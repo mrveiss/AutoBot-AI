@@ -306,14 +306,10 @@ class LayeredProfiler:
         metrics = get_metrics_manager()
         report = self.summary()
         for name, stg in report["stages"].items():
-            metrics.record_inference_stage_duration(
-                self._model_name, name, stg["total_ms"] / 1000
-            )
+            metrics.record_inference_stage_duration(self._model_name, name, stg["total_ms"] / 1000)
         vram = report["vram"]
         if vram["peak_allocated_bytes"] > 0:
-            metrics.record_inference_vram_peak(
-                self._model_name, vram["peak_allocated_bytes"]
-            )
+            metrics.record_inference_vram_peak(self._model_name, vram["peak_allocated_bytes"])
         total_s = report["total_ms"] / 1000
         metrics.record_inference_session_complete(self._model_name, total_s)
 

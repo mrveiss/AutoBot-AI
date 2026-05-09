@@ -28,9 +28,7 @@ router = APIRouter()
 _manager = BackgroundTaskManager(redis_prefix="import_task:")
 
 
-def _build_module_to_file_mapping(
-    python_files: List[Path], project_root: Path
-) -> Dict[str, str]:
+def _build_module_to_file_mapping(python_files: List[Path], project_root: Path) -> Dict[str, str]:
     """Build module path to file path mapping (Issue #315)."""
     module_to_file: Dict[str, str] = {}
 
@@ -52,14 +50,10 @@ def _build_module_to_file_mapping(
     return module_to_file
 
 
-def _process_import_node(
-    module_name: str, module_to_file: Dict[str, str]
-) -> Tuple[Dict, Optional[str]]:
+def _process_import_node(module_name: str, module_to_file: Dict[str, str]) -> Tuple[Dict, Optional[str]]:
     """Process a single import and return import info and target file (Issue #315)."""
     base_module = module_name.split(".")[0]
-    is_external = (
-        base_module in STDLIB_MODULES or base_module not in INTERNAL_MODULE_PREFIXES
-    )
+    is_external = base_module in STDLIB_MODULES or base_module not in INTERNAL_MODULE_PREFIXES
     target_file = module_to_file.get(module_name)
 
     import_info = {
@@ -100,9 +94,7 @@ def _extract_imports_from_ast(
         for alias in node.names:
             import_info, target_file = _process_import_node(alias.name, module_to_file)
             file_imports[rel_path].append(import_info)
-            _add_imported_by_relation(
-                file_imported_by, target_file, rel_path, alias.name
-            )
+            _add_imported_by_relation(file_imported_by, target_file, rel_path, alias.name)
 
     elif isinstance(node, ast.ImportFrom) and node.module:
         import_info, target_file = _process_import_node(node.module, module_to_file)
@@ -155,11 +147,7 @@ async def get_import_tree():
         "dist",
         "build",
     }
-    python_files = [
-        f
-        for f in python_files
-        if not any(excluded in f.parts for excluded in excluded_dirs)
-    ]
+    python_files = [f for f in python_files if not any(excluded in f.parts for excluded in excluded_dirs)]
 
     # Data structures
     file_imports: Dict[str, List[Dict]] = {}
@@ -170,9 +158,7 @@ async def get_import_tree():
 
     # Analyze imports (Issue #315 - simplified loop)
     for py_file in python_files[:500]:
-        await _analyze_file_imports(
-            py_file, project_root, module_to_file, file_imports, file_imported_by
-        )
+        await _analyze_file_imports(py_file, project_root, module_to_file, file_imports, file_imported_by)
 
     # Build result with bidirectional relationships
     import_tree = _build_import_tree(file_imports, file_imported_by)
@@ -208,9 +194,7 @@ async def _analyze_file_imports(
         tree = ast.parse(content)
 
         for node in ast.walk(tree):
-            _extract_imports_from_ast(
-                node, module_to_file, rel_path, file_imports, file_imported_by
-            )
+            _extract_imports_from_ast(node, module_to_file, rel_path, file_imports, file_imported_by)
 
     except Exception as e:
         logger.debug("Could not analyze %s: %s", py_file, e)
@@ -237,9 +221,7 @@ def _build_import_tree(
         )
 
     # Sort by connectivity (most connected files first)
-    import_tree.sort(
-        key=lambda x: len(x["imports"]) + len(x["imported_by"]), reverse=True
-    )
+    import_tree.sort(key=lambda x: len(x["imports"]) + len(x["imported_by"]), reverse=True)
     return import_tree
 
 
@@ -250,15 +232,11 @@ def _build_summary(import_tree: List[Dict]) -> Dict:
         "total_import_relationships": sum(len(f["imports"]) for f in import_tree),
         "most_imported_files": [
             {"file": f["path"], "count": len(f["imported_by"])}
-            for f in sorted(
-                import_tree, key=lambda x: len(x["imported_by"]), reverse=True
-            )[:10]
+            for f in sorted(import_tree, key=lambda x: len(x["imported_by"]), reverse=True)[:10]
         ],
         "most_importing_files": [
             {"file": f["path"], "count": len(f["imports"])}
-            for f in sorted(import_tree, key=lambda x: len(x["imports"]), reverse=True)[
-                :10
-            ]
+            for f in sorted(import_tree, key=lambda x: len(x["imports"]), reverse=True)[:10]
         ],
     }
 
@@ -286,9 +264,7 @@ async def _run_import_analysis(task_id: str) -> None:
             "dist",
             "build",
         }
-        python_files = [
-            f for f in python_files if not any(ex in f.parts for ex in excluded_dirs)
-        ]
+        python_files = [f for f in python_files if not any(ex in f.parts for ex in excluded_dirs)]
 
         await _manager.update_progress(task_id, "Building module mappings", 30.0)
         file_imports: Dict[str, List[Dict]] = {}

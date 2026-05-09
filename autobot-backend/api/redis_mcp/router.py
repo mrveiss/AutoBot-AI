@@ -139,8 +139,7 @@ async def call_redis_mcp_tool(
             "status": "approval_required",
             "tool": tool_name,
             "message": (
-                f"Tool '{tool_name}' requires explicit approval. "
-                "Confirm to proceed with this destructive operation."
+                f"Tool '{tool_name}' requires explicit approval. " "Confirm to proceed with this destructive operation."
             ),
             "arguments": args,
         }
@@ -164,9 +163,7 @@ async def call_redis_mcp_tool(
     # Route to handler
     handler = _TOOL_HANDLERS.get(tool_name)
     if handler is None:
-        raise HTTPException(
-            status_code=400, detail=f"Unknown Redis MCP tool: {tool_name}"
-        )
+        raise HTTPException(status_code=400, detail=f"Unknown Redis MCP tool: {tool_name}")
     return await handler(args)
 
 
@@ -197,9 +194,7 @@ async def redis_mcp_tool_endpoint(
 
 
 async def _wrap_data_get(args: dict) -> Metadata:
-    return await handle_redis_get(
-        key=args["key"], database=args.get("database", "main")
-    )
+    return await handle_redis_get(key=args["key"], database=args.get("database", "main"))
 
 
 async def _wrap_data_set(args: dict) -> Metadata:
@@ -212,9 +207,7 @@ async def _wrap_data_set(args: dict) -> Metadata:
 
 
 async def _wrap_data_delete(args: dict) -> Metadata:
-    return await handle_redis_delete(
-        keys=args["keys"], database=args.get("database", "main")
-    )
+    return await handle_redis_delete(keys=args["keys"], database=args.get("database", "main"))
 
 
 async def _wrap_data_hget(args: dict) -> Metadata:
@@ -226,9 +219,7 @@ async def _wrap_data_hget(args: dict) -> Metadata:
 
 
 async def _wrap_data_hgetall(args: dict) -> Metadata:
-    return await handle_redis_hgetall(
-        key=args["key"], database=args.get("database", "main")
-    )
+    return await handle_redis_hgetall(key=args["key"], database=args.get("database", "main"))
 
 
 async def _wrap_data_hset(args: dict) -> Metadata:
@@ -305,15 +296,11 @@ async def _wrap_data_scan_keys(args: dict) -> Metadata:
 
 
 async def _wrap_data_type(args: dict) -> Metadata:
-    return await handle_redis_type(
-        key=args["key"], database=args.get("database", "main")
-    )
+    return await handle_redis_type(key=args["key"], database=args.get("database", "main"))
 
 
 async def _wrap_data_ttl(args: dict) -> Metadata:
-    return await handle_redis_ttl(
-        key=args["key"], database=args.get("database", "main")
-    )
+    return await handle_redis_ttl(key=args["key"], database=args.get("database", "main"))
 
 
 async def _wrap_vector_create_index(args: dict) -> Metadata:
@@ -374,9 +361,7 @@ async def _wrap_ops_memory_stats(args: dict) -> Metadata:
 
 
 async def _wrap_ops_stream_health(args: dict) -> Metadata:
-    return await handle_redis_stream_health(
-        key=args["key"], database=args.get("database", "main")
-    )
+    return await handle_redis_stream_health(key=args["key"], database=args.get("database", "main"))
 
 
 async def _wrap_ops_client_list(args: dict) -> Metadata:

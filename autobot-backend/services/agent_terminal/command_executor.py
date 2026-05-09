@@ -82,17 +82,13 @@ class CommandExecutor:
         """
         try:
             self._write_to_pty(session, "\x03")  # Ctrl+C
-            logger.info(
-                f"[CANCEL] Sent SIGINT (Ctrl+C) to PTY {session.pty_session_id}"
-            )
+            logger.info(f"[CANCEL] Sent SIGINT (Ctrl+C) to PTY {session.pty_session_id}")
             return True
         except Exception as sigint_error:
             logger.warning("[CANCEL] Failed to send SIGINT: %s", sigint_error)
             return False
 
-    async def _log_cancellation_to_chat(
-        self, session: AgentTerminalSession, reason: str
-    ) -> None:
+    async def _log_cancellation_to_chat(self, session: AgentTerminalSession, reason: str) -> None:
         """
         Log command cancellation to chat history.
 
@@ -138,9 +134,7 @@ class CommandExecutor:
             logger.error(f"[CANCEL] Failed to forcefully close PTY: {sigkill_error}")
             return False
 
-    async def _finalize_cancellation(
-        self, session: AgentTerminalSession, reason: str
-    ) -> bool:
+    async def _finalize_cancellation(self, session: AgentTerminalSession, reason: str) -> bool:
         """
         Finalize command cancellation with cleanup and logging.
 
@@ -156,18 +150,12 @@ class CommandExecutor:
         # Clean up session state (Issue #372 - use model method)
         task_was_running = await session.cancel_running_task()
         if task_was_running:
-            logger.info(
-                f"[CANCEL] Cancelled running command task for "
-                f"session {session.session_id}"
-            )
+            logger.info(f"[CANCEL] Cancelled running command task for " f"session {session.session_id}")
 
         # Log cancellation (Issue #281: uses extracted helper)
         await self._log_cancellation_to_chat(session, reason)
 
-        logger.info(
-            f"[CANCEL] ✅ Command cancellation complete for "
-            f"session {session.session_id}"
-        )
+        logger.info(f"[CANCEL] ✅ Command cancellation complete for " f"session {session.session_id}")
         return True
 
     def _write_to_pty(self, session: AgentTerminalSession, text: str) -> bool:
@@ -196,8 +184,7 @@ class CommandExecutor:
 
             pty = simple_pty_manager.get_session(session.pty_session_id)
             logger.info(
-                f"[PTY_WRITE] Got PTY session: {pty is not None}, "
-                f"alive: {pty.is_alive() if pty else 'N/A'}"
+                f"[PTY_WRITE] Got PTY session: {pty is not None}, " f"alive: {pty.is_alive() if pty else 'N/A'}"
             )
 
             # If PTY is not alive, recreate it (handles stale sessions after restart)
@@ -208,34 +195,26 @@ class CommandExecutor:
                 )
 
                 # Create new PTY with same session ID
-                new_pty = simple_pty_manager.create_session(
-                    session.pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT)
-                )
+                new_pty = simple_pty_manager.create_session(session.pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT))
 
                 if new_pty:
                     logger.info("Recreated PTY session %s", session.pty_session_id)
                     pty = new_pty
                 else:
-                    logger.error(
-                        f"Failed to recreate PTY session {session.pty_session_id}"
-                    )
+                    logger.error(f"Failed to recreate PTY session {session.pty_session_id}")
                     return False
 
             # Write to PTY
             success = pty.write_input(text)
             if success:
-                logger.debug(
-                    "Wrote to PTY %s: %s...", session.pty_session_id, text[:50]
-                )
+                logger.debug("Wrote to PTY %s: %s...", session.pty_session_id, text[:50])
             return success
 
         except Exception as e:
             logger.error("Error writing to PTY: %s", e)
             return False
 
-    async def cancel_command(
-        self, session: AgentTerminalSession, reason: str = "timeout"
-    ) -> bool:
+    async def cancel_command(self, session: AgentTerminalSession, reason: str = "timeout") -> bool:
         """
         Cancel a running command with graceful shutdown. Ref: #1088.
 
@@ -243,9 +222,7 @@ class CommandExecutor:
         CRITICAL FIX (Critical #3): Prevents orphaned processes on timeout.
         """
         if not session.has_pty_session():
-            logger.warning(
-                f"[CANCEL] No PTY session to cancel for {session.session_id}"
-            )
+            logger.warning(f"[CANCEL] No PTY session to cancel for {session.session_id}")
             return False
 
         try:
@@ -253,16 +230,10 @@ class CommandExecutor:
 
             pty = simple_pty_manager.get_session(session.pty_session_id)
             if not pty or not pty.is_alive():
-                logger.info(
-                    f"[CANCEL] PTY session {session.pty_session_id} not alive, "
-                    f"nothing to cancel"
-                )
+                logger.info(f"[CANCEL] PTY session {session.pty_session_id} not alive, " f"nothing to cancel")
                 return False
 
-            logger.warning(
-                f"[CANCEL] Cancelling command due to {reason}: "
-                f"PTY {session.pty_session_id}"
-            )
+            logger.warning(f"[CANCEL] Cancelling command due to {reason}: " f"PTY {session.pty_session_id}")
 
             # Issue #281: Step 1 - Send SIGINT using extracted helper
             self._send_sigint_to_pty(session)
@@ -273,8 +244,7 @@ class CommandExecutor:
             # Step 3: Check if process is still running (Issue #665: uses helper)
             if pty.is_alive():
                 logger.warning(
-                    "[CANCEL] Process still running after SIGINT, "
-                    "attempting forceful termination (SIGKILL)"
+                    "[CANCEL] Process still running after SIGINT, " "attempting forceful termination (SIGKILL)"
                 )
                 if not self._force_close_pty_session(session.pty_session_id):
                     return False
@@ -285,14 +255,10 @@ class CommandExecutor:
             return await self._finalize_cancellation(session, reason)
 
         except Exception as e:
-            logger.error(
-                "[CANCEL] Error during command cancellation: %s", e, exc_info=True
-            )
+            logger.error("[CANCEL] Error during command cancellation: %s", e, exc_info=True)
             return False
 
-    def _search_for_exit_marker(
-        self, messages: list, marker: str, marker_id: str
-    ) -> Optional[int]:
+    def _search_for_exit_marker(self, messages: list, marker: str, marker_id: str) -> Optional[int]:
         """Search messages for exit code marker. (Issue #315 - extracted)"""
         escaped_marker = re.escape(marker)
         for msg in reversed(messages):
@@ -302,16 +268,11 @@ class CommandExecutor:
             match = re.search(rf"{escaped_marker}(\d+)", clean_text)
             if match:
                 return_code = int(match.group(1))
-                logger.info(
-                    f"[PTY_EXEC] Detected return code: {return_code} "
-                    f"(marker: {marker_id})"
-                )
+                logger.info(f"[PTY_EXEC] Detected return code: {return_code} " f"(marker: {marker_id})")
                 return return_code
         return None
 
-    async def _detect_return_code(
-        self, session: AgentTerminalSession, max_attempts: int = 10
-    ) -> Optional[int]:
+    async def _detect_return_code(self, session: AgentTerminalSession, max_attempts: int = 10) -> Optional[int]:
         """
         Detect command return code using exit code marker injection.
 
@@ -361,20 +322,13 @@ class CommandExecutor:
                 if result is not None:
                     return result
             except Exception as e:
-                logger.warning(
-                    f"[PTY_EXEC] Error detecting return code "
-                    f"(attempt {attempt + 1}): {e}"
-                )
+                logger.warning(f"[PTY_EXEC] Error detecting return code " f"(attempt {attempt + 1}): {e}")
 
         # Fallback: Analyze error patterns
-        logger.debug(
-            "[PTY_EXEC] Marker detection failed, falling back to error pattern analysis"
-        )
+        logger.debug("[PTY_EXEC] Marker detection failed, falling back to error pattern analysis")
         return await self._analyze_error_patterns(session)
 
-    def _check_error_patterns_in_text(
-        self, clean_text: str, error_patterns: list
-    ) -> bool:
+    def _check_error_patterns_in_text(self, clean_text: str, error_patterns: list) -> bool:
         """Check if text contains any error patterns. (Issue #315 - extracted)"""
         for pattern in error_patterns:
             if re.search(pattern, clean_text):
@@ -403,9 +357,7 @@ class CommandExecutor:
             if not session.conversation_id:
                 return 0  # Assume success if no conversation
 
-            messages = await self.chat_history_manager.get_session_messages(
-                session_id=session.conversation_id, limit=5
-            )
+            messages = await self.chat_history_manager.get_session_messages(session_id=session.conversation_id, limit=5)
 
             for msg in reversed(messages):
                 if msg.get("sender") != "terminal" or not msg.get("text"):
@@ -434,17 +386,13 @@ class CommandExecutor:
             return ""
 
         try:
-            messages = await self.chat_history_manager.get_session_messages(
-                session_id=session.conversation_id, limit=5
-            )
+            messages = await self.chat_history_manager.get_session_messages(session_id=session.conversation_id, limit=5)
             return _extract_terminal_output(messages)
         except Exception as e:
             logger.warning("[PTY_EXEC] Polling error: %s", e)
             return ""
 
-    async def _handle_poll_timeout(
-        self, session: AgentTerminalSession, elapsed: float, last_output: str
-    ) -> str:
+    async def _handle_poll_timeout(self, session: AgentTerminalSession, elapsed: float, last_output: str) -> str:
         """
         Handle polling timeout with command cancellation (Issue #665: extracted helper).
 
@@ -459,18 +407,14 @@ class CommandExecutor:
             Last captured output
         """
         logger.warning(
-            f"[PTY_EXEC] Polling timeout reached ({elapsed:.2f}s), "
-            f"cancelling command to prevent orphaned processes"
+            f"[PTY_EXEC] Polling timeout reached ({elapsed:.2f}s), " f"cancelling command to prevent orphaned processes"
         )
 
         cancelled = await self.cancel_command(session, reason="timeout")
         if cancelled:
             logger.info("[PTY_EXEC] Successfully cancelled command after timeout")
         else:
-            logger.error(
-                "[PTY_EXEC] Failed to cancel command after timeout - "
-                "may have orphaned process"
-            )
+            logger.error("[PTY_EXEC] Failed to cancel command after timeout - " "may have orphaned process")
 
         return last_output
 
@@ -507,8 +451,7 @@ class CommandExecutor:
         max_interval = 2.0  # Cap at 2 seconds
 
         logger.debug(
-            f"[PTY_EXEC] Starting intelligent polling "
-            f"(timeout={timeout}s, stability={stability_threshold}s)"
+            f"[PTY_EXEC] Starting intelligent polling " f"(timeout={timeout}s, stability={stability_threshold}s)"
         )
 
         while (time.time() - start_time) < timeout:
@@ -576,9 +519,7 @@ class CommandExecutor:
             "return_code": return_code,
         }
 
-    async def _poll_and_detect_return_code(
-        self, session: AgentTerminalSession, timeout: float
-    ) -> tuple[str, int]:
+    async def _poll_and_detect_return_code(self, session: AgentTerminalSession, timeout: float) -> tuple[str, int]:
         """
         Poll for command output and detect return code.
 
@@ -593,10 +534,7 @@ class CommandExecutor:
             Tuple of (full_output, return_code)
         """
         # Phase 2: Intelligent polling with adaptive timeouts
-        logger.info(
-            f"[PTY_EXEC] Starting intelligent polling (timeout={timeout}s) "
-            f"for command completion..."
-        )
+        logger.info(f"[PTY_EXEC] Starting intelligent polling (timeout={timeout}s) " f"for command completion...")
 
         full_output = await self._intelligent_poll_output(
             session=session,
@@ -622,9 +560,7 @@ class CommandExecutor:
 
         return full_output, return_code
 
-    async def execute_in_pty(
-        self, session: AgentTerminalSession, command: str, timeout: float = 30.0
-    ) -> Metadata:
+    async def execute_in_pty(self, session: AgentTerminalSession, command: str, timeout: float = 30.0) -> Metadata:
         """
         Execute command directly in PTY shell (true collaboration mode).
 
@@ -645,8 +581,6 @@ class CommandExecutor:
             return self._build_pty_error_result("Failed to write command to PTY")
 
         # Poll for output and detect return code (Issue #665: extracted)
-        full_output, return_code = await self._poll_and_detect_return_code(
-            session, timeout
-        )
+        full_output, return_code = await self._poll_and_detect_return_code(session, timeout)
 
         return self._build_pty_result(full_output, return_code)

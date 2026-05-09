@@ -245,9 +245,7 @@ class EnhancedKBLibrarian:
             "from_cache": False,
         }
 
-    def _collect_valid_results(
-        self, extraction_results: List[Any]
-    ) -> List[Dict[str, Any]]:
+    def _collect_valid_results(self, extraction_results: List[Any]) -> List[Dict[str, Any]]:
         """Collect valid results from gather, skipping exceptions."""
         tools = []
         for result in extraction_results:
@@ -256,9 +254,7 @@ class EnhancedKBLibrarian:
             tools.extend(result)
         return tools
 
-    async def _get_detailed_tools(
-        self, top_tools: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    async def _get_detailed_tools(self, top_tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Get detailed info for top tools in parallel."""
         if not top_tools:
             return []
@@ -275,9 +271,7 @@ class EnhancedKBLibrarian:
             detailed_tools.append({**tool, **tool_info})
         return detailed_tools
 
-    async def _process_web_research_results(
-        self, tool_type: str, web_results: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+    async def _process_web_research_results(self, tool_type: str, web_results: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Process successful web research results."""
         sources = web_results.get("sources", [])
 
@@ -316,9 +310,7 @@ class EnhancedKBLibrarian:
             logger.error("Web research failed for %s", tool_type)
             return []
 
-        detailed_tools = await self._process_web_research_results(
-            tool_type, web_results
-        )
+        detailed_tools = await self._process_web_research_results(tool_type, web_results)
 
         async with self._cache_lock:
             if len(self._tool_cache) >= _TOOL_CACHE_MAX_SIZE:
@@ -360,14 +352,10 @@ class EnhancedKBLibrarian:
 
     async def get_tool_instructions(self, tool_name: str) -> Dict[str, Any]:
         """Get installation and usage instructions for a specific tool."""
-        search_results = await self.knowledge_base.search(
-            f"{tool_name} installation usage", n_results=3
-        )
+        search_results = await self.knowledge_base.search(f"{tool_name} installation usage", n_results=3)
 
         if search_results:
-            instructions = InstructionParser.extract_instructions(
-                search_results, tool_name
-            )
+            instructions = InstructionParser.extract_instructions(search_results, tool_name)
             if instructions:
                 return instructions
 
@@ -375,9 +363,7 @@ class EnhancedKBLibrarian:
         tool_info = await self._research_specific_tool(tool_name)
 
         if tool_info:
-            tool_dict = (
-                tool_info.to_dict() if hasattr(tool_info, "to_dict") else tool_info
-            )
+            tool_dict = tool_info.to_dict() if hasattr(tool_info, "to_dict") else tool_info
             await self.store_tool_knowledge(tool_dict)
             return tool_dict
 
@@ -470,9 +456,7 @@ class EnhancedKBLibrarian:
 
         return "general"
 
-    async def _store_tool_research_results(
-        self, tool_type: str, tools: List[Dict[str, Any]]
-    ):
+    async def _store_tool_research_results(self, tool_type: str, tools: List[Dict[str, Any]]):
         """Store research results in KB for future use."""
         if not tools:
             return
@@ -523,9 +507,7 @@ Found {len(tools)} tools for {tool_type}:
 
         return None
 
-    def _build_system_doc_header(
-        self, doc_title: str, doc_type: str, doc_info: Dict[str, Any]
-    ) -> str:
+    def _build_system_doc_header(self, doc_title: str, doc_type: str, doc_info: Dict[str, Any]) -> str:
         """
         Build the header section of system documentation content.
 
@@ -595,9 +577,7 @@ METADATA:
 - Complexity Level: {doc_info.get('complexity', 'medium')}
 """
 
-    def _build_system_doc_content(
-        self, doc_title: str, doc_type: str, doc_info: Dict[str, Any]
-    ) -> str:
+    def _build_system_doc_content(self, doc_title: str, doc_type: str, doc_info: Dict[str, Any]) -> str:
         """
         Build the full document content string for system documentation.
 
@@ -615,9 +595,7 @@ METADATA:
         footer = self._build_system_doc_footer(doc_info)
         return header + footer
 
-    def _build_system_doc_metadata(
-        self, doc_title: str, doc_type: str, doc_info: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _build_system_doc_metadata(self, doc_title: str, doc_type: str, doc_info: Dict[str, Any]) -> Dict[str, Any]:
         """
         Build metadata dictionary for system documentation storage.
 
@@ -657,9 +635,7 @@ METADATA:
         await self.knowledge_base.store_fact(document_content, metadata=metadata)
         logger.info("Stored system documentation: %s", doc_title)
 
-    def _build_workflow_document_content(
-        self, workflow_name: str, workflow_info: Dict[str, Any]
-    ) -> str:
+    def _build_workflow_document_content(self, workflow_name: str, workflow_info: Dict[str, Any]) -> str:
         """
         Build the document content string for workflow documentation.
 
@@ -711,9 +687,7 @@ METADATA:
 - Difficulty Level: {workflow_info.get('difficulty', 'medium')}
 """
 
-    def _build_workflow_metadata(
-        self, workflow_name: str, workflow_info: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _build_workflow_metadata(self, workflow_name: str, workflow_info: Dict[str, Any]) -> Dict[str, Any]:
         """
         Build metadata dictionary for workflow documentation.
 
@@ -731,9 +705,7 @@ METADATA:
         """Store complete workflow documentation for complex procedures."""
         workflow_name = workflow_info.get("name", "Unknown Workflow")
 
-        document_content = self._build_workflow_document_content(
-            workflow_name, workflow_info
-        )
+        document_content = self._build_workflow_document_content(workflow_name, workflow_info)
         metadata = self._build_workflow_metadata(workflow_name, workflow_info)
 
         await self.knowledge_base.store_fact(document_content, metadata=metadata)

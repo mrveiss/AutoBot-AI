@@ -32,9 +32,7 @@ class TeamsAdapter(BaseAdapter):
             metadata=metadata,
         )
 
-    async def denormalize_response(
-        self, unified_response: NormalizedResponse
-    ) -> Dict[str, Any]:
+    async def denormalize_response(self, unified_response: NormalizedResponse) -> Dict[str, Any]:
         """Convert unified response to Teams format."""
         teams_response = {
             "type": "message",

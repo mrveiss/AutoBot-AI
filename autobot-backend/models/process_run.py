@@ -97,10 +97,7 @@ class TaskDecomposition(Base):
     process_run = relationship("ProcessRun", back_populates="decompositions")
 
     def __repr__(self) -> str:
-        return (
-            f"<TaskDecomposition parent={self.parent_task_id} "
-            f"order={self.subtask_order} status={self.status}>"
-        )
+        return f"<TaskDecomposition parent={self.parent_task_id} " f"order={self.subtask_order} status={self.status}>"
 
 
 class AgentSession(Base):
@@ -116,7 +113,4 @@ class AgentSession(Base):
     expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
 
     def __repr__(self) -> str:
-        return (
-            f"<AgentSession agent={self.agent_id} task={self.task_id} "
-            f"expires={self.expires_at}>"
-        )
+        return f"<AgentSession agent={self.agent_id} task={self.task_id} " f"expires={self.expires_at}>"

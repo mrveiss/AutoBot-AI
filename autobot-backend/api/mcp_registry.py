@@ -168,11 +168,7 @@ class MCPToolCache:
     def get_stats(self) -> Metadata:
         """Get cache statistics"""
         total_requests = self._stats["cache_hits"] + self._stats["cache_misses"]
-        hit_rate = (
-            (self._stats["cache_hits"] / total_requests * 100)
-            if total_requests > 0
-            else 0
-        )
+        hit_rate = (self._stats["cache_hits"] / total_requests * 100) if total_requests > 0 else 0
 
         return {
             "enabled": CACHE_ENABLED,
@@ -306,9 +302,7 @@ MCP_BRIDGES = [
 # ============================================================================
 
 
-def _build_tool_entry(
-    tool: dict, bridge_name: str, bridge_desc: str, endpoint: str, features: List[str]
-) -> dict:
+def _build_tool_entry(tool: dict, bridge_name: str, bridge_desc: str, endpoint: str, features: List[str]) -> dict:
     """Build a tool entry with bridge info. (Issue #315 - extracted)"""
     return {
         "name": tool["name"],
@@ -336,15 +330,10 @@ async def _fetch_bridge_tools(
             timeout=aiohttp.ClientTimeout(total=3),
         ) as response:
             if response.status != 200:
-                logger.warning(
-                    "MCP bridge %s returned status %s", bridge_name, response.status
-                )
+                logger.warning("MCP bridge %s returned status %s", bridge_name, response.status)
                 return [], False
             tools = await response.json()
-            entries = [
-                _build_tool_entry(t, bridge_name, bridge_desc, endpoint, features)
-                for t in tools
-            ]
+            entries = [_build_tool_entry(t, bridge_name, bridge_desc, endpoint, features) for t in tools]
             return entries, True
     except aiohttp.ClientError as e:
         logger.error("HTTP error fetching tools from %s: %s", bridge_name, e)
@@ -359,9 +348,7 @@ async def _fetch_tools_from_bridges() -> Metadata:
 
     This is the actual HTTP fetching logic, separated for caching support.
     """
-    backend_url = (
-        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-    )
+    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
     all_tools = []
     bridge_count = 0
 
@@ -392,9 +379,7 @@ async def _fetch_bridges_info() -> Metadata:
 
     This is the actual HTTP fetching logic, separated for caching support.
     """
-    backend_url = (
-        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-    )
+    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
     bridges = []
     # Issue #380: Get http_client once before loop instead of per-iteration
     http_client = get_http_client()
@@ -613,9 +598,7 @@ def _find_bridge_by_name(bridge_name: str) -> tuple:
         None,
     )
     if not bridge:
-        raise HTTPException(
-            status_code=404, detail=f"MCP bridge '{bridge_name}' not found"
-        )
+        raise HTTPException(status_code=404, detail=f"MCP bridge '{bridge_name}' not found")
     return bridge
 
 
@@ -696,9 +679,7 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
     Returns:
         Detailed tool information including full schema and bridge info
     """
-    backend_url = (
-        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-    )
+    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 
     # Find the bridge (Issue #620: uses helper)
     bridge = _find_bridge_by_name(bridge_name)
@@ -764,9 +745,7 @@ async def probe_mcp_registry(
 )
 async def get_mcp_registry_health() -> Metadata:
     """Get overall health status of all MCP bridges (always fresh, no cache). Ref: #1088."""
-    backend_url = (
-        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-    )
+    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
     health_checks = []
     # Issue #380: Get http_client once before loop instead of per-iteration
     http_client = get_http_client()
@@ -862,9 +841,7 @@ async def get_mcp_registry_stats() -> Metadata:
         },
         "tools_by_bridge": bridge_tool_counts,
         "bridge_health": {b["name"]: b["status"] for b in bridges_response["bridges"]},
-        "available_features": list(
-            set(feature for _, _, _, features in MCP_BRIDGES for feature in features)
-        ),
+        "available_features": list(set(feature for _, _, _, features in MCP_BRIDGES for feature in features)),
         "cache": mcp_cache.get_stats(),
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }

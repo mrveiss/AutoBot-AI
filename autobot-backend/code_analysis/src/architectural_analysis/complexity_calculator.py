@@ -65,9 +65,7 @@ class ComplexityCalculator:
 
     def _count_attribute_assignments(self, assign_node: ast.Assign) -> int:
         """Count attribute assignments in an assign node."""
-        return sum(
-            1 for target in assign_node.targets if isinstance(target, ast.Attribute)
-        )
+        return sum(1 for target in assign_node.targets if isinstance(target, ast.Attribute))
 
     def calculate_function_complexity(self, node: ast.FunctionDef) -> int:
         """

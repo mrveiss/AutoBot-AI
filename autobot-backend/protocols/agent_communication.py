@@ -22,9 +22,7 @@ from enum import Enum
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 # Add project root to path for imports
-sys.path.insert(
-    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.error_boundaries import error_boundary  # noqa: E402
@@ -188,9 +186,7 @@ class CommunicationChannel(ABC):
         """Send a message through the channel"""
 
     @abstractmethod
-    async def receive(
-        self, timeout: Optional[float] = None
-    ) -> Optional[StandardMessage]:
+    async def receive(self, timeout: Optional[float] = None) -> Optional[StandardMessage]:
         """Receive a message from the channel"""
 
     @abstractmethod
@@ -220,9 +216,7 @@ class RedisCommunicationChannel(CommunicationChannel):
         while self.is_active:
             try:
                 # Use Redis BLPOP for blocking message retrieval (sync call in thread)
-                result = await asyncio.to_thread(
-                    self.redis_client.blpop, self.channel_key, 1
-                )
+                result = await asyncio.to_thread(self.redis_client.blpop, self.channel_key, 1)
                 if result:
                     _, message_json = result
                     if isinstance(message_json, bytes):
@@ -241,17 +235,13 @@ class RedisCommunicationChannel(CommunicationChannel):
         """Send a message through Redis"""
         try:
             message_json = message.to_json()
-            await asyncio.to_thread(
-                self.redis_client.rpush, self.channel_key, message_json
-            )
+            await asyncio.to_thread(self.redis_client.rpush, self.channel_key, message_json)
 
             # Set TTL for automatic cleanup
             if message.header.expires_at:
                 ttl = int(message.header.expires_at - time.time())
                 if ttl > 0:
-                    await asyncio.to_thread(
-                        self.redis_client.expire, self.channel_key, ttl
-                    )
+                    await asyncio.to_thread(self.redis_client.expire, self.channel_key, ttl)
 
             logger.debug(
                 "Message sent to channel %s: %s",
@@ -264,15 +254,11 @@ class RedisCommunicationChannel(CommunicationChannel):
             logger.error("Failed to send message: %s", e)
             return False
 
-    async def receive(
-        self, timeout: Optional[float] = None
-    ) -> Optional[StandardMessage]:
+    async def receive(self, timeout: Optional[float] = None) -> Optional[StandardMessage]:
         """Receive a message from the channel"""
         try:
             if timeout:
-                message = await asyncio.wait_for(
-                    self.message_queue.get(), timeout=timeout
-                )
+                message = await asyncio.wait_for(self.message_queue.get(), timeout=timeout)
             else:
                 message = await self.message_queue.get()
             return message
@@ -319,15 +305,11 @@ class DirectCommunicationChannel(CommunicationChannel):
             logger.error("Failed to send direct message: %s", e)
             return False
 
-    async def receive(
-        self, timeout: Optional[float] = None
-    ) -> Optional[StandardMessage]:
+    async def receive(self, timeout: Optional[float] = None) -> Optional[StandardMessage]:
         """Receive a message from the direct queue"""
         try:
             if timeout:
-                message = await asyncio.wait_for(
-                    self.message_queue.get(), timeout=timeout
-                )
+                message = await asyncio.wait_for(self.message_queue.get(), timeout=timeout)
             else:
                 message = await self.message_queue.get()
             return message
@@ -369,14 +351,9 @@ class AgentCommunicationProtocol:
         self.heartbeat_task = asyncio.create_task(self._heartbeat_loop())
 
         # Start message processor
-        self.message_processor_task = asyncio.create_task(
-            self._process_incoming_messages()
-        )
+        self.message_processor_task = asyncio.create_task(self._process_incoming_messages())
 
-        logger.info(
-            f"Agent communication protocol started for "
-            f"{self.agent_identity.agent_id}"
-        )
+        logger.info(f"Agent communication protocol started for " f"{self.agent_identity.agent_id}")
 
     async def stop(self):
         """Stop the communication protocol"""
@@ -425,9 +402,7 @@ class AgentCommunicationProtocol:
         self.message_handlers[message_type].append(handler)
         logger.info("Registered handler for %s messages", message_type.value)
 
-    async def send_message(
-        self, message: StandardMessage, channel_id: Optional[str] = None
-    ) -> bool:
+    async def send_message(self, message: StandardMessage, channel_id: Optional[str] = None) -> bool:
         """Send a message through a specific or default channel"""
 
         # Set sender information
@@ -538,15 +513,11 @@ class AgentCommunicationProtocol:
                 # Check all channels for incoming messages (Issue #376 - use constants)
                 for channel_id, channel in list(self.channels.items()):
                     try:
-                        message = await channel.receive(
-                            timeout=TimingConstants.MICRO_DELAY
-                        )
+                        message = await channel.receive(timeout=TimingConstants.MICRO_DELAY)
                         if message:
                             await self._handle_message(message, channel_id)
                     except Exception as e:
-                        logger.error(
-                            f"Error processing message from channel {channel_id}: {e}"
-                        )
+                        logger.error(f"Error processing message from channel {channel_id}: {e}")
 
                 # Small delay to prevent busy waiting
                 # 10ms - intentionally short for responsive message processing
@@ -689,9 +660,7 @@ class AgentCommunicationManager:
         # Register in manager
         self.protocols[agent_identity.agent_id] = protocol
 
-        logger.info(
-            f"Registered agent communication protocol: " f"{agent_identity.agent_id}"
-        )
+        logger.info(f"Registered agent communication protocol: " f"{agent_identity.agent_id}")
         return protocol
 
     async def unregister_agent(self, agent_id: str):
@@ -784,13 +753,9 @@ if __name__ == "__main__":
         manager = get_communication_manager()
 
         # Create test agents
-        agent1_identity = AgentIdentity(
-            agent_id="test_agent_1", agent_type="test", capabilities=["test", "demo"]
-        )
+        agent1_identity = AgentIdentity(agent_id="test_agent_1", agent_type="test", capabilities=["test", "demo"])
 
-        agent2_identity = AgentIdentity(
-            agent_id="test_agent_2", agent_type="test", capabilities=["test", "demo"]
-        )
+        agent2_identity = AgentIdentity(agent_id="test_agent_2", agent_type="test", capabilities=["test", "demo"])
 
         # Register agents with direct communication
         await manager.register_agent(agent1_identity, [{"type": "direct"}])
@@ -811,17 +776,13 @@ if __name__ == "__main__":
         # Test direct communication
         logger.info("Testing direct agent communication...")
 
-        response = await send_agent_request(
-            "test_agent_1", "test_agent_2", {"message": "Hello from Agent 1!"}
-        )
+        response = await send_agent_request("test_agent_1", "test_agent_2", {"message": "Hello from Agent 1!"})
 
         logger.info("Response received: %s", response)
 
         # Test broadcast
         logger.info("\nTesting broadcast communication...")
-        broadcast_count = await broadcast_to_all_agents(
-            "test_agent_1", {"broadcast": "Hello everyone!"}
-        )
+        broadcast_count = await broadcast_to_all_agents("test_agent_1", {"broadcast": "Hello everyone!"})
 
         logger.info("Broadcast sent to %s channels", broadcast_count)
 

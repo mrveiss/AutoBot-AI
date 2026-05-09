@@ -225,9 +225,7 @@ async def report_detection_feedback(request: WakeWordReportFeedbackRequest) -> M
 
     if request.is_correct:
         detector.report_true_positive()
-        message = (
-            "True positive reported - threshold may be adjusted for better convenience"
-        )
+        message = "True positive reported - threshold may be adjusted for better convenience"
     else:
         detector.report_false_positive()
         message = "False positive reported - threshold increased to reduce false alarms"

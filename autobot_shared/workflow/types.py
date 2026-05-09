@@ -293,16 +293,10 @@ class WorkflowPlan:
         fallback_plans_raw = data.get("fallback_plans", [])
         fallback_plans = [cls.from_dict(p) for p in fallback_plans_raw]
         strategy_raw = data.get("strategy", ExecutionStrategy.SEQUENTIAL.value)
-        strategy = (
-            strategy_raw if isinstance(strategy_raw, ExecutionStrategy)
-            else ExecutionStrategy(strategy_raw)
-        )
+        strategy = strategy_raw if isinstance(strategy_raw, ExecutionStrategy) else ExecutionStrategy(strategy_raw)
         known = {f.name for f in cls.__dataclass_fields__.values()}
         nested_keys = {"tasks", "fallback_plans", "strategy"}
-        kwargs = {
-            k: v for k, v in data.items()
-            if k in known and k not in nested_keys
-        }
+        kwargs = {k: v for k, v in data.items() if k in known and k not in nested_keys}
         kwargs["tasks"] = tasks
         kwargs["fallback_plans"] = fallback_plans
         kwargs["strategy"] = strategy

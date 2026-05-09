@@ -322,9 +322,7 @@ def _validate_fact_id(fact_id: str) -> None:
         raise HTTPException(status_code=400, detail="Invalid fact_id")
 
 
-async def _call_auto_apply_kb(
-    fact_id: str, request: AutoApplySuggestionsRequest
-) -> dict:
+async def _call_auto_apply_kb(fact_id: str, request: AutoApplySuggestionsRequest) -> dict:
     """Helper for auto_apply_suggestions. Ref: #1088."""
     kb = await get_knowledge_base()
     result = await kb.auto_apply_suggestions(

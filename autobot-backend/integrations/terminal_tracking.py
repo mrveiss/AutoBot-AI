@@ -47,10 +47,7 @@ async def _call_track_terminal_activity(
             output=output,
             metadata=metadata,
         )
-        logger.info(
-            f"Terminal activity tracked: user={user_id}, "
-            f"command={command[:50]}, activity_id={activity_id}"
-        )
+        logger.info(f"Terminal activity tracked: user={user_id}, " f"command={command[:50]}, activity_id={activity_id}")
         return activity_id
     except Exception as e:
         logger.error(

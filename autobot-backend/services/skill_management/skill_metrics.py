@@ -102,9 +102,7 @@ class SkillMetrics(AsyncRedisClientMixin):
         except Exception as e:
             logger.error("Failed to log skill metrics: %s", e)
 
-    async def get_metrics(
-        self, skill_id: str, days: int = 30
-    ) -> Dict[str, Any]:
+    async def get_metrics(self, skill_id: str, days: int = 30) -> Dict[str, Any]:
         """Get aggregated metrics for a skill over past N days.
 
         Args:
@@ -160,16 +158,8 @@ class SkillMetrics(AsyncRedisClientMixin):
                         continue
 
             # Calculate aggregated metrics
-            success_rate = (
-                (total_successes / total_invocations * 100)
-                if total_invocations > 0
-                else 0.0
-            )
-            avg_duration = (
-                (sum(all_durations) / len(all_durations))
-                if all_durations
-                else 0.0
-            )
+            success_rate = (total_successes / total_invocations * 100) if total_invocations > 0 else 0.0
+            avg_duration = (sum(all_durations) / len(all_durations)) if all_durations else 0.0
 
             return {
                 "skill_id": skill_id,
@@ -192,9 +182,7 @@ class SkillMetrics(AsyncRedisClientMixin):
                 "avg_duration_ms": 0.0,
             }
 
-    async def get_health_score(
-        self, skill_id: str, days: int = 30
-    ) -> float:
+    async def get_health_score(self, skill_id: str, days: int = 30) -> float:
         """Calculate health score for a skill (0.0 - 1.0).
 
         Health score = success_rate * performance_factor
@@ -283,10 +271,7 @@ class SkillMetrics(AsyncRedisClientMixin):
         try:
             stale_keys = await redis.keys(f"{REDIS_SKILL_HEALTH_PREFIX}*:stale")
             return [
-                key.decode().replace(f"{REDIS_SKILL_HEALTH_PREFIX}", "").replace(
-                    ":stale", ""
-                )
-                for key in stale_keys
+                key.decode().replace(f"{REDIS_SKILL_HEALTH_PREFIX}", "").replace(":stale", "") for key in stale_keys
             ]
         except Exception as e:
             logger.error("Failed to retrieve stale skills: %s", e)

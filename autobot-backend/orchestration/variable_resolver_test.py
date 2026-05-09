@@ -117,9 +117,7 @@ class TestVariableResolverStatus:
         assert result == TaskStatus.FAILED.value
 
     def test_status_in_sentence(self):
-        result = self.resolver.resolve(
-            "Step finished with status: ${steps.step1.status}", self.outputs
-        )
+        result = self.resolver.resolve("Step finished with status: ${steps.step1.status}", self.outputs)
         assert result == "Step finished with status: completed"
 
 
@@ -170,15 +168,11 @@ class TestVariableResolverNested:
         }
 
     def test_array_first_element(self):
-        result = self.resolver.resolve(
-            "${steps.fetch_data.output.items[0].name}", self.outputs
-        )
+        result = self.resolver.resolve("${steps.fetch_data.output.items[0].name}", self.outputs)
         assert result == "alpha"
 
     def test_array_second_element(self):
-        result = self.resolver.resolve(
-            "${steps.fetch_data.output.items[1].score}", self.outputs
-        )
+        result = self.resolver.resolve("${steps.fetch_data.output.items[1].score}", self.outputs)
         assert result == "20"
 
     def test_deeply_nested_path(self):
@@ -187,9 +181,7 @@ class TestVariableResolverNested:
 
     def test_nested_array_sub_object(self):
         outputs = {"s": _json_output({"results": [{"data": {"value": 99}}]})}
-        result = self.resolver.resolve(
-            "${steps.s.output.results[0].data.value}", outputs
-        )
+        result = self.resolver.resolve("${steps.s.output.results[0].data.value}", outputs)
         assert result == "99"
 
 
@@ -207,9 +199,7 @@ class TestVariableResolverMultipleTokens:
             "s1": StepOutput(status=TaskStatus.COMPLETED.value, stdout=""),
             "s2": _json_output({"msg": "hello"}),
         }
-        result = self.resolver.resolve(
-            "${steps.s1.status} — ${steps.s2.output.msg}", outputs
-        )
+        result = self.resolver.resolve("${steps.s1.status} — ${steps.s2.output.msg}", outputs)
         assert result == "completed — hello"
 
     def test_three_tokens(self):
@@ -218,9 +208,7 @@ class TestVariableResolverMultipleTokens:
             "b": _json_output({"x": 2}),
             "c": _json_output({"x": 3}),
         }
-        result = self.resolver.resolve(
-            "${steps.a.output.x},${steps.b.output.x},${steps.c.output.x}", outputs
-        )
+        result = self.resolver.resolve("${steps.a.output.x},${steps.b.output.x},${steps.c.output.x}", outputs)
         assert result == "1,2,3"
 
 

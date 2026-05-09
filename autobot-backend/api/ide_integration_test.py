@@ -58,9 +58,7 @@ def sample_context():
 @pytest.mark.anyio
 @patch("api.ide_integration.context_analyzer")
 @patch("api.ide_integration.redis_client")
-async def test_completion_caching(
-    mock_redis, mock_analyzer, engine, sample_request, sample_context
-):
+async def test_completion_caching(mock_redis, mock_analyzer, engine, sample_request, sample_context):
     """Test completion result caching."""
     # Setup mocks
     mock_redis.get.return_value = None
@@ -98,9 +96,7 @@ async def test_completion_caching(
 @patch("api.ide_integration.context_analyzer")
 @patch("api.ide_integration.redis_client")
 @patch("api.ide_integration.trainer")
-async def test_ml_completions(
-    mock_trainer, mock_redis, mock_analyzer, engine, sample_request, sample_context
-):
+async def test_ml_completions(mock_trainer, mock_redis, mock_analyzer, engine, sample_request, sample_context):
     """Test ML-based completions."""
     # Setup mocks
     mock_redis.get.return_value = None
@@ -120,17 +116,13 @@ async def test_ml_completions(
     assert len(response.completions) >= 2
     # Check for ML-generated completions in results
     completion_texts = [c.label for c in response.completions]
-    assert any(
-        "result = func()" in text or "result" in text for text in completion_texts
-    )
+    assert any("result = func()" in text or "result" in text for text in completion_texts)
 
 
 @pytest.mark.anyio
 @patch("api.ide_integration.context_analyzer")
 @patch("api.ide_integration.redis_client")
-async def test_pattern_completions(
-    mock_redis, mock_analyzer, engine, sample_request, sample_context
-):
+async def test_pattern_completions(mock_redis, mock_analyzer, engine, sample_request, sample_context):
     """Test pattern-based completions."""
     # Setup mocks
     mock_redis.get.return_value = None
@@ -160,22 +152,10 @@ async def test_pattern_completions(
 
 def test_completion_kind_inference(engine, sample_context):
     """Test completion kind inference."""
-    assert (
-        engine._infer_completion_kind("def test():", sample_context)
-        == CompletionItemKind.FUNCTION
-    )
-    assert (
-        engine._infer_completion_kind("class MyClass:", sample_context)
-        == CompletionItemKind.CLASS
-    )
-    assert (
-        engine._infer_completion_kind("import os", sample_context)
-        == CompletionItemKind.MODULE
-    )
-    assert (
-        engine._infer_completion_kind("MAX_SIZE", sample_context)
-        == CompletionItemKind.CONSTANT
-    )
+    assert engine._infer_completion_kind("def test():", sample_context) == CompletionItemKind.FUNCTION
+    assert engine._infer_completion_kind("class MyClass:", sample_context) == CompletionItemKind.CLASS
+    assert engine._infer_completion_kind("import os", sample_context) == CompletionItemKind.MODULE
+    assert engine._infer_completion_kind("MAX_SIZE", sample_context) == CompletionItemKind.CONSTANT
 
 
 def test_completion_ranking(engine):
@@ -223,9 +203,7 @@ async def test_completion_max_limit(mock_redis, mock_analyzer, engine, sample_co
 @patch("api.ide_integration.context_analyzer")
 @patch("api.ide_integration.redis_client")
 @patch("api.ide_integration.trainer")
-async def test_ml_timeout_fallback(
-    mock_trainer, mock_redis, mock_analyzer, engine, sample_request, sample_context
-):
+async def test_ml_timeout_fallback(mock_trainer, mock_redis, mock_analyzer, engine, sample_request, sample_context):
     """Test fallback to patterns when ML times out."""
     import time
 
@@ -253,9 +231,7 @@ def test_pattern_relevance_filtering(engine):
     from models.completion_context import CompletionContext
 
     # Test FastAPI completions are returned when fastapi in frameworks
-    context_with_fastapi = CompletionContext(
-        context_id="test", language="python", detected_frameworks={"fastapi"}
-    )
+    context_with_fastapi = CompletionContext(context_id="test", language="python", detected_frameworks={"fastapi"})
 
     fastapi_completions = engine._get_fastapi_completions(context_with_fastapi)
     assert len(fastapi_completions) > 0
@@ -277,9 +253,7 @@ def test_pattern_relevance_filtering(engine):
 @pytest.mark.anyio
 @patch("api.ide_integration.context_analyzer")
 @patch("api.ide_integration.redis_client")
-async def test_completion_performance(
-    mock_redis, mock_analyzer, engine, sample_request, sample_context
-):
+async def test_completion_performance(mock_redis, mock_analyzer, engine, sample_request, sample_context):
     """Test completion response time."""
     # Setup mocks
     mock_redis.get.return_value = None

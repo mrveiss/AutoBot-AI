@@ -179,9 +179,7 @@ class TestGroqProviderMetadata:
     async def test_provider_metadata_populated(self):
         provider = GroqProvider(settings={"api_key": "gsk_test"})
         mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(
-            return_value=_make_groq_response("Hello!")
-        )
+        mock_client.chat.completions.create = AsyncMock(return_value=_make_groq_response("Hello!"))
         provider._client = mock_client
 
         response = await provider.chat_completion(_basic_request())
@@ -194,9 +192,7 @@ class TestGroqProviderMetadata:
     async def test_provider_metadata_contains_model_in_kwargs(self):
         provider = GroqProvider(settings={"api_key": "gsk_test"})
         mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(
-            return_value=_make_groq_response("ok", model="llama3-70b-8192")
-        )
+        mock_client.chat.completions.create = AsyncMock(return_value=_make_groq_response("ok", model="llama3-70b-8192"))
         provider._client = mock_client
 
         response = await provider.chat_completion(_basic_request("llama3-70b-8192"))
@@ -208,9 +204,7 @@ class TestGroqProviderMetadata:
     async def test_provider_metadata_none_on_error(self):
         provider = GroqProvider(settings={"api_key": "gsk_test"})
         mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(
-            side_effect=RuntimeError("rate limited")
-        )
+        mock_client.chat.completions.create = AsyncMock(side_effect=RuntimeError("rate limited"))
         provider._client = mock_client
 
         response = await provider.chat_completion(_basic_request())
@@ -240,17 +234,13 @@ class TestAnthropicProviderMetadata:
     async def test_provider_metadata_populated(self):
         provider = AnthropicProvider(settings={"api_key": "sk-ant-test"})
         mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(
-            return_value=_make_anthropic_response("Hi!")
-        )
+        mock_client.messages.create = AsyncMock(return_value=_make_anthropic_response("Hi!"))
         provider._client = mock_client
 
         response = await provider.chat_completion(_basic_request())
 
         assert response.provider_metadata is not None
-        _assert_provider_metadata(
-            response.provider_metadata, "anthropic", "claude-sonnet-4-6"
-        )
+        _assert_provider_metadata(response.provider_metadata, "anthropic", "claude-sonnet-4-6")
         assert response.provider_metadata["total_tokens"] == 20  # 8 + 12
 
     @pytest.mark.asyncio
@@ -287,9 +277,7 @@ class TestOpenAIProviderMetadata:
     async def test_provider_metadata_populated(self):
         provider = OpenAIProvider(settings={"api_key": "sk-test"})
         mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(
-            return_value=_make_openai_response("Hello!")
-        )
+        mock_client.chat.completions.create = AsyncMock(return_value=_make_openai_response("Hello!"))
         provider._client = mock_client
 
         response = await provider.chat_completion(_basic_request())
@@ -302,9 +290,7 @@ class TestOpenAIProviderMetadata:
     async def test_provider_metadata_none_on_error(self):
         provider = OpenAIProvider(settings={"api_key": "sk-test"})
         mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(
-            side_effect=RuntimeError("quota exceeded")
-        )
+        mock_client.chat.completions.create = AsyncMock(side_effect=RuntimeError("quota exceeded"))
         provider._client = mock_client
 
         response = await provider.chat_completion(_basic_request())
@@ -336,9 +322,7 @@ class TestCustomOpenAIProviderMetadata:
             settings={"base_url": "http://localhost:8000/v1", "default_model": "local-model"}
         )
         mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(
-            return_value=_make_custom_response("Hello from local!")
-        )
+        mock_client.chat.completions.create = AsyncMock(return_value=_make_custom_response("Hello from local!"))
         provider._client = mock_client
 
         response = await provider.chat_completion(_basic_request())

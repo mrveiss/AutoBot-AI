@@ -130,9 +130,7 @@ class FeatureFlags(AsyncRedisClientMixin):
             logger.error("Failed to set enforcement mode: %s", e)
             return False
 
-    async def get_endpoint_enforcement(
-        self, endpoint: str
-    ) -> Optional[EnforcementMode]:
+    async def get_endpoint_enforcement(self, endpoint: str) -> Optional[EnforcementMode]:
         """
         Get enforcement mode for specific endpoint (allows per-endpoint control)
 
@@ -158,9 +156,7 @@ class FeatureFlags(AsyncRedisClientMixin):
             logger.error("Failed to get endpoint enforcement for %s: %s", endpoint, e)
             return None
 
-    async def set_endpoint_enforcement(
-        self, endpoint: str, mode: Optional[EnforcementMode]
-    ) -> bool:
+    async def set_endpoint_enforcement(self, endpoint: str, mode: Optional[EnforcementMode]) -> bool:
         """
         Set enforcement mode for specific endpoint
 
@@ -281,9 +277,7 @@ class FeatureFlags(AsyncRedisClientMixin):
             mode = await self.get_enforcement_mode()
 
             # Get and parse change history (Issue #315 - uses helper)
-            history_raw = await redis._redis.lrange(
-                "feature_flag:access_control:history", 0, 9
-            )
+            history_raw = await redis._redis.lrange("feature_flag:access_control:history", 0, 9)
             history = self._parse_history_entries(history_raw)
 
             # Get endpoint overrides
@@ -305,9 +299,7 @@ class FeatureFlags(AsyncRedisClientMixin):
                     pipe.get(key)
                 mode_values = await pipe.execute()
                 # Use helper to build overrides (Issue #315)
-                endpoint_overrides = self._build_endpoint_overrides(
-                    endpoint_keys, mode_values
-                )
+                endpoint_overrides = self._build_endpoint_overrides(endpoint_keys, mode_values)
 
             return {
                 "current_mode": mode.value,
@@ -337,9 +329,7 @@ class FeatureFlags(AsyncRedisClientMixin):
             cursor = 0
             deleted = 0
             while True:
-                cursor, keys = await redis._redis.scan(
-                    cursor, match="feature_flag:*", count=100
-                )
+                cursor, keys = await redis._redis.scan(cursor, match="feature_flag:*", count=100)
                 if keys:
                     deleted += await redis.delete(*keys)
                 if cursor == 0:

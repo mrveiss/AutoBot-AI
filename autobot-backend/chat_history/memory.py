@@ -51,8 +51,7 @@ class MemoryMixin:
             collected_objects = gc.collect()
 
             logger.info(
-                "CHAT CLEANUP: Trimmed messages from %d to %d "
-                "(limit: %d), collected %d objects",
+                "CHAT CLEANUP: Trimmed messages from %d to %d " "(limit: %d), collected %d objects",
                 old_count,
                 len(self.history),
                 self.max_messages,
@@ -74,8 +73,7 @@ class MemoryMixin:
         message_count = len(self.history)
         if message_count > self.max_messages * 0.8:  # 80% threshold warning
             logger.warning(
-                "MEMORY WARNING: Chat history approaching limit - "
-                "%d/%d messages (%.1f%%)",
+                "MEMORY WARNING: Chat history approaching limit - " "%d/%d messages (%.1f%%)",
                 message_count,
                 self.max_messages,
                 (message_count / self.max_messages) * 100,
@@ -113,13 +111,10 @@ class MemoryMixin:
                         await run_in_chat_io_executor(os.remove, file_path)
                         logger.info("CLEANUP: Removed old session file: %s", filename)
                     except Exception as e:
-                        logger.error(
-                            "Failed to remove session file %s: %s", filename, e
-                        )
+                        logger.error("Failed to remove session file %s: %s", filename, e)
 
                 logger.info(
-                    "SESSION CLEANUP: Removed %d old session files, "
-                    "kept %d most recent",
+                    "SESSION CLEANUP: Removed %d old session files, " "kept %d most recent",
                     len(files_to_remove),
                     self.max_session_files,
                 )

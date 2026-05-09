@@ -32,9 +32,7 @@ class WebAdapter(BaseAdapter):
             metadata=metadata,
         )
 
-    async def denormalize_response(
-        self, unified_response: NormalizedResponse
-    ) -> Dict[str, Any]:
+    async def denormalize_response(self, unified_response: NormalizedResponse) -> Dict[str, Any]:
         """Convert unified response to web format."""
         web_response = {
             "user_id": unified_response.user_id,

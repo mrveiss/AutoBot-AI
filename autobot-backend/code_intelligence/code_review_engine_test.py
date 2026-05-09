@@ -326,11 +326,7 @@ class TestBuiltinPatterns:
 
     def test_security_patterns(self):
         """Test security patterns exist."""
-        security_patterns = [
-            p
-            for p in BUILTIN_PATTERNS.values()
-            if p.category == ReviewCategory.SECURITY
-        ]
+        security_patterns = [p for p in BUILTIN_PATTERNS.values() if p.category == ReviewCategory.SECURITY]
         assert len(security_patterns) >= 5
 
     def test_pattern_ids_unique(self):
@@ -340,11 +336,7 @@ class TestBuiltinPatterns:
 
     def test_critical_patterns_exist(self):
         """Test that critical severity patterns exist."""
-        critical = [
-            p
-            for p in BUILTIN_PATTERNS.values()
-            if p.severity == ReviewSeverity.CRITICAL
-        ]
+        critical = [p for p in BUILTIN_PATTERNS.values() if p.severity == ReviewSeverity.CRITICAL]
         assert len(critical) >= 3
 
     def test_all_categories_covered(self):
@@ -905,10 +897,7 @@ class TestIntegration:
 
         # Check categories detected
         categories = {c.category for c in comments}
-        assert (
-            ReviewCategory.SECURITY in categories
-            or ReviewCategory.BEST_PRACTICE in categories
-        )
+        assert ReviewCategory.SECURITY in categories or ReviewCategory.BEST_PRACTICE in categories
 
     def test_review_diff_integration(self, tmp_path, sample_diff):
         """Test diff review integration."""

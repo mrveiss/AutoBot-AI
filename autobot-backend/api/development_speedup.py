@@ -106,9 +106,7 @@ async def analyze_codebase_endpoint(request: DevelopmentSpeedupAnalysisRequest):
     - quality: Code quality consistency only
     """
     try:
-        logger.info(
-            "Starting %s analysis: %s", request.analysis_type, request.root_path
-        )
+        logger.info("Starting %s analysis: %s", request.analysis_type, request.root_path)
 
         # Issue #336: Dispatch table lookup replaces elif chain
         handler = ANALYSIS_TYPE_HANDLERS.get(request.analysis_type)
@@ -164,9 +162,7 @@ async def analyze_codebase_get(
 )
 async def find_duplicates_endpoint(
     path: str = Query(..., description="Root path to analyze"),
-    min_lines: int = Query(
-        5, description="Minimum lines for duplicate detection", ge=3, le=50
-    ),
+    min_lines: int = Query(5, description="Minimum lines for duplicate detection", ge=3, le=50),
 ):
     """
     Find duplicate code blocks in the codebase.
@@ -212,9 +208,7 @@ async def find_duplicates_endpoint(
 )
 async def analyze_patterns_endpoint(
     path: str = Query(..., description="Root path to analyze"),
-    pattern_type: Optional[str] = Query(
-        None, description="Specific pattern type to search for"
-    ),
+    pattern_type: Optional[str] = Query(None, description="Specific pattern type to search for"),
 ):
     """
     Analyze code patterns and anti-patterns.
@@ -229,9 +223,7 @@ async def analyze_patterns_endpoint(
         # Filter by pattern type if specified
         if pattern_type:
             filtered_patterns = [
-                p
-                for p in result.get("patterns", [])
-                if pattern_type.lower() in p.get("pattern_type", "").lower()
+                p for p in result.get("patterns", []) if pattern_type.lower() in p.get("pattern_type", "").lower()
             ]
             result["patterns"] = filtered_patterns
             result["total_patterns"] = len(filtered_patterns)
@@ -298,9 +290,7 @@ async def analyze_imports_endpoint(
     operation="detect_dead_code_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
-async def detect_dead_code_endpoint(
-    path: str = Query(..., description="Root path to analyze")
-):
+async def detect_dead_code_endpoint(path: str = Query(..., description="Root path to analyze")):
     """
     Detect potentially dead or unreachable code.
 
@@ -334,9 +324,7 @@ async def detect_dead_code_endpoint(
 )
 async def find_refactoring_opportunities_endpoint(
     path: str = Query(..., description="Root path to analyze"),
-    min_complexity: float = Query(
-        5.0, description="Minimum complexity score for opportunities", ge=1.0, le=10.0
-    ),
+    min_complexity: float = Query(5.0, description="Minimum complexity score for opportunities", ge=1.0, le=10.0),
 ):
     """
     Find refactoring opportunities to improve code quality.
@@ -383,9 +371,7 @@ async def find_refactoring_opportunities_endpoint(
 )
 async def analyze_quality_endpoint(
     path: str = Query(..., description="Root path to analyze"),
-    severity: Optional[str] = Query(
-        None, description="Filter by severity: low, medium, high, critical"
-    ),
+    severity: Optional[str] = Query(None, description="Filter by severity: low, medium, high, critical"),
 ):
     """
     Analyze code quality and consistency.
@@ -406,11 +392,7 @@ async def analyze_quality_endpoint(
                     detail=f"Invalid severity. Must be one of: {sorted(_VALID_SEVERITIES)}",
                 )
 
-            filtered_issues = [
-                issue
-                for issue in result.get("quality_issues", [])
-                if issue.get("severity") == severity
-            ]
+            filtered_issues = [issue for issue in result.get("quality_issues", []) if issue.get("severity") == severity]
             result["quality_issues"] = filtered_issues
             result["total_issues"] = len(filtered_issues)
             result["filtered_by_severity"] = severity
@@ -434,20 +416,10 @@ async def analyze_quality_endpoint(
 def _build_recommendation_metrics(result: dict) -> dict:
     """Helper for get_recommendations_endpoint. Ref: #1088."""
     return {
-        "duplicate_savings": (
-            result.get("duplicate_code", {})
-            .get("potential_savings", {})
-            .get("lines_of_code", 0)
-        ),
-        "technical_debt_items": (
-            result.get("code_patterns", {}).get("high_priority_issues", 0)
-        ),
-        "unused_imports": len(
-            result.get("import_analysis", {}).get("potential_unused_imports", [])
-        ),
-        "refactoring_opportunities": (
-            result.get("refactoring_opportunities", {}).get("total_opportunities", 0)
-        ),
+        "duplicate_savings": (result.get("duplicate_code", {}).get("potential_savings", {}).get("lines_of_code", 0)),
+        "technical_debt_items": (result.get("code_patterns", {}).get("high_priority_issues", 0)),
+        "unused_imports": len(result.get("import_analysis", {}).get("potential_unused_imports", [])),
+        "refactoring_opportunities": (result.get("refactoring_opportunities", {}).get("total_opportunities", 0)),
         "quality_issues": result.get("quality_issues", {}).get("total_issues", 0),
     }
 
@@ -470,9 +442,7 @@ def _calculate_health_score(result: dict, metrics: dict) -> int:
     operation="get_recommendations_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
-async def get_recommendations_endpoint(
-    path: str = Query(..., description="Root path to analyze")
-):
+async def get_recommendations_endpoint(path: str = Query(..., description="Root path to analyze")):
     """
     Get actionable recommendations for development speedup.
 
@@ -557,13 +527,9 @@ async def get_development_speedup_status():
                 },
                 "search_index": search_status,
                 "thresholds": {
-                    "duplicate_similarity": (
-                        _get_dev_speedup_agent().duplicate_threshold
-                    ),
+                    "duplicate_similarity": (_get_dev_speedup_agent().duplicate_threshold),
                     "min_duplicate_lines": _get_dev_speedup_agent().min_duplicate_lines,
-                    "complexity_threshold": (
-                        _get_dev_speedup_agent().complexity_threshold
-                    ),
+                    "complexity_threshold": (_get_dev_speedup_agent().complexity_threshold),
                 },
             },
         )
@@ -594,17 +560,13 @@ async def get_analysis_examples():
                         "root_path": "/path/to/project",
                         "analysis_type": "comprehensive",
                     },
-                    "use_case": (
-                        "Get complete overview of codebase health and improvement opportunities"
-                    ),
+                    "use_case": ("Get complete overview of codebase health and improvement opportunities"),
                 },
                 "duplicate_detection": {
                     "description": "Find duplicate code blocks",
                     "endpoint": "/api/development_speedup/duplicates",
                     "parameters": {"path": "/path/to/project", "min_lines": 5},
-                    "use_case": (
-                        "Identify and eliminate code duplication to reduce maintenance burden"
-                    ),
+                    "use_case": ("Identify and eliminate code duplication to reduce maintenance burden"),
                 },
                 "pattern_analysis": {
                     "description": "Identify code patterns and anti-patterns",

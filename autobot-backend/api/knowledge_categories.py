@@ -141,9 +141,7 @@ async def create_category(
     error_code_prefix="KNOWLEDGE_CATEGORIES",
 )
 async def get_category_tree(
-    root_id: Optional[str] = Query(
-        default=None, description="Start from specific category"
-    ),
+    root_id: Optional[str] = Query(default=None, description="Start from specific category"),
     max_depth: int = Query(
         default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
         ge=1,
@@ -368,9 +366,7 @@ async def delete_category(
     - deleted_count: Number of categories deleted
     - facts_reassigned: Number of facts reassigned
     """
-    category_id, reassign_to = _validate_delete_category_params(
-        category_id, reassign_to
-    )
+    category_id, reassign_to = _validate_delete_category_params(category_id, reassign_to)
 
     # Get knowledge base instance
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -395,9 +391,7 @@ async def delete_category(
     _raise_delete_category_error(result)
 
 
-def _validate_delete_category_params(
-    category_id: str, reassign_to: Optional[str]
-) -> tuple:
+def _validate_delete_category_params(category_id: str, reassign_to: Optional[str]) -> tuple:
     """Helper for delete_category. Ref: #1088."""
     category_id = category_id.strip()
     if not _CATEGORY_ID_RE.match(category_id):
@@ -526,9 +520,7 @@ async def get_category_ancestors(
 )
 async def get_facts_in_category(
     category_id: str = Path(..., description="Category UUID"),
-    include_descendants: bool = Query(
-        default=False, description="Include facts from children"
-    ),
+    include_descendants: bool = Query(default=False, description="Include facts from children"),
     limit: int = Query(default=QueryDefaults.DEFAULT_PAGE_SIZE, ge=1, le=500),
     offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0),
     req: Request = None,

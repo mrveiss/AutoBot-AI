@@ -125,9 +125,7 @@ class CostTracker:
         """Accumulate token counts for one LLM call inside *workflow_id*."""
         cost = self._executions.get(workflow_id)
         if cost is None:
-            logger.warning(
-                "CostTracker: unknown workflow_id %s — ignoring", workflow_id
-            )
+            logger.warning("CostTracker: unknown workflow_id %s — ignoring", workflow_id)
             return
         cost.total_input_tokens += input_tokens
         cost.total_output_tokens += output_tokens
@@ -264,11 +262,7 @@ class StepTimeoutEnforcer:
         Raises:
             StepTimeoutError: When the step exceeds its deadline.
         """
-        effective_timeout = (
-            timeout_seconds
-            if timeout_seconds is not None
-            else limits.default_step_timeout_s
-        )
+        effective_timeout = timeout_seconds if timeout_seconds is not None else limits.default_step_timeout_s
         try:
             return await asyncio.wait_for(coro, timeout=effective_timeout)
         except asyncio.TimeoutError:

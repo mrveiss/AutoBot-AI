@@ -211,9 +211,7 @@ class TestContradictionDetectorScan:
 
     @pytest.mark.asyncio
     async def test_scan_finds_contradictions(self, mock_llm):
-        mock_llm.chat_completion.return_value = _llm_response(
-            _contradiction_json(pairs=1, gaps=["gap1"])
-        )
+        mock_llm.chat_completion.return_value = _llm_response(_contradiction_json(pairs=1, gaps=["gap1"]))
         detector = ContradictionDetector(llm_interface=mock_llm)
         # Both chunks share the rare keyword "redis" so they land in the same group
         chunks = [
@@ -285,9 +283,7 @@ class TestContradictionDetectorScan:
 
     @pytest.mark.asyncio
     async def test_scan_checked_at_is_utc(self, mock_llm):
-        mock_llm.chat_completion.return_value = _llm_response(
-            json.dumps({"contradictions": [], "gaps": []})
-        )
+        mock_llm.chat_completion.return_value = _llm_response(json.dumps({"contradictions": [], "gaps": []}))
         detector = ContradictionDetector(llm_interface=mock_llm)
         report = await detector.scan([])
         assert report.checked_at.tzinfo is not None
@@ -307,11 +303,7 @@ class TestStoreAndLoadReport:
             new=AsyncMock(return_value=mock_redis),
         ):
             report = ContradictionReport(
-                contradictions=[
-                    ConflictPair(
-                        chunk_a="a", chunk_b="b", explanation="e", confidence=0.7
-                    )
-                ],
+                contradictions=[ConflictPair(chunk_a="a", chunk_b="b", explanation="e", confidence=0.7)],
                 gaps=["gap"],
             )
             await store_report(report)

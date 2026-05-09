@@ -158,8 +158,8 @@ class AgentCapabilityDescriptor:
 class CircuitState(Enum):
     """Circuit breaker state for a distributed agent (Issue #4694)."""
 
-    CLOSED = "closed"      # Normal operation — agent receives tasks.
-    OPEN = "open"          # Agent quarantined — excluded from routing.
+    CLOSED = "closed"  # Normal operation — agent receives tasks.
+    OPEN = "open"  # Agent quarantined — excluded from routing.
     HALF_OPEN = "half_open"  # Recovery probe: one task allowed; result decides next state.
 
 

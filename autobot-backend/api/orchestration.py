@@ -70,9 +70,7 @@ def _build_single_task_response(result: dict) -> JSONResponse:
     task_results = list(result.get("results", {}).values())
     if task_results:
         task_result = task_results[0]
-        response_text = task_result.get(
-            "response", task_result.get("result", "Task completed")
-        )
+        response_text = task_result.get("response", task_result.get("result", "Task completed"))
     else:
         response_text = "Task completed successfully"
 
@@ -164,9 +162,7 @@ async def create_workflow_plan(
         logger.info("Creating workflow plan for: %s", request.goal)
 
         # Create plan
-        plan = await orchestrator.create_workflow_plan(
-            request.goal, request.context
-        )
+        plan = await orchestrator.create_workflow_plan(request.goal, request.context)
 
         # Convert to serializable format
         plan_dict = {
@@ -181,9 +177,7 @@ async def create_workflow_plan(
                     "action": task.action,
                     "priority": task.priority,
                     "dependencies": task.dependencies,
-                    "capabilities_required": [
-                        cap.value for cap in task.capabilities_required
-                    ],
+                    "capabilities_required": [cap.value for cap in task.capabilities_required],
                 }
                 for task in plan.tasks
             ],
@@ -230,9 +224,7 @@ async def get_agent_performance(
     try:
         report = orchestrator.get_performance_report()
 
-        return JSONResponse(
-            status_code=200, content={"status": "success", "performance_data": report}
-        )
+        return JSONResponse(status_code=200, content={"status": "success", "performance_data": report})
 
     except Exception as e:
         logger.error("Performance report error: %s", e)
@@ -270,9 +262,7 @@ async def recommend_agents(
                 logger.warning("Unknown capability: %s", cap_str)
 
         if not capabilities_needed:
-            raise HTTPException(
-                status_code=400, detail="No valid capabilities specified"
-            )
+            raise HTTPException(status_code=400, detail="No valid capabilities specified")
 
         # Get recommendations
         recommendations = await orchestrator.get_agent_recommendations(capabilities_needed)
@@ -386,9 +376,7 @@ async def get_execution_strategies(
         },
     }
 
-    return JSONResponse(
-        status_code=200, content={"strategies": strategies, "default": "adaptive"}
-    )
+    return JSONResponse(status_code=200, content={"strategies": strategies, "default": "adaptive"})
 
 
 @router.get("/capabilities", response_model=DataResponse)
@@ -423,17 +411,13 @@ async def get_agent_capabilities(
 
         if runner is not None:
             try:
-                coverage = runner.get_performance_report().get(
-                    "capabilities_coverage", {}
-                )
+                coverage = runner.get_performance_report().get("capabilities_coverage", {})
             except Exception:
                 coverage = {}
         else:
             coverage = {}
 
-        agent_perf = (
-            getattr(perf_tracker, "agent_performance", {}) if perf_tracker else {}
-        )
+        agent_perf = getattr(perf_tracker, "agent_performance", {}) if perf_tracker else {}
 
         # Get detailed agent capabilities
         agent_details = {}
@@ -535,13 +519,9 @@ async def get_orchestration_examples(
         content={
             "examples": {
                 "parallel_research": {
-                    "goal": (
-                        "Research the latest developments in quantum computing and AI"
-                    ),
+                    "goal": ("Research the latest developments in quantum computing and AI"),
                     "strategy": "parallel",
-                    "description": (
-                        "Multiple research agents work simultaneously on different aspects"
-                    ),
+                    "description": ("Multiple research agents work simultaneously on different aspects"),
                 },
                 "sequential_installation": {
                     "goal": "Install Docker, configure it, and deploy a test container",
@@ -549,29 +529,19 @@ async def get_orchestration_examples(
                     "description": "Installation steps must be performed in order",
                 },
                 "collaborative_analysis": {
-                    "goal": (
-                        "Analyze this codebase for security vulnerabilities and performance issues"
-                    ),
+                    "goal": ("Analyze this codebase for security vulnerabilities and performance issues"),
                     "strategy": "collaborative",
-                    "description": (
-                        "Security and performance agents share findings in real-time"
-                    ),
+                    "description": ("Security and performance agents share findings in real-time"),
                 },
                 "pipeline_processing": {
-                    "goal": (
-                        "Extract data from documents, transform it, and generate a report"
-                    ),
+                    "goal": ("Extract data from documents, transform it, and generate a report"),
                     "strategy": "pipeline",
                     "description": "Each stage processes and passes data to the next",
                 },
                 "adaptive_complex": {
-                    "goal": (
-                        "Help me refactor this legacy application to use microservices"
-                    ),
+                    "goal": ("Help me refactor this legacy application to use microservices"),
                     "strategy": "adaptive",
-                    "description": (
-                        "Strategy adapts based on codebase complexity and progress"
-                    ),
+                    "description": ("Strategy adapts based on codebase complexity and progress"),
                 },
             },
             "usage_tips": [

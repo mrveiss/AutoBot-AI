@@ -28,7 +28,6 @@ from utils.semantic_chunker_gpu_optimized import (
     get_optimized_semantic_chunker,
 )
 
-
 # ---------------------------------------------------------------------------
 # Structural / class-level tests (no model construction required)
 # ---------------------------------------------------------------------------

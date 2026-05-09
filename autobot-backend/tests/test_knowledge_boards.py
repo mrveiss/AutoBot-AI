@@ -30,7 +30,6 @@ from api.knowledge_boards import router as boards_router
 from tests.helpers.fake_redis import AsyncHashFakeRedis
 from tests.helpers.fake_kb import MinimalFakeKB
 
-
 # ---------------------------------------------------------------------------
 # Fake KB stub and app factory
 # ---------------------------------------------------------------------------

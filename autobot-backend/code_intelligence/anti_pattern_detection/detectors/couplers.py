@@ -81,9 +81,7 @@ FEATURE_ENVY_EXCLUDED_OBJECTS = frozenset(
 )
 
 # Pre-computed lowercase version for case-insensitive lookups
-_FEATURE_ENVY_EXCLUDED_LOWER = frozenset(
-    x.lower() for x in FEATURE_ENVY_EXCLUDED_OBJECTS
-)
+_FEATURE_ENVY_EXCLUDED_LOWER = frozenset(x.lower() for x in FEATURE_ENVY_EXCLUDED_OBJECTS)
 
 
 class CouplerDetector:
@@ -130,9 +128,7 @@ class CouplerDetector:
                 self._import_graph[module_name] = set()
                 self._module_to_file[module_name] = file_path
 
-            self._import_graph[module_name].update(
-                self._extract_imports_from_tree(tree)
-            )
+            self._import_graph[module_name].update(self._extract_imports_from_tree(tree))
         except Exception as e:
             logger.debug("Failed to collect imports from %s: %s", file_path, e)
 
@@ -172,10 +168,7 @@ class CouplerDetector:
             line_number=1,
             entity_name=" -> ".join(cycle),
             description=f"Circular dependency detected: {' -> '.join(cycle)}",
-            suggestion=(
-                "Refactor to break the cycle using "
-                "dependency injection, interfaces, or restructuring"
-            ),
+            suggestion=("Refactor to break the cycle using " "dependency injection, interfaces, or restructuring"),
             metrics={
                 "cycle_length": len(cycle),
                 "modules": list(cycle),
@@ -206,9 +199,7 @@ class CouplerDetector:
         for imported in self._import_graph.get(module, []):
             if imported in self._import_graph:
                 if imported not in visited:
-                    cycle = self._find_cycle_dfs(
-                        imported, path + [imported], visited, rec_stack
-                    )
+                    cycle = self._find_cycle_dfs(imported, path + [imported], visited, rec_stack)
                     if cycle:
                         return cycle
                 elif imported in rec_stack:
@@ -304,10 +295,7 @@ class CouplerDetector:
             file_path=file_path,
             line_number=node.lineno,
             entity_name=node.name,
-            description=(
-                f"Method '{node.name}' accesses '{obj_name}' "
-                f"{count} times vs self {self_accesses} times"
-            ),
+            description=(f"Method '{node.name}' accesses '{obj_name}' " f"{count} times vs self {self_accesses} times"),
             suggestion=f"Consider moving this method to the '{obj_name}' class",
             metrics={
                 "self_accesses": self_accesses,
@@ -341,11 +329,7 @@ class CouplerDetector:
 
         for obj_name, count in external_accesses.items():
             if count > self_accesses and count >= self.feature_envy_threshold:
-                patterns.append(
-                    self._create_feature_envy_result(
-                        node, file_path, obj_name, count, self_accesses
-                    )
-                )
+                patterns.append(self._create_feature_envy_result(node, file_path, obj_name, count, self_accesses))
 
         return patterns
 
@@ -381,13 +365,9 @@ class CouplerDetector:
                         line_number=getattr(child, "lineno", node.lineno),
                         entity_name=node.name,
                         description=(
-                            f"Message chain of length {chain_length} "
-                            f"(threshold: {self.message_chain_threshold})"
+                            f"Message chain of length {chain_length} " f"(threshold: {self.message_chain_threshold})"
                         ),
-                        suggestion=(
-                            "Consider introducing intermediate variables "
-                            "or using the Law of Demeter"
-                        ),
+                        suggestion=("Consider introducing intermediate variables " "or using the Law of Demeter"),
                         metrics={
                             "chain_length": chain_length,
                             "threshold": self.message_chain_threshold,

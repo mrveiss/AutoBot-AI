@@ -32,9 +32,7 @@ class TestSlmExec:
     async def test_calls_correct_endpoint(self):
         resp = MagicMock()
         resp.status = 200
-        resp.json = AsyncMock(
-            return_value={"success": True, "stdout": "output", "stderr": ""}
-        )
+        resp.json = AsyncMock(return_value={"success": True, "stdout": "output", "stderr": ""})
         resp_cm = MagicMock()
         resp_cm.__aenter__ = AsyncMock(return_value=resp)
         resp_cm.__aexit__ = AsyncMock(return_value=False)
@@ -48,9 +46,7 @@ class TestSlmExec:
             "services.command_extraction_service.aiohttp.ClientSession",
             return_value=session_cm,
         ):
-            ok, stdout, stderr = await _slm_exec(
-                "04-Databases", "ls -la", slm_url="https://slm.test"
-            )
+            ok, stdout, stderr = await _slm_exec("04-Databases", "ls -la", slm_url="https://slm.test")
 
         assert ok is True
         assert stdout == "output"
@@ -74,9 +70,7 @@ class TestSlmExec:
             "services.command_extraction_service.aiohttp.ClientSession",
             return_value=session_cm,
         ):
-            ok, stdout, stderr = await _slm_exec(
-                "node1", "cmd", slm_url="https://slm.test"
-            )
+            ok, stdout, stderr = await _slm_exec("node1", "cmd", slm_url="https://slm.test")
         assert ok is False
         assert "network error" in stderr
 
@@ -111,18 +105,14 @@ class TestExtractCommandDescriptions:
     async def test_returns_descriptions_dict(self):
         whatis_output = "ls (1) - list directory contents\ncat (1) - concatenate files"
         with _patch_slm_exec((True, whatis_output, "")):
-            descs = await _extract_command_descriptions(
-                "node1", {"ls", "cat"}, "https://slm", "token"
-            )
+            descs = await _extract_command_descriptions("node1", {"ls", "cat"}, "https://slm", "token")
         assert "ls" in descs
         assert "list directory" in descs["ls"]
 
     @pytest.mark.asyncio
     async def test_handles_batch_failure_gracefully(self):
         with _patch_slm_exec((False, "", "whatis error")):
-            descs = await _extract_command_descriptions(
-                "node1", {"ls"}, "https://slm", "token"
-            )
+            descs = await _extract_command_descriptions("node1", {"ls"}, "https://slm", "token")
         assert descs == {}
 
 

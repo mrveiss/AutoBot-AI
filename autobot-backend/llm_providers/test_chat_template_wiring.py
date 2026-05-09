@@ -76,11 +76,13 @@ def test_all_supported_templates_render_without_error():
 def _make_vllm_provider():
     """Return a VLLMProvider with vllm import mocked out."""
     import sys
+
     vllm_mock = MagicMock()
     sys.modules.setdefault("vllm", vllm_mock)
     # Re-import after patching so VLLM_AVAILABLE reflects mock
     import importlib
     import llm_providers.vllm_provider as mod
+
     importlib.reload(mod)
     provider = mod.VLLMProvider.__new__(mod.VLLMProvider)
     provider.config = {"model": "test-model"}
@@ -154,6 +156,7 @@ async def test_ollama_stream_uses_prompt_payload_when_template_set():
 
         async def fake_content():
             import json as _json
+
             yield _json.dumps({"response": "Hello", "done": False}).encode("utf-8")
             yield _json.dumps({"response": "", "done": True}).encode("utf-8")
 
@@ -164,9 +167,7 @@ async def test_ollama_stream_uses_prompt_payload_when_template_set():
         ctx.content = fake_content()
         return ctx
 
-    with patch(
-        "llm_providers.ollama_provider.get_http_client"
-    ) as mock_client:
+    with patch("llm_providers.ollama_provider.get_http_client") as mock_client:
         client = MagicMock()
         client.post = fake_post
         mock_client.return_value = client
@@ -201,6 +202,7 @@ async def test_ollama_stream_uses_messages_payload_without_template():
 
         async def fake_content():
             import json as _json
+
             yield _json.dumps({"message": {"content": "Hey"}, "done": True}).encode("utf-8")
 
         ctx = MagicMock()
@@ -210,9 +212,7 @@ async def test_ollama_stream_uses_messages_payload_without_template():
         ctx.content = fake_content()
         return ctx
 
-    with patch(
-        "llm_providers.ollama_provider.get_http_client"
-    ) as mock_client:
+    with patch("llm_providers.ollama_provider.get_http_client") as mock_client:
         client = MagicMock()
         client.post = fake_post
         mock_client.return_value = client
@@ -280,6 +280,7 @@ async def test_ollama_chat_completion_pre_renders_when_template_set():
 
     # Must use the generate endpoint, not the chat endpoint
     from constants.api_constants import PATH_OLLAMA_GENERATE
+
     assert PATH_OLLAMA_GENERATE in captured_url["url"]
 
     # Payload must carry rendered prompt with chatml markers

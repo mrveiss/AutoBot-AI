@@ -27,9 +27,7 @@ class TestDiagnosticsRouterRegistration:
     def test_diagnostics_router_in_registry(self):
         """Verify diagnostics router is registered in MONITORING_ROUTER_CONFIGS."""
         config_names = [config[4] for config in MONITORING_ROUTER_CONFIGS]
-        assert "diagnostics" in config_names, (
-            f"Diagnostics router not found in registry. Available: {config_names}"
-        )
+        assert "diagnostics" in config_names, f"Diagnostics router not found in registry. Available: {config_names}"
 
     def test_diagnostics_router_config_format(self):
         """Verify diagnostics router config has correct format."""

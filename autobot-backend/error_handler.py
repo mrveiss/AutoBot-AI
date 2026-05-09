@@ -25,9 +25,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
-def log_error(
-    error: Exception, context: Optional[str] = None, include_traceback: bool = True
-) -> None:
+def log_error(error: Exception, context: Optional[str] = None, include_traceback: bool = True) -> None:
     """
     Log an error with appropriate context and detail level.
 
@@ -121,8 +119,7 @@ def _handle_retry_attempt(
     if on_retry:
         on_retry(exception, attempt + 1)
     logger.warning(
-        f"Retry {attempt + 1}/{max_attempts} for "
-        f"{func_name} after {type(exception).__name__}: {exception}"
+        f"Retry {attempt + 1}/{max_attempts} for " f"{func_name} after {type(exception).__name__}: {exception}"
     )
 
 
@@ -180,9 +177,7 @@ def _process_retry_exception(
     return (current_delay, current_delay * backoff)
 
 
-def _select_retry_wrapper(
-    func: Callable, sync_wrapper: Callable, async_wrapper: Callable
-) -> Callable:
+def _select_retry_wrapper(func: Callable, sync_wrapper: Callable, async_wrapper: Callable) -> Callable:
     """Select appropriate wrapper based on whether function is async. Issue #620."""
     return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
 
@@ -274,12 +269,8 @@ def retry(
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         """Inner decorator that wraps function with retry logic. Issue #620."""
-        sync_wrapper = _create_sync_retry_wrapper(
-            func, max_attempts, delay, backoff, exceptions, on_retry
-        )
-        async_wrapper = _create_async_retry_wrapper(
-            func, max_attempts, delay, backoff, exceptions, on_retry
-        )
+        sync_wrapper = _create_sync_retry_wrapper(func, max_attempts, delay, backoff, exceptions, on_retry)
+        async_wrapper = _create_async_retry_wrapper(func, max_attempts, delay, backoff, exceptions, on_retry)
         return _select_retry_wrapper(func, sync_wrapper, async_wrapper)
 
     return decorator
@@ -371,10 +362,7 @@ class CircuitBreaker:
 
             if self.failure_count >= self.failure_threshold:
                 self._state = "open"
-                logger.error(
-                    f"Circuit breaker opened for {func_name} after "
-                    f"{self.failure_count} failures"
-                )
+                logger.error(f"Circuit breaker opened for {func_name} after " f"{self.failure_count} failures")
 
 
 @contextmanager
@@ -442,9 +430,7 @@ def format_traceback(exc: Exception, limit: int = 10) -> str:
     Returns:
         Formatted traceback string
     """
-    tb_lines = traceback.format_exception(
-        type(exc), exc, exc.__traceback__, limit=limit
-    )
+    tb_lines = traceback.format_exception(type(exc), exc, exc.__traceback__, limit=limit)
     return "".join(tb_lines)
 
 

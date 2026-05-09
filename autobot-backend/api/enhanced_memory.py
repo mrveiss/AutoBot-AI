@@ -85,9 +85,7 @@ async def _apply_task_status_update(
     return await memory_manager.update_task_status(task_id, status_enum, metadata)
 
 
-async def get_memory_manager() -> (
-    tuple[AsyncEnhancedMemoryManager, MarkdownReferenceSystem]
-):
+async def get_memory_manager() -> tuple[AsyncEnhancedMemoryManager, MarkdownReferenceSystem]:
     """Lazy initialization of async memory manager to prevent startup blocking.
 
     Issue #357: Now uses AsyncEnhancedMemoryManager for non-blocking operations.
@@ -216,9 +214,7 @@ async def create_task(request: TaskCreateRequest):
         }
         priority_enum = priority_map.get(request.priority.lower())
         if priority_enum is None:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid priority: {request.priority}"
-            )
+            raise HTTPException(status_code=400, detail=f"Invalid priority: {request.priority}")
 
         # Create TaskEntry for async manager
         task_entry = TaskEntry(
@@ -268,9 +264,7 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
             try:
                 status_enum = TaskStatus(request.status)
             except ValueError:
-                raise HTTPException(
-                    status_code=400, detail=f"Invalid status: {request.status}"
-                )
+                raise HTTPException(status_code=400, detail=f"Invalid status: {request.status}")
 
             # Use helper for status-specific logic (Issue #315, #357)
             success = await _apply_task_status_update(
@@ -282,9 +276,7 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
             )
 
         if not success:
-            raise HTTPException(
-                status_code=404, detail="Task not found or update failed"
-            )
+            raise HTTPException(status_code=404, detail="Task not found or update failed")
 
         return {
             "task_id": task_id,
@@ -326,9 +318,7 @@ async def add_markdown_reference(task_id: str, request: MarkdownReferenceRequest
         )
 
         if not success:
-            raise HTTPException(
-                status_code=400, detail="Failed to add markdown reference"
-            )
+            raise HTTPException(status_code=400, detail="Failed to add markdown reference")
 
         return {
             "task_id": task_id,
@@ -387,9 +377,7 @@ async def search_markdown(
     """
     try:
         _, markdown_system = await get_memory_manager()
-        results = await asyncio.to_thread(
-            markdown_system.search_markdown_content, query, document_type, tags, limit
-        )
+        results = await asyncio.to_thread(markdown_system.search_markdown_content, query, document_type, tags, limit)
 
         return {
             "query": query,
@@ -416,9 +404,7 @@ async def get_document_references(file_path: str):
     """
     try:
         _, markdown_system = await get_memory_manager()
-        references = await asyncio.to_thread(
-            markdown_system.get_document_references, file_path
-        )
+        references = await asyncio.to_thread(markdown_system.get_document_references, file_path)
 
         return {
             "file_path": file_path,

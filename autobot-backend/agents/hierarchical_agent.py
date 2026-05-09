@@ -83,11 +83,7 @@ class HierarchicalAgent:
             "[Issue #657] HierarchicalAgent created: id=%s, level=%d, parent=%s",
             context.agent_id[:8] if len(context.agent_id) > 8 else context.agent_id,
             context.level,
-            (
-                context.parent_id[:8]
-                if context.parent_id and len(context.parent_id) > 8
-                else context.parent_id
-            ),
+            (context.parent_id[:8] if context.parent_id and len(context.parent_id) > 8 else context.parent_id),
         )
 
     def _validate_delegation_depth(self) -> None:
@@ -206,9 +202,7 @@ class HierarchicalAgent:
             },
         )
 
-    def _record_delegation_history(
-        self, subordinate_id: str, task: str, reason: str
-    ) -> None:
+    def _record_delegation_history(self, subordinate_id: str, task: str, reason: str) -> None:
         """
         Record delegation action in agent history.
 
@@ -289,23 +283,15 @@ class HierarchicalAgent:
         self._validate_delegation_depth()
 
         subordinate_id = str(uuid.uuid4())
-        subordinate, sub_context = self._create_subordinate(
-            subordinate_id, task, reason
-        )
+        subordinate, sub_context = self._create_subordinate(subordinate_id, task, reason)
         self._record_delegation_history(subordinate_id, task, reason)
 
         try:
             if wait_for_result:
-                return await self._execute_sync_delegation(
-                    subordinate, subordinate_id, task, sub_context, start_time
-                )
-            return self._execute_async_delegation(
-                subordinate, subordinate_id, task, sub_context
-            )
+                return await self._execute_sync_delegation(subordinate, subordinate_id, task, sub_context, start_time)
+            return self._execute_async_delegation(subordinate, subordinate_id, task, sub_context)
         except Exception as e:
-            return self._create_failed_delegation_result(
-                subordinate_id, task, start_time, e
-            )
+            return self._create_failed_delegation_result(subordinate_id, task, start_time, e)
 
     async def execute(self, task: str) -> str:
         """

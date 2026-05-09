@@ -171,9 +171,7 @@ async def request_takeover(
 
     trigger = trigger_mapping.get(request.trigger.upper())
     if not trigger:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid trigger: {request.trigger}"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid trigger: {request.trigger}")
 
     # Convert priority string to TaskPriority
     priority_mapping = {
@@ -254,9 +252,7 @@ async def execute_takeover_action(
             action_data=action.action_data,
         )
 
-        logger.info(
-            f"Takeover action executed: {action.action_type} in session {session_id}"
-        )
+        logger.info(f"Takeover action executed: {action.action_type} in session {session_id}")
         return {"success": True, "result": result}
 
     except ValueError:
@@ -304,9 +300,7 @@ async def resume_takeover_session(
     if success:
         return {"success": True, "session_id": session_id, "status": "active"}
     else:
-        raise HTTPException(
-            status_code=404, detail="Session not found or not resumable"
-        )
+        raise HTTPException(status_code=404, detail="Session not found or not resumable")
 
 
 @router.post("/takeover/sessions/{session_id}/complete", response_model=AdvancedControlTakeoverSessionStatusResponse)
@@ -491,9 +485,7 @@ async def get_system_health(
             "status": "healthy",
             "desktop_streaming_available": get_desktop_streaming().vnc_manager.vnc_available,
             "novnc_available": get_desktop_streaming().vnc_manager.novnc_available,
-            "active_streaming_sessions": len(
-                get_desktop_streaming().vnc_manager.active_sessions
-            ),
+            "active_streaming_sessions": len(get_desktop_streaming().vnc_manager.active_sessions),
             "pending_takeovers": len(get_takeover_manager().pending_requests),
             "active_takeovers": len(get_takeover_manager().active_sessions),
             "paused_tasks": len(get_takeover_manager().paused_tasks),
@@ -523,9 +515,7 @@ async def monitoring_websocket(websocket: WebSocket):
             # Send periodic system updates
             try:
                 health_data = await get_system_health()
-                await websocket.send_json(
-                    {"type": "system_health", "data": health_data}
-                )
+                await websocket.send_json({"type": "system_health", "data": health_data})
 
                 # Wait for next update cycle
                 await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)
@@ -534,9 +524,7 @@ async def monitoring_websocket(websocket: WebSocket):
                 break
             except Exception as e:
                 logger.error("Error in monitoring WebSocket: %s", e)
-                await websocket.send_json(
-                    {"type": "error", "message": "Operation failed"}
-                )
+                await websocket.send_json({"type": "error", "message": "Operation failed"})
                 break
 
     except WebSocketDisconnect:
@@ -561,9 +549,7 @@ async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
 
     try:
         # Use the desktop streaming manager's WebSocket handler
-        await get_desktop_streaming().handle_websocket_client(
-            websocket, f"/ws/desktop/{session_id}"
-        )
+        await get_desktop_streaming().handle_websocket_client(websocket, f"/ws/desktop/{session_id}")
     except WebSocketDisconnect:
         logger.info("Desktop streaming WebSocket client disconnected: %s", session_id)
 

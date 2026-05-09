@@ -32,9 +32,7 @@ class WhatsAppAdapter(BaseAdapter):
             metadata=metadata,
         )
 
-    async def denormalize_response(
-        self, unified_response: NormalizedResponse
-    ) -> Dict[str, Any]:
+    async def denormalize_response(self, unified_response: NormalizedResponse) -> Dict[str, Any]:
         """Convert unified response to WhatsApp format."""
         whatsapp_response = {
             "to": unified_response.channel_id,
@@ -43,9 +41,7 @@ class WhatsAppAdapter(BaseAdapter):
 
         # WhatsApp reply type
         if unified_response.response_type == "reply":
-            whatsapp_response["reply_to"] = unified_response.metadata.get(
-                "message_id"
-            )
+            whatsapp_response["reply_to"] = unified_response.metadata.get("message_id")
 
         return whatsapp_response
 

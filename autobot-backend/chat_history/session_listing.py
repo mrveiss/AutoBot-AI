@@ -130,9 +130,7 @@ class SessionListingMixin:
                     continue
 
                 chat_path = os.path.join(chats_directory, filename)
-                session = await self._process_chat_file_for_listing(
-                    chat_path, chat_id, filename
-                )
+                session = await self._process_chat_file_for_listing(chat_path, chat_id, filename)
                 if session:
                     sessions.append(session)
 
@@ -164,9 +162,7 @@ class SessionListingMixin:
             logger.debug("Could not read chat file content: %s", read_err)
             return None, 0
 
-    async def _build_session_entry(
-        self, chat_id: str, chat_path: str, filename: str
-    ) -> Dict[str, Any] | None:
+    async def _build_session_entry(self, chat_id: str, chat_path: str, filename: str) -> Dict[str, Any] | None:
         """Build a session entry from file metadata (Issue #315: extracted).
 
         Args:
@@ -218,9 +214,7 @@ class SessionListingMixin:
             # Ensure chats directory exists
             dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
             if not dir_exists:
-                await run_in_chat_io_executor(
-                    os.makedirs, chats_directory, exist_ok=True
-                )
+                await run_in_chat_io_executor(os.makedirs, chats_directory, exist_ok=True)
                 return sessions
 
             # Process each chat file
@@ -237,9 +231,7 @@ class SessionListingMixin:
 
             # Detect orphaned terminal files and auto-create chat sessions
             existing_chat_ids = {session["id"] for session in sessions}
-            sessions = await self._recover_orphaned_terminal_sessions(
-                chats_directory, existing_chat_ids, sessions
-            )
+            sessions = await self._recover_orphaned_terminal_sessions(chats_directory, existing_chat_ids, sessions)
 
             # Sort by last modified time (most recent first)
             sessions.sort(key=lambda x: x.get("lastModified", ""), reverse=True)
@@ -286,9 +278,7 @@ class SessionListingMixin:
             },
         }
 
-    def _build_orphaned_session_dict(
-        self, session_id: str, stat: os.stat_result
-    ) -> Dict[str, Any]:
+    def _build_orphaned_session_dict(self, session_id: str, stat: os.stat_result) -> Dict[str, Any]:
         """Build session dictionary from stat result for orphaned session. Issue #620.
 
         Args:
@@ -364,9 +354,7 @@ class SessionListingMixin:
         orphaned_sessions_created = 0
 
         try:
-            orphan_filenames = await run_in_chat_io_executor(
-                os.listdir, chats_directory
-            )
+            orphan_filenames = await run_in_chat_io_executor(os.listdir, chats_directory)
 
             for filename in orphan_filenames:
                 session_id = self._extract_session_id_from_terminal_file(filename)
@@ -374,9 +362,7 @@ class SessionListingMixin:
                     continue
 
                 try:
-                    session = await self._create_orphaned_session(
-                        session_id, filename, chats_directory
-                    )
+                    session = await self._create_orphaned_session(session_id, filename, chats_directory)
                     if session:
                         existing_chat_ids.add(session_id)
                         sessions.append(session)

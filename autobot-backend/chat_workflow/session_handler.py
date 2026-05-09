@@ -55,9 +55,7 @@ class SessionHandlerMixin:
             self.sessions[session_id].last_activity = time.time()
             return self.sessions[session_id]
 
-    def _determine_exit_intent(
-        self, classification: IntentClassification, safety_check: SafetyCheckResult
-    ) -> bool:
+    def _determine_exit_intent(self, classification: IntentClassification, safety_check: SafetyCheckResult) -> bool:
         """Determine if user wants to exit conversation (Issue #332 - extracted helper).
 
         Returns:
@@ -145,26 +143,18 @@ class SessionHandlerMixin:
 
         session = await self.get_or_create_session(session_id)
         session.message_count += 1
-        logger.debug(
-            "[ChatWorkflowManager] Session message_count: %d", session.message_count
-        )
+        logger.debug("[ChatWorkflowManager] Session message_count: %d", session.message_count)
 
         # Comprehensive intent classification with safety guards (Issue #159)
-        conversation_history_formatted = self._convert_conversation_history_format(
-            session.conversation_history
-        )
+        conversation_history_formatted = self._convert_conversation_history_format(session.conversation_history)
 
         # Initialize classifiers and analyze
         intent_classifier = IntentClassifier()
         context_analyzer = ConversationContextAnalyzer()
         safety_guards = ConversationSafetyGuards()
 
-        classification: IntentClassification = intent_classifier.classify(
-            message, conversation_history_formatted
-        )
-        context: ConversationContext = context_analyzer.analyze(
-            conversation_history_formatted, message
-        )
+        classification: IntentClassification = intent_classifier.classify(message, conversation_history_formatted)
+        context: ConversationContext = context_analyzer.analyze(conversation_history_formatted, message)
         safety_check: SafetyCheckResult = safety_guards.check(classification, context)
 
         # Determine exit intent (uses helper)
@@ -236,9 +226,7 @@ async def _emit_session_create(session_id: str, context: Dict[str, Any]) -> None
     await get_extension_manager().invoke_hook(HookPoint.SESSION_CREATE, ctx)
 
 
-async def _emit_session_destroy(
-    session_id: str, message_count: int, context: Dict[str, Any]
-) -> None:
+async def _emit_session_destroy(session_id: str, message_count: int, context: Dict[str, Any]) -> None:
     """Emit SESSION_DESTROY hook to registered extensions.
 
     Issue #4181: Fires when a chat session is closed so extensions
@@ -256,9 +244,7 @@ async def _emit_session_destroy(
     await get_extension_manager().invoke_hook(HookPoint.SESSION_DESTROY, ctx)
 
 
-async def _emit_before_rag_query(
-    query: str, session_id: str, context: Dict[str, Any]
-) -> str:
+async def _emit_before_rag_query(query: str, session_id: str, context: Dict[str, Any]) -> str:
     """Emit BEFORE_RAG_QUERY hook to registered extensions.
 
     Issue #4181: Fires before executing RAG query so extensions can
@@ -276,15 +262,11 @@ async def _emit_before_rag_query(
         session_id=session_id,
         data={"query": query, "context": context},
     )
-    result = await get_extension_manager().invoke_with_transform(
-        HookPoint.BEFORE_RAG_QUERY, ctx, "query"
-    )
+    result = await get_extension_manager().invoke_with_transform(HookPoint.BEFORE_RAG_QUERY, ctx, "query")
     return result if isinstance(result, str) else query
 
 
-async def _emit_after_rag_results(
-    results: list, query: str, session_id: str, context: Dict[str, Any]
-) -> list:
+async def _emit_after_rag_results(results: list, query: str, session_id: str, context: Dict[str, Any]) -> list:
     """Emit AFTER_RAG_RESULTS hook to registered extensions.
 
     Issue #4181: Fires after RAG returns results so extensions can
@@ -303,15 +285,11 @@ async def _emit_after_rag_results(
         session_id=session_id,
         data={"results": results, "query": query, "context": context},
     )
-    result = await get_extension_manager().invoke_with_transform(
-        HookPoint.AFTER_RAG_RESULTS, ctx, "results"
-    )
+    result = await get_extension_manager().invoke_with_transform(HookPoint.AFTER_RAG_RESULTS, ctx, "results")
     return result if isinstance(result, list) else results
 
 
-async def _emit_approval_required(
-    request_id: str, action: str, session_id: str, context: Dict[str, Any]
-) -> bool:
+async def _emit_approval_required(request_id: str, action: str, session_id: str, context: Dict[str, Any]) -> bool:
     """Emit APPROVAL_REQUIRED hook to registered extensions.
 
     Issue #4181: Fires when an action requires approval so extensions
@@ -330,15 +308,11 @@ async def _emit_approval_required(
         session_id=session_id,
         data={"request_id": request_id, "action": action, "context": context},
     )
-    result = await get_extension_manager().invoke_until_handled(
-        HookPoint.APPROVAL_REQUIRED, ctx
-    )
+    result = await get_extension_manager().invoke_until_handled(HookPoint.APPROVAL_REQUIRED, ctx)
     return result is not None
 
 
-async def _emit_approval_received(
-    request_id: str, approved: bool, session_id: str, context: Dict[str, Any]
-) -> None:
+async def _emit_approval_received(request_id: str, approved: bool, session_id: str, context: Dict[str, Any]) -> None:
     """Emit APPROVAL_RECEIVED hook to registered extensions.
 
     Issue #4181: Fires when approval is received so extensions can

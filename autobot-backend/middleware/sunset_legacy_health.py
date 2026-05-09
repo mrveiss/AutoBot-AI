@@ -67,7 +67,5 @@ class SunsetLegacyHealthMiddleware(BaseHTTPMiddleware):
         if _is_legacy_module_health(path):
             response.headers["Sunset"] = SUNSET_DATE_HTTP
             response.headers["Deprecation"] = "true"
-            response.headers["Link"] = (
-                '</api/system/health>; rel="successor-version"'
-            )
+            response.headers["Link"] = '</api/system/health>; rel="successor-version"'
         return response

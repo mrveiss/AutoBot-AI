@@ -91,9 +91,7 @@ class ASTCacheStats:
         """Convert to dictionary for API responses."""
         total = self.hits + self.misses
         hit_rate = (self.hits / total * 100) if total > 0 else 0
-        avg_parse_time = (
-            self.total_parse_time_ms / self.misses if self.misses > 0 else 0
-        )
+        avg_parse_time = self.total_parse_time_ms / self.misses if self.misses > 0 else 0
         return {
             "hits": self.hits,
             "misses": self.misses,
@@ -370,9 +368,7 @@ class ASTCache:
             logger.debug("ASTCache: get_safe failed for %s: %s", file_path, e)
             return None
 
-    def get_with_content(
-        self, file_path: Union[str, Path]
-    ) -> Tuple[Optional[ast.AST], str]:
+    def get_with_content(self, file_path: Union[str, Path]) -> Tuple[Optional[ast.AST], str]:
         """
         Get AST and file content together.
 

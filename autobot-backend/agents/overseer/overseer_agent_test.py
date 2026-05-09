@@ -32,16 +32,12 @@ class TestBuildPreviousContext:
     """Tests for _build_previous_context module-level function."""
 
     def test_no_context_for_step_1(self):
-        task = AgentTask(
-            task_id="t1", step_number=1, total_steps=2, description="first"
-        )
+        task = AgentTask(task_id="t1", step_number=1, total_steps=2, description="first")
         result = _build_previous_context(task, {})
         assert result == {}
 
     def test_gathers_completed_results(self):
-        task = AgentTask(
-            task_id="t2", step_number=2, total_steps=2, description="second"
-        )
+        task = AgentTask(task_id="t2", step_number=2, total_steps=2, description="second")
         completed = {
             "t1": StepResult(
                 task_id="t1",
@@ -60,9 +56,7 @@ class TestBuildPreviousContext:
         assert result["t1"]["return_code"] == 0
 
     def test_skips_results_without_output(self):
-        task = AgentTask(
-            task_id="t2", step_number=2, total_steps=2, description="second"
-        )
+        task = AgentTask(task_id="t2", step_number=2, total_steps=2, description="second")
         completed = {
             "t1": StepResult(
                 task_id="t1",

@@ -14,20 +14,14 @@ from typing import FrozenSet
 PLACEHOLDER_PATTERNS = {"example", "placeholder", "your_", "xxx", "changeme", "todo"}
 
 # Issue #380: Module-level frozensets for security pattern checking
-HTTP_METHODS: FrozenSet[str] = frozenset(
-    {"get", "post", "put", "delete", "patch", "route"}
-)
-INSECURE_RANDOM_FUNCS: FrozenSet[str] = frozenset(
-    {"random", "randint", "choice", "shuffle"}
-)
+HTTP_METHODS: FrozenSet[str] = frozenset({"get", "post", "put", "delete", "patch", "route"})
+INSECURE_RANDOM_FUNCS: FrozenSet[str] = frozenset({"random", "randint", "choice", "shuffle"})
 PICKLE_MODULES: FrozenSet[str] = frozenset({"pickle", "cPickle"})
 YAML_LOADER_ARGS: FrozenSet[str] = frozenset({"Loader", "SafeLoader"})
 DEBUG_MODE_VARS: FrozenSet[str] = frozenset({"DEBUG", "DEBUG_MODE"})
 LOAD_FUNCS: FrozenSet[str] = frozenset({"load", "loads"})
 VALIDATION_FUNCS: FrozenSet[str] = frozenset({"validate", "Validator", "Schema"})
-VALIDATION_ATTRS: FrozenSet[str] = frozenset(
-    {"validate", "parse_obj", "model_validate"}
-)
+VALIDATION_ATTRS: FrozenSet[str] = frozenset({"validate", "parse_obj", "model_validate"})
 
 
 class SecuritySeverity(Enum):

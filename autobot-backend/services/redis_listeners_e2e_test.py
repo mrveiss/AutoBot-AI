@@ -27,9 +27,7 @@ def test_worker_capabilities():
         # Connect to Redis using centralized utility
         client = get_redis_client()
         if client is None:
-            print(  # noqa: print
-                "❌ Could not get Redis client from centralized utility"
-            )  # noqa: print
+            print("❌ Could not get Redis client from centralized utility")  # noqa: print  # noqa: print
             return False
         client.ping()
         print(f"✅ Connected to Redis at {redis_host}:{redis_port}")  # noqa: print
@@ -51,9 +49,7 @@ def test_worker_capabilities():
         client.publish(channel, json.dumps(mock_capabilities))
         print(f"✅ Published worker capabilities to channel '{channel}'")  # noqa: print
         print(f"   Worker ID: {mock_capabilities['worker_id']}")  # noqa: print
-        print(  # noqa: print
-            f"   Capabilities: {list(mock_capabilities['capabilities'].keys())}"
-        )  # noqa: print
+        print(f"   Capabilities: {list(mock_capabilities['capabilities'].keys())}")  # noqa: print  # noqa: print
 
         return True
 
@@ -78,9 +74,7 @@ def test_command_approval():
         # Connect to Redis using centralized utility
         client = get_redis_client()
         if client is None:
-            print(  # noqa: print
-                "❌ Could not get Redis client from centralized utility"
-            )  # noqa: print
+            print("❌ Could not get Redis client from centralized utility")  # noqa: print  # noqa: print
             return False
         client.ping()
 
@@ -121,14 +115,10 @@ def test_redis_connection():
     try:
         client = get_redis_client()
         if client is None:
-            print(  # noqa: print
-                "❌ Could not get Redis client from centralized utility"
-            )  # noqa: print
+            print("❌ Could not get Redis client from centralized utility")  # noqa: print  # noqa: print
             return False
         client.ping()
-        print(  # noqa: print
-            f"✅ Redis connection successful at {redis_host}:{redis_port}"
-        )  # noqa: print
+        print(f"✅ Redis connection successful at {redis_host}:{redis_port}")  # noqa: print  # noqa: print
 
         # Test pub/sub functionality
         pubsub = client.pubsub()
@@ -186,12 +176,8 @@ def main():
         print(  # noqa: print
             "   1. Check the AutoBot backend logs to see if the orchestrator received the test messages"
         )
-        print(  # noqa: print
-            "   2. Look for log entries about worker capabilities updates and command approvals"
-        )
-        print(  # noqa: print
-            "   3. The background Redis listeners should now be fully functional"
-        )  # noqa: print
+        print("   2. Look for log entries about worker capabilities updates and command approvals")  # noqa: print
+        print("   3. The background Redis listeners should now be fully functional")  # noqa: print  # noqa: print
     else:
         print("❌ Some Redis listener tests FAILED")  # noqa: print
         print("   Check Redis connection and configuration")  # noqa: print

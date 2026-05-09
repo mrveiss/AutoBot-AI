@@ -103,9 +103,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                 func = decorator.func
                 if isinstance(func, ast.Attribute) and func.attr in HTTP_METHODS:
                     return True
-            elif (
-                isinstance(decorator, ast.Attribute) and decorator.attr in HTTP_METHODS
-            ):
+            elif isinstance(decorator, ast.Attribute) and decorator.attr in HTTP_METHODS:
                 return True
         return False
 
@@ -127,9 +125,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
 
     def _check_input_validation(self, node) -> None:
         """Check if web handler validates input."""
-        has_validation = self._has_validation_call(node) or self._has_type_annotations(
-            node
-        )
+        has_validation = self._has_validation_call(node) or self._has_type_annotations(node)
 
         if not has_validation:
             code = self._get_source_segment(node.lineno, node.end_lineno or node.lineno)
@@ -142,9 +138,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                     line_end=node.end_lineno or node.lineno,
                     description=f"Web handler '{node.name}' may lack input validation",
                     recommendation="Use Pydantic models or validation decorators",
-                    owasp_category=OWASP_MAPPING[
-                        VulnerabilityType.MISSING_INPUT_VALIDATION
-                    ],
+                    owasp_category=OWASP_MAPPING[VulnerabilityType.MISSING_INPUT_VALIDATION],
                     cwe_id="CWE-20",
                     current_code=code,
                     secure_alternative="Use Pydantic BaseModel for request validation",
@@ -159,13 +153,9 @@ class SecurityASTVisitor(ast.NodeVisitor):
 
         if isinstance(func, ast.Name):
             if func.id == "eval":
-                self._add_injection_finding(
-                    node, "eval()", VulnerabilityType.COMMAND_INJECTION, "CWE-95"
-                )
+                self._add_injection_finding(node, "eval()", VulnerabilityType.COMMAND_INJECTION, "CWE-95")
             elif func.id == "exec":
-                self._add_injection_finding(
-                    node, "exec()", VulnerabilityType.COMMAND_INJECTION, "CWE-95"
-                )
+                self._add_injection_finding(node, "exec()", VulnerabilityType.COMMAND_INJECTION, "CWE-95")
             elif func.id == "compile":
                 self._add_injection_finding(
                     node,
@@ -199,9 +189,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                         line_end=node.lineno,
                         description=f"Weak hash algorithm: {func.attr}. {msg}",
                         recommendation="Use SHA-256 or SHA-3 for hashing, bcrypt/argon2 for passwords",
-                        owasp_category=OWASP_MAPPING[
-                            VulnerabilityType.WEAK_HASH_ALGORITHM
-                        ],
+                        owasp_category=OWASP_MAPPING[VulnerabilityType.WEAK_HASH_ALGORITHM],
                         cwe_id=cwe,
                         current_code=code,
                         secure_alternative="hashlib.sha256() or bcrypt.hashpw()",
@@ -222,9 +210,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                             line_end=node.lineno,
                             description="random module is not cryptographically secure",
                             recommendation="Use secrets module for security-sensitive randomness",
-                            owasp_category=OWASP_MAPPING[
-                                VulnerabilityType.INSECURE_RANDOM
-                            ],
+                            owasp_category=OWASP_MAPPING[VulnerabilityType.INSECURE_RANDOM],
                             cwe_id="CWE-330",
                             current_code=code,
                             secure_alternative="secrets.token_hex() or secrets.randbelow()",
@@ -238,10 +224,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
         func = node.func
 
         if isinstance(func, ast.Attribute):
-            if (
-                func.attr in LOAD_FUNCS
-                and self._get_module_name(func) in PICKLE_MODULES
-            ):
+            if func.attr in LOAD_FUNCS and self._get_module_name(func) in PICKLE_MODULES:
                 code = self._get_source_segment(node.lineno, node.lineno)
                 self.findings.append(
                     SecurityFinding(
@@ -273,9 +256,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                             line_end=node.lineno,
                             description="yaml.load() without SafeLoader can execute arbitrary code",
                             recommendation="Use yaml.safe_load() or specify Loader=yaml.SafeLoader",
-                            owasp_category=OWASP_MAPPING[
-                                VulnerabilityType.YAML_LOAD_UNSAFE
-                            ],
+                            owasp_category=OWASP_MAPPING[VulnerabilityType.YAML_LOAD_UNSAFE],
                             cwe_id="CWE-502",
                             current_code=code,
                             secure_alternative="yaml.safe_load(data) or yaml.load(data, Loader=yaml.SafeLoader)",
@@ -302,9 +283,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                                 line_end=node.lineno,
                                 description="subprocess with shell=True is vulnerable to injection",
                                 recommendation="Use shell=False and pass command as list",
-                                owasp_category=OWASP_MAPPING[
-                                    VulnerabilityType.COMMAND_INJECTION
-                                ],
+                                owasp_category=OWASP_MAPPING[VulnerabilityType.COMMAND_INJECTION],
                                 cwe_id="CWE-78",
                                 current_code=code,
                                 secure_alternative="subprocess.run(['cmd', 'arg1', 'arg2'], shell=False)",
@@ -329,9 +308,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                                 line_end=node.lineno,
                                 description="Debug mode appears to be enabled",
                                 recommendation="Disable debug mode in production",
-                                owasp_category=OWASP_MAPPING[
-                                    VulnerabilityType.DEBUG_MODE_ENABLED
-                                ],
+                                owasp_category=OWASP_MAPPING[VulnerabilityType.DEBUG_MODE_ENABLED],
                                 cwe_id="CWE-489",
                                 current_code=code,
                                 secure_alternative="DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'",
@@ -382,9 +359,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                         line_end=node.lineno,
                         description=f"f-string in {function_name} is vulnerable to command injection",
                         recommendation="Use subprocess.run() with list arguments",
-                        owasp_category=OWASP_MAPPING[
-                            VulnerabilityType.COMMAND_INJECTION
-                        ],
+                        owasp_category=OWASP_MAPPING[VulnerabilityType.COMMAND_INJECTION],
                         cwe_id="CWE-78",
                         current_code=code,
                         secure_alternative="subprocess.run(['cmd', arg], shell=False)",

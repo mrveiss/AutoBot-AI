@@ -114,11 +114,7 @@ async def test_connection(request: VCSConnectionTestRequest) -> IntegrationHealt
             api_key=request.api_key,
             base_url=request.settings.get("base_url"),
             username=request.settings.get("username"),
-            extra={
-                k: v
-                for k, v in request.settings.items()
-                if k not in ("base_url", "username")
-            },
+            extra={k: v for k, v in request.settings.items() if k not in ("base_url", "username")},
         )
 
         integration = _create_integration(request.provider, config)

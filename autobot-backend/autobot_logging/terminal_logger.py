@@ -25,9 +25,7 @@ from utils.encoding_utils import strip_ansi_codes
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level frozenset for command statuses requiring command display
-_COMMAND_DISPLAY_STATUSES: FrozenSet[str] = frozenset(
-    {"EXECUTING", "PENDING_APPROVAL", "SUCCESS", "ERROR"}
-)
+_COMMAND_DISPLAY_STATUSES: FrozenSet[str] = frozenset({"EXECUTING", "PENDING_APPROVAL", "SUCCESS", "ERROR"})
 
 # Issue #380: Module-level frozensets for status matching (case-insensitive)
 _SUCCESS_STATUSES: FrozenSet[str] = frozenset({"success", "SUCCESS"})
@@ -57,8 +55,7 @@ class TerminalLogger:
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(
-            f"TerminalLogger initialized - data_dir: {self.data_dir}, "
-            f"redis_enabled: {redis_client is not None}"
+            f"TerminalLogger initialized - data_dir: {self.data_dir}, " f"redis_enabled: {redis_client is not None}"
         )
 
     async def _ensure_chat_json_exists(self, session_id: str):
@@ -97,9 +94,7 @@ class TerminalLogger:
                 logger.error(f"❌ Failed to write chat.json file {chat_file}: {e}")
                 raise
             except Exception as e:
-                logger.error(
-                    f"❌ Failed to create chat.json for session {session_id}: {e}"
-                )
+                logger.error(f"❌ Failed to create chat.json for session {session_id}: {e}")
                 raise
 
     def _create_log_entry(
@@ -154,9 +149,7 @@ class TerminalLogger:
         if self.redis_client:
             await self._cache_command(session_id, log_entry)
 
-        logger.debug(
-            f"Logged {run_type} command for session {session_id}: {command[:50]}..."
-        )
+        logger.debug(f"Logged {run_type} command for session {session_id}: {command[:50]}...")
         return log_entry
 
     @staticmethod
@@ -195,15 +188,11 @@ class TerminalLogger:
 
             # Add truncated output (stripped of ANSI codes)
             if result.get("stdout"):
-                stdout = self._strip_ansi_codes(result["stdout"])[:200].replace(
-                    "\n", " "
-                )
+                stdout = self._strip_ansi_codes(result["stdout"])[:200].replace("\n", " ")
                 line += f" | OUTPUT: {stdout}..."
 
             if result.get("stderr"):
-                stderr = self._strip_ansi_codes(result["stderr"])[:200].replace(
-                    "\n", " "
-                )
+                stderr = self._strip_ansi_codes(result["stderr"])[:200].replace("\n", " ")
                 line += f" | ERROR: {stderr}..."
 
         return line
@@ -233,9 +222,7 @@ class TerminalLogger:
         except Exception as e:
             logger.error("Failed to cache command in Redis: %s", e)
 
-    async def get_recent_commands(
-        self, session_id: str, limit: int = 100
-    ) -> List[Dict[str, Any]]:
+    async def get_recent_commands(self, session_id: str, limit: int = 100) -> List[Dict[str, Any]]:
         """
         Get recent commands for a session.
 
@@ -252,14 +239,10 @@ class TerminalLogger:
                 import json
 
                 cache_key = f"chat:session:{session_id}:terminal"
-                cached_commands = await self.redis_client.lrange(
-                    cache_key, 0, limit - 1
-                )
+                cached_commands = await self.redis_client.lrange(cache_key, 0, limit - 1)
 
                 if cached_commands:
-                    logger.debug(
-                        f"Cache HIT for terminal commands: session {session_id}"
-                    )
+                    logger.debug(f"Cache HIT for terminal commands: session {session_id}")
                     return [json.loads(cmd) for cmd in cached_commands]
 
             except Exception as e:
@@ -269,9 +252,7 @@ class TerminalLogger:
         logger.debug("Cache MISS for terminal commands: session %s", session_id)
         return await self._read_from_file(session_id, limit)
 
-    async def _read_from_file(
-        self, session_id: str, limit: int = 100
-    ) -> List[Dict[str, Any]]:
+    async def _read_from_file(self, session_id: str, limit: int = 100) -> List[Dict[str, Any]]:
         """Read recent commands from log file."""
         log_file = self.data_dir / f"{session_id}_terminal.log"
 
@@ -362,9 +343,7 @@ class TerminalLogger:
             # Set expiry
             await self.redis_client.expire(cache_key, self.cache_ttl)
 
-            logger.debug(
-                f"Warmed cache for session {session_id}: {len(commands)} commands"
-            )
+            logger.debug(f"Warmed cache for session {session_id}: {len(commands)} commands")
 
         except Exception as e:
             logger.error("Failed to warm cache: %s", e)
@@ -384,9 +363,7 @@ class TerminalLogger:
         autobot_count = sum(1 for cmd in commands if cmd.get("run_type") == "AUTOBOT")
         manual_count = sum(1 for cmd in commands if cmd.get("run_type") == "MANUAL")
 
-        success_count = sum(
-            1 for cmd in commands if cmd.get("status") in _SUCCESS_STATUSES
-        )
+        success_count = sum(1 for cmd in commands if cmd.get("status") in _SUCCESS_STATUSES)
         error_count = sum(1 for cmd in commands if cmd.get("status") in _ERROR_STATUSES)
 
         return {
@@ -427,7 +404,5 @@ class TerminalLogger:
             return True
 
         except Exception as e:
-            logger.error(
-                "Failed to clear terminal logs for session %s: %s", session_id, e
-            )
+            logger.error("Failed to clear terminal logs for session %s: %s", session_id, e)
             return False

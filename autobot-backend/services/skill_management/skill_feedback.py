@@ -68,9 +68,7 @@ class SkillFeedbackAnalyzer(AsyncRedisClientMixin):
         except Exception as e:
             logger.error("Failed to log user feedback: %s", e)
 
-    async def get_feedback_summary(
-        self, skill_id: str, days: int = 30
-    ) -> Dict[str, Any]:
+    async def get_feedback_summary(self, skill_id: str, days: int = 30) -> Dict[str, Any]:
         """Get summary of user feedback for a skill.
 
         Args:
@@ -120,10 +118,7 @@ class SkillFeedbackAnalyzer(AsyncRedisClientMixin):
 
             # Find most common failure patterns
             pattern_counter = Counter(failure_patterns)
-            top_patterns = [
-                {"pattern": p, "count": c}
-                for p, c in pattern_counter.most_common(5)
-            ]
+            top_patterns = [{"pattern": p, "count": c} for p, c in pattern_counter.most_common(5)]
 
             return {
                 "skill_id": skill_id,
@@ -150,9 +145,7 @@ class SkillFeedbackAnalyzer(AsyncRedisClientMixin):
                 "failure_patterns": [],
             }
 
-    async def get_refinement_suggestions(
-        self, skill_id: str
-    ) -> Dict[str, Any]:
+    async def get_refinement_suggestions(self, skill_id: str) -> Dict[str, Any]:
         """Suggest improvements for a skill based on feedback patterns.
 
         Args:
@@ -171,40 +164,48 @@ class SkillFeedbackAnalyzer(AsyncRedisClientMixin):
             if feedback.get("needs_refinement"):
                 patterns = feedback.get("failure_patterns", [])
                 pattern_text = ", ".join([p["pattern"] for p in patterns[:2]])
-                suggestions.append({
-                    "type": "refinement",
-                    "priority": "high",
-                    "message": f"Consider editing skill to address failure patterns: {pattern_text}",
-                    "confidence": 0.9,
-                })
+                suggestions.append(
+                    {
+                        "type": "refinement",
+                        "priority": "high",
+                        "message": f"Consider editing skill to address failure patterns: {pattern_text}",
+                        "confidence": 0.9,
+                    }
+                )
 
             # Suggest performance optimization if avg duration > 5s
             if metrics["avg_duration_ms"] > 5000:
-                suggestions.append({
-                    "type": "performance",
-                    "priority": "medium",
-                    "message": f"Skill is slow (avg {metrics['avg_duration_ms']:.0f}ms). Consider optimization.",
-                    "confidence": 0.8,
-                })
+                suggestions.append(
+                    {
+                        "type": "performance",
+                        "priority": "medium",
+                        "message": f"Skill is slow (avg {metrics['avg_duration_ms']:.0f}ms). Consider optimization.",
+                        "confidence": 0.8,
+                    }
+                )
 
             # Suggest deprecation if low usage
             if metrics["invocations"] < 5 and metrics["invocations"] > 0:
-                suggestions.append({
-                    "type": "deprecation",
-                    "priority": "low",
-                    "message": "Skill has low usage. Consider deprecation if not essential.",
-                    "confidence": 0.6,
-                })
+                suggestions.append(
+                    {
+                        "type": "deprecation",
+                        "priority": "low",
+                        "message": "Skill has low usage. Consider deprecation if not essential.",
+                        "confidence": 0.6,
+                    }
+                )
 
             # Suggest error handling improvements if error variety high
             error_types = len(metrics.get("error_patterns", {}))
             if error_types > 4:
-                suggestions.append({
-                    "type": "error_handling",
-                    "priority": "medium",
-                    "message": f"Skill produces many error types ({error_types}). Improve error handling.",
-                    "confidence": 0.75,
-                })
+                suggestions.append(
+                    {
+                        "type": "error_handling",
+                        "priority": "medium",
+                        "message": f"Skill produces many error types ({error_types}). Improve error handling.",
+                        "confidence": 0.75,
+                    }
+                )
 
             return {
                 "skill_id": skill_id,

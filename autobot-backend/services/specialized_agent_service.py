@@ -70,9 +70,7 @@ def _categorize_agent(name: str, description: str) -> str:
     for category, keywords in _CATEGORY_RULES:
         if any(kw in combined for kw in keywords):
             # analysis takes priority over implementation for reviewers
-            if category == "implementation" and (
-                "review" in combined or "analysis" in combined
-            ):
+            if category == "implementation" and ("review" in combined or "analysis" in combined):
                 return "analysis"
             return category
     return "general"
@@ -160,9 +158,7 @@ class SpecializedAgentService:
 
         return self._parse_file(md_file, include_full_prompt=True)
 
-    def get_categories_summary(
-        self, agents: Optional[List[Dict[str, Any]]] = None
-    ) -> Dict[str, int]:
+    def get_categories_summary(self, agents: Optional[List[Dict[str, Any]]] = None) -> Dict[str, int]:
         """Return count per category (#1794)."""
         if agents is None:
             agents = self.list_agents()
@@ -177,9 +173,7 @@ class SpecializedAgentService:
     # Internals
     # ------------------------------------------------------------------
 
-    def _parse_file(
-        self, md_file: Path, include_full_prompt: bool = False
-    ) -> Optional[Dict[str, Any]]:
+    def _parse_file(self, md_file: Path, include_full_prompt: bool = False) -> Optional[Dict[str, Any]]:
         """Parse a single .md agent file (#1794)."""
         try:
             content = md_file.read_text(encoding="utf-8")
@@ -206,8 +200,6 @@ class SpecializedAgentService:
 
         if include_full_prompt:
             match = re.match(r"^---\s*\n.*?\n---\s*\n?", content, re.DOTALL)
-            agent["system_prompt"] = (
-                content[match.end() :].strip() if match else content.strip()
-            )
+            agent["system_prompt"] = content[match.end() :].strip() if match else content.strip()
 
         return agent

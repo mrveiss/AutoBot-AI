@@ -76,8 +76,7 @@ class NotionIntegration(BaseIntegration):
                     details={
                         "bot_id": body.get("id"),
                         "name": body.get("name"),
-                        "workspace_name": body.get("bot", {})
-                        .get("workspace_name", ""),
+                        "workspace_name": body.get("bot", {}).get("workspace_name", ""),
                     },
                 )
             if result.get("status_code") == 401:
@@ -150,9 +149,7 @@ class NotionIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Dispatch a named action with the provided parameters."""
         action_map: Dict[str, Any] = {
             "list_databases": self._list_databases,
@@ -232,9 +229,7 @@ class NotionIntegration(BaseIntegration):
         if page_result.get("status_code") != 200:
             return {"error": "HTTP %s" % page_result.get("status_code")}
 
-        blocks_result = await self._notion_request(
-            "GET", "/blocks/%s/children?page_size=100" % page_id
-        )
+        blocks_result = await self._notion_request("GET", "/blocks/%s/children?page_size=100" % page_id)
         blocks = []
         if blocks_result.get("status_code") == 200:
             blocks = blocks_result.get("body", {}).get("results", [])
@@ -289,9 +284,7 @@ class NotionIntegration(BaseIntegration):
         if not payload:
             return {"error": "No update fields provided"}
 
-        result = await self._notion_request(
-            "PATCH", "/pages/%s" % page_id, json_data=payload
-        )
+        result = await self._notion_request("PATCH", "/pages/%s" % page_id, json_data=payload)
         if result.get("status_code") == 200:
             body = result.get("body", {})
             return {
@@ -321,9 +314,7 @@ class NotionIntegration(BaseIntegration):
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(
-                    method, url, headers=headers, json=json_data
-                ) as resp:
+                async with session.request(method, url, headers=headers, json=json_data) as resp:
                     body = await resp.json(content_type=None)
                     return {"status_code": resp.status, "body": body}
         except aiohttp.ClientError as exc:

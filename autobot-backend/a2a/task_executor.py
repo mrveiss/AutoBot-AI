@@ -64,9 +64,7 @@ async def execute_a2a_task(
     """
     manager = get_task_manager()
     manager.update_state(task_id, TaskState.WORKING)
-    manager.publish_event(
-        task_id, {"event": "state_change", "state": "working", "task_id": task_id}
-    )
+    manager.publish_event(task_id, {"event": "state_change", "state": "working", "task_id": task_id})
 
     try:
         # Late import to avoid circular deps at module load time

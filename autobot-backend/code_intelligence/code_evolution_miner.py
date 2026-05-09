@@ -204,9 +204,7 @@ class TemporalEmbedding:
 
     def get_pattern_counts_by_month(self) -> Dict[str, Dict[str, int]]:
         """Get pattern counts grouped by month"""
-        monthly_counts: Dict[str, Dict[str, int]] = defaultdict(
-            lambda: defaultdict(int)
-        )
+        monthly_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
 
         for pattern_type, occurrences in self.pattern_timeline.items():
             for occurrence in occurrences:
@@ -255,21 +253,15 @@ class PatternEvolutionTracker:
         self.temporal_embedding.add_pattern(occurrence)
 
         # Find or create lifecycle
-        lifecycle = self._find_lifecycle(
-            occurrence.pattern_type, occurrence.file_path, occurrence.line_number
-        )
+        lifecycle = self._find_lifecycle(occurrence.pattern_type, occurrence.file_path, occurrence.line_number)
 
         if lifecycle is None:
-            lifecycle = PatternLifecycle(
-                occurrence.pattern_type, occurrence.file_path, occurrence.line_number
-            )
+            lifecycle = PatternLifecycle(occurrence.pattern_type, occurrence.file_path, occurrence.line_number)
             self.lifecycles.append(lifecycle)
 
         lifecycle.add_occurrence(occurrence)
 
-    def _find_lifecycle(
-        self, pattern_type: str, file_path: str, line_number: int
-    ) -> Optional[PatternLifecycle]:
+    def _find_lifecycle(self, pattern_type: str, file_path: str, line_number: int) -> Optional[PatternLifecycle]:
         """Find existing lifecycle for a pattern"""
         for lifecycle in self.lifecycles:
             if (
@@ -429,9 +421,7 @@ class CodeEvolutionMiner:
                         code = f.read()
 
                     # Use anti-pattern detector
-                    results = self.anti_pattern_detector.analyze_code(
-                        code, str(file_path)
-                    )
+                    results = self.anti_pattern_detector.analyze_code(code, str(file_path))
 
                     # Track each detected pattern
                     for result in results.patterns:
@@ -474,16 +464,8 @@ class CodeEvolutionMiner:
                 "total_occurrences": len(occurrences),
                 "trend": self.tracker.temporal_embedding.calculate_trend(pattern_type),
                 "adoption_rate": self.tracker.get_pattern_adoption_rate(pattern_type),
-                "first_seen": (
-                    min(occ.timestamp for occ in occurrences).isoformat()
-                    if occurrences
-                    else None
-                ),
-                "last_seen": (
-                    max(occ.timestamp for occ in occurrences).isoformat()
-                    if occurrences
-                    else None
-                ),
+                "first_seen": (min(occ.timestamp for occ in occurrences).isoformat() if occurrences else None),
+                "last_seen": (max(occ.timestamp for occ in occurrences).isoformat() if occurrences else None),
             }
 
         return metrics

@@ -9,6 +9,7 @@ Issue #6464 - Install 3rd-party plugins from ZIP upload or Git URL.
 Note: Uses asyncio.create_subprocess_exec (no shell, args passed as a list)
 which is the safe equivalent of execFile — no shell injection possible.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -151,10 +152,7 @@ def _validate_zip_metadata(zf: zipfile.ZipFile, extract_root: Path) -> None:
                 detail=f"Archive contains symlink: {info.filename}",
             )
         # Sentinel against ZIP bombs whose header file_size is honest.
-        if (
-            info.compress_size > 0
-            and info.file_size // info.compress_size > _MAX_COMPRESSION_RATIO
-        ):
+        if info.compress_size > 0 and info.file_size // info.compress_size > _MAX_COMPRESSION_RATIO:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Archive entry has suspicious compression ratio: {info.filename}",
@@ -195,11 +193,7 @@ def _safe_extract(zf: zipfile.ZipFile, extract_root: Path) -> None:
 def _find_plugin_root(extract_dir: Path) -> Path:
     if (extract_dir / "plugin.json").is_file():
         return extract_dir
-    children = [
-        c
-        for c in extract_dir.iterdir()
-        if c.is_dir() and c.name != "__MACOSX" and not c.name.startswith(".")
-    ]
+    children = [c for c in extract_dir.iterdir() if c.is_dir() and c.name != "__MACOSX" and not c.name.startswith(".")]
     if len(children) == 1 and (children[0] / "plugin.json").is_file():
         return children[0]
     raise HTTPException(
@@ -261,9 +255,7 @@ async def install_from_zip(upload: UploadFile) -> InstallResult:
                 shutil.rmtree(target, ignore_errors=True)
                 raise
         logger.info("Installed plugin '%s' v%s from ZIP upload", name, manifest.version)
-        return InstallResult(
-            name=name, version=manifest.version, path=str(target), source="zip"
-        )
+        return InstallResult(name=name, version=manifest.version, path=str(target), source="zip")
 
 
 def _extract_archive(zip_path: Path, extract_dir: Path) -> None:
@@ -317,9 +309,7 @@ async def _git_clone(url: str, ref: Optional[str], dest: Path) -> None:
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        _, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=_GIT_CLONE_TIMEOUT_SECONDS
-        )
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_CLONE_TIMEOUT_SECONDS)
     except asyncio.TimeoutError as exc:
         proc.kill()
         await proc.wait()
@@ -356,9 +346,5 @@ async def install_from_git(url: str, ref: Optional[str]) -> InstallResult:
             except Exception:
                 shutil.rmtree(target, ignore_errors=True)
                 raise
-        logger.info(
-            "Installed plugin '%s' v%s from git %s", name, manifest.version, url
-        )
-        return InstallResult(
-            name=name, version=manifest.version, path=str(target), source="git"
-        )
+        logger.info("Installed plugin '%s' v%s from git %s", name, manifest.version, url)
+        return InstallResult(name=name, version=manifest.version, path=str(target), source="git")

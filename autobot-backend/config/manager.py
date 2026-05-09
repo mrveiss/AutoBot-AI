@@ -103,9 +103,7 @@ class ConfigManager(
 
     def _reload_config(self) -> None:
         """Reload configuration from files."""
-        self._config = load_configuration(
-            self.config_dir, self.base_config_file, self.settings_file
-        )
+        self._config = load_configuration(self.config_dir, self.base_config_file, self.settings_file)
         self._sync_cache_timestamp = time.time()
 
 

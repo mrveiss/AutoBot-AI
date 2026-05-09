@@ -21,10 +21,10 @@ from services.knowledge.synthesis_schema_loader import (
     load_synthesis_schema,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write_yaml(tmp_path: Path, content: str) -> Path:
     """Write YAML content to a temp file and return its path."""
@@ -65,6 +65,7 @@ VALID_YAML = """\
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestLoadSuccess:
     def test_returns_synthesis_schema(self, tmp_path):
@@ -237,6 +238,7 @@ class TestPathExistenceWarnings:
         real_dir.mkdir()
         schema_path = _write_yaml(tmp_path, self._yaml_with_paths("existing_docs"))
         import logging
+
         with caplog.at_level(logging.WARNING):
             load_synthesis_schema(schema_path, repo_root=tmp_path)
         warnings = [r for r in caplog.records if r.levelname == "WARNING" and "does not exist" in r.message]
@@ -245,6 +247,7 @@ class TestPathExistenceWarnings:
     def test_warning_for_missing_path(self, tmp_path, caplog):
         schema_path = _write_yaml(tmp_path, self._yaml_with_paths("nonexistent_dir"))
         import logging
+
         with caplog.at_level(logging.WARNING):
             schema = load_synthesis_schema(schema_path, repo_root=tmp_path)
         # Schema still loads — no exception
@@ -261,6 +264,7 @@ class TestPathExistenceWarnings:
             self._yaml_with_paths("real_docs", "missing_one", "missing_two"),
         )
         import logging
+
         with caplog.at_level(logging.WARNING):
             schema = load_synthesis_schema(schema_path, repo_root=tmp_path)
         assert len(schema.collections) == 1

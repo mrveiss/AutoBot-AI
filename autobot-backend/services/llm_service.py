@@ -98,15 +98,11 @@ def _apply_task_defaults(
     """
     defaults = _TASK_TYPE_DEFAULTS.get(llm_type.value, _TASK_TYPE_DEFAULTS["general"])
     resolved_temp = temperature if temperature is not None else defaults["temperature"]
-    resolved_tokens = (
-        max_tokens if max_tokens is not None else defaults.get("max_tokens")
-    )
+    resolved_tokens = max_tokens if max_tokens is not None else defaults.get("max_tokens")
     return resolved_temp, resolved_tokens
 
 
-def _build_error_response(
-    request: LLMRequest, message: str, provider_name: str
-) -> LLMResponse:
+def _build_error_response(request: LLMRequest, message: str, provider_name: str) -> LLMResponse:
     """Build a standardised error LLMResponse."""
     return LLMResponse(
         content="",
@@ -136,9 +132,7 @@ class LLMService:
         self._active_provider: Optional[str] = None
         # Tiered model routing — mirrors LLMInterface._init_tiered_routing() (#3185).
         try:
-            self._tier_router: Optional[TieredModelRouter] = TieredModelRouter(
-                TierConfig.from_config()
-            )
+            self._tier_router: Optional[TieredModelRouter] = TieredModelRouter(TierConfig.from_config())
         except Exception as exc:  # pragma: no cover
             logger.warning("Tiered routing init failed, disabled: %s", exc)
             self._tier_router = None
@@ -147,9 +141,7 @@ class LLMService:
     # Per-conversation model configuration
     # ------------------------------------------------------------------
 
-    def set_conversation_provider(
-        self, conversation_id: str, provider_name: str
-    ) -> None:
+    def set_conversation_provider(self, conversation_id: str, provider_name: str) -> None:
         """Pin a provider for all future requests in a conversation."""
         self._registry.set_conversation_provider(conversation_id, provider_name)
 
@@ -219,9 +211,7 @@ class LLMService:
         response = await provider.chat_completion(request)
         if response.error:
             self._error_count += 1
-            logger.warning(
-                "Provider %s returned error: %s", provider.provider_name, response.error
-            )
+            logger.warning("Provider %s returned error: %s", provider.provider_name, response.error)
         self._track_usage(response, conversation_id)
         return response
 
@@ -277,9 +267,7 @@ class LLMService:
                 yield chunk
         except Exception as exc:
             self._error_count += 1
-            logger.error(
-                "Stream error from provider %s: %s", provider.provider_name, exc
-            )
+            logger.error("Stream error from provider %s: %s", provider.provider_name, exc)
             raise
 
     # ------------------------------------------------------------------
@@ -294,9 +282,7 @@ class LLMService:
             entry["available"] = availability.get(str(entry["name"]), False)
         return {"providers": providers}
 
-    async def list_models(
-        self, provider_name: Optional[str] = None
-    ) -> Dict[str, List[str]]:
+    async def list_models(self, provider_name: Optional[str] = None) -> Dict[str, List[str]]:
         """
         Return available models, optionally filtered to a single provider.
 
@@ -304,9 +290,7 @@ class LLMService:
         """
         import asyncio as _asyncio
 
-        target_names = (
-            [provider_name] if provider_name else list(self._registry._providers.keys())
-        )
+        target_names = [provider_name] if provider_name else list(self._registry._providers.keys())
         results: Dict[str, List[str]] = {}
         for name in target_names:
             provider = self._registry._providers.get(name)
@@ -383,22 +367,12 @@ class LLMService:
         try:
             registry = get_tool_registry()
             tool_set = set(available_tools)
-            uncompressed = {
-                n: d
-                for n, d in registry.get_raw_descriptions().items()
-                if n in tool_set
-            }
+            uncompressed = {n: d for n, d in registry.get_raw_descriptions().items() if n in tool_set}
             compressed_map = await registry.get_compressed_descriptions()
-            tool_descriptions = {
-                n: d for n, d in compressed_map.items() if n in tool_set
-            }
+            tool_descriptions = {n: d for n, d in compressed_map.items() if n in tool_set}
             uncompressed_bytes = sum(len(d) for d in uncompressed.values())
             compressed_bytes = sum(len(d) for d in tool_descriptions.values())
-            saving_pct = (
-                (1 - compressed_bytes / uncompressed_bytes) * 100
-                if uncompressed_bytes
-                else 0
-            )
+            saving_pct = (1 - compressed_bytes / uncompressed_bytes) * 100 if uncompressed_bytes else 0
             logger.debug(
                 "[#5827] Tool desc savings: %d tools, %d → %d bytes (%.0f%% reduction)",
                 len(tool_descriptions),
@@ -431,9 +405,7 @@ class LLMService:
         try:
             from config.manager import get_config_manager as _get_cfg
 
-            model_name: str = _get_cfg().get(
-                "llm.vllm.default_model", "meta-llama/Llama-3.2-3B-Instruct"
-            )
+            model_name: str = _get_cfg().get("llm.vllm.default_model", "meta-llama/Llama-3.2-3B-Instruct")
         except Exception:
             model_name = "meta-llama/Llama-3.2-3B-Instruct"
 
@@ -506,9 +478,7 @@ class LLMService:
     # Runtime provider control (#3185)
     # ------------------------------------------------------------------
 
-    async def switch_provider(
-        self, provider: str, model: str = "", validate: bool = False
-    ) -> Dict[str, Any]:
+    async def switch_provider(self, provider: str, model: str = "", validate: bool = False) -> Dict[str, Any]:
         """Switch the active LLM provider at runtime.
 
         Ported from ``LLMInterface.switch_provider`` (interface.py line 469).
@@ -675,9 +645,7 @@ class LLMService:
     # Provider health check (#3185, ported from LLMInterface._is_provider_healthy)
     # ------------------------------------------------------------------
 
-    async def is_provider_healthy(
-        self, provider_name: str
-    ) -> tuple[bool, Optional[str]]:
+    async def is_provider_healthy(self, provider_name: str) -> tuple[bool, Optional[str]]:
         """Check whether a named provider is currently healthy.
 
         Public equivalent of ``LLMInterface._is_provider_healthy()``
@@ -770,9 +738,7 @@ class LLMService:
             )
         return None, cache_key
 
-    async def _optimized_store_cache(
-        self, cache_key: str, response: LLMResponse, request_id: str
-    ) -> None:
+    async def _optimized_store_cache(self, cache_key: str, response: LLMResponse, request_id: str) -> None:
         """Store a successful optimized-chat response in the L1/L2 cache."""
         await self._response_cache.set(
             cache_key,
@@ -785,9 +751,7 @@ class LLMService:
             ),
         )
 
-    def _track_usage(
-        self, response: LLMResponse, conversation_id: Optional[str]
-    ) -> None:
+    def _track_usage(self, response: LLMResponse, conversation_id: Optional[str]) -> None:
         """Forward usage data to the cost tracker when available."""
         if not response.usage:
             return

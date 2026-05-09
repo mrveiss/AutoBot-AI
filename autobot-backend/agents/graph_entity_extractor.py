@@ -226,28 +226,20 @@ class GraphEntityExtractor:
         combined_text = self._combine_messages(messages)
 
         if not combined_text.strip():
-            logger.warning(
-                "No content to extract from conversation %s", conversation_id
-            )
+            logger.warning("No content to extract from conversation %s", conversation_id)
             return
 
         # Step 2: Extract and filter facts
-        high_confidence_facts = await self._extract_facts_from_messages(
-            combined_text, conversation_id, result
-        )
+        high_confidence_facts = await self._extract_facts_from_messages(combined_text, conversation_id, result)
 
         # Step 3: Process entity candidates
-        entity_candidates = self._facts_to_entity_candidates(
-            high_confidence_facts, conversation_id, session_metadata
-        )
+        entity_candidates = self._facts_to_entity_candidates(high_confidence_facts, conversation_id, session_metadata)
         created_entities = await self._process_entity_candidates(
             high_confidence_facts, conversation_id, session_metadata, result
         )
 
         # Step 4: Process relationships
-        await self._process_relationships(
-            entity_candidates, high_confidence_facts, created_entities, result
-        )
+        await self._process_relationships(entity_candidates, high_confidence_facts, created_entities, result)
 
     @error_boundary(
         component="graph_entity_extractor",
@@ -276,14 +268,9 @@ class GraphEntityExtractor:
         result = ExtractionResult(conversation_id=conversation_id)
 
         try:
-            logger.info(
-                f"Extracting entities from conversation {conversation_id} "
-                f"({len(messages)} messages)"
-            )
+            logger.info(f"Extracting entities from conversation {conversation_id} " f"({len(messages)} messages)")
 
-            await self._perform_extraction_pipeline(
-                conversation_id, messages, session_metadata, result
-            )
+            await self._perform_extraction_pipeline(conversation_id, messages, session_metadata, result)
 
             result.processing_time = time.perf_counter() - start_time
             logger.info(
@@ -357,9 +344,7 @@ class GraphEntityExtractor:
             grouped_facts = self._group_similar_facts(type_facts)
 
             for fact_group in grouped_facts:
-                candidate = self._build_entity_candidate_from_group(
-                    fact_group, entity_type, conversation_id
-                )
+                candidate = self._build_entity_candidate_from_group(fact_group, entity_type, conversation_id)
                 entity_candidates.append(candidate)
 
         return entity_candidates
@@ -438,9 +423,7 @@ class GraphEntityExtractor:
 
         return intersection / union if union > 0 else 0.0
 
-    def _generate_entity_name(
-        self, fact: AtomicFact, entity_type: str, conversation_id: str
-    ) -> str:
+    def _generate_entity_name(self, fact: AtomicFact, entity_type: str, conversation_id: str) -> str:
         """
         Generate entity name from fact content.
 
@@ -469,13 +452,9 @@ class GraphEntityExtractor:
         # Add conversation reference
         conv_suffix = conversation_id[:8]
 
-        return (
-            f"{entity_type.replace('_', ' ').title()}: {truncated}... ({conv_suffix})"
-        )
+        return f"{entity_type.replace('_', ' ').title()}: {truncated}... ({conv_suffix})"
 
-    async def _create_entities_in_graph(
-        self, candidates: List[EntityCandidate]
-    ) -> List[Dict[str, Any]]:
+    async def _create_entities_in_graph(self, candidates: List[EntityCandidate]) -> List[Dict[str, Any]]:
         """
         Create entities in memory graph.
 
@@ -498,11 +477,7 @@ class GraphEntityExtractor:
                     observations=candidate.observations,
                     metadata={
                         "confidence": candidate.confidence,
-                        "temporal_type": (
-                            candidate.temporal_type.value
-                            if candidate.temporal_type
-                            else "unknown"
-                        ),
+                        "temporal_type": (candidate.temporal_type.value if candidate.temporal_type else "unknown"),
                         "priority": "medium",
                         "status": "active",
                     },
@@ -542,9 +517,7 @@ class GraphEntityExtractor:
         for i, entity_a in enumerate(entity_candidates):
             for entity_b in entity_candidates[i + 1 :]:
                 # Check if entities co-occur in facts
-                co_occurrence_evidence = self._check_co_occurrence(
-                    entity_a, entity_b, facts
-                )
+                co_occurrence_evidence = self._check_co_occurrence(entity_a, entity_b, facts)
 
                 if co_occurrence_evidence:
                     relation_candidates.append(
@@ -560,9 +533,7 @@ class GraphEntityExtractor:
         # Strategy 2: Keyword-based relationships
         for entity in entity_candidates:
             for fact in entity.facts:
-                keyword_relations = self._extract_keyword_relations(
-                    entity, fact, entity_candidates
-                )
+                keyword_relations = self._extract_keyword_relations(entity, fact, entity_candidates)
                 relation_candidates.extend(keyword_relations)
 
         # Deduplicate relationships
@@ -651,9 +622,7 @@ class GraphEntityExtractor:
 
         return relations
 
-    def _deduplicate_relations(
-        self, relations: List[RelationCandidate]
-    ) -> List[RelationCandidate]:
+    def _deduplicate_relations(self, relations: List[RelationCandidate]) -> List[RelationCandidate]:
         """
         Remove duplicate relationship candidates.
 
@@ -668,17 +637,12 @@ class GraphEntityExtractor:
         for relation in relations:
             key = (relation.from_entity, relation.to_entity, relation.relation_type)
 
-            if (
-                key not in unique_map
-                or relation.confidence > unique_map[key].confidence
-            ):
+            if key not in unique_map or relation.confidence > unique_map[key].confidence:
                 unique_map[key] = relation
 
         return list(unique_map.values())
 
-    async def _create_relations_in_graph(
-        self, candidates: List[RelationCandidate]
-    ) -> List[Dict[str, Any]]:
+    async def _create_relations_in_graph(self, candidates: List[RelationCandidate]) -> List[Dict[str, Any]]:
         """
         Create relationships in memory graph.
 
@@ -711,10 +675,7 @@ class GraphEntityExtractor:
                 )
 
             except Exception as e:
-                logger.warning(
-                    f"Failed to create relation "
-                    f"{candidate.from_entity} -> {candidate.to_entity}: {e}"
-                )
+                logger.warning(f"Failed to create relation " f"{candidate.from_entity} -> {candidate.to_entity}: {e}")
                 continue
 
         return created_relations
@@ -748,9 +709,7 @@ class GraphEntityExtractor:
 
         # Filter facts by confidence
         high_confidence_facts = [
-            fact
-            for fact in extraction_result.facts
-            if fact.confidence >= self.confidence_threshold
+            fact for fact in extraction_result.facts if fact.confidence >= self.confidence_threshold
         ]
 
         logger.info(
@@ -779,9 +738,7 @@ class GraphEntityExtractor:
         Returns:
             List of created entities
         """
-        entity_candidates = self._facts_to_entity_candidates(
-            high_confidence_facts, conversation_id, session_metadata
-        )
+        entity_candidates = self._facts_to_entity_candidates(high_confidence_facts, conversation_id, session_metadata)
         logger.info("Generated %s entity candidates", len(entity_candidates))
 
         created_entities = await self._create_entities_in_graph(entity_candidates)
@@ -809,9 +766,7 @@ class GraphEntityExtractor:
         if not self.enable_relationship_inference or len(created_entities) <= 1:
             return
 
-        relation_candidates = self._infer_relationships(
-            entity_candidates, high_confidence_facts
-        )
+        relation_candidates = self._infer_relationships(entity_candidates, high_confidence_facts)
         logger.info("Inferred %s relationship candidates", len(relation_candidates))
 
         created_relations = await self._create_relations_in_graph(relation_candidates)
@@ -833,9 +788,7 @@ class GraphEntityExtractor:
             EntityCandidate object
         """
         primary_fact = fact_group[0]
-        entity_name = self._generate_entity_name(
-            primary_fact, entity_type, conversation_id
-        )
+        entity_name = self._generate_entity_name(primary_fact, entity_type, conversation_id)
 
         # Collect observations from all facts in group
         observations = [fact.original_text for fact in fact_group]

@@ -156,9 +156,7 @@ class MetaAgent:
             parent_id=parent_id,
         )
         if not patch.has_changes:
-            logger.info(
-                "MetaAgent: LLM produced no changes for %s", target_module_path.name
-            )
+            logger.info("MetaAgent: LLM produced no changes for %s", target_module_path.name)
         else:
             logger.info(
                 "MetaAgent: patch %s has changes (gen=%d, parent=%s)",
@@ -177,9 +175,7 @@ class MetaAgent:
         if not path.is_absolute():
             raise ValueError(f"target_module_path must be absolute, got: {path}")
         if path.suffix != ".py":
-            raise ValueError(
-                f"target_module_path must be a .py file, got: {path.suffix}"
-            )
+            raise ValueError(f"target_module_path must be a .py file, got: {path.suffix}")
         stem = path.stem.lower()
         if stem.startswith("test_") or stem.endswith("_test"):
             raise ValueError(f"meta-agent must not target test files: {path.name}")
@@ -191,13 +187,9 @@ class MetaAgent:
         line_count = content.count("\n")
         limit = self.config.meta_agent_max_module_lines
         if line_count > limit:
-            raise ValueError(
-                f"{path.name} has {line_count} lines, exceeds limit of {limit}"
-            )
+            raise ValueError(f"{path.name} has {line_count} lines, exceeds limit of {limit}")
 
-    def _build_prompt(
-        self, original_content: str, eval_context: List[Dict[str, Any]]
-    ) -> str:
+    def _build_prompt(self, original_content: str, eval_context: List[Dict[str, Any]]) -> str:
         """Compose the user prompt from module content and archive context."""
         parts = [
             "Here is the Python module to improve:\n\n```python\n",

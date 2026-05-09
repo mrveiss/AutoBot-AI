@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -369,9 +368,7 @@ class TestTieredContextBuilderFeatureFlag:
             mock_gen = MagicMock()
             mock_gen.generate = AsyncMock(return_value="")
             fake_ks = MagicMock()
-            fake_ks.conversation_aware_retrieve = AsyncMock(
-                return_value=("SHOULD NOT APPEAR", [], None, None)
-            )
+            fake_ks.conversation_aware_retrieve = AsyncMock(return_value=("SHOULD NOT APPEAR", [], None, None))
 
             with patch("memory.essential_story.EssentialStoryGenerator", return_value=mock_gen):
                 builder = layers_mod.TieredContextBuilder()

@@ -31,18 +31,13 @@ class TagFilter:
         tag_fact_sets = []
         for fact_ids in tag_results:
             if fact_ids:
-                decoded_ids = {
-                    fid.decode("utf-8") if isinstance(fid, bytes) else fid
-                    for fid in fact_ids
-                }
+                decoded_ids = {fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in fact_ids}
                 tag_fact_sets.append(decoded_ids)
             else:
                 tag_fact_sets.append(set())
         return tag_fact_sets
 
-    def combine_tag_fact_sets(
-        self, tag_fact_sets: List[Set[str]], match_all: bool
-    ) -> Set[str]:
+    def combine_tag_fact_sets(self, tag_fact_sets: List[Set[str]], match_all: bool) -> Set[str]:
         """Combine fact sets based on match_all flag. Issue #281: Extracted helper."""
         if not tag_fact_sets:
             return set()
@@ -56,9 +51,7 @@ class TagFilter:
                 result_ids = result_ids.union(fact_set)
         return result_ids
 
-    async def get_fact_ids_by_tags(
-        self, tags: List[str], match_all: bool = True
-    ) -> Dict[str, Any]:
+    async def get_fact_ids_by_tags(self, tags: List[str], match_all: bool = True) -> Dict[str, Any]:
         """Get fact IDs matching specified tags (Issue #281 refactor)."""
         try:
             if not self.redis_client:
@@ -125,8 +118,4 @@ class TagFilter:
         """Apply tag filtering to results."""
         if tag_filtered_ids is None:
             return results
-        return [
-            r
-            for r in results
-            if r.get("metadata", {}).get("fact_id") in tag_filtered_ids
-        ]
+        return [r for r in results if r.get("metadata", {}).get("fact_id") in tag_filtered_ids]

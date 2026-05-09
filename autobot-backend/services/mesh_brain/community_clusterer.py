@@ -60,10 +60,7 @@ def cluster_graph(edges: list[dict]) -> list[str]:
     centroids: list[str] = []
 
     for comm_nodes in communities.values():
-        if (
-            len(comm_nodes) / total_nodes > _MAX_COMMUNITY_FRACTION
-            and len(comm_nodes) >= _MIN_SPLIT_SIZE
-        ):
+        if len(comm_nodes) / total_nodes > _MAX_COMMUNITY_FRACTION and len(comm_nodes) >= _MIN_SPLIT_SIZE:
             centroids.extend(_split_community(G.subgraph(comm_nodes)))
         else:
             centroids.append(_pick_centroid(G.subgraph(comm_nodes), comm_nodes))
@@ -105,10 +102,7 @@ def _split_community(subgraph) -> list[str]:
         nodes = list(subgraph.nodes)
         return [_pick_centroid(subgraph, nodes)]
 
-    return [
-        _pick_centroid(subgraph.subgraph(sub_nodes), sub_nodes)
-        for sub_nodes in sub_communities.values()
-    ]
+    return [_pick_centroid(subgraph.subgraph(sub_nodes), sub_nodes) for sub_nodes in sub_communities.values()]
 
 
 class CommunityClusterer:

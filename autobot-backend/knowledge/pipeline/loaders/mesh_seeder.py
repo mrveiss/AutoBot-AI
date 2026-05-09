@@ -25,9 +25,7 @@ _EdgeDict = Dict[str, Any]
 class MeshSeeder(BaseLoader):
     """Seeds the mesh graph with structural, entity-based, and typed relationship edges."""
 
-    def __init__(
-        self, db: Optional[Any] = None, similarity_threshold: float = 0.82
-    ) -> None:
+    def __init__(self, db: Optional[Any] = None, similarity_threshold: float = 0.82) -> None:
         """
         Initialize MeshSeeder.
 
@@ -98,9 +96,7 @@ class MeshSeeder(BaseLoader):
     # Edge builders
     # ------------------------------------------------------------------
 
-    def _group_nodes_by_file(
-        self, nodes: List[Dict[str, Any]]
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    def _group_nodes_by_file(self, nodes: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         """Return nodes grouped by source_file, omitting nodes without a file."""
         by_file: Dict[str, List[Dict[str, Any]]] = {}
         for n in nodes:
@@ -142,9 +138,7 @@ class MeshSeeder(BaseLoader):
                 )
         return edges
 
-    def _build_entity_edges(
-        self, nodes: List[Dict[str, Any]], entities: List[Any]
-    ) -> List[_EdgeDict]:
+    def _build_entity_edges(self, nodes: List[Dict[str, Any]], entities: List[Any]) -> List[_EdgeDict]:
         """Create SHARED_ENTITY edges between chunk-pairs that mention the same entity.
 
         Uses a node_ids set to restrict edges to chunks present in the current

@@ -36,53 +36,39 @@ class RiskAnalyzer:
         else:
             return "low"
 
-    async def generate_optimization_suggestions(
-        self, steps: List[SmartWorkflowStep]
-    ) -> List[str]:
+    async def generate_optimization_suggestions(self, steps: List[SmartWorkflowStep]) -> List[str]:
         """Generate AI optimization suggestions"""
         suggestions = []
 
         # Check for common optimization opportunities
         install_steps = [s for s in steps if "install" in s.command]
         if len(install_steps) > 2:
-            suggestions.append(
-                "Consider consolidating package installations for faster execution"
-            )
+            suggestions.append("Consider consolidating package installations for faster execution")
 
         sudo_steps = [s for s in steps if "sudo" in s.command]
         if len(sudo_steps) > len(steps) * 0.7:
-            suggestions.append(
-                "High privilege usage detected - consider running as elevated user"
-            )
+            suggestions.append("High privilege usage detected - consider running as elevated user")
 
-        validation_missing = [
-            s for s in steps if not s.validation_command and s.requires_confirmation
-        ]
+        validation_missing = [s for s in steps if not s.validation_command and s.requires_confirmation]
         if validation_missing:
             suggestions.append("Add validation commands to verify step success")
 
         return suggestions
 
-    async def generate_risk_mitigation(
-        self, steps: List[SmartWorkflowStep]
-    ) -> List[str]:
+    async def generate_risk_mitigation(self, steps: List[SmartWorkflowStep]) -> List[str]:
         """Generate risk mitigation strategies"""
         strategies = []
 
         high_risk_steps = [s for s in steps if s.requires_confirmation]
         if high_risk_steps:
-            strategies.append(
-                "Create system backup before executing high-risk operations"
-            )
+            strategies.append("Create system backup before executing high-risk operations")
             strategies.append("Test workflow in development environment first")
 
         if any("rm " in s.command for s in steps):
             strategies.append("Verify file paths before deletion operations")
 
         if any("firewall" in s.command or "iptables" in s.command for s in steps):
-            strategies.append(
-                "Ensure remote access recovery method before firewall changes"
-            )
+            strategies.append("Ensure remote access recovery method before firewall changes")
 
         return strategies
 

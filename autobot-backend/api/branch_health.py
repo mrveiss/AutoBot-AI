@@ -119,12 +119,8 @@ async def get_diverged_branch_health(
     collector = BranchMetricsCollector(resolved_path, base_branch)
     all_metrics = await collector.analyze_all_branches()
 
-    diverged = [
-        m for m in all_metrics if m.divergence.total_commits_diverged > threshold
-    ]
-    diverged.sort(
-        key=lambda m: m.divergence.total_commits_diverged, reverse=True
-    )
+    diverged = [m for m in all_metrics if m.divergence.total_commits_diverged > threshold]
+    diverged.sort(key=lambda m: m.divergence.total_commits_diverged, reverse=True)
 
     return [_metrics_to_response(m) for m in diverged]
 
@@ -178,7 +174,5 @@ def _metrics_to_response(metrics: BranchMetrics) -> BranchHealthResponse:
         days_since_activity=metrics.days_since_activity,
         is_stale=metrics.is_stale,
         health_score=round(metrics.health_score, 2),
-        last_activity=(
-            metrics.last_activity.isoformat() if metrics.last_activity else None
-        ),
+        last_activity=(metrics.last_activity.isoformat() if metrics.last_activity else None),
     )

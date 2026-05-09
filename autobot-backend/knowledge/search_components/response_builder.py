@@ -150,9 +150,7 @@ class ResponseBuilder:
         """
         total_count = len(ctx.results)
         paginated_results = (
-            ctx.unclustered[ctx.offset : ctx.offset + ctx.limit]
-            if not ctx.enable_clustering
-            else ctx.unclustered
+            ctx.unclustered[ctx.offset : ctx.offset + ctx.limit] if not ctx.enable_clustering else ctx.unclustered
         )
 
         response = {

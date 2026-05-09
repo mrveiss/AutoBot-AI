@@ -35,14 +35,10 @@ class MilvusMemoryProvider:
                 )
                 logger.info(f"Created Milvus collection: {self.collection_name}")
             else:
-                logger.info(
-                    f"Using existing Milvus collection: {self.collection_name}"
-                )
+                logger.info(f"Using existing Milvus collection: {self.collection_name}")
             logger.info("Milvus memory provider initialized")
         except ImportError:
-            logger.error(
-                "pymilvus not installed. Install with: pip install pymilvus"
-            )
+            logger.error("pymilvus not installed. Install with: pip install pymilvus")
             raise
         except Exception as e:
             logger.error(f"Failed to initialize Milvus memory provider: {e}")

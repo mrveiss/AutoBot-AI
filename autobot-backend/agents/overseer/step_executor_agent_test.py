@@ -35,11 +35,7 @@ def mock_explanation_service():
             breakdown=[CommandBreakdownPart(part="ls", explanation="list")],
         )
     )
-    svc.explain_output = AsyncMock(
-        return_value=OutputExplanation(
-            summary="Test output", key_findings=["finding 1"]
-        )
-    )
+    svc.explain_output = AsyncMock(return_value=OutputExplanation(summary="Test output", key_findings=["finding 1"]))
     return svc
 
 
@@ -68,18 +64,14 @@ class TestBuildNoCommandResult:
     """Tests for _build_no_command_result."""
 
     def test_returns_completed(self):
-        task = AgentTask(
-            task_id="t1", step_number=1, total_steps=1, description="No-op step"
-        )
+        task = AgentTask(task_id="t1", step_number=1, total_steps=1, description="No-op step")
         result = _build_no_command_result(task, 0.1)
         assert result.status == StepStatus.COMPLETED
         assert result.command is None
         assert "No command" in result.output
 
     def test_includes_description_in_findings(self):
-        task = AgentTask(
-            task_id="t1", step_number=1, total_steps=1, description="Check network"
-        )
+        task = AgentTask(task_id="t1", step_number=1, total_steps=1, description="Check network")
         result = _build_no_command_result(task, 0.1)
         assert "Check network" in result.output_explanation.key_findings
 
@@ -143,18 +135,14 @@ class TestStepExecutorInit:
         assert executor.pty_session_id == "pty1"
 
     def test_custom_explanation_service(self, mock_explanation_service):
-        executor = StepExecutorAgent(
-            session_id="s1", explanation_service=mock_explanation_service
-        )
+        executor = StepExecutorAgent(session_id="s1", explanation_service=mock_explanation_service)
         assert executor.explanation_service is mock_explanation_service
 
 
 class TestValidateCommand:
     """Tests for command validation."""
 
-    @patch(
-        "agents.overseer.step_executor_agent.check_dangerous_patterns", return_value=[]
-    )
+    @patch("agents.overseer.step_executor_agent.check_dangerous_patterns", return_value=[])
     @patch("agents.overseer.step_executor_agent.is_safe_command", return_value=True)
     def test_valid_command(self, mock_safe, mock_dangerous, executor):
         is_safe, reason = executor._validate_command("ls -la")
@@ -241,9 +229,7 @@ class TestExecuteStep:
         return_value=[("danger", "pat")],
     )
     @patch("agents.overseer.step_executor_agent.is_safe_command", return_value=True)
-    async def test_blocked_command_yields_failed(
-        self, mock_safe, mock_dangerous, executor
-    ):
+    async def test_blocked_command_yields_failed(self, mock_safe, mock_dangerous, executor):
         task = AgentTask(
             task_id="t1",
             step_number=1,
@@ -255,18 +241,12 @@ class TestExecuteStep:
         async for update in executor.execute_step(task):
             results.append(update)
 
-        assert any(
-            isinstance(r, StepResult) and r.status == StepStatus.FAILED for r in results
-        )
+        assert any(isinstance(r, StepResult) and r.status == StepStatus.FAILED for r in results)
 
     @pytest.mark.asyncio
-    @patch(
-        "agents.overseer.step_executor_agent.check_dangerous_patterns", return_value=[]
-    )
+    @patch("agents.overseer.step_executor_agent.check_dangerous_patterns", return_value=[])
     @patch("agents.overseer.step_executor_agent.is_safe_command", return_value=True)
-    async def test_successful_execution(
-        self, mock_safe, mock_dangerous, executor, sample_task
-    ):
+    async def test_successful_execution(self, mock_safe, mock_dangerous, executor, sample_task):
         async def mock_stream(task):
             yield StreamChunk(
                 task_id=task.task_id,
@@ -307,9 +287,7 @@ class TestGenerateExplanations:
 
     @pytest.mark.asyncio
     async def test_command_explanation_fallback(self, executor):
-        executor.explanation_service.explain_command = AsyncMock(
-            side_effect=Exception("fail")
-        )
+        executor.explanation_service.explain_command = AsyncMock(side_effect=Exception("fail"))
         result = await executor._generate_command_explanation("nmap -sn")
         assert "nmap" in result.summary.lower() or "Executing" in result.summary
 
@@ -320,9 +298,7 @@ class TestGenerateExplanations:
 
     @pytest.mark.asyncio
     async def test_output_explanation_fallback(self, executor):
-        executor.explanation_service.explain_output = AsyncMock(
-            side_effect=Exception("fail")
-        )
+        executor.explanation_service.explain_output = AsyncMock(side_effect=Exception("fail"))
         result = await executor._generate_output_explanation("ls", "out", 1)
         assert "1" in result.summary
         assert len(result.key_findings) >= 1

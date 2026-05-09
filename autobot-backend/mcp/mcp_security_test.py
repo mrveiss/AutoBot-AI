@@ -113,9 +113,7 @@ class TestFilesystemMCPPathTraversal:
 
         for attack_path in traversal_attempts:
             result = is_path_allowed(attack_path)
-            assert (
-                result is False
-            ), f"Windows-style traversal not blocked: {attack_path}"
+            assert result is False, f"Windows-style traversal not blocked: {attack_path}"
 
     def test_path_traversal_null_byte(self):
         """Test null byte injection in paths"""
@@ -166,8 +164,7 @@ class TestFilesystemMCPPathTraversal:
             response = client.post("/api/filesystem/mcp/read_text_file", json=payload)
             # Should either return 400 (validation error) or 403 (forbidden)
             assert response.status_code in [400, 403, 422], (
-                f"API did not block path traversal: {payload['path']}, "
-                f"status: {response.status_code}"
+                f"API did not block path traversal: {payload['path']}, " f"status: {response.status_code}"
             )
 
 
@@ -274,9 +271,7 @@ class TestFilesystemMCPAccessControl:
         ]
 
         for expected in expected_dirs:
-            assert (
-                expected in ALLOWED_DIRECTORIES
-            ), f"Expected directory missing from whitelist: {expected}"
+            assert expected in ALLOWED_DIRECTORIES, f"Expected directory missing from whitelist: {expected}"
 
     def test_access_to_parent_of_allowed(self):
         """Test that parent directories of allowed paths are blocked"""
@@ -422,9 +417,7 @@ class TestMCPInputValidation:
 
         for payload in overflow_payloads:
             payload["thought"] = "test"
-            response = client.post(
-                "/api/sequential_thinking/mcp/sequential_thinking", json=payload
-            )
+            response = client.post("/api/sequential_thinking/mcp/sequential_thinking", json=payload)
             # Should validate and reject invalid integers
             assert response.status_code in [
                 400,
@@ -478,9 +471,7 @@ class TestMCPSizeLimiting:
         large_file = temp_allowed_dir / "large_file.txt"
         large_file.write_bytes(b"X" * (10 * 1024 * 1024))
 
-        response = client.post(
-            "/api/filesystem/mcp/read_text_file", json={"path": str(large_file)}
-        )
+        response = client.post("/api/filesystem/mcp/read_text_file", json={"path": str(large_file)})
 
         # Should either succeed or have reasonable limits
         # (Implementation may have size limits or chunking)
@@ -509,9 +500,7 @@ class TestMCPSizeLimiting:
         # Try to read 1000 files at once
         file_paths = [f"/tmp/autobot/file{i}.txt" for i in range(1000)]
 
-        response = client.post(
-            "/api/filesystem/mcp/read_multiple_files", json={"paths": file_paths}
-        )
+        response = client.post("/api/filesystem/mcp/read_multiple_files", json={"paths": file_paths})
 
         # Should have limits on batch operations
         assert response.status_code in [200, 400, 422]
@@ -651,9 +640,7 @@ class TestSecurityCoverage:
         }
 
         # All bridges should have at least input validation tests
-        assert tested_bridges.issubset(
-            expected_bridges
-        ), "Not all MCP bridges have security tests"
+        assert tested_bridges.issubset(expected_bridges), "Not all MCP bridges have security tests"
 
     def test_critical_attack_vectors_covered(self):
         """Verify all critical attack vectors are tested"""

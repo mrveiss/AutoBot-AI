@@ -107,18 +107,14 @@ class TestSubagentSpawner:
 
     def test_spawn_valid_number_of_subagents(self, spawner):
         """Test spawning valid number of subagents."""
-        tasks = [
-            {"goal": f"Task {i}", "context": {"index": i}} for i in range(3)
-        ]
+        tasks = [{"goal": f"Task {i}", "context": {"index": i}} for i in range(3)]
         # Validate constraints at spawner level
         assert len(tasks) <= 5  # MAX_SUBAGENTS_PER_PARENT
 
     @pytest.mark.asyncio
     async def test_spawn_exceeds_max_subagents(self, spawner):
         """Test spawning exceeds max subagents constraint."""
-        tasks = [
-            {"goal": f"Task {i}", "context": {"index": i}} for i in range(6)
-        ]
+        tasks = [{"goal": f"Task {i}", "context": {"index": i}} for i in range(6)]
         # This should raise ValueError in spawn_subagents
         with pytest.raises(ValueError, match="Cannot spawn 6 subagents"):
             await spawner.spawn_subagents("parent-1", tasks)
@@ -130,22 +126,15 @@ class TestSubagentSpawner:
 
         # At depth 2 (max), should raise ValueError
         with pytest.raises(ValueError, match="Cannot spawn subagents at depth"):
-            await spawner.spawn_subagents(
-                "parent-1", tasks, parent_depth=2
-            )
+            await spawner.spawn_subagents("parent-1", tasks, parent_depth=2)
 
     @pytest.mark.asyncio
     async def test_spawn_without_waiting(self):
         """Test spawning subagents without waiting for completion."""
         spawner = SubagentSpawner(redis_client=None)
-        tasks = [
-            {"goal": f"Task {i}", "context": {"index": i}, "timeout_seconds": 10}
-            for i in range(3)
-        ]
+        tasks = [{"goal": f"Task {i}", "context": {"index": i}, "timeout_seconds": 10} for i in range(3)]
 
-        result = await spawner.spawn_subagents(
-            "parent-1", tasks, wait_for_all=False
-        )
+        result = await spawner.spawn_subagents("parent-1", tasks, wait_for_all=False)
 
         assert result["status"] == "spawned"
         assert result["count"] == 3
@@ -157,12 +146,8 @@ class TestSubagentSpawner:
         """Test aggregating results with 'all' strategy."""
         spawner = SubagentSpawner()
         results = [
-            TaskResult(
-                task_id="t1", status=TaskStatus.COMPLETED, output={"value": 10}
-            ),
-            TaskResult(
-                task_id="t2", status=TaskStatus.COMPLETED, output={"value": 20}
-            ),
+            TaskResult(task_id="t1", status=TaskStatus.COMPLETED, output={"value": 10}),
+            TaskResult(task_id="t2", status=TaskStatus.COMPLETED, output={"value": 20}),
             TaskResult(task_id="t3", status=TaskStatus.FAILED, error="Failed"),
         ]
 
@@ -179,20 +164,12 @@ class TestSubagentSpawner:
         """Test aggregating results with 'consensus' strategy."""
         spawner = SubagentSpawner()
         results = [
-            TaskResult(
-                task_id="t1", status=TaskStatus.COMPLETED, output={"answer": "yes"}
-            ),
-            TaskResult(
-                task_id="t2", status=TaskStatus.COMPLETED, output={"answer": "yes"}
-            ),
-            TaskResult(
-                task_id="t3", status=TaskStatus.COMPLETED, output={"answer": "yes"}
-            ),
+            TaskResult(task_id="t1", status=TaskStatus.COMPLETED, output={"answer": "yes"}),
+            TaskResult(task_id="t2", status=TaskStatus.COMPLETED, output={"answer": "yes"}),
+            TaskResult(task_id="t3", status=TaskStatus.COMPLETED, output={"answer": "yes"}),
         ]
 
-        aggregation = await spawner.aggregate_results(
-            results, strategy="consensus"
-        )
+        aggregation = await spawner.aggregate_results(results, strategy="consensus")
 
         assert aggregation["status"] == "consensus_reached"
         assert aggregation["consensus_output"] == {"answer": "yes"}
@@ -217,12 +194,8 @@ class TestSubagentSpawner:
         """Test conflict resolution when no conflict exists."""
         spawner = SubagentSpawner()
         results = [
-            TaskResult(
-                task_id="t1", status=TaskStatus.COMPLETED, output={"result": "same"}
-            ),
-            TaskResult(
-                task_id="t2", status=TaskStatus.COMPLETED, output={"result": "same"}
-            ),
+            TaskResult(task_id="t1", status=TaskStatus.COMPLETED, output={"result": "same"}),
+            TaskResult(task_id="t2", status=TaskStatus.COMPLETED, output={"result": "same"}),
         ]
 
         conflict = await spawner.resolve_conflicts(results)
@@ -298,9 +271,7 @@ class TestSubagentManager:
     @pytest.mark.asyncio
     async def test_get_task_result_from_local_cache(self, manager):
         """Test getting result from local cache."""
-        result = TaskResult(
-            task_id="task-1", status=TaskStatus.COMPLETED, output="cached"
-        )
+        result = TaskResult(task_id="task-1", status=TaskStatus.COMPLETED, output="cached")
         manager.local_results["task-1"] = result
 
         retrieved = await manager.get_task_result("task-1")
@@ -378,9 +349,7 @@ class TestSubagentManager:
         manager.local_results["t1"] = result1
         manager.local_results["t2"] = result2
 
-        results = await manager.wait_for_results(
-            ["t1", "t2"], timeout_seconds=5, check_interval=0.1
-        )
+        results = await manager.wait_for_results(["t1", "t2"], timeout_seconds=5, check_interval=0.1)
 
         assert results["t1"] == result1
         assert results["t2"] == result2
@@ -396,15 +365,10 @@ class TestParallelExecution:
         manager = SubagentManager(redis_client=AsyncMock())
 
         # Simulate 3 independent tasks
-        tasks = [
-            {"goal": f"Analyze component {i}", "timeout_seconds": 10}
-            for i in range(3)
-        ]
+        tasks = [{"goal": f"Analyze component {i}", "timeout_seconds": 10} for i in range(3)]
 
         # Spawn without waiting
-        spawn_result = await spawner.spawn_subagents(
-            "analysis-parent", tasks, wait_for_all=False
-        )
+        spawn_result = await spawner.spawn_subagents("analysis-parent", tasks, wait_for_all=False)
 
         assert spawn_result["count"] == 3
         assert len(spawn_result["subagent_ids"]) == 3
@@ -415,9 +379,7 @@ class TestParallelExecution:
             return {"status": "analyzed", "goal": task.goal}
 
         tasks_obj = [SubagentTask.from_dict(t) for t in tasks]
-        results = await asyncio.gather(
-            *[manager.distribute_work(t, simulate_executor) for t in tasks_obj]
-        )
+        results = await asyncio.gather(*[manager.distribute_work(t, simulate_executor) for t in tasks_obj])
 
         assert len(results) == 3
         assert all(r.status == TaskStatus.COMPLETED for r in results)

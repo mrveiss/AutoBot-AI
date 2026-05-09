@@ -174,9 +174,7 @@ async def get_metadata_template(template_id: str):
     operation="update_metadata_template",
     error_code_prefix="KNOWLEDGE_METADATA",
 )
-async def update_metadata_template(
-    template_id: str, request: UpdateMetadataTemplateRequest
-):
+async def update_metadata_template(template_id: str, request: UpdateMetadataTemplateRequest):
     """Update an existing metadata template."""
     try:
         kb = await get_knowledge_base()
@@ -440,9 +438,7 @@ async def revert_to_version(fact_id: str, request: RevertToVersionRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            "Failed to revert %s to version %d: %s", fact_id, request.version, e
-        )
+        logger.error("Failed to revert %s to version %d: %s", fact_id, request.version, e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

@@ -134,9 +134,7 @@ class KnowledgeSynthesizer(BaseSynthesizer):
         # Query experiments tagged with this session — use a large limit
         # to avoid silently missing experiments beyond the default page size
         all_experiments = await self._store.list_experiments(limit=500)
-        session_experiments = [
-            e for e in all_experiments if f"session:{session_id}" in e.tags
-        ]
+        session_experiments = [e for e in all_experiments if f"session:{session_id}" in e.tags]
 
         if not session_experiments:
             logger.info("No experiments found for session %s", session_id)
@@ -155,9 +153,7 @@ class KnowledgeSynthesizer(BaseSynthesizer):
             )
             raw_insights = json.loads(response.content)
         except json.JSONDecodeError as exc:
-            logger.warning(
-                "KnowledgeSynthesizer: failed to parse LLM response: %s", exc
-            )
+            logger.warning("KnowledgeSynthesizer: failed to parse LLM response: %s", exc)
             return []
         except Exception as exc:
             logger.exception("KnowledgeSynthesizer: LLM call failed: %s", exc)
@@ -178,9 +174,7 @@ class KnowledgeSynthesizer(BaseSynthesizer):
         await self._index_insights(insights, source_doc_ids=source_doc_ids)
         return insights
 
-    async def query_insights(
-        self, query: str, limit: int = 5
-    ) -> List[ExperimentInsight]:
+    async def query_insights(self, query: str, limit: int = 5) -> List[ExperimentInsight]:
         """Semantic search over distilled insights.
 
         Args:
@@ -200,22 +194,16 @@ class KnowledgeSynthesizer(BaseSynthesizer):
         if results and results.get("ids") and results["ids"][0]:
             for i, doc_id in enumerate(results["ids"][0]):
                 meta = results["metadatas"][0][i] if results.get("metadatas") else {}
-                document = (
-                    results["documents"][0][i] if results.get("documents") else ""
-                )
+                document = results["documents"][0][i] if results.get("documents") else ""
                 insight = ExperimentInsight(
                     id=doc_id,
                     statement=document,
                     confidence=float(meta.get("confidence", 0.0)),
                     supporting_experiments=(
-                        meta.get("supporting_experiments", "").split(",")
-                        if meta.get("supporting_experiments")
-                        else []
+                        meta.get("supporting_experiments", "").split(",") if meta.get("supporting_experiments") else []
                     ),
                     related_hyperparams=(
-                        meta.get("related_hyperparams", "").split(",")
-                        if meta.get("related_hyperparams")
-                        else []
+                        meta.get("related_hyperparams", "").split(",") if meta.get("related_hyperparams") else []
                     ),
                     session_id=meta.get("session_id"),
                 )
@@ -239,9 +227,7 @@ class KnowledgeSynthesizer(BaseSynthesizer):
 
         lines = ["Prior experiment insights:"]
         for insight in insights:
-            lines.append(
-                f"- {insight.statement} (confidence: {insight.confidence:.0%})"
-            )
+            lines.append(f"- {insight.statement} (confidence: {insight.confidence:.0%})")
         return "\n".join(lines)
 
     def _build_experiment_summary(self, experiments: list) -> str:
@@ -259,10 +245,7 @@ class KnowledgeSynthesizer(BaseSynthesizer):
                 summary += f"  val_bpb: {exp.result.val_bpb}\n"
                 if exp.baseline_val_bpb is not None:
                     improvement = exp.baseline_val_bpb - exp.result.val_bpb
-                    summary += (
-                        f"  Baseline: {exp.baseline_val_bpb}, "
-                        f"Improvement: {improvement:.4f}\n"
-                    )
+                    summary += f"  Baseline: {exp.baseline_val_bpb}, " f"Improvement: {improvement:.4f}\n"
             parts.append(summary)
         return "\n".join(parts)
 

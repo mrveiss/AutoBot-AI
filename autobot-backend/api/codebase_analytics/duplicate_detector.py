@@ -63,9 +63,7 @@ except ImportError:
 
 # Issue #1225: JS/TS function detection pattern (hoisted from _extract_js_blocks)
 _JS_FUNC_RE = re.compile(
-    r"(?:function\s+\w+|(?:const|let|var)\s+\w+\s*=\s*"
-    r"(?:async\s+)?(?:function|\([^)]*\)\s*=>))"
-    r"[^{]*\{",
+    r"(?:function\s+\w+|(?:const|let|var)\s+\w+\s*=\s*" r"(?:async\s+)?(?:function|\([^)]*\)\s*=>))" r"[^{]*\{",
     re.MULTILINE,
 )
 
@@ -323,10 +321,7 @@ def _extract_js_blocks(file_path: str, lines: List[str]) -> List[CodeBlock]:
         end_line = content[:pos].count("\n")
         block_content = content[start_pos:pos]
 
-        if (
-            len(block_content) >= MIN_DUPLICATE_CHARS
-            and (end_line - start_line) >= MIN_DUPLICATE_LINES
-        ):
+        if len(block_content) >= MIN_DUPLICATE_CHARS and (end_line - start_line) >= MIN_DUPLICATE_LINES:
             normalized = _normalize_code(block_content)
             # Issue #659: Pre-compute token set for faster similarity
             token_set = set(normalized.split())
@@ -346,9 +341,7 @@ def _extract_js_blocks(file_path: str, lines: List[str]) -> List[CodeBlock]:
     return blocks
 
 
-def _extract_sliding_window_blocks(
-    file_path: str, lines: List[str], window_size: int = 10
-) -> List[CodeBlock]:
+def _extract_sliding_window_blocks(file_path: str, lines: List[str], window_size: int = 10) -> List[CodeBlock]:
     """Extract blocks using sliding window for generic files."""
     blocks = []
 
@@ -401,11 +394,7 @@ def _compute_similarity(block1: CodeBlock, block2: CodeBlock) -> float:
     s2 = block2.normalized_content
 
     # Quick length check
-    len_ratio = (
-        min(len(s1), len(s2)) / max(len(s1), len(s2))
-        if max(len(s1), len(s2)) > 0
-        else 0
-    )
+    len_ratio = min(len(s1), len(s2)) / max(len(s1), len(s2)) if max(len(s1), len(s2)) > 0 else 0
     if len_ratio < 0.5:
         return 0.0
 
@@ -422,9 +411,7 @@ def _compute_similarity(block1: CodeBlock, block2: CodeBlock) -> float:
     return intersection / union if union > 0 else 0.0
 
 
-def _build_minhash(
-    token_set: Set[str], num_perm: int = LSH_NUM_PERMUTATIONS
-) -> "MinHash":
+def _build_minhash(token_set: Set[str], num_perm: int = LSH_NUM_PERMUTATIONS) -> "MinHash":
     """
     Build MinHash signature for a token set.
 
@@ -461,11 +448,7 @@ def _build_minhash_signatures(
     """
     minhashes: Dict[int, MinHash] = {}
     for idx, block in enumerate(blocks):
-        token_set = (
-            block.token_set
-            if block.token_set
-            else set(block.normalized_content.split())
-        )
+        token_set = block.token_set if block.token_set else set(block.normalized_content.split())
         if token_set:
             minhashes[idx] = _build_minhash(token_set, num_perm)
     return minhashes
@@ -596,9 +579,7 @@ def _find_lsh_candidates(
     # Phase 3: Query for candidates - O(n) expected (Issue #665: uses helper)
     candidates = _query_lsh_candidates(blocks, minhashes, lsh)
 
-    logger.info(
-        "LSH found %d candidate pairs from %d blocks", len(candidates), len(blocks)
-    )
+    logger.info("LSH found %d candidate pairs from %d blocks", len(candidates), len(blocks))
     return candidates
 
 
@@ -645,9 +626,7 @@ class DuplicateCodeDetector(_BaseClass):
             use_semantic_analysis: Enable LLM-based semantic duplicate detection (Issue #554)
         """
         # Issue #554: Initialize semantic analysis infrastructure if enabled
-        self.use_semantic_analysis = (
-            use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
-        )
+        self.use_semantic_analysis = use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
 
         if self.use_semantic_analysis:
             super().__init__()
@@ -665,9 +644,7 @@ class DuplicateCodeDetector(_BaseClass):
             self.project_root = Path(__file__).resolve().parents[3]
 
         self.min_similarity = min_similarity
-        self.code_extensions = (
-            PYTHON_EXTENSIONS | JS_EXTENSIONS | TS_EXTENSIONS | VUE_EXTENSIONS
-        )
+        self.code_extensions = PYTHON_EXTENSIONS | JS_EXTENSIONS | TS_EXTENSIONS | VUE_EXTENSIONS
 
     def _should_skip_path(self, path: Path) -> bool:
         """Check if path should be skipped."""
@@ -890,10 +867,7 @@ class DuplicateCodeDetector(_BaseClass):
         logger.info("Using O(n²) fallback for similarity search")
 
         blocks_to_compare = all_blocks
-        if (
-            MAX_BLOCKS_FOR_SIMILARITY > 0
-            and len(all_blocks) > MAX_BLOCKS_FOR_SIMILARITY
-        ):
+        if MAX_BLOCKS_FOR_SIMILARITY > 0 and len(all_blocks) > MAX_BLOCKS_FOR_SIMILARITY:
             sorted_blocks = sorted(all_blocks, key=lambda b: b.line_count, reverse=True)
             blocks_to_compare = sorted_blocks[:MAX_BLOCKS_FOR_SIMILARITY]
             logger.info(
@@ -909,19 +883,11 @@ class DuplicateCodeDetector(_BaseClass):
         duplicates: List[DuplicatePair],
     ) -> Tuple[int, int, int, int]:
         """Calculate duplicate statistics (Issue #560: extracted)."""
-        high_count = sum(
-            1 for d in duplicates if d.similarity >= HIGH_SIMILARITY_THRESHOLD
-        )
+        high_count = sum(1 for d in duplicates if d.similarity >= HIGH_SIMILARITY_THRESHOLD)
         medium_count = sum(
-            1
-            for d in duplicates
-            if MEDIUM_SIMILARITY_THRESHOLD <= d.similarity < HIGH_SIMILARITY_THRESHOLD
+            1 for d in duplicates if MEDIUM_SIMILARITY_THRESHOLD <= d.similarity < HIGH_SIMILARITY_THRESHOLD
         )
-        low_count = sum(
-            1
-            for d in duplicates
-            if LOW_SIMILARITY_THRESHOLD <= d.similarity < MEDIUM_SIMILARITY_THRESHOLD
-        )
+        low_count = sum(1 for d in duplicates if LOW_SIMILARITY_THRESHOLD <= d.similarity < MEDIUM_SIMILARITY_THRESHOLD)
         total_lines = sum(d.line_count for d in duplicates)
         return high_count, medium_count, low_count, total_lines
 
@@ -959,9 +925,7 @@ class DuplicateCodeDetector(_BaseClass):
             duplicates = duplicates[:MAX_DUPLICATES_RETURNED]
 
         # Calculate statistics
-        high_count, medium_count, low_count, total_lines = self._calculate_statistics(
-            duplicates
-        )
+        high_count, medium_count, low_count, total_lines = self._calculate_statistics(duplicates)
 
         analysis = DuplicateAnalysis(
             total_duplicates=len(duplicates),
@@ -1003,10 +967,7 @@ class DuplicateCodeDetector(_BaseClass):
         Returns:
             Sampled list of blocks (or original if under limit)
         """
-        if (
-            MAX_BLOCKS_FOR_SIMILARITY > 0
-            and len(all_blocks) > MAX_BLOCKS_FOR_SIMILARITY
-        ):
+        if MAX_BLOCKS_FOR_SIMILARITY > 0 and len(all_blocks) > MAX_BLOCKS_FOR_SIMILARITY:
             sorted_blocks = sorted(all_blocks, key=lambda b: b.line_count, reverse=True)
             sampled = sorted_blocks[:MAX_BLOCKS_FOR_SIMILARITY]
             logger.info(
@@ -1076,9 +1037,7 @@ class DuplicateCodeDetector(_BaseClass):
         # Generate embeddings and compute similarities
         codes = [block.normalized_content for block in blocks_to_compare]
         embeddings = await self._get_embeddings_batch(codes)
-        similarity_pairs = self._compute_batch_similarities(
-            embeddings, min_similarity=self.min_similarity
-        )
+        similarity_pairs = self._compute_batch_similarities(embeddings, min_similarity=self.min_similarity)
 
         for i, j, similarity in similarity_pairs:
             block1, block2 = blocks_to_compare[i], blocks_to_compare[j]
@@ -1132,9 +1091,7 @@ class DuplicateCodeDetector(_BaseClass):
 
         # Add semantic duplicates if enabled
         if self.use_semantic_analysis:
-            semantic_dups = await self._find_semantic_duplicates_async(
-                all_blocks, seen_pairs
-            )
+            semantic_dups = await self._find_semantic_duplicates_async(all_blocks, seen_pairs)
             duplicates.extend(semantic_dups)
 
         return duplicates
@@ -1162,9 +1119,7 @@ class DuplicateCodeDetector(_BaseClass):
             duplicates = duplicates[:MAX_DUPLICATES_RETURNED]
 
         # Calculate statistics
-        high_count, medium_count, low_count, total_lines = self._calculate_statistics(
-            duplicates
-        )
+        high_count, medium_count, low_count, total_lines = self._calculate_statistics(duplicates)
 
         return DuplicateAnalysis(
             total_duplicates=len(duplicates),
@@ -1196,9 +1151,7 @@ class DuplicateCodeDetector(_BaseClass):
         # Check for cached results first
         cache_key = f"dup_analysis:{self.project_root}"
         if self.use_semantic_analysis:
-            cached = await self._get_cached_result(
-                cache_key, prefix="duplicate_detector"
-            )
+            cached = await self._get_cached_result(cache_key, prefix="duplicate_detector")
             if cached:
                 logger.info("Returning cached duplicate analysis")
                 return DuplicateAnalysis(**cached)

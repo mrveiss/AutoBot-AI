@@ -26,7 +26,6 @@ from services.knowledge.autonomous_loop import (
     get_loop_runner,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -176,10 +175,18 @@ async def test_experiment_returns_one_result_per_variant():
     """EXPERIMENT phase returns exactly one VariantResult per input variant."""
     orch = _make_orchestrator()
     variants = [
-        {"hybrid_weight_semantic": 0.7, "diversity_threshold": 0.3,
-         "ucb1_exploration_constant": 1.5, "max_results_per_stage": 10},
-        {"hybrid_weight_semantic": 0.6, "diversity_threshold": 0.4,
-         "ucb1_exploration_constant": 2.0, "max_results_per_stage": 20},
+        {
+            "hybrid_weight_semantic": 0.7,
+            "diversity_threshold": 0.3,
+            "ucb1_exploration_constant": 1.5,
+            "max_results_per_stage": 10,
+        },
+        {
+            "hybrid_weight_semantic": 0.6,
+            "diversity_threshold": 0.4,
+            "ucb1_exploration_constant": 2.0,
+            "max_results_per_stage": 20,
+        },
     ]
     # Patch the evaluator so tests don't need ChromaDB
     orch._evaluator.score_variant = AsyncMock(side_effect=[0.8, 0.6])
@@ -320,8 +327,10 @@ async def test_promote_applies_when_above_threshold():
     # 0.9 vs 0.5 baseline → 80 % improvement, well above 5 % threshold
     best = VariantResult("v00", {"hybrid_weight_semantic": 0.8}, 0.9, 0.9, 0.9)
 
-    with patch("services.knowledge.autonomous_loop.update_rag_config") as mock_update, \
-         patch("services.knowledge.autonomous_loop.SynthesisProvenanceLog") as MockPlog:
+    with (
+        patch("services.knowledge.autonomous_loop.update_rag_config") as mock_update,
+        patch("services.knowledge.autonomous_loop.SynthesisProvenanceLog") as MockPlog,
+    ):
         MockPlog.return_value.log_run = AsyncMock()
         promoted = await orch._phase_promote(best, baseline_score=0.5, run_id="apply")
 
@@ -373,12 +382,14 @@ async def test_approve_pending_applies_and_clears():
     orch._pending_approval = {"hybrid_weight_semantic": 0.8}
 
     mock_redis = AsyncMock()
-    with patch("services.knowledge.autonomous_loop.update_rag_config") as mock_update, \
-         patch("services.knowledge.autonomous_loop.SynthesisProvenanceLog") as MockPlog, \
-         patch(
-             "services.knowledge.autonomous_loop.get_async_redis_client",
-             new=AsyncMock(return_value=mock_redis),
-         ):
+    with (
+        patch("services.knowledge.autonomous_loop.update_rag_config") as mock_update,
+        patch("services.knowledge.autonomous_loop.SynthesisProvenanceLog") as MockPlog,
+        patch(
+            "services.knowledge.autonomous_loop.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
+        ),
+    ):
         MockPlog.return_value.log_run = AsyncMock()
         result = await orch.approve_pending()
 
@@ -450,10 +461,12 @@ async def test_run_once_dry_run_produces_record():
     orch._evaluator.score_variant = AsyncMock(return_value=0.75)
     orch._evaluator.score_baseline = AsyncMock(return_value=0.5)
 
-    with patch("services.knowledge.autonomous_loop.get_rag_config") as mock_cfg, \
-         patch("services.knowledge.autonomous_loop.get_analyzer_service", side_effect=ImportError), \
-         patch("services.knowledge.autonomous_loop.SynthesisProvenanceLog", side_effect=ImportError), \
-         patch("services.knowledge.autonomous_loop.update_rag_config") as mock_update:
+    with (
+        patch("services.knowledge.autonomous_loop.get_rag_config") as mock_cfg,
+        patch("services.knowledge.autonomous_loop.get_analyzer_service", side_effect=ImportError),
+        patch("services.knowledge.autonomous_loop.SynthesisProvenanceLog", side_effect=ImportError),
+        patch("services.knowledge.autonomous_loop.update_rag_config") as mock_update,
+    ):
         cfg = MagicMock()
         cfg.hybrid_weight_semantic = 0.7
         cfg.diversity_threshold = 0.3
@@ -481,9 +494,11 @@ async def test_run_once_appends_to_history():
     orch._evaluator.score_baseline = AsyncMock(return_value=0.5)
 
     assert len(orch._history) == 0
-    with patch("services.knowledge.autonomous_loop.get_rag_config") as mock_cfg, \
-         patch("services.knowledge.autonomous_loop.get_analyzer_service", side_effect=ImportError), \
-         patch("services.knowledge.autonomous_loop.SynthesisProvenanceLog", side_effect=ImportError):
+    with (
+        patch("services.knowledge.autonomous_loop.get_rag_config") as mock_cfg,
+        patch("services.knowledge.autonomous_loop.get_analyzer_service", side_effect=ImportError),
+        patch("services.knowledge.autonomous_loop.SynthesisProvenanceLog", side_effect=ImportError),
+    ):
         cfg = MagicMock()
         cfg.hybrid_weight_semantic = 0.7
         cfg.diversity_threshold = 0.3
@@ -509,11 +524,13 @@ async def test_promote_stores_pending_in_redis():
     best = VariantResult("v00", {"hybrid_weight_semantic": 0.75}, 0.6, 0.6, 0.6)
 
     mock_redis = AsyncMock()
-    with patch("services.knowledge.autonomous_loop.update_rag_config"), \
-         patch(
-             "services.knowledge.autonomous_loop.get_async_redis_client",
-             new=AsyncMock(return_value=mock_redis),
-         ):
+    with (
+        patch("services.knowledge.autonomous_loop.update_rag_config"),
+        patch(
+            "services.knowledge.autonomous_loop.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
+        ),
+    ):
         await orch._phase_promote(best, baseline_score=0.5, run_id="pending-redis")
 
     assert orch._pending_approval == best.params

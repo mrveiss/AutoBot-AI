@@ -243,9 +243,7 @@ async def post_pr_comment(request: GitHubCommentRequest) -> Dict[str, Any]:
                 "body": request.body,
             },
         )
-        logger.info(
-            "Posted comment to %s/%s#%d", request.owner, request.repo, request.pull_number
-        )
+        logger.info("Posted comment to %s/%s#%d", request.owner, request.repo, request.pull_number)
         return result
     except Exception as exc:
         logger.error("Failed to post PR comment: %s", exc)
@@ -375,9 +373,7 @@ async def get_repository(
     """
     try:
         integration = _make_integration(token)
-        result = await integration.execute_action(
-            "get_repository", {"owner": owner, "repo": repo}
-        )
+        result = await integration.execute_action("get_repository", {"owner": owner, "repo": repo})
         return result
     except Exception as exc:
         logger.error("Failed to get repository %s/%s: %s", owner, repo, exc)
@@ -434,9 +430,7 @@ async def get_commit(
     """
     try:
         integration = _make_integration(token)
-        result = await integration.execute_action(
-            "get_commit", {"owner": owner, "repo": repo, "ref": ref}
-        )
+        result = await integration.execute_action("get_commit", {"owner": owner, "repo": repo, "ref": ref})
         return result
     except Exception as exc:
         logger.error("Failed to get commit %s/%s@%s: %s", owner, repo, ref, exc)

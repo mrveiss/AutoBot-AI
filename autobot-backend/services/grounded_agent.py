@@ -283,9 +283,7 @@ class GroundedAgent:
         )
 
         # 3. Reconstruct response with sources
-        reconstructed_text = await self._reconstruct_response(
-            agent_response, verified_claims
-        )
+        reconstructed_text = await self._reconstruct_response(agent_response, verified_claims)
 
         # 4. Trace reasoning through Tier 3
         causal_trace = await self._trace_verification_chain(
@@ -294,17 +292,11 @@ class GroundedAgent:
 
         # 5. Calculate overall confidence
         overall_confidence = (
-            sum(c.confidence for c in verified_claims) / len(verified_claims)
-            if verified_claims
-            else 0.0
+            sum(c.confidence for c in verified_claims) / len(verified_claims) if verified_claims else 0.0
         )
 
         # 6. Determine if review needed
-        requires_review = (
-            len(unverified_claims) > 0
-            or len(conflicts) > 0
-            or overall_confidence < 0.6
-        )
+        requires_review = len(unverified_claims) > 0 or len(conflicts) > 0 or overall_confidence < 0.6
 
         # Build response
         grounded = GroundedResponse(
@@ -502,9 +494,7 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
                 # Find claim text in response and annotate it
                 claim_text = verified.claim.claim_text
                 if claim_text in reconstructed:
-                    annotation = (
-                        f"{claim_text} [KB source, {verified.confidence:.0%} confidence]"
-                    )
+                    annotation = f"{claim_text} [KB source, {verified.confidence:.0%} confidence]"
                     reconstructed = reconstructed.replace(claim_text, annotation)
 
         return reconstructed
@@ -545,11 +535,7 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
                     },
                     {
                         "step": "kb_classification",
-                        "kb_matches": sum(
-                            1
-                            for c in verified_claims
-                            if c.kb_status == ClaimStatus.IN_KB
-                        ),
+                        "kb_matches": sum(1 for c in verified_claims if c.kb_status == ClaimStatus.IN_KB),
                         "unknown": len(unverified_claims),
                     },
                 ],
@@ -562,12 +548,9 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
                     }
                     for c in verified_claims
                 ],
-                confidence=sum(
-                    c.confidence for c in verified_claims
-                )
-                / len(verified_claims)
-                if verified_claims
-                else 0.0,
+                confidence=(
+                    sum(c.confidence for c in verified_claims) / len(verified_claims) if verified_claims else 0.0
+                ),
             )
 
             return trace

@@ -94,14 +94,11 @@ class OpenAIProvider(BaseProvider):
         try:
             import openai
         except ImportError as exc:
-            raise ImportError(
-                "openai package not installed. Run: pip install openai"
-            ) from exc
+            raise ImportError("openai package not installed. Run: pip install openai") from exc
         api_key = self._resolve_api_key()
         if not api_key:
             raise ValueError(
-                "OpenAI API key not configured. "
-                "Set OPENAI_API_KEY or provide api_key in provider settings."
+                "OpenAI API key not configured. " "Set OPENAI_API_KEY or provide api_key in provider settings."
             )
         base_url = self._get_setting("base_url") or os.getenv("OPENAI_API_BASE_URL")
         kwargs: Dict[str, Any] = {"api_key": api_key}
@@ -129,9 +126,7 @@ class OpenAIProvider(BaseProvider):
             "llm.max_tokens": request.max_tokens or 0,
             "llm.prompt_messages": len(request.messages),
         }
-        with _tracer.start_as_current_span(
-            "llm.inference", kind=SpanKind.CLIENT, attributes=span_attrs
-        ) as span:
+        with _tracer.start_as_current_span("llm.inference", kind=SpanKind.CLIENT, attributes=span_attrs) as span:
             try:
                 client = self._ensure_client()
                 params: Dict[str, Any] = {
@@ -149,13 +144,9 @@ class OpenAIProvider(BaseProvider):
                 processing_time = time.time() - start
                 if span.is_recording():
                     span.set_attribute("llm.duration_ms", processing_time * 1000)
-                    span.set_attribute(
-                        "llm.response_length", len(choice.message.content or "")
-                    )
+                    span.set_attribute("llm.response_length", len(choice.message.content or ""))
                     span.set_attribute("llm.prompt_tokens", response.usage.prompt_tokens)
-                    span.set_attribute(
-                        "llm.completion_tokens", response.usage.completion_tokens
-                    )
+                    span.set_attribute("llm.completion_tokens", response.usage.completion_tokens)
                     span.set_attribute("llm.total_tokens", response.usage.total_tokens)
                     span.set_status(Status(StatusCode.OK))
                 return LLMResponse(

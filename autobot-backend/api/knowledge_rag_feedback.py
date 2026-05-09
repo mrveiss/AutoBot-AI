@@ -55,12 +55,7 @@ async def record_rag_feedback(
     Returns:
         {"status": "recorded", "stream_key": "..."} on success.
     """
-    uid = (
-        current_user.get("user_id")
-        or current_user.get("id")
-        or body.user_id
-        or GLOBAL_USER
-    )
+    uid = current_user.get("user_id") or current_user.get("id") or body.user_id or GLOBAL_USER
     date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
     stream_key = f"rag:feedback:{uid}:{date_key}"
 
@@ -70,9 +65,7 @@ async def record_rag_feedback(
     entry = {
         "query_text": body.query,
         "retrieved_chunk_ids": json.dumps([body.source_url], ensure_ascii=False),
-        "final_ranked_ids": json.dumps(
-            [body.source_url] if is_accepted else [], ensure_ascii=False
-        ),
+        "final_ranked_ids": json.dumps([body.source_url] if is_accepted else [], ensure_ascii=False),
         "complexity": "simple",
         "annotation": body.decision,
         "title": body.title,
@@ -90,9 +83,7 @@ async def record_rag_feedback(
             # warning.  reason="redis_down" - analytics Redis unreachable.
             from knowledge.metrics import autobot_kb_degradation_total
 
-            autobot_kb_degradation_total.labels(
-                endpoint="rag_feedback", reason="redis_down"
-            ).inc()
+            autobot_kb_degradation_total.labels(endpoint="rag_feedback", reason="redis_down").inc()
             return {"status": "skipped", "reason": "redis_unavailable"}
 
         await redis.xadd(stream_key, entry)

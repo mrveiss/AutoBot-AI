@@ -98,9 +98,7 @@ class TestInitializeNotNoOp:
         assert manager._initialized is True
 
     @pytest.mark.asyncio
-    async def test_memory_graph_failure_does_not_prevent_initialized_flag(
-        self, manager, caplog
-    ):
+    async def test_memory_graph_failure_does_not_prevent_initialized_flag(self, manager, caplog):
         """
         If _init_memory_graph raises, initialize() should still propagate the
         exception (not silently swallow it) — the Memory Graph failure is
@@ -108,6 +106,7 @@ class TestInitializeNotNoOp:
         But if _init_memory_graph handles errors internally (as the real impl
         does), _initialized must still be set to True.
         """
+
         # Simulate the real _init_memory_graph: it catches all errors internally
         # and sets memory_graph = None, so it never raises.
         async def _safe_stub():

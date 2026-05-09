@@ -57,9 +57,7 @@ class MLModel(Base):
     deployed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -98,7 +96,4 @@ class MLModel(Base):
         }
 
     def __repr__(self) -> str:
-        return (
-            f"<MLModel(version={self.version}, type={self.model_type}, "
-            f"active={self.is_active})>"
-        )
+        return f"<MLModel(version={self.version}, type={self.model_type}, " f"active={self.is_active})>"

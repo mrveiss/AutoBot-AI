@@ -177,9 +177,7 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
         """Return list of capabilities this agent supports."""
         return self.capabilities.copy()
 
-    def _build_command_messages(
-        self, request: str, context: Optional[Dict[str, Any]]
-    ) -> List[Dict[str, str]]:
+    def _build_command_messages(self, request: str, context: Optional[Dict[str, Any]]) -> List[Dict[str, str]]:
         """Build messages for command generation (Issue #398: extracted)."""
         system_prompt = self._get_system_commands_prompt()
         if context:
@@ -222,9 +220,7 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
             "model_used": self.model_name,
         }
 
-    async def process_command_request(
-        self, request: str, context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    async def process_command_request(self, request: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Process a command request (Issue #398: refactored)."""
         try:
             logger.info("System Commands Agent processing: %s...", request[:50])
@@ -237,9 +233,7 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
                 top_p=0.8,
             )
             command_info = self._extract_and_validate_command(response)
-            security_check = self._security_validate_command(
-                command_info.get("command", "")
-            )
+            security_check = self._security_validate_command(command_info.get("command", ""))
             command_info.update(security_check)
             return self._build_command_payload(command_info)
         except Exception as e:
@@ -315,9 +309,7 @@ and suggest alternatives."""
                 if isinstance(parsed, dict) and "command" in parsed:
                     return {
                         "command": parsed.get("command", "").strip(),
-                        "explanation": parsed.get(
-                            "explanation", "No explanation provided"
-                        ),
+                        "explanation": parsed.get("explanation", "No explanation provided"),
                         "safety_level": parsed.get("safety_level", "unknown"),
                         "alternative": parsed.get("alternative", ""),
                         "is_structured": True,
@@ -375,9 +367,7 @@ and suggest alternatives."""
                 }
         return None
 
-    def _validate_parsed_command(
-        self, parts: list, main_command: str
-    ) -> Dict[str, Any]:
+    def _validate_parsed_command(self, parts: list, main_command: str) -> Dict[str, Any]:
         """Validate parsed command parts (Issue #398: extracted)."""
         if main_command not in self.allowed_commands:
             return {

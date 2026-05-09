@@ -34,9 +34,7 @@ class TestConfigRegistryBasic:
         ConfigRegistry.clear_cache()
 
         # Mock Redis to return a value
-        with patch.object(
-            ConfigRegistry, "_fetch_from_redis", return_value="redis_value"
-        ):
+        with patch.object(ConfigRegistry, "_fetch_from_redis", return_value="redis_value"):
             result = ConfigRegistry.get("some.key", default="default")
             assert result == "redis_value"
 
@@ -60,9 +58,7 @@ class TestConfigRegistryBasic:
         ConfigRegistry.clear_cache()
 
         # First call - fetch from Redis
-        with patch.object(
-            ConfigRegistry, "_fetch_from_redis", return_value="cached_value"
-        ) as mock_redis:
+        with patch.object(ConfigRegistry, "_fetch_from_redis", return_value="cached_value") as mock_redis:
             result1 = ConfigRegistry.get("cache.test.key")
             assert result1 == "cached_value"
             assert mock_redis.call_count == 1
@@ -107,9 +103,7 @@ class TestConfigRegistryBasic:
         ConfigRegistry.clear_cache()
 
         # Mock Redis to raise an exception
-        with patch.object(
-            ConfigRegistry, "_fetch_from_redis", side_effect=Exception("Test error")
-        ):
+        with patch.object(ConfigRegistry, "_fetch_from_redis", side_effect=Exception("Test error")):
             with patch.dict(os.environ, {}, clear=True):
                 result = ConfigRegistry.get("error.key", default="safe_default")
                 assert result == "safe_default"
@@ -121,9 +115,7 @@ class TestConfigRegistryBasic:
         ConfigRegistry.clear_cache()
 
         with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
-            with patch.dict(
-                os.environ, {"AUTOBOT_REDIS_HOST": "10.0.0.99"}, clear=True
-            ):
+            with patch.dict(os.environ, {"AUTOBOT_REDIS_HOST": "10.0.0.99"}, clear=True):
                 result = ConfigRegistry.get("redis.host", default="10.0.0.4")
                 assert result == "10.0.0.99"
 
@@ -134,9 +126,7 @@ class TestConfigRegistryBasic:
         ConfigRegistry.clear_cache()
 
         with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
-            with patch.dict(
-                os.environ, {"AUTOBOT_BACKEND_API_PORT": "9000"}, clear=True
-            ):
+            with patch.dict(os.environ, {"AUTOBOT_BACKEND_API_PORT": "9000"}, clear=True):
                 result = ConfigRegistry.get("api.port", default="8001")
                 assert result == "9000"
 
@@ -219,9 +209,7 @@ class TestConfigRegistrySections:
             "redis.database": "0",
             "backend.port": "8001",
         }
-        ConfigRegistry._cache_timestamps = {
-            k: time.time() for k in ConfigRegistry._cache
-        }
+        ConfigRegistry._cache_timestamps = {k: time.time() for k in ConfigRegistry._cache}
 
         result = ConfigRegistry.get_section("redis")
         assert result == {
@@ -239,9 +227,7 @@ class TestConfigRegistrySections:
         ConfigRegistry._cache = {
             "redis.host": "10.0.0.4",
         }
-        ConfigRegistry._cache_timestamps = {
-            k: time.time() for k in ConfigRegistry._cache
-        }
+        ConfigRegistry._cache_timestamps = {k: time.time() for k in ConfigRegistry._cache}
 
         result = ConfigRegistry.get_section("nonexistent")
         assert result == {}
@@ -298,9 +284,7 @@ class TestConfigRegistrySections:
         ConfigRegistry._cache["refresh.key"] = "old_value"
         ConfigRegistry._cache_timestamps["refresh.key"] = time.time()
 
-        with patch.object(
-            ConfigRegistry, "_fetch_from_redis", return_value="new_value"
-        ) as mock_fetch:
+        with patch.object(ConfigRegistry, "_fetch_from_redis", return_value="new_value") as mock_fetch:
             result = ConfigRegistry.refresh("refresh.key")
 
         assert result == "new_value"
@@ -356,9 +340,7 @@ class TestConfigRegistryDefaults:
 
         ConfigRegistry.clear_cache()
 
-        with patch.object(
-            ConfigRegistry, "_fetch_from_redis", return_value="10.0.0.99"
-        ):
+        with patch.object(ConfigRegistry, "_fetch_from_redis", return_value="10.0.0.99"):
             result = ConfigRegistry.get("redis.host")
             assert result == "10.0.0.99"
 
@@ -409,10 +391,7 @@ class TestConfigRegistryDefaults:
         with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
             with patch.dict(os.environ, {}, clear=True):
                 assert ConfigRegistry.get("llm.default_model") == DEFAULT_LLM_MODEL
-                assert (
-                    ConfigRegistry.get("llm.embedding_model")
-                    == "nomic-embed-text:latest"
-                )
+                assert ConfigRegistry.get("llm.embedding_model") == "nomic-embed-text:latest"
 
     def test_timeout_defaults_available(self):
         """Test that timeout defaults are available."""

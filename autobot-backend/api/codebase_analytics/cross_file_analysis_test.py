@@ -68,15 +68,11 @@ async def test_cross_file_analysis_finds_lsp_violation(tmp_path):
         return len(problems)
 
     with patch.object(xfa, "_persist_to_chromadb", new=fake_persist):
-        count = await xfa.run_cross_file_analysis(
-            str(tmp_path), source_id=None, exclude_patterns=["__pycache__"]
-        )
+        count = await xfa.run_cross_file_analysis(str(tmp_path), source_id=None, exclude_patterns=["__pycache__"])
 
     assert count >= 1, f"expected at least one finding persisted, got {count}"
     types = {p.get("type") for p in persisted}
-    assert "code_smell_lsp_signature_incompatible" in types, (
-        f"expected LSP signature finding, got types={types}"
-    )
+    assert "code_smell_lsp_signature_incompatible" in types, f"expected LSP signature finding, got types={types}"
 
 
 @pytest.mark.asyncio
@@ -118,9 +114,7 @@ async def test_cross_file_analysis_finds_duplicate_enum(tmp_path):
         return len(problems)
 
     with patch.object(xfa, "_persist_to_chromadb", new=fake_persist):
-        count = await xfa.run_cross_file_analysis(
-            str(tmp_path), source_id=None, exclude_patterns=["__pycache__"]
-        )
+        count = await xfa.run_cross_file_analysis(str(tmp_path), source_id=None, exclude_patterns=["__pycache__"])
 
     assert count >= 1
     types = {p.get("type") for p in persisted}
@@ -154,9 +148,7 @@ async def test_problem_dict_shape_matches_chromadb_persistence(tmp_path):
         return len(problems)
 
     with patch.object(xfa, "_persist_to_chromadb", new=fake_persist):
-        await xfa.run_cross_file_analysis(
-            str(tmp_path), source_id=None, exclude_patterns=["__pycache__"]
-        )
+        await xfa.run_cross_file_analysis(str(tmp_path), source_id=None, exclude_patterns=["__pycache__"])
 
     assert persisted, "fixture must produce at least one finding"
     p = persisted[0]
@@ -194,10 +186,6 @@ async def test_run_swallows_detector_failure(tmp_path):
     )
     import sys as _sys
 
-    with patch.dict(
-        _sys.modules, {"code_analysis.src.anti_pattern_detector": fake_module}
-    ):
-        count = await xfa.run_cross_file_analysis(
-            str(tmp_path), source_id=None, exclude_patterns=["__pycache__"]
-        )
+    with patch.dict(_sys.modules, {"code_analysis.src.anti_pattern_detector": fake_module}):
+        count = await xfa.run_cross_file_analysis(str(tmp_path), source_id=None, exclude_patterns=["__pycache__"])
     assert count == 0

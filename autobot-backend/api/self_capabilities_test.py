@@ -22,6 +22,7 @@ import api.self_capabilities as sc
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def _make_route(
     path: str,
     method: str = "GET",
@@ -54,6 +55,7 @@ def _stub_app(route_count: int = 5) -> MagicMock:
 # _build_endpoint_entry
 # ---------------------------------------------------------------------------
 
+
 def test_build_endpoint_entry_maps_method_and_operation_type():
     op = {"summary": "Fetch item", "tags": ["items"], "operationId": "get_item"}
     entry = sc._build_endpoint_entry("/api/items/{id}", "get", op)
@@ -81,6 +83,7 @@ def test_build_endpoint_entry_delete_is_delete():
 # ---------------------------------------------------------------------------
 # _collect_endpoints
 # ---------------------------------------------------------------------------
+
 
 def test_collect_endpoints_filters_non_http_keys():
     paths = {
@@ -111,6 +114,7 @@ def test_collect_endpoints_multiple_methods():
 # _categorise_by_tag
 # ---------------------------------------------------------------------------
 
+
 def test_categorise_by_tag_groups_correctly():
     endpoints = [
         {"path": "/a", "method": "GET", "tags": ["alpha"], "operation_type": "query"},
@@ -136,6 +140,7 @@ def test_categorise_by_tag_no_duplicate_entries():
 # _categorise_by_operation
 # ---------------------------------------------------------------------------
 
+
 def test_categorise_by_operation_type():
     endpoints = [
         {"path": "/a", "method": "GET", "tags": [], "operation_type": "query"},
@@ -150,6 +155,7 @@ def test_categorise_by_operation_type():
 # ---------------------------------------------------------------------------
 # _cache_is_valid
 # ---------------------------------------------------------------------------
+
 
 def test_cache_is_valid_returns_false_when_no_cache():
     sc._cache = None
@@ -180,6 +186,7 @@ def test_cache_is_valid_returns_true_when_fresh():
 # ---------------------------------------------------------------------------
 # discover_endpoints (integration-style with stub)
 # ---------------------------------------------------------------------------
+
 
 def _fake_openapi_paths(_app):
     return {

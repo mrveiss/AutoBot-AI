@@ -10,6 +10,7 @@ evaluator, agentic search query rewriter).
 Issue #5102: three near-identical ``_call_llm`` methods collapsed into
 this single helper.
 """
+
 from __future__ import annotations
 
 import httpx

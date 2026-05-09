@@ -24,12 +24,8 @@ _UUID = postgresql.UUID(as_uuid=True)
 def _common_ts_cols():
     """Return created_at/updated_at Column defs. Helper (#1406)."""
     return [
-        sa.Column(
-            "created_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False
-        ),
-        sa.Column(
-            "updated_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False
-        ),
+        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
     ]
 
 
@@ -47,9 +43,7 @@ def _create_process_runs_table() -> None:
         sa.Column("signal", sa.String(30), nullable=True),
         sa.Column("log_excerpt", sa.Text(), nullable=True),
         sa.Column("log_path", sa.String(1024), nullable=True),
-        sa.Column(
-            "timeout_seconds", sa.Integer(), nullable=False, server_default="300"
-        ),
+        sa.Column("timeout_seconds", sa.Integer(), nullable=False, server_default="300"),
         sa.Column("started_at", sa.DateTime(), nullable=True),
         sa.Column("completed_at", sa.DateTime(), nullable=True),
         *_common_ts_cols(),
@@ -73,9 +67,7 @@ def _create_task_decompositions_table() -> None:
         sa.Column("context_out", _JSONB, nullable=True),
         sa.Column("status", sa.String(30), nullable=False, server_default="queued"),
         *_common_ts_cols(),
-        sa.ForeignKeyConstraint(
-            ["process_run_id"], ["process_runs.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["process_run_id"], ["process_runs.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(

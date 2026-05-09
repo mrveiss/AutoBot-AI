@@ -70,8 +70,7 @@ class SessionMixin:
             raise ValueError("session_id must not contain null bytes")
         if ".." in session_id or "/" in session_id or "\\" in session_id:
             raise ValueError(
-                "session_id must not contain path traversal characters "
-                f"('..', '/', '\\'): {session_id!r}"
+                "session_id must not contain path traversal characters " f"('..', '/', '\\'): {session_id!r}"
             )
 
     def _try_get_from_cache(self, session_id: str) -> Optional[List[Dict[str, Any]]]:
@@ -92,25 +91,19 @@ class SessionMixin:
             logger.error("Failed to read from Redis cache: %s", e)
             return None
 
-    async def _resolve_session_file_path(
-        self, session_id: str, chats_directory: str
-    ) -> Optional[str]:
+    async def _resolve_session_file_path(self, session_id: str, chats_directory: str) -> Optional[str]:
         """Resolve session file path with backward compatibility.
 
         Issue #315 - extracted.  Issue #1721 - uses shared path validator.
         """
         # Validate paths against chats directory (#1721)
-        chat_file = str(
-            validate_relative_path(f"{session_id}_chat.json", chats_directory)
-        )
+        chat_file = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
         file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
         if file_exists:
             return chat_file
 
         # Backward compatibility: try old naming convention
-        chat_file_old = str(
-            validate_relative_path(f"chat_{session_id}.json", chats_directory)
-        )
+        chat_file_old = str(validate_relative_path(f"chat_{session_id}.json", chats_directory))
         old_file_exists = await run_in_chat_io_executor(os.path.exists, chat_file_old)
         if old_file_exists:
             logger.debug("Using legacy file format for session %s", session_id)
@@ -119,9 +112,7 @@ class SessionMixin:
         logger.warning("Chat session %s not found", session_id)
         return None
 
-    async def _load_existing_chat_data(
-        self, session_id: str, chat_file: str, chats_directory: str
-    ) -> Dict[str, Any]:
+    async def _load_existing_chat_data(self, session_id: str, chat_file: str, chats_directory: str) -> Dict[str, Any]:
         """Load existing chat data with backward compatibility. (Issue #315 - extracted)"""
         file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
         if file_exists:
@@ -130,15 +121,11 @@ class SessionMixin:
                     file_content = await f.read()
                 return self._decrypt_data(file_content)
             except Exception as e:
-                logger.warning(
-                    "Could not load existing chat data for %s: %s", session_id, e
-                )
+                logger.warning("Could not load existing chat data for %s: %s", session_id, e)
                 return {}
 
         # Try old format for backward compatibility
-        chat_file_old = str(
-            validate_relative_path(f"chat_{session_id}.json", chats_directory)
-        )
+        chat_file_old = str(validate_relative_path(f"chat_{session_id}.json", chats_directory))
         old_file_exists = await run_in_chat_io_executor(os.path.exists, chat_file_old)
         if old_file_exists:
             try:
@@ -203,9 +190,7 @@ class SessionMixin:
             if metadata:
                 entity_metadata.update(metadata)
 
-            await self.memory_graph.create_conversation_entity(
-                session_id=session_id, metadata=entity_metadata
-            )
+            await self.memory_graph.create_conversation_entity(session_id=session_id, metadata=entity_metadata)
 
             logger.info("Created Memory Graph entity for session: %s", session_id)
 
@@ -243,21 +228,15 @@ class SessionMixin:
         current_time = time.strftime("%Y-%m-%d %H:%M:%S")
         session_title = title or session_name or f"Chat {session_id[:13]}"
 
-        session_data = self._build_session_data(
-            session_id, session_title, current_time, metadata
-        )
+        session_data = self._build_session_data(session_id, session_title, current_time, metadata)
 
         await self.save_session(session_id=session_id, messages=[], name=session_title)
-        await self._create_memory_graph_entity(
-            session_id, session_title, current_time, metadata
-        )
+        await self._create_memory_graph_entity(session_id, session_title, current_time, metadata)
 
         logger.info("Created new chat session: %s", session_id)
         return session_data
 
-    async def _load_session_from_file(
-        self, session_id: str
-    ) -> Optional[Dict[str, Any]]:
+    async def _load_session_from_file(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Load and decrypt session data from file. Issue #620."""
         chats_directory = self._get_chats_directory()
         chat_file = await self._resolve_session_file_path(session_id, chats_directory)
@@ -269,9 +248,7 @@ class SessionMixin:
 
         return self._decrypt_data(file_content)
 
-    async def _process_loaded_messages(
-        self, session_id: str, chat_data: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+    async def _process_loaded_messages(self, session_id: str, chat_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Deduplicate messages and save cleaned version if needed. Issue #620."""
         messages = chat_data.get("messages", [])
         cleaned_messages = self._dedupe_streaming_messages(messages)
@@ -331,9 +308,7 @@ class SessionMixin:
 
         return cleaned_messages
 
-    async def _warm_cache_safe(
-        self, session_id: str, chat_data: Dict[str, Any]
-    ) -> None:
+    async def _warm_cache_safe(self, session_id: str, chat_data: Dict[str, Any]) -> None:
         """Warm up Redis cache safely. (Issue #315 - extracted)"""
         if not self.redis_client:
             return
@@ -344,9 +319,7 @@ class SessionMixin:
         except Exception as e:
             logger.error("Failed to warm cache: %s", e)
 
-    async def _update_redis_cache_on_save(
-        self, session_id: str, chat_data: Dict[str, Any]
-    ) -> None:
+    async def _update_redis_cache_on_save(self, session_id: str, chat_data: Dict[str, Any]) -> None:
         """Update Redis cache on session save. (Issue #315 - extracted)"""
         if not self.redis_client:
             return
@@ -355,9 +328,7 @@ class SessionMixin:
             await self._async_cache_session(cache_key, chat_data)
             # Update recent chats sorted set for fast listing
             # Issue #361 - avoid blocking
-            await run_in_chat_io_executor(
-                self.redis_client.zadd, "chat:recent", {session_id: time.time()}
-            )
+            await run_in_chat_io_executor(self.redis_client.zadd, "chat:recent", {session_id: time.time()})
             logger.debug("Cached session %s in Redis", session_id)
         except Exception as e:
             logger.error("Failed to cache session in Redis: %s", e)
@@ -414,9 +385,7 @@ class SessionMixin:
         try:
             await self._atomic_write(chat_file, encrypted_data)
         except Exception as atomic_error:
-            logger.warning(
-                f"Atomic write failed, falling back to direct write: {atomic_error}"
-            )
+            logger.warning(f"Atomic write failed, falling back to direct write: {atomic_error}")
             async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
                 await f.write(encrypted_data)
 
@@ -504,27 +473,19 @@ class SessionMixin:
             chats_directory = self._get_chats_directory()
             await self._ensure_chats_directory_exists(chats_directory)
 
-            chat_file = str(
-                validate_relative_path(f"{session_id}_chat.json", chats_directory)
-            )
+            chat_file = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
             current_time = time.strftime("%Y-%m-%d %H:%M:%S")
             session_messages = self._prepare_session_messages(session_id, messages)
 
-            chat_data = await self._load_existing_chat_data(
-                session_id, chat_file, chats_directory
-            )
-            chat_data = self._build_session_chat_data(
-                chat_data, session_id, name, session_messages, current_time
-            )
+            chat_data = await self._load_existing_chat_data(session_id, chat_file, chats_directory)
+            chat_data = self._build_session_chat_data(chat_data, session_id, name, session_messages, current_time)
 
             await self._write_session_to_storage(chat_file, chat_data)
             await self._update_redis_cache_on_save(session_id, chat_data)
             logger.info("Chat session '%s' saved successfully", session_id)
 
             if self.memory_graph_enabled and self.memory_graph:
-                await self._update_memory_graph_entity(
-                    session_id, session_messages, name, current_time
-                )
+                await self._update_memory_graph_entity(session_id, session_messages, name, current_time)
 
             await self._handle_periodic_cleanup()
 
@@ -609,9 +570,7 @@ class SessionMixin:
             observations = self._build_memory_graph_observations(metadata, current_time)
 
             try:
-                await self.memory_graph.add_observations(
-                    entity_name=entity_name, observations=observations
-                )
+                await self.memory_graph.add_observations(entity_name=entity_name, observations=observations)
                 logger.debug("Updated Memory Graph entity for session: %s", session_id)
 
             except (ValueError, RuntimeError) as e:
@@ -620,20 +579,14 @@ class SessionMixin:
                         "Entity not found, creating new entity for session: %s",
                         session_id,
                     )
-                    await self._create_memory_graph_entity_on_missing(
-                        session_id, name, metadata, observations
-                    )
+                    await self._create_memory_graph_entity_on_missing(session_id, name, metadata, observations)
                 else:
                     raise
 
         except Exception as mg_error:
-            logger.warning(
-                "Failed to update Memory Graph entity (continuing): %s", mg_error
-            )
+            logger.warning("Failed to update Memory Graph entity (continuing): %s", mg_error)
 
-    async def _delete_session_files(
-        self, session_id: str, chats_directory: str
-    ) -> bool:
+    async def _delete_session_files(self, session_id: str, chats_directory: str) -> bool:
         """
         Delete main session files (new and old format).
 
@@ -649,18 +602,14 @@ class SessionMixin:
         deleted = False
 
         # Delete new format file
-        chat_file_new = str(
-            validate_relative_path(f"{session_id}_chat.json", chats_directory)
-        )
+        chat_file_new = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
         new_exists = await run_in_chat_io_executor(os.path.exists, chat_file_new)
         if new_exists:
             await run_in_chat_io_executor(os.remove, chat_file_new)
             deleted = True
 
         # Delete old format file if exists
-        chat_file_old = str(
-            validate_relative_path(f"chat_{session_id}.json", chats_directory)
-        )
+        chat_file_old = str(validate_relative_path(f"chat_{session_id}.json", chats_directory))
         old_exists = await run_in_chat_io_executor(os.path.exists, chat_file_old)
         if old_exists:
             await run_in_chat_io_executor(os.remove, chat_file_old)
@@ -668,9 +617,7 @@ class SessionMixin:
 
         return deleted
 
-    async def _delete_companion_files(
-        self, session_id: str, chats_directory: str
-    ) -> None:
+    async def _delete_companion_files(self, session_id: str, chats_directory: str) -> None:
         """
         Delete companion files (terminal logs, transcripts, etc.).
 
@@ -681,23 +628,15 @@ class SessionMixin:
         Issue #620.
         """
         # Delete terminal log file
-        terminal_log = str(
-            validate_relative_path(f"{session_id}_terminal.log", chats_directory)
-        )
+        terminal_log = str(validate_relative_path(f"{session_id}_terminal.log", chats_directory))
         log_exists = await run_in_chat_io_executor(os.path.exists, terminal_log)
         if log_exists:
             await run_in_chat_io_executor(os.remove, terminal_log)
             logger.debug("Deleted terminal log for session %s", session_id)
 
         # Delete terminal transcript file
-        terminal_transcript = str(
-            validate_relative_path(
-                f"{session_id}_terminal_transcript.txt", chats_directory
-            )
-        )
-        transcript_exists = await run_in_chat_io_executor(
-            os.path.exists, terminal_transcript
-        )
+        terminal_transcript = str(validate_relative_path(f"{session_id}_terminal_transcript.txt", chats_directory))
+        transcript_exists = await run_in_chat_io_executor(os.path.exists, terminal_transcript)
         if transcript_exists:
             await run_in_chat_io_executor(os.remove, terminal_transcript)
             logger.debug("Deleted terminal transcript for session %s", session_id)
@@ -718,9 +657,7 @@ class SessionMixin:
             cache_key = f"chat:session:{session_id}"
             # Issue #361 - avoid blocking
             await run_in_chat_io_executor(self.redis_client.delete, cache_key)
-            await run_in_chat_io_executor(
-                self.redis_client.zrem, "chat:recent", session_id
-            )
+            await run_in_chat_io_executor(self.redis_client.zrem, "chat:recent", session_id)
             logger.debug("Cleared Redis cache for session %s", session_id)
         except Exception as e:
             logger.error("Failed to clear Redis cache: %s", e)
@@ -756,9 +693,7 @@ class SessionMixin:
             logger.error("Error deleting chat session %s: %s", session_id, e)
             return False
 
-    async def _update_redis_session_cache(
-        self, session_id: str, chat_data: Dict[str, Any]
-    ) -> None:
+    async def _update_redis_session_cache(self, session_id: str, chat_data: Dict[str, Any]) -> None:
         """
         Update the Redis cache for a session.
 
@@ -785,9 +720,7 @@ class SessionMixin:
         try:
             self._sanitize_session_id(session_id)
             chats_directory = self._get_chats_directory()
-            chat_file = await self._resolve_session_file_path(
-                session_id, chats_directory
-            )
+            chat_file = await self._resolve_session_file_path(session_id, chats_directory)
             if not chat_file:
                 logger.warning("Session %s not found for update", session_id)
                 return False
@@ -802,9 +735,7 @@ class SessionMixin:
             chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
             # Save updated data (always use new format)
-            chat_file_new = str(
-                validate_relative_path(f"{session_id}_chat.json", chats_directory)
-            )
+            chat_file_new = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
             encrypted_data = self._encrypt_data(chat_data)
             async with aiofiles.open(chat_file_new, "w", encoding="utf-8") as f:
                 await f.write(encrypted_data)
@@ -837,9 +768,7 @@ class SessionMixin:
             chats_directory = self._get_chats_directory()
 
             # Resolve file path using existing helper
-            chat_file = await self._resolve_session_file_path(
-                session_id, chats_directory
-            )
+            chat_file = await self._resolve_session_file_path(session_id, chats_directory)
             if not chat_file:
                 logger.warning("Chat session %s not found for name update", session_id)
                 return False
@@ -848,9 +777,7 @@ class SessionMixin:
             chat_data = await self._load_and_update_session_name(chat_file, name)
 
             # Save and cache updated data (Issue #620: extracted helper)
-            await self._save_session_name_update(
-                session_id, chats_directory, chat_data, name
-            )
+            await self._save_session_name_update(session_id, chats_directory, chat_data, name)
 
             return True
 
@@ -858,9 +785,7 @@ class SessionMixin:
             logger.error("Error updating chat session %s name: %s", session_id, e)
             return False
 
-    async def _load_and_update_session_name(
-        self, chat_file: str, name: str
-    ) -> Dict[str, Any]:
+    async def _load_and_update_session_name(self, chat_file: str, name: str) -> Dict[str, Any]:
         """
         Load session data and update the name field.
 
@@ -897,9 +822,7 @@ class SessionMixin:
             name: New session name (for logging). Issue #620.
         """
         # Save updated data (always use new format, #1721)
-        chat_file_new = str(
-            validate_relative_path(f"{session_id}_chat.json", chats_directory)
-        )
+        chat_file_new = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
         async with aiofiles.open(chat_file_new, "w", encoding="utf-8") as f:
             await f.write(json.dumps(chat_data, indent=2, ensure_ascii=False))
 
@@ -940,9 +863,7 @@ class SessionMixin:
         try:
             self._sanitize_session_id(session_id)
             chats_directory = self._get_chats_directory()
-            chat_file = str(
-                validate_relative_path(f"{session_id}_chat.json", chats_directory)
-            )
+            chat_file = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
 
             # Try new format first
             file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)

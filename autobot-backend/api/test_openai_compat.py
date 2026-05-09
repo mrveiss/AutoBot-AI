@@ -64,9 +64,7 @@ def _make_mock_registry(content: str = "Hello from AutoBot", models: list = None
 
     mock_registry = MagicMock()
     mock_registry.get_provider_for_request = AsyncMock(return_value=mock_provider)
-    mock_registry.list_providers = MagicMock(
-        return_value=[{"name": "mock_provider"}]
-    )
+    mock_registry.list_providers = MagicMock(return_value=[{"name": "mock_provider"}])
     mock_registry._providers = {"mock_provider": mock_provider}
     return mock_registry
 
@@ -81,12 +79,11 @@ async def test_chat_completions_non_streaming_returns_oai_shape():
     """POST /v1/chat/completions (non-streaming) must return OpenAI-shaped JSON."""
     mock_registry = _make_mock_registry("Hello from AutoBot")
 
-    with patch(
-        "api.openai_compat.get_provider_registry", return_value=mock_registry
-    ), patch("api.openai_compat._get_user", return_value=_SYNTHETIC_USER):
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+    with (
+        patch("api.openai_compat.get_provider_registry", return_value=mock_registry),
+        patch("api.openai_compat._get_user", return_value=_SYNTHETIC_USER),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.post(
                 "/v1/chat/completions",
                 json={
@@ -115,12 +112,11 @@ async def test_list_models_returns_model_list():
     """GET /v1/models must return {object: 'list', data: [{id, object, ...}]}."""
     mock_registry = _make_mock_registry(models=["gpt-autobot-1", "gpt-autobot-2"])
 
-    with patch(
-        "api.openai_compat.get_provider_registry", return_value=mock_registry
-    ), patch("api.openai_compat._get_user", return_value=_SYNTHETIC_USER):
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+    with (
+        patch("api.openai_compat.get_provider_registry", return_value=mock_registry),
+        patch("api.openai_compat._get_user", return_value=_SYNTHETIC_USER),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get("/v1/models")
 
     assert resp.status_code == 200, resp.text
@@ -138,12 +134,11 @@ async def test_chat_completions_streaming_returns_sse_done():
     """POST /v1/chat/completions (stream=true) must return SSE events and [DONE]."""
     mock_registry = _make_mock_registry()
 
-    with patch(
-        "api.openai_compat.get_provider_registry", return_value=mock_registry
-    ), patch("api.openai_compat._get_user", return_value=_SYNTHETIC_USER):
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+    with (
+        patch("api.openai_compat.get_provider_registry", return_value=mock_registry),
+        patch("api.openai_compat._get_user", return_value=_SYNTHETIC_USER),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             async with client.stream(
                 "POST",
                 "/v1/chat/completions",
@@ -161,7 +156,7 @@ async def test_chat_completions_streaming_returns_sse_done():
     assert "data: [DONE]" in text
     # All data lines except [DONE] must be valid JSON with expected shape
     data_lines = [
-        line[len("data: "):].strip()
+        line[len("data: ") :].strip()
         for line in text.splitlines()
         if line.startswith("data: ") and line.strip() != "data: [DONE]"
     ]
@@ -177,15 +172,12 @@ def _stream_post(payload):
     mock_registry = _make_mock_registry()
 
     async def _run():
-        with patch(
-            "api.openai_compat.get_provider_registry", return_value=mock_registry
-        ), patch("api.openai_compat._get_user", return_value=_SYNTHETIC_USER):
-            async with AsyncClient(
-                transport=ASGITransport(app=app), base_url="http://test"
-            ) as client:
-                async with client.stream(
-                    "POST", "/v1/chat/completions", json=payload
-                ) as response:
+        with (
+            patch("api.openai_compat.get_provider_registry", return_value=mock_registry),
+            patch("api.openai_compat._get_user", return_value=_SYNTHETIC_USER),
+        ):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                async with client.stream("POST", "/v1/chat/completions", json=payload) as response:
                     assert response.status_code == 200
                     return (await response.aread()).decode("utf-8")
 
@@ -195,7 +187,7 @@ def _stream_post(payload):
 def _parse_sse_chunks(text: str):
     """Return the list of parsed JSON chunks (excluding [DONE])."""
     return [
-        json.loads(line[len("data: "):])
+        json.loads(line[len("data: ") :])
         for line in text.splitlines()
         if line.startswith("data: ") and line.strip() != "data: [DONE]"
     ]

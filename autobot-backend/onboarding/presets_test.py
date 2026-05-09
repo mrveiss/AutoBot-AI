@@ -29,9 +29,9 @@ class TestGetAllPresets:
 
     def test_all_llm_tiers_are_valid(self):
         for preset in get_all_presets():
-            assert preset["llm_tier"] in VALID_TIERS, (
-                f"Preset '{preset['name']}' has invalid llm_tier '{preset['llm_tier']}'"
-            )
+            assert (
+                preset["llm_tier"] in VALID_TIERS
+            ), f"Preset '{preset['name']}' has invalid llm_tier '{preset['llm_tier']}'"
 
     def test_returns_copies_not_references(self):
         presets = get_all_presets()

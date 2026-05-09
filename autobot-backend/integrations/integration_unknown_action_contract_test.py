@@ -60,13 +60,10 @@ def test_no_subclass_raises_value_error_on_unknown_action(src_file, class_name):
     AsanaIntegration / NotionIntegration which already did).
     """
     text = src_file.read_text(encoding="utf-8")
-    forbidden = re.compile(
-        r'raise ValueError\(f"(Unknown|Unsupported) action: \{action\}"\)'
-    )
+    forbidden = re.compile(r'raise ValueError\(f"(Unknown|Unsupported) action: \{action\}"\)')
     matches = forbidden.findall(text)
     assert not matches, (
-        f"{src_file.name} still raises ValueError on unknown action "
-        f"(violates BaseIntegration contract — see #6658)"
+        f"{src_file.name} still raises ValueError on unknown action " f"(violates BaseIntegration contract — see #6658)"
     )
 
 

@@ -150,9 +150,7 @@ class StepCheckpoint:
     step_id: str
     status: str
     output: Dict[str, Any]
-    timestamp: str = field(
-        default_factory=lambda: now_utc().isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: now_utc().isoformat())
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialise to a plain dict for JSON storage."""
@@ -262,21 +260,13 @@ class WorkflowCheckpointManager:
         try:
             raw_map = redis.hgetall(key)
         except Exception as exc:
-            logger.error(
-                "Failed to load checkpoints for workflow=%s: %s", workflow_id, exc
-            )
+            logger.error("Failed to load checkpoints for workflow=%s: %s", workflow_id, exc)
             return {}
 
         result: Dict[str, StepCheckpoint] = {}
         for step_id_bytes, value_bytes in raw_map.items():
-            step_id = (
-                step_id_bytes.decode()
-                if isinstance(step_id_bytes, bytes)
-                else step_id_bytes
-            )
-            raw = (
-                value_bytes.decode() if isinstance(value_bytes, bytes) else value_bytes
-            )
+            step_id = step_id_bytes.decode() if isinstance(step_id_bytes, bytes) else step_id_bytes
+            raw = value_bytes.decode() if isinstance(value_bytes, bytes) else value_bytes
             try:
                 result[step_id] = StepCheckpoint.from_dict(json.loads(raw))
             except (json.JSONDecodeError, KeyError) as exc:
@@ -302,9 +292,7 @@ class WorkflowCheckpointManager:
             redis.delete(key)
             logger.debug("Checkpoints cleared for workflow=%s", workflow_id)
         except Exception as exc:
-            logger.error(
-                "Failed to clear checkpoints for workflow=%s: %s", workflow_id, exc
-            )
+            logger.error("Failed to clear checkpoints for workflow=%s: %s", workflow_id, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -355,7 +343,7 @@ class StepErrorHandler:
         retry_config = RetryConfig(
             max_attempts=config.max_retries,
             base_delay=config.base_delay,
-            max_delay=config.base_delay * (2 ** config.max_retries),  # no hard cap needed
+            max_delay=config.base_delay * (2**config.max_retries),  # no hard cap needed
             backoff_multiplier=2.0,
             jitter=False,
             strategy=config.backoff.to_retry_strategy(),
@@ -410,9 +398,7 @@ class StepErrorHandler:
             }
 
         if config.action == StepErrorAction.RETRY and attempt >= config.max_retries:
-            logger.error(
-                "Step %s: exhausted %d retries — ABORT", step_id, config.max_retries
-            )
+            logger.error("Step %s: exhausted %d retries — ABORT", step_id, config.max_retries)
             return {
                 "action": StepErrorAction.ABORT,
                 "delay": 0.0,

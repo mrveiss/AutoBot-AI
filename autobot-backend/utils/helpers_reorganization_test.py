@@ -29,6 +29,7 @@ class TestReorganizeRedisHelpers:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from analysis.reorganize_redis_databases import _decode_key
 
@@ -40,6 +41,7 @@ class TestReorganizeRedisHelpers:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from analysis.reorganize_redis_databases import _decode_key
 
@@ -51,6 +53,7 @@ class TestReorganizeRedisHelpers:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from analysis.reorganize_redis_databases import _decode_key
 
@@ -62,6 +65,7 @@ class TestReorganizeRedisHelpers:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from analysis.reorganize_redis_databases import _determine_target_db
 
@@ -73,6 +77,7 @@ class TestReorganizeRedisHelpers:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from analysis.reorganize_redis_databases import _determine_target_db
 
@@ -84,6 +89,7 @@ class TestReorganizeRedisHelpers:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from analysis.reorganize_redis_databases import _determine_target_db
 
@@ -95,6 +101,7 @@ class TestReorganizeRedisHelpers:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from analysis.reorganize_redis_databases import DB_INDEX_TO_NAME
 
@@ -113,6 +120,7 @@ class TestMCPClientHelpers:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from examples.mcp_agent_workflows.base import MCPClient
 
@@ -127,6 +135,7 @@ class TestMCPClientHelpers:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from examples.mcp_agent_workflows.base import MCPClient
 
@@ -142,6 +151,7 @@ class TestMCPClientHelpers:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from examples.mcp_agent_workflows.base import MCPClient
 
@@ -156,6 +166,7 @@ class TestMCPClientHelpers:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from examples.mcp_agent_workflows.base import NON_RETRYABLE_STATUS_CODES
 
@@ -170,6 +181,7 @@ class TestMCPClientHelpers:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from examples.mcp_agent_workflows.base import _RetrySignal
 
@@ -183,6 +195,7 @@ class TestMCPClientHelpers:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from examples.mcp_agent_workflows.base import MCPClient
 
@@ -199,6 +212,7 @@ class TestMCPClientHelpers:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from examples.mcp_agent_workflows.base import MCPClient
 
@@ -384,6 +398,7 @@ class TestWorkflowResult:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from examples.mcp_agent_workflows.base import WorkflowResult
 
@@ -399,6 +414,7 @@ class TestWorkflowResult:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from examples.mcp_agent_workflows.base import WorkflowResult
 
@@ -416,6 +432,7 @@ class TestWorkflowResult:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from examples.mcp_agent_workflows.base import WorkflowResult
 
@@ -431,6 +448,7 @@ class TestWorkflowResult:
         import sys
 
         import os
+
         sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
         from examples.mcp_agent_workflows.base import WorkflowResult
 

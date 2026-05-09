@@ -93,9 +93,7 @@ class SuggestionsMixin:
                 return self._no_similar_docs_response()
 
             tag_scores = await self._extract_weighted_tags(similar_docs)
-            suggestions = self._build_suggestions_list(
-                tag_scores, limit, min_confidence
-            )
+            suggestions = self._build_suggestions_list(tag_scores, limit, min_confidence)
 
             logger.info(
                 "Generated %d tag suggestions from %d similar documents",
@@ -136,9 +134,7 @@ class SuggestionsMixin:
                 return self._no_similar_docs_response()
 
             category_scores = await self._extract_weighted_categories(similar_docs)
-            suggestions = self._build_category_suggestions_list(
-                category_scores, limit, min_confidence
-            )
+            suggestions = self._build_category_suggestions_list(category_scores, limit, min_confidence)
 
             logger.info(
                 "Generated %d category suggestions from %d similar documents",
@@ -202,9 +198,7 @@ class SuggestionsMixin:
                 self._extract_weighted_categories(similar_docs),
             )
 
-            tag_suggestions = self._build_suggestions_list(
-                tag_scores, tag_limit, min_confidence
-            )
+            tag_suggestions = self._build_suggestions_list(tag_scores, tag_limit, min_confidence)
             category_suggestions = self._build_category_suggestions_list(
                 category_scores, category_limit, min_confidence
             )
@@ -231,9 +225,7 @@ class SuggestionsMixin:
         self, fact_id: str, suggestions: List[Dict], min_confidence: float, result: Dict
     ) -> None:
         """Apply tag suggestions to a fact (Issue #398: extracted)."""
-        high_conf_tags = [
-            s["tag"] for s in suggestions if s["confidence"] >= min_confidence
-        ]
+        high_conf_tags = [s["tag"] for s in suggestions if s["confidence"] >= min_confidence]
         if high_conf_tags:
             add_result = await self.add_tags_to_fact(fact_id, high_conf_tags)
             if add_result.get("status") == "success":
@@ -241,9 +233,7 @@ class SuggestionsMixin:
             else:
                 result["tag_error"] = add_result.get("message")
         result["skipped_tags"] = [
-            {"tag": s["tag"], "confidence": s["confidence"]}
-            for s in suggestions
-            if s["confidence"] < min_confidence
+            {"tag": s["tag"], "confidence": s["confidence"]} for s in suggestions if s["confidence"] < min_confidence
         ]
 
     async def _apply_category_suggestion(
@@ -252,9 +242,7 @@ class SuggestionsMixin:
         """Apply category suggestion to a fact (Issue #398: extracted)."""
         top_category = suggestions[0]
         if top_category["confidence"] >= min_confidence:
-            assign_result = await self.assign_fact_to_category(
-                fact_id, top_category["category_path"]
-            )
+            assign_result = await self.assign_fact_to_category(fact_id, top_category["category_path"])
             if assign_result.get("status") == "success":
                 result["applied_category"] = top_category["category_path"]
             else:
@@ -286,9 +274,7 @@ class SuggestionsMixin:
         }
 
         try:
-            suggestions = await self.suggest_all(
-                content, tag_limit=10, category_limit=3, min_confidence=min_confidence
-            )
+            suggestions = await self.suggest_all(content, tag_limit=10, category_limit=3, min_confidence=min_confidence)
 
             if not suggestions.get("success"):
                 return {
@@ -298,9 +284,7 @@ class SuggestionsMixin:
                 }
 
             if apply_tags and suggestions.get("tag_suggestions"):
-                await self._apply_tag_suggestions(
-                    fact_id, suggestions["tag_suggestions"], min_confidence, result
-                )
+                await self._apply_tag_suggestions(fact_id, suggestions["tag_suggestions"], min_confidence, result)
 
             if apply_category and suggestions.get("category_suggestions"):
                 await self._apply_category_suggestion(
@@ -317,9 +301,7 @@ class SuggestionsMixin:
                 "error": "Failed to apply suggestions",
             }
 
-    async def _find_similar_documents(
-        self, content: str, limit: int
-    ) -> List[Dict[str, Any]]:
+    async def _find_similar_documents(self, content: str, limit: int) -> List[Dict[str, Any]]:
         """
         Find similar documents using embedding similarity.
 
@@ -346,9 +328,7 @@ class SuggestionsMixin:
             logger.error("Failed to find similar documents: %s", e)
             return []
 
-    async def _extract_weighted_tags(
-        self, similar_docs: List[Dict[str, Any]]
-    ) -> Dict[str, Tuple[float, int]]:
+    async def _extract_weighted_tags(self, similar_docs: List[Dict[str, Any]]) -> Dict[str, Tuple[float, int]]:
         """
         Extract tags from similar documents weighted by similarity.
 
@@ -397,9 +377,7 @@ class SuggestionsMixin:
 
         return result
 
-    async def _extract_weighted_categories(
-        self, similar_docs: List[Dict[str, Any]]
-    ) -> Dict[str, Tuple[float, int]]:
+    async def _extract_weighted_categories(self, similar_docs: List[Dict[str, Any]]) -> Dict[str, Tuple[float, int]]:
         """
         Extract categories from similar documents weighted by similarity.
 
@@ -446,9 +424,7 @@ class SuggestionsMixin:
         """Get tags for a fact from Redis."""
         try:
             fact_key = f"fact:{fact_id}"
-            metadata_json = await asyncio.to_thread(
-                self.redis_client.hget, fact_key, "metadata"
-            )
+            metadata_json = await asyncio.to_thread(self.redis_client.hget, fact_key, "metadata")
             if metadata_json:
                 metadata = json.loads(metadata_json)
                 return metadata.get("tags", [])
@@ -460,9 +436,7 @@ class SuggestionsMixin:
         """Get category for a fact from Redis."""
         try:
             fact_key = f"fact:{fact_id}"
-            metadata_json = await asyncio.to_thread(
-                self.redis_client.hget, fact_key, "metadata"
-            )
+            metadata_json = await asyncio.to_thread(self.redis_client.hget, fact_key, "metadata")
             if metadata_json:
                 metadata = json.loads(metadata_json)
                 return metadata.get("category_path", metadata.get("category", ""))

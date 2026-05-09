@@ -56,15 +56,11 @@ def _try_chromadb_aggregation(
             }
         else:
             where_filter = {"type": "problem"}
-        results = get_all_paginated(
-            code_collection, where=where_filter, include=["metadatas"]
-        )
+        results = get_all_paginated(code_collection, where=where_filter, include=["metadatas"])
         total = 0
         for metadata in results.get("metadatas", []):
             total += 1
-            _aggregate_problem_data(
-                metadata, problem_types, severity_counts, race_conditions, file_problems
-            )
+            _aggregate_problem_data(metadata, problem_types, severity_counts, race_conditions, file_problems)
         logger.info("Aggregated chart data for %s problems", total)
         return total, True
     except Exception as chroma_error:

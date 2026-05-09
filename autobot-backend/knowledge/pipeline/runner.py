@@ -69,9 +69,7 @@ class PipelineRunner:
 
         return result
 
-    async def _run_extract_stage(
-        self, input_data: Any, context: PipelineContext
-    ) -> List[Any]:
+    async def _run_extract_stage(self, input_data: Any, context: PipelineContext) -> List[Any]:
         """
         Run Extract stage tasks. Helper for run (Issue #665).
 
@@ -98,9 +96,7 @@ class PipelineRunner:
         logger.info("Extract stage: %d items", len(extracted_data))
         return extracted_data
 
-    async def _run_cognify_stage(
-        self, extracted_data: List[Any], context: PipelineContext
-    ) -> Dict[str, List[Any]]:
+    async def _run_cognify_stage(self, extracted_data: List[Any], context: PipelineContext) -> Dict[str, List[Any]]:
         """
         Run Cognify stage tasks. Helper for run (Issue #665).
 
@@ -147,9 +143,7 @@ class PipelineRunner:
             len(cognified_data["summaries"]),
         )
 
-    async def _run_load_stage(
-        self, cognified_data: Dict[str, List[Any]], context: PipelineContext
-    ) -> None:
+    async def _run_load_stage(self, cognified_data: Dict[str, List[Any]], context: PipelineContext) -> None:
         """
         Run Load stage tasks. Helper for run (Issue #665).
 
@@ -174,9 +168,7 @@ class PipelineRunner:
 
         logger.info("Load stage: persisted all data")
 
-    def _update_result_counts(
-        self, result: PipelineResult, cognified_data: Dict[str, List[Any]]
-    ) -> None:
+    def _update_result_counts(self, result: PipelineResult, cognified_data: Dict[str, List[Any]]) -> None:
         """
         Update result with cognified data counts. Helper for run (Issue #665).
 

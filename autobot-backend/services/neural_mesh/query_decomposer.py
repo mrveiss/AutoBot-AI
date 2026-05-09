@@ -122,9 +122,7 @@ class QueryDecomposer:
         try:
             raw = await self.llm(prompt)
         except Exception:
-            logger.exception(
-                "QueryDecomposer.decompose: LLM call failed, using single-step fallback"
-            )
+            logger.exception("QueryDecomposer.decompose: LLM call failed, using single-step fallback")
             return DecompositionPlan(
                 original_query=query,
                 steps=[DecompositionStep(step=1, query=sanitized, depends_on=[])],
@@ -146,9 +144,7 @@ class QueryDecomposer:
             context = self._build_step_context(step, results)
             augmented_query = f"{step.query} {context}".strip()
             try:
-                retrieval = await self.mesh_retriever.retrieve(
-                    query=augmented_query, top_k=5
-                )
+                retrieval = await self.mesh_retriever.retrieve(query=augmented_query, top_k=5)
                 evidence = self._extract_evidence(retrieval)
             except Exception:
                 logger.exception(
@@ -199,9 +195,7 @@ class QueryDecomposer:
 
         # Fallback if sanitization produced an empty string
         if not cleaned:
-            logger.warning(
-                "QueryDecomposer._sanitize_query: query empty after sanitization"
-            )
+            logger.warning("QueryDecomposer._sanitize_query: query empty after sanitization")
             return "general query"
         return cleaned
 
@@ -229,9 +223,7 @@ class QueryDecomposer:
             "[END USER QUESTION]"
         )
 
-    def _parse_steps(
-        self, llm_output: str, fallback_query: str
-    ) -> list[DecompositionStep]:
+    def _parse_steps(self, llm_output: str, fallback_query: str) -> list[DecompositionStep]:
         """Parse a JSON array from *llm_output* into DecompositionStep list.
 
         Attempts to locate the first ``[...]`` block in the output before
@@ -263,9 +255,7 @@ class QueryDecomposer:
             logger.warning("QueryDecomposer._parse_steps: parse failed, using fallback")
         return [DecompositionStep(step=1, query=fallback_query, depends_on=[])]
 
-    def _build_step_context(
-        self, step: DecompositionStep, prior_results: list[StepResult]
-    ) -> str:
+    def _build_step_context(self, step: DecompositionStep, prior_results: list[StepResult]) -> str:
         """Build a context string from evidence of steps this step depends on.
 
         Args:
@@ -301,11 +291,7 @@ class QueryDecomposer:
         Returns:
             List of dicts, each representing one evidence chunk.
         """
-        chunks = (
-            retrieval_result.chunks
-            if hasattr(retrieval_result, "chunks")
-            else retrieval_result
-        )
+        chunks = retrieval_result.chunks if hasattr(retrieval_result, "chunks") else retrieval_result
         evidence: list[dict] = []
         for chunk in chunks:
             if isinstance(chunk, dict):

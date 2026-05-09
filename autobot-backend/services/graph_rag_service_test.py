@@ -182,9 +182,7 @@ async def test_graph_aware_search_basic(graph_rag_service, mock_rag_service):
 
 
 @pytest.mark.asyncio
-async def test_graph_aware_search_with_entity_expansion(
-    graph_rag_service, mock_rag_service, mock_memory_graph
-):
+async def test_graph_aware_search_with_entity_expansion(graph_rag_service, mock_rag_service, mock_memory_graph):
     """Test graph expansion adds related entity content."""
     results, metrics = await graph_rag_service.graph_aware_search(
         query="Redis issues",
@@ -203,9 +201,7 @@ async def test_graph_aware_search_with_entity_expansion(
 
 
 @pytest.mark.asyncio
-async def test_graph_aware_search_no_expansion_without_entities(
-    graph_rag_service, mock_rag_service, mock_memory_graph
-):
+async def test_graph_aware_search_no_expansion_without_entities(graph_rag_service, mock_rag_service, mock_memory_graph):
     """Test search without entity expansion when no entities found."""
     # Mock empty entity extraction
     graph_rag_service.enable_entity_extraction = False
@@ -276,9 +272,7 @@ async def test_extract_entities_from_results(graph_rag_service, mock_memory_grap
 
 
 @pytest.mark.asyncio
-async def test_extract_entities_handles_missing_entities(
-    graph_rag_service, mock_memory_graph
-):
+async def test_extract_entities_handles_missing_entities(graph_rag_service, mock_memory_graph):
     """Test entity extraction handles missing entities gracefully."""
     # Mock entity not found
     mock_memory_graph.get_entity = AsyncMock(return_value=None)
@@ -341,9 +335,7 @@ async def test_expand_via_graph(graph_rag_service, mock_memory_graph):
 
 
 @pytest.mark.asyncio
-async def test_expand_via_graph_multiple_starting_points(
-    graph_rag_service, mock_memory_graph
-):
+async def test_expand_via_graph_multiple_starting_points(graph_rag_service, mock_memory_graph):
     """Test graph expansion from multiple entity matches."""
     entity_matches = [
         EntityMatch(
@@ -411,9 +403,7 @@ async def test_deduplicate_and_rank(graph_rag_service):
         ),
     ]
 
-    deduplicated = await graph_rag_service._deduplicate_and_rank(
-        results, max_results=10
-    )
+    deduplicated = await graph_rag_service._deduplicate_and_rank(results, max_results=10)
 
     # Verify deduplication (3 → 2)
     assert len(deduplicated) == 2
@@ -463,9 +453,7 @@ async def test_deduplicate_and_rank_respects_max_results(graph_rag_service):
 
 
 @pytest.mark.asyncio
-async def test_end_to_end_composition(
-    graph_rag_service, mock_rag_service, mock_memory_graph
-):
+async def test_end_to_end_composition(graph_rag_service, mock_rag_service, mock_memory_graph):
     """Test end-to-end flow verifies proper composition."""
     # Execute full search
     results, metrics = await graph_rag_service.graph_aware_search(
@@ -479,10 +467,7 @@ async def test_end_to_end_composition(
     assert mock_rag_service.advanced_search.called
 
     # Verify AutoBotMemoryGraph called (composition)
-    assert (
-        mock_memory_graph.get_entity.called
-        or mock_memory_graph.get_related_entities.called
-    )
+    assert mock_memory_graph.get_entity.called or mock_memory_graph.get_related_entities.called
 
     # Verify results structure
     assert isinstance(results, list)
@@ -606,9 +591,7 @@ async def test_deduplicate_and_rank_applies_provenance_boost(graph_rag_service):
         chunk_index=0,
     )
 
-    ranked = await graph_rag_service._deduplicate_and_rank(
-        [extracted, inferred], max_results=10
-    )
+    ranked = await graph_rag_service._deduplicate_and_rank([extracted, inferred], max_results=10)
 
     # extracted receives +0.05 boost; inferred receives 0.0 adjustment
     assert ranked[0] is extracted
@@ -640,9 +623,7 @@ async def test_deduplicate_and_rank_applies_provenance_penalty(graph_rag_service
         chunk_index=0,
     )
 
-    ranked = await graph_rag_service._deduplicate_and_rank(
-        [ambiguous, inferred], max_results=10
-    )
+    ranked = await graph_rag_service._deduplicate_and_rank([ambiguous, inferred], max_results=10)
 
     # inferred receives 0.0; ambiguous receives -0.05 penalty
     assert ranked[0] is inferred

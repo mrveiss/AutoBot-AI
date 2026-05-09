@@ -91,9 +91,7 @@ def append_result(
     }
     with result_file.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record) + "\n")
-    logger.debug(
-        "Appended result for (%s, %s) error=%s", experiment_id, prompt_id, result.error
-    )
+    logger.debug("Appended result for (%s, %s) error=%s", experiment_id, prompt_id, result.error)
 
 
 def reorg_results(result_file: Path) -> Dict[_ResultKey, ScorerResult]:
@@ -186,9 +184,7 @@ def filter_prompts(
     return pending
 
 
-def build_task_inference_params(
-    task: ExperimentTask, experiment: Experiment
-) -> Dict[str, str | float | None]:
+def build_task_inference_params(task: ExperimentTask, experiment: Experiment) -> Dict[str, str | float | None]:
     """Build inference parameters from per-task and experiment-level overrides.
 
     Issue #3259: Apply per-task temperature and system_prompt overrides on top
@@ -334,10 +330,7 @@ class ExperimentRunner:
                 await self._current_process.wait()
             wall_time = time.monotonic() - start
             return ExperimentResult(
-                error_message=(
-                    f"Training timed out after "
-                    f"{self.config.default_training_timeout}s"
-                ),
+                error_message=(f"Training timed out after " f"{self.config.default_training_timeout}s"),
                 wall_time_seconds=wall_time,
             )
 
@@ -385,18 +378,14 @@ class ExperimentRunner:
 
             if process.returncode != 0:
                 return ExperimentResult(
-                    error_message=(
-                        f"Docker container exited with code {process.returncode}"
-                    ),
+                    error_message=(f"Docker container exited with code {process.returncode}"),
                     raw_output=container_log,
                     wall_time_seconds=wall_time,
                 )
 
             return self._parse_docker_output(Path(output_dir), wall_time)
 
-    def _build_docker_command(
-        self, experiment: Experiment, output_dir: Path
-    ) -> list[str]:
+    def _build_docker_command(self, experiment: Experiment, output_dir: Path) -> list[str]:
         """Build the docker run command for a containerised experiment."""
         hp = experiment.hyperparams
         self._validate_extra_params(hp.extra)
@@ -449,9 +438,7 @@ class ExperimentRunner:
         if self._current_process and self._current_process.returncode is None:
             if self._current_container_name:
                 try:
-                    kill_proc = await asyncio.create_subprocess_exec(
-                        "docker", "kill", self._current_container_name
-                    )
+                    kill_proc = await asyncio.create_subprocess_exec("docker", "kill", self._current_container_name)
                     await kill_proc.wait()
                 except Exception:
                     logger.exception(
@@ -462,15 +449,11 @@ class ExperimentRunner:
             await self._current_process.wait()
 
         return ExperimentResult(
-            error_message=(
-                f"Docker experiment timed out after {self.config.docker_timeout}s"
-            ),
+            error_message=(f"Docker experiment timed out after {self.config.docker_timeout}s"),
             wall_time_seconds=wall_time,
         )
 
-    def _parse_docker_output(
-        self, output_dir: Path, wall_time: float
-    ) -> ExperimentResult:
+    def _parse_docker_output(self, output_dir: Path, wall_time: float) -> ExperimentResult:
         """Read result.json from the container output mount and parse it."""
         result_path = output_dir / "result.json"
         if not result_path.exists():
@@ -525,19 +508,13 @@ class ExperimentRunner:
                 raise ValueError(f"Extra param '{key}' conflicts with a built-in flag")
             if not _EXTRA_KEY_PATTERN.match(key):
                 raise ValueError(
-                    f"Invalid extra param key '{key}': "
-                    "must be lowercase alphanumeric/underscore, 1-64 chars"
+                    f"Invalid extra param key '{key}': " "must be lowercase alphanumeric/underscore, 1-64 chars"
                 )
         for key, val in extra.items():
             if not isinstance(val, (int, float, str, bool)):
-                raise ValueError(
-                    f"Extra param values must be scalar, got {type(val).__name__}"
-                )
+                raise ValueError(f"Extra param values must be scalar, got {type(val).__name__}")
             if isinstance(val, str) and (len(val) > 256 or "--" in val):
-                raise ValueError(
-                    f"Extra param '{key}': string values must be ≤256 chars "
-                    "and cannot contain '--'"
-                )
+                raise ValueError(f"Extra param '{key}': string values must be ≤256 chars " "and cannot contain '--'")
 
     async def _evaluate_result(self, experiment: Experiment) -> None:
         """Decide whether to keep or discard based on improvement threshold."""

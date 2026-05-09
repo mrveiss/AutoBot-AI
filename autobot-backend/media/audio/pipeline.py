@@ -102,11 +102,7 @@ class AudioPipeline(BasePipeline):
             output = pipe(tmp_path, return_timestamps=False)
             text = output.get("text", "").strip() if isinstance(output, dict) else ""
             chunks = output.get("chunks", []) if isinstance(output, dict) else []
-            language = (
-                output.get("language", "unknown")
-                if isinstance(output, dict)
-                else "unknown"
-            )
+            language = output.get("language", "unknown") if isinstance(output, dict) else "unknown"
             return self._transcription_result(text, language, chunks)
         finally:
             try:
@@ -114,9 +110,7 @@ class AudioPipeline(BasePipeline):
             except OSError:
                 pass
 
-    def _transcription_result(
-        self, text: str, language: str, chunks: list
-    ) -> Dict[str, Any]:
+    def _transcription_result(self, text: str, language: str, chunks: list) -> Dict[str, Any]:
         """Build the transcription result dict."""
         confidence = 0.9 if text else 0.5
         return {
@@ -166,9 +160,7 @@ class AudioPipeline(BasePipeline):
 
     def _unavailable_result(self, metadata: Dict) -> Dict[str, Any]:
         """Return structured result when Whisper/transformers not installed."""
-        logger.info(
-            "Audio transcription unavailable: install transformers to enable Whisper"
-        )
+        logger.info("Audio transcription unavailable: install transformers to enable Whisper")
         return {
             "type": "audio_transcription",
             "transcribed_text": "",
@@ -176,9 +168,7 @@ class AudioPipeline(BasePipeline):
             "word_count": 0,
             "chunks": [],
             "processing_status": "unavailable",
-            "unavailability_reason": (
-                "transformers library not installed. " "Run: pip install transformers"
-            ),
+            "unavailability_reason": ("transformers library not installed. " "Run: pip install transformers"),
             "confidence": 0.0,
             "metadata": metadata,
         }

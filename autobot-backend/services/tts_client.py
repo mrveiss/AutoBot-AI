@@ -54,9 +54,7 @@ class TTSClient:
             logger.debug("TTS worker health check failed: %s", e)
         return False
 
-    async def synthesize(
-        self, text: str, voice_id: str = "", language: str = ""
-    ) -> bytes:
+    async def synthesize(self, text: str, voice_id: str = "", language: str = "") -> bytes:
         """Send text to TTS worker and return WAV bytes."""
         timeout = aiohttp.ClientTimeout(total=SYNTHESIS_TIMEOUT)
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -66,9 +64,7 @@ class TTSClient:
                 data.add_field("voice_id", voice_id)
             if language:
                 data.add_field("language", language)
-            async with session.post(
-                f"{self.base_url}/tts/synthesize", data=data
-            ) as resp:
+            async with session.post(f"{self.base_url}/tts/synthesize", data=data) as resp:
                 if resp.status != 200:
                     body = await resp.text()
                     raise RuntimeError(f"TTS worker error {resp.status}: {body}")
@@ -86,9 +82,7 @@ class TTSClient:
                 filename="reference.wav",
                 content_type="audio/wav",
             )
-            async with session.post(
-                f"{self.base_url}/tts/clone-voice", data=data
-            ) as resp:
+            async with session.post(f"{self.base_url}/tts/clone-voice", data=data) as resp:
                 if resp.status != 200:
                     body = await resp.text()
                     raise RuntimeError(f"TTS worker error {resp.status}: {body}")
@@ -106,9 +100,7 @@ class TTSClient:
             logger.warning("Failed to list voices: %s", e)
         return []
 
-    async def create_voice(
-        self, name: str, audio_bytes: bytes, filename: str = "ref.wav"
-    ) -> dict:
+    async def create_voice(self, name: str, audio_bytes: bytes, filename: str = "ref.wav") -> dict:
         """Create a voice profile from reference audio."""
         timeout = aiohttp.ClientTimeout(total=SYNTHESIS_TIMEOUT)
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -120,9 +112,7 @@ class TTSClient:
                 filename=filename,
                 content_type="audio/wav",
             )
-            async with session.post(
-                f"{self.base_url}/voices/create", data=data
-            ) as resp:
+            async with session.post(f"{self.base_url}/voices/create", data=data) as resp:
                 if resp.status != 200:
                     body = await resp.text()
                     raise RuntimeError(f"Voice create error {resp.status}: {body}")

@@ -88,9 +88,7 @@ def check_admin_permission(request: Request) -> str:
 
     # Check if user has admin role
     if user_data.get("role") != "admin":
-        raise HTTPException(
-            status_code=403, detail="Admin role required for this operation"
-        )
+        raise HTTPException(status_code=403, detail="Admin role required for this operation")
 
     return user_data.get("username", "unknown")
 
@@ -128,9 +126,7 @@ def check_operator_permission(request: Request) -> str:
     operation="start_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
-async def start_redis_service(
-    request: Request, manager: RedisServiceManager = Depends(get_service_manager)
-):
+async def start_redis_service(request: Request, manager: RedisServiceManager = Depends(get_service_manager)):
     """
     Start Redis service on Redis VM
 
@@ -171,9 +167,7 @@ async def start_redis_service(
     operation="stop_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
-async def stop_redis_service(
-    request: Request, manager: RedisServiceManager = Depends(get_service_manager)
-):
+async def stop_redis_service(request: Request, manager: RedisServiceManager = Depends(get_service_manager)):
     """
     Stop Redis service on Redis VM
 
@@ -216,9 +210,7 @@ async def stop_redis_service(
     operation="restart_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
-async def restart_redis_service(
-    request: Request, manager: RedisServiceManager = Depends(get_service_manager)
-):
+async def restart_redis_service(request: Request, manager: RedisServiceManager = Depends(get_service_manager)):
     """
     Restart Redis service on Redis VM
 

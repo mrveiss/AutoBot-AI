@@ -72,9 +72,7 @@ class TestSearchEventsInRange:
 
         start = datetime(2024, 1, 1)
         end = datetime(2024, 12, 31)
-        events = await service.search_events_in_range(
-            start, end, event_types=["action"]
-        )
+        events = await service.search_events_in_range(start, end, event_types=["action"])
         assert len(events) == 0
 
     @pytest.mark.asyncio
@@ -86,9 +84,7 @@ class TestSearchEventsInRange:
 
         start = datetime(2024, 1, 1)
         end = datetime(2024, 12, 31)
-        events = await service.search_events_in_range(
-            start, end, participants=[participant_id]
-        )
+        events = await service.search_events_in_range(start, end, participants=[participant_id])
         assert len(events) == 1
 
     @pytest.mark.asyncio
@@ -98,9 +94,7 @@ class TestSearchEventsInRange:
 
         start = datetime(2024, 1, 1)
         end = datetime(2024, 12, 31)
-        events = await service.search_events_in_range(
-            start, end, participants=[uuid4()]
-        )
+        events = await service.search_events_in_range(start, end, participants=[uuid4()])
         assert len(events) == 0
 
     @pytest.mark.asyncio
@@ -163,9 +157,7 @@ class TestGetEventTimeline:
         mock_redis.get.return_value = entity_id.encode()
         mock_redis.smembers.return_value = ["e1", "e2", "e3"]
 
-        events = [
-            {"name": f"E{i}", "timestamp": f"2024-0{i+1}-01T00:00:00"} for i in range(3)
-        ]
+        events = [{"name": f"E{i}", "timestamp": f"2024-0{i+1}-01T00:00:00"} for i in range(3)]
         mock_redis.json().get.side_effect = events
 
         result = await service.get_event_timeline("entity", limit=2)
@@ -220,9 +212,7 @@ class TestFindCausalChain:
         mock_redis.json().get.side_effect = [make_event(f"e{i}") for i in range(10)]
         mock_redis.smembers.side_effect = [{f"e{i+1}"} for i in range(10)]
 
-        chain = await service.find_causal_chain(
-            uuid4(), direction="forward", max_depth=3
-        )
+        chain = await service.find_causal_chain(uuid4(), direction="forward", max_depth=3)
         assert len(chain) <= 3
 
     @pytest.mark.asyncio

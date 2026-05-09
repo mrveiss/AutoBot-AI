@@ -127,9 +127,7 @@ async def list_resources(
 ):
     """List compute resources (instances/VMs) for a cloud provider."""
     try:
-        extra = _build_extra_params(
-            region, subscription_id, tenant_id, project_id, zone
-        )
+        extra = _build_extra_params(region, subscription_id, tenant_id, project_id, zone)
         integration = _create_integration(provider, api_key, api_secret, token, extra)
 
         action_map = {
@@ -170,9 +168,7 @@ async def list_storage(
 ):
     """List storage resources (buckets/accounts) for a cloud provider."""
     try:
-        extra = _build_extra_params(
-            region, subscription_id, tenant_id, project_id, None
-        )
+        extra = _build_extra_params(region, subscription_id, tenant_id, project_id, None)
         integration = _create_integration(provider, api_key, api_secret, token, extra)
 
         action_map = {
@@ -213,9 +209,7 @@ async def get_account_info(
 ):
     """Get account/subscription/project information for a cloud provider."""
     try:
-        extra = _build_extra_params(
-            region, subscription_id, tenant_id, project_id, None
-        )
+        extra = _build_extra_params(region, subscription_id, tenant_id, project_id, None)
         integration = _create_integration(provider, api_key, api_secret, token, extra)
 
         action_map = {

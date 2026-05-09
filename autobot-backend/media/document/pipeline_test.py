@@ -123,8 +123,9 @@ class TestDocumentPipelinePdf:
         mock_reader.pages = [mock_page]
         mock_reader.metadata = {"/Title": "Test Doc", "/Author": "Author"}
 
-        with patch("media.document.pipeline._PYPDF_AVAILABLE", True), patch(
-            "media.document.pipeline.PdfReader", return_value=mock_reader
+        with (
+            patch("media.document.pipeline._PYPDF_AVAILABLE", True),
+            patch("media.document.pipeline.PdfReader", return_value=mock_reader),
         ):
             result = pipe._extract_pdf(b"%PDF-1.4", {"source": "test"})
 
@@ -136,8 +137,9 @@ class TestDocumentPipelinePdf:
 
     def test_pdf_extraction_error(self):
         pipe = DocumentPipeline()
-        with patch("media.document.pipeline._PYPDF_AVAILABLE", True), patch(
-            "media.document.pipeline.PdfReader", side_effect=Exception("bad pdf")
+        with (
+            patch("media.document.pipeline._PYPDF_AVAILABLE", True),
+            patch("media.document.pipeline.PdfReader", side_effect=Exception("bad pdf")),
         ):
             result = pipe._extract_pdf(b"garbage", {})
         assert result["processing_status"] == "error"
@@ -165,8 +167,9 @@ class TestDocumentPipelineDocx:
         mock_doc.core_properties.subject = ""
         mock_doc.core_properties.keywords = ""
 
-        with patch("media.document.pipeline._DOCX_AVAILABLE", True), patch(
-            "media.document.pipeline.DocxDocument", return_value=mock_doc
+        with (
+            patch("media.document.pipeline._DOCX_AVAILABLE", True),
+            patch("media.document.pipeline.DocxDocument", return_value=mock_doc),
         ):
             result = pipe._extract_docx(b"PK data", {})
 

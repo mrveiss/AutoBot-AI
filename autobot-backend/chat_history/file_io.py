@@ -100,9 +100,7 @@ class FileIOMixin:
 
         # Create temporary file in same directory (required for atomic rename)
         # Issue #718: Use dedicated executor to avoid blocking on saturated pool
-        fd, temp_path = await self._run_in_io_executor(
-            tempfile.mkstemp, ".json", ".tmp_chat_", dir_path
-        )
+        fd, temp_path = await self._run_in_io_executor(tempfile.mkstemp, ".json", ".tmp_chat_", dir_path)
 
         try:
             # Acquire exclusive lock - use dedicated executor
@@ -128,9 +126,7 @@ class FileIOMixin:
                 if await self._run_in_io_executor(os.path.exists, temp_path):
                     await self._run_in_io_executor(os.unlink, temp_path)
             except Exception as cleanup_error:
-                logger.warning(
-                    "Failed to cleanup temp file %s: %s", temp_path, cleanup_error
-                )
+                logger.warning("Failed to cleanup temp file %s: %s", temp_path, cleanup_error)
 
     async def _save_history(self):
         """
@@ -146,13 +142,9 @@ class FileIOMixin:
             async with aiofiles.open(self.history_file, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(self.history, indent=2, ensure_ascii=False))
         except OSError as e:
-            logger.error(
-                "Failed to write chat history file %s: %s", self.history_file, e
-            )
+            logger.error("Failed to write chat history file %s: %s", self.history_file, e)
         except Exception as e:
-            logger.error(
-                "Error saving chat history to %s: %s", self.history_file, str(e)
-            )
+            logger.error("Error saving chat history to %s: %s", self.history_file, str(e))
 
         # Also save to Redis if enabled for fast access
         if self.use_redis and self.redis_client:
@@ -169,9 +161,7 @@ class FileIOMixin:
             except Exception as e:
                 logger.error("Error saving chat history to Redis: %s", str(e))
 
-    async def export_session(
-        self, session_id: str, format: str = "json"
-    ) -> Optional[str]:
+    async def export_session(self, session_id: str, format: str = "json") -> Optional[str]:
         """
         Export a session in the specified format.
 

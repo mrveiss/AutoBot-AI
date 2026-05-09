@@ -62,10 +62,7 @@ class SSHBackend(ExecutionBackend):
         super().__init__(BackendType.SSH)
 
         if paramiko is None:
-            raise RuntimeError(
-                "paramiko package not installed. "
-                "Install with: pip install paramiko"
-            )
+            raise RuntimeError("paramiko package not installed. " "Install with: pip install paramiko")
 
         self.hostname = hostname
         self.port = port
@@ -117,11 +114,7 @@ class SSHBackend(ExecutionBackend):
                 result.stderr = stderr.read().decode(encoding="utf-8", errors="replace")
                 result.return_code = stdout.channel.recv_exit_status()
 
-                result.status = (
-                    ExecutionStatus.SUCCESS
-                    if result.return_code == 0
-                    else ExecutionStatus.FAILED
-                )
+                result.status = ExecutionStatus.SUCCESS if result.return_code == 0 else ExecutionStatus.FAILED
 
             except asyncio.TimeoutError:
                 result.status = ExecutionStatus.TIMEOUT
@@ -137,9 +130,7 @@ class SSHBackend(ExecutionBackend):
         finally:
             result.completed_at = now_utc()
             if result.started_at:
-                result.execution_time_ms = (
-                    result.completed_at - result.started_at
-                ).total_seconds() * 1000
+                result.execution_time_ms = (result.completed_at - result.started_at).total_seconds() * 1000
 
         return result
 
@@ -180,8 +171,7 @@ class SSHBackend(ExecutionBackend):
         if task.language.lower() not in supported_languages:
             return (
                 False,
-                f"Language '{task.language}' not supported via SSH. "
-                f"Supported: {', '.join(supported_languages)}",
+                f"Language '{task.language}' not supported via SSH. " f"Supported: {', '.join(supported_languages)}",
             )
 
         return True, ""
@@ -212,9 +202,7 @@ class SSHBackend(ExecutionBackend):
             except Exception as e:
                 self._client = None
                 err_msg = str(e)
-                if "not found in known_hosts" in err_msg or (
-                    "Server" in err_msg and "known_hosts" in err_msg
-                ):
+                if "not found in known_hosts" in err_msg or ("Server" in err_msg and "known_hosts" in err_msg):
                     raise RuntimeError(
                         f"SSH host key for '{self.hostname}' is not in known_hosts. "
                         "Run: ssh-keyscan -H <host> >> ~/.ssh/known_hosts as the autobot service user."
@@ -235,9 +223,7 @@ class SSHBackend(ExecutionBackend):
         """
         # Run in executor to avoid blocking
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            None, client.exec_command, cmd
-        )
+        return await loop.run_in_executor(None, client.exec_command, cmd)
 
     def _prepare_command(self, task: ExecutionTask) -> str:
         """Prepare command for SSH execution.

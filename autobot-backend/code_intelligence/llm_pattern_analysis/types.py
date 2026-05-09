@@ -151,23 +151,11 @@ class PromptIssueType(Enum):
         Fixes Feature Envy: Move suggestion logic to where data lives (Issue #312)
         """
         suggestions = {
-            PromptIssueType.REDUNDANT_INSTRUCTIONS: (
-                "Remove redundant instructions and consolidate repeated phrases"
-            ),
-            PromptIssueType.EXCESSIVE_CONTEXT: (
-                "Consider summarizing or limiting context to relevant portions"
-            ),
-            PromptIssueType.INEFFICIENT_FORMAT: (
-                "Optimize formatting: reduce whitespace and simplify"
-            ),
-            PromptIssueType.REPETITIVE_CONTENT: (
-                "Remove repeated content and consolidate similar ideas"
-            ),
-            PromptIssueType.MISSING_CONSTRAINTS: (
-                "Add explicit constraints and requirements"
-            ),
-            PromptIssueType.UNCLEAR_INTENT: (
-                "Clarify the intended goal and expected output"
-            ),
+            PromptIssueType.REDUNDANT_INSTRUCTIONS: ("Remove redundant instructions and consolidate repeated phrases"),
+            PromptIssueType.EXCESSIVE_CONTEXT: ("Consider summarizing or limiting context to relevant portions"),
+            PromptIssueType.INEFFICIENT_FORMAT: ("Optimize formatting: reduce whitespace and simplify"),
+            PromptIssueType.REPETITIVE_CONTENT: ("Remove repeated content and consolidate similar ideas"),
+            PromptIssueType.MISSING_CONSTRAINTS: ("Add explicit constraints and requirements"),
+            PromptIssueType.UNCLEAR_INTENT: ("Clarify the intended goal and expected output"),
         }
         return suggestions.get(self, "Review and optimize this section")

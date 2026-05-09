@@ -15,7 +15,6 @@ from enhanced_orchestration.types import (
 )
 from enhanced_orchestration.workflow_runner import WorkflowRunner
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -82,6 +81,7 @@ def _make_runner(criteria_evaluator=None):
 
 def test_default_criteria_evaluator_created_when_none():
     from enhanced_orchestration.success_criteria import SuccessCriteriaEvaluator
+
     runner = _make_runner()
     assert isinstance(runner._criteria_evaluator, SuccessCriteriaEvaluator)
 

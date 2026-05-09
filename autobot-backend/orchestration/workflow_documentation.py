@@ -258,9 +258,7 @@ class WorkflowDocumenter:
                 )
         return items
 
-    async def _store_knowledge_items(
-        self, knowledge_items: List[Dict[str, Any]]
-    ) -> None:
+    async def _store_knowledge_items(self, knowledge_items: List[Dict[str, Any]]) -> None:
         """
         Store extracted knowledge items in the knowledge base.
 
@@ -301,15 +299,11 @@ class WorkflowDocumenter:
         try:
             knowledge_items: List[Dict[str, Any]] = []
 
-            success_pattern = self._extract_success_pattern(
-                user_request, execution_result
-            )
+            success_pattern = self._extract_success_pattern(user_request, execution_result)
             if success_pattern:
                 knowledge_items.append(success_pattern)
 
-            knowledge_items.extend(
-                self._extract_agent_performance(execution_result, agent_registry)
-            )
+            knowledge_items.extend(self._extract_agent_performance(execution_result, agent_registry))
 
             await self._store_knowledge_items(knowledge_items)
             self._metrics["knowledge_extracted"] += len(knowledge_items)
@@ -338,9 +332,7 @@ class WorkflowDocumenter:
             {
                 "error_message": error_message,
                 "failure_time": datetime.now(tz=timezone.utc).isoformat(),
-                "failure_analysis": (
-                    "Workflow execution failed - requires investigation"
-                ),
+                "failure_analysis": ("Workflow execution failed - requires investigation"),
             }
         )
 

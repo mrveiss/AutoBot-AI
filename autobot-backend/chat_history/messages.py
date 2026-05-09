@@ -79,9 +79,7 @@ class MessagesMixin:
             message["authorId"] = author_id
         return message
 
-    async def _add_message_to_session(
-        self, session_id: str, message: Dict[str, Any]
-    ) -> bool:
+    async def _add_message_to_session(self, session_id: str, message: Dict[str, Any]) -> bool:
         """
         Add a message to a specific session.
 
@@ -169,9 +167,7 @@ class MessagesMixin:
 
         Issue #620: Refactored to use extracted helper methods.
         """
-        message = self._build_message_dict(
-            sender, text, message_type, raw_data, tool_markers, author_id
-        )
+        message = self._build_message_dict(sender, text, message_type, raw_data, tool_markers, author_id)
 
         # If session_id provided, add to that session
         if session_id:
@@ -216,10 +212,7 @@ class MessagesMixin:
         # Use model-aware limit if not explicitly provided
         if limit is None:
             limit = self.context_manager.calculate_retrieval_limit(model_name)
-            logger.debug(
-                f"Using model-aware limit: {limit} messages for model "
-                f"{model_name or 'default'}"
-            )
+            logger.debug(f"Using model-aware limit: {limit} messages for model " f"{model_name or 'default'}")
 
         if limit > 0:
             return messages[-limit:]  # Return last N messages
@@ -242,9 +235,7 @@ class MessagesMixin:
             return 0
         return len(messages)
 
-    def _message_matches_filter(
-        self, message: Dict[str, Any], metadata_filter: Dict[str, Any]
-    ) -> bool:
+    def _message_matches_filter(self, message: Dict[str, Any], metadata_filter: Dict[str, Any]) -> bool:
         """
         Check if a message matches all filter criteria.
 
@@ -258,13 +249,9 @@ class MessagesMixin:
         Issue #620.
         """
         msg_metadata = message.get("metadata", {})
-        return all(
-            msg_metadata.get(key) == value for key, value in metadata_filter.items()
-        )
+        return all(msg_metadata.get(key) == value for key, value in metadata_filter.items())
 
-    def _apply_metadata_updates(
-        self, message: Dict[str, Any], metadata_updates: Dict[str, Any]
-    ) -> None:
+    def _apply_metadata_updates(self, message: Dict[str, Any], metadata_updates: Dict[str, Any]) -> None:
         """
         Apply metadata updates to a message in-place.
 
@@ -318,16 +305,11 @@ class MessagesMixin:
                     )
                     return True
 
-            logger.warning(
-                f"No message found matching metadata filter in session "
-                f"{session_id}: {metadata_filter}"
-            )
+            logger.warning(f"No message found matching metadata filter in session " f"{session_id}: {metadata_filter}")
             return False
 
         except Exception as e:
-            logger.error(
-                f"Error updating message metadata in session {session_id}: {e}"
-            )
+            logger.error(f"Error updating message metadata in session {session_id}: {e}")
             return False
 
     async def add_tool_marker_to_last_message(

@@ -139,10 +139,7 @@ async def _fan_out_stream(
         await queue.put(None)  # signal this model is done
 
     # Launch all model streams concurrently
-    tasks = [
-        asyncio.create_task(_drain(_stream_single_model(spec, messages)))
-        for spec in model_specs
-    ]
+    tasks = [asyncio.create_task(_drain(_stream_single_model(spec, messages))) for spec in model_specs]
 
     try:
         while sentinel_count < n_models:

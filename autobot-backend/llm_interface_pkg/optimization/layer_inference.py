@@ -84,9 +84,7 @@ class LayerInferenceConfig:
         if not self.model_name:
             raise ValueError("model_name must not be empty")
         if self.compression not in _VALID_COMPRESSIONS:
-            raise ValueError(
-                f"compression must be one of {sorted(_VALID_COMPRESSIONS)}, got '{self.compression}'"
-            )
+            raise ValueError(f"compression must be one of {sorted(_VALID_COMPRESSIONS)}, got '{self.compression}'")
         if self.max_seq_len < 1:
             raise ValueError(f"max_seq_len must be >= 1, got {self.max_seq_len}")
         if self.batch_size < 1:
@@ -184,8 +182,7 @@ class LayerInferenceEngine:
             from transformers import AutoConfig  # noqa: PLC0415
         except ImportError as exc:
             raise ImportError(
-                "transformers is required for load_model_config. "
-                "Install with: pip install transformers>=4.40.0"
+                "transformers is required for load_model_config. " "Install with: pip install transformers>=4.40.0"
             ) from exc
 
         kwargs: Dict[str, Any] = {}
@@ -220,16 +217,10 @@ class LayerInferenceEngine:
         Returns:
             Ordered list of transformer layer name strings.
         """
-        num_layers = (
-            config.get("num_hidden_layers")
-            or config.get("n_layer")
-            or config.get("num_layers")
-        )
+        num_layers = config.get("num_hidden_layers") or config.get("n_layer") or config.get("num_layers")
 
         if num_layers is None:
-            logger.warning(
-                "Could not determine num_hidden_layers from config — returning ['model']"
-            )
+            logger.warning("Could not determine num_hidden_layers from config — returning ['model']")
             return ["model"]
 
         model_type: str = str(config.get("model_type", "")).lower()
@@ -275,13 +266,9 @@ class LayerInferenceEngine:
         logger.debug("Loading layer '%s' from %s", layer_name, state_dict_path)
         t0 = time.monotonic()
 
-        full_sd: Dict[str, Any] = torch.load(
-            state_dict_path, map_location="cpu", weights_only=True
-        )
+        full_sd: Dict[str, Any] = torch.load(state_dict_path, map_location="cpu", weights_only=True)
         prefix = layer_name + "."
-        layer_sd = {
-            k[len(prefix) :]: v for k, v in full_sd.items() if k.startswith(prefix)
-        }
+        layer_sd = {k[len(prefix) :]: v for k, v in full_sd.items() if k.startswith(prefix)}
 
         if not layer_sd:
             raise KeyError(
@@ -364,11 +351,7 @@ class LayerInferenceEngine:
         if not layers:
             raise ValueError("layers must not be empty")
 
-        hidden = (
-            input_ids.float()
-            if input_ids.dtype not in (torch.float16, torch.float32)
-            else input_ids
-        )
+        hidden = input_ids.float() if input_ids.dtype not in (torch.float16, torch.float32) else input_ids
 
         for layer in layers:
             out = layer(hidden)
@@ -421,8 +404,7 @@ class LayerInferenceEngine:
             from transformers import AutoTokenizer  # noqa: PLC0415
         except (ImportError, RuntimeError) as exc:
             raise ImportError(
-                "transformers is required for generate. "
-                "Install with: pip install transformers>=4.40.0"
+                "transformers is required for generate. " "Install with: pip install transformers>=4.40.0"
             ) from exc
 
         t_start = time.monotonic()
@@ -434,9 +416,7 @@ class LayerInferenceEngine:
         layer_names = self.get_layer_names(model_cfg)
         state_dict_path = self._resolve_checkpoint_path()
 
-        input_ids = tokeniser(prompt, return_tensors="pt").input_ids.to(
-            self._config.device
-        )
+        input_ids = tokeniser(prompt, return_tensors="pt").input_ids.to(self._config.device)
         generated_ids: List[int] = []
 
         logger.info(
@@ -447,9 +427,7 @@ class LayerInferenceEngine:
         _reset_peak_memory(torch, self._config.device)
 
         for _step in range(max_new_tokens):
-            hidden = self._run_layer_loop(
-                input_ids, layer_names, state_dict_path, stats
-            )
+            hidden = self._run_layer_loop(input_ids, layer_names, state_dict_path, stats)
             next_token_id = _greedy_sample(torch, hidden)
             generated_ids.append(next_token_id)
             input_ids = torch.cat(
@@ -595,9 +573,7 @@ def _set_nested_param(module: Any, torch: Any, key: str, tensor: Any) -> None:
         container = getattr(container, part)
     leaf = parts[-1]
     if isinstance(tensor, torch.Tensor):
-        container.register_parameter(
-            leaf, torch.nn.Parameter(tensor, requires_grad=False)
-        )
+        container.register_parameter(leaf, torch.nn.Parameter(tensor, requires_grad=False))
     else:
         container.register_buffer(leaf, tensor)
 
@@ -625,9 +601,7 @@ def _set_buffer(module: Any, torch: Any, name: str, device: Any, buf: Any) -> No
     for part in parts[:-1]:
         container = getattr(container, part)
     leaf = parts[-1]
-    container.register_buffer(
-        leaf, torch.empty(buf.shape, dtype=buf.dtype, device=device)
-    )
+    container.register_buffer(leaf, torch.empty(buf.shape, dtype=buf.dtype, device=device))
 
 
 def _greedy_sample(torch: Any, hidden: "torch.Tensor") -> int:

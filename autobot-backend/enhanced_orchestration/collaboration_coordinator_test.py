@@ -11,7 +11,6 @@ import pytest
 
 from enhanced_orchestration.collaboration_coordinator import CollaborationCoordinator
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -73,9 +72,7 @@ async def test_ensure_redis_raises_when_factory_returns_none():
 
 @pytest.mark.asyncio
 async def test_coordinate_collaboration_broadcasts_share_insight():
-    insight_msg = _make_message(
-        "message", {"type": "share_insight", "agent": "agent_a", "insight": "foo"}
-    )
+    insight_msg = _make_message("message", {"type": "share_insight", "agent": "agent_a", "insight": "foo"})
     redis, pubsub = _make_redis([{"type": "subscribe"}, insight_msg])
 
     coord = CollaborationCoordinator(redis_factory=AsyncMock(return_value=redis))

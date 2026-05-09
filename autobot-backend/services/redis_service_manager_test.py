@@ -188,9 +188,7 @@ class TestServiceControlOperations:
 
         # Mock SSH manager to simulate successful start
         mock_ssh_manager.execute_command = AsyncMock(
-            return_value=RemoteCommandResult(
-                success=True, exit_code=0, stdout="", stderr=""
-            )
+            return_value=RemoteCommandResult(success=True, exit_code=0, stdout="", stderr="")
         )
 
         # Mock the actual operation
@@ -289,9 +287,7 @@ class TestServiceControlOperations:
         logger.info("=== Test 1.4: Stop service with confirmation ===")
 
         mock_ssh_manager.execute_command = AsyncMock(
-            return_value=RemoteCommandResult(
-                success=True, exit_code=0, stdout="", stderr=""
-            )
+            return_value=RemoteCommandResult(success=True, exit_code=0, stdout="", stderr="")
         )
 
         result = ServiceOperationResult(
@@ -344,9 +340,7 @@ class TestServiceControlOperations:
         logger.info("=== Test 1.6: Restart service success ===")
 
         mock_ssh_manager.execute_command = AsyncMock(
-            return_value=RemoteCommandResult(
-                success=True, exit_code=0, stdout="", stderr=""
-            )
+            return_value=RemoteCommandResult(success=True, exit_code=0, stdout="", stderr="")
         )
 
         result = ServiceOperationResult(
@@ -510,9 +504,7 @@ class TestCommandValidation:
 
         for dangerous_input in dangerous_inputs:
             # In real implementation, this would raise ValueError
-            is_dangerous = any(
-                char in dangerous_input for char in [";", "&&", "|", "$", "`"]
-            )
+            is_dangerous = any(char in dangerous_input for char in [";", "&&", "|", "$", "`"])
             assert is_dangerous
             logger.info(f"✓ Detected dangerous input: {dangerous_input[:20]}...")
 
@@ -540,15 +532,11 @@ class TestHealthMonitoring:
 
         # Mock systemd status success
         mock_ssh_manager.execute_command = AsyncMock(
-            return_value=RemoteCommandResult(
-                success=True, exit_code=0, stdout="active", stderr=""
-            )
+            return_value=RemoteCommandResult(success=True, exit_code=0, stdout="active", stderr="")
         )
 
         # Mock info for performance metrics
-        mock_redis_client.info = AsyncMock(
-            return_value={"used_memory": 128 * 1024 * 1024}  # 128 MB
-        )
+        mock_redis_client.info = AsyncMock(return_value={"used_memory": 128 * 1024 * 1024})  # 128 MB
 
         health = HealthStatus(
             overall_status="healthy",
@@ -579,9 +567,7 @@ class TestHealthMonitoring:
 
         # Mock slow response
         mock_redis_client.ping = AsyncMock(return_value=True)
-        mock_redis_client.info = AsyncMock(
-            return_value={"used_memory": 3500 * 1024 * 1024}  # 3.5 GB - high usage
-        )
+        mock_redis_client.info = AsyncMock(return_value={"used_memory": 3500 * 1024 * 1024})  # 3.5 GB - high usage
 
         health = HealthStatus(
             overall_status="degraded",
@@ -611,9 +597,7 @@ class TestHealthMonitoring:
         logger.info("=== Test 4.3: Critical status - service down ===")
 
         # Mock connection failure
-        mock_redis_client.ping = AsyncMock(
-            side_effect=ConnectionRefusedError("Connection refused")
-        )
+        mock_redis_client.ping = AsyncMock(side_effect=ConnectionRefusedError("Connection refused"))
 
         health = HealthStatus(
             overall_status="critical",
@@ -648,9 +632,7 @@ class TestAutoRecovery:
 
         # Mock successful start command
         mock_ssh_manager.execute_command = AsyncMock(
-            return_value=RemoteCommandResult(
-                success=True, exit_code=0, stdout="", stderr=""
-            )
+            return_value=RemoteCommandResult(success=True, exit_code=0, stdout="", stderr="")
         )
 
         recovery = RecoveryResult(success=True, strategy="standard")
@@ -673,9 +655,7 @@ class TestAutoRecovery:
         """
         logger.info("=== Test 5.2: Max recovery attempts exceeded ===")
 
-        max_attempts = test_config["redis_service_management"]["auto_recovery"][
-            "max_attempts"
-        ]
+        max_attempts = test_config["redis_service_management"]["auto_recovery"]["max_attempts"]
         current_attempts = 3
 
         assert current_attempts >= max_attempts
@@ -733,14 +713,10 @@ class TestErrorHandling:
         logger.info("=== Test 6.1: SSH connection timeout ===")
 
         # Mock timeout
-        mock_ssh_manager.execute_command = AsyncMock(
-            side_effect=asyncio.TimeoutError("SSH connection timeout")
-        )
+        mock_ssh_manager.execute_command = AsyncMock(side_effect=asyncio.TimeoutError("SSH connection timeout"))
 
         try:
-            await mock_ssh_manager.execute_command(
-                host="redis", command="systemctl status redis-server", timeout=5
-            )
+            await mock_ssh_manager.execute_command(host="redis", command="systemctl status redis-server", timeout=5)
             assert False, "Should have raised timeout"
         except asyncio.TimeoutError as e:
             assert "timeout" in str(e).lower()
@@ -760,14 +736,10 @@ class TestErrorHandling:
         """
         logger.info("=== Test 6.2: SSH connection refused ===")
 
-        mock_ssh_manager.execute_command = AsyncMock(
-            side_effect=ConnectionRefusedError("Connection refused")
-        )
+        mock_ssh_manager.execute_command = AsyncMock(side_effect=ConnectionRefusedError("Connection refused"))
 
         try:
-            await mock_ssh_manager.execute_command(
-                host="redis", command="systemctl status redis-server", timeout=5
-            )
+            await mock_ssh_manager.execute_command(host="redis", command="systemctl status redis-server", timeout=5)
             assert False, "Should have raised connection error"
         except ConnectionRefusedError as e:
             assert "refused" in str(e).lower()

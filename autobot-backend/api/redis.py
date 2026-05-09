@@ -110,9 +110,7 @@ async def get_redis_health():
             "message": result.get("message"),
             "host": result.get("host"),
             "port": result.get("port"),
-            "redis_search_module_loaded": result.get(
-                "redis_search_module_loaded", False
-            ),
+            "redis_search_module_loaded": result.get("redis_search_module_loaded", False),
         }
     except Exception:
         logger.error("Redis health check failed: %s", "Internal server error")

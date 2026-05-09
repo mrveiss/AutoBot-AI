@@ -86,11 +86,7 @@ async def test_duplicate_enum_string_values_overlap(fixture_root):
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    dup_enum = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "duplicate_enum"
-    ]
+    dup_enum = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_enum"]
     assert dup_enum, "expected DUPLICATE_ENUM finding for fully-overlapping enums"
     msg = dup_enum[0].description
     assert "TaskStatus" in msg or "StepStatus" in msg
@@ -122,11 +118,7 @@ async def test_duplicate_enum_ignores_non_enum_classes(fixture_root):
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    dup_enum = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "duplicate_enum"
-    ]
+    dup_enum = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_enum"]
     assert not dup_enum, "non-enum classes should not be flagged as DUPLICATE_ENUM"
 
 
@@ -156,11 +148,7 @@ async def test_duplicate_enum_skips_inheritance_relation(fixture_root):
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    dup_enum = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "duplicate_enum"
-    ]
+    dup_enum = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_enum"]
     # Note: Python actually disallows inheriting from a non-empty enum, but
     # the AST stage doesn't care.  Detector must skip parent/child pairs.
     assert not dup_enum, "parent/child enum pairs should be skipped"
@@ -196,11 +184,7 @@ async def test_duplicate_enum_below_threshold_not_flagged(fixture_root):
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    dup_enum = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "duplicate_enum"
-    ]
+    dup_enum = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_enum"]
     assert not dup_enum, "below-threshold overlap should not be flagged"
 
 
@@ -248,11 +232,7 @@ async def test_duplicate_class_shape_unrelated_classes_with_shared_methods(
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    dup_shape = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "duplicate_class_shape"
-    ]
+    dup_shape = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_class_shape"]
     assert dup_shape, "expected DUPLICATE_CLASS_SHAPE for two unrelated similar classes"
 
 
@@ -291,11 +271,7 @@ async def test_duplicate_class_shape_skips_shared_base(fixture_root):
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    dup_shape = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "duplicate_class_shape"
-    ]
+    dup_shape = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_class_shape"]
     assert not dup_shape, "shared base class makes this expected, not anti-pattern"
 
 
@@ -334,11 +310,7 @@ async def test_duplicate_class_shape_skips_pydantic_models(fixture_root):
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    dup_shape = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "duplicate_class_shape"
-    ]
+    dup_shape = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_class_shape"]
     # Pydantic models are excluded by base-class name; even though these
     # don't have actual methods, they also don't trigger detection by design.
     assert not dup_shape
@@ -368,9 +340,5 @@ async def test_duplicate_class_shape_below_method_threshold_skipped(fixture_root
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    dup_shape = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "duplicate_class_shape"
-    ]
+    dup_shape = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_class_shape"]
     assert not dup_shape, "small classes (< _SHAPE_MIN_METHODS) should be skipped"

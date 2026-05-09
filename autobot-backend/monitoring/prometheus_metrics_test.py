@@ -79,9 +79,7 @@ class TestPrometheusMetricsManager:
 
     def test_record_workflow_execution_success(self, metrics_manager):
         """Test recording successful workflow execution"""
-        metrics_manager.record_workflow_execution(
-            workflow_type="code_review", status="success", duration=45.2
-        )
+        metrics_manager.record_workflow_execution(workflow_type="code_review", status="success", duration=45.2)
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'workflow_type="code_review"' in metrics_output
@@ -89,9 +87,7 @@ class TestPrometheusMetricsManager:
 
     def test_record_workflow_execution_failed(self, metrics_manager):
         """Test recording failed workflow execution"""
-        metrics_manager.record_workflow_execution(
-            workflow_type="deployment", status="failed", duration=12.5
-        )
+        metrics_manager.record_workflow_execution(workflow_type="deployment", status="failed", duration=12.5)
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'workflow_type="deployment"' in metrics_output
@@ -99,18 +95,14 @@ class TestPrometheusMetricsManager:
 
     def test_record_workflow_execution_without_duration(self, metrics_manager):
         """Test recording workflow execution without duration"""
-        metrics_manager.record_workflow_execution(
-            workflow_type="test_workflow", status="success"
-        )
+        metrics_manager.record_workflow_execution(workflow_type="test_workflow", status="success")
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'workflow_type="test_workflow"' in metrics_output
 
     def test_record_workflow_step(self, metrics_manager):
         """Test recording workflow step execution"""
-        metrics_manager.record_workflow_step(
-            workflow_type="code_review", step_type="analysis", status="completed"
-        )
+        metrics_manager.record_workflow_step(workflow_type="code_review", step_type="analysis", status="completed")
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'workflow_type="code_review"' in metrics_output
@@ -126,9 +118,7 @@ class TestPrometheusMetricsManager:
 
     def test_record_workflow_approval(self, metrics_manager):
         """Test recording workflow approval"""
-        metrics_manager.record_workflow_approval(
-            workflow_type="deployment", decision="approved"
-        )
+        metrics_manager.record_workflow_approval(workflow_type="deployment", decision="approved")
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'workflow_type="deployment"' in metrics_output
@@ -138,9 +128,7 @@ class TestPrometheusMetricsManager:
 
     def test_record_github_operation_success(self, metrics_manager):
         """Test recording successful GitHub operation"""
-        metrics_manager.record_github_operation(
-            operation="create_commit", status="success", duration=1.2
-        )
+        metrics_manager.record_github_operation(operation="create_commit", status="success", duration=1.2)
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'operation="create_commit"' in metrics_output
@@ -148,9 +136,7 @@ class TestPrometheusMetricsManager:
 
     def test_record_github_operation_failed(self, metrics_manager):
         """Test recording failed GitHub operation"""
-        metrics_manager.record_github_operation(
-            operation="create_pr", status="failed", duration=0.5
-        )
+        metrics_manager.record_github_operation(operation="create_pr", status="failed", duration=0.5)
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'operation="create_pr"' in metrics_output
@@ -158,9 +144,7 @@ class TestPrometheusMetricsManager:
 
     def test_record_github_operation_without_duration(self, metrics_manager):
         """Test recording GitHub operation without duration"""
-        metrics_manager.record_github_operation(
-            operation="list_issues", status="success"
-        )
+        metrics_manager.record_github_operation(operation="list_issues", status="success")
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'operation="list_issues"' in metrics_output
@@ -182,9 +166,7 @@ class TestPrometheusMetricsManager:
 
     def test_record_github_pull_request(self, metrics_manager):
         """Test recording GitHub pull request"""
-        metrics_manager.record_github_pull_request(
-            repository="owner/repo", action="create", status="success"
-        )
+        metrics_manager.record_github_pull_request(repository="owner/repo", action="create", status="success")
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'repository="owner/repo"' in metrics_output
@@ -193,9 +175,7 @@ class TestPrometheusMetricsManager:
 
     def test_record_github_issue(self, metrics_manager):
         """Test recording GitHub issue"""
-        metrics_manager.record_github_issue(
-            repository="owner/repo", action="update", status="success"
-        )
+        metrics_manager.record_github_issue(repository="owner/repo", action="update", status="success")
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'repository="owner/repo"' in metrics_output
@@ -233,9 +213,7 @@ class TestPrometheusMetricsManager:
 
     def test_record_task_execution_without_duration(self, metrics_manager):
         """Test recording task execution without duration"""
-        metrics_manager.record_task_execution(
-            task_type="test_task", agent_type="test-agent", status="success"
-        )
+        metrics_manager.record_task_execution(task_type="test_task", agent_type="test-agent", status="success")
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'task_type="test_task"' in metrics_output
@@ -271,9 +249,7 @@ class TestPrometheusMetricsManager:
 
     def test_record_timeout(self, metrics_manager):
         """Test recording timeout event"""
-        metrics_manager.record_timeout(
-            operation_type="redis_get", database="main", timed_out=True
-        )
+        metrics_manager.record_timeout(operation_type="redis_get", database="main", timed_out=True)
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'operation_type="redis_get"' in metrics_output
@@ -282,9 +258,7 @@ class TestPrometheusMetricsManager:
 
     def test_record_operation_duration(self, metrics_manager):
         """Test recording operation duration"""
-        metrics_manager.record_operation_duration(
-            operation_type="redis_get", database="main", duration=0.015
-        )
+        metrics_manager.record_operation_duration(operation_type="redis_get", database="main", duration=0.015)
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'operation_type="redis_get"' in metrics_output
@@ -292,9 +266,7 @@ class TestPrometheusMetricsManager:
 
     def test_record_circuit_breaker_event(self, metrics_manager):
         """Test recording circuit breaker event"""
-        metrics_manager.record_circuit_breaker_event(
-            database="main", event="opened", reason="too_many_failures"
-        )
+        metrics_manager.record_circuit_breaker_event(database="main", event="opened", reason="too_many_failures")
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'database="main"' in metrics_output
@@ -303,18 +275,14 @@ class TestPrometheusMetricsManager:
 
     def test_update_circuit_breaker_state(self, metrics_manager):
         """Test updating circuit breaker state"""
-        metrics_manager.update_circuit_breaker_state(
-            database="main", state="open", failure_count=5
-        )
+        metrics_manager.update_circuit_breaker_state(database="main", state="open", failure_count=5)
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'database="main"' in metrics_output
 
     def test_update_connection_pool(self, metrics_manager):
         """Test updating connection pool metrics"""
-        metrics_manager.update_connection_pool(
-            database="main", active=10, idle=5, max_connections=20
-        )
+        metrics_manager.update_connection_pool(database="main", active=10, idle=5, max_connections=20)
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'database="main"' in metrics_output
@@ -342,13 +310,9 @@ class TestPrometheusMetricsManager:
 
     def test_get_metrics_format(self, metrics_manager):
         """Test that get_metrics returns Prometheus text format"""
-        metrics_manager.record_workflow_execution(
-            "test_workflow", "success", duration=10.0
-        )
+        metrics_manager.record_workflow_execution("test_workflow", "success", duration=10.0)
         metrics_manager.record_github_commit("owner/repo", "created")
-        metrics_manager.record_task_execution(
-            "test_task", "test-agent", "success", duration=5.0
-        )
+        metrics_manager.record_task_execution("test_task", "test-agent", "success", duration=5.0)
 
         metrics_data = metrics_manager.get_metrics()
 
@@ -369,9 +333,7 @@ class TestPrometheusMetricsManager:
         """Test recording multiple metrics of same type"""
         # Record multiple workflow executions
         for i in range(5):
-            metrics_manager.record_workflow_execution(
-                "code_review", "success", 10.0 + i
-            )
+            metrics_manager.record_workflow_execution("code_review", "success", 10.0 + i)
 
         for i in range(3):
             metrics_manager.record_workflow_execution("code_review", "failed", 5.0 + i)
@@ -397,9 +359,7 @@ class TestPrometheusMetricsManager:
 
     def test_workflow_execution_zero_duration(self, metrics_manager):
         """Test recording workflow with zero duration"""
-        metrics_manager.record_workflow_execution(
-            "fast_workflow", "success", duration=0.0
-        )
+        metrics_manager.record_workflow_execution("fast_workflow", "success", duration=0.0)
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'workflow_type="fast_workflow"' in metrics_output
@@ -440,9 +400,7 @@ class TestPrometheusMetricsManager:
 
         for wf_type in valid_types:
             for status in valid_statuses:
-                metrics_manager.record_workflow_execution(
-                    wf_type, status, duration=10.0
-                )
+                metrics_manager.record_workflow_execution(wf_type, status, duration=10.0)
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         for wf_type in valid_types:
@@ -459,9 +417,7 @@ class TestPrometheusMetricsManager:
         ]
 
         for agent in valid_agents:
-            metrics_manager.record_task_execution(
-                "code_analysis", agent, "success", duration=60.0
-            )
+            metrics_manager.record_task_execution("code_analysis", agent, "success", duration=60.0)
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         for agent in valid_agents:
@@ -498,28 +454,20 @@ class TestPrometheusMetricsPerformance:
         registry = CollectorRegistry()
         return PrometheusMetricsManager(registry=registry)
 
-    @pytest.mark.skip(
-        reason="Requires pytest-benchmark plugin (optional performance test)"
-    )
+    @pytest.mark.skip(reason="Requires pytest-benchmark plugin (optional performance test)")
     def test_batch_recording_performance(self, metrics_manager, benchmark):
         """Test performance of recording metrics in batch"""
 
         def record_batch():
             for i in range(100):
-                metrics_manager.record_workflow_execution(
-                    "code_review", "success", 10.0
-                )
+                metrics_manager.record_workflow_execution("code_review", "success", 10.0)
                 metrics_manager.record_github_commit("owner/repo", "created")
-                metrics_manager.record_task_execution(
-                    "code_analysis", "code-reviewer", "success", 60.0
-                )
+                metrics_manager.record_task_execution("code_analysis", "code-reviewer", "success", 60.0)
 
         # Should complete in reasonable time (benchmark handles timing)
         benchmark(record_batch)
 
-    @pytest.mark.skip(
-        reason="Requires pytest-benchmark plugin (optional performance test)"
-    )
+    @pytest.mark.skip(reason="Requires pytest-benchmark plugin (optional performance test)")
     def test_get_metrics_performance(self, metrics_manager, benchmark):
         """Test performance of get_metrics call"""
         # Pre-populate with data
@@ -563,7 +511,5 @@ class TestPrometheusMetricsIntegration:
         assert has_type, "Missing TYPE comments"
 
         # Should have metric data
-        has_data = any(
-            line and not line.startswith("#") and "autobot" in line for line in lines
-        )
+        has_data = any(line and not line.startswith("#") and "autobot" in line for line in lines)
         assert has_data, "Missing metric data"

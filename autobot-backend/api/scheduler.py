@@ -42,7 +42,6 @@ from api.schemas_system import (
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 
 
-
 @router.post("/schedule", response_model=SchedulerWorkflowCreateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -55,9 +54,7 @@ async def schedule_workflow(request: ScheduleWorkflowRequest):
     try:
         priority = WorkflowPriority[request.priority.upper()]
     except KeyError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid priority: {request.priority}"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid priority: {request.priority}")
 
     # Issue #319: Use request object to reduce parameter count
     internal_request = InternalScheduleRequest(
@@ -159,18 +156,12 @@ async def reschedule_workflow(workflow_id: str, request: RescheduleRequest):
         try:
             new_priority = WorkflowPriority[request.new_priority.upper()]
         except KeyError:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid priority: {request.new_priority}"
-            )
+            raise HTTPException(status_code=400, detail=f"Invalid priority: {request.new_priority}")
 
-    success = get_workflow_scheduler().reschedule_workflow(
-        workflow_id, request.new_scheduled_time, new_priority
-    )
+    success = get_workflow_scheduler().reschedule_workflow(workflow_id, request.new_scheduled_time, new_priority)
 
     if not success:
-        raise HTTPException(
-            status_code=404, detail="Workflow not found or cannot be rescheduled"
-        )
+        raise HTTPException(status_code=404, detail="Workflow not found or cannot be rescheduled")
 
     # Get updated workflow
     workflow = get_workflow_scheduler().get_workflow(workflow_id)
@@ -199,9 +190,7 @@ async def cancel_workflow(workflow_id: str):
     success = get_workflow_scheduler().cancel_workflow(workflow_id)
 
     if not success:
-        raise HTTPException(
-            status_code=404, detail="Workflow not found or cannot be cancelled"
-        )
+        raise HTTPException(status_code=404, detail="Workflow not found or cannot be cancelled")
 
     return {
         "success": True,
@@ -351,9 +340,7 @@ def _parse_template_variables(variables: Optional[str]) -> Metadata:
     try:
         return json.loads(variables)
     except json.JSONDecodeError:
-        raise HTTPException(
-            status_code=400, detail="Invalid JSON in variables parameter"
-        )
+        raise HTTPException(status_code=400, detail="Invalid JSON in variables parameter")
 
 
 def _build_template_schedule_request(
@@ -388,9 +375,7 @@ def _build_template_schedule_request(
         user_message=user_message,
         scheduled_time=scheduled_time,
         priority=priority,
-        complexity=(
-            template.complexity.value if hasattr(template, "complexity") else "simple"
-        ),
+        complexity=(template.complexity.value if hasattr(template, "complexity") else "simple"),
         template_id=template_id,
         variables=template_variables,
         auto_approve=auto_approve,
@@ -410,9 +395,7 @@ async def schedule_template_workflow(
     template_id: str,
     scheduled_time: str = Query(..., description="When to execute the workflow"),
     priority: str = Query("normal", description="Workflow priority"),
-    variables: Optional[str] = Query(
-        None, description="Template variables as JSON string"
-    ),
+    variables: Optional[str] = Query(None, description="Template variables as JSON string"),
     auto_approve: bool = Query(False, description="Auto-approve workflow steps"),
     user_id: Optional[str] = Query(None, description="User ID for the workflow"),
 ):
@@ -476,24 +459,18 @@ async def get_scheduler_statistics():
     # Priority distribution
     priority_stats = {}
     for priority in WorkflowPriority:
-        priority_stats[priority.name] = len(
-            [w for w in all_workflows if w.priority == priority]
-        )
+        priority_stats[priority.name] = len([w for w in all_workflows if w.priority == priority])
 
     # Status distribution
     status_stats = {}
     for status in WorkflowStatus:
-        status_stats[status.name] = len(
-            [w for w in all_workflows if w.status == status]
-        )
+        status_stats[status.name] = len([w for w in all_workflows if w.status == status])
 
     # Template usage
     template_usage = {}
     for workflow in all_workflows:
         if workflow.template_id:
-            template_usage[workflow.template_id] = (
-                template_usage.get(workflow.template_id, 0) + 1
-            )
+            template_usage[workflow.template_id] = template_usage.get(workflow.template_id, 0) + 1
 
     # Average durations
     durations = [w.estimated_duration_minutes for w in all_workflows]

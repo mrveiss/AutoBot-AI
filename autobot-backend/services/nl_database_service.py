@@ -63,9 +63,7 @@ _HISTORY_KEY_PREFIX = "nl_database:history:"
 
 # Local DB path (autobot_data.db)
 _DEFAULT_BASE = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
-_LOCAL_DB_PATH = os.environ.get(
-    "AUTOBOT_DATA_DB", os.path.join(_DEFAULT_BASE, "autobot_data.db")
-)
+_LOCAL_DB_PATH = os.environ.get("AUTOBOT_DATA_DB", os.path.join(_DEFAULT_BASE, "autobot_data.db"))
 
 
 def _validate_readonly_sql(sql: str) -> bool:
@@ -107,9 +105,7 @@ def _extract_sql_from_response(response: str) -> str:
         Extracted SQL string
     """
     # Try to extract from markdown code block
-    code_block_match = re.search(
-        r"```(?:sql)?\s*(.*?)```", response, re.DOTALL | re.IGNORECASE
-    )
+    code_block_match = re.search(r"```(?:sql)?\s*(.*?)```", response, re.DOTALL | re.IGNORECASE)
     if code_block_match:
         return code_block_match.group(1).strip()
 
@@ -142,9 +138,7 @@ def _get_local_db_schema() -> str:
     try:
         with sqlite3.connect(_LOCAL_DB_PATH) as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL"
-            )
+            cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL")
             tables = cursor.fetchall()
             return "\n\n".join(row[0] for row in tables if row[0])
     except Exception as exc:
@@ -338,9 +332,7 @@ class NLDatabaseService:
             logger.info("Vanna.ai package available")
             return True
         except ImportError:
-            logger.info(
-                "Vanna.ai not installed - using LLM fallback for SQL generation"
-            )
+            logger.info("Vanna.ai not installed - using LLM fallback for SQL generation")
             return False
 
     async def _train_on_ddl(self, db_id: str, ddl: str) -> None:
@@ -354,9 +346,7 @@ class NLDatabaseService:
             ddl: DDL schema string
         """
         self._trained_schemas[db_id] = ddl
-        logger.debug(
-            "Trained NL service on schema for db '%s' (%d chars)", db_id, len(ddl)
-        )
+        logger.debug("Trained NL service on schema for db '%s' (%d chars)", db_id, len(ddl))
 
     async def query(
         self,
@@ -384,9 +374,7 @@ class NLDatabaseService:
         sql = await self._generate_sql(question, schema)
 
         if not sql:
-            return _error_response(
-                "Could not generate SQL for the given question", question, None
-            )
+            return _error_response("Could not generate SQL for the given question", question, None)
 
         if not _validate_readonly_sql(sql):
             return _error_response(
@@ -464,9 +452,7 @@ class NLDatabaseService:
             try:
                 return await self._generate_sql_with_vanna(question, schema)
             except Exception as exc:
-                logger.warning(
-                    "Vanna SQL generation failed, using LLM fallback: %s", exc
-                )
+                logger.warning("Vanna SQL generation failed, using LLM fallback: %s", exc)
 
         return await self._generate_sql_with_llm(question, schema)
 
@@ -764,9 +750,7 @@ class NLDatabaseService:
             logger.warning("Failed to retrieve query history: %s", exc)
             return []
 
-    async def _save_history(
-        self, entry: Dict[str, Any], user_id: Optional[str]
-    ) -> None:
+    async def _save_history(self, entry: Dict[str, Any], user_id: Optional[str]) -> None:
         """
         Save a query entry to Redis history.
 

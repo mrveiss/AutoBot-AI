@@ -240,9 +240,7 @@ class AgentAnalytics(AsyncRedisClientMixin):
         try:
             redis = await self.get_redis()
             running_key = f"{self.REDIS_KEY_PREFIX}running:{task_id}"
-            await redis.set(
-                running_key, json.dumps(record.to_dict()), ex=TTL_1_HOUR
-            )
+            await redis.set(running_key, json.dumps(record.to_dict()), ex=TTL_1_HOUR)
         except Exception as e:
             logger.error("Failed to track task start: %s", e)
 
@@ -279,9 +277,7 @@ class AgentAnalytics(AsyncRedisClientMixin):
                 logger.warning("Task not found for completion: %s", task_id)
                 return None
 
-            task_str = (
-                task_data if isinstance(task_data, str) else task_data.decode("utf-8")
-            )
+            task_str = task_data if isinstance(task_data, str) else task_data.decode("utf-8")
             record = AgentTaskRecord.from_dict(json.loads(task_str))
 
             # Update completion info
@@ -347,20 +343,14 @@ class AgentAnalytics(AsyncRedisClientMixin):
                 await redis.hincrby(metrics_key, counter_field, 1)
 
             if record.duration_ms:
-                await redis.hincrbyfloat(
-                    metrics_key, "total_duration_ms", record.duration_ms
-                )
+                await redis.hincrbyfloat(metrics_key, "total_duration_ms", record.duration_ms)
 
             if record.tokens_used:
-                await redis.hincrby(
-                    metrics_key, "total_tokens_used", record.tokens_used
-                )
+                await redis.hincrby(metrics_key, "total_tokens_used", record.tokens_used)
 
             # Update metadata
             await redis.hset(metrics_key, "agent_type", record.agent_type)
-            await redis.hset(
-                metrics_key, "last_activity", record.completed_at or record.started_at
-            )
+            await redis.hset(metrics_key, "last_activity", record.completed_at or record.started_at)
 
         except Exception as e:
             logger.error("Failed to update agent metrics: %s", e)
@@ -417,9 +407,7 @@ class AgentAnalytics(AsyncRedisClientMixin):
             return None
 
     @staticmethod
-    def _build_agent_metrics_from_data(
-        agent_id: str, data: Dict[str, Any]
-    ) -> AgentMetrics:
+    def _build_agent_metrics_from_data(agent_id: str, data: Dict[str, Any]) -> AgentMetrics:
         """Helper for get_all_agents_metrics. Ref: #1088.
 
         Decodes a raw Redis hash, computes derived rates, and constructs an
@@ -483,9 +471,7 @@ class AgentAnalytics(AsyncRedisClientMixin):
             logger.error("Failed to get all agents metrics: %s", e)
             return []
 
-    async def get_agent_history(
-        self, agent_id: str, limit: int = 100
-    ) -> List[Dict[str, Any]]:
+    async def get_agent_history(self, agent_id: str, limit: int = 100) -> List[Dict[str, Any]]:
         """Get task history for an agent"""
         try:
             redis = await self.get_redis()
@@ -509,9 +495,7 @@ class AgentAnalytics(AsyncRedisClientMixin):
             logger.error("Failed to get recent tasks: %s", e)
             return []
 
-    async def compare_agents(
-        self, agent_ids: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
+    async def compare_agents(self, agent_ids: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Compare performance across agents.
 
@@ -534,9 +518,7 @@ class AgentAnalytics(AsyncRedisClientMixin):
             return {"agents": [], "rankings": {}}
 
         # Calculate rankings
-        by_success_rate = sorted(
-            metrics_list, key=lambda x: x.success_rate, reverse=True
-        )
+        by_success_rate = sorted(metrics_list, key=lambda x: x.success_rate, reverse=True)
         by_speed = sorted(
             metrics_list,
             key=lambda x: x.avg_duration_ms if x.avg_duration_ms > 0 else float("inf"),
@@ -552,9 +534,7 @@ class AgentAnalytics(AsyncRedisClientMixin):
             },
             "summary": {
                 "total_agents": len(metrics_list),
-                "avg_success_rate": round(
-                    sum(m.success_rate for m in metrics_list) / len(metrics_list), 2
-                ),
+                "avg_success_rate": round(sum(m.success_rate for m in metrics_list) / len(metrics_list), 2),
                 "total_tasks_processed": sum(m.total_tasks for m in metrics_list),
             },
         }
@@ -594,19 +574,13 @@ class AgentAnalytics(AsyncRedisClientMixin):
         """
         for stats in daily_stats.values():
             if stats["total"] > 0:
-                stats["success_rate"] = round(
-                    (stats["completed"] / stats["total"]) * 100, 2
-                )
-                stats["avg_duration_ms"] = round(
-                    stats["total_duration_ms"] / stats["total"], 2
-                )
+                stats["success_rate"] = round((stats["completed"] / stats["total"]) * 100, 2)
+                stats["avg_duration_ms"] = round(stats["total_duration_ms"] / stats["total"], 2)
             else:
                 stats["success_rate"] = 0
                 stats["avg_duration_ms"] = 0
 
-    async def get_performance_trends(
-        self, agent_id: Optional[str] = None, days: int = 7
-    ) -> Dict[str, Any]:
+    async def get_performance_trends(self, agent_id: Optional[str] = None, days: int = 7) -> Dict[str, Any]:
         """
         Get performance trends over time.
 
@@ -623,9 +597,7 @@ class AgentAnalytics(AsyncRedisClientMixin):
             else:
                 tasks = await self.get_recent_tasks(limit=5000)
             cutoff = now_utc() - timedelta(days=days)
-            filtered_tasks = [
-                t for t in tasks if parse_utc_iso(t["started_at"]) > cutoff
-            ]
+            filtered_tasks = [t for t in tasks if parse_utc_iso(t["started_at"]) > cutoff]
             daily_stats = self._group_tasks_by_day(filtered_tasks)
             self._compute_daily_averages(daily_stats)
             return {

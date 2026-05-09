@@ -167,9 +167,7 @@ class QueryExpander:
             return self.SYNONYMS[term_lower]
         if term_lower in self._reverse_synonyms:
             canonical = self._reverse_synonyms[term_lower]
-            return [canonical] + [
-                s for s in self.SYNONYMS.get(canonical, []) if s != term_lower
-            ]
+            return [canonical] + [s for s in self.SYNONYMS.get(canonical, []) if s != term_lower]
         return []
 
 
@@ -302,9 +300,7 @@ class RelevanceScorer:
         """
         if verified:
             return self.authority_scores.get("verified", 0.9)
-        return self.authority_scores.get(
-            source, self.authority_scores.get("unknown", 0.5)
-        )
+        return self.authority_scores.get(source, self.authority_scores.get("unknown", 0.5))
 
     def calculate_exact_match_boost(
         self,
@@ -335,9 +331,7 @@ class RelevanceScorer:
             return self.factors.exact_match_boost
         return 1.0
 
-    def _parse_result_metadata(
-        self, result: Dict[str, Any]
-    ) -> Tuple[str, str, str, str, bool, Optional[datetime]]:
+    def _parse_result_metadata(self, result: Dict[str, Any]) -> Tuple[str, str, str, str, bool, Optional[datetime]]:
         """Parse metadata from result for scoring (Issue #398: extracted)."""
         metadata = result.get("metadata", {})
         content = result.get("content", "")
@@ -385,9 +379,7 @@ class RelevanceScorer:
         )
         return min(boosted_score / max_possible, 1.0)
 
-    def calculate_relevance_score(
-        self, base_score: float, query: str, result: Dict[str, Any]
-    ) -> float:
+    def calculate_relevance_score(self, base_score: float, query: str, result: Dict[str, Any]) -> float:
         """Calculate final relevance score with all factors (Issue #398: refactored)."""
         (
             content,
@@ -397,9 +389,7 @@ class RelevanceScorer:
             verified,
             created_at,
         ) = self._parse_result_metadata(result)
-        return self._compute_boosted_score(
-            base_score, query, content, title, doc_id, source, verified, created_at
-        )
+        return self._compute_boosted_score(base_score, query, content, title, doc_id, source, verified, created_at)
 
     def record_access(self, doc_id: str) -> None:
         """Record document access for popularity tracking."""
@@ -504,9 +494,7 @@ class AdvancedFilter:
 
         # Score filter
         if self.filters.min_score > 0:
-            filtered = [
-                r for r in filtered if r.get("score", 0) >= self.filters.min_score
-            ]
+            filtered = [r for r in filtered if r.get("score", 0) >= self.filters.min_score]
 
         # Limit results
         return filtered[: self.filters.max_results]
@@ -632,9 +620,7 @@ class ResultClusterer:
         self.max_clusters = max_clusters
         self.min_cluster_size = min_cluster_size
 
-    def _match_topics_to_results(
-        self, results: List[Dict[str, Any]]
-    ) -> Dict[str, List[int]]:
+    def _match_topics_to_results(self, results: List[Dict[str, Any]]) -> Dict[str, List[int]]:
         """Match topics to result indices (Issue #398: extracted)."""
         topic_results: Dict[str, List[int]] = defaultdict(list)
         for idx, result in enumerate(results):
@@ -646,21 +632,15 @@ class ResultClusterer:
                     topic_results[topic].append(idx)
         return topic_results
 
-    def _build_cluster(
-        self, topic: str, indices: List[int], results: List[Dict]
-    ) -> ResultCluster:
+    def _build_cluster(self, topic: str, indices: List[int], results: List[Dict]) -> ResultCluster:
         """Build a cluster from topic and indices (Issue #398: extracted)."""
         cluster_results = [results[i] for i in indices]
         scores = [r.get("score", 0) for r in cluster_results]
         avg_score = sum(scores) / len(scores) if scores else 0.0
         keywords = self.TOPIC_KEYWORDS.get(topic, [])[:5]
-        return ResultCluster(
-            topic=topic, results=cluster_results, keywords=keywords, avg_score=avg_score
-        )
+        return ResultCluster(topic=topic, results=cluster_results, keywords=keywords, avg_score=avg_score)
 
-    def cluster_results(
-        self, results: List[Dict[str, Any]]
-    ) -> Tuple[List[ResultCluster], List[Dict[str, Any]]]:
+    def cluster_results(self, results: List[Dict[str, Any]]) -> Tuple[List[ResultCluster], List[Dict[str, Any]]]:
         """Cluster results by topic (Issue #398: refactored)."""
         if not results:
             return [], []
@@ -669,9 +649,7 @@ class ResultClusterer:
         clusters = []
         clustered_indices: Set[int] = set()
 
-        sorted_topics = sorted(
-            topic_results.items(), key=lambda x: len(x[1]), reverse=True
-        )
+        sorted_topics = sorted(topic_results.items(), key=lambda x: len(x[1]), reverse=True)
 
         for topic, indices in sorted_topics:
             if len(clusters) >= self.max_clusters:
@@ -681,9 +659,7 @@ class ResultClusterer:
                 clusters.append(self._build_cluster(topic, available, results))
                 clustered_indices.update(available)
 
-        unclustered = [
-            results[i] for i in range(len(results)) if i not in clustered_indices
-        ]
+        unclustered = [results[i] for i in range(len(results)) if i not in clustered_indices]
         clusters.sort(key=lambda c: c.avg_score, reverse=True)
 
         logger.debug(
@@ -806,9 +782,7 @@ class SearchAnalytics:
         Returns:
             List of (query, count) tuples sorted by count
         """
-        sorted_queries = sorted(
-            self.query_counts.items(), key=lambda x: x[1], reverse=True
-        )
+        sorted_queries = sorted(self.query_counts.items(), key=lambda x: x[1], reverse=True)
         return sorted_queries[:limit]
 
     def get_failed_searches(self, limit: int = 10) -> List[str]:
@@ -872,9 +846,7 @@ class SearchAnalytics:
             "total_searches": len(self.events),
             "unique_queries": len(self.query_counts),
             "avg_results": self.get_average_results_count(),
-            "failed_search_rate": (
-                failed_count / len(self.events) if self.events else 0.0
-            ),
+            "failed_search_rate": (failed_count / len(self.events) if self.events else 0.0),
             "click_through_rate": self.get_click_through_rate(),
             "avg_duration_ms": sum(durations) / len(durations) if durations else 0,
             "popular_queries": self.get_popular_queries(5),

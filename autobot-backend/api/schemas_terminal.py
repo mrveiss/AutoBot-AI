@@ -10,10 +10,10 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
-
 # ---------------------------------------------------------------------------
 # Terminal schemas
 # ---------------------------------------------------------------------------
+
 
 class TerminalSessionCreateResponse(BaseModel):
     """Response for POST /sessions."""
@@ -26,7 +26,6 @@ class TerminalSessionCreateResponse(BaseModel):
     ssh_keys: Optional[Dict[str, Any]] = None
 
 
-
 class TerminalSessionItem(BaseModel):
     """Single session entry within a list response."""
 
@@ -37,14 +36,12 @@ class TerminalSessionItem(BaseModel):
     is_active: bool
 
 
-
 class TerminalSessionListResponse(BaseModel):
     """Response for GET /sessions."""
 
     sessions: List[TerminalSessionItem]
     total: int
     active: int
-
 
 
 class TerminalSessionDetailResponse(BaseModel):
@@ -54,7 +51,6 @@ class TerminalSessionDetailResponse(BaseModel):
     config: Dict[str, Any]
     is_active: bool
     statistics: Dict[str, Any]
-
 
 
 class TerminalSessionDeleteResponse(BaseModel):
@@ -69,7 +65,6 @@ class TerminalSessionDeleteResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class SSHKeyItem(BaseModel):
     """A single SSH key entry as returned by get_session_keys()."""
 
@@ -77,7 +72,6 @@ class SSHKeyItem(BaseModel):
     fingerprint: Optional[str] = None
     has_passphrase: Optional[bool] = None
     key_path: Optional[str] = None
-
 
 
 class SSHKeyListResponse(BaseModel):
@@ -88,7 +82,6 @@ class SSHKeyListResponse(BaseModel):
     total: int
 
 
-
 class SSHKeyAgentResponse(BaseModel):
     """Response for POST /sessions/{session_id}/ssh-keys/{key_name}/agent."""
 
@@ -96,7 +89,6 @@ class SSHKeyAgentResponse(BaseModel):
     key_name: str
     status: str
     message: str
-
 
 
 class SSHKeyPathResponse(BaseModel):
@@ -113,7 +105,6 @@ class SSHKeyPathResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class CommandAssessResponse(BaseModel):
     """Response for POST /command."""
 
@@ -124,14 +115,12 @@ class CommandAssessResponse(BaseModel):
     requires_confirmation: bool
 
 
-
 class TerminalInputResponse(BaseModel):
     """Response for POST /sessions/{session_id}/input."""
 
     session_id: str
     status: str
     input: str
-
 
 
 class TerminalSignalResponse(BaseModel):
@@ -147,7 +136,6 @@ class TerminalSignalResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class TerminalCommandHistoryResponse(BaseModel):
     """Response for GET /sessions/{session_id}/history."""
 
@@ -156,7 +144,6 @@ class TerminalCommandHistoryResponse(BaseModel):
     history: List[Any]
     total_commands: Optional[int] = None
     message: Optional[str] = None
-
 
 
 class TerminalAuditLogResponse(BaseModel):
@@ -173,7 +160,6 @@ class TerminalAuditLogResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class TerminalInfoResponse(BaseModel):
     """Response for GET /."""
 
@@ -186,7 +172,6 @@ class TerminalInfoResponse(BaseModel):
     notice: str
 
 
-
 class TerminalHealthComponents(BaseModel):
     terminal_manager: str
     websocket_manager: str
@@ -194,11 +179,9 @@ class TerminalHealthComponents(BaseModel):
     session_manager: str
 
 
-
 class TerminalHealthMetrics(BaseModel):
     active_sessions: int
     manager_initialized: bool
-
 
 
 class TerminalHealthResponse(BaseModel):
@@ -211,7 +194,6 @@ class TerminalHealthResponse(BaseModel):
     error: Optional[str] = None
 
 
-
 class TerminalStatusFeatures(BaseModel):
     pty_support: bool
     websocket_support: bool
@@ -221,11 +203,9 @@ class TerminalStatusFeatures(BaseModel):
     agent_integration: bool
 
 
-
 class TerminalStatusSessionInfo(BaseModel):
     active_sessions: int
     max_concurrent_sessions: Optional[int] = None
-
 
 
 class TerminalSystemStatusResponse(BaseModel):
@@ -236,7 +216,6 @@ class TerminalSystemStatusResponse(BaseModel):
     features: Optional[TerminalStatusFeatures] = None
     session_info: Optional[TerminalStatusSessionInfo] = None
     error: Optional[str] = None
-
 
 
 class TerminalCapabilitiesResponse(BaseModel):
@@ -252,7 +231,6 @@ class TerminalCapabilitiesResponse(BaseModel):
     websocket_features: Dict[str, Any]
 
 
-
 class TerminalSecurityPoliciesResponse(BaseModel):
     """Response for GET /security."""
 
@@ -264,7 +242,6 @@ class TerminalSecurityPoliciesResponse(BaseModel):
     audit_logging: Dict[str, Any]
 
 
-
 class TerminalImplementationItem(BaseModel):
     name: str
     description: str
@@ -272,7 +249,6 @@ class TerminalImplementationItem(BaseModel):
     backend_api: str
     approval_workflow: bool
     service_layer: Optional[str] = None
-
 
 
 class TerminalFeaturesResponse(BaseModel):
@@ -291,7 +267,6 @@ class TerminalFeaturesResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class TerminalStatsResponse(BaseModel):
     """Response for GET /stats.
 
@@ -308,7 +283,6 @@ class TerminalStatsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class AdminExecuteResponse(BaseModel):
     """Response for POST /execute."""
 
@@ -320,7 +294,6 @@ class AdminExecuteResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # terminal_tools.py schemas
 # ---------------------------------------------------------------------------
-
 
 
 class PackageManagersResponse(BaseModel):
@@ -336,7 +309,6 @@ class PackageManagersResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class AgentTerminalSessionCreateResponse(BaseModel):
     """Response for POST /agent-terminal/sessions."""
 
@@ -349,7 +321,6 @@ class AgentTerminalSessionCreateResponse(BaseModel):
     state: str
     created_at: float
     pty_session_id: Optional[str] = None
-
 
 
 class AgentTerminalSessionItem(BaseModel):
@@ -367,14 +338,12 @@ class AgentTerminalSessionItem(BaseModel):
     pty_session_id: Optional[str] = None
 
 
-
 class AgentTerminalSessionListResponse(BaseModel):
     """Response for GET /agent-terminal/sessions."""
 
     status: str
     total: int
     sessions: List[AgentTerminalSessionItem]
-
 
 
 class AgentTerminalSessionDetailResponse(BaseModel):
@@ -388,13 +357,11 @@ class AgentTerminalSessionDetailResponse(BaseModel):
     status: str
 
 
-
 class AgentTerminalSessionDeleteResponse(BaseModel):
     """Response for DELETE /agent-terminal/sessions/{session_id}."""
 
     status: str
     session_id: str
-
 
 
 class AgentTerminalCommandStateResponse(BaseModel):
@@ -419,7 +386,6 @@ class AgentTerminalCommandStateResponse(BaseModel):
     approval_comment: Optional[str] = None
 
 
-
 class AgentTerminalInfoResponse(BaseModel):
     """Response for GET /agent-terminal/."""
 
@@ -433,7 +399,6 @@ class AgentTerminalInfoResponse(BaseModel):
     security_features: Dict[str, str]
 
 
-
 class AgentTerminalToolApprovalResponse(BaseModel):
     """Response for POST /agent-terminal/tools/approve/{approval_id}."""
 
@@ -442,14 +407,12 @@ class AgentTerminalToolApprovalResponse(BaseModel):
     approved: bool
 
 
-
 class AgentTerminalHostSelectionRequestResponse(BaseModel):
     """Response for POST /agent-terminal/host-selection/request."""
 
     request_id: str
     status: str
     message: str
-
 
 
 class AgentTerminalHostSelectionGetResponse(BaseModel):
@@ -464,7 +427,6 @@ class AgentTerminalHostSelectionGetResponse(BaseModel):
     updated_at: Optional[str] = None
 
 
-
 class AgentTerminalHostSelectionSubmitResponse(BaseModel):
     """Response for POST /agent-terminal/host-selection/{request_id}/select."""
 
@@ -475,13 +437,11 @@ class AgentTerminalHostSelectionSubmitResponse(BaseModel):
     connection_info: Optional[Dict[str, Any]] = None
 
 
-
 class AgentTerminalHostSelectionCancelResponse(BaseModel):
     """Response for POST /agent-terminal/host-selection/{request_id}/cancel."""
 
     status: str
     request_id: str
-
 
 
 class AgentTerminalPendingSelectionsResponse(BaseModel):
@@ -580,4 +540,3 @@ class AdminExecuteRequest(BaseModel):
 
     command: str
     host: str = ""
-

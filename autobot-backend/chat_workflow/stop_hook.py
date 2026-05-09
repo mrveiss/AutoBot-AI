@@ -57,9 +57,7 @@ async def on_turn_complete(
 
     try:
         # Verbatim store writes — one task per role for parallelism
-        _wv.delay(
-            session_id, turn_number, "user", user_message, timestamp, user_id
-        )
+        _wv.delay(session_id, turn_number, "user", user_message, timestamp, user_id)
         _wv.delay(
             session_id,
             turn_number,
@@ -74,16 +72,14 @@ async def on_turn_complete(
         _ef.delay(session_id, combined_text, user_id)
 
         logger.debug(
-            "stop_hook.on_turn_complete: enqueued 3 memory tasks "
-            "(session=%s turn=%d)",
+            "stop_hook.on_turn_complete: enqueued 3 memory tasks " "(session=%s turn=%d)",
             session_id,
             turn_number,
         )
     except Exception as exc:
         # Never raise from a fire-and-forget hook — log and continue.
         logger.warning(
-            "stop_hook.on_turn_complete failed to enqueue tasks "
-            "(session=%s turn=%d): %s",
+            "stop_hook.on_turn_complete failed to enqueue tasks " "(session=%s turn=%d): %s",
             session_id,
             turn_number,
             exc,

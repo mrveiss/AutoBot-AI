@@ -24,7 +24,6 @@ from llm_providers.base_provider import BaseProvider
 from llm_providers.provider_registry import ProviderRegistry
 from services.llm_cost_tracker import LLMCostTracker
 
-
 # ============================================================================
 # Mock Provider for Testing
 # ============================================================================
@@ -267,9 +266,7 @@ class TestConversationOverrides:
             messages=[ChatMessage(role="user", content="test")],
             model_name="test-model",
         )
-        selected = await registry.get_provider_for_request(
-            conversation_id="conv-123", request=request
-        )
+        selected = await registry.get_provider_for_request(conversation_id="conv-123", request=request)
 
         assert selected is override
 
@@ -507,23 +504,17 @@ class TestProviderIntegration:
             messages=[ChatMessage(role="user", content="test")],
             model_name="test",
         )
-        selected = await registry.get_provider_for_request(
-            conversation_id=conv_id, request=request
-        )
+        selected = await registry.get_provider_for_request(conversation_id=conv_id, request=request)
         assert selected is provider1
 
         # Switch to secondary
         registry.set_conversation_provider(conv_id, "secondary")
-        selected = await registry.get_provider_for_request(
-            conversation_id=conv_id, request=request
-        )
+        selected = await registry.get_provider_for_request(conversation_id=conv_id, request=request)
         assert selected is provider2
 
         # Clear override, back to primary
         registry.clear_conversation_provider(conv_id)
-        selected = await registry.get_provider_for_request(
-            conversation_id=conv_id, request=request
-        )
+        selected = await registry.get_provider_for_request(conversation_id=conv_id, request=request)
         assert selected is provider1
 
 
@@ -565,9 +556,7 @@ class TestEdgeCases:
         registry.set_conversation_provider("conv-id", "secondary")
 
         # Explicit request should take priority
-        selected = await registry.get_provider_for_request(
-            provider_name="primary", conversation_id="conv-id"
-        )
+        selected = await registry.get_provider_for_request(provider_name="primary", conversation_id="conv-id")
         assert selected is provider1
 
     @pytest.mark.asyncio
@@ -583,9 +572,7 @@ class TestEdgeCases:
             model_name="test",
         )
         # Should gracefully fall back to available providers
-        selected = await registry.get_provider_for_request(
-            conversation_id="conv-id", request=request
-        )
+        selected = await registry.get_provider_for_request(conversation_id="conv-id", request=request)
         assert selected is provider
 
 

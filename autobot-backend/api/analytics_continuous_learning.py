@@ -279,14 +279,9 @@ class LearningPipeline:
     def _should_trigger_retrain(self) -> bool:
         """Check if retraining should be triggered."""
         # Check feedback threshold
-        total_feedback = sum(
-            s.true_positives + s.false_positives for s in self.pattern_stats.values()
-        )
+        total_feedback = sum(s.true_positives + s.false_positives for s in self.pattern_stats.values())
         if total_feedback >= THRESHOLDS["feedback_for_retrain"]:
-            if (
-                self.last_retrain is None
-                or (datetime.now(tz=timezone.utc) - self.last_retrain).seconds > 3600
-            ):
+            if self.last_retrain is None or (datetime.now(tz=timezone.utc) - self.last_retrain).seconds > 3600:
                 return True
 
         # Check accuracy drop
@@ -310,9 +305,7 @@ class LearningPipeline:
 
         return total_correct / total if total > 0 else 1.0
 
-    async def retrain_models(
-        self, reason: RetrainingReason, patterns: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
+    async def retrain_models(self, reason: RetrainingReason, patterns: Optional[List[str]] = None) -> Dict[str, Any]:
         """Retrain pattern detection models."""
         start_time = time.time()
         self.last_retrain = datetime.now(tz=timezone.utc)
@@ -348,9 +341,7 @@ class LearningPipeline:
                     )
 
         # Record accuracy history
-        self.accuracy_history.append(
-            (datetime.now(tz=timezone.utc), self._calculate_recent_accuracy())
-        )
+        self.accuracy_history.append((datetime.now(tz=timezone.utc), self._calculate_recent_accuracy()))
         if len(self.accuracy_history) > 100:
             self.accuracy_history = self.accuracy_history[-100:]
 
@@ -395,9 +386,7 @@ class LearningPipeline:
             ],
         )
 
-    def _generate_false_positive_insight(
-        self, pattern: "PatternStats"  # noqa: F821
-    ) -> Optional[LearningInsight]:
+    def _generate_false_positive_insight(self, pattern: "PatternStats") -> Optional[LearningInsight]:  # noqa: F821
         """Generate insight for high false positive pattern (Issue #398: extracted)."""
         total = pattern.true_positives + pattern.false_positives
         fp_rate = pattern.false_positives / total if total > 0 else 0
@@ -471,17 +460,14 @@ class LearningPipeline:
         recent_patterns = [
             p
             for p in self.pattern_stats.values()
-            if p.last_detected
-            and (now - p.last_detected).seconds < THRESHOLDS["anomaly_detection_window"]
+            if p.last_detected and (now - p.last_detected).seconds < THRESHOLDS["anomaly_detection_window"]
         ]
         insight = self._generate_active_pattern_insight(recent_patterns)
         if insight:
             new_insights.append(insight)
 
         # Insight 2: False positive trends
-        high_fp_patterns = [
-            p for p in self.pattern_stats.values() if p.false_positives > 5
-        ]
+        high_fp_patterns = [p for p in self.pattern_stats.values() if p.false_positives > 5]
         for pattern in high_fp_patterns[:3]:
             insight = self._generate_false_positive_insight(pattern)
             if insight:
@@ -505,23 +491,15 @@ class LearningPipeline:
         events_last_day = sum(1 for e in self.events if e.timestamp >= day_ago)
 
         patterns_learned = len(self.pattern_stats)
-        patterns_updated = sum(
-            1 for s in self.pattern_stats.values() if len(s.evolution_history) > 1
-        )
-        false_positives_reduced = sum(
-            s.false_positives for s in self.pattern_stats.values()
-        )
+        patterns_updated = sum(1 for s in self.pattern_stats.values() if len(s.evolution_history) > 1)
+        false_positives_reduced = sum(s.false_positives for s in self.pattern_stats.values())
 
         # Calculate accuracy improvement
         accuracy_improvement = 0.0
         if len(self.accuracy_history) >= 2:
-            accuracy_improvement = (
-                self.accuracy_history[-1][1] - self.accuracy_history[0][1]
-            )
+            accuracy_improvement = self.accuracy_history[-1][1] - self.accuracy_history[0][1]
 
-        active_insights = sum(
-            1 for i in self.insights if i.expires_at is None or i.expires_at > now
-        )
+        active_insights = sum(1 for i in self.insights if i.expires_at is None or i.expires_at > now)
 
         return ContinuousLearningMetrics(
             total_events_processed=self.processed_count,
@@ -634,9 +612,7 @@ class FileMonitor:
 
                 try:
                     # Issue #358 - avoid blocking
-                    content = await asyncio.to_thread(
-                        py_file.read_text, encoding="utf-8", errors="ignore"
-                    )
+                    content = await asyncio.to_thread(py_file.read_text, encoding="utf-8", errors="ignore")
                     content_hash = hashlib.sha256(content.encode()).hexdigest()
                     stat = await asyncio.to_thread(py_file.stat)
 
@@ -845,9 +821,7 @@ class ContinuousLearningEngine:
             try:
                 # Get event with timeout
                 try:
-                    event = await asyncio.wait_for(
-                        self.monitor.event_queue.get(), timeout=5.0
-                    )
+                    event = await asyncio.wait_for(self.monitor.event_queue.get(), timeout=5.0)
                     await self.pipeline.process_event(event)
                 except asyncio.TimeoutError:
                     continue
@@ -869,9 +843,7 @@ class ContinuousLearningEngine:
             except Exception as e:
                 logger.error("Insight generation error: %s", e)
 
-    async def submit_feedback(
-        self, pattern_id: str, is_correct: bool, details: Optional[str] = None
-    ) -> Dict[str, Any]:
+    async def submit_feedback(self, pattern_id: str, is_correct: bool, details: Optional[str] = None) -> Dict[str, Any]:
         """Submit feedback for a pattern detection."""
         event = LearningEvent(
             event_id=hashlib.sha256(
@@ -902,17 +874,13 @@ class ContinuousLearningEngine:
             patterns=request.patterns_to_focus,
         )
 
-    async def get_insights(
-        self, active_only: bool = True, limit: int = 20
-    ) -> List[LearningInsight]:
+    async def get_insights(self, active_only: bool = True, limit: int = 20) -> List[LearningInsight]:
         """Get generated insights."""
         now = datetime.now(tz=timezone.utc)
         insights = self.pipeline.insights
 
         if active_only:
-            insights = [
-                i for i in insights if i.expires_at is None or i.expires_at > now
-            ]
+            insights = [i for i in insights if i.expires_at is None or i.expires_at > now]
 
         return sorted(insights, key=lambda i: i.generated_at, reverse=True)[:limit]
 
@@ -1094,7 +1062,9 @@ async def get_insights(
     }
 
 
-@router.post("/insights/generate", summary="Generate insights now", response_model=ContinuousLearningGenerateInsightsResponse)
+@router.post(
+    "/insights/generate", summary="Generate insights now", response_model=ContinuousLearningGenerateInsightsResponse
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_insights_now",

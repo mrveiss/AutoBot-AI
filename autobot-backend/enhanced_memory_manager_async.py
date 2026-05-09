@@ -105,9 +105,7 @@ class TaskEntry:
             Generated task ID string.
         """
         timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
-        desc_hash = hashlib.md5(
-            self.description.encode(), usedforsecurity=False
-        ).hexdigest()[:8]
+        desc_hash = hashlib.md5(self.description.encode(), usedforsecurity=False).hexdigest()[:8]
         return f"task_{timestamp}_{desc_hash}"
 
 
@@ -250,18 +248,9 @@ class AsyncEnhancedMemoryManager:
             "CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at)",
             "CREATE INDEX IF NOT EXISTS idx_tasks_agent ON tasks(assigned_agent)",
             "CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)",
-            (
-                "CREATE INDEX IF NOT EXISTS idx_execution_task "
-                "ON execution_records(task_id)"
-            ),
-            (
-                "CREATE INDEX IF NOT EXISTS idx_execution_timestamp "
-                "ON execution_records(timestamp)"
-            ),
-            (
-                "CREATE INDEX IF NOT EXISTS idx_execution_success "
-                "ON execution_records(success)"
-            ),
+            ("CREATE INDEX IF NOT EXISTS idx_execution_task " "ON execution_records(task_id)"),
+            ("CREATE INDEX IF NOT EXISTS idx_execution_timestamp " "ON execution_records(timestamp)"),
+            ("CREATE INDEX IF NOT EXISTS idx_execution_success " "ON execution_records(success)"),
             "CREATE INDEX IF NOT EXISTS idx_memory_category ON memory_entries(category)",
             "CREATE INDEX IF NOT EXISTS idx_memory_timestamp ON memory_entries(timestamp)",
             "CREATE INDEX IF NOT EXISTS idx_memory_hash ON memory_entries(content_hash)",
@@ -347,9 +336,7 @@ class AsyncEnhancedMemoryManager:
 
                 if metadata:
                     # Get existing metadata and merge
-                    cursor = await conn.execute(
-                        "SELECT metadata FROM tasks WHERE task_id = ?", (task_id,)
-                    )
+                    cursor = await conn.execute("SELECT metadata FROM tasks WHERE task_id = ?", (task_id,))
                     row = await cursor.fetchone()
                     if row:
                         existing_metadata = json.loads(row[0] or "{}")
@@ -423,9 +410,7 @@ class AsyncEnhancedMemoryManager:
 
         try:
             async with aiosqlite.connect(self.db_path) as conn:
-                cursor = await conn.execute(
-                    "SELECT * FROM tasks WHERE task_id = ?", (task_id,)
-                )
+                cursor = await conn.execute("SELECT * FROM tasks WHERE task_id = ?", (task_id,))
                 row = await cursor.fetchone()
 
                 if not row:
@@ -453,17 +438,14 @@ class AsyncEnhancedMemoryManager:
             logger.error("Failed to get task %s: %s", task_id, e)
             raise RuntimeError(f"Failed to get task: {e}")
 
-    async def get_tasks_by_status(
-        self, status: TaskStatus, limit: int = 100, offset: int = 0
-    ) -> List[TaskEntry]:
+    async def get_tasks_by_status(self, status: TaskStatus, limit: int = 100, offset: int = 0) -> List[TaskEntry]:
         """Get tasks by status with async performance"""
         await self._init_database()
 
         try:
             async with aiosqlite.connect(self.db_path) as conn:
                 cursor = await conn.execute(
-                    "SELECT * FROM tasks WHERE status = ? "
-                    "ORDER BY priority DESC, created_at DESC LIMIT ? OFFSET ?",
+                    "SELECT * FROM tasks WHERE status = ? " "ORDER BY priority DESC, created_at DESC LIMIT ? OFFSET ?",
                     (status.value, limit, offset),
                 )
                 rows = await cursor.fetchall()
@@ -478,9 +460,7 @@ class AsyncEnhancedMemoryManager:
                             priority=Priority(row[3]),
                             created_at=datetime.fromtimestamp(row[4]),
                             updated_at=datetime.fromtimestamp(row[5]),
-                            completed_at=(
-                                datetime.fromtimestamp(row[6]) if row[6] else None
-                            ),
+                            completed_at=(datetime.fromtimestamp(row[6]) if row[6] else None),
                             assigned_agent=row[7],
                             parent_task_id=row[8],
                             tags=json.loads(row[9] or "[]"),
@@ -498,9 +478,7 @@ class AsyncEnhancedMemoryManager:
             logger.error("Failed to get tasks by status: %s", e)
             raise RuntimeError(f"Failed to get tasks: {e}")
 
-    async def get_execution_history(
-        self, task_id: str, limit: int = 100
-    ) -> List[ExecutionRecord]:
+    async def get_execution_history(self, task_id: str, limit: int = 100) -> List[ExecutionRecord]:
         """Get execution history for a task with async performance"""
         await self._init_database()
 
@@ -576,29 +554,21 @@ class AsyncEnhancedMemoryManager:
     async def _gather_task_counts(self, conn) -> Dict[str, Any]:
         """Gather task counts by status and priority. Issue #620."""
         counts = {}
-        cursor = await conn.execute(
-            "SELECT status, COUNT(*) FROM tasks GROUP BY status"
-        )
+        cursor = await conn.execute("SELECT status, COUNT(*) FROM tasks GROUP BY status")
         counts["tasks_by_status"] = dict(await cursor.fetchall())
 
-        cursor = await conn.execute(
-            "SELECT priority, COUNT(*) FROM tasks GROUP BY priority"
-        )
+        cursor = await conn.execute("SELECT priority, COUNT(*) FROM tasks GROUP BY priority")
         counts["tasks_by_priority"] = dict(await cursor.fetchall())
         return counts
 
     async def _gather_execution_metrics(self, conn) -> Dict[str, Any]:
         """Gather execution time and success rate metrics. Issue #620."""
         metrics = {}
-        cursor = await conn.execute(
-            "SELECT AVG(duration_ms) FROM execution_records WHERE success = 1"
-        )
+        cursor = await conn.execute("SELECT AVG(duration_ms) FROM execution_records WHERE success = 1")
         result = await cursor.fetchone()
         metrics["avg_execution_time_ms"] = result[0] if result[0] else 0
 
-        cursor = await conn.execute(
-            "SELECT success, COUNT(*) FROM execution_records GROUP BY success"
-        )
+        cursor = await conn.execute("SELECT success, COUNT(*) FROM execution_records GROUP BY success")
         success_data = dict(await cursor.fetchall())
         total_executions = sum(success_data.values())
         if total_executions > 0:

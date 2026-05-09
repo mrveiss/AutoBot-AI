@@ -208,9 +208,7 @@ class TestTemporalInvalidation:
             if "Dynamic Facts" in rule.name:
                 matches, reason = rule.matches_fact(self.old_dynamic_fact)
                 if matches:
-                    print(  # noqa: print
-                        f"    ✓ Matches old dynamic fact: {reason.value}"
-                    )  # noqa: print
+                    print(f"    ✓ Matches old dynamic fact: {reason.value}")  # noqa: print  # noqa: print
                     matches_found += 1
 
                 # Should NOT match recent dynamic fact
@@ -221,27 +219,21 @@ class TestTemporalInvalidation:
             elif "Predictions" in rule.name:
                 matches, reason = rule.matches_fact(self.old_prediction)
                 if matches:
-                    print(  # noqa: print
-                        f"    ✓ Matches old prediction: {reason.value}"
-                    )  # noqa: print
+                    print(f"    ✓ Matches old prediction: {reason.value}")  # noqa: print  # noqa: print
                     matches_found += 1
 
             # Test against low confidence fact
             elif "Low Confidence" in rule.name:
                 matches, reason = rule.matches_fact(self.low_confidence_fact)
                 if matches:
-                    print(  # noqa: print
-                        f"    ✓ Matches low confidence fact: {reason.value}"
-                    )  # noqa: print
+                    print(f"    ✓ Matches low confidence fact: {reason.value}")  # noqa: print  # noqa: print
                     matches_found += 1
 
             # Test against test source
             elif "Test Sources" in rule.name:
                 matches, reason = rule.matches_fact(self.test_source_fact)
                 if matches:
-                    print(  # noqa: print
-                        f"    ✓ Matches test source fact: {reason.value}"
-                    )  # noqa: print
+                    print(f"    ✓ Matches test source fact: {reason.value}")  # noqa: print  # noqa: print
                     matches_found += 1
 
         print(f"✓ Rule matching working: {matches_found} matches found")  # noqa: print
@@ -261,29 +253,21 @@ class TestTemporalInvalidation:
 
         print(f"✓ Dry run sweep completed: {result['status']}")  # noqa: print
         print(f"  Facts processed: {result['facts_processed']}")  # noqa: print
-        print(  # noqa: print
-            f"  Facts identified for invalidation: {result['facts_identified_for_invalidation']}"
-        )
+        print(f"  Facts identified for invalidation: {result['facts_identified_for_invalidation']}")  # noqa: print
         print(f"  Processing time: {result['processing_time']:.3f}s")  # noqa: print
 
         # Validate results
         assert result["status"] == "success", "Dry run should succeed"
         assert result["dry_run"] is True, "Should indicate dry run mode"
         assert result["facts_processed"] > 0, "Should process some facts"
-        assert (
-            result["facts_invalidated"] == 0
-        ), "Should not actually invalidate in dry run"
+        assert result["facts_invalidated"] == 0, "Should not actually invalidate in dry run"
 
         # Check if facts that should be invalidated were identified
         if result["facts_identified_for_invalidation"] > 0:
             print("  Sample facts to invalidate:")  # noqa: print
             for sample_fact in result.get("sample_facts_to_invalidate", [])[:3]:
-                print(  # noqa: print
-                    f"    - {sample_fact['statement']} (age: {sample_fact['age_days']} days)"
-                )
-                print(  # noqa: print
-                    f"      Reason: {sample_fact['reason'].get('reason', 'unknown')}"
-                )  # noqa: print
+                print(f"    - {sample_fact['statement']} (age: {sample_fact['age_days']} days)")  # noqa: print
+                print(f"      Reason: {sample_fact['reason'].get('reason', 'unknown')}")  # noqa: print  # noqa: print
 
         return result
 
@@ -292,9 +276,7 @@ class TestTemporalInvalidation:
         print("\nTesting actual invalidation sweep...")  # noqa: print
 
         # Count active facts before invalidation
-        active_facts_before = await self.mock_fact_service.get_facts_by_criteria(
-            active_only=True
-        )
+        active_facts_before = await self.mock_fact_service.get_facts_by_criteria(active_only=True)
 
         print(f"  Active facts before: {len(active_facts_before)}")  # noqa: print
 
@@ -303,9 +285,7 @@ class TestTemporalInvalidation:
 
         print(f"✓ Actual sweep completed: {result['status']}")  # noqa: print
         print(f"  Facts processed: {result['facts_processed']}")  # noqa: print
-        print(  # noqa: print
-            f"  Facts identified: {result['facts_identified_for_invalidation']}"
-        )  # noqa: print
+        print(f"  Facts identified: {result['facts_identified_for_invalidation']}")  # noqa: print  # noqa: print
         print(f"  Facts invalidated: {result['facts_invalidated']}")  # noqa: print
 
         # Validate results
@@ -352,9 +332,7 @@ class TestTemporalInvalidation:
         result = await self.invalidation_service.invalidate_contradictory_facts(fact2)
 
         print(f"✓ Contradiction check completed: {result['status']}")  # noqa: print
-        print(  # noqa: print
-            f"  Contradictions found: {result['contradictions_found']}"
-        )  # noqa: print
+        print(f"  Contradictions found: {result['contradictions_found']}")  # noqa: print  # noqa: print
         print(f"  Facts invalidated: {result['facts_invalidated']}")  # noqa: print
 
         # Validate results
@@ -378,15 +356,11 @@ class TestTemporalInvalidation:
         stats = await self.invalidation_service.get_invalidation_statistics()
 
         print("✓ Statistics retrieved successfully")  # noqa: print
-        print(  # noqa: print
-            f"  Total invalidated facts: {stats.get('total_invalidated_facts', 0)}"
-        )  # noqa: print
+        print(f"  Total invalidated facts: {stats.get('total_invalidated_facts', 0)}")  # noqa: print  # noqa: print
         print(f"  Recent sweeps: {stats.get('recent_sweeps', 0)}")  # noqa: print
         print(f"  Total rules: {stats.get('total_rules', 0)}")  # noqa: print
         print(f"  Enabled rules: {stats.get('enabled_rules', 0)}")  # noqa: print
-        print(  # noqa: print
-            f"  Auto invalidation: {stats.get('auto_invalidation_enabled', False)}"
-        )  # noqa: print
+        print(f"  Auto invalidation: {stats.get('auto_invalidation_enabled', False)}")  # noqa: print  # noqa: print
 
         # Validate statistics structure
         assert isinstance(stats, dict), "Should return statistics dictionary"
@@ -394,12 +368,8 @@ class TestTemporalInvalidation:
         assert "enabled_rules" in stats, "Should include enabled rules count"
 
         if stats.get("recent_sweeps", 0) > 0:
-            assert (
-                "average_processing_time" in stats
-            ), "Should include average processing time"
-            print(  # noqa: print
-                f"  Average processing time: {stats.get('average_processing_time', 0):.3f}s"
-            )
+            assert "average_processing_time" in stats, "Should include average processing time"
+            print(f"  Average processing time: {stats.get('average_processing_time', 0):.3f}s")  # noqa: print
 
         return stats
 
@@ -426,27 +396,17 @@ class TestTemporalInvalidation:
         assert add_result["status"] == "success", "Should successfully add custom rule"
 
         # Remove the rule
-        remove_result = await self.invalidation_service.remove_invalidation_rule(
-            "test_custom_rule"
-        )
+        remove_result = await self.invalidation_service.remove_invalidation_rule("test_custom_rule")
 
         print(f"✓ Custom rule removed: {remove_result['status']}")  # noqa: print
 
-        assert (
-            remove_result["status"] == "success"
-        ), "Should successfully remove custom rule"
+        assert remove_result["status"] == "success", "Should successfully remove custom rule"
 
         # Try to remove non-existent rule
-        remove_nonexistent = await self.invalidation_service.remove_invalidation_rule(
-            "nonexistent_rule"
-        )
+        remove_nonexistent = await self.invalidation_service.remove_invalidation_rule("nonexistent_rule")
 
-        print(  # noqa: print
-            f"  Non-existent rule removal: {remove_nonexistent['status']}"
-        )  # noqa: print
-        assert (
-            remove_nonexistent["status"] == "error"
-        ), "Should fail to remove non-existent rule"
+        print(f"  Non-existent rule removal: {remove_nonexistent['status']}")  # noqa: print  # noqa: print
+        assert remove_nonexistent["status"] == "error", "Should fail to remove non-existent rule"
 
         return add_result, remove_result
 
@@ -477,9 +437,7 @@ class TestTemporalInvalidation:
 
             temporal_test_results[temporal_type.value] = len(applicable_rules)
 
-            print(  # noqa: print
-                f"  {temporal_type.value}: {len(applicable_rules)} applicable rules"
-            )  # noqa: print
+            print(f"  {temporal_type.value}: {len(applicable_rules)} applicable rules")  # noqa: print  # noqa: print
             for rule_name, reason in applicable_rules:
                 print(f"    - {rule_name} ({reason})")  # noqa: print
 
@@ -528,23 +486,13 @@ class TestTemporalInvalidation:
             print("✅ All Temporal Invalidation Tests Passed!")  # noqa: print
             print("=" * 70)  # noqa: print
             print("Summary:")  # noqa: print
-            print(  # noqa: print
-                f"  - Rules initialized: {rules_result['total_rules']} total"
-            )  # noqa: print
+            print(f"  - Rules initialized: {rules_result['total_rules']} total")  # noqa: print  # noqa: print
             print(f"  - Rule matches found: {matches_found}")  # noqa: print
-            print(  # noqa: print
-                f"  - Dry run identified: {dry_run_result['facts_identified_for_invalidation']} facts"
-            )
-            print(  # noqa: print
-                f"  - Actual sweep processed: {actual_result['facts_processed']} facts"
-            )
-            print(  # noqa: print
-                f"  - Contradictions detected: {contradiction_result['contradictions_found']}"
-            )
+            print(f"  - Dry run identified: {dry_run_result['facts_identified_for_invalidation']} facts")  # noqa: print
+            print(f"  - Actual sweep processed: {actual_result['facts_processed']} facts")  # noqa: print
+            print(f"  - Contradictions detected: {contradiction_result['contradictions_found']}")  # noqa: print
             print(f"  - Statistics collected: {len(stats)} metrics")  # noqa: print
-            print(  # noqa: print
-                f"  - Temporal behavior verified: {len(temporal_behavior)} types tested"
-            )
+            print(f"  - Temporal behavior verified: {len(temporal_behavior)} types tested")  # noqa: print
 
             return True
 
@@ -562,9 +510,7 @@ async def main():
     success = await tester.run_all_tests()
 
     if success:
-        print(  # noqa: print
-            "\n🎉 Temporal invalidation implementation is working correctly!"
-        )  # noqa: print
+        print("\n🎉 Temporal invalidation implementation is working correctly!")  # noqa: print  # noqa: print
         return 0
     else:
         print("\n💥 Temporal invalidation tests failed!")  # noqa: print

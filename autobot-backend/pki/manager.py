@@ -118,9 +118,7 @@ class PKIManager:
         config_results = await self.configurator.configure_all()
         for service, result in config_results.items():
             if not result.success:
-                self._warnings.append(
-                    f"Configuration failed for {service}: {result.message}"
-                )
+                self._warnings.append(f"Configuration failed for {service}: {result.message}")
 
     async def _run_verification_stage(self) -> None:
         """Run distribution verification stage.
@@ -134,9 +132,7 @@ class PKIManager:
         verification = await self.distributor.verify_distribution()
         failed_verify = [name for name, ok in verification.items() if not ok]
         if failed_verify:
-            self._warnings.append(
-                f"Verification failed for: {', '.join(failed_verify)}"
-            )
+            self._warnings.append(f"Verification failed for: {', '.join(failed_verify)}")
 
     async def setup(
         self,
@@ -223,9 +219,7 @@ class PKIManager:
         ca_status = statuses.get("ca")
 
         # Count certificates
-        cert_count = sum(
-            1 for name, s in statuses.items() if name != "ca" and s.exists and s.valid
-        )
+        cert_count = sum(1 for name, s in statuses.items() if name != "ca" and s.exists and s.valid)
 
         return PKIStatus(
             stage=self._stage,
@@ -285,9 +279,7 @@ class PKIManager:
                 "the CA key and re-sign all service certificates."
             )
 
-        logger.info(
-            "Renewing certificates: %s (preserve_keys=%s)", certificates, preserve_keys
-        )
+        logger.info("Renewing certificates: %s (preserve_keys=%s)", certificates, preserve_keys)
 
         success = True
         for cert_name in certificates:
@@ -348,15 +340,9 @@ class PKIManager:
         logger.info("-" * 60)
         for name, detail in details.items():
             status_str = "✓" if detail["valid"] else "✗"
-            expiry_str = (
-                f"{detail['days_until_expiry']} days"
-                if detail["days_until_expiry"]
-                else "N/A"
-            )
+            expiry_str = f"{detail['days_until_expiry']} days" if detail["days_until_expiry"] else "N/A"
             renewal_str = " (RENEWAL NEEDED)" if detail["needs_renewal"] else ""
-            logger.info(
-                "  %s %s: expires in %s%s", status_str, name, expiry_str, renewal_str
-            )
+            logger.info("  %s %s: expires in %s%s", status_str, name, expiry_str, renewal_str)
 
         if status.errors:
             logger.info("")

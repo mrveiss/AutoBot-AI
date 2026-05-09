@@ -72,9 +72,7 @@ class TemporalSearchService:
 
                 if participants:
                     event_participants = set(event.get("participants", []))
-                    if not event_participants.intersection(
-                        {str(p) for p in participants}
-                    ):
+                    if not event_participants.intersection({str(p) for p in participants}):
                         continue
 
                 events.append(event)

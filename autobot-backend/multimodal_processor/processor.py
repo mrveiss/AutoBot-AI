@@ -95,9 +95,7 @@ class UnifiedMultiModalProcessor:
         # Initialize GPU device for fusion
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.logger.info(
-            f"UnifiedMultiModalProcessor initialized with device: {self.device}"
-        )
+        self.logger.info(f"UnifiedMultiModalProcessor initialized with device: {self.device}")
         if torch.cuda.is_available():
             self.logger.info(
                 f"GPU: {torch.cuda.get_device_name(0)}, "
@@ -109,9 +107,7 @@ class UnifiedMultiModalProcessor:
         self.attention_layer = None
         self._initialize_fusion_components()
 
-    async def _route_to_processor(
-        self, input_data: MultiModalInput
-    ) -> ProcessingResult:
+    async def _route_to_processor(self, input_data: MultiModalInput) -> ProcessingResult:
         """Route input to appropriate processor (Issue #315 - extracted method)"""
         # Use dict-based routing to reduce if-elif chain nesting
         if input_data.modality_type in VISUAL_MODALITY_TYPES:
@@ -149,10 +145,7 @@ class UnifiedMultiModalProcessor:
         Main processing method that routes input to appropriate processor
         """
         start_time = time.time()
-        self.logger.info(
-            f"Processing {input_data.modality_type.value} input "
-            f"with intent {input_data.intent.value}"
-        )
+        self.logger.info(f"Processing {input_data.modality_type.value} input " f"with intent {input_data.intent.value}")
 
         # Auto-optimize performance if needed
         await self.performance_monitor.auto_optimize()
@@ -266,9 +259,7 @@ class UnifiedMultiModalProcessor:
             results = await asyncio.gather(*tasks, return_exceptions=True)
             combined_result = self._combine_results(results)
             processing_time = time.time() - start_time
-            return self._build_combined_result(
-                input_data, combined_result, processing_time
-            )
+            return self._build_combined_result(input_data, combined_result, processing_time)
 
         except Exception as e:
             processing_time = time.time() - start_time
@@ -296,16 +287,14 @@ class UnifiedMultiModalProcessor:
             ).to(self.device)
 
             # Multi-head attention for modality weighting
-            self.attention_layer = nn.MultiheadAttention(
-                embed_dim=512, num_heads=8, dropout=0.1, batch_first=True
-            ).to(self.device)
+            self.attention_layer = nn.MultiheadAttention(embed_dim=512, num_heads=8, dropout=0.1, batch_first=True).to(
+                self.device
+            )
 
             # Set to evaluation mode
             self.fusion_network.eval()
 
-            self.logger.info(
-                "Cross-modal fusion components initialized on %s", self.device
-            )
+            self.logger.info("Cross-modal fusion components initialized on %s", self.device)
         except Exception as e:
             self.logger.error("Failed to initialize fusion components: %s", e)
 
@@ -321,9 +310,7 @@ class UnifiedMultiModalProcessor:
 
         return None
 
-    def _collect_embeddings_from_results(
-        self, results: List[ProcessingResult]
-    ) -> tuple:
+    def _collect_embeddings_from_results(self, results: List[ProcessingResult]) -> tuple:
         """Collect and filter embeddings from results (Issue #315 - extracted method)"""
         torch = _get_torch()
 
@@ -450,19 +437,13 @@ class UnifiedMultiModalProcessor:
         with torch.no_grad():
             normalized_embeddings = self._normalize_embeddings(embeddings)
             stacked_embeddings = torch.stack(normalized_embeddings).unsqueeze(0)
-            attended_output, attention_weights = self._apply_attention_fusion(
-                stacked_embeddings
-            )
+            attended_output, attention_weights = self._apply_attention_fusion(stacked_embeddings)
 
-            confidence_weights = torch.tensor(
-                confidences, device=self.device
-            ).unsqueeze(-1)
+            confidence_weights = torch.tensor(confidences, device=self.device).unsqueeze(-1)
             weighted_embeddings = attended_output.squeeze(0) * confidence_weights
             fused_embedding = self._compute_fused_embedding(weighted_embeddings)
             fusion_confidence = torch.mean(confidence_weights).item()
-            modality_contributions = self._extract_modality_contributions(
-                attention_weights, modalities
-            )
+            modality_contributions = self._extract_modality_contributions(attention_weights, modalities)
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -493,9 +474,7 @@ class UnifiedMultiModalProcessor:
             return self._simple_combination(results)
 
         try:
-            return self._perform_attention_fusion(
-                embeddings, modalities, confidences, result_data, results
-            )
+            return self._perform_attention_fusion(embeddings, modalities, confidences, result_data, results)
         except Exception as e:
             self.logger.error("Attention fusion failed: %s", e)
             return self._simple_combination(results)
@@ -544,10 +523,7 @@ class UnifiedMultiModalProcessor:
         self.stats["modality_counts"][result.modality_type.value] += 1
 
         # Update average processing time
-        total_time = (
-            self.stats["avg_processing_time"] * (self.stats["total_processed"] - 1)
-            + result.processing_time
-        )
+        total_time = self.stats["avg_processing_time"] * (self.stats["total_processed"] - 1) + result.processing_time
         self.stats["avg_processing_time"] = total_time / self.stats["total_processed"]
 
     async def _store_result(self, result: ProcessingResult):
@@ -576,9 +552,7 @@ class UnifiedMultiModalProcessor:
         except Exception as e:
             self.logger.warning("Failed to store processing result: %s", e)
 
-    def _group_inputs_by_modality(
-        self, inputs: List[MultiModalInput]
-    ) -> Dict[str, List[MultiModalInput]]:
+    def _group_inputs_by_modality(self, inputs: List[MultiModalInput]) -> Dict[str, List[MultiModalInput]]:
         """Group inputs by modality type (Issue #315 - extracted method)"""
         modality_groups: Dict[str, List[MultiModalInput]] = {}
         for inp in inputs:
@@ -588,9 +562,7 @@ class UnifiedMultiModalProcessor:
             modality_groups[modality].append(inp)
         return modality_groups
 
-    async def _process_single_batch(
-        self, batch: List[MultiModalInput], modality: str
-    ) -> List[ProcessingResult]:
+    async def _process_single_batch(self, batch: List[MultiModalInput], modality: str) -> List[ProcessingResult]:
         """Process a single batch of inputs (Issue #315 - extracted method)"""
         # Memory optimization before processing
         if self.performance_monitor.should_optimize():
@@ -620,9 +592,7 @@ class UnifiedMultiModalProcessor:
 
         return results
 
-    async def _fallback_individual_processing(
-        self, inputs: List[MultiModalInput]
-    ) -> List[ProcessingResult]:
+    async def _fallback_individual_processing(self, inputs: List[MultiModalInput]) -> List[ProcessingResult]:
         """Fallback to individual processing on batch failure (Issue #315 - extracted)"""
         results = []
         for inp in inputs:
@@ -630,21 +600,15 @@ class UnifiedMultiModalProcessor:
             results.append(result)
         return results
 
-    async def _process_input_with_fallback(
-        self, inp: MultiModalInput
-    ) -> ProcessingResult:
+    async def _process_input_with_fallback(self, inp: MultiModalInput) -> ProcessingResult:
         """Process single input with error handling (Issue #315 - extracted method)"""
         try:
             return await self.process(inp)
         except Exception as individual_error:
-            self.logger.error(
-                f"Individual processing failed for {inp.input_id}: {individual_error}"
-            )
+            self.logger.error(f"Individual processing failed for {inp.input_id}: {individual_error}")
             return self._create_error_result(inp, 0.0, individual_error, "batch_error")
 
-    async def process_batch(
-        self, inputs: List[MultiModalInput]
-    ) -> List[ProcessingResult]:
+    async def process_batch(self, inputs: List[MultiModalInput]) -> List[ProcessingResult]:
         """
         Process multiple inputs efficiently using optimized batching
         """
@@ -664,9 +628,7 @@ class UnifiedMultiModalProcessor:
             # Process each modality group (Issue #315 - extracted method)
             results = []
             for modality, group_inputs in modality_groups.items():
-                group_results = await self._process_modality_group(
-                    modality, group_inputs
-                )
+                group_results = await self._process_modality_group(modality, group_inputs)
                 results.extend(group_results)
 
             # Record batch processing performance
@@ -677,19 +639,14 @@ class UnifiedMultiModalProcessor:
                 items_processed=len(inputs),
             )
 
-            self.logger.info(
-                f"Batch processing completed: {len(results)} results "
-                f"in {total_processing_time:.2f}s"
-            )
+            self.logger.info(f"Batch processing completed: {len(results)} results " f"in {total_processing_time:.2f}s")
             return results
 
         except Exception as e:
             self.logger.error("Batch processing failed: %s", e)
             return await self._fallback_individual_processing(inputs)
 
-    async def _process_image_batch(
-        self, batch: List[MultiModalInput]
-    ) -> List[ProcessingResult]:
+    async def _process_image_batch(self, batch: List[MultiModalInput]) -> List[ProcessingResult]:
         """Process a batch of images efficiently"""
         torch = _get_torch()
         results = []
@@ -729,9 +686,7 @@ class UnifiedMultiModalProcessor:
 
         return results
 
-    async def _process_audio_batch(
-        self, batch: List[MultiModalInput]
-    ) -> List[ProcessingResult]:
+    async def _process_audio_batch(self, batch: List[MultiModalInput]) -> List[ProcessingResult]:
         """Process a batch of audio inputs efficiently"""
         torch = _get_torch()
         results = []

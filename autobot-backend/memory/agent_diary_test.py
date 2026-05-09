@@ -20,10 +20,10 @@ sys.path.insert(0, _repo_root)
 
 from memory.agent_diary import AgentDiaryService, list_with_diaries
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_kb_mock(
     store_result: dict | None = None,
@@ -60,6 +60,7 @@ def _make_diary_fact(
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 async def test_write_returns_fact_id():
     """write() returns the fact_id from KB store_fact."""
@@ -105,10 +106,7 @@ async def test_read_filters_by_agent_and_category():
 
 async def test_read_respects_last_n():
     """read() caps results at last_n."""
-    facts = [
-        _make_diary_fact("rag", f"entry {i}", f"2025-01-01T{i:02d}:00:00+00:00")
-        for i in range(10)
-    ]
+    facts = [_make_diary_fact("rag", f"entry {i}", f"2025-01-01T{i:02d}:00:00+00:00") for i in range(10)]
     kb = _make_kb_mock(all_facts=facts)
     with patch("memory.agent_diary._get_kb", new=AsyncMock(return_value=kb)):
         diary = AgentDiaryService()
@@ -183,6 +181,7 @@ async def test_list_with_diaries_parallel():
 # ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
+
 
 async def run_all():
     await test_write_returns_fact_id()

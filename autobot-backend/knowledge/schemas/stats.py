@@ -103,15 +103,11 @@ class DetailedKnowledgeStats(BaseModel):
     # When kb is offline, backend returns `{"basic_stats": {}}`; we model
     # the field as a full envelope rather than `{} | envelope` because
     # the offline dict is a subset of the populated envelope.
-    basic_stats: KnowledgeBasicStatsEnvelope = Field(
-        default_factory=KnowledgeBasicStatsEnvelope
-    )
+    basic_stats: KnowledgeBasicStatsEnvelope = Field(default_factory=KnowledgeBasicStatsEnvelope)
     category_breakdown: Dict[str, int] = Field(default_factory=dict)
     source_breakdown: Dict[str, int] = Field(default_factory=dict)
     type_breakdown: Dict[str, int] = Field(default_factory=dict)
-    size_metrics: DetailedKnowledgeSizeMetrics = Field(
-        default_factory=DetailedKnowledgeSizeMetrics
-    )
+    size_metrics: DetailedKnowledgeSizeMetrics = Field(default_factory=DetailedKnowledgeSizeMetrics)
     rag_available: bool = False
     # Offline branch adds this; populated branch omits it.
     message: Optional[str] = None

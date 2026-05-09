@@ -221,7 +221,6 @@ async def test_loop_stops_after_repetition_halt():
     # because _should_continue() returns False on the next guard check.
     # Either way total iterations must be <= 2, not 50.
     assert len(results) <= 2, (
-        f"Loop ran {len(results)} iterations after repetition halt — "
-        "fix for #3877 is not working."
+        f"Loop ran {len(results)} iterations after repetition halt — " "fix for #3877 is not working."
     )
     assert loop._halted_on_repetition is True

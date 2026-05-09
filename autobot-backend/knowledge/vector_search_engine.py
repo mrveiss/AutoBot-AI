@@ -214,10 +214,7 @@ class _CPUBackend:
                 text=r.get("content", ""),
                 score=r.get("score", 0.0),
                 metadata=r.get("metadata", {}),
-                source=(
-                    r.get("metadata", {}).get("fact_id")
-                    or r.get("node_id", "")
-                ),
+                source=(r.get("metadata", {}).get("fact_id") or r.get("node_id", "")),
             )
             for r in raw
         ]
@@ -308,9 +305,7 @@ class VectorSearchEngine:
                 exc,
             )
             try:
-                results = await self._cpu.search(
-                    query=query, top_k=top_k, filters=filters
-                )
+                results = await self._cpu.search(query=query, top_k=top_k, filters=filters)
             except Exception as cpu_exc:
                 logger.error("VectorSearchEngine: CPU fallback also failed: %s", cpu_exc)
                 return []
@@ -319,9 +314,7 @@ class VectorSearchEngine:
             try:
                 results = await reranker(query, results)
             except Exception as rerr:
-                logger.warning(
-                    "VectorSearchEngine: reranker raised %s, skipping rerank", rerr
-                )
+                logger.warning("VectorSearchEngine: reranker raised %s, skipping rerank", rerr)
 
         # Guarantee descending score order regardless of backend
         results.sort(key=lambda r: r.score, reverse=True)

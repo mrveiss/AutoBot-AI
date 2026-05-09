@@ -72,9 +72,7 @@ def _dict_to_step_result(step_data: Dict[str, Any]) -> StepResult:
     try:
         status = StepStatus(step_data.get("status", "completed"))
     except ValueError:
-        logger.warning(
-            "Invalid status '%s', defaulting to COMPLETED", step_data.get("status")
-        )
+        logger.warning("Invalid status '%s', defaulting to COMPLETED", step_data.get("status"))
         status = StepStatus.COMPLETED
 
     return StepResult(
@@ -177,8 +175,7 @@ class OverseerWebSocketHandler:
             # Format plan as a message
             steps_text = "\n".join(
                 [
-                    f"  {s.step_number}. {s.description}"
-                    + (f"\n     $ {s.command}" if s.command else "")
+                    f"  {s.step_number}. {s.description}" + (f"\n     $ {s.command}" if s.command else "")
                     for s in plan.steps
                 ]
             )
@@ -229,23 +226,17 @@ class OverseerWebSocketHandler:
         if result.command_explanation:
             breakdown_text = "\n".join(
                 f"  • `{p['part']}`: {p['explanation']}"
-                for p in (
-                    result.to_dict().get("command_explanation", {}).get("breakdown", [])
-                )
+                for p in (result.to_dict().get("command_explanation", {}).get("breakdown", []))
             )
             cmd_explanation = (
-                f"\n📖 **What this command does:**\n"
-                f"{result.command_explanation.summary}\n\n{breakdown_text}\n"
+                f"\n📖 **What this command does:**\n" f"{result.command_explanation.summary}\n\n{breakdown_text}\n"
             )
 
         output_explanation = ""
         if result.output_explanation:
-            findings_text = "\n".join(
-                f"  • {f}" for f in result.output_explanation.key_findings
-            )
+            findings_text = "\n".join(f"  • {f}" for f in result.output_explanation.key_findings)
             output_explanation = (
-                f"\n📊 **What we found:**\n"
-                f"{result.output_explanation.summary}\n\n{findings_text}\n"
+                f"\n📊 **What we found:**\n" f"{result.output_explanation.summary}\n\n{findings_text}\n"
             )
 
         return (
@@ -259,9 +250,7 @@ class OverseerWebSocketHandler:
         try:
             message_text = self._format_step_message_text(result)
             step_data = result.to_dict()
-            step_data["description"] = (
-                f"Step {result.step_number}: {result.command or 'N/A'}"
-            )
+            step_data["description"] = f"Step {result.step_number}: {result.command or 'N/A'}"
 
             await self.chat_history.add_message(
                 sender="assistant",
@@ -320,9 +309,7 @@ class OverseerWebSocketHandler:
             await self.send_update(update)
             if update.update_type == "step_complete" and update.content:
                 if isinstance(update.content, dict):
-                    await self.save_step_result_to_chat(
-                        _dict_to_step_result(update.content)
-                    )
+                    await self.save_step_result_to_chat(_dict_to_step_result(update.content))
                 elif isinstance(update.content, StepResult):
                     await self.save_step_result_to_chat(update.content)
 
@@ -402,9 +389,7 @@ class OverseerWebSocketHandler:
                         }
                     )
                 else:
-                    self._current_task = asyncio.create_task(
-                        self.handle_query(query, context)
-                    )
+                    self._current_task = asyncio.create_task(self.handle_query(query, context))
             else:
                 await self.send_json(
                     {

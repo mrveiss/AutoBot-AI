@@ -96,9 +96,7 @@ def _handle_task_exception(result: Any, name: str) -> Any:
 async def _get_realtime_metrics() -> Dict[str, Any]:
     """Get real-time metrics from monitoring (Issue #398: extracted)."""
     try:
-        current_metrics = (
-            await analytics_controller.metrics_collector.collect_all_metrics()
-        )
+        current_metrics = await analytics_controller.metrics_collector.collect_all_metrics()
         return {
             name: {
                 "value": metric.value,
@@ -113,12 +111,8 @@ async def _get_realtime_metrics() -> Dict[str, Any]:
 
 async def _get_code_analysis_status() -> Dict[str, Any]:
     """Get code analysis tool status (Issue #398: extracted)."""
-    code_analysis_exists = await asyncio.to_thread(
-        analytics_controller.code_analysis_path.exists
-    )
-    code_index_exists = await asyncio.to_thread(
-        analytics_controller.code_index_path.exists
-    )
+    code_analysis_exists = await asyncio.to_thread(analytics_controller.code_analysis_path.exists)
+    code_index_exists = await asyncio.to_thread(analytics_controller.code_index_path.exists)
     return {
         "last_analysis": analytics_state.get("last_analysis_time"),
         "cache_available": bool(analytics_state.get("code_analysis_cache")),
@@ -178,9 +172,7 @@ async def _check_redis_db(db) -> Tuple[str, str]:
         return db.name, "connection error"
 
 
-async def _check_service(
-    client, service_name: str, service_url: str
-) -> Tuple[str, Dict[str, Any]]:
+async def _check_service(client, service_name: str, service_url: str) -> Tuple[str, Dict[str, Any]]:
     """Check connectivity for a single service (Issue #398: extracted)."""
     try:
         start_time = time.time()
@@ -253,9 +245,7 @@ async def get_detailed_system_health(current_user: Dict = Depends(get_current_us
     }
 
     # Issue #370: Check Redis connectivity for all databases in parallel
-    redis_results = await asyncio.gather(
-        *[_check_redis_db(db) for db in RedisDatabase], return_exceptions=True
-    )
+    redis_results = await asyncio.gather(*[_check_redis_db(db) for db in RedisDatabase], return_exceptions=True)
     for result in redis_results:
         if isinstance(result, Exception):
             continue
@@ -302,26 +292,16 @@ async def get_performance_metrics(current_user: Dict = Depends(get_current_user)
         recent_history = list(analytics_state["performance_history"])[-10:]
         metrics["historical_context"] = {
             "samples_count": len(recent_history),
-            "avg_cpu_last_10": (
-                sum(h.get("cpu_percent", 0) for h in recent_history)
-                / len(recent_history)
-            ),
-            "avg_memory_last_10": (
-                sum(h.get("memory_percent", 0) for h in recent_history)
-                / len(recent_history)
-            ),
+            "avg_cpu_last_10": (sum(h.get("cpu_percent", 0) for h in recent_history) / len(recent_history)),
+            "avg_memory_last_10": (sum(h.get("memory_percent", 0) for h in recent_history) / len(recent_history)),
         }
 
     # Store current metrics in history
     current_snapshot = {
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "cpu_percent": metrics.get("system_performance", {}).get("cpu_percent", 0),
-        "memory_percent": (
-            metrics.get("system_performance", {}).get("memory_percent", 0)
-        ),
-        "gpu_utilization": (
-            metrics.get("hardware_performance", {}).get("gpu_utilization", 0)
-        ),
+        "memory_percent": (metrics.get("system_performance", {}).get("memory_percent", 0)),
+        "gpu_utilization": (metrics.get("hardware_performance", {}).get("gpu_utilization", 0)),
     }
     analytics_state["performance_history"].append(current_snapshot)
 
@@ -351,34 +331,26 @@ async def get_communication_patterns(current_user: Dict = Depends(get_current_us
     if patterns["api_patterns"]:
         # Find high-frequency, high-latency endpoints
         high_latency_endpoints = [
-            p
-            for p in patterns["api_patterns"]
-            if p["avg_response_time"] > 1.0 and p["frequency"] > 10
+            p for p in patterns["api_patterns"] if p["avg_response_time"] > 1.0 and p["frequency"] > 10
         ]
 
         if high_latency_endpoints:
             patterns["pattern_insights"].append(
                 {
                     "type": "performance_concern",
-                    "message": (
-                        f"Found {len(high_latency_endpoints)} high-frequency endpoints with high latency"
-                    ),
+                    "message": (f"Found {len(high_latency_endpoints)} high-frequency endpoints with high latency"),
                     "details": high_latency_endpoints[:3],  # Show top 3
                 }
             )
 
         # Find endpoints with high error rates
-        high_error_endpoints = [
-            p for p in patterns["api_patterns"] if p["error_rate"] > 5.0
-        ]
+        high_error_endpoints = [p for p in patterns["api_patterns"] if p["error_rate"] > 5.0]
 
         if high_error_endpoints:
             patterns["pattern_insights"].append(
                 {
                     "type": "reliability_concern",
-                    "message": (
-                        f"Found {len(high_error_endpoints)} endpoints with high error rates"
-                    ),
+                    "message": (f"Found {len(high_error_endpoints)} endpoints with high error rates"),
                     "details": high_error_endpoints[:3],
                 }
             )
@@ -480,16 +452,13 @@ async def _collect_realtime_metrics_data() -> Dict[str, Any]:
             [
                 call
                 for call in analytics_state["api_call_patterns"]
-                if parse_utc_iso(call["timestamp"])
-                > datetime.now(tz=timezone.utc) - timedelta(minutes=1)
+                if parse_utc_iso(call["timestamp"]) > datetime.now(tz=timezone.utc) - timedelta(minutes=1)
             ]
         ),
         # Issue #596: Fixed key names to match hardware_monitor.get_system_resources() output
         "performance_snapshot": {
             "cpu_percent": system_resources.get("cpu", {}).get("usage_percent", 0),
-            "memory_percent": system_resources.get("memory", {}).get(
-                "usage_percent", 0
-            ),
+            "memory_percent": system_resources.get("memory", {}).get("usage_percent", 0),
             "disk_percent": system_resources.get("disk", {}).get("usage_percent", 0),
         },
     }
@@ -514,9 +483,7 @@ async def get_realtime_metrics(current_user: Dict = Depends(get_current_user)):
     operation="track_analytics_event",
     error_code_prefix="ANALYTICS",
 )
-async def track_analytics_event(
-    event: RealTimeEvent, current_user: Dict = Depends(get_current_user)
-):
+async def track_analytics_event(event: RealTimeEvent, current_user: Dict = Depends(get_current_user)):
     """Track a real-time analytics event"""
     # Store event in analytics state
     event_data = event.dict()
@@ -593,9 +560,7 @@ def _compute_hourly_stats(historical_calls: list) -> dict:
     Returns:
         Dictionary of hourly statistics with averages computed
     """
-    hourly_stats = defaultdict(
-        lambda: {"calls": 0, "avg_response_time": 0, "errors": 0}
-    )
+    hourly_stats = defaultdict(lambda: {"calls": 0, "avg_response_time": 0, "errors": 0})
 
     for call in historical_calls:
         hour_key = call["timestamp"][:13]  # YYYY-MM-DDTHH
@@ -961,11 +926,7 @@ def _build_snapshot_response(snapshot_data: dict) -> dict:
 def _get_recent_api_calls(cutoff_seconds: int = 10) -> list:
     """Get recent API calls within cutoff period."""
     cutoff = datetime.now(tz=timezone.utc) - timedelta(seconds=cutoff_seconds)
-    return [
-        call
-        for call in analytics_state["api_call_patterns"]
-        if parse_utc_iso(call["timestamp"]) > cutoff
-    ]
+    return [call for call in analytics_state["api_call_patterns"] if parse_utc_iso(call["timestamp"]) > cutoff]
 
 
 async def _handle_websocket_command(websocket: WebSocket, message: str) -> None:
@@ -1034,9 +995,7 @@ def _build_periodic_update(current_data: dict) -> dict:
 # =============================================================================
 
 
-async def _send_performance_update_if_due(
-    websocket: WebSocket, current_time: float, last_update: float
-) -> float:
+async def _send_performance_update_if_due(websocket: WebSocket, current_time: float, last_update: float) -> float:
     """Send performance update if due (every 5 seconds). (Issue #315 - extracted)
 
     Returns:
@@ -1052,9 +1011,7 @@ async def _send_performance_update_if_due(
     return last_update
 
 
-async def _send_api_activity_update_if_due(
-    websocket: WebSocket, current_time: float, last_update: float
-) -> float:
+async def _send_api_activity_update_if_due(websocket: WebSocket, current_time: float, last_update: float) -> float:
     """Send API activity update if due (every 2 seconds). (Issue #315 - extracted)
 
     Returns:
@@ -1070,9 +1027,7 @@ async def _send_api_activity_update_if_due(
     return last_update
 
 
-async def _send_health_update_if_due(
-    websocket: WebSocket, current_time: float, last_update: float
-) -> float:
+async def _send_health_update_if_due(websocket: WebSocket, current_time: float, last_update: float) -> float:
     """Send system health update if due (every 10 seconds). (Issue #315 - extracted)
 
     Issue #69: Legacy analytics_monitoring removed. Real-time alerts now delivered
@@ -1120,12 +1075,8 @@ async def _live_analytics_loop_iteration(
         last_performance_update = await _send_performance_update_if_due(
             websocket, current_time, last_performance_update
         )
-        last_api_update = await _send_api_activity_update_if_due(
-            websocket, current_time, last_api_update
-        )
-        last_health_update = await _send_health_update_if_due(
-            websocket, current_time, last_health_update
-        )
+        last_api_update = await _send_api_activity_update_if_due(websocket, current_time, last_api_update)
+        last_health_update = await _send_health_update_if_due(websocket, current_time, last_health_update)
 
         # Handle client messages
         await _handle_client_message_with_timeout(websocket)

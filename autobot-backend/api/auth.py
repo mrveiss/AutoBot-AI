@@ -81,9 +81,7 @@ class PasswordChangeRateLimiter:
         """Check if password change attempt is allowed."""
         now = time()
         # Clean old attempts
-        self.attempts[client_id] = [
-            t for t in self.attempts[client_id] if now - t < self.window
-        ]
+        self.attempts[client_id] = [t for t in self.attempts[client_id] if now - t < self.window]
         # Check limit
         if len(self.attempts[client_id]) >= self.max_attempts:
             return False
@@ -94,9 +92,7 @@ class PasswordChangeRateLimiter:
     def get_remaining(self, client_id: str) -> int:
         """Get remaining attempts for client."""
         now = time()
-        self.attempts[client_id] = [
-            t for t in self.attempts[client_id] if now - t < self.window
-        ]
+        self.attempts[client_id] = [t for t in self.attempts[client_id] if now - t < self.window]
         return max(0, self.max_attempts - len(self.attempts[client_id]))
 
 
@@ -104,9 +100,7 @@ class PasswordChangeRateLimiter:
 password_change_limiter = PasswordChangeRateLimiter()
 
 
-async def _authenticate_and_build_user_data(
-    username: str, password: str, ip_address: str
-) -> Dict:
+async def _authenticate_and_build_user_data(username: str, password: str, ip_address: str) -> Dict:
     """Helper for login. Ref: #1088.
 
     Authenticates credentials against PostgreSQL and returns the user data dict
@@ -129,9 +123,7 @@ async def _authenticate_and_build_user_data(
             "user_id": str(user.id),
             "role": "admin" if user.is_platform_admin else "user",
             "email": user.email,
-            "last_login": (
-                user.last_login_at.isoformat() if user.last_login_at else None
-            ),
+            "last_login": (user.last_login_at.isoformat() if user.last_login_at else None),
         }
         if user.org_id:
             user_data["org_id"] = str(user.org_id)
@@ -169,9 +161,7 @@ async def login(request: Request, login_data: LoginRequest):
             jwt_token = get_auth_middleware().create_jwt_token(
                 {"username": "admin", "role": "admin", "email": f"admin@{ssot_config.auth.domain}"}
             )
-            session_id = get_auth_middleware().create_session(
-                {"username": "admin", "role": "admin"}, request
-            )
+            session_id = get_auth_middleware().create_session({"username": "admin", "role": "admin"}, request)
             _emit_event(EventType.USER_LOGIN, user_id="admin", ip_address=ip_address)
             return LoginResponse(
                 success=True,
@@ -182,9 +172,7 @@ async def login(request: Request, login_data: LoginRequest):
             )
 
         # Authenticate against PostgreSQL and build user data (Issue #888, #898)
-        user_data = await _authenticate_and_build_user_data(
-            login_data.username, login_data.password, ip_address
-        )
+        user_data = await _authenticate_and_build_user_data(login_data.username, login_data.password, ip_address)
 
         jwt_token = get_auth_middleware().create_jwt_token(user_data)
         session_id = get_auth_middleware().create_session(user_data, request)
@@ -214,9 +202,7 @@ async def login(request: Request, login_data: LoginRequest):
         raise
     except Exception as e:
         logger.error("Login error for user %s: %s", login_data.username, e)
-        raise HTTPException(
-            status_code=500, detail="Authentication service temporarily unavailable"
-        )
+        raise HTTPException(status_code=500, detail="Authentication service temporarily unavailable")
 
 
 @router.post("/logout", response_model=DataResponse)
@@ -354,9 +340,7 @@ async def check_permission(request: Request, operation: str):
     Check if current user has permission for specific operation
     """
     try:
-        has_permission, user_data = get_auth_middleware().check_file_permissions(
-            request, operation
-        )
+        has_permission, user_data = get_auth_middleware().check_file_permissions(request, operation)
 
         return {
             "permitted": has_permission,
@@ -391,9 +375,7 @@ def _check_password_change_rate_limit(username: str, ip_address: str) -> None:
         )
 
 
-def _verify_current_password(
-    username: str, current_password: str, ip_address: str
-) -> str:
+def _verify_current_password(username: str, current_password: str, ip_address: str) -> str:
     """Verify current password and return the hash. Raises HTTPException on failure."""
     allowed_users = get_auth_middleware().security_config.get("allowed_users", {})
     if username not in allowed_users:
@@ -479,17 +461,13 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
         )
         logger.info("Password changed successfully for user: %s", username)
 
-        return ChangePasswordResponse(
-            success=True, message="Password changed successfully"
-        )
+        return ChangePasswordResponse(success=True, message="Password changed successfully")
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Password change error: %s", e)
-        raise HTTPException(
-            status_code=500, detail="Failed to change password. Please try again."
-        )
+        raise HTTPException(status_code=500, detail="Failed to change password. Please try again.")
 
 
 @router.post("/signup", response_model=SignupResponse)

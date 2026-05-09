@@ -20,9 +20,7 @@ from utils.background_llm_sync import background_llm_sync
 logger = get_logger(__name__, "backend")
 
 
-def log_initialization_step(
-    stage: str, message: str, percentage: int = 0, success: bool = True
-):
+def log_initialization_step(stage: str, message: str, percentage: int = 0, success: bool = True):
     """Log initialization steps with consistent formatting."""
     icon = "✅" if success else "❌" if percentage == 100 else "🔄"
     logger.info(f"{icon} [{percentage:3d}%] {stage}: {message}")
@@ -73,9 +71,7 @@ async def _mark_redis_ready(update_status_fn, append_error_fn):
         await append_error_fn(f"Redis: {str(e)}")
 
 
-async def _init_knowledge_base(
-    app: FastAPI, update_status_fn, append_error_fn, get_status_fn
-):
+async def _init_knowledge_base(app: FastAPI, update_status_fn, append_error_fn, get_status_fn):
     """
     Initialize knowledge base with optional AI Stack integration.
 
@@ -96,9 +92,7 @@ async def _init_knowledge_base(
         # Enhanced: Check if AI Stack integration is available
         ai_stack_status = await get_status_fn("ai_stack")
         if hasattr(app.state, "ai_stack_client") and ai_stack_status == "ready":
-            logger.info(
-                "Knowledge Base initialized with AI Stack enhancement available"
-            )
+            logger.info("Knowledge Base initialized with AI Stack enhancement available")
         else:
             logger.info("Knowledge Base initialized in standalone mode")
     else:
@@ -122,9 +116,7 @@ async def _init_chat_workflow(app: FastAPI, update_status_fn, append_error_fn):
         workflow_manager = ChatWorkflowManager()
         app.state.chat_workflow_manager = workflow_manager
         await update_status_fn("chat_workflow", "ready")
-        log_initialization_step(
-            "Chat Workflow", "Chat workflow manager initialized", 90, True
-        )
+        log_initialization_step("Chat Workflow", "Chat workflow manager initialized", 90, True)
     except Exception as e:
         logger.error("Chat workflow initialization failed: %s", e)
         await update_status_fn("chat_workflow", "failed")
@@ -195,9 +187,7 @@ async def _init_distributed_tracing(app: FastAPI, update_status_fn):
         logger.warning("Distributed tracing initialization failed: %s", e)
         await update_status_fn("distributed_tracing", "failed")
         # Don't add to errors - tracing is optional
-        log_initialization_step(
-            "Distributed Tracing", f"Tracing unavailable: {e}", 90, False
-        )
+        log_initialization_step("Distributed Tracing", f"Tracing unavailable: {e}", 90, False)
 
 
 def _log_initialization_result(failed_services: list):
@@ -217,9 +207,7 @@ def _log_initialization_result(failed_services: list):
             False,
         )
     else:
-        log_initialization_step(
-            "Background Init", "All services initialized successfully", 100, True
-        )
+        log_initialization_step("Background Init", "All services initialized successfully", 100, True)
 
 
 async def _init_retrieval_learner_consolidation(update_status_fn, append_error_fn):
@@ -252,9 +240,7 @@ async def _init_retrieval_learner_consolidation(update_status_fn, append_error_f
         # Non-fatal: learner absence degrades adaptivity, not core retrieval.
 
 
-async def enhanced_background_init(
-    app: FastAPI, update_status_fn, append_error_fn, get_status_fn
-):
+async def enhanced_background_init(app: FastAPI, update_status_fn, append_error_fn, get_status_fn):
     """
     Enhanced background initialization with AI Stack integration.
 
@@ -267,9 +253,7 @@ async def enhanced_background_init(
         get_status_fn: Function to get initialization status
     """
     try:
-        log_initialization_step(
-            "Background Init", "Starting enhanced background initialization...", 0
-        )
+        log_initialization_step("Background Init", "Starting enhanced background initialization...", 0)
 
         # Run all initialization tasks concurrently (Issue #281: uses helpers)
         tasks = [
@@ -287,9 +271,7 @@ async def enhanced_background_init(
         # Check overall initialization status (thread-safe)
         init_status_snapshot = await get_status_fn()
         failed_services = [
-            service
-            for service, status in init_status_snapshot.items()
-            if status == "failed" and service != "errors"
+            service for service, status in init_status_snapshot.items() if status == "failed" and service != "errors"
         ]
 
         # Log result (Issue #281: uses helper)

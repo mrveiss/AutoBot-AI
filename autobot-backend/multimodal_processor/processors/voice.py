@@ -59,9 +59,7 @@ try:
 except ImportError:
     AUDIO_MODELS_AVAILABLE = False
     logger = logging.getLogger(__name__)
-    logger.warning(
-        "Audio models not available. Install with: pip install transformers librosa"
-    )
+    logger.warning("Audio models not available. Install with: pip install transformers librosa")
 
 logger = logging.getLogger(__name__)
 
@@ -99,26 +97,18 @@ class VoiceProcessor(BaseModalProcessor):
         try:
             # Load Whisper model for speech recognition
             self.logger.info("Loading Whisper model...")
-            self.whisper_processor = WhisperProcessor.from_pretrained(
-                "openai/whisper-base"
-            )
+            self.whisper_processor = WhisperProcessor.from_pretrained("openai/whisper-base")
             self.whisper_model = WhisperForConditionalGeneration.from_pretrained(
                 "openai/whisper-base",
-                torch_dtype=(
-                    torch.float16 if torch.cuda.is_available() else torch.float32
-                ),
+                torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
             ).to(self.device)
 
             # Load Wav2Vec2 model for audio embeddings and feature extraction
             self.logger.info("Loading Wav2Vec2 model...")
-            self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(
-                "facebook/wav2vec2-base-960h", use_fast=True
-            )
+            self.wav2vec_processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h", use_fast=True)
             self.wav2vec_model = Wav2Vec2ForCTC.from_pretrained(
                 "facebook/wav2vec2-base-960h",
-                torch_dtype=(
-                    torch.float16 if torch.cuda.is_available() else torch.float32
-                ),
+                torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
             ).to(self.device)
 
             # Set models to evaluation mode
@@ -129,9 +119,7 @@ class VoiceProcessor(BaseModalProcessor):
         except Exception as e:
             self.logger.error("Failed to load audio models: %s", e)
             # Issue #466: Will raise error on process() - no placeholder fallback
-            self.logger.warning(
-                "VoiceProcessor will raise errors when processing - models unavailable"
-            )
+            self.logger.warning("VoiceProcessor will raise errors when processing - models unavailable")
 
     def __del__(self):
         """Clean up GPU resources when processor is destroyed"""
@@ -183,9 +171,7 @@ class VoiceProcessor(BaseModalProcessor):
                 error_message=str(e),
             )
 
-    def _prepare_audio_data(
-        self, input_data: MultiModalInput
-    ) -> Tuple[np.ndarray, int]:
+    def _prepare_audio_data(self, input_data: MultiModalInput) -> Tuple[np.ndarray, int]:
         """Prepare and normalize audio data (Issue #315 - extracted method)"""
         audio_array = None
         sampling_rate = 16000  # Standard sampling rate for speech models
@@ -206,9 +192,7 @@ class VoiceProcessor(BaseModalProcessor):
 
         return audio_array, sampling_rate
 
-    def _transcribe_with_whisper(
-        self, audio_array: np.ndarray, sampling_rate: int
-    ) -> str:
+    def _transcribe_with_whisper(self, audio_array: np.ndarray, sampling_rate: int) -> str:
         """Transcribe audio with Whisper model (Issue #315 - extracted method)"""
         torch = _get_torch()
 
@@ -225,19 +209,13 @@ class VoiceProcessor(BaseModalProcessor):
             if use_cuda:
                 input_features = input_features.to(self.device)
 
-            with torch.autocast(
-                device_type="cuda", dtype=torch.float16, enabled=use_cuda
-            ):
+            with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_cuda):
                 predicted_ids = self.whisper_model.generate(
                     input_features, max_length=448, num_beams=5, temperature=0.8
                 )
-                return self.whisper_processor.batch_decode(
-                    predicted_ids, skip_special_tokens=True
-                )[0].strip()
+                return self.whisper_processor.batch_decode(predicted_ids, skip_special_tokens=True)[0].strip()
 
-    def _process_wav2vec_embeddings(
-        self, audio_array: np.ndarray, sampling_rate: int
-    ) -> Tuple[Any, str]:
+    def _process_wav2vec_embeddings(self, audio_array: np.ndarray, sampling_rate: int) -> Tuple[Any, str]:
         """Process audio with Wav2Vec2 for embeddings (Issue #315 - extracted method)"""
         torch = _get_torch()
 
@@ -255,22 +233,14 @@ class VoiceProcessor(BaseModalProcessor):
             # Use CUDA with autocast if available
             use_cuda = torch.cuda.is_available()
             if use_cuda:
-                wav2vec_inputs = {
-                    k: v.to(self.device) for k, v in wav2vec_inputs.items()
-                }
+                wav2vec_inputs = {k: v.to(self.device) for k, v in wav2vec_inputs.items()}
 
-            with torch.autocast(
-                device_type="cuda", dtype=torch.float16, enabled=use_cuda
-            ):
+            with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_cuda):
                 logits = self.wav2vec_model(**wav2vec_inputs).logits
-                hidden_states = self.wav2vec_model.wav2vec2(
-                    **wav2vec_inputs
-                ).last_hidden_state
+                hidden_states = self.wav2vec_model.wav2vec2(**wav2vec_inputs).last_hidden_state
                 audio_embedding = torch.mean(hidden_states, dim=1).cpu().numpy()
                 predicted_ids = torch.argmax(logits, dim=-1)
-                wav2vec_transcription = self.wav2vec_processor.batch_decode(
-                    predicted_ids
-                )[0]
+                wav2vec_transcription = self.wav2vec_processor.batch_decode(predicted_ids)[0]
 
             return audio_embedding, wav2vec_transcription
 
@@ -288,9 +258,7 @@ class VoiceProcessor(BaseModalProcessor):
             transcribed_text = self._transcribe_with_whisper(audio_array, sampling_rate)
 
             # Process with Wav2Vec2 for embeddings (Issue #315 - extracted method)
-            audio_embedding, wav2vec_transcription = self._process_wav2vec_embeddings(
-                audio_array, sampling_rate
-            )
+            audio_embedding, wav2vec_transcription = self._process_wav2vec_embeddings(audio_array, sampling_rate)
 
             # Determine command type from transcription
             command_type = self._classify_command(transcribed_text)
@@ -319,11 +287,7 @@ class VoiceProcessor(BaseModalProcessor):
 
     def _validate_audio_models_available(self) -> None:
         """Validate that audio models are loaded and available. Issue #620."""
-        if (
-            not AUDIO_MODELS_AVAILABLE
-            or self.whisper_model is None
-            or self.wav2vec_model is None
-        ):
+        if not AUDIO_MODELS_AVAILABLE or self.whisper_model is None or self.wav2vec_model is None:
             self.logger.error("Audio models not available - cannot process voice")
             raise RuntimeError(
                 "Voice processing unavailable: Required models (Whisper, Wav2Vec2) "

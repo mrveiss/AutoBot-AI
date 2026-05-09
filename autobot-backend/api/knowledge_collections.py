@@ -338,9 +338,7 @@ async def delete_collection(
             detail="Knowledge base not initialized - please check logs for errors",
         )
 
-    logger.info(
-        "Deleting collection '%s' (delete_facts=%s)", collection_id, delete_facts
-    )
+    logger.info("Deleting collection '%s' (delete_facts=%s)", collection_id, delete_facts)
 
     result = await kb.delete_collection(
         collection_id=collection_id,
@@ -404,9 +402,7 @@ async def add_facts_to_collection(
             detail="Knowledge base not initialized - please check logs for errors",
         )
 
-    logger.info(
-        "Adding %d facts to collection '%s'", len(request.fact_ids), collection_id
-    )
+    logger.info("Adding %d facts to collection '%s'", len(request.fact_ids), collection_id)
 
     result = await kb.add_facts_to_collection(
         collection_id=collection_id,
@@ -468,9 +464,7 @@ async def remove_facts_from_collection(
             detail="Knowledge base not initialized - please check logs for errors",
         )
 
-    logger.info(
-        "Removing %d facts from collection '%s'", len(request.fact_ids), collection_id
-    )
+    logger.info("Removing %d facts from collection '%s'", len(request.fact_ids), collection_id)
 
     result = await kb.remove_facts_from_collection(
         collection_id=collection_id,

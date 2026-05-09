@@ -112,9 +112,7 @@ class ContextFingerprinter:
             if not content or len(content) < min_block_length:
                 continue
             if msg.get("role") == "system" or (
-                msg.get("role") == "user"
-                and i == 0
-                and len(content) > min_preamble_length
+                msg.get("role") == "user" and i == 0 and len(content) > min_preamble_length
             ):
                 fp = ContextFingerprinter.fingerprint(content)
                 blocks.append(
@@ -177,9 +175,7 @@ class L1Cache:
 class L2Cache:
     """Redis-backed persistent cache for compacted context (L2)."""
 
-    def __init__(
-        self, ttl_seconds: int = 86400, key_prefix: str = "autobot:token_opt:"
-    ):
+    def __init__(self, ttl_seconds: int = 86400, key_prefix: str = "autobot:token_opt:"):
         self._ttl_seconds = ttl_seconds
         self._key_prefix = key_prefix
         self._redis = None
@@ -346,12 +342,8 @@ class TokenOptimizer:
         if not blocks:
             return messages, self._empty_record(messages, request_id)
 
-        optimized, total_saved, blocks_compacted = self._process_blocks(
-            messages, blocks
-        )
-        return optimized, self._build_record(
-            messages, optimized, total_saved, blocks_compacted, request_id
-        )
+        optimized, total_saved, blocks_compacted = self._process_blocks(messages, blocks)
+        return optimized, self._build_record(messages, optimized, total_saved, blocks_compacted, request_id)
 
     def _process_blocks(
         self,
@@ -457,9 +449,7 @@ class TokenOptimizer:
             result = result[: cut if cut > 0 else target_len]
         return result
 
-    def _empty_record(
-        self, messages: List[Dict[str, str]], request_id: str
-    ) -> TokenSavingsRecord:
+    def _empty_record(self, messages: List[Dict[str, str]], request_id: str) -> TokenSavingsRecord:
         """Create a zero-savings record."""
         est = sum(len(m.get("content", "")) for m in messages) // 4
         return TokenSavingsRecord(

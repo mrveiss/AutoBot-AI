@@ -165,9 +165,7 @@ def _get_intent_name(intent_id: str) -> str:
     return INTENT_ID_TO_NAME.get(intent_id, "Unknown")
 
 
-def _collect_user_samples(
-    messages: List[Dict], intent_stats: Dict, analyzer: "ConversationAnalyzer"
-) -> None:
+def _collect_user_samples(messages: List[Dict], intent_stats: Dict, analyzer: "ConversationAnalyzer") -> None:
     """Collect sample messages for each intent. (Issue #315 - extracted)"""
     for msg in messages:
         if msg.get("role") != "user":
@@ -237,9 +235,7 @@ class ConversationAnalyzer:
 
         return success_count, frustration_count
 
-    def extract_conversation_data(
-        self, messages: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    def extract_conversation_data(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Extract structured data from a conversation.
 
@@ -260,9 +256,7 @@ class ConversationAnalyzer:
         frustration_indicators = 0
 
         for msg in messages:
-            success, frustration = self._process_message_for_extraction(
-                msg, intents, timestamps
-            )
+            success, frustration = self._process_message_for_extraction(msg, intents, timestamps)
             success_indicators += success
             frustration_indicators += frustration
 
@@ -359,25 +353,19 @@ class ConversationAnalyzer:
                 )
         return bottlenecks
 
-    def identify_bottlenecks(
-        self, conversations: List[Dict[str, Any]]
-    ) -> List[FlowBottleneck]:
+    def identify_bottlenecks(self, conversations: List[Dict[str, Any]]) -> List[FlowBottleneck]:
         """
         Identify bottlenecks in conversation flows.
 
         Issue #620: Refactored using Extract Method pattern.
         """
-        intent_transitions: Dict[str, Dict[str, int]] = defaultdict(
-            lambda: defaultdict(int)
-        )
+        intent_transitions: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
         intent_failures: Dict[str, int] = defaultdict(int)
         intent_repetitions: Dict[str, int] = defaultdict(int)
 
         # Track intent data for all conversations
         for conv in conversations:
-            self._track_conversation_intents(
-                conv, intent_transitions, intent_failures, intent_repetitions
-            )
+            self._track_conversation_intents(conv, intent_transitions, intent_failures, intent_repetitions)
 
         # Build bottleneck lists
         bottlenecks = self._build_repetition_bottlenecks(intent_repetitions)
@@ -411,9 +399,7 @@ class ConversationAnalyzer:
 
         # Track intent success
         if conv_data["intents"]:
-            success_rate = conv_data["success_indicators"] / max(
-                1, len(conv_data["intents"])
-            )
+            success_rate = conv_data["success_indicators"] / max(1, len(conv_data["intents"]))
             for intent in set(conv_data["intents"]):
                 intent_success[intent].append(success_rate)
 
@@ -484,9 +470,7 @@ class ConversationAnalyzer:
             totals["success"] += conv_data["success_indicators"]
             totals["frustration"] += conv_data["frustration_indicators"]
 
-            self._update_intent_tracking(
-                conv_data, intent_counts, intent_success, flow_counts
-            )
+            self._update_intent_tracking(conv_data, intent_counts, intent_success, flow_counts)
             self._update_hourly_distribution(messages, hourly_dist)
 
         return (
@@ -610,19 +594,13 @@ class ConversationAnalyzer:
         Issue #620.
         """
         satisfaction = (total_success / max(1, total_success + total_frustration)) * 100
-        resolution_rate = (
-            sum(1 for c in processed_convs if c["success_indicators"] > 0)
-            / max(1, n_convs)
-            * 100
-        )
+        resolution_rate = sum(1 for c in processed_convs if c["success_indicators"] > 0) / max(1, n_convs) * 100
 
         return ConversationMetrics(
             total_conversations=n_convs,
             total_messages=total_messages,
             avg_messages_per_conversation=round(total_messages / max(1, n_convs), 1),
-            avg_conversation_duration_seconds=round(
-                total_duration / max(1, n_convs), 1
-            ),
+            avg_conversation_duration_seconds=round(total_duration / max(1, n_convs), 1),
             user_satisfaction_estimate=round(satisfaction, 1),
             resolution_rate=round(resolution_rate, 1),
             escalation_rate=round(total_frustration / max(1, n_convs) * 100, 1),
@@ -667,9 +645,7 @@ class ConversationAnalyzer:
         )
 
         # Build result components
-        intent_patterns = self._build_intent_patterns(
-            intent_counts, intent_success, total_messages
-        )
+        intent_patterns = self._build_intent_patterns(intent_counts, intent_success, total_messages)
         common_flows = self._build_common_flows(flow_counts)
         bottlenecks = self.identify_bottlenecks(processed_convs)
 
@@ -701,11 +677,7 @@ async def load_chat_sessions(hours: int = 24) -> List[Dict[str, Any]]:
     cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
 
     # Try to load from chat history files
-    chat_dir = (
-        PATH.DATA_DIR / "chat_history"
-        if hasattr(PATH, "DATA_DIR")
-        else Path("data/chat_history")
-    )
+    chat_dir = PATH.DATA_DIR / "chat_history" if hasattr(PATH, "DATA_DIR") else Path("data/chat_history")
 
     # Issue #358 - avoid blocking
     if not await asyncio.to_thread(chat_dir.exists):
@@ -741,9 +713,7 @@ async def load_chat_sessions(hours: int = 24) -> List[Dict[str, Any]]:
     error_code_prefix="ANALYTICS_CONVERSATION",
 )
 async def analyze_conversations(
-    hours: int = Query(
-        24, ge=1, le=168, description="Hours of conversations to analyze"
-    ),
+    hours: int = Query(24, ge=1, le=168, description="Hours of conversations to analyze"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -807,9 +777,7 @@ async def get_intent_stats(
     try:
         conversations = await load_chat_sessions(hours)
 
-        intent_stats: Dict[str, Dict] = defaultdict(
-            lambda: {"count": 0, "samples": [], "success_count": 0}
-        )
+        intent_stats: Dict[str, Dict] = defaultdict(lambda: {"count": 0, "samples": [], "success_count": 0})
 
         for conv in conversations:
             messages = conv.get("messages", [])
@@ -825,17 +793,13 @@ async def get_intent_stats(
 
         # Format results using O(1) lookup (Issue #315 + #326)
         results = []
-        for intent_id, stats in sorted(
-            intent_stats.items(), key=lambda x: x[1]["count"], reverse=True
-        ):
+        for intent_id, stats in sorted(intent_stats.items(), key=lambda x: x[1]["count"], reverse=True):
             results.append(
                 {
                     "intent_id": intent_id,
                     "intent_name": _get_intent_name(intent_id),
                     "count": stats["count"],
-                    "success_rate": round(
-                        stats["success_count"] / max(1, stats["count"]) * 100, 1
-                    ),
+                    "success_rate": round(stats["success_count"] / max(1, stats["count"]) * 100, 1),
                     "samples": stats["samples"],
                 }
             )
@@ -871,9 +835,7 @@ async def get_flow_paths(
     try:
         conversations = await load_chat_sessions(hours)
 
-        flow_data: Dict[Tuple, Dict] = defaultdict(
-            lambda: {"count": 0, "durations": [], "successes": 0}
-        )
+        flow_data: Dict[Tuple, Dict] = defaultdict(lambda: {"count": 0, "durations": [], "successes": 0})
 
         for conv in conversations:
             messages = conv.get("messages", [])
@@ -888,23 +850,15 @@ async def get_flow_paths(
 
         # Filter and format
         flows = []
-        for path, data in sorted(
-            flow_data.items(), key=lambda x: x[1]["count"], reverse=True
-        ):
+        for path, data in sorted(flow_data.items(), key=lambda x: x[1]["count"], reverse=True):
             if data["count"] >= min_frequency:
-                avg_duration = (
-                    sum(data["durations"]) / len(data["durations"])
-                    if data["durations"]
-                    else 0
-                )
+                avg_duration = sum(data["durations"]) / len(data["durations"]) if data["durations"] else 0
                 flows.append(
                     {
                         "path": list(path),
                         "frequency": data["count"],
                         "avg_duration_seconds": round(avg_duration, 1),
-                        "completion_rate": round(
-                            data["successes"] / data["count"] * 100, 1
-                        ),
+                        "completion_rate": round(data["successes"] / data["count"] * 100, 1),
                         "path_display": " → ".join(path),
                     }
                 )

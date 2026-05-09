@@ -47,9 +47,7 @@ async def _resolve_search_context(request: Request, current_user: User, query: s
     if kb is None or not kb.ownership_manager:
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
-    user_id, user_org_id, user_group_ids = extract_user_context_from_request(
-        current_user
-    )
+    user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
 
     logger.info(
         "Scoped search for user %s (org: %s, groups: %d): %s",
@@ -77,9 +75,7 @@ async def _execute_permission_filtered_search(
     )
 
     if not hasattr(kb, "search"):
-        raise HTTPException(
-            status_code=500, detail="Knowledge base search not available"
-        )
+        raise HTTPException(status_code=500, detail="Knowledge base search not available")
 
     return await kb.search(
         query=search_request.query,
@@ -153,9 +149,7 @@ async def scoped_search(
         kb, user_id, user_org_id, user_group_ids = await _resolve_search_context(
             request, current_user, search_request.query
         )
-        results = await _execute_permission_filtered_search(
-            kb, search_request, user_id, user_org_id, user_group_ids
-        )
+        results = await _execute_permission_filtered_search(kb, search_request, user_id, user_org_id, user_group_ids)
         return await _build_scoped_search_response(
             results,
             search_request,
@@ -195,10 +189,7 @@ async def _synthesize_rag_response(
         from agents.rag_agent import get_rag_agent
 
         rag_agent = get_rag_agent()
-        context_texts = [
-            f"{fact.get('title', 'Untitled')}: {fact.get('content', '')}"
-            for fact in accessible_facts[:5]
-        ]
+        context_texts = [f"{fact.get('title', 'Untitled')}: {fact.get('content', '')}" for fact in accessible_facts[:5]]
         context = "\n\n".join(context_texts)
         rag_response = await rag_agent.generate_response(query=query, context=context)
         return {
@@ -247,9 +238,7 @@ async def scoped_rag_search(
 
     try:
         # Extract user context (Issue #1088: context extracted here, synthesis delegated)
-        user_id, user_org_id, user_group_ids = extract_user_context_from_request(
-            current_user
-        )
+        user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
 
         logger.info(
             "Scoped RAG search for user %s: %s",
@@ -258,9 +247,7 @@ async def scoped_rag_search(
         )
 
         # Get accessible facts via permission-filtered search
-        scoped_results = await scoped_search(
-            search_request=search_request, request=request, current_user=current_user
-        )
+        scoped_results = await scoped_search(search_request=search_request, request=request, current_user=current_user)
         accessible_facts = scoped_results["results"]
 
         # Synthesize RAG response (Issue #1088: uses helper)
@@ -282,9 +269,7 @@ async def scoped_rag_search(
     operation="get_accessible_scopes",
     error_code_prefix="KNOWLEDGE_SEARCH_SCOPED",
 )
-async def get_accessible_scopes(
-    request: Request, current_user: User = Depends(get_current_user)
-):
+async def get_accessible_scopes(request: Request, current_user: User = Depends(get_current_user)):
     """Get list of scopes user has access to.
 
     Issue #679: Returns visibility levels user can search within.
@@ -294,9 +279,7 @@ async def get_accessible_scopes(
     """
     try:
         # Extract user context
-        user_id, user_org_id, user_group_ids = extract_user_context_from_request(
-            current_user
-        )
+        user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
 
         # Build accessible scopes list
         scopes = [

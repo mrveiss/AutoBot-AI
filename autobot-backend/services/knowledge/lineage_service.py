@@ -124,9 +124,7 @@ class LineageService:
         chain.reverse()
         return chain
 
-    async def get_best_ancestor(
-        self, collection: str, metric: str = "score"
-    ) -> Optional[SynthesisRun]:
+    async def get_best_ancestor(self, collection: str, metric: str = "score") -> Optional[SynthesisRun]:
         """Return the highest-scoring run in the lineage tree for *collection*.
 
         Uses ``get_best_run_id_for_collection()`` for O(1) sorted-set lookup
@@ -143,9 +141,7 @@ class LineageService:
             The SynthesisRun with the highest metric value, or None when no
             runs exist for the collection.
         """
-        best_run_id = await self._provenance_log.get_best_run_id_for_collection(
-            collection
-        )
+        best_run_id = await self._provenance_log.get_best_run_id_for_collection(collection)
         if not best_run_id:
             return None
         entry = await self._provenance_log.get_by_run_id(best_run_id)
@@ -222,25 +218,16 @@ class LineageService:
             None,
         )
         if target is None:
-            raise ValueError(
-                f"No version {to_version} found for entity '{entity_id}'"
-            )
+            raise ValueError(f"No version {to_version} found for entity '{entity_id}'")
 
         source_collection = target.get("lineage_source_collection", "")
         if not source_collection:
-            raise ValueError(
-                f"Version {to_version} has no lineage_source_collection — cannot roll back"
-            )
+            raise ValueError(f"Version {to_version} has no lineage_source_collection — cannot roll back")
 
         live_collection = await self._collection_factory(source_collection)
         current_version_ids = await self._get_current_version(entity_id, live_collection)
-        new_version = (
-            max(int(v.get("lineage_version", 0)) for v in history) + 1
-        )
-        rollback_meta = {
-            k: v for k, v in target.items()
-            if k not in ("version_id", "content")
-        }
+        new_version = max(int(v.get("lineage_version", 0)) for v in history) + 1
+        rollback_meta = {k: v for k, v in target.items() if k not in ("version_id", "content")}
         rollback_meta["lineage_version"] = new_version
         rollback_meta["lineage_parent_id"] = target["version_id"]
         rollback_meta["lineage_rollback_from"] = to_version
@@ -284,9 +271,7 @@ class LineageService:
         """
         try:
             history = await self.get_entity_history(entity_id)
-            next_version = (
-                max((int(v.get("lineage_version", 0)) for v in history), default=0) + 1
-            )
+            next_version = max((int(v.get("lineage_version", 0)) for v in history), default=0) + 1
             parent_version_id = history[-1]["version_id"] if history else None
 
             version_id = f"{entity_id}_v{next_version}"
@@ -305,13 +290,9 @@ class LineageService:
                 documents=[content],
                 metadatas=[version_meta],
             )
-            logger.debug(
-                "Stamped entity '%s' version %d (run=%s)", entity_id, next_version, source_run_id
-            )
+            logger.debug("Stamped entity '%s' version %d (run=%s)", entity_id, next_version, source_run_id)
         except Exception:
-            logger.exception(
-                "stamp_entity_version: failed for entity '%s' (non-fatal)", entity_id
-            )
+            logger.exception("stamp_entity_version: failed for entity '%s' (non-fatal)", entity_id)
 
     async def _get_current_version(self, entity_id: str, collection: Any) -> List[Dict]:
         """Return current metadata list for entity_id from *collection*."""
@@ -329,9 +310,7 @@ class LineageService:
 _lineage_service: Optional[LineageService] = None
 
 
-def get_lineage_service(
-    provenance_log: Any, chromadb_collection_factory: Any
-) -> LineageService:
+def get_lineage_service(provenance_log: Any, chromadb_collection_factory: Any) -> LineageService:
     """Return the singleton LineageService, creating it if needed."""
     global _lineage_service
     if _lineage_service is None:

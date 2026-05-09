@@ -20,14 +20,10 @@ async def test_api_workflow_execution():
     orchestrator = Orchestrator()
     user_message = "I need to scan my network for security vulnerabilities"
 
-    print(  # noqa: print
-        f"Initial tool registry check: {orchestrator.tool_registry is not None}"
-    )  # noqa: print
+    print(f"Initial tool registry check: {orchestrator.tool_registry is not None}")  # noqa: print  # noqa: print
 
     # Step 1: Check if should use workflow orchestration
-    should_orchestrate = await orchestrator.should_use_workflow_orchestration(
-        user_message
-    )
+    should_orchestrate = await orchestrator.should_use_workflow_orchestration(user_message)
     print(f"Should orchestrate: {should_orchestrate}")  # noqa: print
 
     if should_orchestrate:
@@ -36,15 +32,9 @@ async def test_api_workflow_execution():
         # Step 2: Create workflow response (this might be where issue occurs)
         print("🔄 About to create workflow response...")  # noqa: print
         workflow_response = await orchestrator.create_workflow_response(user_message)
-        print(  # noqa: print
-            f"Workflow response created: {workflow_response.get('message_classification', 'N/A')}"
-        )
-        print(  # noqa: print
-            f"Response complexity: {workflow_response.get('request_complexity', 'N/A')}"
-        )
-        print(  # noqa: print
-            f"Tool registry after workflow response: {orchestrator.tool_registry is not None}"
-        )
+        print(f"Workflow response created: {workflow_response.get('message_classification', 'N/A')}")  # noqa: print
+        print(f"Response complexity: {workflow_response.get('request_complexity', 'N/A')}")  # noqa: print
+        print(f"Tool registry after workflow response: {orchestrator.tool_registry is not None}")  # noqa: print
 
         # Debug: Check workflow steps format
         workflow_steps = workflow_response.get("workflow_steps", [])
@@ -54,15 +44,11 @@ async def test_api_workflow_execution():
         )
         if workflow_steps:
             print(f"First workflow step type: {type(workflow_steps[0])}")  # noqa: print
-            print(  # noqa: print
-                f"First workflow step: {workflow_steps[0] if len(workflow_steps) > 0 else 'N/A'}"
-            )
+            print(f"First workflow step: {workflow_steps[0] if len(workflow_steps) > 0 else 'N/A'}")  # noqa: print
 
         # Step 3: Execute workflow steps (where the error occurs)
         try:
-            execution_result = await orchestrator._execute_workflow_steps(
-                workflow_steps, user_message
-            )
+            execution_result = await orchestrator._execute_workflow_steps(workflow_steps, user_message)
             print(f"Workflow execution result: {execution_result}")  # noqa: print
         except Exception as e:
             print(f"Workflow execution failed: {e}")  # noqa: print

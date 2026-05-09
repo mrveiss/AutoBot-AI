@@ -178,9 +178,7 @@ class TestMCPToolCache:
         # Age should be around 0.5 seconds
         assert 0.4 <= stats["tools_cache_age_seconds"] <= 1.0
 
-    def test_separate_tools_and_bridges_caches(
-        self, cache, sample_tools_data, sample_bridges_data
-    ):
+    def test_separate_tools_and_bridges_caches(self, cache, sample_tools_data, sample_bridges_data):
         """Test that tools and bridges have independent caches"""
         cache.set_tools(sample_tools_data)
         # Only tools should be cached

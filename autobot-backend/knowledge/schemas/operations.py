@@ -107,9 +107,7 @@ class MachineProfileResponse(BaseModel):
     status: str = "success"
     machine_profile: Dict[str, Any] = Field(default_factory=dict)
     knowledge_base_stats: Dict[str, Any] = Field(default_factory=dict)
-    capabilities: MachineProfileCapabilities = Field(
-        default_factory=MachineProfileCapabilities
-    )
+    capabilities: MachineProfileCapabilities = Field(default_factory=MachineProfileCapabilities)
 
 
 class ManPagesSummaryEnvelope(BaseModel):
@@ -131,9 +129,7 @@ class ManPagesSummaryResponse(BaseModel):
 
     status: str = Field(..., description="'success' | 'error'")
     message: Optional[str] = None
-    man_pages_summary: ManPagesSummaryEnvelope = Field(
-        default_factory=ManPagesSummaryEnvelope
-    )
+    man_pages_summary: ManPagesSummaryEnvelope = Field(default_factory=ManPagesSummaryEnvelope)
 
 
 class MachineKnowledgeInitComponents(BaseModel):

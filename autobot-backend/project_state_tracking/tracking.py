@@ -88,9 +88,7 @@ async def track_user_interaction_to_redis(
             return
 
         current_hour = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
-        interaction_key = (
-            f"{REDIS_METRIC_KEYS['user_interactions']}:{current_hour.timestamp()}"
-        )
+        interaction_key = f"{REDIS_METRIC_KEYS['user_interactions']}:{current_hour.timestamp()}"
         type_key = f"autobot:metrics:interaction_types:{interaction_type}:count"
 
         # Issue #379: Batch all Redis operations using pipeline
@@ -119,9 +117,7 @@ def is_significant_interaction(interaction_type: str) -> bool:
 # ============================================================================
 
 
-def _handle_sync_error_tracking(
-    error: Exception, func: Callable, args: tuple, kwargs: dict
-) -> None:
+def _handle_sync_error_tracking(error: Exception, func: Callable, args: tuple, kwargs: dict) -> None:
     """Handle error tracking for sync functions"""
     error_context = {
         "function": func.__name__,

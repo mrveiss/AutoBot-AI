@@ -203,9 +203,7 @@ class PermissionMatcher:
                 )
             )
 
-    def match(
-        self, tool: str, command: str
-    ) -> Tuple[MatchResult, Optional[PermissionRule]]:
+    def match(self, tool: str, command: str) -> Tuple[MatchResult, Optional[PermissionRule]]:
         """
         Match a command against permission rules.
 
@@ -265,9 +263,7 @@ class PermissionMatcher:
         """
         # Admin-only modes require admin privileges
         if config.permission.is_admin_only_mode(self.mode) and not self.is_admin:
-            logger.warning(
-                f"Non-admin user attempted to use admin-only mode: {self.mode.value}"
-            )
+            logger.warning(f"Non-admin user attempted to use admin-only mode: {self.mode.value}")
             # Fall through to normal rule matching
             return None
 
@@ -286,9 +282,7 @@ class PermissionMatcher:
                 # Still check deny rules
                 for rule in self.deny_rules:
                     if rule.matches(tool, command):
-                        logger.debug(
-                            f"DONT_ASK mode: DENY rule still applies: {rule.pattern}"
-                        )
+                        logger.debug(f"DONT_ASK mode: DENY rule still applies: {rule.pattern}")
                         return MatchResult.DENY
                 logger.debug("DONT_ASK mode: Auto-allowing (admin, no deny rule)")
                 return MatchResult.ALLOW
@@ -438,9 +432,7 @@ class PermissionMatcher:
 _matcher_instance: Optional[PermissionMatcher] = None
 
 
-def get_permission_matcher(
-    is_admin: bool = False, reload: bool = False
-) -> PermissionMatcher:
+def get_permission_matcher(is_admin: bool = False, reload: bool = False) -> PermissionMatcher:
     """
     Get or create the global permission matcher instance.
 

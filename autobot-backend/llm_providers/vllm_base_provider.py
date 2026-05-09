@@ -72,8 +72,7 @@ class VLLMBaseProvider(BaseProvider):
                 self._vllm_provider = VLLMProvider(self.settings)
                 await self._vllm_provider.initialize()
                 self._initialized = True
-                logger.info("vLLM provider initialized for model: %s",
-                           self.settings.get("model"))
+                logger.info("vLLM provider initialized for model: %s", self.settings.get("model"))
             except Exception as exc:
                 logger.error("Failed to initialize vLLM provider: %s", exc)
                 raise
@@ -93,10 +92,7 @@ class VLLMBaseProvider(BaseProvider):
             await self._ensure_initialized()
 
             # Convert LLMRequest to vLLM format
-            messages = [
-                {"role": msg.role, "content": msg.content}
-                for msg in request.messages
-            ]
+            messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
             # Extract inference parameters from request metadata
             # Issue #4524: only apply chat_template when explicitly set — never default
@@ -167,10 +163,7 @@ class VLLMBaseProvider(BaseProvider):
             await self._ensure_initialized()
 
             # Convert to vLLM format
-            messages = [
-                {"role": msg.role, "content": msg.content}
-                for msg in request.messages
-            ]
+            messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
             # Issue #4524: only apply chat_template when explicitly set
             api_kwargs = request.metadata.get("api_kwargs", {})
@@ -253,11 +246,13 @@ class VLLMBaseProvider(BaseProvider):
         """
         stats = super().get_stats()
         if self._initialized and self._vllm_provider:
-            stats.update({
-                "model_name": self._vllm_provider.model_name,
-                "dtype": self._vllm_provider.dtype,
-                "tensor_parallel_size": self._vllm_provider.tensor_parallel_size,
-            })
+            stats.update(
+                {
+                    "model_name": self._vllm_provider.model_name,
+                    "dtype": self._vllm_provider.dtype,
+                    "tensor_parallel_size": self._vllm_provider.tensor_parallel_size,
+                }
+            )
         return stats
 
     async def cleanup(self) -> None:

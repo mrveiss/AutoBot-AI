@@ -182,15 +182,10 @@ class AnalyticsService(AsyncRedisClientMixin):
             "total_agents": len(agent_metrics),
             "total_tasks": sum(m.total_tasks for m in agent_metrics),
             "avg_success_rate": (
-                sum(m.success_rate for m in agent_metrics) / len(agent_metrics)
-                if agent_metrics
-                else 0
+                sum(m.success_rate for m in agent_metrics) / len(agent_metrics) if agent_metrics else 0
             ),
             "top_performers": [
-                m.agent_id
-                for m in sorted(
-                    agent_metrics, key=lambda x: x.success_rate, reverse=True
-                )[:3]
+                m.agent_id for m in sorted(agent_metrics, key=lambda x: x.success_rate, reverse=True)[:3]
             ],
         }
 
@@ -198,16 +193,11 @@ class AnalyticsService(AsyncRedisClientMixin):
         """Build maintenance section for unified dashboard (Issue #665: extracted helper)."""
         return {
             "total_recommendations": len(maintenance_recs),
-            "critical_count": sum(
-                1
-                for r in maintenance_recs
-                if r.priority == MaintenancePriority.CRITICAL
-            ),
+            "critical_count": sum(1 for r in maintenance_recs if r.priority == MaintenancePriority.CRITICAL),
             "high_priority": [
                 r.to_dict()
                 for r in maintenance_recs
-                if r.priority
-                in [MaintenancePriority.CRITICAL, MaintenancePriority.HIGH]
+                if r.priority in [MaintenancePriority.CRITICAL, MaintenancePriority.HIGH]
             ][:5],
         }
 
@@ -242,9 +232,7 @@ class AnalyticsService(AsyncRedisClientMixin):
         )
 
         # Calculate health score
-        health_score = await self._calculate_system_health(
-            cost_trends, agent_metrics, engagement
-        )
+        health_score = await self._calculate_system_health(cost_trends, agent_metrics, engagement)
 
         return {
             "generated_at": utc_timestamp(),
@@ -262,9 +250,7 @@ class AnalyticsService(AsyncRedisClientMixin):
             },
             "agents": self._build_agents_section(agent_metrics),
             "engagement": {
-                "total_sessions": engagement.get("metrics", {}).get(
-                    "total_sessions", 0
-                ),
+                "total_sessions": engagement.get("metrics", {}).get("total_sessions", 0),
                 "page_views": engagement.get("metrics", {}).get("total_page_views", 0),
                 "most_popular": engagement.get("most_popular_feature"),
             },
@@ -292,9 +278,7 @@ class AnalyticsService(AsyncRedisClientMixin):
 
         # Agent health (success rate)
         if agent_metrics:
-            agent_score = sum(m.success_rate for m in agent_metrics) / len(
-                agent_metrics
-            )
+            agent_score = sum(m.success_rate for m in agent_metrics) / len(agent_metrics)
             scores.append(agent_score)
 
         # Engagement health (based on session activity)
@@ -326,9 +310,7 @@ class AnalyticsService(AsyncRedisClientMixin):
             return "warning"
         return "critical"
 
-    def _sum_savings(
-        self, recommendations: List[ResourceOptimization]
-    ) -> Dict[str, float]:
+    def _sum_savings(self, recommendations: List[ResourceOptimization]) -> Dict[str, float]:
         """Sum up expected savings from optimization recommendations."""
         savings = {"cost_usd": 0, "performance_percent": 0}
         for rec in recommendations:
@@ -370,9 +352,7 @@ class AnalyticsService(AsyncRedisClientMixin):
 
         return recommendations
 
-    def _make_agent_timeout_rec(
-        self, agent: Any
-    ) -> Optional[MaintenanceRecommendation]:
+    def _make_agent_timeout_rec(self, agent: Any) -> Optional[MaintenanceRecommendation]:
         """Helper for _check_agent_maintenance_issues. Ref: #1088."""
         if agent.timeout_tasks <= 5 or agent.total_tasks <= 0:
             return None
@@ -396,9 +376,7 @@ class AnalyticsService(AsyncRedisClientMixin):
             },
         )
 
-    def _check_agent_maintenance_issues(
-        self, agent: Any
-    ) -> List[MaintenanceRecommendation]:
+    def _check_agent_maintenance_issues(self, agent: Any) -> List[MaintenanceRecommendation]:
         """Helper for _analyze_agent_maintenance. Ref: #1088."""
         issues: List[MaintenanceRecommendation] = []
         if agent.error_rate > 20:
@@ -407,11 +385,7 @@ class AnalyticsService(AsyncRedisClientMixin):
                     id=f"agent-error-{agent.agent_id}",
                     title=f"High Error Rate: {agent.agent_id}",
                     description=f"Agent {agent.agent_id} has an error rate of {agent.error_rate:.1f}%",
-                    priority=(
-                        MaintenancePriority.HIGH
-                        if agent.error_rate > 30
-                        else MaintenancePriority.MEDIUM
-                    ),
+                    priority=(MaintenancePriority.HIGH if agent.error_rate > 30 else MaintenancePriority.MEDIUM),
                     category="agent_performance",
                     affected_component=f"agent:{agent.agent_id}",
                     predicted_issue="Continued degradation may lead to task failures",
@@ -429,9 +403,7 @@ class AnalyticsService(AsyncRedisClientMixin):
                 MaintenanceRecommendation(
                     id=f"agent-slow-{agent.agent_id}",
                     title=f"Slow Performance: {agent.agent_id}",
-                    description=(
-                        f"Agent {agent.agent_id} average duration is {agent.avg_duration_ms/1000:.1f}s"
-                    ),
+                    description=(f"Agent {agent.agent_id} average duration is {agent.avg_duration_ms/1000:.1f}s"),
                     priority=MaintenancePriority.MEDIUM,
                     category="agent_performance",
                     affected_component=f"agent:{agent.agent_id}",
@@ -468,19 +440,14 @@ class AnalyticsService(AsyncRedisClientMixin):
                     id="cost-growth-alert",
                     title="Rapid Cost Increase Detected",
                     description=f"LLM costs are increasing at {growth_rate:.1f}% rate",
-                    priority=(
-                        MaintenancePriority.HIGH
-                        if growth_rate > 50
-                        else MaintenancePriority.MEDIUM
-                    ),
+                    priority=(MaintenancePriority.HIGH if growth_rate > 50 else MaintenancePriority.MEDIUM),
                     category="cost_management",
                     affected_component="llm_provider",
                     predicted_issue="Budget may be exceeded if trend continues",
                     confidence=0.85,
                     recommended_action="Review usage patterns, implement cost controls, optimize prompts",
                     estimated_impact=(
-                        f"Projected cost increase of "
-                        f"${trends.get('total_cost_usd', 0) * growth_rate / 100:.2f}"
+                        f"Projected cost increase of " f"${trends.get('total_cost_usd', 0) * growth_rate / 100:.2f}"
                     ),
                     metadata={"growth_rate": growth_rate, "trend": trends.get("trend")},
                 )
@@ -508,18 +475,13 @@ class AnalyticsService(AsyncRedisClientMixin):
                             id="redis-memory-high",
                             title="High Redis Memory Usage",
                             description=f"Redis is using {memory_pct:.1f}% of allocated memory",
-                            priority=(
-                                MaintenancePriority.HIGH
-                                if memory_pct > 90
-                                else MaintenancePriority.MEDIUM
-                            ),
+                            priority=(MaintenancePriority.HIGH if memory_pct > 90 else MaintenancePriority.MEDIUM),
                             category="infrastructure",
                             affected_component="redis",
                             predicted_issue="Memory exhaustion may cause cache evictions or failures",
                             confidence=0.9,
                             recommended_action=(
-                                "Clean up old data, increase memory allocation, "
-                                "review retention policies"
+                                "Clean up old data, increase memory allocation, " "review retention policies"
                             ),
                             estimated_impact="May affect caching and real-time features",
                             metadata={
@@ -571,9 +533,7 @@ class AnalyticsService(AsyncRedisClientMixin):
 
         return recommendations
 
-    def _check_model_token_optimizations(
-        self, model: str, data: Dict[str, Any]
-    ) -> List[ResourceOptimization]:
+    def _check_model_token_optimizations(self, model: str, data: Dict[str, Any]) -> List[ResourceOptimization]:
         """Helper for _analyze_token_optimization. Ref: #1088.
 
         Returns model-substitution and prompt-caching recommendations for a
@@ -666,8 +626,7 @@ class AnalyticsService(AsyncRedisClientMixin):
                             },
                             recommended_change="Improve error handling and task validation",
                             expected_savings={
-                                "cost_usd": wasted_tasks
-                                * 0.01,  # Estimate $0.01 per task
+                                "cost_usd": wasted_tasks * 0.01,  # Estimate $0.01 per task
                                 "performance_percent": 10,
                             },
                             implementation_effort="medium",
@@ -830,14 +789,10 @@ class AnalyticsService(AsyncRedisClientMixin):
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
         self._populate_report_sections(report, tasks, list(results))
         if report_type == "executive":
-            report["executive_summary"] = await self._generate_executive_summary(
-                report["sections"]
-            )
+            report["executive_summary"] = await self._generate_executive_summary(report["sections"])
         return report
 
-    async def _generate_executive_summary(
-        self, sections: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _generate_executive_summary(self, sections: Dict[str, Any]) -> Dict[str, Any]:
         """Generate executive summary from report sections."""
         summary = {
             "highlights": [],
@@ -855,9 +810,7 @@ class AnalyticsService(AsyncRedisClientMixin):
         agent_data = sections.get("agents", {})
         if agent_data.get("summary"):
             avg_success = agent_data["summary"].get("avg_success_rate", 0)
-            summary["highlights"].append(
-                f"Average agent success rate: {avg_success:.1f}%"
-            )
+            summary["highlights"].append(f"Average agent success rate: {avg_success:.1f}%")
             if avg_success < 80:
                 summary["concerns"].append("Agent success rate below 80% target")
 
@@ -865,20 +818,14 @@ class AnalyticsService(AsyncRedisClientMixin):
         maintenance = sections.get("maintenance", [])
         critical_count = sum(1 for m in maintenance if m.get("priority") == "critical")
         if critical_count > 0:
-            summary["concerns"].append(
-                f"{critical_count} critical maintenance items require attention"
-            )
+            summary["concerns"].append(f"{critical_count} critical maintenance items require attention")
 
         # Optimization opportunities
         optimization = sections.get("optimization", [])
         if optimization:
-            total_savings = sum(
-                o.get("expected_savings", {}).get("cost_usd", 0) for o in optimization
-            )
+            total_savings = sum(o.get("expected_savings", {}).get("cost_usd", 0) for o in optimization)
             if total_savings > 0:
-                summary["recommendations"].append(
-                    f"Potential cost savings of ${total_savings:.2f} identified"
-                )
+                summary["recommendations"].append(f"Potential cost savings of ${total_savings:.2f} identified")
 
         return summary
 

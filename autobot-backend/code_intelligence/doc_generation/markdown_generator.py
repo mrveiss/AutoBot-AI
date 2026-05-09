@@ -64,9 +64,7 @@ def _calculate_avg_completeness(modules: List[ModuleDoc]) -> float:
     if not modules:
         return 0
     all_completeness = [m.completeness for m in modules]
-    return sum(_COMPLETENESS_SCORES[c] for c in all_completeness) / len(
-        all_completeness
-    )
+    return sum(_COMPLETENESS_SCORES[c] for c in all_completeness) / len(all_completeness)
 
 
 def _generate_module_header_lines(module: ModuleDoc) -> List[str]:
@@ -141,18 +139,12 @@ class MarkdownGenerator:
             GeneratedDoc with the generated content
         """
         if format == DocFormat.MARKDOWN:
-            return self._generate_markdown_api(
-                modules, title, include_toc, include_diagrams
-            )
+            return self._generate_markdown_api(modules, title, include_toc, include_diagrams)
         elif format == DocFormat.HTML:
-            return self._generate_html_api(
-                modules, title, include_toc, include_diagrams
-            )
+            return self._generate_html_api(modules, title, include_toc, include_diagrams)
         else:
             # Default to markdown
-            return self._generate_markdown_api(
-                modules, title, include_toc, include_diagrams
-            )
+            return self._generate_markdown_api(modules, title, include_toc, include_diagrams)
 
     def _generate_markdown_api(
         self,
@@ -176,9 +168,7 @@ class MarkdownGenerator:
 
         # Process each module using helpers (Issue #665, #620)
         for module in modules:
-            module_lines, module_diagrams = self._process_module_content(
-                module, include_diagrams
-            )
+            module_lines, module_diagrams = self._process_module_content(module, include_diagrams)
             lines.extend(module_lines)
             diagrams.extend(module_diagrams)
 
@@ -195,9 +185,7 @@ class MarkdownGenerator:
             completeness_score=_calculate_avg_completeness(modules),
         )
 
-    def _process_module_content(
-        self, module: ModuleDoc, include_diagrams: bool
-    ) -> tuple:
+    def _process_module_content(self, module: ModuleDoc, include_diagrams: bool) -> tuple:
         """
         Process a single module and generate its markdown content.
 
@@ -363,9 +351,7 @@ class MarkdownGenerator:
         lines.extend(self._generate_class_examples(class_doc))
         return lines
 
-    def _generate_function_header(
-        self, func_doc: FunctionDoc, is_property: bool
-    ) -> List[str]:
+    def _generate_function_header(self, func_doc: FunctionDoc, is_property: bool) -> List[str]:
         """
         Generate function header with async/decorator info.
 
@@ -405,9 +391,7 @@ class MarkdownGenerator:
         lines = ["**Parameters:**", ""]
         for param in func_doc.parameters:
             type_info = f": `{param.type_hint}`" if param.type_hint else ""
-            default_info = (
-                f" (default: `{param.default_value}`)" if param.default_value else ""
-            )
+            default_info = f" (default: `{param.default_value}`)" if param.default_value else ""
             desc = f" - {param.description}" if param.description else ""
             lines.append(f"- `{param.name}`{type_info}{default_info}{desc}")
         lines.append("")
@@ -422,14 +406,8 @@ class MarkdownGenerator:
         lines = []
 
         if func_doc.returns:
-            type_info = (
-                f"`{func_doc.returns.type_hint}`" if func_doc.returns.type_hint else ""
-            )
-            desc = (
-                f": {func_doc.returns.description}"
-                if func_doc.returns.description
-                else ""
-            )
+            type_info = f"`{func_doc.returns.type_hint}`" if func_doc.returns.type_hint else ""
+            desc = f": {func_doc.returns.description}" if func_doc.returns.description else ""
             lines.append(f"**Returns:** {type_info}{desc}")
             lines.append("")
 
@@ -443,9 +421,7 @@ class MarkdownGenerator:
 
         return lines
 
-    def _generate_function_markdown(
-        self, func_doc: FunctionDoc, is_property: bool = False
-    ) -> List[str]:
+    def _generate_function_markdown(self, func_doc: FunctionDoc, is_property: bool = False) -> List[str]:
         """
         Generate Markdown documentation for a function/method.
 
@@ -501,9 +477,7 @@ class MarkdownGenerator:
     ) -> GeneratedDoc:
         """Generate HTML API documentation."""
         # First generate markdown, then convert to HTML
-        md_doc = self._generate_markdown_api(
-            modules, title, include_toc, include_diagrams
-        )
+        md_doc = self._generate_markdown_api(modules, title, include_toc, include_diagrams)
 
         # Simple markdown to HTML conversion
         html_content = self._markdown_to_html(md_doc.content)
@@ -653,9 +627,7 @@ class MarkdownGenerator:
             "",
         ]
 
-    def _build_list_section(
-        self, title: str, items: List[str], code_format: bool = True
-    ) -> List[str]:
+    def _build_list_section(self, title: str, items: List[str], code_format: bool = True) -> List[str]:
         """Build a markdown list section with optional code formatting.
 
         Issue #620.
@@ -701,9 +673,7 @@ class MarkdownGenerator:
         lines.extend(self._build_list_section("Public API (exports)", module.exports))
 
         content = "\n".join(lines)
-        completeness_score = (
-            100 if module.completeness == DocCompleteness.COMPREHENSIVE else 50
-        )
+        completeness_score = 100 if module.completeness == DocCompleteness.COMPREHENSIVE else 50
 
         return GeneratedDoc(
             title=f"{module.name} Overview",
@@ -740,9 +710,7 @@ def generate_api_docs(
     Returns:
         GeneratedDoc with the generated content
     """
-    return _generator.generate_api_docs(
-        modules, title, format, include_toc, include_diagrams
-    )
+    return _generator.generate_api_docs(modules, title, format, include_toc, include_diagrams)
 
 
 def generate_module_overview(

@@ -133,10 +133,7 @@ class TestNLPExtractionPatterns:
     def test_extracts_multiple_relationships_from_chunk(self) -> None:
         """Multiple causal relationships in one chunk are all extracted."""
         extractor = CausalRelationshipExtractor(mode="nlp")
-        chunk = _make_chunk(
-            "High load causes latency. Caching reduces load. "
-            "Indexing enables fast queries."
-        )
+        chunk = _make_chunk("High load causes latency. Caching reduces load. " "Indexing enables fast queries.")
         ctx = _make_context()
 
         edges = extractor._nlp_extract_chunk(chunk, ctx.document_id)
@@ -223,9 +220,7 @@ class TestLLMExtractionWithMocks:
         }"""
         extractor.llm.chat_completion = AsyncMock(return_value=mock_response)
 
-        chunk = _make_chunk(
-            "Request rate amplifies CPU usage when processing is single-threaded."
-        )
+        chunk = _make_chunk("Request rate amplifies CPU usage when processing is single-threaded.")
         ctx = _make_context()
 
         edges = await extractor._extract_from_chunk(chunk, ctx)

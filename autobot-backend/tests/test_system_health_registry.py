@@ -246,12 +246,14 @@ def test_probes_run_concurrently_not_serially():
     sleeps = [0.5, 0.5, 0.5]
 
     for index, duration in enumerate(sleeps):
+
         @register_health_probe(f"sleeper_{index}")
         async def _probe(_request=None, _d=duration, _i=index):
             await asyncio.sleep(_d)
             return ComponentHealth(name=f"sleeper_{_i}", status="ok")
 
     import time
+
     started = time.perf_counter()
     asyncio.run(collect_system_health())
     elapsed = time.perf_counter() - started

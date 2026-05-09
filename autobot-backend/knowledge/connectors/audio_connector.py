@@ -52,9 +52,7 @@ _VIDEO_EXTS = {".mp4", ".mkv", ".webm", ".avi", ".mov"}
 _MEDIA_EXTS = _AUDIO_EXTS | _VIDEO_EXTS
 
 # YouTube URL patterns
-_YT_PATTERN = re.compile(
-    r"(https?://)?(www\.)?(youtube\.com/watch\?v=|youtu\.be/)[\w\-]+"
-)
+_YT_PATTERN = re.compile(r"(https?://)?(www\.)?(youtube\.com/watch\?v=|youtu\.be/)[\w\-]+")
 
 
 def _is_youtube_url(url: str) -> bool:
@@ -69,6 +67,7 @@ def _source_id_for(path_or_url: str) -> str:
 # ---------------------------------------------------------------------------
 # Whisper helpers
 # ---------------------------------------------------------------------------
+
 
 async def _transcribe_with_npu(
     audio_path: str,
@@ -104,9 +103,7 @@ def _transcribe_with_whisper_cpu(
     try:
         import whisper  # type: ignore[import-untyped]
     except ImportError as exc:
-        raise RuntimeError(
-            "whisper package not installed.  Run: pip install openai-whisper"
-        ) from exc
+        raise RuntimeError("whisper package not installed.  Run: pip install openai-whisper") from exc
 
     model = whisper.load_model(model_name)
     options: dict = {}
@@ -125,9 +122,7 @@ async def _download_audio_yt_dlp(url: str, dest_dir: str) -> str:
     try:
         import yt_dlp  # type: ignore[import-untyped]
     except ImportError as exc:
-        raise RuntimeError(
-            "yt-dlp not installed.  Run: pip install yt-dlp"
-        ) from exc
+        raise RuntimeError("yt-dlp not installed.  Run: pip install yt-dlp") from exc
 
     output_template = os.path.join(dest_dir, "%(id)s.%(ext)s")
     ydl_opts = {
@@ -235,9 +230,7 @@ class AudioConnector(AbstractConnector):
             if is_local:
                 stat = os.stat(src) if os.path.exists(src) else None
                 size = stat.st_size if stat else 0
-                mtime = (
-                    datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc) if stat else now_utc()
-                )
+                mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc) if stat else now_utc()
             else:
                 size = 0
                 mtime = now_utc()
@@ -255,9 +248,7 @@ class AudioConnector(AbstractConnector):
             )
         return results
 
-    async def detect_changes(
-        self, since: Optional[datetime] = None
-    ) -> List[ChangeInfo]:
+    async def detect_changes(self, since: Optional[datetime] = None) -> List[ChangeInfo]:
         """Return all sources as 'added' (audio content is immutable once ingested)."""
         sources = await self.discover_sources()
         return [
@@ -289,9 +280,7 @@ class AudioConnector(AbstractConnector):
     # Transcription orchestration
     # ------------------------------------------------------------------
 
-    async def _transcribe_source(
-        self, source_id: str, source: str
-    ) -> ContentResult:
+    async def _transcribe_source(self, source_id: str, source: str) -> ContentResult:
         """Resolve source to an audio file path, then transcribe."""
         is_remote = source.startswith(("http://", "https://"))
 
@@ -313,9 +302,7 @@ class AudioConnector(AbstractConnector):
             metadata=metadata,
         )
 
-    async def _resolve_remote(
-        self, url: str, tmp_dir: str
-    ) -> "tuple[str, dict]":
+    async def _resolve_remote(self, url: str, tmp_dir: str) -> "tuple[str, dict]":
         """Download remote URL to tmp_dir.  Returns (audio_path, extra_metadata)."""
         if _is_youtube_url(url):
             extra_meta = _extract_yt_metadata(url)
@@ -360,13 +347,9 @@ async def _download_direct_url(url: str, dest_dir: str) -> str:
     dest_path = os.path.join(dest_dir, filename)
 
     async with aiohttp.ClientSession() as session:
-        async with session.get(
-            url, timeout=aiohttp.ClientTimeout(total=300)
-        ) as resp:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=300)) as resp:
             if resp.status != 200:
-                raise RuntimeError(
-                    f"Failed to download {url}: HTTP {resp.status}"
-                )
+                raise RuntimeError(f"Failed to download {url}: HTTP {resp.status}")
             with open(dest_path, "wb", encoding=None) as fh:  # type: ignore[call-overload]
                 async for chunk in resp.content.iter_chunked(65536):
                     fh.write(chunk)
@@ -381,9 +364,7 @@ def _validate_local_path(path: str) -> None:
         raise ValueError(f"Audio file not found: {path!r}")
     ext = os.path.splitext(path.lower())[1]
     if ext not in _MEDIA_EXTS:
-        raise ValueError(
-            f"Unsupported audio/video extension {ext!r}. Allowed: {sorted(_MEDIA_EXTS)}"
-        )
+        raise ValueError(f"Unsupported audio/video extension {ext!r}. Allowed: {sorted(_MEDIA_EXTS)}")
 
 
 def _build_metadata(source: str, extra: dict) -> dict:

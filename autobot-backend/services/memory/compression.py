@@ -80,9 +80,7 @@ class ContextCompressionService:
             for name, spec in models.items():
                 if not isinstance(spec, dict):
                     continue
-                threshold = spec.get(
-                    "compression_threshold", _DEFAULT_COMPRESSION_THRESHOLD
-                )
+                threshold = spec.get("compression_threshold", _DEFAULT_COMPRESSION_THRESHOLD)
                 context_window = spec.get("context_window_tokens")
                 if context_window is not None and threshold > context_window:
                     raise ValueError(
@@ -125,9 +123,7 @@ class ContextCompressionService:
         threshold = self._get_threshold(model_name)
         return content_tokens > threshold
 
-    async def compress_history(
-        self, messages: List[Dict[str, Any]], target_tokens: int
-    ) -> List[Dict[str, Any]]:
+    async def compress_history(self, messages: List[Dict[str, Any]], target_tokens: int) -> List[Dict[str, Any]]:
         """Trim conversation history to fit within target_tokens.
 
         Strategy: keep the most recent messages that fit; prefix the result
@@ -148,9 +144,7 @@ class ContextCompressionService:
             logger.warning("[#3770] compress_history failed, returning original: %s", exc)
             return messages
 
-    def _trim_with_summary(
-        self, messages: List[Dict[str, Any]], target_tokens: int
-    ) -> List[Dict[str, Any]]:
+    def _trim_with_summary(self, messages: List[Dict[str, Any]], target_tokens: int) -> List[Dict[str, Any]]:
         """Keep trailing messages that fit, prepend summary of dropped ones."""
         kept: List[Dict[str, Any]] = []
         used = 0
@@ -174,9 +168,7 @@ class ContextCompressionService:
         }
         return [summary] + kept
 
-    async def compress_kb_results(
-        self, results: List[Any], max_tokens: int
-    ) -> List[Any]:
+    async def compress_kb_results(self, results: List[Any], max_tokens: int) -> List[Any]:
         """Re-rank KB results by score and trim to fit max_tokens.
 
         Args:
@@ -219,6 +211,8 @@ class ContextCompressionService:
             used += cost
         logger.debug(
             "[#3770] KB compression: kept %d/%d results (%d tokens)",
-            len(kept), len(results), used,
+            len(kept),
+            len(results),
+            used,
         )
         return kept

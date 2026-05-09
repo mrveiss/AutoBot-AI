@@ -88,6 +88,7 @@ class TestFallbackChain:
     @pytest.mark.asyncio
     async def test_async_fallback_chain(self):
         """Test async fallback chain."""
+
         async def primary():
             await asyncio.sleep(0.01)
             raise RuntimeError("Primary down")
@@ -106,6 +107,7 @@ class TestFallbackChain:
     @pytest.mark.asyncio
     async def test_mixed_sync_async_fallbacks(self):
         """Test chain with both sync and async fallbacks."""
+
         def sync_fallback():
             return "sync_result"
 

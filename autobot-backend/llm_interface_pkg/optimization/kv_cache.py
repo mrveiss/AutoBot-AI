@@ -111,10 +111,7 @@ class KVCacheConfig:
         if self.batch_size < 1:
             raise ValueError(f"batch_size must be >= 1, got {self.batch_size}")
         if self.dtype not in _DTYPE_BYTES:
-            raise ValueError(
-                f"Unsupported dtype '{self.dtype}'. "
-                f"Choose from: {sorted(_DTYPE_BYTES)}"
-            )
+            raise ValueError(f"Unsupported dtype '{self.dtype}'. " f"Choose from: {sorted(_DTYPE_BYTES)}")
 
     @property
     def dtype_bytes(self) -> int:
@@ -330,25 +327,17 @@ class LayerKVCache:
         for name, tensor in (("new_k", new_k), ("new_v", new_v)):
             if tensor.ndim != 4:
                 raise ValueError(
-                    f"{name} must be 4D [batch, seq, heads, head_dim], "
-                    f"got {tensor.ndim}D for layer {layer_idx}"
+                    f"{name} must be 4D [batch, seq, heads, head_dim], " f"got {tensor.ndim}D for layer {layer_idx}"
                 )
             b, _seq, h, d = tensor.shape
             if b != cfg.batch_size:
                 raise ValueError(
-                    f"{name} batch size {b} != config batch_size {cfg.batch_size} "
-                    f"for layer {layer_idx}"
+                    f"{name} batch size {b} != config batch_size {cfg.batch_size} " f"for layer {layer_idx}"
                 )
             if h != cfg.num_heads:
-                raise ValueError(
-                    f"{name} num_heads {h} != config num_heads {cfg.num_heads} "
-                    f"for layer {layer_idx}"
-                )
+                raise ValueError(f"{name} num_heads {h} != config num_heads {cfg.num_heads} " f"for layer {layer_idx}")
             if d != cfg.head_dim:
-                raise ValueError(
-                    f"{name} head_dim {d} != config head_dim {cfg.head_dim} "
-                    f"for layer {layer_idx}"
-                )
+                raise ValueError(f"{name} head_dim {d} != config head_dim {cfg.head_dim} " f"for layer {layer_idx}")
 
     def _allocate_layer_tensors(
         self,
@@ -384,8 +373,7 @@ class LayerKVCache:
         end = start + new_seq
         if end > self._config.max_seq_len:
             raise ValueError(
-                f"KV cache overflow: current={start}, adding={new_seq}, "
-                f"max_seq_len={self._config.max_seq_len}"
+                f"KV cache overflow: current={start}, adding={new_seq}, " f"max_seq_len={self._config.max_seq_len}"
             )
         entry.k[:, start:end, :, :] = new_k
         entry.v[:, start:end, :, :] = new_v
@@ -419,8 +407,7 @@ class KVCacheManager:
         """
         estimated = self.estimate_memory(config)
         logger.info(
-            "Creating KV cache: layers=%d heads=%d head_dim=%d max_seq=%d "
-            "dtype=%s estimated_mb=%.1f",
+            "Creating KV cache: layers=%d heads=%d head_dim=%d max_seq=%d " "dtype=%s estimated_mb=%.1f",
             config.num_layers,
             config.num_heads,
             config.head_dim,
@@ -527,9 +514,7 @@ def _compute_cache_bytes(
     Issue #1964: Extracted helper so both manager methods share the formula.
     """
     # 2 tensors (k and v) per layer
-    return (
-        2 * num_layers * batch_size * max_seq_len * num_heads * head_dim * dtype_bytes
-    )
+    return 2 * num_layers * batch_size * max_seq_len * num_heads * head_dim * dtype_bytes
 
 
 def _max_seq_from_budget(
@@ -546,9 +531,7 @@ def _max_seq_from_budget(
     Issue #1964.
     """
     # bytes_per_position = 2 * num_layers * batch_size * num_heads * head_dim * dtype_bytes
-    bytes_per_position = (
-        2 * num_layers * batch_size * num_heads * head_dim * dtype_bytes
-    )
+    bytes_per_position = 2 * num_layers * batch_size * num_heads * head_dim * dtype_bytes
     if bytes_per_position == 0:
         return 0
     return max(1, budget_bytes // bytes_per_position)

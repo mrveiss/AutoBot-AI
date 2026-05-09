@@ -112,9 +112,7 @@ class TestRAGQueryBenchmarks:
             scored_docs = []
             for doc in documents:
                 # Simple dot product for speed
-                score = sum(
-                    a * b for a, b in zip(query_vector[:10], doc["embedding"][:10])
-                )
+                score = sum(a * b for a, b in zip(query_vector[:10], doc["embedding"][:10]))
                 scored_docs.append((score, doc))
 
             # Get top k
@@ -140,8 +138,7 @@ class TestRAGQueryBenchmarks:
         """Benchmark context window assembly from retrieved documents"""
         retrieved_docs = [
             {
-                "content": f"Document {i} contains important information about the topic. "
-                * 10,
+                "content": f"Document {i} contains important information about the topic. " * 10,
                 "metadata": {"source": f"source_{i}", "relevance": 0.9 - i * 0.1},
             }
             for i in range(10)
@@ -189,9 +186,7 @@ class TestRAGQueryBenchmarks:
             while start < len(long_document):
                 end = min(start + chunk_size, len(long_document))
                 chunks.append(long_document[start:end])
-                start = (
-                    end - overlap if end < len(long_document) else len(long_document)
-                )
+                start = end - overlap if end < len(long_document) else len(long_document)
             return chunks
 
         result = runner.run_benchmark(
@@ -213,11 +208,7 @@ class TestRAGQueryBenchmarks:
         """Benchmark metadata filtering performance"""
 
         def filter_by_metadata(source_filter="test"):
-            return [
-                doc
-                for doc in mock_documents
-                if doc["metadata"]["source"] == source_filter
-            ]
+            return [doc for doc in mock_documents if doc["metadata"]["source"] == source_filter]
 
         result = runner.run_benchmark(
             name="rag_metadata_filtering_1000_docs",
@@ -322,15 +313,11 @@ class TestRAGPipelineBenchmarks:
         def simulate_rag_pipeline():
             # 1. Query embedding (simulated)
             query = "What is the best approach for performance optimization?"
-            _query_embedding = [
-                hash(query + str(i)) % 1000 / 1000.0 for i in range(384)
-            ]
+            _query_embedding = [hash(query + str(i)) % 1000 / 1000.0 for i in range(384)]
 
             # 2. Vector search (simulated - quick sleep for realism)
             time.sleep(0.001)  # Simulate 1ms DB query
-            retrieved_docs = [
-                {"content": f"Doc {i}", "score": 0.9 - i * 0.05} for i in range(5)
-            ]
+            retrieved_docs = [{"content": f"Doc {i}", "score": 0.9 - i * 0.05} for i in range(5)]
 
             # 3. Reranking (simulated)
             reranked = sorted(retrieved_docs, key=lambda x: x["score"], reverse=True)
@@ -411,30 +398,120 @@ def _deterministic_embed(text: str, dim: int = 128) -> list:
     # Terms are grouped by topic so same-topic documents share high overlap.
     _VOCAB = [
         # Python (indices 0-19)
-        "python", "list", "comprehension", "generator", "yield", "decorator",
-        "asyncio", "coroutine", "dataclass", "unittest", "mock", "venv",
-        "gil", "interpreter", "bytecode", "hint", "mypy", "typing",
-        "functools", "wraps",
+        "python",
+        "list",
+        "comprehension",
+        "generator",
+        "yield",
+        "decorator",
+        "asyncio",
+        "coroutine",
+        "dataclass",
+        "unittest",
+        "mock",
+        "venv",
+        "gil",
+        "interpreter",
+        "bytecode",
+        "hint",
+        "mypy",
+        "typing",
+        "functools",
+        "wraps",
         # Database (indices 20-39)
-        "postgresql", "database", "sql", "index", "query", "transaction",
-        "acid", "redis", "chromadb", "vector", "embedding", "normalization",
-        "partition", "connection", "pool", "wal", "log", "schema",
-        "relational", "table",
+        "postgresql",
+        "database",
+        "sql",
+        "index",
+        "query",
+        "transaction",
+        "acid",
+        "redis",
+        "chromadb",
+        "vector",
+        "embedding",
+        "normalization",
+        "partition",
+        "connection",
+        "pool",
+        "wal",
+        "log",
+        "schema",
+        "relational",
+        "table",
         # Networking (indices 40-59)
-        "tcp", "http", "tls", "dns", "load", "balancer", "websocket",
-        "cidr", "bgp", "nginx", "proxy", "network", "protocol", "routing",
-        "server", "client", "encrypt", "firewall", "sse", "packet",
+        "tcp",
+        "http",
+        "tls",
+        "dns",
+        "load",
+        "balancer",
+        "websocket",
+        "cidr",
+        "bgp",
+        "nginx",
+        "proxy",
+        "network",
+        "protocol",
+        "routing",
+        "server",
+        "client",
+        "encrypt",
+        "firewall",
+        "sse",
+        "packet",
         # Machine Learning (indices 60-79)
-        "transformer", "rag", "retrieval", "augmented", "generation",
-        "cosine", "similarity", "precision", "recall", "embedding",
-        "finetune", "quantisation", "reranker", "bm25", "hybrid",
-        "sentence", "chunk", "attention", "model", "language",
+        "transformer",
+        "rag",
+        "retrieval",
+        "augmented",
+        "generation",
+        "cosine",
+        "similarity",
+        "precision",
+        "recall",
+        "embedding",
+        "finetune",
+        "quantisation",
+        "reranker",
+        "bm25",
+        "hybrid",
+        "sentence",
+        "chunk",
+        "attention",
+        "model",
+        "language",
         # General / overlap (indices 80-127)
-        "data", "performance", "memory", "efficient", "search", "result",
-        "document", "content", "source", "text", "word", "term",
-        "score", "rank", "top", "relevant", "train", "test", "run",
-        "function", "class", "method", "import", "module", "package",
-        "version", "install", "build", "config", "setup",
+        "data",
+        "performance",
+        "memory",
+        "efficient",
+        "search",
+        "result",
+        "document",
+        "content",
+        "source",
+        "text",
+        "word",
+        "term",
+        "score",
+        "rank",
+        "top",
+        "relevant",
+        "train",
+        "test",
+        "run",
+        "function",
+        "class",
+        "method",
+        "import",
+        "module",
+        "package",
+        "version",
+        "install",
+        "build",
+        "config",
+        "setup",
     ]
     # Extend to *dim* entries with placeholder values (empty string never matches)
     vocab = (_VOCAB + [""] * dim)[:dim]
@@ -468,49 +545,209 @@ def _deterministic_embed(text: str, dim: int = 128) -> list:
 
 _TOPIC_DOCS = [
     # Python programming
-    ("python_01", "Python is a high-level interpreted programming language with clear readable syntax supporting procedural object-oriented and functional paradigms.", "python"),
-    ("python_02", "Python list comprehensions provide a concise way to create lists. Example: squares = [x**2 for x in range(10)]. They are faster than equivalent for-loops.", "python"),
-    ("python_03", "Python decorators add behaviour to functions without modifying them. The @functools.wraps decorator preserves the wrapped function metadata.", "python"),
-    ("python_04", "Python generators use the yield keyword to produce sequences lazily which is memory-efficient for large data streams.", "python"),
-    ("python_05", "The Python GIL Global Interpreter Lock prevents multiple threads from executing Python bytecode simultaneously. Use multiprocessing for CPU-bound work.", "python"),
-    ("python_06", "Python virtual environments venv isolate project dependencies so different projects can use different package versions without conflicts.", "python"),
-    ("python_07", "Type hints in Python PEP 484 allow static type checkers such as mypy to catch type errors before runtime without affecting performance.", "python"),
-    ("python_08", "Python asyncio library enables single-threaded concurrency using coroutines and an event loop ideal for I/O-bound workloads such as HTTP clients.", "python"),
-    ("python_09", "Python dataclasses PEP 557 auto-generate __init__ __repr__ and __eq__ from field annotations reducing boilerplate for data-holding classes.", "python"),
-    ("python_10", "Python unittest.mock lets you replace real objects with Mock instances during testing to assert how they are called without side effects.", "python"),
+    (
+        "python_01",
+        "Python is a high-level interpreted programming language with clear readable syntax supporting procedural object-oriented and functional paradigms.",
+        "python",
+    ),
+    (
+        "python_02",
+        "Python list comprehensions provide a concise way to create lists. Example: squares = [x**2 for x in range(10)]. They are faster than equivalent for-loops.",
+        "python",
+    ),
+    (
+        "python_03",
+        "Python decorators add behaviour to functions without modifying them. The @functools.wraps decorator preserves the wrapped function metadata.",
+        "python",
+    ),
+    (
+        "python_04",
+        "Python generators use the yield keyword to produce sequences lazily which is memory-efficient for large data streams.",
+        "python",
+    ),
+    (
+        "python_05",
+        "The Python GIL Global Interpreter Lock prevents multiple threads from executing Python bytecode simultaneously. Use multiprocessing for CPU-bound work.",
+        "python",
+    ),
+    (
+        "python_06",
+        "Python virtual environments venv isolate project dependencies so different projects can use different package versions without conflicts.",
+        "python",
+    ),
+    (
+        "python_07",
+        "Type hints in Python PEP 484 allow static type checkers such as mypy to catch type errors before runtime without affecting performance.",
+        "python",
+    ),
+    (
+        "python_08",
+        "Python asyncio library enables single-threaded concurrency using coroutines and an event loop ideal for I/O-bound workloads such as HTTP clients.",
+        "python",
+    ),
+    (
+        "python_09",
+        "Python dataclasses PEP 557 auto-generate __init__ __repr__ and __eq__ from field annotations reducing boilerplate for data-holding classes.",
+        "python",
+    ),
+    (
+        "python_10",
+        "Python unittest.mock lets you replace real objects with Mock instances during testing to assert how they are called without side effects.",
+        "python",
+    ),
     # Database / SQL
-    ("db_01", "PostgreSQL is an advanced open-source relational database supporting ACID transactions complex queries foreign keys and triggers.", "database"),
-    ("db_02", "SQL indexes speed up SELECT queries by allowing the database engine to locate rows without scanning the entire table. B-tree indexes are the default in PostgreSQL.", "database"),
-    ("db_03", "Database normalization organises tables to reduce redundancy. Third Normal Form 3NF requires all non-key attributes depend only on the primary key.", "database"),
-    ("db_04", "Redis is an in-memory data structure store used as a database cache and message broker supporting strings hashes lists sets and sorted sets.", "database"),
-    ("db_05", "ChromaDB is an open-source embedding database for storing and querying high-dimensional vectors produced by language model embeddings.", "database"),
-    ("db_06", "ACID properties Atomicity Consistency Isolation Durability guarantee database transactions are processed reliably even after system failures.", "database"),
-    ("db_07", "Partitioning a large database table by date range dramatically improves query performance by limiting scans to relevant partitions.", "database"),
-    ("db_08", "Vector similarity search retrieves documents whose embedding vectors are closest to a query vector using cosine similarity or L2 distance.", "database"),
-    ("db_09", "Connection pooling reuses existing database connections rather than opening a new TCP connection for each query reducing latency and resource use.", "database"),
-    ("db_10", "A write-ahead log WAL records database changes before applying them so the database can recover to a consistent state after a crash.", "database"),
+    (
+        "db_01",
+        "PostgreSQL is an advanced open-source relational database supporting ACID transactions complex queries foreign keys and triggers.",
+        "database",
+    ),
+    (
+        "db_02",
+        "SQL indexes speed up SELECT queries by allowing the database engine to locate rows without scanning the entire table. B-tree indexes are the default in PostgreSQL.",
+        "database",
+    ),
+    (
+        "db_03",
+        "Database normalization organises tables to reduce redundancy. Third Normal Form 3NF requires all non-key attributes depend only on the primary key.",
+        "database",
+    ),
+    (
+        "db_04",
+        "Redis is an in-memory data structure store used as a database cache and message broker supporting strings hashes lists sets and sorted sets.",
+        "database",
+    ),
+    (
+        "db_05",
+        "ChromaDB is an open-source embedding database for storing and querying high-dimensional vectors produced by language model embeddings.",
+        "database",
+    ),
+    (
+        "db_06",
+        "ACID properties Atomicity Consistency Isolation Durability guarantee database transactions are processed reliably even after system failures.",
+        "database",
+    ),
+    (
+        "db_07",
+        "Partitioning a large database table by date range dramatically improves query performance by limiting scans to relevant partitions.",
+        "database",
+    ),
+    (
+        "db_08",
+        "Vector similarity search retrieves documents whose embedding vectors are closest to a query vector using cosine similarity or L2 distance.",
+        "database",
+    ),
+    (
+        "db_09",
+        "Connection pooling reuses existing database connections rather than opening a new TCP connection for each query reducing latency and resource use.",
+        "database",
+    ),
+    (
+        "db_10",
+        "A write-ahead log WAL records database changes before applying them so the database can recover to a consistent state after a crash.",
+        "database",
+    ),
     # Networking
-    ("net_01", "TCP Transmission Control Protocol provides reliable ordered error-checked delivery of data between applications running on hosts in an IP network.", "networking"),
-    ("net_02", "HTTP/2 multiplexes multiple requests over a single TCP connection reducing latency compared to HTTP/1.1 which requires a separate connection per request.", "networking"),
-    ("net_03", "TLS Transport Layer Security encrypts network traffic between client and server to prevent eavesdropping and man-in-the-middle attacks.", "networking"),
-    ("net_04", "A load balancer distributes incoming network requests across multiple backend servers to improve availability and horizontal scalability.", "networking"),
-    ("net_05", "DNS Domain Name System translates hostnames such as example.com into IP addresses that routers use to forward packets.", "networking"),
-    ("net_06", "WebSockets provide full-duplex communication over a single TCP connection enabling real-time data exchange between browser and server.", "networking"),
-    ("net_07", "CIDR Classless Inter-Domain Routing notation expresses IP address ranges; for example 192.168.1.0/24 covers 256 addresses.", "networking"),
-    ("net_08", "Server-Sent Events SSE allow a server to push data to a browser client over a standard HTTP connection without requiring the client to poll.", "networking"),
-    ("net_09", "BGP Border Gateway Protocol is the routing protocol that directs traffic between autonomous systems on the internet.", "networking"),
-    ("net_10", "A reverse proxy sits in front of backend servers forwarding client requests and returning responses; nginx and HAProxy are popular choices.", "networking"),
+    (
+        "net_01",
+        "TCP Transmission Control Protocol provides reliable ordered error-checked delivery of data between applications running on hosts in an IP network.",
+        "networking",
+    ),
+    (
+        "net_02",
+        "HTTP/2 multiplexes multiple requests over a single TCP connection reducing latency compared to HTTP/1.1 which requires a separate connection per request.",
+        "networking",
+    ),
+    (
+        "net_03",
+        "TLS Transport Layer Security encrypts network traffic between client and server to prevent eavesdropping and man-in-the-middle attacks.",
+        "networking",
+    ),
+    (
+        "net_04",
+        "A load balancer distributes incoming network requests across multiple backend servers to improve availability and horizontal scalability.",
+        "networking",
+    ),
+    (
+        "net_05",
+        "DNS Domain Name System translates hostnames such as example.com into IP addresses that routers use to forward packets.",
+        "networking",
+    ),
+    (
+        "net_06",
+        "WebSockets provide full-duplex communication over a single TCP connection enabling real-time data exchange between browser and server.",
+        "networking",
+    ),
+    (
+        "net_07",
+        "CIDR Classless Inter-Domain Routing notation expresses IP address ranges; for example 192.168.1.0/24 covers 256 addresses.",
+        "networking",
+    ),
+    (
+        "net_08",
+        "Server-Sent Events SSE allow a server to push data to a browser client over a standard HTTP connection without requiring the client to poll.",
+        "networking",
+    ),
+    (
+        "net_09",
+        "BGP Border Gateway Protocol is the routing protocol that directs traffic between autonomous systems on the internet.",
+        "networking",
+    ),
+    (
+        "net_10",
+        "A reverse proxy sits in front of backend servers forwarding client requests and returning responses; nginx and HAProxy are popular choices.",
+        "networking",
+    ),
     # Machine Learning / RAG
-    ("ml_01", "A transformer model uses self-attention mechanisms to weigh the influence of different input tokens when producing each output token.", "ml"),
-    ("ml_02", "Retrieval-Augmented Generation RAG combines a retrieval step that fetches relevant documents with a generation step that produces a grounded response.", "ml"),
-    ("ml_03", "Fine-tuning a pre-trained language model on a domain-specific dataset adapts its weights to improve performance on that domain without full retraining.", "ml"),
-    ("ml_04", "Cosine similarity measures the angle between two embedding vectors. A score of 1 means identical direction 0 means orthogonal and -1 means opposite.", "ml"),
-    ("ml_05", "Precision@k is the fraction of retrieved top-k documents that are relevant to the query. It measures retrieval accuracy rather than recall.", "ml"),
-    ("ml_06", "A cross-encoder reranker scores each query-document pair jointly to improve ranking quality beyond what a bi-encoder retrieval step achieves.", "ml"),
-    ("ml_07", "Sentence transformers encode sentences into dense vectors such that semantically similar sentences have high cosine similarity in the embedding space.", "ml"),
-    ("ml_08", "Chunking a long document into smaller overlapping windows before embedding ensures retrieval can target specific sections rather than averaging the whole.", "ml"),
-    ("ml_09", "Hybrid search combines dense vector retrieval with sparse keyword retrieval BM25 and merges the two ranked lists using reciprocal rank fusion.", "ml"),
-    ("ml_10", "Quantisation reduces the memory footprint of a language model by representing weights in lower precision such as INT8 or INT4 instead of FP32.", "ml"),
+    (
+        "ml_01",
+        "A transformer model uses self-attention mechanisms to weigh the influence of different input tokens when producing each output token.",
+        "ml",
+    ),
+    (
+        "ml_02",
+        "Retrieval-Augmented Generation RAG combines a retrieval step that fetches relevant documents with a generation step that produces a grounded response.",
+        "ml",
+    ),
+    (
+        "ml_03",
+        "Fine-tuning a pre-trained language model on a domain-specific dataset adapts its weights to improve performance on that domain without full retraining.",
+        "ml",
+    ),
+    (
+        "ml_04",
+        "Cosine similarity measures the angle between two embedding vectors. A score of 1 means identical direction 0 means orthogonal and -1 means opposite.",
+        "ml",
+    ),
+    (
+        "ml_05",
+        "Precision@k is the fraction of retrieved top-k documents that are relevant to the query. It measures retrieval accuracy rather than recall.",
+        "ml",
+    ),
+    (
+        "ml_06",
+        "A cross-encoder reranker scores each query-document pair jointly to improve ranking quality beyond what a bi-encoder retrieval step achieves.",
+        "ml",
+    ),
+    (
+        "ml_07",
+        "Sentence transformers encode sentences into dense vectors such that semantically similar sentences have high cosine similarity in the embedding space.",
+        "ml",
+    ),
+    (
+        "ml_08",
+        "Chunking a long document into smaller overlapping windows before embedding ensures retrieval can target specific sections rather than averaging the whole.",
+        "ml",
+    ),
+    (
+        "ml_09",
+        "Hybrid search combines dense vector retrieval with sparse keyword retrieval BM25 and merges the two ranked lists using reciprocal rank fusion.",
+        "ml",
+    ),
+    (
+        "ml_10",
+        "Quantisation reduces the memory footprint of a language model by representing weights in lower precision such as INT8 or INT4 instead of FP32.",
+        "ml",
+    ),
 ]
 
 # Ground-truth: query text -> expected doc IDs (at least one must appear in top-k)
@@ -528,7 +765,6 @@ _GROUND_TRUTH = {
     "TLS encryption and secure network communication": {"net_03", "net_01"},
     "RAG retrieval augmented generation embedding search": {"ml_02", "ml_09"},
     "cosine similarity precision at k evaluation metrics": {"ml_04", "ml_05"},
-
     # ------------------------------------------------------------------ [factual] — Python
     "Python GIL Global Interpreter Lock threading bytecode": {"python_05"},
     "Python type hints mypy static type checking PEP 484": {"python_07"},
@@ -538,7 +774,6 @@ _GROUND_TRUTH = {
     "Python virtual environments venv package isolation": {"python_06"},
     "Python decorators functools wraps metadata preservation": {"python_03"},
     "Python high-level interpreted language syntax paradigms": {"python_01"},
-
     # ------------------------------------------------------------------ [factual] — Database
     "Redis in-memory data structure store cache message broker": {"db_04"},
     "ChromaDB embedding database vector storage language model": {"db_05"},
@@ -548,7 +783,6 @@ _GROUND_TRUTH = {
     "database table partitioning date range query performance": {"db_07"},
     "vector similarity search cosine distance embeddings": {"db_08"},
     "SQL database normalization third normal form redundancy": {"db_03"},
-
     # ------------------------------------------------------------------ [factual] — Networking
     "TCP reliable ordered error-checked data delivery": {"net_01"},
     "HTTP/2 multiplexing single TCP connection latency": {"net_02"},
@@ -558,7 +792,6 @@ _GROUND_TRUTH = {
     "Server-Sent Events SSE server push HTTP browser": {"net_08"},
     "BGP border gateway protocol autonomous systems internet routing": {"net_09"},
     "reverse proxy nginx HAProxy backend forwarding": {"net_10"},
-
     # ------------------------------------------------------------------ [factual] — ML / RAG
     "transformer self-attention mechanism input tokens weights": {"ml_01"},
     "fine-tuning pre-trained language model domain-specific dataset": {"ml_03"},
@@ -567,7 +800,6 @@ _GROUND_TRUTH = {
     "document chunking overlapping windows embedding retrieval": {"ml_08"},
     "BM25 hybrid search dense sparse retrieval reciprocal rank fusion": {"ml_09"},
     "quantisation INT8 INT4 model memory footprint weights": {"ml_10"},
-
     # ------------------------------------------------------------------ [procedural]
     "how to create a Python virtual environment and install packages": {"python_06"},
     "steps to add a type hint to a Python function and check with mypy": {"python_07"},
@@ -583,82 +815,98 @@ _GROUND_TRUTH = {
     "steps to fine-tune a language model on a domain-specific corpus": {"ml_03"},
     "how to chunk documents before embedding them for RAG retrieval": {"ml_08"},
     "how to combine dense and sparse retrieval using hybrid search BM25": {"ml_09"},
-
     # ------------------------------------------------------------------ [multi-hop]
     "how does Python asyncio interact with PostgreSQL connection pools for scalable I/O": {
-        "python_08", "db_09",
+        "python_08",
+        "db_09",
     },
     "how do transformer embeddings enable vector similarity search in ChromaDB": {
-        "ml_01", "db_05",
+        "ml_01",
+        "db_05",
     },
     "how does TLS affect load balancer configuration for HTTPS termination": {
-        "net_03", "net_04",
+        "net_03",
+        "net_04",
     },
     "relationship between Python GIL and asyncio for concurrent database queries": {
-        "python_05", "python_08",
+        "python_05",
+        "python_08",
     },
     "how does document chunking affect precision at k in RAG evaluation": {
-        "ml_08", "ml_05",
+        "ml_08",
+        "ml_05",
     },
     "why does database write-ahead logging complement ACID transaction guarantees": {
-        "db_10", "db_06",
+        "db_10",
+        "db_06",
     },
     "how does fine-tuning interact with quantisation for memory-efficient deployment": {
-        "ml_03", "ml_10",
+        "ml_03",
+        "ml_10",
     },
     "how does HTTP/2 multiplexing reduce load on reverse proxy backends": {
-        "net_02", "net_10",
+        "net_02",
+        "net_10",
     },
     "how do PostgreSQL partitions and indexes work together to accelerate queries": {
-        "db_07", "db_02",
+        "db_07",
+        "db_02",
     },
     "how does sentence transformer encoding feed into a cross-encoder reranker": {
-        "ml_07", "ml_06",
+        "ml_07",
+        "ml_06",
     },
-
     # ------------------------------------------------------------------ [troubleshooting]
     "why are Python threads not achieving parallelism on CPU-bound work": {"python_05"},
     "why does a PostgreSQL SELECT query remain slow despite having an index": {
-        "db_02", "db_07",
+        "db_02",
+        "db_07",
     },
     "why is Redis returning stale data after a server restart": {"db_04", "db_10"},
     "why does a TLS handshake fail when connecting to a backend service": {"net_03"},
     "why is ChromaDB returning low-relevance results for a domain query": {
-        "db_05", "ml_07",
+        "db_05",
+        "ml_07",
     },
     "why does RAG retrieval return irrelevant documents for a specific query": {
-        "ml_02", "ml_08",
+        "ml_02",
+        "ml_08",
     },
     "why does cosine similarity score poorly for short queries in the embedding space": {
-        "ml_04", "ml_07",
+        "ml_04",
+        "ml_07",
     },
     "why is connection pool exhausted under high concurrency in a Python service": {
-        "db_09", "python_08",
+        "db_09",
+        "python_08",
     },
     "why does a DNS lookup return incorrect IP after a server migration": {"net_05"},
     "why are Server-Sent Events disconnecting frequently from a browser client": {
-        "net_08", "net_06",
+        "net_08",
+        "net_06",
     },
-
     # ------------------------------------------------------------------ [edge-case]
     "behaviour of Python GIL when using multiprocessing instead of threading": {
         "python_05",
     },
     "what happens when a PostgreSQL write-ahead log fills up during high write load": {
-        "db_10", "db_06",
+        "db_10",
+        "db_06",
     },
     "how does chromadb handle duplicate document IDs on repeated insertion": {"db_05"},
     "behaviour of cosine similarity when comparing a zero-magnitude embedding vector": {
         "ml_04",
     },
     "what happens to active WebSocket connections when a backend server restarts": {
-        "net_06", "net_04",
+        "net_06",
+        "net_04",
     },
     "how does quantisation affect model output quality at very low bit widths INT4": {
         "ml_10",
     },
     "what happens when document chunk size exceeds the language model context window": {
-        "ml_08", "ml_01",
+        "ml_08",
+        "ml_01",
     },
     "behaviour of Python dataclass when a mutable default value is used in a field": {
         "python_09",
@@ -693,9 +941,7 @@ class BenchmarkSplit(str, enum.Enum):
     ALL = "all"
 
 
-def _deterministic_dev_test_split(
-    query_ids: List[str], dev_fraction: float = 0.8
-) -> Dict[str, Set[str]]:
+def _deterministic_dev_test_split(query_ids: List[str], dev_fraction: float = 0.8) -> Dict[str, Set[str]]:
     """Split *query_ids* into ``dev_ids`` and ``test_ids`` deterministically.
 
     Uses SHA-256 of each query string modulo 100 as a sort key; a query ``q``
@@ -765,9 +1011,7 @@ class BenchmarkDataset:
         dev_fraction: float = 0.8,
     ) -> "BenchmarkDataset":
         """Build a dataset with a deterministic hash-based dev/test split."""
-        split = _deterministic_dev_test_split(
-            sorted(ground_truth.keys()), dev_fraction=dev_fraction
-        )
+        split = _deterministic_dev_test_split(sorted(ground_truth.keys()), dev_fraction=dev_fraction)
         return cls(
             ground_truth=dict(ground_truth),
             dev_ids=split["dev_ids"],
@@ -792,22 +1036,14 @@ class BenchmarkDataset:
         """
         if query_id in self.dev_ids:
             if self._enforce_test_only:
-                raise RuntimeError(
-                    f"score() accessed dev query_id={query_id!r}; "
-                    "test-only enforcement is active"
-                )
+                raise RuntimeError(f"score() accessed dev query_id={query_id!r}; " "test-only enforcement is active")
             self._accessed_dev.add(query_id)
         elif query_id in self.test_ids:
             if self._enforce_dev_only:
-                raise RuntimeError(
-                    f"tune() accessed test query_id={query_id!r}; "
-                    "dev-only enforcement is active"
-                )
+                raise RuntimeError(f"tune() accessed test query_id={query_id!r}; " "dev-only enforcement is active")
             self._accessed_test.add(query_id)
         else:
-            raise KeyError(
-                f"query_id {query_id!r} is not in any split of this dataset"
-            )
+            raise KeyError(f"query_id {query_id!r} is not in any split of this dataset")
         return set(self.ground_truth[query_id])
 
     def reset_access(self) -> None:
@@ -986,8 +1222,7 @@ class TestRealKBBenchmarks:
                 expected_topic,
             )
             assert actual_topic == expected_topic, (
-                f"Query '{query}': top-1 doc '{top1[0]}' has topic '{actual_topic}', "
-                f"expected '{expected_topic}'"
+                f"Query '{query}': top-1 doc '{top1[0]}' has topic '{actual_topic}', " f"expected '{expected_topic}'"
             )
 
 
@@ -1125,11 +1360,7 @@ class BenchmarkHarness:
         results: List["BenchmarkResult"],
         touched_test: bool,
     ) -> BenchmarkRunReport:
-        mean_p = (
-            sum(r.precision_at_k for r in results) / len(results)
-            if results
-            else 0.0
-        )
+        mean_p = sum(r.precision_at_k for r in results) / len(results) if results else 0.0
         held_out = (
             split == BenchmarkSplit.TEST
             and not touched_test_leakage(self.dataset, split)
@@ -1159,9 +1390,7 @@ class BenchmarkHarness:
         with self.dataset.enforce_dev_only():
             results = harness_fn(self.dataset)
         self._tuned_on_dev = True
-        return self._build_report(
-            BenchmarkSplit.DEV, results, touched_test=False
-        )
+        return self._build_report(BenchmarkSplit.DEV, results, touched_test=False)
 
     def score(
         self,
@@ -1177,13 +1406,8 @@ class BenchmarkHarness:
         with self.dataset.enforce_test_only():
             results = scorer_fn(self.dataset)
         if not self.dataset.accessed_test:
-            raise RuntimeError(
-                "score() called but no test_ids were accessed — "
-                "harness returned zero results"
-            )
-        return self._build_report(
-            BenchmarkSplit.TEST, results, touched_test=False
-        )
+            raise RuntimeError("score() called but no test_ids were accessed — " "harness returned zero results")
+        return self._build_report(BenchmarkSplit.TEST, results, touched_test=False)
 
     def run(
         self,
@@ -1198,11 +1422,7 @@ class BenchmarkHarness:
         if split == BenchmarkSplit.ALL:
             self.dataset.reset_access()
             results = runner_fn(self.dataset)
-            mean_p = (
-                sum(r.precision_at_k for r in results) / len(results)
-                if results
-                else 0.0
-            )
+            mean_p = sum(r.precision_at_k for r in results) / len(results) if results else 0.0
             return BenchmarkRunReport(
                 split_used=BenchmarkSplit.ALL.value,
                 dev_size=self.dataset.dev_size,

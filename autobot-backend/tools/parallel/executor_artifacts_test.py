@@ -121,10 +121,7 @@ class TestPublishObservationWithArtifacts:
         # Create a valid artifact using build_artifact to ensure JSON serializability
         artifacts = [
             build_artifact(
-                artifact_type=ArtifactType.FILE_CHANGE,
-                content="test change",
-                label="test.py",
-                file_path="/tmp/test.py"
+                artifact_type=ArtifactType.FILE_CHANGE, content="test change", label="test.py", file_path="/tmp/test.py"
             )
         ]
 

@@ -37,19 +37,14 @@ _SECRET = os.environ.get("AUTOBOT_A2A_SECRET", "")
 try:
     _CARD_TTL = int(os.environ.get("AUTOBOT_A2A_CARD_TTL", "3600"))
 except ValueError:
-    logger.warning(
-        "AUTOBOT_A2A_CARD_TTL is not a valid integer; defaulting to 3600 s"
-    )
+    logger.warning("AUTOBOT_A2A_CARD_TTL is not a valid integer; defaulting to 3600 s")
     _CARD_TTL = 3600
 
 
 def _get_secret() -> bytes:
     """Return the signing secret as bytes.  Raises RuntimeError if unset."""
     if not _SECRET:
-        raise RuntimeError(
-            "AUTOBOT_A2A_SECRET is not set. "
-            "Set it in .env or via the Ansible backend role."
-        )
+        raise RuntimeError("AUTOBOT_A2A_SECRET is not set. " "Set it in .env or via the Ansible backend role.")
     return _SECRET.encode()
 
 
@@ -116,9 +111,7 @@ class SecurityCardSigner:
 
         age = int(time.time()) - issued_at
         if age > _CARD_TTL:
-            logger.warning(
-                "A2A security card expired (age=%ds, ttl=%ds)", age, _CARD_TTL
-            )
+            logger.warning("A2A security card expired (age=%ds, ttl=%ds)", age, _CARD_TTL)
             raise ValueError(f"Security card expired (age {age}s > ttl {_CARD_TTL}s)")
 
         logger.debug("A2A security card verified (age=%ds)", age)

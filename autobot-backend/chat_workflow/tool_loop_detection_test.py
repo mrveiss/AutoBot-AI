@@ -55,9 +55,7 @@ _STUBS: dict = {
     "langgraph": types.ModuleType("langgraph"),
     "langgraph.checkpoint": types.ModuleType("langgraph.checkpoint"),
     "langgraph.checkpoint.redis": types.ModuleType("langgraph.checkpoint.redis"),
-    "langgraph.checkpoint.redis.aio": types.ModuleType(
-        "langgraph.checkpoint.redis.aio"
-    ),
+    "langgraph.checkpoint.redis.aio": types.ModuleType("langgraph.checkpoint.redis.aio"),
     "langgraph.graph": types.ModuleType("langgraph.graph"),
     "langgraph.types": types.ModuleType("langgraph.types"),
     "typing_extensions": types.ModuleType("typing_extensions"),

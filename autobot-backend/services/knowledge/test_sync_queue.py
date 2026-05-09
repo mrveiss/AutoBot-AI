@@ -53,9 +53,7 @@ def queue(fake_redis: AsyncFullFakeRedis) -> DocumentSyncQueue:
 
 class TestEnqueueDequeue:
     @pytest.mark.asyncio
-    async def test_enqueue_returns_pending_entry(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_enqueue_returns_pending_entry(self, queue: DocumentSyncQueue) -> None:
         entry = await queue.enqueue_sync("docs/a.md", SyncReason.CONTENT_CHANGED)
 
         assert entry.document_path == "docs/a.md"
@@ -64,9 +62,7 @@ class TestEnqueueDequeue:
         assert entry.attempts == 0
 
     @pytest.mark.asyncio
-    async def test_get_next_pending_returns_enqueued_entry(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_get_next_pending_returns_enqueued_entry(self, queue: DocumentSyncQueue) -> None:
         enq = await queue.enqueue_sync("docs/a.md", SyncReason.MANUAL)
 
         nxt = await queue.get_next_pending()
@@ -87,9 +83,7 @@ class TestEnqueueDequeue:
 
 class TestPriorityOrdering:
     @pytest.mark.asyncio
-    async def test_content_changed_dequeued_before_manual(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_content_changed_dequeued_before_manual(self, queue: DocumentSyncQueue) -> None:
         # Enqueue manual FIRST so FIFO would return it without priority.
         await queue.enqueue_sync("manual.md", SyncReason.MANUAL)
         # Small await gap so monotonic-suffix does not order them backwards.
@@ -130,9 +124,7 @@ class TestPriorityOrdering:
         assert nxt.reason == SyncReason.CONTENT_CHANGED
 
     @pytest.mark.asyncio
-    async def test_model_updated_between_content_and_manual(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_model_updated_between_content_and_manual(self, queue: DocumentSyncQueue) -> None:
         manual = await queue.enqueue_sync("m.md", SyncReason.MANUAL)
         await asyncio.sleep(0)
         model = await queue.enqueue_sync("mdl.md", SyncReason.MODEL_UPDATED)
@@ -159,9 +151,7 @@ class TestPriorityOrdering:
 
 class TestAtomicClaim:
     @pytest.mark.asyncio
-    async def test_claim_next_pending_returns_and_removes(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_claim_next_pending_returns_and_removes(self, queue: DocumentSyncQueue) -> None:
         entry = await queue.enqueue_sync("a.md", SyncReason.MANUAL)
 
         claimed = await queue.claim_next_pending()
@@ -173,15 +163,11 @@ class TestAtomicClaim:
         assert await queue.claim_next_pending() is None
 
     @pytest.mark.asyncio
-    async def test_claim_next_pending_empty_queue_returns_none(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_claim_next_pending_empty_queue_returns_none(self, queue: DocumentSyncQueue) -> None:
         assert await queue.claim_next_pending() is None
 
     @pytest.mark.asyncio
-    async def test_concurrent_claims_only_one_wins(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_concurrent_claims_only_one_wins(self, queue: DocumentSyncQueue) -> None:
         """Two workers calling claim_next_pending concurrently — exactly one gets it."""
         await queue.enqueue_sync("a.md", SyncReason.CONTENT_CHANGED)
 
@@ -203,9 +189,7 @@ class TestAtomicClaim:
 
 class TestPathDedup:
     @pytest.mark.asyncio
-    async def test_duplicate_enqueue_returns_existing_entry(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_duplicate_enqueue_returns_existing_entry(self, queue: DocumentSyncQueue) -> None:
         first = await queue.enqueue_sync("docs/a.md", SyncReason.CONTENT_CHANGED)
         second = await queue.enqueue_sync("docs/a.md", SyncReason.MANUAL)
 
@@ -216,9 +200,7 @@ class TestPathDedup:
         assert stats["pending"] == 1
 
     @pytest.mark.asyncio
-    async def test_reenqueue_allowed_after_mark_done(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_reenqueue_allowed_after_mark_done(self, queue: DocumentSyncQueue) -> None:
         first = await queue.enqueue_sync("docs/a.md", SyncReason.CONTENT_CHANGED)
         await queue.mark_processing(first.id)
         await queue.mark_done(first.id)
@@ -232,9 +214,7 @@ class TestPathDedup:
         assert stats["done"] == 1
 
     @pytest.mark.asyncio
-    async def test_reenqueue_allowed_after_terminal_failure(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_reenqueue_allowed_after_terminal_failure(self, queue: DocumentSyncQueue) -> None:
         first = await queue.enqueue_sync("docs/a.md", SyncReason.CONTENT_CHANGED)
         for _ in range(MAX_ATTEMPTS):
             await queue.mark_processing(first.id)
@@ -252,9 +232,7 @@ class TestPathDedup:
 
 class TestStateTransitions:
     @pytest.mark.asyncio
-    async def test_mark_processing_removes_from_pending(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_mark_processing_removes_from_pending(self, queue: DocumentSyncQueue) -> None:
         entry = await queue.enqueue_sync("a.md", SyncReason.MANUAL)
 
         await queue.mark_processing(entry.id)
@@ -264,9 +242,7 @@ class TestStateTransitions:
         assert pending == []
 
     @pytest.mark.asyncio
-    async def test_mark_done_moves_to_done_collection(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_mark_done_moves_to_done_collection(self, queue: DocumentSyncQueue) -> None:
         entry = await queue.enqueue_sync("a.md", SyncReason.MANUAL)
         await queue.mark_processing(entry.id)
 
@@ -285,9 +261,7 @@ class TestStateTransitions:
 
 class TestFailureAndRetry:
     @pytest.mark.asyncio
-    async def test_failed_under_limit_requeues(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_failed_under_limit_requeues(self, queue: DocumentSyncQueue) -> None:
         entry = await queue.enqueue_sync("a.md", SyncReason.CONTENT_CHANGED)
         await queue.mark_processing(entry.id)
 
@@ -301,9 +275,7 @@ class TestFailureAndRetry:
         assert nxt is not None and nxt.id == entry.id
 
     @pytest.mark.asyncio
-    async def test_mark_failed_three_times_terminates_as_failed(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_mark_failed_three_times_terminates_as_failed(self, queue: DocumentSyncQueue) -> None:
         entry = await queue.enqueue_sync("a.md", SyncReason.CONTENT_CHANGED)
 
         for attempt in range(MAX_ATTEMPTS):
@@ -318,9 +290,7 @@ class TestFailureAndRetry:
         assert stats["pending"] == 0
 
     @pytest.mark.asyncio
-    async def test_failed_entries_appear_in_list_entries(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_failed_entries_appear_in_list_entries(self, queue: DocumentSyncQueue) -> None:
         entry = await queue.enqueue_sync("a.md", SyncReason.CONTENT_CHANGED)
         for _ in range(MAX_ATTEMPTS):
             await queue.mark_processing(entry.id)
@@ -340,9 +310,7 @@ class TestFailureAndRetry:
 
 class TestWorkerLoop:
     @pytest.mark.asyncio
-    async def test_process_one_runs_processor_and_marks_done(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_process_one_runs_processor_and_marks_done(self, queue: DocumentSyncQueue) -> None:
         entry = await queue.enqueue_sync("a.md", SyncReason.MANUAL)
         called: List[str] = []
 
@@ -359,9 +327,7 @@ class TestWorkerLoop:
         assert stats["pending"] == 0
 
     @pytest.mark.asyncio
-    async def test_process_one_records_failure_and_requeues(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_process_one_records_failure_and_requeues(self, queue: DocumentSyncQueue) -> None:
         entry = await queue.enqueue_sync("a.md", SyncReason.CONTENT_CHANGED)
 
         async def processor(_: SyncQueueEntry) -> None:
@@ -377,18 +343,14 @@ class TestWorkerLoop:
         assert stats["pending"] == 1
 
     @pytest.mark.asyncio
-    async def test_process_one_empty_queue_returns_none(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_process_one_empty_queue_returns_none(self, queue: DocumentSyncQueue) -> None:
         async def processor(_: SyncQueueEntry) -> None:
             pytest.fail("processor must not run on empty queue")
 
         assert await queue.process_one(processor) is None
 
     @pytest.mark.asyncio
-    async def test_sync_queue_worker_drains_pending(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_sync_queue_worker_drains_pending(self, queue: DocumentSyncQueue) -> None:
         """SyncQueueWorker.run() processes pending entries and idles otherwise."""
         processed_ids: List[str] = []
 
@@ -396,9 +358,7 @@ class TestWorkerLoop:
             processed_ids.append(e.id)
 
         entry = await queue.enqueue_sync("a.md", SyncReason.MANUAL)
-        worker = SyncQueueWorker(
-            queue=queue, idle_sleep_seconds=0.01, processor=processor
-        )
+        worker = SyncQueueWorker(queue=queue, idle_sleep_seconds=0.01, processor=processor)
         task = asyncio.create_task(worker.run())
 
         # Let the worker pick up the entry.
@@ -448,9 +408,7 @@ class TestPrune:
 
 class TestAdminEndpoint:
     @pytest.mark.asyncio
-    async def test_admin_endpoint_returns_pending_and_failed(
-        self, queue: DocumentSyncQueue
-    ) -> None:
+    async def test_admin_endpoint_returns_pending_and_failed(self, queue: DocumentSyncQueue) -> None:
         from api.knowledge_sync_queue import get_sync_queue
 
         pending_entry = await queue.enqueue_sync("a.md", SyncReason.CONTENT_CHANGED)
@@ -459,9 +417,7 @@ class TestAdminEndpoint:
             await queue.mark_processing(failed_entry.id)
             await queue.mark_failed(failed_entry.id, "nope")
 
-        with patch(
-            "api.knowledge_sync_queue.get_document_sync_queue", return_value=queue
-        ):
+        with patch("api.knowledge_sync_queue.get_document_sync_queue", return_value=queue):
             response = await get_sync_queue(limit=10, offset=0, admin_check=True)
 
         pending_ids = {e["id"] for e in response["pending"]}

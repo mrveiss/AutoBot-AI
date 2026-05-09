@@ -66,9 +66,7 @@ class ApprovalHandler:
         async with self._approval_locks_lock:
             self._approval_locks.pop(session_id, None)
 
-    def check_agent_permission(
-        self, agent_role, command_risk: CommandRisk
-    ) -> tuple[bool, str]:
+    def check_agent_permission(self, agent_role, command_risk: CommandRisk) -> tuple[bool, str]:
         """
         Check if agent has permission to execute command at given risk level.
 
@@ -105,9 +103,7 @@ class ApprovalHandler:
             permissions=self.approval_manager.agent_permissions,
         )
 
-    async def store_auto_approve_rule(
-        self, user_id: str, command: str, risk_level: str
-    ):
+    async def store_auto_approve_rule(self, user_id: str, command: str, risk_level: str):
         """
         Store an auto-approve rule for future similar commands.
 
@@ -122,9 +118,7 @@ class ApprovalHandler:
             risk_level=risk_level,
         )
 
-    async def check_auto_approve_rules(
-        self, user_id: str, command: str, risk_level: str
-    ) -> bool:
+    async def check_auto_approve_rules(self, user_id: str, command: str, risk_level: str) -> bool:
         """
         Check if command matches any auto-approve rules.
 
@@ -193,9 +187,7 @@ class ApprovalHandler:
                     f"comment={comment}"
                 )
             except Exception as broadcast_error:
-                logger.warning(
-                    f"Failed to broadcast approval status (non-fatal): {broadcast_error}"
-                )
+                logger.warning(f"Failed to broadcast approval status (non-fatal): {broadcast_error}")
                 # Continue - don't fail the approval process if broadcast fails
 
         except Exception as e:
@@ -234,9 +226,7 @@ class ApprovalHandler:
                 f"⚠️ Could not find chat message to update {'approval' if approved else 'denial'} status: "
                 f"session={session.conversation_id}, terminal_session={session.session_id}"
             )
-        status_text = (
-            "✅ Command approved and executed" if approved else "❌ Command denied"
-        )
+        status_text = "✅ Command approved and executed" if approved else "❌ Command denied"
         await self.chat_history_manager.add_message(
             session_id=session.conversation_id,
             role="system",
@@ -267,13 +257,9 @@ class ApprovalHandler:
         if not session.conversation_id or not self.chat_history_manager:
             return
         try:
-            await self._persist_chat_approval_update(
-                session, command, approved, user_id, comment
-            )
+            await self._persist_chat_approval_update(session, command, approved, user_id, comment)
         except Exception as e:
-            logger.error(
-                f"Failed to update chat approval status (non-fatal): {e}", exc_info=True
-            )
+            logger.error(f"Failed to update chat approval status (non-fatal): {e}", exc_info=True)
 
     async def update_command_queue_status(
         self,
@@ -297,15 +283,11 @@ class ApprovalHandler:
                     user_id=user_id or "web_user",
                     comment=comment,
                 )
-                logger.info(
-                    f"✅ [QUEUE] Command {command_id} approved in queue by {user_id or 'web_user'}"
-                )
+                logger.info(f"✅ [QUEUE] Command {command_id} approved in queue by {user_id or 'web_user'}")
 
                 # Mark execution start
                 await self.command_queue.start_execution(command_id)
-                logger.info(
-                    f"✅ [QUEUE] Command {command_id} marked as EXECUTING in queue"
-                )
+                logger.info(f"✅ [QUEUE] Command {command_id} marked as EXECUTING in queue")
 
                 # Complete if output provided
                 if output or stderr or return_code != 0:
@@ -327,9 +309,7 @@ class ApprovalHandler:
                     user_id=user_id or "web_user",
                     comment=comment,
                 )
-                logger.info(
-                    f"✅ [QUEUE] Command {command_id} denied in queue by {user_id or 'web_user'}"
-                )
+                logger.info(f"✅ [QUEUE] Command {command_id} denied in queue by {user_id or 'web_user'}")
 
         except Exception as e:
             logger.error("Failed to update command queue status: %s", e, exc_info=True)

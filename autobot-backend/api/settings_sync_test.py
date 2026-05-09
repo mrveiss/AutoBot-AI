@@ -39,6 +39,7 @@ from api.settings import (
 # _exceeds_depth — Issue #3881
 # ---------------------------------------------------------------------------
 
+
 class TestExceedsDepth:
     """_exceeds_depth() rejects payloads that are nested too deeply."""
 
@@ -78,6 +79,7 @@ class TestExceedsDepth:
 # Allowlist constants — Issue #3881
 # ---------------------------------------------------------------------------
 
+
 class TestAllowlistConstants:
     """Sanity-check that the allowlist contains expected keys and excludes others."""
 
@@ -88,9 +90,7 @@ class TestAllowlistConstants:
     def test_internal_keys_are_absent(self):
         """Internal / runtime keys that must never be synced."""
         for key in ("__runtime__", "auth", "jwt", "tokens", "password"):
-            assert key not in _SYNC_ALLOWED_TOP_LEVEL_KEYS, (
-                f"'{key}' should not be in the allowlist"
-            )
+            assert key not in _SYNC_ALLOWED_TOP_LEVEL_KEYS, f"'{key}' should not be in the allowlist"
 
     def test_max_depth_is_reasonable(self):
         assert _SYNC_MAX_DEPTH >= 4, "Max depth must accommodate real nested configs"
@@ -102,6 +102,7 @@ class TestAllowlistConstants:
 # ---------------------------------------------------------------------------
 # _atomic_write_json — Issue #3882 (asyncio.to_thread for blocking calls)
 # ---------------------------------------------------------------------------
+
 
 class TestAtomicWriteJson:
     """_atomic_write_json() must use asyncio.to_thread for os.replace/os.unlink."""
@@ -133,9 +134,7 @@ class TestAtomicWriteJson:
                 await _atomic_write_json(target, {"k": "v"})
 
             fns_called = [fn for fn, _ in calls_recorded]
-            assert os.replace in fns_called, (
-                "os.replace must be dispatched via asyncio.to_thread"
-            )
+            assert os.replace in fns_called, "os.replace must be dispatched via asyncio.to_thread"
 
     @pytest.mark.asyncio
     async def test_cleanup_via_to_thread_on_failure(self):
@@ -159,9 +158,7 @@ class TestAtomicWriteJson:
                 with pytest.raises(OSError, match="simulated rename failure"):
                     await _atomic_write_json(target, {"k": "v"})
 
-            assert len(cleanup_calls) == 1, (
-                "os.unlink must be called exactly once via asyncio.to_thread on failure"
-            )
+            assert len(cleanup_calls) == 1, "os.unlink must be called exactly once via asyncio.to_thread on failure"
 
     @pytest.mark.asyncio
     async def test_creates_parent_dirs_if_needed(self):
@@ -174,6 +171,7 @@ class TestAtomicWriteJson:
 # ---------------------------------------------------------------------------
 # _compute_flat_diff — regression guard
 # ---------------------------------------------------------------------------
+
 
 class TestComputeFlatDiff:
     """_compute_flat_diff() returns correct leaf-level diff."""
@@ -207,6 +205,7 @@ class TestComputeFlatDiff:
 # ---------------------------------------------------------------------------
 # _count_unchanged_keys — regression guard
 # ---------------------------------------------------------------------------
+
 
 class TestCountUnchangedKeys:
     def test_all_changed(self):

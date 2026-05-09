@@ -162,9 +162,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
         env_vars["TERM"] = "xterm-256color"
         return env_vars
 
-    async def _spawn_process(
-        self, command: str, env_vars: dict, cwd: Optional[str]
-    ) -> None:
+    async def _spawn_process(self, command: str, env_vars: dict, cwd: Optional[str]) -> None:
         """Spawn the subprocess attached to PTY. Issue #620."""
         self.process = await asyncio.create_subprocess_exec(
             "/bin/bash",
@@ -190,9 +188,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
             },
         )
 
-    async def start_session(
-        self, command: str, env: dict = None, cwd: str = None
-    ) -> None:
+    async def start_session(self, command: str, env: dict = None, cwd: str = None) -> None:
         """Start an interactive terminal session."""
         try:
             self._setup_pty()
@@ -204,9 +200,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
 
             await self._notify_session_started(command)
             asyncio.create_task(self._stream_output())
-            logger.info(
-                "Started terminal session for chat %s: %s", self.chat_id, command
-            )
+            logger.info("Started terminal session for chat %s: %s", self.chat_id, command)
 
         except Exception as e:
             logger.error("Failed to start terminal session: %s", e)
@@ -322,10 +316,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
                 "type": "sudo_prompt",
                 "requires_input": True,
                 "input_type": "password",
-                "message": (
-                    "🔐 Sudo password required. "
-                    "Click 'Send Input' to provide password."
-                ),
+                "message": ("🔐 Sudo password required. " "Click 'Send Input' to provide password."),
             },
         )
 
@@ -406,10 +397,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
             {
                 "chat_id": self.chat_id,
                 "status": "user_control",
-                "message": (
-                    "🎮 You now have control of the terminal. "
-                    "Type commands directly."
-                ),
+                "message": ("🎮 You now have control of the terminal. " "Type commands directly."),
             },
         )
 
@@ -486,9 +474,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
         # Cleanup
         await self.cleanup()
 
-    async def wait_for_completion(
-        self, timeout: Optional[float] = None
-    ) -> Dict[str, Any]:
+    async def wait_for_completion(self, timeout: Optional[float] = None) -> Dict[str, Any]:
         """Wait for the terminal session to complete (thread-safe)"""
         try:
             if self.process:

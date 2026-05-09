@@ -25,7 +25,6 @@ from knowledge.rag_benchmarks import (
     publish_feedback_events,
 )
 
-
 # ---------------------------------------------------------------------------
 # Dataset split correctness
 # ---------------------------------------------------------------------------
@@ -80,9 +79,7 @@ def test_tune_allows_dev_access():
         out = []
         for qid in dataset.iter_split(BenchmarkSplit.DEV):
             dataset.expected(qid)  # should not raise
-            out.append(
-                BenchmarkResult(qid, [], [], 1.0, split_used=BenchmarkSplit.DEV.value)
-            )
+            out.append(BenchmarkResult(qid, [], [], 1.0, split_used=BenchmarkSplit.DEV.value))
         return out
 
     report = harness.tune(runner)
@@ -113,9 +110,7 @@ def test_score_allows_test_access():
         out = []
         for qid in dataset.iter_split(BenchmarkSplit.TEST):
             dataset.expected(qid)
-            out.append(
-                BenchmarkResult(qid, [], [], 1.0, split_used=BenchmarkSplit.TEST.value)
-            )
+            out.append(BenchmarkResult(qid, [], [], 1.0, split_used=BenchmarkSplit.TEST.value))
         return out
 
     report = harness.score(runner)
@@ -171,11 +166,7 @@ def test_run_test_is_held_out():
         out = []
         for q in dataset.iter_split(BenchmarkSplit.TEST):
             dataset.expected(q)  # Issue #5160: must access to mark held_out
-            out.append(
-                BenchmarkResult(
-                    q, [], [], 0.5, split_used=BenchmarkSplit.TEST.value
-                )
-            )
+            out.append(BenchmarkResult(q, [], [], 0.5, split_used=BenchmarkSplit.TEST.value))
         return out
 
     report = harness.run(runner, split=BenchmarkSplit.TEST)

@@ -29,19 +29,11 @@ def test_kb_degradation_counter_with_all_reasons() -> None:
     from knowledge.metrics import autobot_kb_degradation_total
 
     # Every documented reason, across a spread of endpoint labels.
-    autobot_kb_degradation_total.labels(
-        endpoint="stats", reason="kb_uninit"
-    ).inc()
-    autobot_kb_degradation_total.labels(
-        endpoint="categories_main", reason="redis_down"
-    ).inc()
-    autobot_kb_degradation_total.labels(
-        endpoint="audit_user_activity", reason="audit_log_missing"
-    ).inc()
+    autobot_kb_degradation_total.labels(endpoint="stats", reason="kb_uninit").inc()
+    autobot_kb_degradation_total.labels(endpoint="categories_main", reason="redis_down").inc()
+    autobot_kb_degradation_total.labels(endpoint="audit_user_activity", reason="audit_log_missing").inc()
     # inc(n) path.
-    autobot_kb_degradation_total.labels(
-        endpoint="rag_feedback", reason="redis_down"
-    ).inc(2)
+    autobot_kb_degradation_total.labels(endpoint="rag_feedback", reason="redis_down").inc(2)
 
 
 def test_kb_degradation_counter_distinguishes_reasons() -> None:
@@ -50,12 +42,8 @@ def test_kb_degradation_counter_distinguishes_reasons() -> None:
 
     # Same endpoint, both reasons - must not raise and must be
     # accepted as distinct label values.
-    autobot_kb_degradation_total.labels(
-        endpoint="stats", reason="kb_uninit"
-    ).inc()
-    autobot_kb_degradation_total.labels(
-        endpoint="stats", reason="redis_down"
-    ).inc()
+    autobot_kb_degradation_total.labels(endpoint="stats", reason="kb_uninit").inc()
+    autobot_kb_degradation_total.labels(endpoint="stats", reason="redis_down").inc()
 
 
 def test_deprecated_alias_injects_redis_down_reason() -> None:
@@ -71,9 +59,7 @@ def test_deprecated_alias_injects_redis_down_reason() -> None:
     autobot_kb_redis_unreachable_total.labels(endpoint="categories_main").inc()
     autobot_kb_redis_unreachable_total.labels(endpoint="rag_feedback").inc(2)
     # Caller may also still pass reason explicitly; must not crash.
-    autobot_kb_redis_unreachable_total.labels(
-        endpoint="rag_benchmark", reason="redis_down"
-    ).inc()
+    autobot_kb_redis_unreachable_total.labels(endpoint="rag_benchmark", reason="redis_down").inc()
 
 
 def test_kb_metrics_importable_without_prometheus() -> None:
@@ -94,16 +80,10 @@ def test_kb_metrics_importable_without_prometheus() -> None:
         reloaded = importlib.reload(metrics_module)
 
         # New counter: fluent labels().inc() surface still works.
-        reloaded.autobot_kb_degradation_total.labels(
-            endpoint="x", reason="kb_uninit"
-        ).inc()
-        reloaded.autobot_kb_degradation_total.labels(
-            endpoint="y", reason="redis_down"
-        ).inc(3)
+        reloaded.autobot_kb_degradation_total.labels(endpoint="x", reason="kb_uninit").inc()
+        reloaded.autobot_kb_degradation_total.labels(endpoint="y", reason="redis_down").inc(3)
         # Under the hood it's the _NoopCounter.
-        assert type(reloaded.autobot_kb_degradation_total).__name__ == (
-            "_NoopCounter"
-        )
+        assert type(reloaded.autobot_kb_degradation_total).__name__ == ("_NoopCounter")
 
         # Deprecated alias still works against _NoopCounter.
         reloaded.autobot_kb_redis_unreachable_total.labels(endpoint="z").inc()

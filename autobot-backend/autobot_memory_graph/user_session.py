@@ -65,9 +65,7 @@ class UserSessionMixin:
         self.ensure_initialized()
 
         try:
-            existing = await self.search_entities(
-                query=user_id, entity_type="user", limit=1
-            )
+            existing = await self.search_entities(query=user_id, entity_type="user", limit=1)
             if existing:
                 logger.debug("User entity already exists for %s", username)
                 return existing[0]
@@ -166,9 +164,7 @@ class UserSessionMixin:
         self.ensure_initialized()
 
         try:
-            session_metadata = self._build_session_metadata(
-                session_id, owner_id, collaborators, metadata
-            )
+            session_metadata = self._build_session_metadata(session_id, owner_id, collaborators, metadata)
             entity = await self.create_entity(
                 entity_type="chat_session",
                 name=title or f"Chat Session {session_id[:8]}",
@@ -191,10 +187,7 @@ class UserSessionMixin:
     ) -> None:
         """Issue #665: Validate that the activity type is valid."""
         if activity_type not in VALID_ACTIVITY_TYPES:
-            raise ValueError(
-                f"Invalid activity_type: {activity_type}. "
-                f"Must be one of {VALID_ACTIVITY_TYPES}"
-            )
+            raise ValueError(f"Invalid activity_type: {activity_type}. " f"Must be one of {VALID_ACTIVITY_TYPES}")
 
     def _build_activity_metadata(
         self: AutoBotMemoryGraphCore,
@@ -284,9 +277,7 @@ class UserSessionMixin:
         self._validate_activity_type(activity_type)
 
         try:
-            activity_metadata = self._build_activity_metadata(
-                session_id, user_id, secrets_used, metadata
-            )
+            activity_metadata = self._build_activity_metadata(session_id, user_id, secrets_used, metadata)
             entity = await self.create_entity(
                 entity_type=activity_type,
                 name=f"{activity_type.replace('_', ' ').title()} by {user_id[:8]}",
@@ -295,9 +286,7 @@ class UserSessionMixin:
                 tags=["activity", activity_type.replace("_activity", "")],
             )
             await self._create_activity_relations(session_id, entity["id"], user_id)
-            await self._create_secret_usage_relations(
-                entity["id"], user_id, activity_type, secrets_used
-            )
+            await self._create_secret_usage_relations(entity["id"], user_id, activity_type, secrets_used)
             logger.info("Created %s entity for session %s", activity_type, session_id)
             return entity
 
@@ -447,9 +436,7 @@ class UserSessionMixin:
         self.ensure_initialized()
 
         try:
-            activities = await self._fetch_and_filter_activities(
-                session_id, activity_types, user_id, limit
-            )
+            activities = await self._fetch_and_filter_activities(session_id, activity_types, user_id, limit)
 
             activities.sort(
                 key=lambda x: x.get("metadata", {}).get("timestamp", ""),

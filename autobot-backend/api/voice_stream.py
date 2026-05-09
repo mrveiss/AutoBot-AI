@@ -144,9 +144,7 @@ async def _send_one_chunk(
         return False
 
     audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
-    return await _send_json(
-        ws, {"type": "tts_audio", "data": audio_b64, "chunk": i + 1, "total": total}
-    )
+    return await _send_json(ws, {"type": "tts_audio", "data": audio_b64, "chunk": i + 1, "total": total})
 
 
 async def _stream_chunks_pipelined(
@@ -237,9 +235,7 @@ async def _synthesize_and_stream(
     language: str = "",
 ) -> None:
     """Synthesize TTS for full text and stream to client (#1031)."""
-    await _stream_chunks_pipelined(
-        ws, text, cancel_event, voice_id=voice_id, language=language
-    )
+    await _stream_chunks_pipelined(ws, text, cancel_event, voice_id=voice_id, language=language)
 
 
 async def _tts_queue_worker(
@@ -328,9 +324,7 @@ async def _drain_sentence_queue(queue: asyncio.Queue) -> None:
             break
 
 
-async def _handle_barge_in(
-    ws: WebSocket, ctx: dict, tts_task: "asyncio.Task | None"
-) -> None:
+async def _handle_barge_in(ws: WebSocket, ctx: dict, tts_task: "asyncio.Task | None") -> None:
     """Handle barge-in: cancel active TTS, drain queue, restart worker. Ref: #2735."""
     logger.debug("Barge-in received")
     await _cancel_active_tts(ctx["cancel_tts"], tts_task)
@@ -344,9 +338,7 @@ async def _handle_barge_in(
             pass
     await _drain_sentence_queue(ctx["sentence_queue"])
     # Restart queue worker for future sentences
-    ctx["queue_worker_task"] = asyncio.create_task(
-        _tts_queue_worker(ws, ctx["sentence_queue"], ctx["cancel_tts"])
-    )
+    ctx["queue_worker_task"] = asyncio.create_task(_tts_queue_worker(ws, ctx["sentence_queue"], ctx["cancel_tts"]))
     await ctx["set_state"]("listening")
 
 
@@ -457,9 +449,7 @@ async def voice_stream_ws(websocket: WebSocket) -> None:
     }
 
     try:
-        queue_worker_task = asyncio.create_task(
-            _tts_queue_worker(websocket, sentence_queue, cancel_tts)
-        )
+        queue_worker_task = asyncio.create_task(_tts_queue_worker(websocket, sentence_queue, cancel_tts))
         ctx["queue_worker_task"] = queue_worker_task
         await _set_state("idle")
         while True:

@@ -243,9 +243,7 @@ class TestExecuteToolsApprovalGate:
     @pytest.mark.asyncio
     async def test_denied_tool_skips_execution(self):
         loop = _make_loop()
-        loop._check_approvals = AsyncMock(
-            return_value={"bash": {"error": "Tool 'bash' was denied by the user"}}
-        )
+        loop._check_approvals = AsyncMock(return_value={"bash": {"error": "Tool 'bash' was denied by the user"}})
         result = await loop._execute_tools([_make_tool("bash")])
         assert "bash" in result
         assert "error" in result["bash"]

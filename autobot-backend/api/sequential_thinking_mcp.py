@@ -133,9 +133,7 @@ async def get_sequential_thinking_mcp_tools() -> List[SequentialThinkingMCPTool]
     return [SequentialThinkingMCPTool(name=name, description=description, input_schema=input_schema)]
 
 
-def _enrich_thought_record(
-    thought_record: dict, request: SequentialThinkingRequest
-) -> None:
+def _enrich_thought_record(thought_record: dict, request: SequentialThinkingRequest) -> None:
     """Add revision/branch info to thought record (Issue #398: extracted)."""
     if request.is_revision and request.revises_thought:
         thought_record["revision_of"] = request.revises_thought
@@ -160,9 +158,7 @@ def _calculate_session_summary(session_thoughts: list, thought_number: int) -> d
     return {
         "total_thoughts_recorded": len(session_thoughts),
         "revisions_made": sum(1 for t in session_thoughts if t.get("is_revision")),
-        "branches_created": len(
-            set(t.get("branch_id") for t in session_thoughts if t.get("branch_id"))
-        ),
+        "branches_created": len(set(t.get("branch_id") for t in session_thoughts if t.get("branch_id"))),
         "thinking_duration_thoughts": thought_number,
     }
 
@@ -217,9 +213,7 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadat
 
     if thinking_complete:
         async with _thinking_sessions_lock:
-            response["summary"] = _calculate_session_summary(
-                thinking_sessions[session_id], request.thought_number
-            )
+            response["summary"] = _calculate_session_summary(thinking_sessions[session_id], request.thought_number)
         logger.info(
             "Sequential thinking session '%s' completed with %s thoughts",
             session_id,
@@ -239,9 +233,7 @@ async def get_thinking_session(session_id: str) -> Metadata:
     """Get complete thinking session history"""
     async with _thinking_sessions_lock:
         if session_id not in thinking_sessions:
-            raise HTTPException(
-                status_code=404, detail=f"Session '{session_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
         # Create a copy under lock to prevent race conditions
         thoughts = list(thinking_sessions[session_id])
@@ -251,9 +243,7 @@ async def get_thinking_session(session_id: str) -> Metadata:
         "thought_count": len(thoughts),
         "thoughts": thoughts,
         "revisions": [t for t in thoughts if t.get("is_revision")],
-        "branches": list(
-            set(t.get("branch_id") for t in thoughts if t.get("branch_id"))
-        ),
+        "branches": list(set(t.get("branch_id") for t in thoughts if t.get("branch_id"))),
         "started_at": thoughts[0]["timestamp"] if thoughts else None,
         "last_thought_at": thoughts[-1]["timestamp"] if thoughts else None,
     }
@@ -269,9 +259,7 @@ async def clear_thinking_session(session_id: str) -> Metadata:
     """Clear a thinking session"""
     async with _thinking_sessions_lock:
         if session_id not in thinking_sessions:
-            raise HTTPException(
-                status_code=404, detail=f"Session '{session_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
         thought_count = len(thinking_sessions[session_id])
         del thinking_sessions[session_id]
@@ -301,11 +289,7 @@ async def list_thinking_sessions() -> Metadata:
                     "thought_count": len(thoughts),
                     "started_at": thoughts[0]["timestamp"] if thoughts else None,
                     "last_thought_at": thoughts[-1]["timestamp"] if thoughts else None,
-                    "complete": (
-                        not thoughts[-1].get("next_thought_needed", True)
-                        if thoughts
-                        else False
-                    ),
+                    "complete": (not thoughts[-1].get("next_thought_needed", True) if thoughts else False),
                 }
             )
 

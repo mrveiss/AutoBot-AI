@@ -63,15 +63,9 @@ class ChatHistoryBase:
             "chat_history_file",
             os.getenv("AUTOBOT_CHAT_HISTORY_FILE", "data/chat_history.json"),
         )
-        self.use_redis = (
-            use_redis if use_redis is not None else _ssot_config.redis.enabled
-        )
-        self.redis_host = redis_host or os.getenv(
-            "AUTOBOT_REDIS_HOST", _ssot_config.vm.redis
-        )
-        self.redis_port = redis_port or int(
-            os.getenv("AUTOBOT_REDIS_PORT", str(_ssot_config.port.redis))
-        )
+        self.use_redis = use_redis if use_redis is not None else _ssot_config.redis.enabled
+        self.redis_host = redis_host or os.getenv("AUTOBOT_REDIS_HOST", _ssot_config.vm.redis)
+        self.redis_port = redis_port or int(os.getenv("AUTOBOT_REDIS_PORT", str(_ssot_config.port.redis)))
 
     def _init_state_and_settings(self) -> None:
         """
@@ -193,15 +187,9 @@ class ChatHistoryBase:
         if self.use_redis:
             self.redis_client = get_redis_client(async_client=False)
             if self.redis_client:
-                logger.info(
-                    "Redis connection established via centralized utility "
-                    "for active memory storage."
-                )
+                logger.info("Redis connection established via centralized utility " "for active memory storage.")
             else:
-                logger.error(
-                    "Failed to get Redis client from centralized utility. "
-                    "Falling back to file storage."
-                )
+                logger.error("Failed to get Redis client from centralized utility. " "Falling back to file storage.")
                 self.use_redis = False
 
     def _ensure_data_directory_exists(self):
@@ -260,13 +248,10 @@ class ChatHistoryBase:
 
             if initialized:
                 self.memory_graph_enabled = True
-                logger.info(
-                    "✅ Memory Graph initialized successfully for conversation tracking"
-                )
+                logger.info("✅ Memory Graph initialized successfully for conversation tracking")
             else:
                 logger.warning(
-                    "⚠️ Memory Graph initialization returned False - "
-                    "conversation entity tracking disabled"
+                    "⚠️ Memory Graph initialization returned False - " "conversation entity tracking disabled"
                 )
                 self.memory_graph = None
 

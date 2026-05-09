@@ -130,9 +130,7 @@ async def share_fact(
         )
 
     metadata = fact.get("metadata", {})
-    updated_metadata = await kb.ownership_manager.share_fact(
-        fact_id, request_body.user_ids, metadata
-    )
+    updated_metadata = await kb.ownership_manager.share_fact(fact_id, request_body.user_ids, metadata)
 
     # Save updated metadata
     await kb.update_fact(fact_id=fact_id, metadata=updated_metadata)
@@ -193,9 +191,7 @@ async def unshare_fact(
         )
 
     metadata = fact.get("metadata", {})
-    updated_metadata = await kb.ownership_manager.unshare_fact(
-        fact_id, [user_id_to_remove], metadata
-    )
+    updated_metadata = await kb.ownership_manager.unshare_fact(fact_id, [user_id_to_remove], metadata)
 
     # Save updated metadata
     await kb.update_fact(fact_id=fact_id, metadata=updated_metadata)
@@ -337,20 +333,14 @@ async def get_my_facts(
             detail="Ownership management not available",
         )
 
-    owned_fact_ids = await kb.ownership_manager.get_user_facts(
-        user_id, limit=limit, offset=offset
-    )
+    owned_fact_ids = await kb.ownership_manager.get_user_facts(user_id, limit=limit, offset=offset)
 
     shared_fact_ids = []
     if include_shared:
-        shared_fact_ids = await kb.ownership_manager.get_shared_facts(
-            user_id, limit=limit, offset=0
-        )
+        shared_fact_ids = await kb.ownership_manager.get_shared_facts(user_id, limit=limit, offset=0)
 
     all_fact_ids = list(set(owned_fact_ids + shared_fact_ids))
-    facts = await _fetch_fact_details(
-        kb, all_fact_ids, owned_fact_ids, shared_fact_ids, limit
-    )
+    facts = await _fetch_fact_details(kb, all_fact_ids, owned_fact_ids, shared_fact_ids, limit)
 
     return {
         "success": True,
@@ -398,9 +388,7 @@ async def get_shared_facts(
         )
 
     # Get shared facts
-    shared_fact_ids = await kb.ownership_manager.get_shared_facts(
-        user_id, limit=limit, offset=offset
-    )
+    shared_fact_ids = await kb.ownership_manager.get_shared_facts(user_id, limit=limit, offset=offset)
 
     # Fetch fact details
     facts = []

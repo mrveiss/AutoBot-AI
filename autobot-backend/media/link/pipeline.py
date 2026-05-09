@@ -198,9 +198,7 @@ class LinkPipeline(BasePipeline):
         jina_url = f"{_JINA_BASE_URL}{url}"
         try:
             session = await _get_jina_session()
-            async with session.get(
-                jina_url, allow_redirects=True, timeout=_JINA_TIMEOUT
-            ) as response:
+            async with session.get(jina_url, allow_redirects=True, timeout=_JINA_TIMEOUT) as response:
                 if response.status == 200:
                     text = await response.text(encoding="utf-8", errors="replace")
                     _record_jina_success()
@@ -257,12 +255,8 @@ class LinkPipeline(BasePipeline):
         # cert verification for known-safe internal URLs.
         ssl_context = False if metadata.get("allow_self_signed") else None
         try:
-            async with aiohttp.ClientSession(
-                headers=headers, timeout=_DEFAULT_TIMEOUT
-            ) as session:
-                async with session.get(
-                    url, allow_redirects=True, ssl=ssl_context
-                ) as response:
+            async with aiohttp.ClientSession(headers=headers, timeout=_DEFAULT_TIMEOUT) as session:
+                async with session.get(url, allow_redirects=True, ssl=ssl_context) as response:
                     final_url = str(response.url)
                     content_type = response.headers.get("Content-Type", "")
                     raw_html = await response.text(encoding="utf-8", errors="replace")
@@ -383,9 +377,7 @@ class LinkPipeline(BasePipeline):
     # Error/fallback helpers
     # ------------------------------------------------------------------
 
-    def _unavailable_result(
-        self, url: str, missing_libs: List[str], metadata: Dict
-    ) -> Dict[str, Any]:
+    def _unavailable_result(self, url: str, missing_libs: List[str], metadata: Dict) -> Dict[str, Any]:
         """Return structured result when dependencies are missing."""
         reason = f"Missing libraries: {', '.join(missing_libs)}"
         logger.warning("Link pipeline unavailable: %s", reason)

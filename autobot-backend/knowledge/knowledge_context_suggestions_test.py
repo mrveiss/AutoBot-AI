@@ -145,16 +145,12 @@ class TestSuggestByContext:
         old = (datetime.now(tz=timezone.utc) - timedelta(days=120)).isoformat()
 
         docs = [
-            _make_doc("fact1", score=0.9, content="Redis pooling guide detailed text here",
-                      timestamp=old),
-            _make_doc("fact2", score=0.7, content="FastAPI async patterns best practices",
-                      timestamp=now),
+            _make_doc("fact1", score=0.9, content="Redis pooling guide detailed text here", timestamp=old),
+            _make_doc("fact2", score=0.7, content="FastAPI async patterns best practices", timestamp=now),
         ]
         mixin._find_similar_documents = AsyncMock(return_value=docs)
 
-        result = await mixin.suggest_by_context(
-            context="Redis FastAPI", limit=5, recency_weight=0.2, min_score=0.3
-        )
+        result = await mixin.suggest_by_context(context="Redis FastAPI", limit=5, recency_weight=0.2, min_score=0.3)
 
         assert result["success"] is True
         assert len(result["suggestions"]) == 2
@@ -168,17 +164,14 @@ class TestSuggestByContext:
         ]
         mixin._find_similar_documents = AsyncMock(return_value=docs)
 
-        result = await mixin.suggest_by_context(
-            context="anything", min_score=0.9
-        )
+        result = await mixin.suggest_by_context(context="anything", min_score=0.9)
 
         assert result["success"] is True
         assert result["suggestions"] == []
 
     async def test_respects_limit(self, mixin):
         now = datetime.now(tz=timezone.utc).isoformat()
-        docs = [_make_doc(f"fact{i}", score=0.8, content=f"Content {i}", timestamp=now)
-                for i in range(10)]
+        docs = [_make_doc(f"fact{i}", score=0.8, content=f"Content {i}", timestamp=now) for i in range(10)]
         mixin._find_similar_documents = AsyncMock(return_value=docs)
 
         result = await mixin.suggest_by_context(context="test", limit=3)
@@ -188,14 +181,16 @@ class TestSuggestByContext:
 
     async def test_suggestion_shape(self, mixin):
         now = datetime.now(tz=timezone.utc).isoformat()
-        docs = [_make_doc(
-            "fact99",
-            score=0.75,
-            content="This is content for a test document about Python.",
-            timestamp=now,
-            tags=["python", "test"],
-            category="tech/python",
-        )]
+        docs = [
+            _make_doc(
+                "fact99",
+                score=0.75,
+                content="This is content for a test document about Python.",
+                timestamp=now,
+                tags=["python", "test"],
+                category="tech/python",
+            )
+        ]
         mixin._find_similar_documents = AsyncMock(return_value=docs)
 
         result = await mixin.suggest_by_context(context="Python testing")
@@ -222,9 +217,7 @@ class TestSuggestByContext:
         docs = [_make_doc("fact1", score=0.8, content=long_content, timestamp=now)]
         mixin._find_similar_documents = AsyncMock(return_value=docs)
 
-        result = await mixin.suggest_by_context(
-            context="test", snippet_length=100
-        )
+        result = await mixin.suggest_by_context(context="test", snippet_length=100)
 
         snippet = result["suggestions"][0]["snippet"]
         assert len(snippet) <= 100 + len(mixin._SNIPPET_ELLIPSIS)
@@ -239,8 +232,7 @@ class TestSuggestByContext:
 
     async def test_total_candidates_reported(self, mixin):
         now = datetime.now(tz=timezone.utc).isoformat()
-        docs = [_make_doc(f"fact{i}", score=0.8, content=f"Content {i}", timestamp=now)
-                for i in range(7)]
+        docs = [_make_doc(f"fact{i}", score=0.8, content=f"Content {i}", timestamp=now) for i in range(7)]
         mixin._find_similar_documents = AsyncMock(return_value=docs)
 
         result = await mixin.suggest_by_context(context="test")

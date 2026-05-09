@@ -108,9 +108,7 @@ class SkillExtractor:
             logger.debug("Conversation does not contain detectable workflow patterns")
             return []
 
-        logger.info(
-            "Extracting skills from %d-message conversation", len(conversation_history)
-        )
+        logger.info("Extracting skills from %d-message conversation", len(conversation_history))
         try:
             extracted = await self._call_extraction_llm(conversation_history)
             # Filter by confidence threshold
@@ -132,12 +130,10 @@ class SkillExtractor:
         """Check if conversation contains workflow/multi-step patterns."""
         import re
 
-        content_lower = " ".join(
-            msg.get("content", "").lower() for msg in conversation_history
-        )
+        content_lower = " ".join(msg.get("content", "").lower() for msg in conversation_history)
 
         # Strip punctuation and split into words
-        words = re.findall(r'\b\w+\b', content_lower)
+        words = re.findall(r"\b\w+\b", content_lower)
 
         workflow_count = sum(1 for word in words if word in self.WORKFLOW_KEYWORDS)
         pattern_count = sum(1 for word in words if word in self.PATTERN_KEYWORDS)
@@ -153,9 +149,7 @@ class SkillExtractor:
             )
         return has_patterns
 
-    async def _call_extraction_llm(
-        self, conversation_history: List[Dict[str, str]]
-    ) -> List[ExtractedSkill]:
+    async def _call_extraction_llm(self, conversation_history: List[Dict[str, str]]) -> List[ExtractedSkill]:
         """Call LLM to extract skills from conversation.
 
         Args:
@@ -196,13 +190,10 @@ class SkillExtractor:
             logger.error("AI Stack call failed: %s", e)
             raise
 
-    def _build_extraction_prompt(
-        self, conversation_history: List[Dict[str, str]]
-    ) -> str:
+    def _build_extraction_prompt(self, conversation_history: List[Dict[str, str]]) -> str:
         """Build prompt for LLM skill extraction."""
         history_text = "\n".join(
-            f"[{msg.get('role', 'unknown')}]: {msg.get('content', '')}"
-            for msg in conversation_history
+            f"[{msg.get('role', 'unknown')}]: {msg.get('content', '')}" for msg in conversation_history
         )
 
         return f"""Analyze this conversation and extract reusable skills.

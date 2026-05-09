@@ -14,7 +14,6 @@ from enhanced_orchestration.types import (
     WorkflowPlan,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -52,9 +51,7 @@ def _failed(task_id: str) -> dict:
 
 
 def _deps_met(task: AgentTask, results: dict) -> bool:
-    return all(
-        results.get(dep, {}).get("status") == "completed" for dep in task.dependencies
-    )
+    return all(results.get(dep, {}).get("status") == "completed" for dep in task.dependencies)
 
 
 async def _default_execute(task, ctx):
@@ -330,6 +327,7 @@ async def test_adaptive_records_failed_result_when_sequential_step_raises():
 @pytest.mark.asyncio
 async def test_safe_execute_propagates_cancelled_error():
     """_safe_execute must NOT swallow CancelledError — cooperative cancellation must still work (#6459)."""
+
     async def execute(task, ctx):
         raise asyncio.CancelledError()
 

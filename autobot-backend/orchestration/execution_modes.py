@@ -188,9 +188,7 @@ class DryRunValidator:
             len(issues),
             len(warnings),
         )
-        return DryRunReport(
-            valid=valid, execution_plan=execution_plan, issues=issues, warnings=warnings
-        )
+        return DryRunReport(valid=valid, execution_plan=execution_plan, issues=issues, warnings=warnings)
 
     # ------------------------------------------------------------------
     # Validation sub-checks
@@ -206,9 +204,7 @@ class DryRunValidator:
         for step in steps:
             for dep_id in step.get("dependencies", []):
                 if dep_id not in step_ids:
-                    issues.append(
-                        f"Step '{step['id']}' depends on unknown step '{dep_id}'."
-                    )
+                    issues.append(f"Step '{step['id']}' depends on unknown step '{dep_id}'.")
 
     @staticmethod
     def _check_cycles(
@@ -225,9 +221,7 @@ class DryRunValidator:
         if cycle:
             path = " → ".join(cycle)
             issues.append(f"Workflow graph contains a cycle: {path}.")
-            logger.warning(
-                "Dry-run cycle detected in workflow %s: %s", workflow_id, path
-            )
+            logger.warning("Dry-run cycle detected in workflow %s: %s", workflow_id, path)
 
     @staticmethod
     def _extract_variable_step_refs(step: Dict[str, Any]) -> List[str]:
@@ -261,10 +255,7 @@ class DryRunValidator:
         for step in steps:
             for ref_id in self._extract_variable_step_refs(step):
                 if ref_id not in step_ids:
-                    warnings.append(
-                        f"Step '{step['id']}' references unknown step '{ref_id}' "
-                        f"via variable token."
-                    )
+                    warnings.append(f"Step '{step['id']}' references unknown step '{ref_id}' " f"via variable token.")
 
     @staticmethod
     def _check_unassigned_agents(
@@ -344,9 +335,7 @@ class DebugController:
 
     async def resume(self) -> None:
         """Signal the executor to execute the current paused step and continue."""
-        logger.debug(
-            "DebugController.resume() called for step %s", self._paused_step_id
-        )
+        logger.debug("DebugController.resume() called for step %s", self._paused_step_id)
         self._signal = self.Signal.RESUME
         self._event.set()
 
@@ -397,13 +386,9 @@ class DebugController:
         self._event.clear()
         self._signal = None
 
-        logger.info(
-            "Debug execution paused before step '%s' — awaiting signal", step_id
-        )
+        logger.info("Debug execution paused before step '%s' — awaiting signal", step_id)
         await self._event.wait()
 
         signal = self._signal or self.Signal.RESUME
-        logger.info(
-            "Debug execution received signal '%s' for step '%s'", signal.value, step_id
-        )
+        logger.info("Debug execution received signal '%s' for step '%s'", signal.value, step_id)
         return signal

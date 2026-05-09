@@ -146,24 +146,18 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
                         from knowledge.backends import get_async_default_client
 
                         chromadb_path = self.project_root / "data" / "chromadb"
-                        self._chromadb_client = await get_async_default_client(
-                            db_path=str(chromadb_path)
+                        self._chromadb_client = await get_async_default_client(db_path=str(chromadb_path))
+                        self._chromadb_collection = await self._chromadb_client.get_or_create_collection(
+                            name=PATTERNS_COLLECTION,
+                            metadata={
+                                "description": "Cross-language code pattern semantics",
+                                "hnsw:space": "cosine",
+                                "hnsw:construction_ef": 200,
+                                "hnsw:search_ef": 100,
+                                "hnsw:M": 24,
+                            },
                         )
-                        self._chromadb_collection = (
-                            await self._chromadb_client.get_or_create_collection(
-                                name=PATTERNS_COLLECTION,
-                                metadata={
-                                    "description": "Cross-language code pattern semantics",
-                                    "hnsw:space": "cosine",
-                                    "hnsw:construction_ef": 200,
-                                    "hnsw:search_ef": 100,
-                                    "hnsw:M": 24,
-                                },
-                            )
-                        )
-                        logger.info(
-                            "ChromaDB collection '%s' initialized", PATTERNS_COLLECTION
-                        )
+                        logger.info("ChromaDB collection '%s' initialized", PATTERNS_COLLECTION)
                     except Exception as e:
                         logger.error("Failed to initialize ChromaDB: %s", e)
                         self._chromadb_collection = None
@@ -178,9 +172,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
                     try:
                         from knowledge.embedding_cache import EmbeddingCache
 
-                        self._embedding_cache = EmbeddingCache(
-                            maxsize=500, ttl_seconds=3600
-                        )
+                        self._embedding_cache = EmbeddingCache(maxsize=500, ttl_seconds=3600)
                     except ImportError:
                         self._embedding_cache = None
         return self._embedding_cache
@@ -206,9 +198,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         try:
             from services.npu_client import generate_embedding_with_fallback
 
-            embedding = await generate_embedding_with_fallback(
-                text, model_name=self.embedding_model
-            )
+            embedding = await generate_embedding_with_fallback(text, model_name=self.embedding_model)
             if embedding:
                 self._embeddings_generated += 1
                 if cache:
@@ -309,16 +299,10 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         # Build normalized representation based on pattern type
         if pattern_type == PatternType.DTO_DEFINITION:
             fields = pattern.get("fields", [])
-            field_strs = [
-                f"{f.get('name')}:{f.get('type', 'any')}{'?' if f.get('optional') else ''}"
-                for f in fields
-            ]
+            field_strs = [f"{f.get('name')}:{f.get('type', 'any')}{'?' if f.get('optional') else ''}" for f in fields]
             return f"DATA_TYPE {name} FIELDS({', '.join(field_strs)})"
 
-        elif (
-            pattern_type == PatternType.API_ENDPOINT
-            or pattern_type == PatternType.API_CALL
-        ):
+        elif pattern_type == PatternType.API_ENDPOINT or pattern_type == PatternType.API_CALL:
             method = pattern.get("method", "GET")
             path = pattern.get("path", "")
             return f"API {method} {path}"
@@ -329,13 +313,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
 
         elif pattern_type == PatternType.UTILITY_FUNCTION:
             params = pattern.get("parameters", [])
-            param_str = (
-                ", ".join(
-                    f"{p.get('name', 'arg')}:{p.get('type', 'any')}" for p in params
-                )
-                if params
-                else ""
-            )
+            param_str = ", ".join(f"{p.get('name', 'arg')}:{p.get('type', 'any')}" for p in params) if params else ""
             is_async = "ASYNC " if pattern.get("is_async") else ""
             return f"{is_async}FUNCTION {name}({param_str})"
 
@@ -384,9 +362,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
 
         return python_files, typescript_files, vue_files
 
-    async def _extract_language_patterns(
-        self, extractor, files: List[Path], cap: int, label: str
-    ) -> List[Dict]:
+    async def _extract_language_patterns(self, extractor, files: List[Path], cap: int, label: str) -> List[Dict]:
         """Extract patterns for one language with cap and threading.
 
         Issue #1217: Caps at `cap` patterns to prevent OOM.
@@ -450,16 +426,8 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         mismatches = []
 
         # Get all DTOs
-        python_dtos = {
-            p["name"]: p
-            for p in python_patterns
-            if p.get("type") == PatternType.DTO_DEFINITION
-        }
-        ts_dtos = {
-            p["name"]: p
-            for p in typescript_patterns
-            if p.get("type") == PatternType.DTO_DEFINITION
-        }
+        python_dtos = {p["name"]: p for p in python_patterns if p.get("type") == PatternType.DTO_DEFINITION}
+        ts_dtos = {p["name"]: p for p in typescript_patterns if p.get("type") == PatternType.DTO_DEFINITION}
 
         # Find common DTOs and check for mismatches
         common_names = set(python_dtos.keys()) & set(ts_dtos.keys())
@@ -515,8 +483,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
                     frontend_definition=str(ts_fields[field_name]),
                     severity=PatternSeverity.MEDIUM,
                     recommendation=(
-                        f"Consider adding field '{field_name}' to backend model "
-                        f"'{name}' or remove from frontend"
+                        f"Consider adding field '{field_name}' to backend model " f"'{name}' or remove from frontend"
                     ),
                 )
             )
@@ -557,9 +524,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
                 )
         return mismatches
 
-    def _compare_dto_fields(
-        self, name: str, py_dto: Dict, ts_dto: Dict
-    ) -> List[DTOMismatch]:
+    def _compare_dto_fields(self, name: str, py_dto: Dict, ts_dto: Dict) -> List[DTOMismatch]:
         """Compare DTO fields and find mismatches (Issue #665: extracted helper)."""
         py_fields = {f["name"]: f for f in py_dto.get("fields", [])}
         ts_fields = {f["name"]: f for f in ts_dto.get("fields", [])}
@@ -568,17 +533,9 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         ts_only = set(ts_fields.keys()) - set(py_fields.keys())
         common_fields = set(py_fields.keys()) & set(ts_fields.keys())
 
-        mismatches = self._find_missing_frontend_fields(
-            name, py_dto, ts_dto, py_fields, py_only
-        )
-        mismatches.extend(
-            self._find_missing_backend_fields(name, py_dto, ts_dto, ts_fields, ts_only)
-        )
-        mismatches.extend(
-            self._find_optional_mismatches(
-                name, py_dto, ts_dto, py_fields, ts_fields, common_fields
-            )
-        )
+        mismatches = self._find_missing_frontend_fields(name, py_dto, ts_dto, py_fields, py_only)
+        mismatches.extend(self._find_missing_backend_fields(name, py_dto, ts_dto, ts_fields, ts_only))
+        mismatches.extend(self._find_optional_mismatches(name, py_dto, ts_dto, py_fields, ts_fields, common_fields))
 
         return mismatches
 
@@ -609,9 +566,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
             recommendation=recommendation,
         )
 
-    def _group_validations_by_type(
-        self, validations: List[Dict]
-    ) -> Dict[str, List[Dict]]:
+    def _group_validations_by_type(self, validations: List[Dict]) -> Dict[str, List[Dict]]:
         """
         Group validation patterns by their validation type.
 
@@ -624,9 +579,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
                 by_type.setdefault(vtype, []).append(v)
         return by_type
 
-    def _create_validation_duplication(
-        self, vtype: str, py_v: Dict, ts_v: Dict
-    ) -> ValidationDuplication:
+    def _create_validation_duplication(self, vtype: str, py_v: Dict, ts_v: Dict) -> ValidationDuplication:
         """
         Create a ValidationDuplication object for a matched pair.
 
@@ -642,8 +595,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
             similarity_score=0.8,  # Assume high similarity for same type
             severity=PatternSeverity.MEDIUM,
             recommendation=(
-                f"Consider consolidating '{vtype}' validation logic "
-                "into a shared schema or specification"
+                f"Consider consolidating '{vtype}' validation logic " "into a shared schema or specification"
             ),
         )
 
@@ -656,14 +608,8 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         duplications = []
 
         # Filter validation patterns
-        py_validations = [
-            p for p in python_patterns if p.get("type") == PatternType.VALIDATION_RULE
-        ]
-        ts_validations = [
-            p
-            for p in typescript_patterns
-            if p.get("type") == PatternType.VALIDATION_RULE
-        ]
+        py_validations = [p for p in python_patterns if p.get("type") == PatternType.VALIDATION_RULE]
+        ts_validations = [p for p in typescript_patterns if p.get("type") == PatternType.VALIDATION_RULE]
 
         # Group by validation type
         py_by_type = self._group_validations_by_type(py_validations)
@@ -675,15 +621,11 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
             # Issue #616: O(n^2) bounded to max 9 pairs (3 py x 3 ts) per type
             for py_v in py_by_type[vtype][:3]:
                 for ts_v in ts_by_type[vtype][:3]:
-                    duplications.append(
-                        self._create_validation_duplication(vtype, py_v, ts_v)
-                    )
+                    duplications.append(self._create_validation_duplication(vtype, py_v, ts_v))
 
         return duplications
 
-    def _find_orphaned_endpoints(
-        self, backend_endpoints: Dict, frontend_calls: Dict
-    ) -> List[APIContractMismatch]:
+    def _find_orphaned_endpoints(self, backend_endpoints: Dict, frontend_calls: Dict) -> List[APIContractMismatch]:
         """
         Find backend endpoints that have no matching frontend call.
 
@@ -709,9 +651,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
             )
         return mismatches
 
-    def _find_missing_endpoints(
-        self, backend_endpoints: Dict, frontend_calls: Dict
-    ) -> List[APIContractMismatch]:
+    def _find_missing_endpoints(self, backend_endpoints: Dict, frontend_calls: Dict) -> List[APIContractMismatch]:
         """
         Find frontend API calls that have no matching backend endpoint.
 
@@ -759,9 +699,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         }
 
         mismatches = self._find_orphaned_endpoints(backend_endpoints, frontend_calls)
-        mismatches.extend(
-            self._find_missing_endpoints(backend_endpoints, frontend_calls)
-        )
+        mismatches.extend(self._find_missing_endpoints(backend_endpoints, frontend_calls))
 
         return mismatches
 
@@ -842,15 +780,9 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         embeddings = await self._get_embeddings_batch(normalized_texts)
 
         result = []
-        for p, normalized, embedding in zip(
-            patterns_to_process, normalized_texts, embeddings
-        ):
+        for p, normalized, embedding in zip(patterns_to_process, normalized_texts, embeddings):
             if embedding:
-                result.append(
-                    self._build_pattern_result_entry(
-                        p, normalized, embedding, prefix, language
-                    )
-                )
+                result.append(self._build_pattern_result_entry(p, normalized, embedding, prefix, language))
 
         return result
 
@@ -924,9 +856,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
             )
             return False
 
-    async def _individual_insert_patterns(
-        self, collection, patterns: List[Dict]
-    ) -> List[Dict]:
+    async def _individual_insert_patterns(self, collection, patterns: List[Dict]) -> List[Dict]:
         """
         Insert patterns individually as fallback when batch fails.
 
@@ -943,16 +873,12 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
                 )
                 stored_patterns.append(pattern)
             except Exception as individual_error:
-                logger.debug(
-                    "Failed to store pattern %s: %s", pattern["id"], individual_error
-                )
+                logger.debug("Failed to store pattern %s: %s", pattern["id"], individual_error)
 
         self._log_individual_insert_result(stored_patterns, patterns)
         return stored_patterns
 
-    def _log_individual_insert_result(
-        self, stored_patterns: List[Dict], all_patterns: List[Dict]
-    ) -> None:
+    def _log_individual_insert_result(self, stored_patterns: List[Dict], all_patterns: List[Dict]) -> None:
         """
         Log the result of individual pattern insertion.
 
@@ -987,9 +913,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
 
         return await self._individual_insert_patterns(collection, patterns)
 
-    def _create_pattern_match(
-        self, py_pattern: Dict, ts_pattern: Dict, similarity: float
-    ) -> PatternMatch:
+    def _create_pattern_match(self, py_pattern: Dict, ts_pattern: Dict, similarity: float) -> PatternMatch:
         """
         Create a PatternMatch object from Python and TypeScript patterns.
 
@@ -1011,9 +935,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
             },
         )
 
-    def _process_query_results(
-        self, results: Dict, py_pattern: Dict, ts_pattern_lookup: Dict
-    ) -> List[PatternMatch]:
+    def _process_query_results(self, results: Dict, py_pattern: Dict, ts_pattern_lookup: Dict) -> List[PatternMatch]:
         """
         Process ChromaDB query results and create pattern matches.
 
@@ -1031,9 +953,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
 
             ts_pattern = ts_pattern_lookup.get(doc_id)
             if ts_pattern:
-                matches.append(
-                    self._create_pattern_match(py_pattern, ts_pattern, similarity)
-                )
+                matches.append(self._create_pattern_match(py_pattern, ts_pattern, similarity))
 
         return matches
 
@@ -1064,9 +984,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
                     n_results=5,
                     where={"language": "typescript"},
                 )
-                matches.extend(
-                    self._process_query_results(results, py_p, ts_pattern_lookup)
-                )
+                matches.extend(self._process_query_results(results, py_p, ts_pattern_lookup))
             except Exception as e:
                 logger.warning("Query failed for pattern %s: %s", py_p["id"], e)
 
@@ -1087,21 +1005,15 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
             return []
 
         # Build patterns with embeddings for both languages
-        python_with_emb = await self._build_patterns_with_embeddings(
-            python_patterns, "python"
-        )
-        ts_with_emb = await self._build_patterns_with_embeddings(
-            typescript_patterns, "typescript"
-        )
+        python_with_emb = await self._build_patterns_with_embeddings(python_patterns, "python")
+        ts_with_emb = await self._build_patterns_with_embeddings(typescript_patterns, "typescript")
 
         all_patterns = python_with_emb + ts_with_emb
         if not all_patterns:
             return []
 
         # Store in ChromaDB
-        stored_patterns = await self._store_patterns_in_chromadb(
-            collection, all_patterns
-        )
+        stored_patterns = await self._store_patterns_in_chromadb(collection, all_patterns)
         if not stored_patterns:
             return []
 
@@ -1110,9 +1022,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         stored_ts = [p for p in stored_patterns if p["language"] == "typescript"]
 
         # Query for cross-language matches
-        return await self._query_cross_language_matches(
-            collection, stored_python, stored_ts
-        )
+        return await self._query_cross_language_matches(collection, stored_python, stored_ts)
 
     async def _cache_results(self, analysis: CrossLanguageAnalysis) -> None:
         """Cache analysis results in Redis."""
@@ -1131,9 +1041,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         except Exception as e:
             logger.warning("Failed to cache results: %s", e)
 
-    async def _collect_and_log_files(
-        self, analysis: CrossLanguageAnalysis
-    ) -> tuple[list, list, list]:
+    async def _collect_and_log_files(self, analysis: CrossLanguageAnalysis) -> tuple[list, list, list]:
         """
         Collect files and update analysis counts.
 
@@ -1166,33 +1074,21 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
 
         Issue #620.
         """
-        analysis.dto_mismatches = await self._find_dto_mismatches(
-            python_patterns, all_ts_patterns
-        )
-        analysis.validation_duplications = await self._find_validation_duplications(
-            python_patterns, all_ts_patterns
-        )
-        analysis.api_contract_mismatches = await self._find_api_contract_mismatches(
-            python_patterns, all_ts_patterns
-        )
+        analysis.dto_mismatches = await self._find_dto_mismatches(python_patterns, all_ts_patterns)
+        analysis.validation_duplications = await self._find_validation_duplications(python_patterns, all_ts_patterns)
+        analysis.api_contract_mismatches = await self._find_api_contract_mismatches(python_patterns, all_ts_patterns)
 
         if self.use_llm:
-            analysis.pattern_matches = await self._find_semantic_matches(
-                python_patterns, all_ts_patterns
-            )
+            analysis.pattern_matches = await self._find_semantic_matches(python_patterns, all_ts_patterns)
 
-    async def _run_pattern_detection(
-        self, analysis: CrossLanguageAnalysis
-    ) -> tuple[list, list]:
+    async def _run_pattern_detection(self, analysis: CrossLanguageAnalysis) -> tuple[list, list]:
         """
         Collect files, extract patterns, and find mismatches.
 
         Returns:
             Tuple of (python_patterns, all_ts_patterns)
         """
-        python_files, typescript_files, vue_files = await self._collect_and_log_files(
-            analysis
-        )
+        python_files, typescript_files, vue_files = await self._collect_and_log_files(analysis)
 
         (
             python_patterns,
@@ -1211,9 +1107,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
 
         return python_patterns, all_ts_patterns
 
-    def _convert_to_cross_language_patterns(
-        self, patterns: list, analysis: CrossLanguageAnalysis
-    ) -> None:
+    def _convert_to_cross_language_patterns(self, patterns: list, analysis: CrossLanguageAnalysis) -> None:
         """Convert extracted patterns to CrossLanguagePattern objects."""
         for p in patterns:
             pattern_type = p.get("type", PatternType.UTILITY_FUNCTION)
@@ -1263,14 +1157,10 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
 
         try:
             # Run pattern detection and mismatch finding
-            python_patterns, all_ts_patterns = await self._run_pattern_detection(
-                analysis
-            )
+            python_patterns, all_ts_patterns = await self._run_pattern_detection(analysis)
 
             # Convert to CrossLanguagePattern objects
-            self._convert_to_cross_language_patterns(
-                python_patterns + all_ts_patterns, analysis
-            )
+            self._convert_to_cross_language_patterns(python_patterns + all_ts_patterns, analysis)
 
             # Calculate statistics and update metrics
             analysis.calculate_stats()

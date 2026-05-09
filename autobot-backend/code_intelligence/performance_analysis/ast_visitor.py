@@ -198,15 +198,9 @@ class PerformanceASTVisitor(ast.NodeVisitor):
             return
 
         complexity = COMPLEXITY_LEVELS.get(self.loop_depth + 1, "O(n^4+)")
-        severity = (
-            PerformanceSeverity.HIGH
-            if self.loop_depth >= 3
-            else PerformanceSeverity.MEDIUM
-        )
+        severity = PerformanceSeverity.HIGH if self.loop_depth >= 3 else PerformanceSeverity.MEDIUM
 
-        code = self._get_source_segment(
-            node.lineno, min(node.lineno + 5, len(self.source_lines))
-        )
+        code = self._get_source_segment(node.lineno, min(node.lineno + 5, len(self.source_lines)))
         self.findings.append(
             PerformanceIssue(
                 issue_type=PerformanceIssueType.NESTED_LOOP_COMPLEXITY,
@@ -244,11 +238,7 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                 continue
 
             code = self._get_source_segment(child.lineno, child.lineno)
-            severity = (
-                PerformanceSeverity.HIGH
-                if confidence >= 0.8
-                else PerformanceSeverity.MEDIUM
-            )
+            severity = PerformanceSeverity.HIGH if confidence >= 0.8 else PerformanceSeverity.MEDIUM
             self.findings.append(
                 PerformanceIssue(
                     issue_type=PerformanceIssueType.N_PLUS_ONE_QUERY,
@@ -287,9 +277,7 @@ class PerformanceASTVisitor(ast.NodeVisitor):
 
         # Step 1: Check explicit false positives first - NEVER flag these
         for fp_pattern in DB_OPERATIONS_FALSE_POSITIVES:
-            if call_name_lower == fp_pattern.lower() or call_name_lower.endswith(
-                "." + fp_pattern.lower()
-            ):
+            if call_name_lower == fp_pattern.lower() or call_name_lower.endswith("." + fp_pattern.lower()):
                 return False, 0.0
 
         # Step 2: Check high confidence patterns (exact match)
@@ -381,9 +369,7 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                 )
             )
 
-    def _build_blocking_issue_messages(
-        self, is_potential: bool, severity: PerformanceSeverity
-    ) -> tuple:
+    def _build_blocking_issue_messages(self, is_potential: bool, severity: PerformanceSeverity) -> tuple:
         """
         Build description and impact messages for blocking I/O issues.
 
@@ -397,11 +383,7 @@ class PerformanceASTVisitor(ast.NodeVisitor):
         desc_prefix = "Potential " if is_potential else ""
         desc_suffix = " (needs review)" if severity == PerformanceSeverity.LOW else ""
         complexity = "May block event loop" if is_potential else "Blocks event loop"
-        impact = (
-            "Review needed - may degrade async performance"
-            if is_potential
-            else "Degrades async performance"
-        )
+        impact = "Review needed - may degrade async performance" if is_potential else "Degrades async performance"
         if severity == PerformanceSeverity.LOW:
             impact = "Review needed"
         return desc_prefix, desc_suffix, complexity, impact
@@ -461,9 +443,7 @@ class PerformanceASTVisitor(ast.NodeVisitor):
         Returns:
             True if time.sleep was found and issue added
         """
-        if call_name == "time.sleep" or (
-            call_name == "sleep" and "time" in str(self._get_call_module(node))
-        ):
+        if call_name == "time.sleep" or (call_name == "sleep" and "time" in str(self._get_call_module(node))):
             code = self._get_source_segment(node.lineno, node.lineno)
             self.findings.append(
                 PerformanceIssue(
@@ -484,9 +464,7 @@ class PerformanceASTVisitor(ast.NodeVisitor):
             return True
         return False
 
-    def _check_high_confidence_blocking(
-        self, call_name: str, node: ast.Call, code: str
-    ) -> bool:
+    def _check_high_confidence_blocking(self, call_name: str, node: ast.Call, code: str) -> bool:
         """Check HIGH confidence blocking patterns (exact match).
 
         Issue #665: Extracted from _check_blocking_in_async to reduce function length.
@@ -500,14 +478,8 @@ class PerformanceASTVisitor(ast.NodeVisitor):
             is_exact,
         ) in BLOCKING_IO_PATTERNS_HIGH_CONFIDENCE.items():
             if is_exact and call_name == pattern:
-                severity = (
-                    PerformanceSeverity.HIGH
-                    if confidence >= 0.9
-                    else PerformanceSeverity.MEDIUM
-                )
-                self._create_blocking_issue(
-                    call_name, node, code, severity, confidence, recommendation
-                )
+                severity = PerformanceSeverity.HIGH if confidence >= 0.9 else PerformanceSeverity.MEDIUM
+                self._create_blocking_issue(call_name, node, code, severity, confidence, recommendation)
                 return True
         return False
 
@@ -540,9 +512,7 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                 return True
         return False
 
-    def _check_legacy_blocking_patterns(
-        self, call_name_lower: str, call_name: str, node: ast.Call, code: str
-    ) -> bool:
+    def _check_legacy_blocking_patterns(self, call_name_lower: str, call_name: str, node: ast.Call, code: str) -> bool:
         """Check legacy low-confidence blocking patterns.
 
         Issue #665: Extracted from _check_blocking_in_async to reduce function length.
@@ -610,9 +580,7 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                 return
 
         # Step 3: MEDIUM confidence patterns
-        if self._check_medium_confidence_blocking(
-            call_name_lower, call_name, node, code
-        ):
+        if self._check_medium_confidence_blocking(call_name_lower, call_name, node, code):
             return
 
         # Step 4: Legacy fallback patterns

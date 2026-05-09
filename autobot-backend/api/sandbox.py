@@ -77,9 +77,7 @@ async def execute_command(
         )
 
         # Get sandbox instance with lazy initialization
-        sandbox = _get_sandbox_or_raise(
-            "Secure sandbox unavailable - command execution blocked for security"
-        )
+        sandbox = _get_sandbox_or_raise("Secure sandbox unavailable - command execution blocked for security")
 
         # Execute command
         result = await sandbox.execute_command(request.command, config)
@@ -136,14 +134,10 @@ async def execute_script(
         )
 
         # Get sandbox instance with lazy initialization
-        sandbox = _get_sandbox_or_raise(
-            "Secure sandbox unavailable - script execution blocked for security"
-        )
+        sandbox = _get_sandbox_or_raise("Secure sandbox unavailable - script execution blocked for security")
 
         # Execute script
-        result = await sandbox.execute_script(
-            request.script_content, request.language, config
-        )
+        result = await sandbox.execute_script(request.script_content, request.language, config)
         data = _build_execution_result_data(result)
 
         if result.success:
@@ -202,9 +196,7 @@ async def execute_batch(
         )
 
         # Get sandbox instance with lazy initialization
-        sandbox = _get_sandbox_or_raise(
-            "Secure sandbox unavailable - batch execution blocked for security"
-        )
+        sandbox = _get_sandbox_or_raise("Secure sandbox unavailable - batch execution blocked for security")
 
         # Execute as script
         result = await sandbox.execute_script(script_content, "bash", config)
@@ -467,9 +459,7 @@ async def get_sandbox_examples(
                     },
                 },
                 "network_enabled": {
-                    "description": (
-                        "Execute with network access (medium/low security only)"
-                    ),
+                    "description": ("Execute with network access (medium/low security only)"),
                     "request": {
                         "command": f"ping -c 3 {NetworkConstants.PUBLIC_DNS_IP}",
                         "security_level": "medium",

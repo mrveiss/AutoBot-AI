@@ -74,7 +74,8 @@ class TestTruncateLargeFile:
 
         # Extract truncated count from marker
         import re
-        match = re.search(r'\.\.\.([\d]+) chars TRUNCATED', result)
+
+        match = re.search(r"\.\.\.([\d]+) chars TRUNCATED", result)
         assert match is not None
         truncated_count = int(match.group(1))
         assert truncated_count > 0

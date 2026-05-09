@@ -110,9 +110,7 @@ class ModuleAnalyzer:
         self._analyzed_files.add(validated_path)
         return module_doc
 
-    def _process_module_node(
-        self, node: ast.AST, source: str, module_doc: ModuleDoc
-    ) -> None:
+    def _process_module_node(self, node: ast.AST, source: str, module_doc: ModuleDoc) -> None:
         """Process a single top-level module node."""
         if isinstance(node, ast.ClassDef):
             class_doc = self.analyze_class(node, source)
@@ -134,9 +132,7 @@ class ModuleAnalyzer:
             for import_stmt in helpers.extract_imports(node):
                 module_doc.add_import(import_stmt)
 
-    def _process_module_constants(
-        self, node: ast.Assign, module_doc: ModuleDoc
-    ) -> None:
+    def _process_module_constants(self, node: ast.Assign, module_doc: ModuleDoc) -> None:
         """Extract constants from assignment node."""
         for target in node.targets:
             if not isinstance(target, ast.Name):
@@ -146,9 +142,7 @@ class ModuleAnalyzer:
             value = helpers.get_node_value(node.value)
             module_doc.add_constant(target.id, value)
 
-    def analyze_package(
-        self, package_path: str, depth: int = 0
-    ) -> Optional[PackageDoc]:
+    def analyze_package(self, package_path: str, depth: int = 0) -> Optional[PackageDoc]:
         """Analyze a Python package and all its modules."""
         import logging
 
@@ -190,9 +184,7 @@ class ModuleAnalyzer:
 
         return package_doc
 
-    def _process_package_item(
-        self, item: str, package_path: str, package_doc: PackageDoc, depth: int
-    ) -> None:
+    def _process_package_item(self, item: str, package_path: str, package_doc: PackageDoc, depth: int) -> None:
         """Process a single item in package directory."""
         item_path = os.path.join(package_path, item)
 
@@ -234,9 +226,7 @@ class ModuleAnalyzer:
         class_doc.completeness = class_doc.calculate_completeness()
         return class_doc
 
-    def _process_class_body_item(
-        self, item: ast.AST, source: str, class_doc: ClassDoc
-    ) -> None:
+    def _process_class_body_item(self, item: ast.AST, source: str, class_doc: ClassDoc) -> None:
         """Process a single class body item."""
         if isinstance(item, _FUNCTION_DEF_TYPES):
             if not self._should_include(item.name):
@@ -253,9 +243,7 @@ class ModuleAnalyzer:
         if isinstance(item, ast.Assign):
             self._process_unannotated_class_var(item, class_doc)
 
-    def _process_annotated_class_var(
-        self, item: ast.AnnAssign, class_doc: ClassDoc
-    ) -> None:
+    def _process_annotated_class_var(self, item: ast.AnnAssign, class_doc: ClassDoc) -> None:
         """Process annotated class variable."""
         if not isinstance(item.target, ast.Name):
             return
@@ -263,22 +251,16 @@ class ModuleAnalyzer:
         var_type = helpers.get_node_name(item.annotation) if item.annotation else "Any"
         class_doc.add_class_variable(var_name, var_type)
 
-    def _process_unannotated_class_var(
-        self, item: ast.Assign, class_doc: ClassDoc
-    ) -> None:
+    def _process_unannotated_class_var(self, item: ast.Assign, class_doc: ClassDoc) -> None:
         """Process unannotated class variable."""
         for target in item.targets:
             if isinstance(target, ast.Name):
                 class_doc.add_class_variable(target.id)
 
-    def analyze_function(
-        self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], source: str
-    ) -> FunctionDoc:
+    def analyze_function(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], source: str) -> FunctionDoc:
         """Analyze a function/method definition and extract documentation."""
         is_async = isinstance(node, ast.AsyncFunctionDef)
-        element_type = (
-            ElementType.METHOD if helpers.is_method(node) else ElementType.FUNCTION
-        )
+        element_type = ElementType.METHOD if helpers.is_method(node) else ElementType.FUNCTION
 
         func_doc = FunctionDoc(
             name=node.name,
@@ -392,9 +374,7 @@ class ModuleAnalyzer:
             List of ParameterDoc for keyword-only arguments
         """
         params = []
-        kw_defaults_map = {
-            i: d for i, d in enumerate(args.kw_defaults) if d is not None
-        }
+        kw_defaults_map = {i: d for i, d in enumerate(args.kw_defaults) if d is not None}
 
         for i, arg in enumerate(args.kwonlyargs):
             param = self._create_parameter(arg, is_keyword_only=True)
@@ -405,9 +385,7 @@ class ModuleAnalyzer:
 
         return params
 
-    def _extract_parameters(
-        self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]
-    ) -> List[ParameterDoc]:
+    def _extract_parameters(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> List[ParameterDoc]:
         """
         Extract parameter documentation from function definition.
 

@@ -122,9 +122,7 @@ class TestGetDocumentOverview:
         assert len(overview["section_summaries"]) == 2
 
     @pytest.mark.asyncio
-    async def test_overview_no_document_summary(
-        self, service, mock_chromadb, mock_collection
-    ):
+    async def test_overview_no_document_summary(self, service, mock_chromadb, mock_collection):
         doc_id = uuid4()
         mock_chromadb.get_collection.return_value = mock_collection
         mock_collection.get.side_effect = [
@@ -152,9 +150,7 @@ class TestDrillDown:
     """Tests for drill_down."""
 
     @pytest.mark.asyncio
-    async def test_drill_down_with_children(
-        self, service, mock_chromadb, mock_collection
-    ):
+    async def test_drill_down_with_children(self, service, mock_chromadb, mock_collection):
         summary_id = uuid4()
         mock_chromadb.get_collection.return_value = mock_collection
 

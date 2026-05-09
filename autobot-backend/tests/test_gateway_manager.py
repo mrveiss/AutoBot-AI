@@ -419,9 +419,7 @@ class TestGatewayManager:
             metadata={},
         )
 
-        agent_handler = AsyncMock(
-            return_value={"response": "Response text", "type": "message"}
-        )
+        agent_handler = AsyncMock(return_value={"response": "Response text", "type": "message"})
 
         handler = AsyncMock()
         gateway.register_response_handler("slack", handler)

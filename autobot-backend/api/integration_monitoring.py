@@ -348,9 +348,7 @@ def _build_config_from_params(
     )
 
 
-def _get_integration(
-    provider: str, config: IntegrationConfig
-) -> DatadogIntegration | NewRelicIntegration:
+def _get_integration(provider: str, config: IntegrationConfig) -> DatadogIntegration | NewRelicIntegration:
     """Get integration instance for provider.
 
     Args:
@@ -371,9 +369,7 @@ def _get_integration(
         raise ValueError(f"Unsupported provider: {provider}")
 
 
-def _build_metrics_params(
-    provider: str, request: MetricsQueryRequest
-) -> Dict[str, Any]:
+def _build_metrics_params(provider: str, request: MetricsQueryRequest) -> Dict[str, Any]:
     """Build metrics query parameters.
 
     Args:
@@ -385,9 +381,7 @@ def _build_metrics_params(
     """
     if provider == "datadog":
         to_time = request.to_time or int(datetime.now(tz=timezone.utc).timestamp())
-        from_time = request.from_time or int(
-            (datetime.now(tz=timezone.utc) - timedelta(hours=1)).timestamp()
-        )
+        from_time = request.from_time or int((datetime.now(tz=timezone.utc) - timedelta(hours=1)).timestamp())
         return {"query": request.query, "from_time": from_time, "to_time": to_time}
     else:  # new_relic
         since = request.since or "1 hour ago"

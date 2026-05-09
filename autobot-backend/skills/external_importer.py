@@ -74,9 +74,7 @@ async def _run_git(*args: str, cwd: str | None = None) -> None:
     )
     _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_TIMEOUT)
     if proc.returncode != 0:
-        raise RuntimeError(
-            f"git {' '.join(args)} failed: {stderr.decode('utf-8', errors='replace')}"
-        )
+        raise RuntimeError(f"git {' '.join(args)} failed: {stderr.decode('utf-8', errors='replace')}")
 
 
 def _walk_skill_mds(root: str) -> list[str]:
@@ -130,9 +128,7 @@ class ExternalSkillImporter:
     DB for subsequent review before any promotion attempt.
     """
 
-    async def import_git_repo(
-        self, url: str, ref: str = "main", repo_id: str | None = None
-    ) -> list[SkillPackage]:
+    async def import_git_repo(self, url: str, ref: str = "main", repo_id: str | None = None) -> list[SkillPackage]:
         """Clone/fetch a git repository and return SkillPackage objects for each SKILL.md found.
 
         The packages are NOT persisted here -- callers are responsible for
@@ -189,9 +185,7 @@ class ExternalSkillImporter:
 
         return packages
 
-    async def import_http_catalog(
-        self, url: str, page: int = 1, page_size: int = 20
-    ) -> list[dict[str, Any]]:
+    async def import_http_catalog(self, url: str, page: int = 1, page_size: int = 20) -> list[dict[str, Any]]:
         """Fetch a paginated JSON skill catalog from an HTTP endpoint.
 
         The endpoint is expected to return JSON in the shape::
@@ -220,9 +214,7 @@ class ExternalSkillImporter:
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url, params=params) as response:
                 if response.status != 200:
-                    raise RuntimeError(
-                        f"Catalog fetch failed: HTTP {response.status} from {url}"
-                    )
+                    raise RuntimeError(f"Catalog fetch failed: HTTP {response.status} from {url}")
                 data = await response.json()
 
         if isinstance(data, list):

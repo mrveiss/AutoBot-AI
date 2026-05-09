@@ -69,6 +69,7 @@ def _pkg_stub(name: str) -> types.ModuleType:
 # Build WorkflowMessage as a real dataclass (not a MagicMock) so tests can
 # inspect .type and .metadata attributes.
 if "async_chat_workflow" not in sys.modules:
+
     @dataclasses.dataclass
     class _WM:
         type: str
@@ -95,9 +96,7 @@ _cw_pkg.__path__ = [str(_BACKEND_ROOT / "chat_workflow")]  # type: ignore[attr-d
 # Sub-module stubs for the two imports tool_handler pulls in at module level.
 _lh = _simple_stub("chat_workflow.llm_handler")
 _lh._emit_before_tool_execute = AsyncMock(return_value=True)  # type: ignore[attr-defined]
-_lh._emit_after_tool_execute = AsyncMock(  # type: ignore[attr-defined]
-    side_effect=lambda t, r, s, m: r
-)
+_lh._emit_after_tool_execute = AsyncMock(side_effect=lambda t, r, s, m: r)  # type: ignore[attr-defined]
 _lh._emit_tool_error = AsyncMock(return_value=None)  # type: ignore[attr-defined]
 
 _sh = _simple_stub("chat_workflow.session_handler")
@@ -114,9 +113,7 @@ _svc_pkg.mcp_dispatch = _mcp_stub  # type: ignore[attr-defined]
 
 # Load tool_handler directly from its source file, bypassing __init__.py.
 _th_path = _BACKEND_ROOT / "chat_workflow" / "tool_handler.py"
-_spec = importlib.util.spec_from_file_location(
-    "chat_workflow.tool_handler", str(_th_path)
-)
+_spec = importlib.util.spec_from_file_location("chat_workflow.tool_handler", str(_th_path))
 assert _spec and _spec.loader, f"Could not locate tool_handler at {_th_path}"
 _th_mod = importlib.util.module_from_spec(_spec)
 _th_mod.__package__ = "chat_workflow"
@@ -171,9 +168,7 @@ class TestValidateToolArguments:
 
     def test_returns_none_for_all_fields_provided(self):
         """All fields provided (including optional) still returns None."""
-        result = validate_tool_arguments(
-            "my_tool", {"query": "hello", "limit": 10}, _SIMPLE_SCHEMA
-        )
+        result = validate_tool_arguments("my_tool", {"query": "hello", "limit": 10}, _SIMPLE_SCHEMA)
         assert result is None
 
     def test_returns_error_for_missing_required_field(self):
@@ -188,9 +183,7 @@ class TestValidateToolArguments:
 
     def test_returns_error_for_wrong_type(self):
         """Wrong field type must produce a structured error dict."""
-        result = validate_tool_arguments(
-            "my_tool", {"query": "ok", "limit": "not-an-int"}, _SIMPLE_SCHEMA
-        )
+        result = validate_tool_arguments("my_tool", {"query": "ok", "limit": "not-an-int"}, _SIMPLE_SCHEMA)
 
         assert result is not None
         assert result["schema_validation_failed"] is True
@@ -284,9 +277,7 @@ class TestTryMcpDispatchSchemaRetry:
         dispatcher = MagicMock()
         dispatcher._cache_loaded = True
         dispatcher.find_tool = MagicMock(return_value=tool_meta)
-        dispatcher.dispatch = AsyncMock(
-            return_value={"success": True, "result": "ok", "bridge": "test"}
-        )
+        dispatcher.dispatch = AsyncMock(return_value={"success": True, "result": "ok", "bridge": "test"})
         return dispatcher
 
     @pytest.mark.asyncio
@@ -338,9 +329,7 @@ class TestTryMcpDispatchSchemaRetry:
                 "arguments": {},
                 "_schema_retry_count": 1,  # second attempt
             }
-            result = await _try_mcp_dispatch(
-                "search", tool_call, [], max_schema_retries=3
-            )
+            result = await _try_mcp_dispatch("search", tool_call, [], max_schema_retries=3)
 
         assert result is not None
         assert result.metadata["retries_left"] == 2  # 3 - 1
@@ -356,9 +345,7 @@ class TestTryMcpDispatchSchemaRetry:
                 "arguments": {},
                 "_schema_retry_count": 3,
             }
-            result = await _try_mcp_dispatch(
-                "search", tool_call, [], max_schema_retries=3
-            )
+            result = await _try_mcp_dispatch("search", tool_call, [], max_schema_retries=3)
 
         assert result is not None
         assert result.metadata["retries_left"] == 0
@@ -411,9 +398,7 @@ class TestTryMcpDispatchSchemaRetry:
         dispatcher = MagicMock()
         dispatcher._cache_loaded = True
         dispatcher.find_tool = MagicMock(return_value=tool_meta)
-        dispatcher.dispatch = AsyncMock(
-            return_value={"success": True, "result": "ok", "bridge": "b"}
-        )
+        dispatcher.dispatch = AsyncMock(return_value={"success": True, "result": "ok", "bridge": "b"})
 
         with (
             patch(f"{_MCP_DISPATCH_MODULE}.get_mcp_dispatcher", return_value=dispatcher),

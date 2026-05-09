@@ -178,9 +178,7 @@ class InMemoryCollection(BaseCollection):
         include = list(include) if include is not None else ["documents", "metadatas"]
         candidate_ids: List[str] = list(ids) if ids is not None else list(self._documents.keys())
         filtered = [
-            _id
-            for _id in candidate_ids
-            if _id in self._documents and _match_where(self._metadatas.get(_id), where)
+            _id for _id in candidate_ids if _id in self._documents and _match_where(self._metadatas.get(_id), where)
         ]
         if offset:
             filtered = filtered[offset:]
@@ -212,16 +210,11 @@ class InMemoryCollection(BaseCollection):
             # The fake has no embedding function. Surface the limitation
             # loudly so tests that need text queries don't get silent passes.
             raise NotImplementedError(
-                "InMemoryCollection requires query_embeddings; text-only "
-                "queries need a real embedding backend"
+                "InMemoryCollection requires query_embeddings; text-only " "queries need a real embedding backend"
             )
         include = list(include) if include is not None else ["documents", "metadatas", "distances"]
 
-        candidate_ids = [
-            _id
-            for _id in self._documents.keys()
-            if _match_where(self._metadatas.get(_id), where)
-        ]
+        candidate_ids = [_id for _id in self._documents.keys() if _match_where(self._metadatas.get(_id), where)]
 
         out_ids: List[List[str]] = []
         out_docs: List[List[Optional[str]]] = []

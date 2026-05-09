@@ -45,7 +45,4 @@ class WorkflowAuditLog(Base):
     details = Column(JSONB, nullable=True)
 
     def __repr__(self) -> str:
-        return (
-            f"<WorkflowAuditLog workflow={self.workflow_id} "
-            f"user={self.user_id} action={self.action}>"
-        )
+        return f"<WorkflowAuditLog workflow={self.workflow_id} " f"user={self.user_id} action={self.action}>"

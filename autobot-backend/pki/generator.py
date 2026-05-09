@@ -23,9 +23,7 @@ from pki.config import VM_DEFINITIONS, CertificateStatus, TLSConfig, VMCertifica
 logger = logging.getLogger(__name__)
 
 
-def _run_openssl_command(
-    cmd: List[str], operation: str, context: str = ""
-) -> Tuple[bool, Optional[str]]:
+def _run_openssl_command(cmd: List[str], operation: str, context: str = "") -> Tuple[bool, Optional[str]]:
     """
     Execute an OpenSSL command with error handling.
 
@@ -50,9 +48,7 @@ def _run_openssl_command(
         return False, error_msg
 
 
-def _write_openssl_config(
-    conf_path: Path, config: TLSConfig, vm_info: VMCertificateInfo
-) -> None:
+def _write_openssl_config(conf_path: Path, config: TLSConfig, vm_info: VMCertificateInfo) -> None:
     """
     Write OpenSSL configuration file for certificate generation.
 
@@ -117,9 +113,7 @@ def _generate_service_key(key_path: Path, key_size: int, vm_name: str) -> bool:
     return success
 
 
-def _generate_csr(
-    key_path: Path, csr_path: Path, conf_path: Path, vm_name: str
-) -> bool:
+def _generate_csr(key_path: Path, csr_path: Path, conf_path: Path, vm_name: str) -> bool:
     """
     Generate Certificate Signing Request for a service.
 
@@ -334,9 +328,7 @@ class CertificateGenerator:
 
         return self._generate_ca_certificate(ca_key, ca_cert)
 
-    def _generate_service_cert(
-        self, vm_info: VMCertificateInfo, force: bool = False
-    ) -> bool:
+    def _generate_service_cert(self, vm_info: VMCertificateInfo, force: bool = False) -> bool:
         """
         Generate service certificate for a VM.
 
@@ -401,15 +393,10 @@ class CertificateGenerator:
         key_path = vm_info.key_path
 
         if not key_path.exists():
-            logger.error(
-                f"Cannot renew certificate for {vm_info.name}: "
-                f"existing key not found at {key_path}"
-            )
+            logger.error(f"Cannot renew certificate for {vm_info.name}: " f"existing key not found at {key_path}")
             return False
 
-        logger.info(
-            f"Renewing certificate for {vm_info.name} (preserving existing key)"
-        )
+        logger.info(f"Renewing certificate for {vm_info.name} (preserving existing key)")
 
         conf_path = cert_path.parent / "server.conf"
         _write_openssl_config(conf_path, self.config, vm_info)
@@ -430,14 +417,10 @@ class CertificateGenerator:
             return False
 
         csr_path.unlink()
-        logger.info(
-            f"Certificate renewed for {vm_info.name} (key preserved): {cert_path}"
-        )
+        logger.info(f"Certificate renewed for {vm_info.name} (key preserved): {cert_path}")
         return True
 
-    def _parse_certificate_output(
-        self, output: str
-    ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    def _parse_certificate_output(self, output: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         """
         Parse OpenSSL x509 output for subject, issuer, and expiry date.
 
@@ -463,9 +446,7 @@ class CertificateGenerator:
 
         return subject, issuer, expires_at
 
-    def _calculate_expiry_info(
-        self, expires_at: Optional[str]
-    ) -> Tuple[Optional[int], bool]:
+    def _calculate_expiry_info(self, expires_at: Optional[str]) -> Tuple[Optional[int], bool]:
         """
         Calculate days until expiry and renewal status from expiry date string.
 

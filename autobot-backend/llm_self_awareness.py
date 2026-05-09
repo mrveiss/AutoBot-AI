@@ -63,9 +63,7 @@ class LLMSelfAwareness:
             return False
         return (datetime.now(tz=timezone.utc) - self._cache_timestamp).seconds < self._cache_ttl
 
-    def _build_system_identity(
-        self, project_status: Dict[str, Any], capabilities: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _build_system_identity(self, project_status: Dict[str, Any], capabilities: Dict[str, Any]) -> Dict[str, Any]:
         """
         Build system identity section of context.
 
@@ -79,9 +77,7 @@ class LLMSelfAwareness:
             "system_maturity": capabilities["system_maturity"],
         }
 
-    def _build_phase_and_metrics(
-        self, project_status: Dict[str, Any], state_summary: Dict[str, Any]
-    ) -> tuple:
+    def _build_phase_and_metrics(self, project_status: Dict[str, Any], state_summary: Dict[str, Any]) -> tuple:
         """
         Build phase information and system metrics sections.
 
@@ -107,9 +103,7 @@ class LLMSelfAwareness:
 
         return phase_information, system_metrics
 
-    def _build_operational_status(
-        self, capabilities: Dict[str, Any], state_summary: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _build_operational_status(self, capabilities: Dict[str, Any], state_summary: Dict[str, Any]) -> Dict[str, Any]:
         """
         Build operational status section of context.
 
@@ -119,9 +113,7 @@ class LLMSelfAwareness:
             "auto_progression_enabled": capabilities["auto_progression_enabled"],
             "last_validation": capabilities["last_progression_check"],
             "recent_changes": len(state_summary.get("recent_changes", [])),
-            "milestones_achieved": sum(
-                1 for m in state_summary.get("milestones", {}).values() if m["achieved"]
-            ),
+            "milestones_achieved": sum(1 for m in state_summary.get("milestones", {}).values() if m["achieved"]),
         }
 
     def _get_error_context(self, error: Exception) -> Dict[str, Any]:
@@ -161,9 +153,7 @@ class LLMSelfAwareness:
             ],
         }
 
-    def _add_detailed_context(
-        self, context: Dict[str, Any], state_summary: Dict[str, Any]
-    ) -> None:
+    def _add_detailed_context(self, context: Dict[str, Any], state_summary: Dict[str, Any]) -> None:
         """
         Add detailed capability information to context.
 
@@ -177,9 +167,7 @@ class LLMSelfAwareness:
         context["phase_progression_rules"] = self._get_progression_rules()
         context["recent_activities"] = state_summary.get("recent_changes", [])[:5]
 
-    async def get_system_context(
-        self, include_detailed: bool = False
-    ) -> Dict[str, Any]:
+    async def get_system_context(self, include_detailed: bool = False) -> Dict[str, Any]:
         """
         Get comprehensive system context for LLM awareness.
 
@@ -194,26 +182,18 @@ class LLMSelfAwareness:
             state_summary = await self.state_tracker.get_state_summary()
             project_status = self.project_state_manager.get_fast_project_status()
 
-            phase_info, system_metrics = self._build_phase_and_metrics(
-                project_status, state_summary
-            )
+            phase_info, system_metrics = self._build_phase_and_metrics(project_status, state_summary)
 
             context = {
-                "system_identity": self._build_system_identity(
-                    project_status, capabilities
-                ),
+                "system_identity": self._build_system_identity(project_status, capabilities),
                 "current_capabilities": {
                     "active": capabilities["active_capabilities"],
                     "count": len(capabilities["active_capabilities"]),
-                    "categories": self._categorize_capabilities(
-                        capabilities["active_capabilities"]
-                    ),
+                    "categories": self._categorize_capabilities(capabilities["active_capabilities"]),
                 },
                 "phase_information": phase_info,
                 "system_metrics": system_metrics,
-                "operational_status": self._build_operational_status(
-                    capabilities, state_summary
-                ),
+                "operational_status": self._build_operational_status(capabilities, state_summary),
                 "contextual_information": await self._build_contextual_information(),
             }
 
@@ -352,9 +332,7 @@ class LLMSelfAwareness:
         # Remove empty categories
         return {k: v for k, v in categories.items() if v}
 
-    def _find_explicit_category(
-        self, capability: str, rules: Dict[str, List[str]]
-    ) -> Optional[str]:
+    def _find_explicit_category(self, capability: str, rules: Dict[str, List[str]]) -> Optional[str]:
         """Find category from explicit rules (Issue #315)."""
         for category, keywords in rules.items():
             if capability in keywords:
@@ -377,10 +355,7 @@ class LLMSelfAwareness:
 
             app = self._get_fastapi_app()
             if app is None:
-                logger.warning(
-                    "llm_self_awareness: FastAPI app not available; "
-                    "returning empty endpoint list"
-                )
+                logger.warning("llm_self_awareness: FastAPI app not available; " "returning empty endpoint list")
                 return []
             payload = await discover_endpoints(app)
             return payload.get("api_paths", [])
@@ -454,13 +429,9 @@ class LLMSelfAwareness:
             }
         return rules
 
-    async def inject_awareness_context(
-        self, prompt: str, context_level: str = "basic"
-    ) -> str:
+    async def inject_awareness_context(self, prompt: str, context_level: str = "basic") -> str:
         """Inject system awareness context into a prompt"""
-        include_detailed = (
-            context_level in DETAILED_CONTEXT_LEVELS
-        )  # O(1) lookup (Issue #326)
+        include_detailed = context_level in DETAILED_CONTEXT_LEVELS  # O(1) lookup (Issue #326)
         context = await self.get_system_context(include_detailed=include_detailed)
 
         # Build context injection
@@ -483,9 +454,7 @@ Your Current Capabilities by Category:
                 if len(caps) > 5:
                     line += f" (and {len(caps) - 5} more)"
                 capability_lines.append(line)
-        awareness_prompt += (
-            "\n".join(capability_lines) + "\n" if capability_lines else ""
-        )
+        awareness_prompt += "\n".join(capability_lines) + "\n" if capability_lines else ""
 
         awareness_prompt += f"""
 System Metrics:
@@ -515,15 +484,11 @@ You should be aware of your current capabilities and limitations based on the sy
             summary.append(f"Generated: {datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
             summary.append("")
             summary.append(f"**System Maturity**: {capabilities['system_maturity']}%")
-            summary.append(
-                f"**Active Capabilities**: {len(capabilities['active_capabilities'])}"
-            )
+            summary.append(f"**Active Capabilities**: {len(capabilities['active_capabilities'])}")
             summary.append("")
 
             # Categorize and list capabilities
-            categorized = self._categorize_capabilities(
-                capabilities["active_capabilities"]
-            )
+            categorized = self._categorize_capabilities(capabilities["active_capabilities"])
 
             for category, caps in categorized.items():
                 if caps:
@@ -538,9 +503,7 @@ You should be aware of your current capabilities and limitations based on the sy
             logger.error("Error creating capability summary: %s", e)
             return "Error creating capability summary"
 
-    def _find_relevant_capabilities(
-        self, query_lower: str, categories: Dict[str, List[str]]
-    ) -> List[Dict[str, Any]]:
+    def _find_relevant_capabilities(self, query_lower: str, categories: Dict[str, List[str]]) -> List[Dict[str, Any]]:
         """
         Find capabilities relevant to the query from category data.
 
@@ -557,14 +520,10 @@ You should be aware of your current capabilities and limitations based on the sy
         for category, caps in categories.items():
             for cap in caps:
                 if cap.replace("_", " ") in query_lower or cap in query_lower:
-                    relevant.append(
-                        {"capability": cap, "category": category, "active": True}
-                    )
+                    relevant.append({"capability": cap, "category": category, "active": True})
         return relevant
 
-    def _build_progression_recommendation(
-        self, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _build_progression_recommendation(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
         Build phase progression recommendation from context.
 
@@ -579,15 +538,11 @@ You should be aware of your current capabilities and limitations based on the sy
         return {
             "type": "phase_progression",
             "current_phase": context["phase_information"]["current_phase"],
-            "completion": (
-                f"{context['phase_information']['completed_phases']}/10 phases complete"
-            ),
+            "completion": (f"{context['phase_information']['completed_phases']}/10 phases complete"),
             "next_action": "Run phase validation to check progression eligibility",
         }
 
-    def _build_capability_recommendation(
-        self, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _build_capability_recommendation(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
         Build capability info recommendation from context.
 
@@ -631,14 +586,10 @@ You should be aware of your current capabilities and limitations based on the sy
 
         # Add phase-specific recommendations using O(1) lookups (Issue #326)
         if any(word in query_lower for word in PROGRESSION_QUERIES):
-            response["recommendations"].append(
-                self._build_progression_recommendation(context)
-            )
+            response["recommendations"].append(self._build_progression_recommendation(context))
 
         if any(word in query_lower for word in CAPABILITY_QUERIES):
-            response["recommendations"].append(
-                self._build_capability_recommendation(context)
-            )
+            response["recommendations"].append(self._build_capability_recommendation(context))
 
         return response
 
@@ -650,9 +601,7 @@ You should be aware of your current capabilities and limitations based on the sy
 
         # Ensure directory exists
         # Issue #358 - avoid blocking
-        await asyncio.to_thread(
-            Path(output_path).parent.mkdir, parents=True, exist_ok=True
-        )
+        await asyncio.to_thread(Path(output_path).parent.mkdir, parents=True, exist_ok=True)
 
         # Get comprehensive context
         context = await self.get_system_context(include_detailed=True)
@@ -678,9 +627,7 @@ You should be aware of your current capabilities and limitations based on the sy
                 await f.write(json.dumps(export_data, indent=2, default=str))
             logger.info("System awareness data exported to %s", output_path)
         except OSError as e:
-            logger.error(
-                "Failed to export system awareness data to %s: %s", output_path, e
-            )
+            logger.error("Failed to export system awareness data to %s: %s", output_path, e)
             raise
         return output_path
 
@@ -718,9 +665,7 @@ if __name__ == "__main__":
         print(aware_prompt)  # noqa: print
 
         # Test phase-aware response
-        response = await awareness.get_phase_aware_response(
-            "What capabilities do I have for AI tasks?"
-        )
+        response = await awareness.get_phase_aware_response("What capabilities do I have for AI tasks?")
         print("\n--- Phase-Aware Response ---")  # noqa: print
         print(json.dumps(response, indent=2))  # noqa: print
 

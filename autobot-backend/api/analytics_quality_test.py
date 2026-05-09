@@ -21,6 +21,7 @@ import pytest
 
 def _make_shared_mock(return_path=None):
     """Build a fake api.codebase_analytics.endpoints.shared module."""
+
     async def fake_resolve(source_id):
         if source_id is None:
             return None
@@ -116,17 +117,16 @@ class TestCalculateHealthScore:
 
         assert len(result.recommendations) > 0
         rec_text = " ".join(result.recommendations)
-        assert any(
-            cat in rec_text.lower()
-            for cat in ["maintainability", "reliability", "security"]
-        )
+        assert any(cat in rec_text.lower() for cat in ["maintainability", "reliability", "security"])
 
     def test_max_5_recommendations(self):
         """At most 5 recommendations are returned."""
         from api.analytics_quality import calculate_health_score
 
-        metrics = {k: 40.0 for k in ["maintainability", "reliability", "security",
-                                       "performance", "testability", "documentation"]}
+        metrics = {
+            k: 40.0
+            for k in ["maintainability", "reliability", "security", "performance", "testability", "documentation"]
+        }
         result = calculate_health_score(metrics)
         assert len(result.recommendations) <= 5
 

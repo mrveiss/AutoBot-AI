@@ -32,10 +32,7 @@ class MemoryManager:
                     self.external_enabled = True
                     logger.info("External memory provider initialized")
             except Exception as e:
-                logger.warning(
-                    f"External memory provider unavailable, "
-                    f"using built-in only: {e}"
-                )
+                logger.warning(f"External memory provider unavailable, " f"using built-in only: {e}")
                 self.external = None
                 self.external_enabled = False
         except Exception as e:
@@ -60,10 +57,7 @@ class MemoryManager:
                 if result:
                     return result
             except Exception as e:
-                logger.warning(
-                    f"External provider prefetch failed, "
-                    f"falling back to built-in: {e}"
-                )
+                logger.warning(f"External provider prefetch failed, " f"falling back to built-in: {e}")
         try:
             return await self.built_in.prefetch(context)
         except Exception as e:
@@ -92,10 +86,7 @@ class MemoryManager:
                 if results:
                     return results
             except Exception as e:
-                logger.warning(
-                    f"External provider search failed, "
-                    f"falling back to built-in: {e}"
-                )
+                logger.warning(f"External provider search failed, " f"falling back to built-in: {e}")
         try:
             return await self.built_in.search(query, limit, filters)
         except Exception as e:

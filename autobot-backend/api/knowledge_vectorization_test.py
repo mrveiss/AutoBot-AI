@@ -82,9 +82,7 @@ class TestBatchVectorizationStatus:
     """Test batch vectorization status retrieval"""
 
     @pytest.mark.asyncio
-    async def test_get_batch_status_success(
-        self, mock_knowledge_base, sample_batch_status
-    ):
+    async def test_get_batch_status_success(self, mock_knowledge_base, sample_batch_status):
         """Test successful batch status retrieval"""
         mock_knowledge_base.get_vectorization_status.return_value = sample_batch_status
 
@@ -133,16 +131,12 @@ class TestBatchVectorizationStatus:
         assert "error" in result
 
     @pytest.mark.asyncio
-    async def test_get_multiple_facts_status(
-        self, mock_knowledge_base, sample_vectorization_status
-    ):
+    async def test_get_multiple_facts_status(self, mock_knowledge_base, sample_vectorization_status):
         """Test getting status for multiple facts"""
         fact_ids = ["fact_1", "fact_2", "fact_3", "fact_4"]
 
         # Mock batch status endpoint
-        mock_knowledge_base.get_vectorization_status.return_value = {
-            "statuses": sample_vectorization_status
-        }
+        mock_knowledge_base.get_vectorization_status.return_value = {"statuses": sample_vectorization_status}
 
         result = await mock_knowledge_base.get_vectorization_status(fact_ids=fact_ids)
 
@@ -464,9 +458,7 @@ class TestCacheIntegration:
         status = {"vectorized": True, "timestamp": "2025-11-28T10:00:00"}
 
         cache_key = f"vectorization:status:{fact_id}"
-        await mock_redis_client.hset(
-            cache_key, mapping={"vectorized": "true", "timestamp": status["timestamp"]}
-        )
+        await mock_redis_client.hset(cache_key, mapping={"vectorized": "true", "timestamp": status["timestamp"]})
 
         mock_redis_client.hset.assert_called_once()
 

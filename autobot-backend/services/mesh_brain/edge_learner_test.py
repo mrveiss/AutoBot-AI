@@ -71,9 +71,7 @@ class TestEdgeLearnerOnRetrieval:
         await learner.on_retrieval({"final_ranked_ids": ["A", "B"]})
 
         expected_weight = 0.6 * _EMA_DECAY + 1.0 * (1 - _EMA_DECAY)
-        db.update_edge.assert_awaited_once_with(
-            "edge-1", weight=pytest.approx(expected_weight), co_access_count=3
-        )
+        db.update_edge.assert_awaited_once_with("edge-1", weight=pytest.approx(expected_weight), co_access_count=3)
 
     @pytest.mark.asyncio
     async def test_on_retrieval_creates_edge_above_threshold(self):
@@ -260,9 +258,7 @@ class TestEdgeLearnerConsumeFeedbackStream:
 # =============================================================================
 
 
-def _make_ewc_learner(
-    db: AsyncMock, redis: AsyncMock, ewc_lambda: float = 0.4
-) -> EdgeLearner:
+def _make_ewc_learner(db: AsyncMock, redis: AsyncMock, ewc_lambda: float = 0.4) -> EdgeLearner:
     """Return an EdgeLearner with EWC++ enabled at specified lambda."""
     return EdgeLearner(
         db=db,
@@ -293,9 +289,7 @@ class TestEWCPrevention:
         await learner.on_retrieval({"final_ranked_ids": ["A", "B"]})
 
         expected_weight = 0.6 * _EMA_DECAY + 1.0 * (1 - _EMA_DECAY)
-        db.update_edge.assert_awaited_once_with(
-            "edge-1", weight=pytest.approx(expected_weight), co_access_count=3
-        )
+        db.update_edge.assert_awaited_once_with("edge-1", weight=pytest.approx(expected_weight), co_access_count=3)
 
     @pytest.mark.asyncio
     async def test_ewc_dampens_high_importance_edges(self):
@@ -482,9 +476,7 @@ class TestEWCRedisPersistence:
 
         learner = _make_ewc_learner(db, redis)
         await learner.consume_feedback_stream(date_key="2026-03-23")
-        first_call_count = (
-            redis.hgetall.await_count
-        )  # 3 (cursors + weights + importance)
+        first_call_count = redis.hgetall.await_count  # 3 (cursors + weights + importance)
 
         await learner.consume_feedback_stream(date_key="2026-03-23")
         # No additional hgetall calls on second consume — state already loaded.
@@ -561,9 +553,7 @@ class TestEWCRedisPersistence:
         """Redis failure loading importance is logged and does not raise (#2546)."""
         db = _make_db_mock()
         redis = _make_redis_mock()
-        redis.hgetall = AsyncMock(
-            side_effect=[{"edge-1": "0.5"}, RuntimeError("redis down")]
-        )
+        redis.hgetall = AsyncMock(side_effect=[{"edge-1": "0.5"}, RuntimeError("redis down")])
 
         learner = _make_ewc_learner(db, redis)
         # Bypass cursor load so only 2 hgetall calls needed.

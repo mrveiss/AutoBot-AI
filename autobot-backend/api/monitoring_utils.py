@@ -48,8 +48,7 @@ def _calculate_overall_health(dashboard: Metadata) -> str:
         # Service health
         if dashboard.get("services"):
             critical_services = any(
-                service.get("status") in CRITICAL_SERVICE_STATUSES
-                for service in dashboard["services"].values()
+                service.get("status") in CRITICAL_SERVICE_STATUSES for service in dashboard["services"].values()
             )
             if critical_services:
                 health_factors.append("critical")
@@ -76,9 +75,7 @@ def _calculate_performance_score(dashboard: Metadata) -> float:
         # GPU performance score
         if dashboard.get("gpu"):
             gpu = dashboard["gpu"]
-            gpu_score = min(
-                100, gpu.get("utilization_percent", 0) * 1.25
-            )  # Favor high utilization
+            gpu_score = min(100, gpu.get("utilization_percent", 0) * 1.25)  # Favor high utilization
             if gpu.get("thermal_throttling"):
                 gpu_score *= 0.5
             scores.append(gpu_score)
@@ -86,17 +83,13 @@ def _calculate_performance_score(dashboard: Metadata) -> float:
         # NPU performance score
         if dashboard.get("npu"):
             npu = dashboard["npu"]
-            npu_score = min(
-                100, npu.get("acceleration_ratio", 0) * 20
-            )  # Target 5x = 100%
+            npu_score = min(100, npu.get("acceleration_ratio", 0) * 20)  # Target 5x = 100%
             scores.append(npu_score)
 
         # System performance score
         if dashboard.get("system"):
             system = dashboard["system"]
-            cpu_score = max(
-                0, 100 - system.get("cpu_load_1m", 0) * 5
-            )  # Penalize high load
+            cpu_score = max(0, 100 - system.get("cpu_load_1m", 0) * 5)  # Penalize high load
             memory_score = max(0, 100 - system.get("memory_usage_percent", 0))
             system_score = (cpu_score + memory_score) / 2
             scores.append(system_score)
@@ -133,9 +126,7 @@ def _identify_bottlenecks(dashboard: Metadata) -> List[str]:
         # Service bottlenecks
         if dashboard.get("services"):
             slow_services = [
-                name
-                for name, service in dashboard["services"].items()
-                if service.get("response_time_ms", 0) > 500
+                name for name, service in dashboard["services"].items() if service.get("response_time_ms", 0) > 500
             ]
             if slow_services:
                 bottlenecks.append(f"Slow services: {', '.join(slow_services)}")

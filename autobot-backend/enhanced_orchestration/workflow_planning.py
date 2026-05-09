@@ -135,9 +135,7 @@ class StrategyPlanner:
             success_criteria=["Task completed"],
         )
 
-    def topological_sort_tasks(
-        self, tasks: List[AgentTask], dependencies: Dict[str, List[str]]
-    ) -> List[AgentTask]:
+    def topological_sort_tasks(self, tasks: List[AgentTask], dependencies: Dict[str, List[str]]) -> List[AgentTask]:
         """Sort tasks based on dependencies"""
         # Create task lookup
         task_map = {task.task_id: task for task in tasks}
@@ -206,17 +204,13 @@ class StrategyPlanner:
 
         return stages
 
-    def enhance_task_for_collaboration(
-        self, task: AgentTask, collab_channel: str
-    ) -> AgentTask:
+    def enhance_task_for_collaboration(self, task: AgentTask, collab_channel: str) -> AgentTask:
         """Enhance task with collaboration metadata"""
         task.metadata["collaboration_channel"] = collab_channel
         task.metadata["enable_sharing"] = True
         return task
 
-    def check_success_criteria(
-        self, plan: WorkflowPlan, results: Dict[str, Any]
-    ) -> bool:
+    def check_success_criteria(self, plan: WorkflowPlan, results: Dict[str, Any]) -> bool:
         """Check if workflow met success criteria"""
         # Basic check: all non-optional tasks completed
         for task in plan.tasks:
@@ -234,9 +228,7 @@ class StrategyPlanner:
 
         return True
 
-    def evaluate_success_criterion(
-        self, criterion: str, results: Dict[str, Any]
-    ) -> bool:
+    def evaluate_success_criterion(self, criterion: str, results: Dict[str, Any]) -> bool:
         """
         Evaluate a single success criterion against workflow results.
 
@@ -263,9 +255,7 @@ class StrategyPlanner:
             if match:
                 required_rate = float(match.group(1)) / 100
                 if results:
-                    completed = sum(
-                        1 for r in results.values() if r.get("status") == "completed"
-                    )
+                    completed = sum(1 for r in results.values() if r.get("status") == "completed")
                     actual_rate = completed / len(results)
                     return actual_rate >= required_rate
             return True
@@ -273,9 +263,7 @@ class StrategyPlanner:
         # Pattern: "Task:<task_id> completed"
         if criterion_lower.startswith("task:") and "completed" in criterion_lower:
             # Extract task_id between "task:" and "completed"
-            parts = (
-                criterion_lower.replace("task:", "").replace("completed", "").strip()
-            )
+            parts = criterion_lower.replace("task:", "").replace("completed", "").strip()
             task_id = parts.strip()
             if task_id in results:
                 return results[task_id].get("status") == "completed"

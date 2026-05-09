@@ -102,9 +102,7 @@ class TestServiceControlWorkflows:
 
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_admin_restart_redis_service(
-        self, authenticated_admin_page, frontend_url
-    ):
+    async def test_admin_restart_redis_service(self, authenticated_admin_page, frontend_url):
         """
         Test Case 1.1: Admin restarts Redis service via UI
 
@@ -130,9 +128,7 @@ class TestServiceControlWorkflows:
         await page.click('[data-testid="redis-service-link"]')
 
         # Wait for service control component
-        await page.wait_for_selector(
-            '[data-testid="redis-service-control"]', timeout=10000
-        )
+        await page.wait_for_selector('[data-testid="redis-service-control"]', timeout=10000)
 
         # Verify service is running
         status_badge = page.locator('[data-testid="service-status-badge"]')
@@ -153,9 +149,7 @@ class TestServiceControlWorkflows:
         await page.click('[data-testid="confirm-button"]')
 
         # Wait for operation to complete
-        await page.wait_for_selector(
-            '[data-testid="success-notification"]', timeout=30000
-        )
+        await page.wait_for_selector('[data-testid="success-notification"]', timeout=30000)
         notification = page.locator('[data-testid="success-notification"]')
         await expect(notification).to_contain_text("restarted successfully")
         logger.info("✓ Success notification displayed")
@@ -168,9 +162,7 @@ class TestServiceControlWorkflows:
 
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_operator_start_stopped_service(
-        self, authenticated_operator_page, frontend_url
-    ):
+    async def test_operator_start_stopped_service(self, authenticated_operator_page, frontend_url):
         """
         Test Case 1.2: Operator starts stopped service
 
@@ -209,9 +201,7 @@ class TestServiceControlWorkflows:
         await start_button.click()
 
         # Wait for operation to complete
-        await page.wait_for_selector(
-            '[data-testid="success-notification"]', timeout=30000
-        )
+        await page.wait_for_selector('[data-testid="success-notification"]', timeout=30000)
         notification = page.locator('[data-testid="success-notification"]')
         await expect(notification).to_contain_text("started successfully")
         logger.info("✓ Service started by operator")
@@ -259,9 +249,7 @@ class TestServiceControlWorkflows:
         logger.info("✓ Loading indicator shown")
 
         # Wait for refresh to complete
-        await page.wait_for_selector(
-            '[data-testid="loading-indicator"]', state="hidden", timeout=5000
-        )
+        await page.wait_for_selector('[data-testid="loading-indicator"]', state="hidden", timeout=5000)
 
         # Status should be updated
         updated_uptime = await uptime_element.text_content()
@@ -396,23 +384,17 @@ class TestRealTimeUpdates:
 
             # Watch for status changes via WebSocket
             # Status should update to restarting/stopping, then running
-            await page.wait_for_timeout(
-                2000
-            )  # Give time for status to potentially change
+            await page.wait_for_timeout(2000)  # Give time for status to potentially change
 
             # Should see notification (via WebSocket event)
-            await page.wait_for_selector(
-                '[data-testid="success-notification"]', timeout=30000
-            )
+            await page.wait_for_selector('[data-testid="success-notification"]', timeout=30000)
             logger.info("✓ Real-time notification received")
 
         logger.info("=== Test 3.1: PASSED ===\n")
 
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_auto_recovery_notification(
-        self, authenticated_admin_page, backend_url
-    ):
+    async def test_auto_recovery_notification(self, authenticated_admin_page, backend_url):
         """
         Test Case 3.2: Auto-recovery notification via WebSocket
 

@@ -78,9 +78,7 @@ class DocstringParser:
         # Process final section
         self._process_section(func_doc, current_section, current_content)
 
-    def _process_section(
-        self, func_doc: FunctionDoc, section: Optional[str], content: List[str]
-    ) -> None:
+    def _process_section(self, func_doc: FunctionDoc, section: Optional[str], content: List[str]) -> None:
         """
         Process a docstring section and update function documentation.
 
@@ -121,9 +119,7 @@ class DocstringParser:
             match = self.TYPE_PATTERNS["param"].match(stripped)
             if match:
                 if current_param:
-                    func_doc.update_parameter_description(
-                        current_param, " ".join(current_desc)
-                    )
+                    func_doc.update_parameter_description(current_param, " ".join(current_desc))
                 current_param = match.group(1)
                 current_desc = [match.group(3)]
                 continue
@@ -132,9 +128,7 @@ class DocstringParser:
             match = self.TYPE_PATTERNS["simple"].match(stripped)
             if match and not stripped.startswith(" "):
                 if current_param:
-                    func_doc.update_parameter_description(
-                        current_param, " ".join(current_desc)
-                    )
+                    func_doc.update_parameter_description(current_param, " ".join(current_desc))
                 current_param = match.group(1)
                 current_desc = [match.group(2)]
                 continue
@@ -233,9 +227,7 @@ class DocstringParser:
         """Extract code content from doctest line."""
         return stripped[4:] if len(stripped) > 4 else ""
 
-    def _finalize_code_block(
-        self, func_doc: FunctionDoc, code_lines: List[str]
-    ) -> List[str]:
+    def _finalize_code_block(self, func_doc: FunctionDoc, code_lines: List[str]) -> List[str]:
         """Add code block to examples and reset."""
         if code_lines:
             func_doc.examples.append(ExampleDoc(code="\n".join(code_lines)))

@@ -73,9 +73,7 @@ class AdapterRegistry:
             )
         return self.get_with_fallback()
 
-    def get_with_fallback(
-        self, preferred: Optional[str] = None
-    ) -> Optional[AdapterBase]:
+    def get_with_fallback(self, preferred: Optional[str] = None) -> Optional[AdapterBase]:
         """Get an adapter with fallback behavior."""
         if preferred:
             adapter = self.get(preferred)

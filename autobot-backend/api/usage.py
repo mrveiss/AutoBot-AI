@@ -35,7 +35,6 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.llm_cost_tracker import get_cost_tracker
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/usage", tags=["usage", "analytics"])
 
@@ -241,18 +240,23 @@ async def export_usage_csv(
     cutoff = now_utc() - timedelta(days=days)
 
     records = await tracker.get_recent_usage(limit=10000)
-    filtered = [
-        r for r in records
-        if r.get("timestamp", "") >= cutoff.strftime("%Y-%m-%dT")
-    ]
+    filtered = [r for r in records if r.get("timestamp", "") >= cutoff.strftime("%Y-%m-%dT")]
 
     output = io.StringIO()
     writer = csv.DictWriter(
         output,
         fieldnames=[
-            "timestamp", "provider", "model", "user_id", "session_id",
-            "agent_id", "input_tokens", "output_tokens", "cost_usd",
-            "latency_ms", "success",
+            "timestamp",
+            "provider",
+            "model",
+            "user_id",
+            "session_id",
+            "agent_id",
+            "input_tokens",
+            "output_tokens",
+            "cost_usd",
+            "latency_ms",
+            "success",
         ],
         extrasaction="ignore",
     )

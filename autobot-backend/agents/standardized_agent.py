@@ -47,9 +47,7 @@ class StandardizedAgent(BaseAgent):
     - Built-in request validation
     """
 
-    def __init__(
-        self, agent_type: str, deployment_mode: DeploymentMode = DeploymentMode.LOCAL
-    ):
+    def __init__(self, agent_type: str, deployment_mode: DeploymentMode = DeploymentMode.LOCAL):
         """Initialize standardized agent with action handlers and metrics."""
         super().__init__(agent_type, deployment_mode)
         self.logger = logging.getLogger(f"{__name__}.{agent_type}")
@@ -86,9 +84,7 @@ class StandardizedAgent(BaseAgent):
     def register_action_handler(self, action: str, handler: ActionHandler):
         """Register an action handler for this agent"""
         self._action_handlers[action] = handler
-        self.logger.debug(
-            f"Registered action handler: {action} -> {handler.handler_method}"
-        )
+        self.logger.debug(f"Registered action handler: {action} -> {handler.handler_method}")
 
     def register_actions(self, actions: Dict[str, ActionHandler]):
         """Register multiple action handlers at once"""
@@ -106,9 +102,7 @@ class StandardizedAgent(BaseAgent):
         """
         if not request.action:
             return (
-                self._create_error_response(
-                    request, "No action specified in request", "validation_error"
-                ),
+                self._create_error_response(request, "No action specified in request", "validation_error"),
                 None,
                 None,
             )
@@ -118,8 +112,7 @@ class StandardizedAgent(BaseAgent):
             return (
                 self._create_error_response(
                     request,
-                    f"Unsupported action '{request.action}'. "
-                    f"Supported actions: {supported_actions}",
+                    f"Unsupported action '{request.action}'. " f"Supported actions: {supported_actions}",
                     "unsupported_action",
                 ),
                 None,
@@ -130,9 +123,7 @@ class StandardizedAgent(BaseAgent):
         validation_error = self._validate_request_params(request, handler_config)
         if validation_error:
             return (
-                self._create_error_response(
-                    request, validation_error, "validation_error"
-                ),
+                self._create_error_response(request, validation_error, "validation_error"),
                 None,
                 None,
             )
@@ -162,9 +153,7 @@ class StandardizedAgent(BaseAgent):
         lang_code = resolve_language(language)
         return base + get_language_instruction(lang_code)
 
-    def _build_success_response(
-        self, request: AgentRequest, result: Any, processing_time: float
-    ) -> AgentResponse:
+    def _build_success_response(self, request: AgentRequest, result: Any, processing_time: float) -> AgentResponse:
         """Build successful response (Issue #398: extracted)."""
         return AgentResponse(
             request_id=request.request_id,
@@ -294,9 +283,7 @@ class StandardizedAgent(BaseAgent):
                 {"processing_time": processing_time, "error_type": type(e).__name__},
             )
 
-    def _validate_request_params(
-        self, request: AgentRequest, handler_config: ActionHandler
-    ) -> Optional[str]:
+    def _validate_request_params(self, request: AgentRequest, handler_config: ActionHandler) -> Optional[str]:
         """Validate request parameters against handler requirements"""
         if not handler_config.required_params:
             return None
@@ -313,9 +300,7 @@ class StandardizedAgent(BaseAgent):
 
         return None
 
-    async def _call_handler_safely(
-        self, handler_method: Callable, request: AgentRequest
-    ) -> Any:
+    async def _call_handler_safely(self, handler_method: Callable, request: AgentRequest) -> Any:
         """Safely call the handler method with error handling"""
         if asyncio.iscoroutinefunction(handler_method):
             return await handler_method(request)
@@ -349,11 +334,7 @@ class StandardizedAgent(BaseAgent):
 
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get performance statistics for this agent"""
-        avg_processing_time = (
-            self._total_processing_time / self._request_count
-            if self._request_count > 0
-            else 0.0
-        )
+        avg_processing_time = self._total_processing_time / self._request_count if self._request_count > 0 else 0.0
 
         return {
             "request_count": self._request_count,
@@ -436,8 +417,7 @@ class StandardizedAgent(BaseAgent):
         tool_lines = [f"- **{t['name']}**: {t['description']}" for t in tools]
         return (
             "\n\n## Available MCP Tools\n"
-            "You can call these tools by name when the user's request requires them:\n"
-            + "\n".join(tool_lines)
+            "You can call these tools by name when the user's request requires them:\n" + "\n".join(tool_lines)
         )
 
     @abstractmethod
@@ -481,9 +461,7 @@ class StandardizedAgent(BaseAgent):
         )
         self.register_action_handler(action, handler)
 
-    def register_query_action(
-        self, action: str = "query", method_name: str = "process_query"
-    ):
+    def register_query_action(self, action: str = "query", method_name: str = "process_query"):
         """Register a standard query action"""
         self.register_simple_action(
             action,
@@ -492,9 +470,7 @@ class StandardizedAgent(BaseAgent):
             description="Process a query request",
         )
 
-    def register_chat_action(
-        self, action: str = "chat", method_name: str = "process_chat"
-    ):
+    def register_chat_action(self, action: str = "chat", method_name: str = "process_chat"):
         """Register a standard chat action"""
         self.register_simple_action(
             action,
@@ -503,9 +479,7 @@ class StandardizedAgent(BaseAgent):
             description="Process a chat message",
         )
 
-    def register_analysis_action(
-        self, action: str = "analyze", method_name: str = "process_analysis"
-    ):
+    def register_analysis_action(self, action: str = "analyze", method_name: str = "process_analysis"):
         """Register a standard analysis action"""
         self.register_simple_action(
             action,

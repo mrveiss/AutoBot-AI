@@ -141,9 +141,7 @@ class DocumentPipeline(BasePipeline):
     def _extract_docx(self, raw_bytes: bytes, metadata: Dict) -> Dict[str, Any]:
         """Extract text and tables from a DOCX file using python-docx."""
         if not _DOCX_AVAILABLE:
-            return self._unavailable_result(
-                "docx", "python-docx not installed", metadata
-            )
+            return self._unavailable_result("docx", "python-docx not installed", metadata)
 
         try:
             doc = DocxDocument(io.BytesIO(raw_bytes))
@@ -189,9 +187,7 @@ class DocumentPipeline(BasePipeline):
         except Exception:
             return {}
 
-    def _extract_text(
-        self, raw_bytes: bytes, mime_type: str, metadata: Dict
-    ) -> Dict[str, Any]:
+    def _extract_text(self, raw_bytes: bytes, mime_type: str, metadata: Dict) -> Dict[str, Any]:
         """Extract text from plain text file (UTF-8 with latin-1 fallback)."""
         try:
             text = raw_bytes.decode("utf-8")
@@ -214,9 +210,7 @@ class DocumentPipeline(BasePipeline):
     # Error/fallback helpers
     # ------------------------------------------------------------------
 
-    def _unavailable_result(
-        self, fmt: str, reason: str, metadata: Dict
-    ) -> Dict[str, Any]:
+    def _unavailable_result(self, fmt: str, reason: str, metadata: Dict) -> Dict[str, Any]:
         """Return structured result when a required library is unavailable."""
         logger.warning("Document pipeline (%s): %s", fmt, reason)
         return {

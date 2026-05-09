@@ -88,9 +88,7 @@ def get_memory_graph(request: Request) -> AutoBotMemoryGraph:
 
     if memory_graph is None:
         logger.error("Memory Graph not initialized in app state")
-        raise HTTPException(
-            status_code=503, detail="Memory Graph service not available"
-        )
+        raise HTTPException(status_code=503, detail="Memory Graph service not available")
 
     if not memory_graph.initialized:
         logger.error("Memory Graph not properly initialized")
@@ -104,9 +102,7 @@ def get_memory_graph(request: Request) -> AutoBotMemoryGraph:
 # ====================================================================
 
 
-async def _get_entity_name_by_id(
-    memory_graph: AutoBotMemoryGraph, entity_id: str
-) -> str:
+async def _get_entity_name_by_id(memory_graph: AutoBotMemoryGraph, entity_id: str) -> str:
     """
     Get entity name from ID. Issue #398: Extracted common pattern.
 
@@ -375,9 +371,7 @@ async def create_entity(
     request_id = generate_request_id()
 
     try:
-        logger.info(
-            f"[{request_id}] Creating entity: {entity_data.name} ({entity_data.entity_type})"
-        )
+        logger.info(f"[{request_id}] Creating entity: {entity_data.name} ({entity_data.entity_type})")
 
         entity = await memory_graph.create_entity(
             entity_type=entity_data.entity_type,
@@ -430,13 +424,9 @@ async def list_all_entities(
     request_id = generate_request_id()
 
     try:
-        logger.info(
-            "[%s] Listing entities: type=%s, limit=%s", request_id, entity_type, limit
-        )
+        logger.info("[%s] Listing entities: type=%s, limit=%s", request_id, entity_type, limit)
 
-        entities = await memory_graph.search_entities(
-            query="*", entity_type=entity_type, limit=limit
-        )
+        entities = await memory_graph.search_entities(query="*", entity_type=entity_type, limit=limit)
 
         logger.info("[%s] Found %s entities", request_id, len(entities))
         return _build_list_entities_response(request_id, entities, entity_type, limit)
@@ -476,14 +466,10 @@ async def find_orphaned_conversation_entities(
     try:
         logger.info("[%s] Scanning for orphaned conversation entities", request_id)
 
-        all_entities = await memory_graph.search_entities(
-            query="*", entity_type="conversation", limit=1000
-        )
+        all_entities = await memory_graph.search_entities(query="*", entity_type="conversation", limit=1000)
 
         if not all_entities:
-            return _build_empty_orphan_response(
-                request_id, "No conversation entities found"
-            )
+            return _build_empty_orphan_response(request_id, "No conversation entities found")
 
         existing_session_ids = await _get_existing_session_ids(request)
         orphaned_raw = _find_orphaned_entities(all_entities, existing_session_ids)
@@ -496,9 +482,7 @@ async def find_orphaned_conversation_entities(
             len(all_entities),
         )
 
-        return _build_orphan_scan_response(
-            request_id, all_entities, existing_session_ids, orphaned_entities
-        )
+        return _build_orphan_scan_response(request_id, all_entities, existing_session_ids, orphaned_entities)
 
     except HTTPException:
         raise
@@ -529,17 +513,13 @@ async def _get_existing_session_ids(request: Request) -> set:
 
     chat_manager = get_chat_history_manager(request)
     if chat_manager is None:
-        raise HTTPException(
-            status_code=500, detail="Chat history manager not available"
-        )
+        raise HTTPException(status_code=500, detail="Chat history manager not available")
 
     existing_sessions = await chat_manager.list_sessions_fast()
     return {s["id"] for s in existing_sessions}
 
 
-def _find_orphaned_entities(
-    entities: List[Dict], existing_session_ids: set
-) -> List[Dict]:
+def _find_orphaned_entities(entities: List[Dict], existing_session_ids: set) -> List[Dict]:
     """
     Find entities that reference non-existent sessions.
 
@@ -667,16 +647,12 @@ async def _delete_entities(
     deleted_count = 0
     failed_deletions = []
 
-    logger.info(
-        "[%s] Deleting %d orphaned conversation entities", request_id, len(entities)
-    )
+    logger.info("[%s] Deleting %d orphaned conversation entities", request_id, len(entities))
 
     for entity in entities:
         entity_name = entity.get("name")
         try:
-            deleted = await memory_graph.delete_entity(
-                entity_name=entity_name, cascade_relations=True
-            )
+            deleted = await memory_graph.delete_entity(entity_name=entity_name, cascade_relations=True)
             if deleted:
                 deleted_count += 1
             else:
@@ -688,9 +664,7 @@ async def _delete_entities(
                     }
                 )
         except Exception as e:
-            logger.warning(
-                "[%s] Failed to delete entity %s: %s", request_id, entity_name, e
-            )
+            logger.warning("[%s] Failed to delete entity %s: %s", request_id, entity_name, e)
             failed_deletions.append(
                 {
                     "id": entity.get("id"),
@@ -699,9 +673,7 @@ async def _delete_entities(
                 }
             )
 
-    logger.info(
-        "[%s] Deleted %d/%d orphaned entities", request_id, deleted_count, len(entities)
-    )
+    logger.info("[%s] Deleted %d/%d orphaned entities", request_id, deleted_count, len(entities))
 
     return deleted_count, failed_deletions
 
@@ -743,9 +715,7 @@ def _build_orphan_cleanup_response(
     )
 
 
-async def _detect_orphaned_entities(
-    memory_graph: AutoBotMemoryGraph, request: Request
-) -> List[Dict]:
+async def _detect_orphaned_entities(memory_graph: AutoBotMemoryGraph, request: Request) -> List[Dict]:
     """
     Detect orphaned conversation entities that reference deleted sessions.
 
@@ -758,9 +728,7 @@ async def _detect_orphaned_entities(
     Returns:
         List of orphaned entities, empty list if none found
     """
-    all_entities = await memory_graph.search_entities(
-        query="*", entity_type="conversation", limit=1000
-    )
+    all_entities = await memory_graph.search_entities(query="*", entity_type="conversation", limit=1000)
 
     if not all_entities:
         return []
@@ -796,15 +764,11 @@ async def cleanup_orphaned_conversation_entities(
         orphaned_entities = await _detect_orphaned_entities(memory_graph, request)
 
         if not orphaned_entities:
-            return _build_orphan_cleanup_response(
-                request_id, dry_run, 0, message="No orphaned entities found"
-            )
+            return _build_orphan_cleanup_response(request_id, dry_run, 0, message="No orphaned entities found")
 
         deleted_count, failed_deletions = 0, []
         if not dry_run:
-            deleted_count, failed_deletions = await _delete_entities(
-                memory_graph, orphaned_entities, request_id
-            )
+            deleted_count, failed_deletions = await _delete_entities(memory_graph, orphaned_entities, request_id)
 
         return _build_orphan_cleanup_response(
             request_id, dry_run, len(orphaned_entities), deleted_count, failed_deletions
@@ -814,9 +778,7 @@ async def cleanup_orphaned_conversation_entities(
         raise
     except Exception as e:
         logger.error("[%s] Error cleaning up orphaned entities: %s", request_id, e)
-        raise HTTPException(
-            status_code=500, detail="Failed to cleanup orphaned entities"
-        )
+        raise HTTPException(status_code=500, detail="Failed to cleanup orphaned entities")
 
 
 @router.get("/entities/{entity_id}", response_model=MemoryEntityDetailResponse)
@@ -853,15 +815,11 @@ async def get_entity_by_id(
     try:
         logger.info("[%s] Retrieving entity: %s", request_id, entity_id)
 
-        entity = await memory_graph.get_entity(
-            entity_id=entity_id, include_relations=include_relations
-        )
+        entity = await memory_graph.get_entity(entity_id=entity_id, include_relations=include_relations)
 
         if entity is None:
             logger.warning("[%s] Entity not found: %s", request_id, entity_id)
-            raise HTTPException(
-                status_code=404, detail=f"Entity not found: {entity_id}"
-            )
+            raise HTTPException(status_code=404, detail=f"Entity not found: {entity_id}")
 
         logger.info("[%s] Entity retrieved: %s", request_id, entity["name"])
 
@@ -911,9 +869,7 @@ async def get_entity_by_name(
     try:
         logger.info("[%s] Searching for entity by name: %s", request_id, name)
 
-        entity = await memory_graph.get_entity(
-            entity_name=name, include_relations=include_relations
-        )
+        entity = await memory_graph.get_entity(entity_name=name, include_relations=include_relations)
 
         if entity is None:
             logger.warning("[%s] Entity not found: %s", request_id, name)
@@ -972,9 +928,7 @@ async def add_observations(
             entity_name=entity_name, observations=observation_data.observations
         )
         obs_count = len(observation_data.observations)
-        logger.info(
-            "[%s] Added %s observations to %s", request_id, obs_count, entity_name
-        )
+        logger.info("[%s] Added %s observations to %s", request_id, obs_count, entity_name)
 
         return JSONResponse(
             status_code=200,
@@ -1005,9 +959,7 @@ async def add_observations(
 async def delete_entity(
     entity_id: str = Path(..., description="Entity UUID"),
     admin_check: bool = Depends(check_admin_permission),
-    cascade_relations: bool = Query(
-        True, description="Delete all relations to/from this entity"
-    ),
+    cascade_relations: bool = Query(True, description="Delete all relations to/from this entity"),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
@@ -1034,18 +986,12 @@ async def delete_entity(
         logger.info("[%s] Deleting entity: %s", request_id, entity_id)
         entity_name = await _get_entity_name_by_id(memory_graph, entity_id)
 
-        deleted = await memory_graph.delete_entity(
-            entity_name=entity_name, cascade_relations=cascade_relations
-        )
+        deleted = await memory_graph.delete_entity(entity_name=entity_name, cascade_relations=cascade_relations)
         if not deleted:
-            raise HTTPException(
-                status_code=404, detail=f"Entity not found: {entity_id}"
-            )
+            raise HTTPException(status_code=404, detail=f"Entity not found: {entity_id}")
 
         logger.info("[%s] Entity deleted: %s", request_id, entity_name)
-        return _build_delete_entity_response(
-            request_id, entity_id, entity_name, cascade_relations
-        )
+        return _build_delete_entity_response(request_id, entity_id, entity_name, cascade_relations)
 
     except HTTPException:
         raise
@@ -1138,12 +1084,8 @@ async def get_related_entities(
     entity_id: str = Path(..., description="Entity UUID"),
     admin_check: bool = Depends(check_admin_permission),
     relation_type: Optional[str] = Query(None, description="Filter by relation type"),
-    direction: str = Query(
-        "both", pattern="^(outgoing|incoming|both)$", description="Relation direction"
-    ),
-    max_depth: int = Query(
-        1, ge=1, le=3, description="Relationship traversal depth (1-3)"
-    ),
+    direction: str = Query("both", pattern="^(outgoing|incoming|both)$", description="Relation direction"),
+    max_depth: int = Query(1, ge=1, le=3, description="Relationship traversal depth (1-3)"),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
@@ -1237,9 +1179,7 @@ async def delete_relation(
             )
 
         logger.info("[%s] Relation deleted successfully", request_id)
-        return _build_delete_relation_response(
-            request_id, from_entity, to_entity, relation_type
-        )
+        return _build_delete_relation_response(request_id, from_entity, to_entity, relation_type)
 
     except HTTPException:
         raise
@@ -1288,9 +1228,7 @@ async def search_entities(
     request_id = generate_request_id()
 
     try:
-        logger.info(
-            f"[{request_id}] Searching: query='{query}', type={entity_type}, limit={limit}"
-        )
+        logger.info(f"[{request_id}] Searching: query='{query}', type={entity_type}, limit={limit}")
         tag_list = _parse_tag_list(tags)
 
         entities = await memory_graph.search_entities(
@@ -1364,9 +1302,7 @@ async def get_entity_graph(
         )
 
         if entity_id:
-            graph_data = await _get_entity_graph_for_id(
-                memory_graph, entity_id, max_depth
-            )
+            graph_data = await _get_entity_graph_for_id(memory_graph, entity_id, max_depth)
         else:
             graph_data = await _get_entity_graph_sample(memory_graph)
 
@@ -1409,9 +1345,7 @@ async def probe_memory(
                 detail="memory_graph not initialized in app state",
             )
         if not getattr(memory_graph, "initialized", False):
-            return ComponentHealth(
-                name="memory", status="degraded", detail="memory_graph not initialized"
-            )
+            return ComponentHealth(name="memory", status="degraded", detail="memory_graph not initialized")
         return ComponentHealth(name="memory", status="ok")
     except Exception as exc:
         return ComponentHealth(
@@ -1448,28 +1382,18 @@ async def memory_health_check(
             "status": "healthy",
             "timestamp": utc_timestamp(),
             "components": {
-                "memory_graph": (
-                    "healthy" if memory_graph.initialized else "unavailable"
-                ),
-                "redis_connection": (
-                    "healthy" if memory_graph.redis_client else "unavailable"
-                ),
-                "knowledge_base": (
-                    "healthy" if memory_graph.knowledge_base else "unavailable"
-                ),
+                "memory_graph": ("healthy" if memory_graph.initialized else "unavailable"),
+                "redis_connection": ("healthy" if memory_graph.redis_client else "unavailable"),
+                "knowledge_base": ("healthy" if memory_graph.knowledge_base else "unavailable"),
             },
         }
 
-        overall_healthy = all(
-            status == "healthy" for status in health_status["components"].values()
-        )
+        overall_healthy = all(status == "healthy" for status in health_status["components"].values())
 
         if not overall_healthy:
             health_status["status"] = "degraded"
 
-        return JSONResponse(
-            status_code=200 if overall_healthy else 503, content=health_status
-        )
+        return JSONResponse(status_code=200 if overall_healthy else 503, content=health_status)
 
     except Exception as e:
         logger.error("Health check failed: %s", e)
@@ -1670,10 +1594,7 @@ async def invalidate_relation(
         if not updated:
             raise HTTPException(
                 status_code=404,
-                detail=(
-                    f"Relation not found: {body.from_id} "
-                    f"-[{body.relation_type}]-> {body.to_id}"
-                ),
+                detail=(f"Relation not found: {body.from_id} " f"-[{body.relation_type}]-> {body.to_id}"),
             )
 
         logger.info("[%s] Relation invalidated successfully", request_id)

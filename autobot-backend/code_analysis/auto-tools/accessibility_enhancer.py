@@ -272,26 +272,18 @@ class AccessibilityFixAgent:
 
             if label:
                 # Add aria-label to opening button tag
-                button_tag_match = re.match(
-                    r"(<button[^>]*)(>)", button_html, re.IGNORECASE
-                )
+                button_tag_match = re.match(r"(<button[^>]*)(>)", button_html, re.IGNORECASE)
                 if button_tag_match:
                     opening_tag = button_tag_match.group(1)
 
                     # Add aria-label before closing >
                     new_opening_tag = f'{opening_tag} aria-label="{label}">'
-                    new_button_html = button_html.replace(
-                        button_tag_match.group(0), new_opening_tag
-                    )
+                    new_button_html = button_html.replace(button_tag_match.group(0), new_opening_tag)
 
                     # Replace in the main content
                     start_pos = match.start() + offset
                     end_pos = match.end() + offset
-                    modified_content = (
-                        modified_content[:start_pos]
-                        + new_button_html
-                        + modified_content[end_pos:]
-                    )
+                    modified_content = modified_content[:start_pos] + new_button_html + modified_content[end_pos:]
 
                     # Update offset for next replacement
                     offset += len(new_button_html) - len(button_html)
@@ -344,9 +336,7 @@ class AccessibilityFixAgent:
             # Replace in content
             start_pos = match.start() + offset
             end_pos = match.end() + offset
-            modified_content = (
-                modified_content[:start_pos] + new_img_tag + modified_content[end_pos:]
-            )
+            modified_content = modified_content[:start_pos] + new_img_tag + modified_content[end_pos:]
 
             # Update offset
             offset += len(new_img_tag) - len(img_tag)
@@ -376,16 +366,12 @@ class AccessibilityFixAgent:
             # Replace in content
             start_pos = match.start() + offset
             end_pos = match.end() + offset
-            modified_content = (
-                modified_content[:start_pos] + new_element + modified_content[end_pos:]
-            )
+            modified_content = modified_content[:start_pos] + new_element + modified_content[end_pos:]
 
             # Update offset
             offset += len(new_element) - len(element)
 
-            fixes_applied.append(
-                "Added keyboard navigation support to clickable element"
-            )
+            fixes_applied.append("Added keyboard navigation support to clickable element")
 
         return modified_content, fixes_applied
 
@@ -398,11 +384,7 @@ class AccessibilityFixAgent:
         score -= img_no_alt * 5
 
         # Check for buttons without labels
-        button_no_label = len(
-            re.findall(
-                r"<button(?![^>]*(?:aria-label|title)\s*=)", content, re.IGNORECASE
-            )
-        )
+        button_no_label = len(re.findall(r"<button(?![^>]*(?:aria-label|title)\s*=)", content, re.IGNORECASE))
         score -= button_no_label * 5
 
         # Check for clickable elements without keyboard support
@@ -416,9 +398,7 @@ class AccessibilityFixAgent:
         score -= clickable_no_kbd * 3
 
         # Check for positive tabindex (bad practice)
-        positive_tabindex = len(
-            re.findall(r'tabindex\s*=\s*["\']?[1-9]', content, re.IGNORECASE)
-        )
+        positive_tabindex = len(re.findall(r'tabindex\s*=\s*["\']?[1-9]', content, re.IGNORECASE))
         score -= positive_tabindex * 2
 
         return max(0, score)
@@ -457,19 +437,13 @@ class AccessibilityFixAgent:
                 "final_score": final_score,
             }
         )
-        self.report_data["files_modified"].append(
-            str(file_path.relative_to(self.root_path))
-        )
-        print(
-            f"✅ Fixed {len(all_fixes)} accessibility issues in {file_path.name}"
-        )  # noqa: print
+        self.report_data["files_modified"].append(str(file_path.relative_to(self.root_path)))
+        print(f"✅ Fixed {len(all_fixes)} accessibility issues in {file_path.name}")  # noqa: print
         for fix in all_fixes[:3]:
             print(f"   • {fix}")  # noqa: print
         if len(all_fixes) > 3:
             print(f"   • ... and {len(all_fixes) - 3} more")  # noqa: print
-        print(
-            f"   • Accessibility score: {initial_score} → {final_score}"
-        )  # noqa: print
+        print(f"   • Accessibility score: {initial_score} → {final_score}")  # noqa: print
 
     def fix_vue_component(self, file_path: Path) -> bool:
         """Fix accessibility issues in a Vue component"""
@@ -479,9 +453,7 @@ class AccessibilityFixAgent:
             initial_score = self.calculate_accessibility_score(original_content)
             modified_content, all_fixes = self._apply_component_fixes(original_content)
             if all_fixes:
-                self._record_component_fix(
-                    file_path, modified_content, all_fixes, initial_score
-                )
+                self._record_component_fix(file_path, modified_content, all_fixes, initial_score)
                 return True
             return False
         except Exception as e:
@@ -504,9 +476,7 @@ class AccessibilityFixAgent:
             if not any(skip_dir in vue_file.parts for skip_dir in skip_dirs):
                 filtered_files.append(vue_file)
 
-        print(
-            f"📄 Found {len(filtered_files)} Vue components to analyze"
-        )  # noqa: print
+        print(f"📄 Found {len(filtered_files)} Vue components to analyze")  # noqa: print
 
         fixed_count = 0
         total_fixes = 0
@@ -516,17 +486,14 @@ class AccessibilityFixAgent:
                 fixed_count += 1
 
         # Calculate summary statistics
-        total_fixes = sum(
-            len(fix["fixes"]) for fix in self.report_data["fixes_applied"]
-        )
+        total_fixes = sum(len(fix["fixes"]) for fix in self.report_data["fixes_applied"])
 
         self.report_data["summary"] = {
             "total_files_scanned": len(filtered_files),
             "files_modified": fixed_count,
             "total_fixes_applied": total_fixes,
             "accessibility_improvements": sum(
-                fix.get("accessibility_score_improvement", 0)
-                for fix in self.report_data["fixes_applied"]
+                fix.get("accessibility_score_improvement", 0) for fix in self.report_data["fixes_applied"]
             ),
         }
 
@@ -591,9 +558,5 @@ if __name__ == "__main__":
     agent.scan_and_fix()
     agent.generate_report()
 
-    print(  # noqa: print
-        "\n🎉 Accessibility fix complete! Your AutoBot frontend is now more accessible."
-    )
-    print(  # noqa: print
-        "📋 Check the generated report for detailed information about the improvements made."
-    )
+    print("\n🎉 Accessibility fix complete! Your AutoBot frontend is now more accessible.")  # noqa: print
+    print("📋 Check the generated report for detailed information about the improvements made.")  # noqa: print

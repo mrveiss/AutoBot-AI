@@ -29,9 +29,7 @@ try:
 except ImportError as _phase_validator_import_error:
     from autobot_shared.missing_dep import MissingDep as _MissingDep
 
-    PhaseValidator = _MissingDep(  # type: ignore[assignment, misc]
-        "PhaseValidator", _phase_validator_import_error
-    )
+    PhaseValidator = _MissingDep("PhaseValidator", _phase_validator_import_error)  # type: ignore[assignment, misc]
 
 from .database import (
     init_database,
@@ -137,9 +135,7 @@ class EnhancedProjectStateTracker:
         except Exception as e:
             logger.error("Error loading state: %s", e)
 
-    def _extract_phase_states(
-        self, validation_results: Dict[str, Any]
-    ) -> Dict[str, Dict[str, Any]]:
+    def _extract_phase_states(self, validation_results: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         """
         Extract phase states from validation results (Issue #665: extracted helper).
 
@@ -180,22 +176,14 @@ class EnhancedProjectStateTracker:
                 [p for p in phase_states.values() if p["completion_percentage"] >= 95.0]
             ),
             TrackingMetric.CAPABILITY_COUNT: len(capabilities["active_capabilities"]),
-            TrackingMetric.VALIDATION_SCORE: validation_results["overall_assessment"][
-                "system_maturity_score"
-            ],
+            TrackingMetric.VALIDATION_SCORE: validation_results["overall_assessment"]["system_maturity_score"],
             TrackingMetric.SYSTEM_MATURITY: capabilities["system_maturity"],
-            TrackingMetric.ERROR_RATE: await get_error_rate(
-                self.redis_client, self._error_count
-            ),
-            TrackingMetric.PROGRESSION_VELOCITY: calculate_progression_velocity(
-                self.state_history
-            ),
+            TrackingMetric.ERROR_RATE: await get_error_rate(self.redis_client, self._error_count),
+            TrackingMetric.PROGRESSION_VELOCITY: calculate_progression_velocity(self.state_history),
             TrackingMetric.USER_INTERACTIONS: await get_user_interactions_count(
                 self.redis_client, self._user_interaction_count
             ),
-            TrackingMetric.API_CALLS: await get_api_calls_count(
-                self.redis_client, self._api_call_count
-            ),
+            TrackingMetric.API_CALLS: await get_api_calls_count(self.redis_client, self._api_call_count),
         }
 
     async def capture_state_snapshot(self) -> StateSnapshot:
@@ -213,9 +201,7 @@ class EnhancedProjectStateTracker:
 
             # Extract phase states and calculate metrics (Issue #665: uses helpers)
             phase_states = self._extract_phase_states(validation_results)
-            metrics = await self._calculate_snapshot_metrics(
-                phase_states, capabilities, validation_results
-            )
+            metrics = await self._calculate_snapshot_metrics(phase_states, capabilities, validation_results)
 
             # Create snapshot (Issue #620: extracted helper)
             snapshot = self._create_state_snapshot(phase_states, capabilities, metrics)
@@ -260,10 +246,7 @@ class EnhancedProjectStateTracker:
             active_capabilities=set(capabilities["active_capabilities"]),
             system_metrics=metrics,
             configuration=config,
-            validation_results={
-                phase: data["completion_percentage"]
-                for phase, data in phase_states.items()
-            },
+            validation_results={phase: data["completion_percentage"] for phase, data in phase_states.items()},
             metadata={
                 "total_phases": len(phase_states),
                 "completed_phases": metrics[TrackingMetric.PHASE_COMPLETION],
@@ -288,17 +271,12 @@ class EnhancedProjectStateTracker:
             timestamp_iso = snapshot.timestamp.isoformat()
             phase_states_json = json.dumps(snapshot.phase_states)
             capabilities_json = json.dumps(list(snapshot.active_capabilities))
-            metrics_json = json.dumps(
-                {k.value: v for k, v in snapshot.system_metrics.items()}
-            )
+            metrics_json = json.dumps({k.value: v for k, v in snapshot.system_metrics.items()})
             config_json = json.dumps(snapshot.configuration)
             validation_json = json.dumps(snapshot.validation_results)
             metadata_json = json.dumps(snapshot.metadata)
 
-            metrics_list = [
-                (metric.value, timestamp_iso, value)
-                for metric, value in snapshot.system_metrics.items()
-            ]
+            metrics_list = [(metric.value, timestamp_iso, value) for metric, value in snapshot.system_metrics.items()]
 
             await asyncio.to_thread(
                 save_snapshot_sync,
@@ -339,9 +317,7 @@ class EnhancedProjectStateTracker:
         self.change_log.append(change)
 
         try:
-            before_state_json = (
-                json.dumps(change.before_state) if change.before_state else None
-            )
+            before_state_json = json.dumps(change.before_state) if change.before_state else None
 
             await asyncio.to_thread(
                 record_state_change_sync,
@@ -373,9 +349,7 @@ class EnhancedProjectStateTracker:
             if criteria_met:
                 await self._mark_milestone_achieved(milestone_name, milestone, evidence)
 
-    async def _mark_milestone_achieved(
-        self, milestone_name: str, milestone: ProjectMilestone, evidence: List[str]
-    ):
+    async def _mark_milestone_achieved(self, milestone_name: str, milestone: ProjectMilestone, evidence: List[str]):
         """Mark a milestone as achieved and record the event."""
         milestone.achieved = True
         milestone.achieved_at = datetime.now(tz=timezone.utc)
@@ -411,9 +385,7 @@ class EnhancedProjectStateTracker:
         except Exception as e:
             logger.error("Error saving milestone: %s", e)
 
-    async def track_error(
-        self, error: Exception, context: Optional[Dict[str, Any]] = None
-    ):
+    async def track_error(self, error: Exception, context: Optional[Dict[str, Any]] = None):
         """Track an error occurrence for error rate calculation (thread-safe)."""
         try:
             async with self._counter_lock:
@@ -441,21 +413,15 @@ class EnhancedProjectStateTracker:
         except Exception as e:
             logger.error("Failed to track error: %s", e)
 
-    async def track_api_call(
-        self, endpoint: str, method: str = "GET", response_status: Optional[int] = None
-    ):
+    async def track_api_call(self, endpoint: str, method: str = "GET", response_status: Optional[int] = None):
         """Track an API call for metrics (thread-safe)."""
         try:
             async with self._counter_lock:
                 self._api_call_count += 1
 
-            await track_api_call_to_redis(
-                self.redis_client, endpoint, method, response_status
-            )
+            await track_api_call_to_redis(self.redis_client, endpoint, method, response_status)
 
-            logger.debug(
-                "API call tracked: %s %s -> %s", method, endpoint, response_status
-            )
+            logger.debug("API call tracked: %s %s -> %s", method, endpoint, response_status)
 
         except Exception as e:
             logger.error("Failed to track API call: %s", e)
@@ -471,9 +437,7 @@ class EnhancedProjectStateTracker:
             async with self._counter_lock:
                 self._user_interaction_count += 1
 
-            await track_user_interaction_to_redis(
-                self.redis_client, interaction_type, user_id, context
-            )
+            await track_user_interaction_to_redis(self.redis_client, interaction_type, user_id, context)
 
             if interaction_type in SIGNIFICANT_INTERACTIONS:
                 await self.record_state_change(
@@ -489,9 +453,7 @@ class EnhancedProjectStateTracker:
                     metadata={"tracking_source": "enhanced_state_tracker"},
                 )
 
-            logger.debug(
-                "User interaction tracked: %s by %s", interaction_type, user_id
-            )
+            logger.debug("User interaction tracked: %s by %s", interaction_type, user_id)
 
         except Exception as e:
             logger.error("Failed to track user interaction: %s", e)
@@ -532,9 +494,7 @@ class EnhancedProjectStateTracker:
         milestone_status = {
             name: {
                 "achieved": milestone.achieved,
-                "achieved_at": (
-                    milestone.achieved_at.isoformat() if milestone.achieved_at else None
-                ),
+                "achieved_at": (milestone.achieved_at.isoformat() if milestone.achieved_at else None),
                 "description": milestone.description,
             }
             for name, milestone in self.milestones.items()
@@ -547,9 +507,7 @@ class EnhancedProjectStateTracker:
             "current_state": {
                 "phase_states": latest_snapshot.phase_states,
                 "active_capabilities": list(latest_snapshot.active_capabilities),
-                "system_metrics": {
-                    k.value: v for k, v in latest_snapshot.system_metrics.items()
-                },
+                "system_metrics": {k.value: v for k, v in latest_snapshot.system_metrics.items()},
                 "validation_results": latest_snapshot.validation_results,
             },
             "recent_changes": [
@@ -582,9 +540,7 @@ class EnhancedProjectStateTracker:
             summary,
             output_path,
             format,
-            report_generator=(
-                self.generate_state_report if format == "markdown" else None
-            ),
+            report_generator=(self.generate_state_report if format == "markdown" else None),
         )
 
 

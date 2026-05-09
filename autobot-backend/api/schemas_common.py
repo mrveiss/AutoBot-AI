@@ -26,12 +26,12 @@ T = TypeVar("T")
 # Generic / reusable (used across multiple unrelated domains)
 # ---------------------------------------------------------------------------
 
+
 class SuccessMessageResponse(BaseModel):
     """Base for endpoints that always return success: bool + message: str."""
 
     success: bool
     message: str
-
 
 
 class SuccessDataResponse(BaseModel):
@@ -40,7 +40,6 @@ class SuccessDataResponse(BaseModel):
     success: bool
     message: str
     data: Optional[Dict[str, Any]] = None
-
 
 
 class SuccessResponse(BaseModel):
@@ -53,7 +52,6 @@ class SuccessResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Terminal session schemas  (terminal.py — session lifecycle)
 # ---------------------------------------------------------------------------
-
 
 
 class DataResponse(BaseModel, Generic[T]):
@@ -79,7 +77,6 @@ class DataResponse(BaseModel, Generic[T]):
 # ---------------------------------------------------------------------------
 # agent.py — simple message / approval responses
 # ---------------------------------------------------------------------------
-
 
 
 class UsageRecordResponse(BaseModel):

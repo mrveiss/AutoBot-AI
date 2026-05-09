@@ -37,9 +37,7 @@ def _make_audit_log():
     """Return a mock KnowledgeAuditLog."""
     log = AsyncMock()
     log.get_organization_audit_log = AsyncMock(return_value=[])
-    log.generate_compliance_report = AsyncMock(
-        return_value={"total_events": 0, "events": []}
-    )
+    log.generate_compliance_report = AsyncMock(return_value={"total_events": 0, "events": []})
     return log
 
 
@@ -226,9 +224,7 @@ async def test_compliance_summary_org_admin_allowed():
         "api.knowledge_audit.get_or_create_knowledge_base",
         new=AsyncMock(return_value=kb),
     ):
-        result = await get_compliance_summary(
-            request=_make_request(kb), current_user=user, days=30
-        )
+        result = await get_compliance_summary(request=_make_request(kb), current_user=user, days=30)
 
     assert "summary_period_days" in result
     assert result["summary_period_days"] == 30

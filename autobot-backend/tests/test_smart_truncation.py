@@ -155,7 +155,7 @@ class TestUtf8BoundarySafety:
 
     def test_emoji_not_corrupted_at_head_boundary(self):
         """4-byte emoji must not be split at the head cut point."""
-        emoji = "\U0001F600"  # 😀 — 4 bytes when encoded to UTF-8
+        emoji = "\U0001f600"  # 😀 — 4 bytes when encoded to UTF-8
         content = emoji * 25000  # all emoji
         result = _truncate_large_file(content, max_chars=20000)
 
@@ -172,7 +172,7 @@ class TestUtf8BoundarySafety:
 
     def test_emoji_content_survives_round_trip(self):
         """Mixed emoji + ASCII content round-trips through truncation."""
-        content = ("Hello 😀 World 🌍 " * 1500)  # > 20000 chars
+        content = "Hello 😀 World 🌍 " * 1500  # > 20000 chars
         result = _truncate_large_file(content, max_chars=20000)
         encoded = result.encode("utf-8")
         assert encoded.decode("utf-8") == result
@@ -192,7 +192,7 @@ class TestUtf8BoundarySafety:
 
     def test_cjk_mixed_with_ascii(self):
         """CJK mixed with ASCII spaces survives truncation round-trip."""
-        content = ("中文 text " * 3000)  # spaces allow boundary snapping
+        content = "中文 text " * 3000  # spaces allow boundary snapping
         result = _truncate_large_file(content, max_chars=20000)
         assert result.encode("utf-8").decode("utf-8") == result
 
@@ -202,13 +202,13 @@ class TestUtf8BoundarySafety:
 
     def test_accented_chars_not_corrupted(self):
         """2-byte accented characters (é, ï, ñ) must survive truncation."""
-        content = ("café naïve résumé " * 1500)  # > 20000 chars
+        content = "café naïve résumé " * 1500  # > 20000 chars
         result = _truncate_large_file(content, max_chars=20000)
         assert result.encode("utf-8").decode("utf-8") == result
 
     def test_accented_head_preserved(self):
         """Head section must start with accented content, not be mangled."""
-        content = ("résumé " * 4000)
+        content = "résumé " * 4000
         result = _truncate_large_file(content, max_chars=20000)
         before_marker = result.split("[...")[0]
         assert "résumé" in before_marker
@@ -232,9 +232,9 @@ class TestUtf8BoundarySafety:
     def test_boundary_snap_does_not_cut_mid_word(self):
         """Boundary snap must not cut in the middle of a multi-byte word."""
         # Place a long emoji word right at the section_size boundary (~8000)
-        prefix = "a " * 4000              # 8000 chars, ends with space
-        emoji_word = "😀🌍🎉" * 100       # 300 chars, no internal spaces
-        suffix = " b" * 8500              # 17000 chars
+        prefix = "a " * 4000  # 8000 chars, ends with space
+        emoji_word = "😀🌍🎉" * 100  # 300 chars, no internal spaces
+        suffix = " b" * 8500  # 17000 chars
         content = prefix + emoji_word + suffix  # well above 20000
 
         result = _truncate_large_file(content, max_chars=20000)
@@ -342,7 +342,7 @@ class TestBinaryFileHandling:
 
     def test_large_binary_no_truncation_marker(self):
         """Placeholder must not contain the normal truncation marker."""
-        content = ("x\x00" * 15000)  # 30000 chars with embedded nulls
+        content = "x\x00" * 15000  # 30000 chars with embedded nulls
         result = _truncate_large_file(content, max_chars=20000)
         assert "chars TRUNCATED" not in result
 
@@ -381,40 +381,40 @@ class TestLargeFilePerformance:
         """10 MB ASCII file must truncate in < 1 s."""
         content = "a" * (10 * 1024 * 1024)
         elapsed = self._time_truncation(content)
-        assert elapsed < self._MAX_SECONDS, (
-            f"10 MB ASCII truncation took {elapsed:.3f}s — exceeds {self._MAX_SECONDS}s budget"
-        )
+        assert (
+            elapsed < self._MAX_SECONDS
+        ), f"10 MB ASCII truncation took {elapsed:.3f}s — exceeds {self._MAX_SECONDS}s budget"
 
     def test_50mb_ascii_under_budget(self):
         """50 MB ASCII file must truncate in < 1 s."""
         content = "b" * (50 * 1024 * 1024)
         elapsed = self._time_truncation(content)
-        assert elapsed < self._MAX_SECONDS, (
-            f"50 MB ASCII truncation took {elapsed:.3f}s — exceeds {self._MAX_SECONDS}s budget"
-        )
+        assert (
+            elapsed < self._MAX_SECONDS
+        ), f"50 MB ASCII truncation took {elapsed:.3f}s — exceeds {self._MAX_SECONDS}s budget"
 
     def test_10mb_unicode_under_budget(self):
         """10 MB Unicode (emoji) file must truncate in < 1 s."""
         # Each emoji is 1 Python str codepoint; repeat to reach ~10 M chars
-        content = "\U0001F600" * (10 * 1024 * 1024)
+        content = "\U0001f600" * (10 * 1024 * 1024)
         elapsed = self._time_truncation(content)
-        assert elapsed < self._MAX_SECONDS, (
-            f"10 MB emoji truncation took {elapsed:.3f}s — exceeds {self._MAX_SECONDS}s budget"
-        )
+        assert (
+            elapsed < self._MAX_SECONDS
+        ), f"10 MB emoji truncation took {elapsed:.3f}s — exceeds {self._MAX_SECONDS}s budget"
 
     def test_10mb_cjk_under_budget(self):
         """10 MB CJK file must truncate in < 1 s."""
         content = "\u4e2d" * (10 * 1024 * 1024)
         elapsed = self._time_truncation(content)
-        assert elapsed < self._MAX_SECONDS, (
-            f"10 MB CJK truncation took {elapsed:.3f}s — exceeds {self._MAX_SECONDS}s budget"
-        )
+        assert (
+            elapsed < self._MAX_SECONDS
+        ), f"10 MB CJK truncation took {elapsed:.3f}s — exceeds {self._MAX_SECONDS}s budget"
 
     def test_result_correct_after_large_truncation(self):
         """Correctness check: 10 MB file must produce valid head/tail output."""
-        head = "HEAD" * 100      # 400 chars
+        head = "HEAD" * 100  # 400 chars
         body = "x" * (10 * 1024 * 1024)
-        tail = "TAIL" * 100      # 400 chars
+        tail = "TAIL" * 100  # 400 chars
         content = head + body + tail
 
         result = _truncate_large_file(content, max_chars=20000)

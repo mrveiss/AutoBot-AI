@@ -41,9 +41,7 @@ logger = logging.getLogger(__name__)
 
 
 # Issue #336: Extracted helper for processing relation results
-def _process_outgoing_relation(
-    rel: Dict[str, Any], fact_id: str, related_ids: Set[str], results: List[Dict]
-) -> None:
+def _process_outgoing_relation(rel: Dict[str, Any], fact_id: str, related_ids: Set[str], results: List[Dict]) -> None:
     """Process a single outgoing relation (Issue #336 - extracted helper)."""
     if rel.get("target_fact"):
         target = rel["target_fact"]
@@ -55,9 +53,7 @@ def _process_outgoing_relation(
             related_ids.add(rel.get("target_id"))
 
 
-def _process_incoming_relation(
-    rel: Dict[str, Any], fact_id: str, related_ids: Set[str], results: List[Dict]
-) -> None:
+def _process_incoming_relation(rel: Dict[str, Any], fact_id: str, related_ids: Set[str], results: List[Dict]) -> None:
     """Process a single incoming relation (Issue #336 - extracted helper)."""
     if rel.get("source_fact"):
         source = rel["source_fact"]
@@ -69,15 +65,11 @@ def _process_incoming_relation(
             related_ids.add(rel.get("source_id"))
 
 
-async def _expand_fact_relations(
-    kb: Any, fact_id: str, related_ids: Set[str], results: List[Dict]
-) -> None:
+async def _expand_fact_relations(kb: Any, fact_id: str, related_ids: Set[str], results: List[Dict]) -> None:
     """Expand relations for a single fact (Issue #336 - extracted helper)."""
     if not fact_id:
         return
-    relations = await kb.get_fact_relations(
-        fact_id, direction="both", include_fact_details=True
-    )
+    relations = await kb.get_fact_relations(fact_id, direction="both", include_fact_details=True)
     if relations.get("success"):
         for rel in relations.get("outgoing", []):
             _process_outgoing_relation(rel, fact_id, related_ids, results)
@@ -85,9 +77,7 @@ async def _expand_fact_relations(
             _process_incoming_relation(rel, fact_id, related_ids, results)
 
 
-def _build_relation_context(
-    rel: Dict[str, Any], total_length: int, max_length: int, context_parts: List[str]
-) -> int:
+def _build_relation_context(rel: Dict[str, Any], total_length: int, max_length: int, context_parts: List[str]) -> int:
     """Build context string from a single relation (Issue #336 - extracted helper)."""
     if not rel.get("target_fact"):
         return total_length
@@ -144,17 +134,13 @@ async def _process_relations_for_citations(
         if not fact_id:
             continue
 
-        relations = await kb.get_fact_relations(
-            fact_id, direction="outgoing", include_fact_details=True
-        )
+        relations = await kb.get_fact_relations(fact_id, direction="outgoing", include_fact_details=True)
         if not (relations.get("success") and relations.get("outgoing")):
             continue
 
         context_parts.append("## Related Information\n")
         for rel in relations["outgoing"][:2]:
-            total_length = _build_relation_context(
-                rel, total_length, max_length, context_parts
-            )
+            total_length = _build_relation_context(rel, total_length, max_length, context_parts)
         context_parts.append("\n")
     return total_length
 
@@ -202,9 +188,7 @@ def _process_documentation_context(
 
     context_parts.append("## AutoBot Documentation\n")
     for doc in doc_results[:2]:
-        total_length = _process_single_doc_result(
-            doc, total_length, max_length, context_parts, citations
-        )
+        total_length = _process_single_doc_result(doc, total_length, max_length, context_parts, citations)
     return total_length
 
 
@@ -297,18 +281,14 @@ async def _search_relations(kb, result: dict) -> None:
         fact_ids = [f.get("id") or f.get("fact_id") for f in result["facts"]]
 
         for fact_id in fact_ids[:5]:  # Limit to top 5 to avoid too many queries
-            await _expand_fact_relations(
-                kb, fact_id, related_ids, result["related_facts"]
-            )
+            await _expand_fact_relations(kb, fact_id, related_ids, result["related_facts"])
 
         result["sources_searched"].append("relations")
     except Exception as e:
         logger.warning("Relation expansion failed: %s", e)
 
 
-def _search_documentation(
-    query: str, doc_results_count: int, score_threshold: float, result: dict
-) -> None:
+def _search_documentation(query: str, doc_results_count: int, score_threshold: float, result: dict) -> None:
     """
     Search documentation collection.
 
@@ -371,16 +351,10 @@ async def unified_search(req: Request, body: UnifiedSearchRequest):
 
     # Search documentation (Issue #620: uses helper)
     if "documentation" in body.include_sources and body.doc_results > 0:
-        _search_documentation(
-            body.query, body.doc_results, body.score_threshold, result
-        )
+        _search_documentation(body.query, body.doc_results, body.score_threshold, result)
 
     # Calculate totals
-    result["total_results"] = (
-        len(result["facts"])
-        + len(result["related_facts"])
-        + len(result["documentation"])
-    )
+    result["total_results"] = len(result["facts"]) + len(result["related_facts"]) + len(result["documentation"])
 
     return result
 
@@ -550,8 +524,7 @@ async def search_documentation(
     if not doc_searcher:
         return {
             "success": False,
-            "message": "Documentation not indexed. "
-            "Run: python tools/index_documentation.py --tier 1",
+            "message": "Documentation not indexed. " "Run: python tools/index_documentation.py --tier 1",
             "results": [],
         }
 
@@ -696,18 +669,14 @@ def _process_category_tree(
             _process_category_tree(children, nodes, edges, node["id"])
 
 
-async def _get_facts_for_graph(
-    kb: Any, category_filter: Optional[str], max_facts: int
-) -> List[Dict[str, Any]]:
+async def _get_facts_for_graph(kb: Any, category_filter: Optional[str], max_facts: int) -> List[Dict[str, Any]]:
     """Get facts for the graph with optional category filtering.
 
     Issue #707: Extracted helper for unified graph building.
     """
     if category_filter:
         # Get facts from specific category
-        result = await kb.get_facts_in_category(
-            category_id=category_filter, include_descendants=True, limit=max_facts
-        )
+        result = await kb.get_facts_in_category(category_id=category_filter, include_descendants=True, limit=max_facts)
         return result.get("facts", []) if result.get("success") else []
     else:
         # Search for recent facts
@@ -715,9 +684,7 @@ async def _get_facts_for_graph(
         return result.get("results", [])
 
 
-async def _get_fact_relations_for_graph(
-    kb: Any, fact_ids: List[str], max_relations: int = 100
-) -> List[Dict[str, Any]]:
+async def _get_fact_relations_for_graph(kb: Any, fact_ids: List[str], max_relations: int = 100) -> List[Dict[str, Any]]:
     """Get relations between facts for the graph.
 
     Issue #707: Extracted helper for unified graph building.
@@ -727,9 +694,7 @@ async def _get_fact_relations_for_graph(
 
     for fact_id in fact_ids[:20]:  # Limit to first 20 to avoid too many queries
         try:
-            result = await kb.get_fact_relations(
-                fact_id, direction="both", include_fact_details=False
-            )
+            result = await kb.get_fact_relations(fact_id, direction="both", include_fact_details=False)
             if not result.get("success"):
                 continue
 
@@ -757,9 +722,7 @@ async def _get_fact_relations_for_graph(
     return relations
 
 
-def _create_dynamic_category_nodes(
-    facts: List[Dict[str, Any]], nodes: List[Dict], edges: List[Dict]
-) -> Dict[str, str]:
+def _create_dynamic_category_nodes(facts: List[Dict[str, Any]], nodes: List[Dict], edges: List[Dict]) -> Dict[str, str]:
     """Create category nodes dynamically from fact categories.
 
     Issue #707: Creates category nodes based on unique category values in facts.
@@ -827,9 +790,7 @@ async def _process_category_tree_for_graph(
         return category_map
 
     try:
-        tree_result = await kb.get_category_tree(
-            root_id=None, max_depth=body.max_depth, include_fact_counts=True
-        )
+        tree_result = await kb.get_category_tree(root_id=None, max_depth=body.max_depth, include_fact_counts=True)
         if tree_result.get("success") and tree_result.get("tree"):
             _process_category_tree(tree_result.get("tree", []), nodes, edges)
             # Build category map from tree
@@ -886,9 +847,7 @@ def _process_facts_into_nodes(
     return fact_ids
 
 
-def _update_category_fact_counts(
-    nodes: List[Dict], facts: List[Dict[str, Any]]
-) -> None:
+def _update_category_fact_counts(nodes: List[Dict], facts: List[Dict[str, Any]]) -> None:
     """Update fact counts in category nodes.
 
     Issue #665: Extracted from get_unified_graph.
@@ -900,9 +859,7 @@ def _update_category_fact_counts(
     for node in nodes:
         if node["type"] == "category":
             cat_path = node.get("metadata", {}).get("path", "")
-            cat_name = (
-                cat_path.split("/")[-1] if cat_path else node["id"].replace("cat_", "")
-            )
+            cat_name = cat_path.split("/")[-1] if cat_path else node["id"].replace("cat_", "")
             count = sum(1 for f in facts if f.get("category") == cat_name)
             node["metadata"]["fact_count"] = count
 

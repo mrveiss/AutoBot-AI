@@ -53,30 +53,23 @@ def _parse_collection(raw: dict, index: int, repo_root: Optional[Path] = None) -
     unknown = set(raw.keys()) - _ALLOWED_KEYS
     if unknown:
         raise ValueError(
-            f"Collection[{index}] has unknown keys: {sorted(unknown)}. "
-            f"Allowed keys are: {sorted(_ALLOWED_KEYS)}"
+            f"Collection[{index}] has unknown keys: {sorted(unknown)}. " f"Allowed keys are: {sorted(_ALLOWED_KEYS)}"
         )
     missing = _REQUIRED_KEYS - set(raw.keys())
     if missing:
-        raise ValueError(
-            f"Collection[{index}] is missing required keys: {sorted(missing)}"
-        )
+        raise ValueError(f"Collection[{index}] is missing required keys: {sorted(missing)}")
     synthesis_model: Optional[str] = None
     if "synthesis_model" in raw:
         model_val = str(raw["synthesis_model"]).strip()
         if not model_val:
-            raise ValueError(
-                f"Collection[{index}] 'synthesis_model' must be a non-empty string when present"
-            )
+            raise ValueError(f"Collection[{index}] 'synthesis_model' must be a non-empty string when present")
         synthesis_model = model_val
 
     prompt_variants: List[str] = []
     if "prompt_variants" in raw:
         raw_variants = raw["prompt_variants"]
         if not isinstance(raw_variants, list):
-            raise ValueError(
-                f"Collection[{index}] 'prompt_variants' must be a list of strings when present"
-            )
+            raise ValueError(f"Collection[{index}] 'prompt_variants' must be a list of strings when present")
         prompt_variants = [str(v) for v in raw_variants if str(v).strip()]
 
     config = CollectionConfig(
@@ -120,12 +113,7 @@ def load_synthesis_schema(
         ValueError: If the YAML contains unknown or missing keys.
     """
     if path is None:
-        path = (
-            Path(__file__).parent.parent.parent
-            / "resources"
-            / "knowledge"
-            / "synthesis_schema.yaml"
-        )
+        path = Path(__file__).parent.parent.parent / "resources" / "knowledge" / "synthesis_schema.yaml"
 
     if repo_root is None:
         # __file__ → services/knowledge/ → services/ → autobot-backend/ → repo root
@@ -144,8 +132,5 @@ def load_synthesis_schema(
             f"{list(raw_data.keys()) if isinstance(raw_data, dict) else type(raw_data).__name__}"
         )
 
-    collections = [
-        _parse_collection(entry, i, repo_root)
-        for i, entry in enumerate(raw_data["collections"])
-    ]
+    collections = [_parse_collection(entry, i, repo_root) for i, entry in enumerate(raw_data["collections"])]
     return SynthesisSchema(collections=collections)

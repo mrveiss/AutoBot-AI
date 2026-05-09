@@ -16,7 +16,6 @@ import inspect
 
 import pytest
 
-
 PIPELINE_MODULES = [
     ("media.document.pipeline", "DocumentPipeline"),
     ("media.link.pipeline", "LinkPipeline"),
@@ -40,12 +39,8 @@ def test_pipeline_constructor_accepts_parent_signature(module_path, class_name):
 
     cls = getattr(mod, class_name)
     params = inspect.signature(cls.__init__).parameters
-    assert "pipeline_name" in params, (
-        f"{class_name}.__init__ must accept 'pipeline_name' for factory compat"
-    )
-    assert "supported_types" in params, (
-        f"{class_name}.__init__ must accept 'supported_types' for factory compat"
-    )
+    assert "pipeline_name" in params, f"{class_name}.__init__ must accept 'pipeline_name' for factory compat"
+    assert "supported_types" in params, f"{class_name}.__init__ must accept 'supported_types' for factory compat"
     # Both parameters must have defaults so the historical no-arg call site
     # (e.g. `DocumentPipeline()` in production) keeps working.
     assert (
@@ -73,7 +68,6 @@ def test_pipeline_no_arg_instantiation_still_works(module_path, class_name):
     # Pipeline name should match the historical hardcoded value
     expected = class_name.replace("Pipeline", "").lower()
     assert inst.pipeline_name == expected, (
-        f"no-arg {class_name}() should produce pipeline_name='{expected}', "
-        f"got {inst.pipeline_name!r}"
+        f"no-arg {class_name}() should produce pipeline_name='{expected}', " f"got {inst.pipeline_name!r}"
     )
     assert inst.supported_types, f"{class_name}() should have non-empty supported_types"

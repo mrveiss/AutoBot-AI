@@ -81,9 +81,7 @@ class TestUpdateEdge:
 
         await adapter.update_edge(_EDGE_ID, weight=0.75, co_access_count=5)
 
-        mock_db.update_edge.assert_awaited_once_with(
-            _EDGE_ID, weight=0.75, co_access_count=5
-        )
+        mock_db.update_edge.assert_awaited_once_with(_EDGE_ID, weight=0.75, co_access_count=5)
 
 
 class TestCreateEdge:
@@ -309,8 +307,10 @@ class TestCreateMeshDbAdapter:
 def _ensure_graspologic_stub() -> None:
     """Install a minimal graspologic stub if not present so tests run without the package."""
     if "graspologic" not in sys.modules:
+
         def _leiden(G, trials=3):
             import networkx as nx  # networkx is a declared dep
+
             partition = {}
             for comm_id, component in enumerate(nx.connected_components(G)):
                 for node in component:

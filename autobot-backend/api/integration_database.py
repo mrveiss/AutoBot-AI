@@ -45,8 +45,6 @@ router = APIRouter(
 )
 
 
-
-
 def _create_integration_config(
     provider: str,
     host: str,
@@ -118,8 +116,7 @@ def _get_integration_class(provider: str):
     if not integration_class:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported provider: {provider}. "
-            f"Supported: {list(providers.keys())}",
+            detail=f"Unsupported provider: {provider}. " f"Supported: {list(providers.keys())}",
         )
 
     return integration_class
@@ -382,13 +379,9 @@ async def list_tables(provider: str, request: DatabaseListRequest):
 
         # MongoDB uses collections instead of tables
         if provider.lower() == "mongodb":
-            result = await integration.execute_action(
-                "list_collections", {"database": request.database}
-            )
+            result = await integration.execute_action("list_collections", {"database": request.database})
         else:
-            result = await integration.execute_action(
-                "list_tables", {"database": request.database}
-            )
+            result = await integration.execute_action("list_tables", {"database": request.database})
 
         return result
 

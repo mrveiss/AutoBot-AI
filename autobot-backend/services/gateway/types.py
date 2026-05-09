@@ -109,11 +109,7 @@ class UnifiedMessage:
             message_type=MessageType(data["message_type"]),
             content=data.get("content"),
             metadata=data.get("metadata", {}),
-            created_at=(
-                parse_utc_iso(data["created_at"])
-                if "created_at" in data
-                else now_utc()
-            ),
+            created_at=(parse_utc_iso(data["created_at"]) if "created_at" in data else now_utc()),
         )
 
 

@@ -256,9 +256,7 @@ def _state_to_response(state: AgentRuntimeState) -> HeartbeatConfigResponse:
         heartbeat_interval_seconds=state.heartbeat_interval_seconds,
         max_run_duration_seconds=state.max_run_duration_seconds,
         current_task_id=state.current_task_id,
-        last_heartbeat_at=(
-            state.last_heartbeat_at.isoformat() if state.last_heartbeat_at else None
-        ),
+        last_heartbeat_at=(state.last_heartbeat_at.isoformat() if state.last_heartbeat_at else None),
         session_params=state.session_params,
         extra=state.extra,
         created_at=(state.created_at.isoformat() if state.created_at else None),

@@ -65,8 +65,6 @@ from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_in
 logger = logging.getLogger(__name__)
 
 
-
-
 router = APIRouter()
 
 # Background task manager for security score analysis (#1304)
@@ -470,9 +468,7 @@ def _filter_results_by_severity(results: list, min_severity: Optional[str]) -> l
 
     try:
         min_idx = _SEVERITY_ORDER.index(min_severity.lower())
-        return [
-            r for r in results if _SEVERITY_ORDER.index(r.severity.value) >= min_idx
-        ]
+        return [r for r in results if _SEVERITY_ORDER.index(r.severity.value) >= min_idx]
     except ValueError as e:
         logger.debug("Value parsing failed during severity filtering: %s", e)
         return results
@@ -540,11 +536,7 @@ def _filter_antipatterns_by_severity(
 
     try:
         min_idx = _SEVERITY_ORDER.index(min_severity.lower())
-        return [
-            p
-            for p in anti_patterns
-            if _SEVERITY_ORDER.index(p.severity.value) >= min_idx
-        ]
+        return [p for p in anti_patterns if _SEVERITY_ORDER.index(p.severity.value) >= min_idx]
     except ValueError:
         logger.warning("Invalid severity filter: %s", min_severity)
         return anti_patterns
@@ -599,9 +591,7 @@ def _filter_redis_results_by_severity(
 
     try:
         min_idx = _SEVERITY_ORDER.index(min_severity.lower())
-        return [
-            r for r in results if _SEVERITY_ORDER.index(r.severity.value) >= min_idx
-        ]
+        return [r for r in results if _SEVERITY_ORDER.index(r.severity.value) >= min_idx]
     except ValueError:
         logger.warning("Invalid severity filter: %s", min_severity)
         return results
@@ -991,9 +981,7 @@ async def analyze_redis_usage_endpoint(
 
         optimizer.results = results
         summary = optimizer.get_summary()
-        response_content = _build_redis_analysis_response(
-            request.path, results, summary
-        )
+        response_content = _build_redis_analysis_response(request.path, results, summary)
 
         return JSONResponse(status_code=200, content=response_content)
 
@@ -1040,8 +1028,7 @@ async def scan_redis_file(
                 "optimizations": [r.to_dict() for r in results],
                 "total_findings": len(results),
                 "severity_breakdown": {
-                    sev.value: len([r for r in results if r.severity == sev])
-                    for sev in OptimizationSeverity
+                    sev.value: len([r for r in results if r.severity == sev]) for sev in OptimizationSeverity
                 },
             },
         )
@@ -1162,8 +1149,7 @@ async def _run_redis_health_analysis(path: str) -> Dict[str, Any]:
         "total_optimizations": len(results),
         "files_with_issues": len(set(r.file_path for r in results)),
         "severity_breakdown": {
-            sev.value: len([r for r in results if r.severity == sev])
-            for sev in OptimizationSeverity
+            sev.value: len([r for r in results if r.severity == sev]) for sev in OptimizationSeverity
         },
         "category_breakdown": optimizer.get_summary().get("by_type", {}),
     }
@@ -1273,8 +1259,7 @@ async def security_scan_file(
                 "total_findings": len(results),
                 "by_type": by_type,
                 "severity_counts": {
-                    sev.value: len([r for r in results if r.severity == sev])
-                    for sev in SecuritySeverity
+                    sev.value: len([r for r in results if r.severity == sev]) for sev in SecuritySeverity
                 },
             },
         )
@@ -1516,8 +1501,7 @@ async def performance_scan_file(
                 "total_findings": len(results),
                 "by_type": by_type,
                 "severity_counts": {
-                    sev.value: len([r for r in results if r.severity == sev])
-                    for sev in PerformanceSeverity
+                    sev.value: len([r for r in results if r.severity == sev]) for sev in PerformanceSeverity
                 },
             },
         )
@@ -1790,9 +1774,7 @@ async def get_pattern_evolution(
 )
 async def detect_refactorings(
     path: str = Query(..., description="Repository path to analyze"),
-    limit: int = Query(
-        default=20, ge=1, le=100, description="Maximum results to return"
-    ),
+    limit: int = Query(default=20, ge=1, le=100, description="Maximum results to return"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -1815,9 +1797,7 @@ async def detect_refactorings(
 
     try:
         miner = CodeEvolutionMiner(path)
-        refactorings = await asyncio.to_thread(
-            miner.refactoring_detector.detect_refactorings
-        )
+        refactorings = await asyncio.to_thread(miner.refactoring_detector.detect_refactorings)
 
         # Limit results
         refactorings = refactorings[:limit]
@@ -1977,14 +1957,10 @@ async def get_full_evolution_report(
 async def _run_security_analysis(task_id: str, path: str) -> None:
     """Background worker for security score analysis (#1304)."""
     try:
-        await _sec_manager.update_progress(
-            task_id, "Initializing security analyzer", 10.0
-        )
+        await _sec_manager.update_progress(task_id, "Initializing security analyzer", 10.0)
         analyzer = SecurityAnalyzer(project_root=path)
 
-        await _sec_manager.update_progress(
-            task_id, "Scanning for vulnerabilities", 30.0
-        )
+        await _sec_manager.update_progress(task_id, "Scanning for vulnerabilities", 30.0)
         await asyncio.to_thread(analyzer.analyze_directory)
 
         await _sec_manager.update_progress(task_id, "Calculating security score", 80.0)

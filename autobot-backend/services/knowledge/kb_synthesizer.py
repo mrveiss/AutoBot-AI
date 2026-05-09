@@ -104,9 +104,7 @@ class KBSynthesizer:
             )
         return self._named_collections[name]
 
-    async def _index_documents(
-        self, docs: List[Any], collection_name: Optional[str] = None
-    ) -> None:
+    async def _index_documents(self, docs: List[Any], collection_name: Optional[str] = None) -> None:
         """Persist synthesized SummaryPage dicts into ChromaDB.
 
         Args:
@@ -148,7 +146,7 @@ class KBSynthesizer:
         """
         all_names: List[Optional[str]] = [None]  # None → default collection
         seen = {self.COLLECTION_NAME}
-        for name in (collection_names or []):
+        for name in collection_names or []:
             if name and name not in seen:
                 all_names.append(name)
                 seen.add(name)
@@ -344,12 +342,8 @@ class KBSynthesizer:
         # Issue #4675: UCB1 variant selection.
         base_prompt = self._resolve_prompt(collection_config)
         variants = collection_config.prompt_variants if collection_config is not None else []
-        collection_key_for_ucb = (
-            collection_config.name if collection_config is not None else "default"
-        )
-        prompt, variant_id = await self._select_prompt_variant(
-            collection_key_for_ucb, variants, base_prompt
-        )
+        collection_key_for_ucb = collection_config.name if collection_config is not None else "default"
+        prompt, variant_id = await self._select_prompt_variant(collection_key_for_ucb, variants, base_prompt)
         if "{documents}" in prompt:
             messages = [{"role": "user", "content": prompt.format(documents=docs_text)}]
         else:
@@ -357,11 +351,7 @@ class KBSynthesizer:
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": docs_text},
             ]
-        override_model: Optional[str] = (
-            collection_config.synthesis_model
-            if collection_config is not None
-            else None
-        )
+        override_model: Optional[str] = collection_config.synthesis_model if collection_config is not None else None
         chat_kwargs: dict = {"messages": messages, "temperature": 0.3, "max_tokens": 600}
         if override_model:
             chat_kwargs["model"] = override_model
@@ -401,9 +391,7 @@ class KBSynthesizer:
         duration_ms = int((time.monotonic() - start) * 1000)
 
         collection_key = target_collection or self.COLLECTION_NAME
-        prompt_name = (
-            collection_config.name if collection_config is not None else "default"
-        )
+        prompt_name = collection_config.name if collection_config is not None else "default"
         # Issue #4681: link this run to its predecessor for lineage chain.
         parent_run_id: Optional[str] = self._last_run_id.get(collection_key)
         await self._provenance_log.log_run(
@@ -429,9 +417,7 @@ class KBSynthesizer:
             output_summary=summary_text,
         )
 
-    async def _run_analyzer(
-        self, run_id: str, input_docs: str, output_summary: str
-    ) -> None:
+    async def _run_analyzer(self, run_id: str, input_docs: str, output_summary: str) -> None:
         """Invoke AnalyzerService post-synthesis; errors are logged and swallowed.
 
         Issue #4678.

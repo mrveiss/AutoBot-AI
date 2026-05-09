@@ -127,9 +127,7 @@ class FactExtractor(BaseCognifier):
             return self.mode
         return "nlp" if len(chunks) > self.nlp_threshold else "llm"
 
-    def _nlp_extract(
-        self, chunks: List[ProcessedChunk], document_id: Optional[UUID]
-    ) -> List[AtomicFact]:
+    def _nlp_extract(self, chunks: List[ProcessedChunk], document_id: Optional[UUID]) -> List[AtomicFact]:
         """
         Extract facts from chunks using NLP patterns (Issue #3395).
 
@@ -210,9 +208,7 @@ class FactExtractor(BaseCognifier):
         logger.info("Extracted %d atomic facts", len(dedup_facts))
         return context
 
-    async def _llm_process(
-        self, chunks: List[ProcessedChunk], context: PipelineContext
-    ) -> List[AtomicFact]:
+    async def _llm_process(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[AtomicFact]:
         """Run LLM-based fact extraction over all chunks in batches."""
         all_facts: List[AtomicFact] = []
         for i in range(0, len(chunks), self.batch_size):
@@ -221,9 +217,7 @@ class FactExtractor(BaseCognifier):
             all_facts.extend(batch_facts)
         return all_facts
 
-    async def _process_batch(
-        self, chunks: List[ProcessedChunk], context: PipelineContext
-    ) -> List[AtomicFact]:
+    async def _process_batch(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[AtomicFact]:
         """Process a batch of chunks."""
         facts = []
         for chunk in chunks:
@@ -231,15 +225,11 @@ class FactExtractor(BaseCognifier):
             facts.extend(chunk_facts)
         return facts
 
-    async def _extract_from_chunk(
-        self, chunk: ProcessedChunk, context: PipelineContext
-    ) -> List[AtomicFact]:
+    async def _extract_from_chunk(self, chunk: ProcessedChunk, context: PipelineContext) -> List[AtomicFact]:
         """Extract facts from a single chunk using LLM."""
         try:
             prompt = FACT_EXTRACTION_PROMPT.format(text=chunk.content[:2000])
-            response = await self.llm.chat(
-                [{"role": "user", "content": prompt}]
-            )
+            response = await self.llm.chat([{"role": "user", "content": prompt}])
             parsed = parse_llm_json_response(response.content)
             raw_facts = parsed if isinstance(parsed, list) else []
             return self._convert_to_facts(raw_facts, chunk, context.document_id)

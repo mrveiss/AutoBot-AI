@@ -62,9 +62,7 @@ class SimplePerformanceAnalyzer:
                 combined_parts.append(f"(?P<{group_name}>{pattern})")
                 self._pattern_descriptions[group_name] = description
             combined = "|".join(combined_parts)
-            self._compiled_patterns[category] = re.compile(
-                combined, re.MULTILINE | re.DOTALL
-            )
+            self._compiled_patterns[category] = re.compile(combined, re.MULTILINE | re.DOTALL)
 
     def analyze_file(self, file_path: Path) -> List[Dict[str, Any]]:
         """Analyze single file for performance issues.
@@ -93,9 +91,7 @@ class SimplePerformanceAnalyzer:
                     line_num = content[: match.start()].count("\n") + 1
                     # Find which pattern matched using lastgroup
                     group_name = match.lastgroup
-                    description = self._pattern_descriptions.get(
-                        group_name, "Performance issue"
-                    )
+                    description = self._pattern_descriptions.get(group_name, "Performance issue")
 
                     # Get context
                     context = lines[line_num - 1] if line_num <= len(lines) else ""
@@ -137,11 +133,7 @@ class SimplePerformanceAnalyzer:
 
         # Skip certain directories
         python_files = [
-            f
-            for f in python_files
-            if not any(
-                skip in str(f) for skip in ["venv", "__pycache__", ".git", "test_"]
-            )
+            f for f in python_files if not any(skip in str(f) for skip in ["venv", "__pycache__", ".git", "test_"])
         ]
 
         print(f"Analyzing {len(python_files)} Python files...")  # noqa: print
@@ -180,14 +172,10 @@ def _print_severity_and_category(results: dict) -> None:
     print("\n=== Issues by Severity ===")  # noqa: print
     for severity in ["critical", "high", "medium", "low"]:
         if severity in results["by_severity"]:
-            print(
-                f"{severity.title()}: {len(results['by_severity'][severity])} issues"
-            )  # noqa: print
+            print(f"{severity.title()}: {len(results['by_severity'][severity])} issues")  # noqa: print
     print("\n=== Issues by Category ===")  # noqa: print
     for category, issues in results["by_category"].items():
-        print(
-            f"{category.replace('_', ' ').title()}: {len(issues)} issues"
-        )  # noqa: print
+        print(f"{category.replace('_', ' ').title()}: {len(issues)} issues")  # noqa: print
 
 
 def _print_issues_and_recommendations(results: dict) -> None:
@@ -208,26 +196,18 @@ def _print_issues_and_recommendations(results: dict) -> None:
     print("\n=== Optimization Recommendations ===")  # noqa: print
     cats = results["by_category"]
     if "memory_leaks" in cats:
-        print(
-            f"1. Fix {len(cats['memory_leaks'])} memory leaks by using 'with' statements"
-        )  # noqa: print
+        print(f"1. Fix {len(cats['memory_leaks'])} memory leaks by using 'with' statements")  # noqa: print
     if "blocking_calls" in cats:
-        print(
-            f"2. Replace {len(cats['blocking_calls'])} blocking calls with async equivalents"
-        )  # noqa: print
+        print(f"2. Replace {len(cats['blocking_calls'])} blocking calls with async equivalents")  # noqa: print
     if "database_issues" in cats:
-        print(
-            f"3. Optimize {len(cats['database_issues'])} database operations to avoid N+1 queries"
-        )  # noqa: print
+        print(f"3. Optimize {len(cats['database_issues'])} database operations to avoid N+1 queries")  # noqa: print
     if "inefficient_loops" in cats:
         print(
             f"4. Refactor {len(cats['inefficient_loops'])} inefficient loops using list comprehensions"
         )  # noqa: print
     print("\n=== Quick Fixes ===")  # noqa: print
     print("Replace: time.sleep() → await asyncio.sleep()")  # noqa: print
-    print(
-        "Replace: requests.get() → async with aiohttp.ClientSession():"
-    )  # noqa: print
+    print("Replace: requests.get() → async with aiohttp.ClientSession():")  # noqa: print
     print("Replace: open() → with open() as f:")  # noqa: print
     print("Replace: for...+=string → ''.join(list)")  # noqa: print
 

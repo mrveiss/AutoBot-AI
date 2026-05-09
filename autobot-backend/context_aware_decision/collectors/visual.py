@@ -31,30 +31,20 @@ class VisualContextCollector:
         try:
             from computer_vision_system import computer_vision_system
 
-            screen_analysis = (
-                await computer_vision_system.analyze_and_understand_screen()
-            )
+            screen_analysis = await computer_vision_system.analyze_and_understand_screen()
             visual_elements = []
 
             # Screen state context
             if screen_analysis.get("screen_analysis"):
-                visual_elements.append(
-                    self._create_screen_context(screen_analysis["screen_analysis"])
-                )
+                visual_elements.append(self._create_screen_context(screen_analysis["screen_analysis"]))
 
             # UI elements context
             if screen_analysis.get("ui_elements"):
-                visual_elements.append(
-                    self._create_ui_context(screen_analysis["ui_elements"])
-                )
+                visual_elements.append(self._create_ui_context(screen_analysis["ui_elements"]))
 
             # Automation opportunities context
             if screen_analysis.get("automation_opportunities"):
-                visual_elements.append(
-                    self._create_automation_context(
-                        screen_analysis["automation_opportunities"]
-                    )
-                )
+                visual_elements.append(self._create_automation_context(screen_analysis["automation_opportunities"]))
 
             return visual_elements
 
@@ -88,9 +78,7 @@ class VisualContextCollector:
             metadata={"type": "ui_elements", "count": len(ui_elements)},
         )
 
-    def _create_automation_context(
-        self, opportunities: List[Dict[str, Any]]
-    ) -> ContextElement:
+    def _create_automation_context(self, opportunities: List[Dict[str, Any]]) -> ContextElement:
         """Create context element for automation opportunities."""
         return ContextElement(
             context_id=f"automation_ops_{self.time_provider.current_timestamp_millis()}",

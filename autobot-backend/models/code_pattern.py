@@ -53,9 +53,7 @@ class CodePattern(Base):
     acceptance_rate: Mapped[float] = mapped_column(Float, default=0.0, index=True)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -92,16 +90,11 @@ class CodePattern(Base):
         }
 
     @classmethod
-    def get_redis_key(
-        cls, pattern_type: str, language: str, category: Optional[str] = None
-    ) -> str:
+    def get_redis_key(cls, pattern_type: str, language: str, category: Optional[str] = None) -> str:
         """Generate Redis key for caching hot patterns."""
         if category:
             return f"patterns:{language}:{pattern_type}:{category}"
         return f"patterns:{language}:{pattern_type}"
 
     def __repr__(self) -> str:
-        return (
-            f"<CodePattern(id={self.id}, type={self.pattern_type}, "
-            f"lang={self.language}, freq={self.frequency})>"
-        )
+        return f"<CodePattern(id={self.id}, type={self.pattern_type}, " f"lang={self.language}, freq={self.frequency})>"

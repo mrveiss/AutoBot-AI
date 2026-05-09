@@ -58,9 +58,7 @@ class TemplateManager:
                 step_id="dev_env_1",
                 command="sudo apt update",
                 description="Update package repositories",
-                explanation=(
-                    "Update system package lists before installing development tools"
-                ),
+                explanation=("Update system package lists before installing development tools"),
                 intent=WorkflowIntent.INSTALLATION,
                 confidence_score=0.95,
                 requires_confirmation=True,
@@ -69,22 +67,14 @@ class TemplateManager:
             ),
             SmartWorkflowStep(
                 step_id="dev_env_2",
-                command=(
-                    "sudo apt install -y git curl wget nodejs npm python3 python3-pip"
-                ),
+                command=("sudo apt install -y git curl wget nodejs npm python3 python3-pip"),
                 description="Install essential development tools",
-                explanation=(
-                    "Install Git, Node.js, Python, and common development utilities"
-                ),
+                explanation=("Install Git, Node.js, Python, and common development utilities"),
                 intent=WorkflowIntent.INSTALLATION,
                 confidence_score=0.9,
                 requires_confirmation=True,
-                validation_command=(
-                    "git --version && node --version && python3 --version"
-                ),
-                rollback_command=(
-                    "sudo apt remove -y git curl wget nodejs npm python3-pip"
-                ),
+                validation_command=("git --version && node --version && python3 --version"),
+                rollback_command=("sudo apt remove -y git curl wget nodejs npm python3-pip"),
                 ai_generated=True,
             ),
             SmartWorkflowStep(
@@ -118,9 +108,7 @@ class TemplateManager:
                 step_id="sec_1",
                 command="sudo ufw --force enable",
                 description="Enable UFW firewall",
-                explanation=(
-                    "Activate Ubuntu's uncomplicated firewall for basic protection"
-                ),
+                explanation=("Activate Ubuntu's uncomplicated firewall for basic protection"),
                 intent=WorkflowIntent.SECURITY,
                 confidence_score=0.9,
                 requires_confirmation=True,
@@ -156,9 +144,7 @@ class TemplateManager:
         return WorkflowTemplate(
             template_id="intelligent_security_hardening",
             name="Intelligent Security Hardening",
-            description=(
-                "AI-driven system security hardening with firewall configuration"
-            ),
+            description=("AI-driven system security hardening with firewall configuration"),
             intent=WorkflowIntent.SECURITY,
             complexity=WorkflowComplexity.MODERATE,
             steps=steps,
@@ -233,10 +219,7 @@ class TemplateManager:
                 step_id="maint_2",
                 command="sudo apt autoremove -y",
                 description="Remove unnecessary packages",
-                explanation=(
-                    "Clean up automatically installed packages that are no "
-                    "longer needed"
-                ),
+                explanation=("Clean up automatically installed packages that are no " "longer needed"),
                 intent=WorkflowIntent.MAINTENANCE,
                 confidence_score=0.85,
                 requires_confirmation=True,
@@ -285,17 +268,14 @@ class TemplateManager:
             SmartWorkflowStep(
                 step_id="backup_2",
                 command=(
-                    "tar -czf ~/backups/$(date +%Y-%m-%d)/home_backup.tar.gz "
-                    "~/Documents ~/Downloads ~/Desktop"
+                    "tar -czf ~/backups/$(date +%Y-%m-%d)/home_backup.tar.gz " "~/Documents ~/Downloads ~/Desktop"
                 ),
                 description="Backup user documents",
                 explanation="Create compressed archive of important user directories",
                 intent=WorkflowIntent.BACKUP,
                 confidence_score=0.8,
                 requires_confirmation=True,
-                validation_command=(
-                    "ls -lh ~/backups/$(date +%Y-%m-%d)/home_backup.tar.gz"
-                ),
+                validation_command=("ls -lh ~/backups/$(date +%Y-%m-%d)/home_backup.tar.gz"),
                 ai_generated=True,
             ),
             SmartWorkflowStep(

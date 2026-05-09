@@ -213,9 +213,7 @@ class TestDetectUserIntent:
         """Messages with 'distributed' should return architecture intent"""
         # Note: "distributed setup" is in installation keywords as a phrase
         # "distributed" alone should return architecture
-        assert (
-            detect_user_intent("Explain the distributed architecture") == "architecture"
-        )
+        assert detect_user_intent("Explain the distributed architecture") == "architecture"
 
     def test_vm_keyword_returns_architecture(self):
         """Messages about VMs (general) should return architecture intent"""
@@ -379,9 +377,7 @@ class TestDetectUserIntent:
 
     def test_troubleshooting_context_boost(self):
         """Troubleshooting in history should boost troubleshooting intent"""
-        history = [
-            {"assistant": "I see you're having an error. Let me help debug this issue."}
-        ]
+        history = [{"assistant": "I see you're having an error. Let me help debug this issue."}]
         # Even a vague message gets context boost
         result = detect_user_intent("Yes please help", history)
         # The history contains: error, debug, issue = 3 troubleshooting keywords

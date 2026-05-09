@@ -64,9 +64,7 @@ try:
 except ImportError:
     VISION_MODELS_AVAILABLE = False
     logger = logging.getLogger(__name__)
-    logger.warning(
-        "Vision models not available. Install transformers with: pip install transformers"
-    )
+    logger.warning("Vision models not available. Install transformers with: pip install transformers")
 
 logger = logging.getLogger(__name__)
 
@@ -104,28 +102,20 @@ class VisionProcessor(BaseModalProcessor):
         try:
             # Load CLIP model for image embeddings and classification
             self.logger.info("Loading CLIP model...")
-            self.clip_model = CLIPModel.from_pretrained(
-                "openai/clip-vit-base-patch32"
-            ).to(self.device)
-            self.clip_processor = CLIPProcessor.from_pretrained(
-                "openai/clip-vit-base-patch32", use_fast=True
-            )
+            self.clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(self.device)
+            self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", use_fast=True)
 
             # Load BLIP-2 model for image captioning and VQA
             # Using smaller model for memory efficiency
             self.logger.info("Loading BLIP-2 model...")
-            self.blip_processor = Blip2Processor.from_pretrained(
-                "Salesforce/blip2-opt-2.7b", use_fast=True
-            )
+            self.blip_processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b", use_fast=True)
 
             # Check if accelerate is available for device_map
             try:
                 accelerate_available = True
             except ImportError:
                 accelerate_available = False
-                self.logger.warning(
-                    "accelerate package not available, loading BLIP-2 without device_map"
-                )
+                self.logger.warning("accelerate package not available, loading BLIP-2 without device_map")
 
             # Load BLIP-2 model with device_map only if accelerate is available
             if accelerate_available and torch.cuda.is_available():
@@ -137,9 +127,7 @@ class VisionProcessor(BaseModalProcessor):
             else:
                 self.blip_model = Blip2ForConditionalGeneration.from_pretrained(
                     "Salesforce/blip2-opt-2.7b",
-                    torch_dtype=(
-                        torch.float16 if torch.cuda.is_available() else torch.float32
-                    ),
+                    torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
                 ).to(self.device)
 
             # Set models to evaluation mode
@@ -150,9 +138,7 @@ class VisionProcessor(BaseModalProcessor):
         except Exception as e:
             self.logger.error("Failed to load vision models: %s", e)
             # Issue #466: Will raise error on process() - no placeholder fallback
-            self.logger.warning(
-                "VisionProcessor will raise errors when processing - models unavailable"
-            )
+            self.logger.warning("VisionProcessor will raise errors when processing - models unavailable")
 
     def __del__(self):
         """Clean up GPU resources when processor is destroyed"""
@@ -216,9 +202,7 @@ class VisionProcessor(BaseModalProcessor):
             return data.convert("RGB")
         elif isinstance(data, str):
             # File path - read asynchronously (Issue #291)
-            return await asyncio.to_thread(
-                lambda p: PILImage.open(p).convert("RGB"), data
-            )
+            return await asyncio.to_thread(lambda p: PILImage.open(p).convert("RGB"), data)
         else:
             raise ValueError(f"Unsupported image data type: {type(data)}")
 
@@ -250,27 +234,18 @@ class VisionProcessor(BaseModalProcessor):
             if torch.cuda.is_available():
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
                     blip_inputs = self.blip_processor(images=image, return_tensors="pt")
-                    blip_inputs = {
-                        k: v.to(self.device) if torch.is_tensor(v) else v
-                        for k, v in blip_inputs.items()
-                    }
+                    blip_inputs = {k: v.to(self.device) if torch.is_tensor(v) else v for k, v in blip_inputs.items()}
                     generated_ids = self.blip_model.generate(
                         **blip_inputs,
                         max_length=50,
                         num_beams=3,
                         temperature=0.8,
                     )
-                    return self.blip_processor.batch_decode(
-                        generated_ids, skip_special_tokens=True
-                    )[0].strip()
+                    return self.blip_processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
             else:
                 blip_inputs = self.blip_processor(images=image, return_tensors="pt")
-                generated_ids = self.blip_model.generate(
-                    **blip_inputs, max_length=50, num_beams=3, temperature=0.8
-                )
-                return self.blip_processor.batch_decode(
-                    generated_ids, skip_special_tokens=True
-                )[0].strip()
+                generated_ids = self.blip_model.generate(**blip_inputs, max_length=50, num_beams=3, temperature=0.8)
+                return self.blip_processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
 
     def _answer_visual_question(self, image: Image.Image, question: str) -> str:
         """Answer visual question (Issue #315 - extracted method to reduce nesting)"""
@@ -282,27 +257,14 @@ class VisionProcessor(BaseModalProcessor):
         with torch.no_grad():
             if torch.cuda.is_available():
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
-                    vqa_inputs = self.blip_processor(
-                        images=image, text=question, return_tensors="pt"
-                    )
-                    vqa_inputs = {
-                        k: v.to(self.device) if torch.is_tensor(v) else v
-                        for k, v in vqa_inputs.items()
-                    }
-                    generated_ids = self.blip_model.generate(
-                        **vqa_inputs, max_length=30
-                    )
-                    return self.blip_processor.batch_decode(
-                        generated_ids, skip_special_tokens=True
-                    )[0].strip()
+                    vqa_inputs = self.blip_processor(images=image, text=question, return_tensors="pt")
+                    vqa_inputs = {k: v.to(self.device) if torch.is_tensor(v) else v for k, v in vqa_inputs.items()}
+                    generated_ids = self.blip_model.generate(**vqa_inputs, max_length=30)
+                    return self.blip_processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
             else:
-                vqa_inputs = self.blip_processor(
-                    images=image, text=question, return_tensors="pt"
-                )
+                vqa_inputs = self.blip_processor(images=image, text=question, return_tensors="pt")
                 generated_ids = self.blip_model.generate(**vqa_inputs, max_length=30)
-                return self.blip_processor.batch_decode(
-                    generated_ids, skip_special_tokens=True
-                )[0].strip()
+                return self.blip_processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
 
     def _build_image_result(
         self,
@@ -360,11 +322,7 @@ class VisionProcessor(BaseModalProcessor):
         torch = _get_torch()
 
         # Guard clause: Check if models are available
-        if (
-            not VISION_MODELS_AVAILABLE
-            or self.clip_model is None
-            or self.blip_model is None
-        ):
+        if not VISION_MODELS_AVAILABLE or self.clip_model is None or self.blip_model is None:
             self.logger.error("Vision models not available - cannot process image")
             raise RuntimeError(
                 "Vision processing unavailable: Required models (CLIP, BLIP) are not loaded. "
@@ -387,9 +345,7 @@ class VisionProcessor(BaseModalProcessor):
                 torch.cuda.empty_cache()
 
             # Issue #665: Use helper to build result
-            return self._build_image_result(
-                image, caption, clip_features, vqa_answer, question
-            )
+            return self._build_image_result(image, caption, clip_features, vqa_answer, question)
 
         except Exception as e:
             self.logger.error("Error during GPU-accelerated image processing: %s", e)

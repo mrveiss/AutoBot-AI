@@ -36,8 +36,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 
 
-
-
 @router.get("/status", response_model=SecurityStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -315,12 +313,8 @@ async def get_domain_security_stats(request: Request):
             "suspicious_tlds_count": len(domain_manager._suspicious_tlds),
             "threat_intelligence": {
                 "enabled": threat_service.is_any_service_configured,
-                "virustotal_configured": threat_status.get("virustotal", {}).get(
-                    "configured", False
-                ),
-                "urlvoid_configured": threat_status.get("urlvoid", {}).get(
-                    "configured", False
-                ),
+                "virustotal_configured": threat_status.get("virustotal", {}).get("configured", False),
+                "urlvoid_configured": threat_status.get("urlvoid", {}).get("configured", False),
                 "cache_size": threat_status.get("cache", {}).get("size", 0),
             },
             "settings": {

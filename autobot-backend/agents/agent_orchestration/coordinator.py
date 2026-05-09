@@ -249,9 +249,7 @@ class DistributedAgentCoordinator:
                 request, context, chat_history, preferred_agents
             )
         except Exception as e:
-            logger.warning(
-                "Distributed processing failed: %s, falling back to legacy", e
-            )
+            logger.warning("Distributed processing failed: %s, falling back to legacy", e)
             return None
 
     def _build_no_agents_response(self) -> Dict[str, Any]:
@@ -284,10 +282,7 @@ class DistributedAgentCoordinator:
         """
         return {
             "status": "error",
-            "response": (
-                "I encountered an error while processing your request. "
-                "Please try rephrasing it."
-            ),
+            "response": ("I encountered an error while processing your request. " "Please try rephrasing it."),
             "error": str(error),
             "agent_used": "orchestrator",
             "routing_strategy": "error_fallback",
@@ -315,9 +310,7 @@ class DistributedAgentCoordinator:
             Dict containing response and routing information
         """
         try:
-            logger.info(
-                "Enhanced Agent Orchestrator processing request: %s...", request[:50]
-            )
+            logger.info("Enhanced Agent Orchestrator processing request: %s...", request[:50])
 
             # Try distributed agents first if available and running
             distributed_result = await self._try_distributed_processing(
@@ -328,9 +321,7 @@ class DistributedAgentCoordinator:
 
             # Fallback to legacy agent processing
             if LEGACY_AGENTS_AVAILABLE:
-                return await self._executor.process_with_legacy_agents(
-                    request, context, chat_history
-                )
+                return await self._executor.process_with_legacy_agents(request, context, chat_history)
             return self._build_no_agents_response()
 
         except Exception as e:

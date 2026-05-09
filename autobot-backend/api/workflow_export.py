@@ -71,9 +71,7 @@ async def export_workflow(
     try:
         doc = await serializer.export_workflow(workflow_id)
         if doc is None:
-            raise HTTPException(
-                status_code=404, detail=f"Workflow '{workflow_id}' not found."
-            )
+            raise HTTPException(status_code=404, detail=f"Workflow '{workflow_id}' not found.")
 
         logger.info(
             "User %s exported workflow %s",
@@ -187,9 +185,7 @@ async def share_workflow(
                 ),
             )
 
-        logger.info(
-            "User %s shared workflow %s as %s", owner_id, body.workflow_id, share_id
-        )
+        logger.info("User %s shared workflow %s as %s", owner_id, body.workflow_id, share_id)
         return {"success": True, "share_id": share_id}
 
     except HTTPException:
@@ -210,9 +206,7 @@ async def unshare_workflow(
     try:
         deleted = await sharing.unshare_workflow(share_id)
         if not deleted:
-            raise HTTPException(
-                status_code=404, detail=f"Share '{share_id}' not found."
-            )
+            raise HTTPException(status_code=404, detail=f"Share '{share_id}' not found.")
 
         logger.info("User %s revoked share %s", current_user.get("user_id"), share_id)
         return {"success": True, "share_id": share_id}
@@ -272,9 +266,7 @@ async def clone_shared_workflow(
                 detail=f"Share '{share_id}' not found or could not be imported.",
             )
 
-        logger.info(
-            "User %s cloned share %s as workflow %s", new_owner_id, share_id, new_id
-        )
+        logger.info("User %s cloned share %s as workflow %s", new_owner_id, share_id, new_id)
         return {"success": True, "workflow_id": new_id}
 
     except HTTPException:

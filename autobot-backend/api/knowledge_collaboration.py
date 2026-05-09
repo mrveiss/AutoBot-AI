@@ -49,9 +49,7 @@ router = APIRouter(prefix="/knowledge/collaboration", tags=["knowledge-collabora
 # =============================================================================
 
 
-async def _filter_fact_ids_by_scope(
-    fact_ids: List[str], scope: VisibilityLevel, redis
-) -> List[str]:
+async def _filter_fact_ids_by_scope(fact_ids: List[str], scope: VisibilityLevel, redis) -> List[str]:
     """Helper for get_knowledge_by_scope. Ref: #1088."""
     filtered = []
     for fact_id in fact_ids:
@@ -63,9 +61,7 @@ async def _filter_fact_ids_by_scope(
     return filtered
 
 
-async def _fetch_facts_from_redis(
-    fact_ids: List[str], redis, include_title_only: bool = False
-) -> List[Dict]:
+async def _fetch_facts_from_redis(fact_ids: List[str], redis, include_title_only: bool = False) -> List[Dict]:
     """Helper for get_knowledge_by_scope. Ref: #1088."""
     facts = []
     for fact_id in fact_ids:
@@ -88,9 +84,7 @@ async def _fetch_facts_from_redis(
                 "title": metadata.get("title", "Untitled"),
             }
             if not include_title_only:
-                entry["visibility"] = metadata.get(
-                    "visibility", VisibilityLevel.PRIVATE
-                )
+                entry["visibility"] = metadata.get("visibility", VisibilityLevel.PRIVATE)
             facts.append(entry)
     return facts
 
@@ -104,9 +98,7 @@ async def _fetch_and_verify_owner(fact_id: str, user_id: str, redis) -> Dict:
         fact_data = fact_data.decode("utf-8")
     metadata = json.loads(fact_data)
     if metadata.get("owner_id") != user_id:
-        raise HTTPException(
-            status_code=403, detail="Only the owner can update permissions"
-        )
+        raise HTTPException(status_code=403, detail="Only the owner can update permissions")
     return metadata
 
 
@@ -203,15 +195,11 @@ def _build_access_response(fact_id: str, metadata: Dict, user_id: str) -> Dict:
     }
 
 
-async def _verify_fact_ownership(
-    fact_id: str, user_id: str, redis, action_label: str
-) -> Dict:
+async def _verify_fact_ownership(fact_id: str, user_id: str, redis, action_label: str) -> Dict:
     """Fetch metadata and assert the caller is the owner. Ref: #1088."""
     metadata = await _fetch_fact_metadata(fact_id, redis)
     if metadata.get("owner_id") != user_id:
-        raise HTTPException(
-            status_code=403, detail=f"Only the owner can {action_label} knowledge"
-        )
+        raise HTTPException(status_code=403, detail=f"Only the owner can {action_label} knowledge")
     return metadata
 
 
@@ -220,12 +208,8 @@ async def _unshare_fact_by_entity(
 ) -> Dict:
     """Dispatch unshare_fact for user or group entity. Helper for unshare_knowledge. Ref: #1088."""
     if entity_type == "user":
-        return await ownership_manager.unshare_fact(
-            fact_id=fact_id, user_ids=[entity_id], fact_metadata=metadata
-        )
-    return await ownership_manager.unshare_fact(
-        fact_id=fact_id, group_ids=[entity_id], fact_metadata=metadata
-    )
+        return await ownership_manager.unshare_fact(fact_id=fact_id, user_ids=[entity_id], fact_metadata=metadata)
+    return await ownership_manager.unshare_fact(fact_id=fact_id, group_ids=[entity_id], fact_metadata=metadata)
 
 
 # =============================================================================
@@ -242,9 +226,7 @@ async def _unshare_fact_by_entity(
 async def get_knowledge_by_scope(
     request: Request,
     current_user: Dict = Depends(get_current_user),
-    scope: Optional[VisibilityLevel] = Query(
-        default=None, description="Filter by visibility scope"
-    ),
+    scope: Optional[VisibilityLevel] = Query(default=None, description="Filter by visibility scope"),
     pagination: PaginationParams = Depends(),
 ):
     """Get knowledge facts filtered by scope.
@@ -264,9 +246,7 @@ async def get_knowledge_by_scope(
 
     try:
         # Get user's organization and group memberships
-        user_id, user_org_id, user_group_ids = extract_user_context_from_request(
-            current_user
-        )
+        user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
 
         # Get all accessible facts
         fact_ids = await kb.ownership_manager.get_all_accessible_facts(
@@ -279,14 +259,10 @@ async def get_knowledge_by_scope(
 
         # If scope filter provided, filter results
         if scope:
-            fact_ids = await _filter_fact_ids_by_scope(
-                fact_ids, scope, kb.redis()
-            )
+            fact_ids = await _filter_fact_ids_by_scope(fact_ids, scope, kb.redis())
 
         # Fetch full fact data
-        facts = await _fetch_facts_from_redis(
-            fact_ids, kb.redis(), include_title_only=False
-        )
+        facts = await _fetch_facts_from_redis(fact_ids, kb.redis(), include_title_only=False)
 
         return {"facts": facts, "count": len(facts), "total": len(fact_ids)}
 
@@ -339,9 +315,7 @@ async def get_organization_knowledge(
             limit=pagination.limit,
             offset=pagination.offset,
         )
-        facts = await _fetch_facts_from_redis(
-            fact_ids, kb.redis(), include_title_only=True
-        )
+        facts = await _fetch_facts_from_redis(fact_ids, kb.redis(), include_title_only=True)
         return {"facts": facts, "count": len(facts)}
 
     except Exception as e:
@@ -382,17 +356,13 @@ async def get_group_knowledge(
     # Verify user is a member of the group
     _, _, user_group_ids = extract_user_context_from_request(current_user)
     if group_id not in user_group_ids:
-        raise HTTPException(
-            status_code=403, detail="Not authorized to access this group's knowledge"
-        )
+        raise HTTPException(status_code=403, detail="Not authorized to access this group's knowledge")
 
     try:
         fact_ids = await kb.ownership_manager.get_group_facts(
             group_id=group_id, limit=pagination.limit, offset=pagination.offset
         )
-        facts = await _fetch_facts_from_redis(
-            fact_ids, kb.redis(), include_title_only=True
-        )
+        facts = await _fetch_facts_from_redis(fact_ids, kb.redis(), include_title_only=True)
         return {"facts": facts, "count": len(facts)}
 
     except Exception as e:
@@ -438,9 +408,7 @@ async def share_knowledge(
 
     try:
         user_id, _, _ = extract_user_context_from_request(current_user)
-        metadata = await _verify_fact_ownership(
-            fact_id, user_id, kb.redis(), "share"
-        )
+        metadata = await _verify_fact_ownership(fact_id, user_id, kb.redis(), "share")
 
         updated_metadata = await kb.ownership_manager.share_fact(
             fact_id=fact_id,
@@ -449,9 +417,7 @@ async def share_knowledge(
             fact_metadata=metadata,
         )
 
-        await kb.redis().hset(
-            f"fact:{fact_id}", "metadata", json.dumps(updated_metadata)
-        )
+        await kb.redis().hset(f"fact:{fact_id}", "metadata", json.dumps(updated_metadata))
 
         logger.info(
             "Shared fact %s with %d users and %d groups",
@@ -510,17 +476,13 @@ async def unshare_knowledge(
 
     try:
         user_id, _, _ = extract_user_context_from_request(current_user)
-        metadata = await _verify_fact_ownership(
-            fact_id, user_id, kb.redis(), "unshare"
-        )
+        metadata = await _verify_fact_ownership(fact_id, user_id, kb.redis(), "unshare")
 
         updated_metadata = await _unshare_fact_by_entity(
             fact_id, entity_id, entity_type, metadata, kb.ownership_manager
         )
 
-        await kb.redis().hset(
-            f"fact:{fact_id}", "metadata", json.dumps(updated_metadata)
-        )
+        await kb.redis().hset(f"fact:{fact_id}", "metadata", json.dumps(updated_metadata))
 
         logger.info("Unshared fact %s from %s %s", fact_id, entity_type, entity_id)
 
@@ -577,9 +539,7 @@ async def update_knowledge_permissions(
 
         # Apply visibility changes and org-level guard to metadata dict
         old_visibility = metadata.get("visibility")
-        metadata = _apply_visibility_to_metadata(
-            metadata, permissions_request, user_org_id
-        )
+        metadata = _apply_visibility_to_metadata(metadata, permissions_request, user_org_id)
 
         # Persist Redis index updates, metadata key, and log
         await _persist_permissions_update(
@@ -613,9 +573,7 @@ async def update_knowledge_permissions(
     operation="get_knowledge_access_info",
     error_code_prefix="KNOWLEDGE_COLLABORATION",
 )
-async def get_knowledge_access_info(
-    fact_id: str, request: Request, current_user: Dict = Depends(get_current_user)
-):
+async def get_knowledge_access_info(fact_id: str, request: Request, current_user: Dict = Depends(get_current_user)):
     """Get access information for a knowledge fact.
 
     Issue #679: Returns who has access and what permissions they have.
@@ -635,9 +593,7 @@ async def get_knowledge_access_info(
 
     try:
         metadata = await _fetch_fact_metadata(fact_id, kb.redis())
-        user_id, user_org_id, user_group_ids = extract_user_context_from_request(
-            current_user
-        )
+        user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
 
         has_access = await _check_fact_access(
             fact_id=fact_id,

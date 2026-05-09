@@ -110,9 +110,7 @@ async def _fetch_man_page(command: str, section: str) -> dict:
     Tries the local `man` subprocess via ManPageParser. Returns a dict with
     parse_success=False when the command is unavailable rather than raising.
     """
-    content: ManPageContent = await asyncio.to_thread(
-        get_man_page_content, command, section
-    )
+    content: ManPageContent = await asyncio.to_thread(get_man_page_content, command, section)
     return _serialize_man_page(content, cached=False)
 
 
@@ -163,8 +161,7 @@ async def _query_doc_index(query: str, max_results: int) -> List[dict]:
             hits = [
                 entry
                 for entry in index
-                if lower_q in entry.get("command", "").lower()
-                or lower_q in entry.get("summary", "").lower()
+                if lower_q in entry.get("command", "").lower() or lower_q in entry.get("summary", "").lower()
             ]
             return hits[:max_results]
     except Exception as exc:  # noqa: BLE001

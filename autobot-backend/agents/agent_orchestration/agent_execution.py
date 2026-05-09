@@ -114,11 +114,7 @@ class AgentExecutor:
         """
         return {
             "status": response.status,
-            "response": (
-                response.result.get("response", "No response")
-                if response.result
-                else "No result"
-            ),
+            "response": (response.result.get("response", "No response") if response.result else "No result"),
             "agent_used": agent_id,
             "agent_type": agent_type,
             "execution_time": execution_time,
@@ -134,9 +130,7 @@ class AgentExecutor:
         preferred_agents: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Process request using distributed agent system. Issue #620."""
-        selected_agent = await self._select_distributed_agent(
-            request, context, preferred_agents
-        )
+        selected_agent = await self._select_distributed_agent(request, context, preferred_agents)
 
         if not selected_agent:
             raise Exception("No suitable distributed agent found")
@@ -160,9 +154,7 @@ class AgentExecutor:
                 task_id,
             )
         finally:
-            self.distributed_manager.remove_active_task(
-                selected_agent.agent_id, task_id
-            )
+            self.distributed_manager.remove_active_task(selected_agent.agent_id, task_id)
 
     async def _select_distributed_agent(
         self,
@@ -181,39 +173,26 @@ class AgentExecutor:
         request_lower = request.lower()
 
         # Prefer specific agent types based on content
-        if any(
-            term in request_lower for term in CODE_SEARCH_TERMS
-        ):  # O(1) lookup (Issue #326)
-            npu_agents = [
-                a for a in healthy_agents if a.agent_type == "npu_code_search"
-            ]
+        if any(term in request_lower for term in CODE_SEARCH_TERMS):  # O(1) lookup (Issue #326)
+            npu_agents = [a for a in healthy_agents if a.agent_type == "npu_code_search"]
             if npu_agents:
                 return npu_agents[0]
 
-        if any(
-            term in request_lower for term in CLASSIFICATION_TERMS
-        ):  # O(1) lookup (Issue #326)
-            classification_agents = [
-                a for a in healthy_agents if a.agent_type == "classification"
-            ]
+        if any(term in request_lower for term in CLASSIFICATION_TERMS):  # O(1) lookup (Issue #326)
+            classification_agents = [a for a in healthy_agents if a.agent_type == "classification"]
             if classification_agents:
                 return classification_agents[0]
 
         # Prefer explicitly requested agents
         if preferred_agents:
             for agent in healthy_agents:
-                if (
-                    agent.agent_id in preferred_agents
-                    or agent.agent_type in preferred_agents
-                ):
+                if agent.agent_id in preferred_agents or agent.agent_type in preferred_agents:
                     return agent
 
         # Return least busy agent
         return min(
             healthy_agents,
-            key=lambda a: len(
-                self.distributed_manager.get_agent_info(a.agent_id).active_tasks
-            ),
+            key=lambda a: len(self.distributed_manager.get_agent_info(a.agent_id).active_tasks),
         )
 
     async def process_with_legacy_agents(
@@ -228,18 +207,12 @@ class AgentExecutor:
 
         # Execute based on routing decision
         if routing_decision["strategy"] == "single_agent":
-            result = await self._execute_single_agent(
-                routing_decision["primary_agent"], request, context, chat_history
-            )
+            result = await self._execute_single_agent(routing_decision["primary_agent"], request, context, chat_history)
         elif routing_decision["strategy"] == "multi_agent":
-            result = await self._execute_multi_agent(
-                routing_decision, request, context, chat_history
-            )
+            result = await self._execute_multi_agent(routing_decision, request, context, chat_history)
         else:
             # Fallback to direct orchestrator handling
-            result = await self._execute_orchestrator_fallback(
-                request, context, chat_history
-            )
+            result = await self._execute_orchestrator_fallback(request, context, chat_history)
 
         # Issue #951: post-response gap detection (fire-and-forget)
         response_text = result.get("response", "")
@@ -248,9 +221,7 @@ class AgentExecutor:
 
         return result
 
-    async def _maybe_trigger_gap_development(
-        self, response_text: str, context: Dict[str, Any]
-    ) -> None:
+    async def _maybe_trigger_gap_development(self, response_text: str, context: Dict[str, Any]) -> None:
         """Detect gap signals in agent output and trigger autonomous development.
 
         Called after every agent response (Issue #951).  Non-fatal on error.
@@ -283,9 +254,7 @@ class AgentExecutor:
         except Exception as exc:
             logger.debug("Gap development hook failed (non-critical): %s", exc)
 
-    def _register_specialized_handlers(
-        self, handlers: Dict, request: str, context: Optional[Dict]
-    ) -> None:
+    def _register_specialized_handlers(self, handlers: Dict, request: str, context: Optional[Dict]) -> None:
         """Register specialized agent handlers (Issue #60)."""
         agent_type_map = {
             AgentType.DATA_ANALYSIS: "data_analysis",
@@ -299,9 +268,7 @@ class AgentExecutor:
         for agent_type, getter_key in agent_type_map.items():
             getter = self._specialized_getters.get(getter_key)
             if getter:
-                handlers[agent_type] = lambda g=getter: g().process_query(
-                    request, context
-                )
+                handlers[agent_type] = lambda g=getter: g().process_query(request, context)
 
     async def _execute_chat_agent(
         self, request: str, context: Optional[Dict], chat_history: Optional[List]
@@ -310,16 +277,12 @@ class AgentExecutor:
         agent = self._get_chat_agent()
         return await agent.process_chat_message(request, context, chat_history)
 
-    async def _execute_system_commands_agent(
-        self, request: str, context: Optional[Dict]
-    ) -> Dict[str, Any]:
+    async def _execute_system_commands_agent(self, request: str, context: Optional[Dict]) -> Dict[str, Any]:
         """Execute system commands agent (Issue #334 - extracted helper)."""
         agent = self._get_system_commands_agent()
         return await agent.process_command_request(request, context)
 
-    async def _execute_rag_agent(
-        self, request: str, context: Optional[Dict]
-    ) -> Dict[str, Any]:
+    async def _execute_rag_agent(self, request: str, context: Optional[Dict]) -> Dict[str, Any]:
         """Execute RAG agent with document retrieval (Issue #334 - extracted helper)."""
         kb_agent = self._get_kb_librarian()
         kb_result = await kb_agent.process_query(request)
@@ -338,19 +301,11 @@ class AgentExecutor:
         """Execute request using a single specialized agent."""
         try:
             agent_handlers = {
-                AgentType.CHAT: lambda: self._execute_chat_agent(
-                    request, context, chat_history
-                ),
-                AgentType.SYSTEM_COMMANDS: lambda: self._execute_system_commands_agent(
-                    request, context
-                ),
+                AgentType.CHAT: lambda: self._execute_chat_agent(request, context, chat_history),
+                AgentType.SYSTEM_COMMANDS: lambda: self._execute_system_commands_agent(request, context),
                 AgentType.RAG: lambda: self._execute_rag_agent(request, context),
-                AgentType.KNOWLEDGE_RETRIEVAL: lambda: self._get_kb_librarian().process_query(
-                    request
-                ),
-                AgentType.RESEARCH: lambda: self._get_research_agent().research_query(
-                    request
-                ),
+                AgentType.KNOWLEDGE_RETRIEVAL: lambda: self._get_kb_librarian().process_query(request),
+                AgentType.RESEARCH: lambda: self._get_research_agent().research_query(request),
             }
 
             # Issue #60: Add specialized agent handlers
@@ -388,18 +343,14 @@ class AgentExecutor:
             secondary_agents = routing_decision.get("secondary_agents", [])
 
             # Execute primary agent
-            primary_result = await self._execute_single_agent(
-                primary_agent, request, context, chat_history
-            )
+            primary_result = await self._execute_single_agent(primary_agent, request, context, chat_history)
 
             # Execute secondary agents if needed
             secondary_results = []
             for agent_type in secondary_agents:
                 try:
                     # Modify request based on primary result for secondary agents
-                    secondary_request = self.router.adapt_request_for_secondary(
-                        request, primary_result, agent_type
-                    )
+                    secondary_request = self.router.adapt_request_for_secondary(request, primary_result, agent_type)
 
                     secondary_result = await self._execute_single_agent(
                         agent_type, secondary_request, context, chat_history
@@ -473,10 +424,7 @@ class AgentExecutor:
 
             # Build combined response
             if additional_info:
-                combined_response = (
-                    f"{primary_response}\n\nAdditional Information:\n"
-                    + "\n".join(additional_info)
-                )
+                combined_response = f"{primary_response}\n\nAdditional Information:\n" + "\n".join(additional_info)
             else:
                 combined_response = primary_response
 
@@ -484,10 +432,7 @@ class AgentExecutor:
                 "status": "success",
                 "response": combined_response,
                 "primary_agent": routing_decision["primary_agent"].value,
-                "secondary_agents": [
-                    agent.value
-                    for agent in routing_decision.get("secondary_agents", [])
-                ],
+                "secondary_agents": [agent.value for agent in routing_decision.get("secondary_agents", [])],
                 "routing_strategy": "multi_agent",
                 "agents_used": len(secondary_results) + 1,
             }

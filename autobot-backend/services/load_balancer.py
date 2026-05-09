@@ -112,8 +112,7 @@ class Worker:
             self.enabled
             and self.status in (WorkerStatus.ONLINE, WorkerStatus.BUSY)
             and self.current_load < self.max_concurrent_tasks
-            and self.circuit_breaker_state
-            in (CircuitBreakerState.CLOSED, CircuitBreakerState.HALF_OPEN)
+            and self.circuit_breaker_state in (CircuitBreakerState.CLOSED, CircuitBreakerState.HALF_OPEN)
         )
 
     def record_success(self):
@@ -127,9 +126,7 @@ class Worker:
             self.circuit_breaker_state = CircuitBreakerState.CLOSED
             self.circuit_open_until = None
 
-    def record_failure(
-        self, circuit_breaker_threshold: int = 3, circuit_breaker_timeout: int = 300
-    ):
+    def record_failure(self, circuit_breaker_threshold: int = 3, circuit_breaker_timeout: int = 300):
         """Record task failure and update circuit breaker"""
         self.current_load = max(0, self.current_load - 1)
         self.total_tasks_failed += 1
@@ -138,9 +135,7 @@ class Worker:
         # Open circuit breaker if threshold reached
         if self.consecutive_failures >= circuit_breaker_threshold:
             self.circuit_breaker_state = CircuitBreakerState.OPEN
-            self.circuit_open_until = datetime.now(tz=timezone.utc) + timedelta(
-                seconds=circuit_breaker_timeout
-            )
+            self.circuit_open_until = datetime.now(tz=timezone.utc) + timedelta(seconds=circuit_breaker_timeout)
             self.status = WorkerStatus.ERROR
             logger.warning(
                 f"Circuit breaker OPEN for worker {self.worker_id} after "
@@ -152,9 +147,7 @@ class Worker:
         if self.circuit_breaker_state == CircuitBreakerState.OPEN:
             if self.circuit_open_until and datetime.now(tz=timezone.utc) >= self.circuit_open_until:
                 self.circuit_breaker_state = CircuitBreakerState.HALF_OPEN
-                logger.info(
-                    f"Circuit breaker HALF_OPEN for worker {self.worker_id}, allowing test requests"
-                )
+                logger.info(f"Circuit breaker HALF_OPEN for worker {self.worker_id}, allowing test requests")
 
     def handle_healthy_check(self) -> bool:
         """Handle successful health check result (Issue #372 - reduces feature envy).
@@ -173,9 +166,7 @@ class Worker:
             return True
         return False
 
-    def handle_unhealthy_check(
-        self, circuit_breaker_threshold: int, circuit_breaker_timeout: int
-    ):
+    def handle_unhealthy_check(self, circuit_breaker_threshold: int, circuit_breaker_timeout: int):
         """Handle failed health check result (Issue #372 - reduces feature envy).
 
         Args:
@@ -188,9 +179,7 @@ class Worker:
         if self.consecutive_failures >= circuit_breaker_threshold:
             self.status = WorkerStatus.ERROR
             self.circuit_breaker_state = CircuitBreakerState.OPEN
-            self.circuit_open_until = datetime.now(tz=timezone.utc) + timedelta(
-                seconds=circuit_breaker_timeout
-            )
+            self.circuit_open_until = datetime.now(tz=timezone.utc) + timedelta(seconds=circuit_breaker_timeout)
         else:
             self.status = WorkerStatus.OFFLINE
 
@@ -225,16 +214,10 @@ class Worker:
             "total_tasks_completed": self.total_tasks_completed,
             "total_tasks_failed": self.total_tasks_failed,
             "consecutive_failures": self.consecutive_failures,
-            "last_health_check": (
-                self.last_health_check.isoformat() if self.last_health_check else None
-            ),
-            "last_success": (
-                self.last_success.isoformat() if self.last_success else None
-            ),
+            "last_health_check": (self.last_health_check.isoformat() if self.last_health_check else None),
+            "last_success": (self.last_success.isoformat() if self.last_success else None),
             "circuit_breaker_state": self.circuit_breaker_state.value,
-            "circuit_open_until": (
-                self.circuit_open_until.isoformat() if self.circuit_open_until else None
-            ),
+            "circuit_open_until": (self.circuit_open_until.isoformat() if self.circuit_open_until else None),
         }
 
 
@@ -371,13 +354,10 @@ class NPULoadBalancer:
         self._health_monitor_task: Optional[asyncio.Task] = None
         self._running = False
         self._selection_lock = asyncio.Lock()
-        self._workers_lock = (
-            threading.Lock()
-        )  # CRITICAL: Protect concurrent worker dictionary access
+        self._workers_lock = threading.Lock()  # CRITICAL: Protect concurrent worker dictionary access
 
         logger.info(
-            f"NPU Load Balancer initialized with {strategy} strategy, "
-            f"health check every {health_check_interval}s"
+            f"NPU Load Balancer initialized with {strategy} strategy, " f"health check every {health_check_interval}s"
         )
 
     def _create_strategy(self, strategy_name: str) -> LoadBalancingStrategy:
@@ -427,9 +407,7 @@ class NPULoadBalancer:
         # CRITICAL: Protect worker dictionary modifications with lock
         with self._workers_lock:
             self._workers[worker_id] = worker
-        logger.info(
-            f"Added worker {worker_id} at {endpoint} (priority={priority}, max_tasks={max_concurrent_tasks})"
-        )
+        logger.info(f"Added worker {worker_id} at {endpoint} (priority={priority}, max_tasks={max_concurrent_tasks})")
         return worker
 
     def remove_worker(self, worker_id: str) -> bool:
@@ -524,29 +502,21 @@ class NPULoadBalancer:
                 worker.record_success()
                 await self._emit_worker_status_change(worker, "task_completed")
             else:
-                worker.record_failure(
-                    self._circuit_breaker_threshold, self._circuit_breaker_timeout
-                )
+                worker.record_failure(self._circuit_breaker_threshold, self._circuit_breaker_timeout)
                 await self._emit_worker_status_change(worker, "task_failed")
 
                 # Retry on different worker if configured
                 if max_retries > 0 and result.get("fallback"):
-                    logger.info(
-                        f"Retrying task on different worker (retries left: {max_retries})"
-                    ),
+                    logger.info(f"Retrying task on different worker (retries left: {max_retries})"),
                     alternative = await self.select_worker()
                     if alternative and alternative.worker_id != worker_id:
-                        return await self.submit_task(
-                            alternative.worker_id, task_type, task_data, max_retries - 1
-                        )
+                        return await self.submit_task(alternative.worker_id, task_type, task_data, max_retries - 1)
 
             return result
 
         except Exception as e:
             logger.error("Task execution error on worker %s: %s", worker_id, e)
-            worker.record_failure(
-                self._circuit_breaker_threshold, self._circuit_breaker_timeout
-            )
+            worker.record_failure(self._circuit_breaker_threshold, self._circuit_breaker_timeout)
             await self._emit_worker_status_change(worker, "task_error")
             return {"success": False, "error": "Task execution failed"}
         finally:
@@ -645,13 +615,9 @@ class NPULoadBalancer:
             if health.get("status") == "healthy":
                 circuit_closed = worker.handle_healthy_check()
                 if circuit_closed:
-                    logger.info(
-                        f"Circuit breaker CLOSED for worker {worker.worker_id} after successful health check"
-                    )
+                    logger.info(f"Circuit breaker CLOSED for worker {worker.worker_id} after successful health check")
             else:
-                worker.handle_unhealthy_check(
-                    self._circuit_breaker_threshold, self._circuit_breaker_timeout
-                )
+                worker.handle_unhealthy_check(self._circuit_breaker_threshold, self._circuit_breaker_timeout)
 
             # Emit status change event if status changed
             if previous_status != worker.status:
@@ -660,15 +626,10 @@ class NPULoadBalancer:
         except Exception as e:
             logger.warning("Health check failed for worker %s: %s", worker.worker_id, e)
             previous_status = worker.status
-            worker.handle_unhealthy_check(
-                self._circuit_breaker_threshold, self._circuit_breaker_timeout
-            )
+            worker.handle_unhealthy_check(self._circuit_breaker_threshold, self._circuit_breaker_timeout)
 
             # Emit event if circuit breaker opened
-            if (
-                worker.circuit_breaker_state == CircuitBreakerState.OPEN
-                and previous_status != worker.status
-            ):
+            if worker.circuit_breaker_state == CircuitBreakerState.OPEN and previous_status != worker.status:
                 await self._emit_worker_status_change(worker, "circuit_breaker_opened")
 
         finally:

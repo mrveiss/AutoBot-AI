@@ -79,17 +79,13 @@ def sample_mixed_logs():
     # Normal requests
     for i in range(20):
         ts = (base_time + timedelta(seconds=i)).strftime("%Y-%m-%d %H:%M:%S")
-        lines.append(
-            f"{ts} - API - INFO - SESSION=s{i % 3} "
-            f"API_CALL: GET /api/data DURATION={10 + i}ms STATUS=200"
-        )
+        lines.append(f"{ts} - API - INFO - SESSION=s{i % 3} " f"API_CALL: GET /api/data DURATION={10 + i}ms STATUS=200")
 
     # Slow requests
     for i in range(5):
         ts = (base_time + timedelta(seconds=30 + i)).strftime("%Y-%m-%d %H:%M:%S")
         lines.append(
-            f"{ts} - API - INFO - SESSION=s0 "
-            f"API_CALL: POST /api/slow DURATION={200 + i * 50}ms STATUS=200"
+            f"{ts} - API - INFO - SESSION=s0 " f"API_CALL: POST /api/slow DURATION={200 + i * 50}ms STATUS=200"
         )
 
     # Errors
@@ -364,10 +360,7 @@ class TestLogParser:
 
     def test_parse_with_api_call(self):
         """Test parsing log with API call pattern."""
-        line = (
-            "2025-09-07 21:36:47 - RUM - INFO - "
-            "API_CALL: POST /api/test DURATION=31.60ms STATUS=200"
-        )
+        line = "2025-09-07 21:36:47 - RUM - INFO - " "API_CALL: POST /api/test DURATION=31.60ms STATUS=200"
         entry = LogParser.parse_line(line, 1)
 
         assert entry is not None
@@ -429,8 +422,7 @@ class TestLogPatternMiner:
         """Test parsing log file."""
         log_file = tmp_path / "test.log"
         log_file.write_text(
-            "2025-09-07 21:36:47 - TEST - INFO - Test message\n"
-            "2025-09-07 21:36:48 - TEST - ERROR - Error message\n"
+            "2025-09-07 21:36:47 - TEST - INFO - Test message\n" "2025-09-07 21:36:48 - TEST - ERROR - Error message\n"
         )
 
         entries = miner.parse_file(str(log_file))
@@ -462,9 +454,7 @@ class TestPatternExtraction:
         miner = LogPatternMiner(min_pattern_occurrences=3)
         result = miner.analyze(content=content)
 
-        error_patterns = [
-            p for p in result.patterns if p.pattern_type == PatternType.RECURRING_ERROR
-        ]
+        error_patterns = [p for p in result.patterns if p.pattern_type == PatternType.RECURRING_ERROR]
         assert len(error_patterns) >= 1
 
     def test_extract_performance_patterns(self, sample_mixed_logs):
@@ -475,11 +465,7 @@ class TestPatternExtraction:
         )
         result = miner.analyze(content=sample_mixed_logs)
 
-        perf_patterns = [
-            p
-            for p in result.patterns
-            if p.pattern_type == PatternType.PERFORMANCE_BOTTLENECK
-        ]
+        perf_patterns = [p for p in result.patterns if p.pattern_type == PatternType.PERFORMANCE_BOTTLENECK]
         assert len(perf_patterns) >= 1
 
     def test_extract_api_patterns(self, sample_standard_logs):
@@ -487,9 +473,7 @@ class TestPatternExtraction:
         miner = LogPatternMiner(min_pattern_occurrences=1)
         result = miner.analyze(content=sample_standard_logs)
 
-        api_patterns = [
-            p for p in result.patterns if p.pattern_type == PatternType.API_USAGE
-        ]
+        api_patterns = [p for p in result.patterns if p.pattern_type == PatternType.API_USAGE]
         # Should detect API call patterns
         assert len(api_patterns) >= 0  # May or may not find depending on threshold
 
@@ -523,9 +507,7 @@ class TestSessionFlowTracking:
         result = miner.analyze(content=sample_standard_logs)
 
         sessions_with_endpoints = [s for s in result.sessions if s.endpoints]
-        assert (
-            len(sessions_with_endpoints) >= 0
-        )  # May not have endpoints in simplified logs
+        assert len(sessions_with_endpoints) >= 0  # May not have endpoints in simplified logs
 
 
 # ============================================================================
@@ -545,16 +527,11 @@ class TestAnomalyDetection:
         # Normal durations
         for i in range(20):
             ts = (base_time + timedelta(seconds=i)).strftime("%Y-%m-%d %H:%M:%S")
-            lines.append(
-                f"{ts} - API - INFO - "
-                f"API_CALL: GET /api/test DURATION={10 + i % 5}ms STATUS=200"
-            )
+            lines.append(f"{ts} - API - INFO - " f"API_CALL: GET /api/test DURATION={10 + i % 5}ms STATUS=200")
 
         # Anomaly
         ts = (base_time + timedelta(seconds=25)).strftime("%Y-%m-%d %H:%M:%S")
-        lines.append(
-            f"{ts} - API - INFO - " f"API_CALL: GET /api/test DURATION=500ms STATUS=200"
-        )
+        lines.append(f"{ts} - API - INFO - " f"API_CALL: GET /api/test DURATION=500ms STATUS=200")
 
         content = "\n".join(lines)
         miner = LogPatternMiner(anomaly_deviation_threshold=2.0)
@@ -752,10 +729,7 @@ class TestEdgeCases:
 
     def test_normalize_error_message(self, miner):
         """Test error message normalization."""
-        message = (
-            "Error at /path/to/file.py: connection to 192.168.1.1 "
-            "failed at 2025-01-01T12:00:00"
-        )
+        message = "Error at /path/to/file.py: connection to 192.168.1.1 " "failed at 2025-01-01T12:00:00"
         normalized = miner._normalize_error_message(message)
 
         assert "<PATH>" in normalized

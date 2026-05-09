@@ -36,8 +36,7 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------
 
 _SUMMARY_EVAL_QUERY = (
-    "Summarize the following text accurately, preserving key facts "
-    "and source attribution: {source_preview}"
+    "Summarize the following text accurately, preserving key facts " "and source attribution: {source_preview}"
 )
 
 
@@ -86,13 +85,9 @@ class RecursiveSummarizer(BaseCognifier):
         chunk_summaries = await self._summarize_chunks(chunks, entity_map, context)
 
         sections = self._group_into_sections(chunks)
-        section_summaries = await self._summarize_sections(
-            sections, chunk_summaries, entity_map, context
-        )
+        section_summaries = await self._summarize_sections(sections, chunk_summaries, entity_map, context)
 
-        doc_summary = await self._summarize_document(
-            section_summaries, entity_map, context
-        )
+        doc_summary = await self._summarize_document(section_summaries, entity_map, context)
 
         all_summaries = chunk_summaries + section_summaries
         if doc_summary:
@@ -138,9 +133,7 @@ class RecursiveSummarizer(BaseCognifier):
         context: PipelineContext,
     ) -> List[Summary]:
         summaries = []
-        chunk_map = {
-            s.source_chunk_ids[0]: s for s in chunk_summaries if s.source_chunk_ids
-        }
+        chunk_map = {s.source_chunk_ids[0]: s for s in chunk_summaries if s.source_chunk_ids}
 
         for section in sections:
             text = "\n\n".join(c.content for c in section)
@@ -259,9 +252,7 @@ class RecursiveSummarizer(BaseCognifier):
 
     async def _generate_and_parse(self, prompt: str) -> dict:
         """Call LLM and parse JSON response (#1383: extracted helper)."""
-        response = await self.llm.chat(
-            [{"role": "user", "content": prompt}]
-        )
+        response = await self.llm.chat([{"role": "user", "content": prompt}])
         raw = parse_llm_json_response(response.content, fallback_dict=True)
         if isinstance(raw, dict):
             return raw
@@ -278,9 +269,7 @@ class RecursiveSummarizer(BaseCognifier):
     ) -> Summary:
         """Construct a Summary from parsed LLM output (#1383: extracted)."""
         summary_text = parsed.get("summary", "")
-        entity_ids = self._resolve_entity_ids(
-            parsed.get("key_entities", []), entity_map
-        )
+        entity_ids = self._resolve_entity_ids(parsed.get("key_entities", []), entity_map)
         word_count = len(summary_text.split())
         original_words = len(source_text.split())
         ratio = word_count / original_words if original_words else 0.0
@@ -300,9 +289,7 @@ class RecursiveSummarizer(BaseCognifier):
     # Helpers
     # ------------------------------------------------------------------
 
-    def _group_into_sections(
-        self, chunks: List[ProcessedChunk]
-    ) -> List[List[ProcessedChunk]]:
+    def _group_into_sections(self, chunks: List[ProcessedChunk]) -> List[List[ProcessedChunk]]:
         sections = []
         for i in range(0, len(chunks), self.section_size):
             sections.append(chunks[i : i + self.section_size])

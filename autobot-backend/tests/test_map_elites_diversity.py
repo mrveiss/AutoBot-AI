@@ -75,8 +75,7 @@ class TestMapElitesSelect(unittest.TestCase):
     def test_capacity_respected(self):
         """Selected results never exceed max_results."""
         results = [
-            _make_result(f"doc{i}", float(i) / 10, category=f"cat{i}", source_path=f"s{i}/f.py")
-            for i in range(1, 10)
+            _make_result(f"doc{i}", float(i) / 10, category=f"cat{i}", source_path=f"s{i}/f.py") for i in range(1, 10)
         ]
         selected = self.optimizer._map_elites_select(results, max_results=3)
         self.assertLessEqual(len(selected), 3)
@@ -87,10 +86,7 @@ class TestMapElitesSelect(unittest.TestCase):
 
     def test_fallback_when_single_category(self):
         """When all results share one category, cosine fallback is used."""
-        results = [
-            _make_result(f"doc{i}", 0.9 - i * 0.1, category="docs", source_path=f"s{i}/f.py")
-            for i in range(5)
-        ]
+        results = [_make_result(f"doc{i}", 0.9 - i * 0.1, category="docs", source_path=f"s{i}/f.py") for i in range(5)]
         # All same category → fewer than _MAP_ELITES_MIN_CATEGORIES → fallback
         selected = self.optimizer._map_elites_select(results, max_results=5)
         # Fallback returns _diversify_results output — just verify we get results back

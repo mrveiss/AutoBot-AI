@@ -50,9 +50,7 @@ from autobot_shared.ssot_config import SYSTEM_MODEL as _SSOT_SYSTEM
 # Routing tier — orchestrator only, no tool use
 ROUTING_TIER_MODEL = os.getenv("AUTOBOT_ROUTING_MODEL", _SSOT_ROUTING)
 # Classification tier — intent detection
-CLASSIFICATION_TIER_MODEL = os.getenv(
-    "AUTOBOT_CLASSIFICATION_MODEL", _SSOT_CLASSIFICATION
-)
+CLASSIFICATION_TIER_MODEL = os.getenv("AUTOBOT_CLASSIFICATION_MODEL", _SSOT_CLASSIFICATION)
 # Light processing tier — extraction, formatting, lightweight tasks
 LIGHT_TIER_MODEL = os.getenv("AUTOBOT_LIGHT_PROCESSING_MODEL", _SSOT_LIGHT)
 # Instruction following tier — RAG, entity extraction, instruction following
@@ -124,9 +122,7 @@ async def _get_available_providers() -> list:
     try:
         from services.provider_health import ProviderHealthManager
 
-        results = await ProviderHealthManager.check_all_providers(
-            timeout=3.0, use_cache=True
-        )
+        results = await ProviderHealthManager.check_all_providers(timeout=3.0, use_cache=True)
         return [name for name, result in results.items() if result.available]
     except Exception as e:
         logger.warning("Could not check provider availability: %s", e)
@@ -324,7 +320,14 @@ DEFAULT_AGENT_CONFIGS = {
             "content_synthesis",
             "trend_analysis",
         ],
-        "mcp_tools": ["memory_mcp", "browser_mcp", "http_client_mcp", "knowledge_mcp", "sequential_thinking_mcp", "shrimp_task_manager_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "browser_mcp",
+            "http_client_mcp",
+            "knowledge_mcp",
+            "sequential_thinking_mcp",
+            "shrimp_task_manager_mcp",
+        ],
         "invoked_by": "workflow, security_scanner, kb_librarian",
         "source_file": "src/agents/web_researcher.py",
     },
@@ -410,7 +413,15 @@ DEFAULT_AGENT_CONFIGS = {
             "system_documentation",
             "context_management",
         ],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "filesystem_mcp", "database_mcp", "prometheus_mcp", "sequential_thinking_mcp", "shrimp_task_manager_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "filesystem_mcp",
+            "database_mcp",
+            "prometheus_mcp",
+            "sequential_thinking_mcp",
+            "shrimp_task_manager_mcp",
+        ],
         "invoked_by": "System initialization, knowledge base maintenance tasks",
         "source_file": "src/agents/system_knowledge_manager.py",
     },
@@ -486,7 +497,14 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 4,
         "tasks": ["research_integration", "knowledge_enrichment", "source_linking"],
-        "mcp_tools": ["memory_mcp", "browser_mcp", "http_client_mcp", "knowledge_mcp", "sequential_thinking_mcp", "shrimp_task_manager_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "browser_mcp",
+            "http_client_mcp",
+            "knowledge_mcp",
+            "sequential_thinking_mcp",
+            "shrimp_task_manager_mcp",
+        ],
         "invoked_by": "AsyncChatWorkflow for research queries, browser_mcp tools",
         "source_file": "src/agents/web_research_integration.py",
     },
@@ -529,9 +547,7 @@ DEFAULT_AGENT_CONFIGS = {
 }
 
 
-async def _resolve_agent_effective_config(
-    agent_id: str, config: dict, unified_config_manager
-) -> tuple:
+async def _resolve_agent_effective_config(agent_id: str, config: dict, unified_config_manager) -> tuple:
     """Helper for list_agents and get_all_agents. Ref: #1088.
 
     Resolves model, provider, enabled, and config_source for an agent
@@ -550,15 +566,9 @@ async def _resolve_agent_effective_config(
             "slm",
         )
 
-    current_model = unified_config_manager.get_nested(
-        f"agents.{agent_id}.model", config["default_model"]
-    )
-    current_provider = unified_config_manager.get_nested(
-        f"agents.{agent_id}.provider", config["provider"]
-    )
-    enabled = unified_config_manager.get_nested(
-        f"agents.{agent_id}.enabled", config["enabled"]
-    )
+    current_model = unified_config_manager.get_nested(f"agents.{agent_id}.model", config["default_model"])
+    current_provider = unified_config_manager.get_nested(f"agents.{agent_id}.provider", config["provider"])
+    enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", config["enabled"])
     return current_model, current_provider, enabled, "local"
 
 
@@ -586,9 +596,7 @@ async def list_agents(admin_check: bool = Depends(check_admin_permission)):
             current_provider,
             enabled,
             config_source,
-        ) = await _resolve_agent_effective_config(
-            agent_id, config, unified_config_manager
-        )
+        ) = await _resolve_agent_effective_config(agent_id, config, unified_config_manager)
 
         status = "connected" if enabled and current_model else "disconnected"
 
@@ -618,9 +626,7 @@ async def list_agents(admin_check: bool = Depends(check_admin_permission)):
         from services.agent_analytics import get_agent_analytics
 
         analytics = get_agent_analytics()
-        metrics_by_id = {
-            m.agent_id: m for m in await analytics.get_all_agents_metrics()
-        }
+        metrics_by_id = {m.agent_id: m for m in await analytics.get_all_agents_metrics()}
         for info in agents:
             m = metrics_by_id.get(info["id"])
             if m:
@@ -644,9 +650,7 @@ async def list_agents(admin_check: bool = Depends(check_admin_permission)):
     )
 
 
-async def _resolve_agent_entry(
-    agent_id: str, config: dict, unified_config_manager
-) -> dict:
+async def _resolve_agent_entry(agent_id: str, config: dict, unified_config_manager) -> dict:
     """Resolve model, enabled state, and config_source for a single agent. Ref: #2735.
 
     Tries SLM first; falls back to local unified config.
@@ -657,12 +661,8 @@ async def _resolve_agent_entry(
         enabled = slm_config.get("enabled", True)
         config_source = "slm"
     else:
-        current_model = unified_config_manager.get_nested(
-            f"agents.{agent_id}.model", config["default_model"]
-        )
-        enabled = unified_config_manager.get_nested(
-            f"agents.{agent_id}.enabled", config["enabled"]
-        )
+        current_model = unified_config_manager.get_nested(f"agents.{agent_id}.model", config["default_model"])
+        enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", config["enabled"])
         config_source = "local"
 
     return {
@@ -700,9 +700,7 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
 
     backend_agents = []
     for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
-        backend_agents.append(
-            await _resolve_agent_entry(agent_id, config, unified_config_manager)
-        )
+        backend_agents.append(await _resolve_agent_entry(agent_id, config, unified_config_manager))
 
     healthy_count = sum(1 for a in backend_agents if a["status"] == "connected")
 
@@ -798,15 +796,9 @@ async def get_specialized_agent(
     error_code_prefix="AGENT_CONFIG",
 )
 async def get_agents_usage(
-    agent_id: Optional[str] = Query(
-        None, description="Filter to a specific agent (all agents if omitted)"
-    ),
-    days: int = Query(
-        default=7, ge=1, le=90, description="Lookback window in days for trend data"
-    ),
-    outcome: Optional[str] = Query(
-        None, description="Filter by outcome: completed, failed, timeout, cancelled"
-    ),
+    agent_id: Optional[str] = Query(None, description="Filter to a specific agent (all agents if omitted)"),
+    days: int = Query(default=7, ge=1, le=90, description="Lookback window in days for trend data"),
+    outcome: Optional[str] = Query(None, description="Filter by outcome: completed, failed, timeout, cancelled"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -859,9 +851,7 @@ async def get_agents_usage(
     daily: dict = {}
     for task in window_tasks:
         day = task["started_at"][:10]
-        bucket = daily.setdefault(
-            day, {"total": 0, "completed": 0, "failed": 0, "total_duration_ms": 0.0}
-        )
+        bucket = daily.setdefault(day, {"total": 0, "completed": 0, "failed": 0, "total_duration_ms": 0.0})
         bucket["total"] += 1
         if task.get("status") == TaskStatus.COMPLETED.value:
             bucket["completed"] += 1
@@ -873,13 +863,9 @@ async def get_agents_usage(
     # Add derived rates to each day bucket
     for stats in daily.values():
         if stats["total"] > 0:
-            stats["success_rate"] = round(
-                (stats["completed"] / stats["total"]) * 100, 2
-            )
+            stats["success_rate"] = round((stats["completed"] / stats["total"]) * 100, 2)
             stats["calls_per_day"] = stats["total"]
-            stats["avg_latency_ms"] = round(
-                stats["total_duration_ms"] / stats["total"], 2
-            )
+            stats["avg_latency_ms"] = round(stats["total_duration_ms"] / stats["total"], 2)
         else:
             stats["success_rate"] = 0.0
             stats["calls_per_day"] = 0
@@ -899,9 +885,7 @@ async def get_agents_usage(
                 "outcome_filter": outcome,
                 "total_calls": total_calls,
                 "total_agents": len(agents_summary),
-                "overall_success_rate": round(
-                    (total_completed / total_calls * 100) if total_calls else 0.0, 2
-                ),
+                "overall_success_rate": round((total_completed / total_calls * 100) if total_calls else 0.0, 2),
             },
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         },
@@ -914,9 +898,7 @@ async def get_agents_usage(
     operation="get_agent_config",
     error_code_prefix="AGENT_CONFIG",
 )
-async def get_agent_config(
-    agent_id: str, admin_check: bool = Depends(check_admin_permission)
-):
+async def get_agent_config(agent_id: str, admin_check: bool = Depends(check_admin_permission)):
     """
     Get detailed configuration for a specific agent
 
@@ -938,15 +920,9 @@ async def get_agent_config(
         enabled = slm_config.get("enabled", True)
         config_source = "slm"
     else:
-        current_model = unified_config_manager.get_nested(
-            f"agents.{agent_id}.model", base_config["default_model"]
-        )
-        current_provider = unified_config_manager.get_nested(
-            f"agents.{agent_id}.provider", base_config["provider"]
-        )
-        enabled = unified_config_manager.get_nested(
-            f"agents.{agent_id}.enabled", base_config["enabled"]
-        )
+        current_model = unified_config_manager.get_nested(f"agents.{agent_id}.model", base_config["default_model"])
+        current_provider = unified_config_manager.get_nested(f"agents.{agent_id}.provider", base_config["provider"])
+        enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", base_config["enabled"])
         config_source = "local"
 
     # Build detailed response
@@ -990,20 +966,14 @@ async def _apply_agent_model_update(
     """
     base = DEFAULT_AGENT_CONFIGS[agent_id]
     before_config = {
-        "model": unified_config_manager.get_nested(
-            f"agents.{agent_id}.model", base["default_model"]
-        ),
-        "provider": unified_config_manager.get_nested(
-            f"agents.{agent_id}.provider", base["provider"]
-        ),
+        "model": unified_config_manager.get_nested(f"agents.{agent_id}.model", base["default_model"]),
+        "provider": unified_config_manager.get_nested(f"agents.{agent_id}.provider", base["provider"]),
     }
 
     # Persist changes
     unified_config_manager.set_nested(f"agents.{agent_id}.model", update.model)
     if update.provider:
-        unified_config_manager.set_nested(
-            f"agents.{agent_id}.provider", update.provider
-        )
+        unified_config_manager.set_nested(f"agents.{agent_id}.provider", update.provider)
     unified_config_manager.save_settings()
     ConfigService.clear_cache()
 
@@ -1064,9 +1034,7 @@ async def update_agent_model(
             detail="Agent ID in URL must match agent ID in request body",
         )
 
-    updated_config = await _apply_agent_model_update(
-        agent_id, update, unified_config_manager, session
-    )
+    updated_config = await _apply_agent_model_update(agent_id, update, unified_config_manager, session)
 
     return JSONResponse(
         status_code=200,
@@ -1100,9 +1068,7 @@ async def enable_agent(
 
     from config import unified_config_manager
 
-    before_enabled = unified_config_manager.get_nested(
-        f"agents.{agent_id}.enabled", True
-    )
+    before_enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", True)
     unified_config_manager.set_nested(f"agents.{agent_id}.enabled", True)
     unified_config_manager.save_settings()
     ConfigService.clear_cache()
@@ -1151,9 +1117,7 @@ async def disable_agent(
 
     from config import unified_config_manager
 
-    before_enabled = unified_config_manager.get_nested(
-        f"agents.{agent_id}.enabled", True
-    )
+    before_enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", True)
     unified_config_manager.set_nested(f"agents.{agent_id}.enabled", False)
     unified_config_manager.save_settings()
     ConfigService.clear_cache()
@@ -1203,14 +1167,9 @@ async def _check_provider_availability(agent_id: str) -> tuple:
         )
         provider_available = health_result.available
         if not provider_available:
-            logger.warning(
-                f"Provider {provider_config} unavailable for agent {agent_id}: "
-                f"{health_result.message}"
-            )
+            logger.warning(f"Provider {provider_config} unavailable for agent {agent_id}: " f"{health_result.message}")
     except Exception as e:
-        logger.warning(
-            f"Provider availability check failed for agent {agent_id}: {str(e)}"
-        )
+        logger.warning(f"Provider availability check failed for agent {agent_id}: {str(e)}")
         provider_available = False
 
     response_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
@@ -1223,9 +1182,7 @@ async def _check_provider_availability(agent_id: str) -> tuple:
     operation="check_agent_health",
     error_code_prefix="AGENT_CONFIG",
 )
-async def check_agent_health(
-    agent_id: str, admin_check: bool = Depends(check_admin_permission)
-):
+async def check_agent_health(agent_id: str, admin_check: bool = Depends(check_admin_permission)):
     """
     Perform health check on a specific agent
 
@@ -1284,12 +1241,8 @@ async def get_agents_overview(admin_check: bool = Depends(check_admin_permission
     agent_summary = []
 
     for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
-        enabled = unified_config_manager.get_nested(
-            f"agents.{agent_id}.enabled", config["enabled"]
-        )
-        model = unified_config_manager.get_nested(
-            f"agents.{agent_id}.model", config["default_model"]
-        )
+        enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", config["enabled"])
+        model = unified_config_manager.get_nested(f"agents.{agent_id}.model", config["default_model"])
 
         if enabled:
             enabled_agents += 1
@@ -1312,9 +1265,7 @@ async def get_agents_overview(admin_check: bool = Depends(check_admin_permission
         "healthy_agents": healthy_agents,
         "unhealthy_agents": enabled_agents - healthy_agents,
         "disabled_agents": total_agents - enabled_agents,
-        "overall_health": (
-            "good" if healthy_agents >= enabled_agents * 0.8 else "warning"
-        ),
+        "overall_health": ("good" if healthy_agents >= enabled_agents * 0.8 else "warning"),
         "agents": agent_summary,
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }

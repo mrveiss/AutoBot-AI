@@ -77,68 +77,41 @@ class WorkflowCoordinator:
         """Helper for generate_intelligent_workflow. Ref: #1088."""
         return WorkflowIntelligence(
             workflow_id=workflow_id,
-            estimated_completion_time=self.risk_analyzer.estimate_workflow_duration(
-                optimized_steps
-            ),
-            confidence_score=self.risk_analyzer.calculate_workflow_confidence(
-                optimized_steps
-            ),
-            optimization_suggestions=(
-                await self.risk_analyzer.generate_optimization_suggestions(
-                    optimized_steps
-                )
-            ),
-            risk_mitigation_strategies=(
-                await self.risk_analyzer.generate_risk_mitigation(optimized_steps)
-            ),
+            estimated_completion_time=self.risk_analyzer.estimate_workflow_duration(optimized_steps),
+            confidence_score=self.risk_analyzer.calculate_workflow_confidence(optimized_steps),
+            optimization_suggestions=(await self.risk_analyzer.generate_optimization_suggestions(optimized_steps)),
+            risk_mitigation_strategies=(await self.risk_analyzer.generate_risk_mitigation(optimized_steps)),
         )
 
-    async def generate_intelligent_workflow(
-        self, user_request: str, session_id: str, context: Metadata = None
-    ) -> str:
+    async def generate_intelligent_workflow(self, user_request: str, session_id: str, context: Metadata = None) -> str:
         """Generate AI-optimized workflow from user request"""
         try:
             context = context or {}
             workflow_id = str(uuid.uuid4())
 
             # Step 1: Analyze user intent and requirements
-            intent_analysis = await self.intent_analyzer.analyze_user_intent(
-                user_request
-            )
+            intent_analysis = await self.intent_analyzer.analyze_user_intent(user_request)
 
             # Step 2: Generate intelligent workflow steps
-            smart_steps = await self.step_generator.generate_smart_steps(
-                user_request, intent_analysis, context
-            )
+            smart_steps = await self.step_generator.generate_smart_steps(user_request, intent_analysis, context)
 
             # Step 3: Apply AI optimizations
-            optimized_steps = await self.optimizer.apply_optimizations(
-                smart_steps, intent_analysis
-            )
+            optimized_steps = await self.optimizer.apply_optimizations(smart_steps, intent_analysis)
 
             # Step 4: Create workflow intelligence profile
-            intelligence = await self._build_workflow_intelligence(
-                workflow_id, optimized_steps
-            )
+            intelligence = await self._build_workflow_intelligence(workflow_id, optimized_steps)
             self.workflow_intelligence[workflow_id] = intelligence
 
             # Step 5: Create enhanced workflow
-            await self._create_enhanced_workflow(
-                workflow_id, user_request, optimized_steps, session_id, intelligence
-            )
+            await self._create_enhanced_workflow(workflow_id, user_request, optimized_steps, session_id, intelligence)
 
             # Step 6: Learn from workflow generation
-            await self.learning_model.record_workflow_generation(
-                user_request, intent_analysis, optimized_steps
-            )
+            await self.learning_model.record_workflow_generation(user_request, intent_analysis, optimized_steps)
 
             self.analytics["total_workflows_generated"] += 1
             self.analytics["ai_optimizations_applied"] += 1
 
-            logger.info(
-                f"Generated intelligent workflow {workflow_id} "
-                f"with {len(optimized_steps)} optimized steps"
-            )
+            logger.info(f"Generated intelligent workflow {workflow_id} " f"with {len(optimized_steps)} optimized steps")
             return workflow_id
 
         except Exception as e:
@@ -163,9 +136,7 @@ class WorkflowCoordinator:
                 description=smart_step.description,
                 explanation=smart_step.explanation,
                 requires_confirmation=smart_step.requires_confirmation,
-                risk_level=self.risk_analyzer.assess_step_risk_level(
-                    smart_step.command
-                ),
+                risk_level=self.risk_analyzer.assess_step_risk_level(smart_step.command),
                 dependencies=smart_step.dependencies,
             )
             regular_steps.append(regular_step)

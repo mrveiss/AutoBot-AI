@@ -54,32 +54,22 @@ async def test_workflow_api():
                             if status_response.status == 200:
                                 status = await status_response.json()
                                 print("✅ Workflow status API working")  # noqa: print
-                                print(  # noqa: print
-                                    f"   Status: {status.get('status', 'unknown')}"
-                                )  # noqa: print
-                                print(  # noqa: print
-                                    f"   Progress: {status.get('progress', 0):.1%}"
-                                )  # noqa: print
+                                print(f"   Status: {status.get('status', 'unknown')}")  # noqa: print  # noqa: print
+                                print(f"   Progress: {status.get('progress', 0):.1%}")  # noqa: print  # noqa: print
                                 print(  # noqa: print
                                     f"   Steps: {status.get('current_step', 0)}/{status.get('total_steps', 0)}"
                                 )
                             else:
-                                print(  # noqa: print
-                                    f"❌ Workflow status API failed: {status_response.status}"
-                                )
+                                print(f"❌ Workflow status API failed: {status_response.status}")  # noqa: print
 
                 else:
-                    print(  # noqa: print
-                        f"❌ Workflow execution API failed: {response.status}"
-                    )  # noqa: print
+                    print(f"❌ Workflow execution API failed: {response.status}")  # noqa: print  # noqa: print
                     error_text = await response.text()
                     print(f"   Error: {error_text}")  # noqa: print
 
         except aiohttp.ClientError as e:
             print(f"❌ Connection error: {e}")  # noqa: print
-            print(  # noqa: print
-                f"   Make sure AutoBot backend is running on {get_test_backend_url()}"
-            )  # noqa: print
+            print(f"   Make sure AutoBot backend is running on {get_test_backend_url()}")  # noqa: print  # noqa: print
 
 
 async def test_research_agent():
@@ -102,18 +92,14 @@ async def test_research_agent():
         # Test tool-specific research
         from agents.web_researcher import ResearchRequest
 
-        request = ResearchRequest(
-            query="network scanning tools", focus="installation_usage", max_results=3
-        )
+        request = ResearchRequest(query="network scanning tools", focus="installation_usage", max_results=3)
 
         result = await agent.research_specific_tools(request)
 
         print("✅ Research Agent working")  # noqa: print
         print(f"   Success: {result.get('success', False)}")  # noqa: print
         print(f"   Tools found: {result.get('tools_found', [])}")  # noqa: print
-        print(  # noqa: print
-            f"   Recommendation: {result.get('recommendation', 'N/A')}"
-        )  # noqa: print
+        print(f"   Recommendation: {result.get('recommendation', 'N/A')}")  # noqa: print  # noqa: print
 
     except Exception as e:
         print(f"❌ Research Agent test failed: {e}")  # noqa: print
@@ -164,9 +150,7 @@ async def demonstrate_workflow_vs_generic():
     print()  # noqa: print
 
     print("❌ OLD GENERIC RESPONSE:")  # noqa: print
-    print(  # noqa: print
-        "   'Port Scanner, Sniffing Software, Password Cracking Tools, Reconnaissance Tools'"
-    )
+    print("   'Port Scanner, Sniffing Software, Password Cracking Tools, Reconnaissance Tools'")  # noqa: print
     print("   Issues: Vague, no specific tools, no installation help")  # noqa: print
     print()  # noqa: print
 
@@ -185,18 +169,10 @@ async def demonstrate_workflow_vs_generic():
         # Test workflow creation
         workflow_response = await orchestrator.create_workflow_response(user_request)
 
-        print(  # noqa: print
-            f"   🎯 Classification: {workflow_response['message_classification']}"
-        )  # noqa: print
-        print(  # noqa: print
-            f"   🤖 Agents: {', '.join(workflow_response['agents_involved'])}"
-        )  # noqa: print
-        print(  # noqa: print
-            f"   ⏱️  Duration: {workflow_response['estimated_duration']}"
-        )  # noqa: print
-        print(  # noqa: print
-            f"   👤 Approvals: {workflow_response['user_approvals_needed']}"
-        )  # noqa: print
+        print(f"   🎯 Classification: {workflow_response['message_classification']}")  # noqa: print  # noqa: print
+        print(f"   🤖 Agents: {', '.join(workflow_response['agents_involved'])}")  # noqa: print  # noqa: print
+        print(f"   ⏱️  Duration: {workflow_response['estimated_duration']}")  # noqa: print  # noqa: print
+        print(f"   👤 Approvals: {workflow_response['user_approvals_needed']}")  # noqa: print  # noqa: print
         print()  # noqa: print
         print("   📋 Workflow Steps:")  # noqa: print
         for step in workflow_response["workflow_preview"]:

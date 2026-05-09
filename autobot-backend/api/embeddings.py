@@ -42,9 +42,7 @@ async def get_embedding_settings(
     """
     try:
         # Get embedding configuration from unified config manager
-        embedding_config = unified_config_manager.get_nested(
-            "backend.llm.unified.embedding", {}
-        )
+        embedding_config = unified_config_manager.get_nested("backend.llm.unified.embedding", {})
 
         if not embedding_config:
             # Return default configuration if none exists
@@ -91,9 +89,7 @@ async def update_embedding_settings(
     """
     try:
         # Update the embedding configuration
-        unified_config_manager.set_nested(
-            "backend.llm.unified.embedding.provider", update.provider
-        )
+        unified_config_manager.set_nested("backend.llm.unified.embedding.provider", update.provider)
         unified_config_manager.set_nested(
             f"backend.llm.unified.embedding.providers.{update.provider}.selected_model",
             update.selected_model,
@@ -109,9 +105,7 @@ async def update_embedding_settings(
         unified_config_manager.save_settings()
         ConfigService.clear_cache()
 
-        logger.info(
-            f"Updated embedding configuration: provider={update.provider}, model={update.selected_model}"
-        )
+        logger.info(f"Updated embedding configuration: provider={update.provider}, model={update.selected_model}")
 
         return JSONResponse(
             status_code=200,
@@ -129,9 +123,7 @@ async def update_embedding_settings(
 
     except Exception as e:
         logger.error("Failed to update embedding settings: %s", e)
-        raise HTTPException(
-            status_code=500, detail="Failed to update embedding settings"
-        )
+        raise HTTPException(status_code=500, detail="Failed to update embedding settings")
 
 
 @router.get("/models", response_model=DataResponse)
@@ -148,9 +140,7 @@ async def get_available_embedding_models(
     Issue #744: Requires authenticated user.
     """
     try:
-        embedding_config = unified_config_manager.get_nested(
-            "backend.llm.unified.embedding", {}
-        )
+        embedding_config = unified_config_manager.get_nested("backend.llm.unified.embedding", {})
         providers = embedding_config.get("providers", {})
 
         available_models = {}
@@ -230,17 +220,13 @@ async def refresh_embedding_models(
                 status_code=400,
                 content={
                     "status": "error",
-                    "message": (
-                        f"Model refresh not implemented for provider: {provider_name}"
-                    ),
+                    "message": (f"Model refresh not implemented for provider: {provider_name}"),
                 },
             )
 
     except Exception as e:
         logger.error("Failed to refresh embedding models for %s: %s", provider_name, e)
-        raise HTTPException(
-            status_code=500, detail="Failed to refresh embedding models"
-        )
+        raise HTTPException(status_code=500, detail="Failed to refresh embedding models")
 
 
 @router.get("/status", response_model=DataResponse)
@@ -257,14 +243,10 @@ async def get_embedding_status(
     Issue #744: Requires authenticated user.
     """
     try:
-        embedding_config = unified_config_manager.get_nested(
-            "backend.llm.unified.embedding", {}
-        )
+        embedding_config = unified_config_manager.get_nested("backend.llm.unified.embedding", {})
         current_provider = embedding_config.get("provider", "ollama")
 
-        provider_config = embedding_config.get("providers", {}).get(
-            current_provider, {}
-        )
+        provider_config = embedding_config.get("providers", {}).get(current_provider, {})
         selected_model = provider_config.get("selected_model", "")
         endpoint = provider_config.get("endpoint", "")
 

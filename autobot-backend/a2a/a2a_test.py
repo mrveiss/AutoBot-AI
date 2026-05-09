@@ -170,9 +170,7 @@ def _make_redis_mock():
         return {m.encode("utf-8") for m in task_set}
 
     def _rpush(key, value):
-        audit_lists.setdefault(key, []).append(
-            value if isinstance(value, str) else value.decode("utf-8")
-        )
+        audit_lists.setdefault(key, []).append(value if isinstance(value, str) else value.decode("utf-8"))
 
     def _lrange(key, start, end):
         entries = audit_lists.get(key, [])
@@ -202,9 +200,7 @@ def _make_redis_mock():
 class TestTaskManager:
     def setup_method(self):
         """Fresh manager with mocked Redis for each test."""
-        with patch(
-            "a2a.task_manager.get_redis_client", return_value=_make_redis_mock()
-        ):
+        with patch("a2a.task_manager.get_redis_client", return_value=_make_redis_mock()):
             self.mgr = TaskManager()
 
     def test_create_task_returns_task(self):
@@ -342,9 +338,7 @@ class TestTaskManagerEviction:
 
     def setup_method(self):
         self._redis_mock = _make_redis_mock()
-        with patch(
-            "a2a.task_manager.get_redis_client", return_value=self._redis_mock
-        ):
+        with patch("a2a.task_manager.get_redis_client", return_value=self._redis_mock):
             self.mgr = TaskManager()
 
     def test_completed_task_visible_before_expiry(self):
@@ -411,9 +405,7 @@ class TestPublishEvent:
 
     def setup_method(self):
         self._redis_mock = _make_redis_mock()
-        with patch(
-            "a2a.task_manager.get_redis_client", return_value=self._redis_mock
-        ):
+        with patch("a2a.task_manager.get_redis_client", return_value=self._redis_mock):
             self.mgr = TaskManager()
 
     def test_publish_event_happy_path(self):
@@ -456,9 +448,7 @@ class TestGetTaskTTLSliding:
 
     def setup_method(self):
         self._redis_mock = _make_redis_mock()
-        with patch(
-            "a2a.task_manager.get_redis_client", return_value=self._redis_mock
-        ):
+        with patch("a2a.task_manager.get_redis_client", return_value=self._redis_mock):
             self.mgr = TaskManager()
 
     def test_get_task_slides_ttl_on_all_three_keys(self):
@@ -475,18 +465,16 @@ class TestGetTaskTTLSliding:
         # Collect every key that was passed to expire()
         expired_keys = [call.args[0] for call in self._redis_mock.expire.call_args_list]
 
-        assert self._redis_mock.expire.call_count >= 3, (
-            f"Expected at least 3 expire() calls, got {self._redis_mock.expire.call_count}"
-        )
-        assert _KEY_TASK.format(task.id) in expired_keys, (
-            f"expire() not called for task key {_KEY_TASK.format(task.id)!r}"
-        )
-        assert _KEY_AUDIT.format(task.id) in expired_keys, (
-            f"expire() not called for audit key {_KEY_AUDIT.format(task.id)!r}"
-        )
-        assert _KEY_TASKS in expired_keys, (
-            f"expire() not called for tracking set {_KEY_TASKS!r}"
-        )
+        assert (
+            self._redis_mock.expire.call_count >= 3
+        ), f"Expected at least 3 expire() calls, got {self._redis_mock.expire.call_count}"
+        assert (
+            _KEY_TASK.format(task.id) in expired_keys
+        ), f"expire() not called for task key {_KEY_TASK.format(task.id)!r}"
+        assert (
+            _KEY_AUDIT.format(task.id) in expired_keys
+        ), f"expire() not called for audit key {_KEY_AUDIT.format(task.id)!r}"
+        assert _KEY_TASKS in expired_keys, f"expire() not called for tracking set {_KEY_TASKS!r}"
 
     def test_get_task_missing_does_not_call_expire(self):
         """expire() must NOT be called when task_id is not found in Redis.
@@ -516,9 +504,7 @@ class TestSaveTTL:
 
     def setup_method(self):
         self._redis_mock = _make_redis_mock()
-        with patch(
-            "a2a.task_manager.get_redis_client", return_value=self._redis_mock
-        ):
+        with patch("a2a.task_manager.get_redis_client", return_value=self._redis_mock):
             self.mgr = TaskManager()
 
     def test_create_task_calls_expire_on_key_tasks(self):
@@ -531,8 +517,7 @@ class TestSaveTTL:
 
         expired_keys = [call.args[0] for call in self._redis_mock.expire.call_args_list]
         assert _KEY_TASKS in expired_keys, (
-            f"expire() not called for tracking set {_KEY_TASKS!r}; "
-            f"keys seen: {expired_keys}"
+            f"expire() not called for tracking set {_KEY_TASKS!r}; " f"keys seen: {expired_keys}"
         )
 
     def test_create_task_expire_uses_configured_ttl(self):
@@ -545,16 +530,11 @@ class TestSaveTTL:
         self.mgr.create_task("TTL value test")
 
         # Find the expire() call for _KEY_TASKS and verify the TTL argument
-        matching = [
-            call
-            for call in self._redis_mock.expire.call_args_list
-            if call.args[0] == _KEY_TASKS
-        ]
+        matching = [call for call in self._redis_mock.expire.call_args_list if call.args[0] == _KEY_TASKS]
         assert matching, f"expire() never called with key {_KEY_TASKS!r}"
         actual_ttl = matching[0].args[1]
         assert actual_ttl == expected_ttl, (
-            f"expire({_KEY_TASKS!r}, ...) used ttl={actual_ttl}, "
-            f"expected {expected_ttl}"
+            f"expire({_KEY_TASKS!r}, ...) used ttl={actual_ttl}, " f"expected {expected_ttl}"
         )
 
 
@@ -706,9 +686,7 @@ class TestExecuteA2aTaskEvalGate:
         task = mgr.create_task("Explain quantum entanglement")
 
         mock_orchestrator = MagicMock()
-        mock_orchestrator.process_request = AsyncMock(
-            return_value={"response": "I'm not sure about this."}
-        )
+        mock_orchestrator.process_request = AsyncMock(return_value={"response": "I'm not sure about this."})
         mock_ao_module = MagicMock()
         mock_ao_module.get_distributed_agent_coordinator = MagicMock(return_value=mock_orchestrator)
 
@@ -731,17 +709,12 @@ class TestExecuteA2aTaskEvalGate:
         final = mgr.get_task(task.id)
         assert final.status.state == TaskState.FAILED
         assert final.status.message is not None
-        assert (
-            "eval" in final.status.message.lower()
-            or "confidence" in final.status.message.lower()
-        )
+        assert "eval" in final.status.message.lower() or "confidence" in final.status.message.lower()
 
         # eval_reason artifact must be present
         eval_artifacts = [
             a
             for a in final.artifacts
-            if a.artifact_type == "json"
-            and isinstance(a.content, dict)
-            and "eval_reason" in a.content
+            if a.artifact_type == "json" and isinstance(a.content, dict) and "eval_reason" in a.content
         ]
         assert len(eval_artifacts) == 1, "Expected exactly one eval_reason artifact"

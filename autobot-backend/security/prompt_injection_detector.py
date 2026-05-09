@@ -137,29 +137,29 @@ CONTEXT_POISON_PATTERNS = (
 # Dangerous invisible Unicode ranges that can hide malicious instructions
 INVISIBLE_UNICODE_RANGES = {
     # Zero-width characters (U+200B-U+200D)
-    "\u200B": "Zero-width space",
-    "\u200C": "Zero-width non-joiner",
-    "\u200D": "Zero-width joiner",
-    "\u200E": "Left-to-right mark",
-    "\u200F": "Right-to-left mark",
+    "\u200b": "Zero-width space",
+    "\u200c": "Zero-width non-joiner",
+    "\u200d": "Zero-width joiner",
+    "\u200e": "Left-to-right mark",
+    "\u200f": "Right-to-left mark",
     # Soft hyphen (U+00AD)
-    "\u00AD": "Soft hyphen",
+    "\u00ad": "Soft hyphen",
     # Byte order mark (U+FEFF)
-    "\uFEFF": "Byte order mark",
+    "\ufeff": "Byte order mark",
     # Other invisible or problematic characters
-    "\u061C": "Arabic letter mark",
-    "\u180E": "Mongolian vowel separator",
+    "\u061c": "Arabic letter mark",
+    "\u180e": "Mongolian vowel separator",
     "\u2061": "Function application (invisible operator)",
     "\u2062": "Invisible times (multiplication)",
     "\u2063": "Invisible separator",
     "\u2064": "Invisible plus",
     "\u2069": "Right-to-left isolation terminator",
-    "\u206A": "Inhibit symmetric swapping",
-    "\u206B": "Activate symmetric swapping",
-    "\u206C": "Inhibit Arabic form shaping",
-    "\u206D": "Activate Arabic form shaping",
-    "\u206E": "National digit shapes",
-    "\u206F": "Nominal digit shapes",
+    "\u206a": "Inhibit symmetric swapping",
+    "\u206b": "Activate symmetric swapping",
+    "\u206c": "Inhibit Arabic form shaping",
+    "\u206d": "Activate Arabic form shaping",
+    "\u206e": "National digit shapes",
+    "\u206f": "Nominal digit shapes",
 }
 
 
@@ -247,9 +247,7 @@ class PromptInjectionDetector:
         Returns:
             Tuple of (updated_risk, found_patterns)
         """
-        found = self._check_pattern_list(
-            text, patterns, label, use_regex=use_regex, case_sensitive=case_sensitive
-        )
+        found = self._check_pattern_list(text, patterns, label, use_regex=use_regex, case_sensitive=case_sensitive)
         for pattern in found:
             detected_patterns.append(f"{label}: {pattern}")
             current_risk = self._update_risk(current_risk, risk_level)
@@ -341,19 +339,13 @@ class PromptInjectionDetector:
             detected_patterns: List of detected patterns for logging
         """
         if blocked:
-            logger.warning(
-                "BLOCKED: Prompt injection detected (risk=%s)", max_risk.value
-            )
+            logger.warning("BLOCKED: Prompt injection detected (risk=%s)", max_risk.value)
             logger.warning("Detected patterns: %s", detected_patterns)
         elif max_risk != InjectionRisk.SAFE:
-            logger.info(
-                "SUSPICIOUS: Potential injection detected (risk=%s)", max_risk.value
-            )
+            logger.info("SUSPICIOUS: Potential injection detected (risk=%s)", max_risk.value)
             logger.info("Detected patterns: %s", detected_patterns)
 
-    def detect_injection(
-        self, text: str, context: str = "user_input"
-    ) -> InjectionDetectionResult:
+    def detect_injection(self, text: str, context: str = "user_input") -> InjectionDetectionResult:
         """
         Detect prompt injection attempts in text. Issue #620.
 
@@ -386,14 +378,10 @@ class PromptInjectionDetector:
             detected_patterns.append(f"Invisible Unicode: {', '.join(invisible_chars)}")
             max_risk = self._update_risk(max_risk, InjectionRisk.MODERATE)
             metadata["invisible_unicode"] = invisible_chars
-            logger.warning(
-                "🚨 Invisible Unicode detected in context: %s", invisible_chars
-            )
+            logger.warning("🚨 Invisible Unicode detected in context: %s", invisible_chars)
 
         # Run all pattern checks and merge with existing risk level
-        pattern_risk = self._run_all_pattern_checks(
-            text, context, detected_patterns, metadata
-        )
+        pattern_risk = self._run_all_pattern_checks(text, context, detected_patterns, metadata)
         max_risk = self._update_risk(max_risk, pattern_risk)
 
         # Sanitize and determine blocking
@@ -414,9 +402,7 @@ class PromptInjectionDetector:
             metadata=metadata,
         )
 
-    def validate_conversation_context(
-        self, conversation_history: List[Dict[str, str]]
-    ) -> bool:
+    def validate_conversation_context(self, conversation_history: List[Dict[str, str]]) -> bool:
         """
         Validate conversation context for poisoning attempts
 
@@ -431,12 +417,8 @@ class PromptInjectionDetector:
             assistant_msg = exchange.get("assistant", "")
 
             # Check both messages for injection patterns
-            user_result = self.detect_injection(
-                user_msg, context="conversation_context"
-            )
-            assistant_result = self.detect_injection(
-                assistant_msg, context="conversation_context"
-            )
+            user_result = self.detect_injection(user_msg, context="conversation_context")
+            assistant_result = self.detect_injection(assistant_msg, context="conversation_context")
 
             if user_result.blocked or assistant_result.blocked:
                 logger.warning("🚨 Context poisoning detected in conversation history")
@@ -651,9 +633,7 @@ if __name__ == "__main__":
             else "❌ FAIL"
         )
 
-        print(  # noqa: print
-            f"{status} | Risk: {result.risk_level.value:8s} | Blocked: {result.blocked}"
-        )
+        print(f"{status} | Risk: {result.risk_level.value:8s} | Blocked: {result.blocked}")  # noqa: print
         logger.info("Input: {test_input}")
         if result.detected_patterns:
             logger.info("Patterns: {result.detected_patterns}")

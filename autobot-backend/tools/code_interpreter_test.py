@@ -22,7 +22,6 @@ import pytest
 
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA, MAX_OUTPUT_BYTES, execute_code
 
-
 # ---------------------------------------------------------------------------
 # Happy-path execution
 # ---------------------------------------------------------------------------

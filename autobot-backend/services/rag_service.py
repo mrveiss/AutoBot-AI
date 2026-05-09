@@ -154,9 +154,7 @@ class RAGService:
                         **_shared_mesh_components,
                     )
                     self.config.mesh_retriever_enabled = True
-                    logger.debug(
-                        "Built per-instance NeuralMeshRetriever from shared components (#4765)"
-                    )
+                    logger.debug("Built per-instance NeuralMeshRetriever from shared components (#4765)")
                 except Exception as _mesh_err:
                     logger.warning(
                         "Per-instance NeuralMeshRetriever build failed (non-fatal): %s",
@@ -777,9 +775,7 @@ class RAGService:
                         combined = results + doc_results
                         combined.sort(key=lambda r: r.hybrid_score, reverse=True)
                         results = combined[:max_results]
-                        logger.debug(
-                            "autobot_docs merged %d result(s) into search", len(doc_results)
-                        )
+                        logger.debug("autobot_docs merged %d result(s) into search", len(doc_results))
             except Exception as _doc_exc:
                 logger.debug("autobot_docs search skipped: %s", _doc_exc)
 

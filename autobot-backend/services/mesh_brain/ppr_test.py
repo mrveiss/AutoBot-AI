@@ -21,9 +21,7 @@ def _make_db_mock(neighbor_map: dict[str, list[dict]]) -> AsyncMock:
     {"to_node": str, "weight": float} dicts.  Unknown nodes return [].
     """
     db = AsyncMock()
-    db.get_neighbors = AsyncMock(
-        side_effect=lambda node_id, min_weight=0.0: neighbor_map.get(node_id, [])
-    )
+    db.get_neighbors = AsyncMock(side_effect=lambda node_id, min_weight=0.0: neighbor_map.get(node_id, []))
     return db
 
 
@@ -86,9 +84,7 @@ class TestPersonalizedPageRank:
         results = await ppr.rank(seed_node_ids=["seed"], alpha=0.15, top_k=20)
 
         node_ids = {nid for nid, _ in results}
-        assert (
-            "isolated" not in node_ids
-        ), "'isolated' is unreachable and must not appear"
+        assert "isolated" not in node_ids, "'isolated' is unreachable and must not appear"
 
     @pytest.mark.asyncio
     async def test_alpha_controls_teleport(self):
@@ -105,9 +101,7 @@ class TestPersonalizedPageRank:
         low_results = dict(await low_alpha_ppr.rank(["seed"], alpha=0.05, top_k=10))
 
         # With high alpha, seed dominates far more strongly
-        seed_dominance_high = high_results.get("seed", 0.0) - high_results.get(
-            "far", 0.0
-        )
+        seed_dominance_high = high_results.get("seed", 0.0) - high_results.get("far", 0.0)
         seed_dominance_low = low_results.get("seed", 0.0) - low_results.get("far", 0.0)
         assert (
             seed_dominance_high > seed_dominance_low
@@ -125,12 +119,8 @@ class TestPersonalizedPageRank:
             "target": [],
         }
 
-        high_results = dict(
-            await _ppr(high_weight_map).rank(["seed"], alpha=0.15, top_k=10)
-        )
-        low_results = dict(
-            await _ppr(low_weight_map).rank(["seed"], alpha=0.15, top_k=10)
-        )
+        high_results = dict(await _ppr(high_weight_map).rank(["seed"], alpha=0.15, top_k=10))
+        low_results = dict(await _ppr(low_weight_map).rank(["seed"], alpha=0.15, top_k=10))
 
         assert high_results.get("target", 0.0) > low_results.get(
             "target", 0.0
@@ -190,6 +180,4 @@ class TestPersonalizedPageRank:
         results = await ppr.rank(seed_node_ids=["seed"], alpha=0.15, top_k=10)
 
         scores = [score for _, score in results]
-        assert scores == sorted(
-            scores, reverse=True
-        ), "Results must be sorted descending"
+        assert scores == sorted(scores, reverse=True), "Results must be sorted descending"

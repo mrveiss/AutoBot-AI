@@ -87,9 +87,7 @@ class ExecutionManager:
         backends_to_try = self._get_backend_order(task, preferred_backend)
 
         if not backends_to_try:
-            raise RuntimeError(
-                f"No suitable backends available for task {task.task_id}"
-            )
+            raise RuntimeError(f"No suitable backends available for task {task.task_id}")
 
         result = None
         last_error = None
@@ -106,9 +104,7 @@ class ExecutionManager:
                 # Check compatibility
                 is_compatible, reason = await backend.verify_task_compatibility(task)
                 if not is_compatible:
-                    logger.info(
-                        f"Task incompatible with {backend_type.value}: {reason}"
-                    )
+                    logger.info(f"Task incompatible with {backend_type.value}: {reason}")
                     continue
 
                 # Execute
@@ -118,17 +114,12 @@ class ExecutionManager:
 
             except Exception as e:
                 last_error = e
-                logger.warning(
-                    f"Error executing on {backend_type.value}: {e}, trying next backend"
-                )
+                logger.warning(f"Error executing on {backend_type.value}: {e}, trying next backend")
                 continue
 
         # All backends failed
         if result is None:
-            error_msg = (
-                f"All backends failed for task {task.task_id}. "
-                f"Last error: {str(last_error)}"
-            )
+            error_msg = f"All backends failed for task {task.task_id}. " f"Last error: {str(last_error)}"
             logger.error(error_msg)
 
             result = ExecutionResult(
@@ -200,18 +191,14 @@ class ExecutionManager:
         Returns:
             List of BackendType in priority order
         """
-        enabled = [
-            bt for bt in self._enabled_backends if bt in self.backends
-        ]
+        enabled = [bt for bt in self._enabled_backends if bt in self.backends]
 
         if not enabled:
             return []
 
         # If preferred backend is enabled, put it first
         if preferred_backend and preferred_backend in enabled:
-            candidates = [preferred_backend] + [
-                b for b in enabled if b != preferred_backend
-            ]
+            candidates = [preferred_backend] + [b for b in enabled if b != preferred_backend]
         else:
             candidates = enabled
 
@@ -221,9 +208,7 @@ class ExecutionManager:
 
         return candidates
 
-    def _smart_route(
-        self, task: ExecutionTask, candidates: List[BackendType]
-    ) -> List[BackendType]:
+    def _smart_route(self, task: ExecutionTask, candidates: List[BackendType]) -> List[BackendType]:
         """Intelligent routing based on task characteristics.
 
         Args:
@@ -246,19 +231,10 @@ class ExecutionManager:
 
         if timeout > 300 and BackendType.MODAL in candidates:
             # Put Modal first for long-running
-            return (
-                [BackendType.MODAL]
-                + [b for b in candidates if b != BackendType.MODAL]
-            )
-        elif (
-            task.resource_limits.cpu_cores > 2
-            and BackendType.DOCKER in candidates
-        ):
+            return [BackendType.MODAL] + [b for b in candidates if b != BackendType.MODAL]
+        elif task.resource_limits.cpu_cores > 2 and BackendType.DOCKER in candidates:
             # Put Docker first for heavy compute
-            return (
-                [BackendType.DOCKER]
-                + [b for b in candidates if b != BackendType.DOCKER]
-            )
+            return [BackendType.DOCKER] + [b for b in candidates if b != BackendType.DOCKER]
         else:
             # Default order
             return candidates

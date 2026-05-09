@@ -122,9 +122,7 @@ def _check_component_health(service: GraphRAGService) -> Dict[str, str]:
     return {
         "graph_rag_service": "healthy",
         "rag_service": "healthy" if service.rag else "unavailable",
-        "memory_graph": (
-            "healthy" if service.graph and service.graph.initialized else "unavailable"
-        ),
+        "memory_graph": ("healthy" if service.graph and service.graph.initialized else "unavailable"),
     }
 
 
@@ -179,8 +177,7 @@ async def graph_rag_search(
         metrics_data = metrics.to_response_dict()
 
         logger.info(
-            f"[{request_id}] Graph-RAG search complete: "
-            f"{len(results)} results in {metrics.total_time:.3f}s"
+            f"[{request_id}] Graph-RAG search complete: " f"{len(results)} results in {metrics.total_time:.3f}s"
         )
 
         return JSONResponse(

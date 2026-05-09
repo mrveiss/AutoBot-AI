@@ -752,9 +752,9 @@ class TestBenchmarkFeedbackRoundTrip:
         # The pattern key contains '__global__'; cursor key is 'rag:rl:cursors'.
         assert redis.hset.called
         all_hset_keys = [call[0][0] for call in redis.hset.call_args_list]
-        assert any("__global__" in k for k in all_hset_keys), (
-            f"Expected a pattern key containing '__global__' in hset calls; got {all_hset_keys}"
-        )
+        assert any(
+            "__global__" in k for k in all_hset_keys
+        ), f"Expected a pattern key containing '__global__' in hset calls; got {all_hset_keys}"
 
     @pytest.mark.asyncio
     async def test_publish_feedback_events_no_publish_when_all_zero_precision(self):

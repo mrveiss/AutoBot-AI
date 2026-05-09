@@ -112,7 +112,7 @@ GOOGLE_GEMINI20_FLASH = "gemini-2.0-flash"
 GOOGLE_GEMINI15_PRO = "gemini-1.5-pro"
 GOOGLE_GEMINI15_FLASH = "gemini-1.5-flash"
 # Google — legacy models
-GOOGLE_GEMINI_PRO = "gemini-pro"          # plain base model (distinct from vision)
+GOOGLE_GEMINI_PRO = "gemini-pro"  # plain base model (distinct from vision)
 GOOGLE_GEMINI_PRO_VISION = "gemini-pro-vision"
 
 # Groq — hosted inference (OpenAI-compatible API)

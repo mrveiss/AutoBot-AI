@@ -405,9 +405,7 @@ class TestCausalIntegration:
         executor = DAGExecutor(_noop_executor)
         causal_executor = CausalExecutor(executor)
 
-        ctx = await causal_executor.execute(
-            dag, "parallel_workflow", validate_causal=False
-        )
+        ctx = await causal_executor.execute(dag, "parallel_workflow", validate_causal=False)
 
         assert ctx.status == "completed"
         assert len(causal_executor.effect_trace.execution_frames) == 3
@@ -431,9 +429,7 @@ class TestCausalIntegration:
         executor = DAGExecutor(_noop_executor)
         causal_executor = CausalExecutor(executor)
 
-        ctx = await causal_executor.execute(
-            dag, "conditional_workflow", validate_causal=False
-        )
+        ctx = await causal_executor.execute(dag, "conditional_workflow", validate_causal=False)
 
         assert ctx.status == "completed"
         # Only true_step should execute (condition is True)

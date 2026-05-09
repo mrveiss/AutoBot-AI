@@ -63,9 +63,7 @@ class WorkflowController:
             return await self._cancel_workflow(workflow, workflows)
 
         elif action == "approve_step":
-            return await self._approve_step(
-                workflow, control_request.step_id, workflows
-            )
+            return await self._approve_step(workflow, control_request.step_id, workflows)
 
         elif action == "skip_step":
             return await self._skip_step(workflow, control_request.step_id, workflows)
@@ -83,9 +81,7 @@ class WorkflowController:
         )
         return True
 
-    async def _resume_workflow(
-        self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
-    ) -> bool:
+    async def _resume_workflow(self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]) -> bool:
         """Resume workflow execution"""
         workflow.is_paused = False
         await self.messenger.send_message(
@@ -95,9 +91,7 @@ class WorkflowController:
         await self.executor.process_next_step(workflow, workflows)
         return True
 
-    async def _cancel_workflow(
-        self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
-    ) -> bool:
+    async def _cancel_workflow(self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]) -> bool:
         """Cancel workflow execution"""
         workflow.is_cancelled = True
         await self.executor.cancel_workflow(workflow, workflows)
@@ -112,9 +106,7 @@ class WorkflowController:
         """Approve and execute a workflow step"""
         # Record Prometheus workflow approval metric
         workflow_type = "automated_workflow"
-        self.prometheus_metrics.record_workflow_approval(
-            workflow_type=workflow_type, decision="approved"
-        )
+        self.prometheus_metrics.record_workflow_approval(workflow_type=workflow_type, decision="approved")
         await self.executor.approve_and_execute_step(workflow, step_id, workflows)
         return True
 
@@ -127,8 +119,6 @@ class WorkflowController:
         """Skip a workflow step"""
         # Record Prometheus workflow approval metric (rejected/skipped)
         workflow_type = "automated_workflow"
-        self.prometheus_metrics.record_workflow_approval(
-            workflow_type=workflow_type, decision="skipped"
-        )
+        self.prometheus_metrics.record_workflow_approval(workflow_type=workflow_type, decision="skipped")
         await self.executor.skip_step(workflow, step_id, workflows)
         return True

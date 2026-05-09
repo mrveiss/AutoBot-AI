@@ -29,9 +29,7 @@ class SecurityLayer:
         self.security_config = global_config_manager.get("security_config", {})
 
         # Check for single-user mode (development/personal use)
-        self.single_user_mode = (
-            os.getenv("AUTOBOT_SINGLE_USER_MODE", "true").lower() in BOOLEAN_TRUE_VALUES
-        )
+        self.single_user_mode = os.getenv("AUTOBOT_SINGLE_USER_MODE", "true").lower() in BOOLEAN_TRUE_VALUES
 
         # If single-user mode is enabled, disable all authentication
         # Issue #745: Added security warning for production awareness
@@ -51,19 +49,13 @@ class SecurityLayer:
             "audit_log_file", os.getenv("AUTOBOT_AUDIT_LOG_FILE", "data/audit.log")
         )
         self.roles = self.security_config.get("roles", {})
-        self.allowed_users = self.security_config.get(
-            "allowed_users", {}
-        )  # For simple demo auth
+        self.allowed_users = self.security_config.get("allowed_users", {})  # For simple demo auth
 
         os.makedirs(os.path.dirname(self.audit_log_file), exist_ok=True)
-        logger.info(
-            f"SecurityLayer initialized. Authentication enabled: {self.enable_auth}"
-        )
+        logger.info(f"SecurityLayer initialized. Authentication enabled: {self.enable_auth}")
         logger.debug("Audit log file: %s", self.audit_log_file)
 
-    def _handle_deprecated_role(
-        self, user_role: str, action_type: str, resource: Optional[str]
-    ) -> str:
+    def _handle_deprecated_role(self, user_role: str, action_type: str, resource: Optional[str]) -> str:
         """
         Handle deprecated privileged roles by logging and downgrading to admin.
 
@@ -97,9 +89,7 @@ class SecurityLayer:
         )
         return "admin"
 
-    def _check_wildcard_permissions(
-        self, action_type: str, permissions: List[str]
-    ) -> bool:
+    def _check_wildcard_permissions(self, action_type: str, permissions: List[str]) -> bool:
         """
         Check if action matches any wildcard permissions in the list.
 
@@ -137,9 +127,7 @@ class SecurityLayer:
             return True
         return self._check_wildcard_permissions(action_type, permissions)
 
-    def check_permission(
-        self, user_role: str, action_type: str, resource: Optional[str] = None
-    ) -> bool:
+    def check_permission(self, user_role: str, action_type: str, resource: Optional[str] = None) -> bool:
         """
         Checks if a given role has permission for a specific action.
 
@@ -174,8 +162,7 @@ class SecurityLayer:
             return True
 
         logger.warning(
-            f"Permission DENIED for role '{user_role}' to perform action "
-            f"'{action_type}' on resource '{resource}'."
+            f"Permission DENIED for role '{user_role}' to perform action " f"'{action_type}' on resource '{resource}'."
         )
         return False
 
@@ -251,9 +238,7 @@ class SecurityLayer:
                 f.write(json.dumps(log_entry) + "\n")
             logger.debug("Audit log: %s by %s - %s", action, user, outcome)
         except Exception as e:
-            logger.error(
-                f"Failed to write to audit log file {self.audit_log_file}: {e}"
-            )
+            logger.error(f"Failed to write to audit log file {self.audit_log_file}: {e}")
 
     # Basic user authentication (for demo purposes)
     def authenticate_user(self, username, password) -> Optional[str]:
@@ -280,9 +265,7 @@ class SecurityLayer:
 if __name__ == "__main__":
     # Ensure config.yaml exists for testing
     if not os.path.exists("config/config.yaml"):
-        print(  # noqa: print
-            "config/config.yaml not found. Copying from template for testing."
-        )  # noqa: print
+        print("config/config.yaml not found. Copying from template for testing.")  # noqa: print  # noqa: print
         os.makedirs("config", exist_ok=True)
         with open("config/config.yaml.template", "r", encoding="utf-8") as f_template:
             with open("config/config.yaml", "w", encoding="utf-8") as f_config:
@@ -292,12 +275,9 @@ if __name__ == "__main__":
     print("\n--- Testing with Authentication DISABLED ---")  # noqa: print
     security = SecurityLayer()
     print(  # noqa: print
-        "Can 'user' execute shell command? "
-        f"{security.check_permission('user', 'allow_shell_execute')}"
+        "Can 'user' execute shell command? " f"{security.check_permission('user', 'allow_shell_execute')}"
     )
-    security.audit_log(
-        "test_action", "test_user", "success", {"info": "demo disabled auth"}
-    )
+    security.audit_log("test_action", "test_user", "success", {"info": "demo disabled auth"})
 
     # Temporarily enable auth in config for testing
     with open("config/config.yaml", "r", encoding="utf-8") as f:
@@ -318,19 +298,12 @@ if __name__ == "__main__":
     security_enabled = SecurityLayer()
 
     # Test authentication
-    print(  # noqa: print
-        "Authenticate 'testuser': "
-        f"{security_enabled.authenticate_user('testuser', 'password123')}"
-    )
-    print(  # noqa: print
-        "Authenticate 'baduser': "
-        f"{security_enabled.authenticate_user('baduser', 'wrongpass')}"
-    )
+    print("Authenticate 'testuser': " f"{security_enabled.authenticate_user('testuser', 'password123')}")  # noqa: print
+    print("Authenticate 'baduser': " f"{security_enabled.authenticate_user('baduser', 'wrongpass')}")  # noqa: print
 
     # Test permissions
     print(  # noqa: print
-        "Can 'admin' execute shell command? "
-        f"{security_enabled.check_permission('admin', 'allow_shell_execute')}"
+        "Can 'admin' execute shell command? " f"{security_enabled.check_permission('admin', 'allow_shell_execute')}"
     )
     print(  # noqa: print
         "Can 'testuser_role' execute shell command? "
@@ -342,15 +315,9 @@ if __name__ == "__main__":
     )
 
     # Test audit logging
-    security_enabled.audit_log(
-        "login", "testuser", "success", {"ip": NetworkConstants.LOCALHOST_IP}
-    )
-    security_enabled.audit_log(
-        "execute_command", "testuser", "denied", {"command": "rm -rf /"}
-    )
-    security_enabled.audit_log(
-        "execute_command", "admin", "success", {"command": "ls -l"}
-    )
+    security_enabled.audit_log("login", "testuser", "success", {"ip": NetworkConstants.LOCALHOST_IP})
+    security_enabled.audit_log("execute_command", "testuser", "denied", {"command": "rm -rf /"})
+    security_enabled.audit_log("execute_command", "admin", "success", {"command": "ls -l"})
 
     # Clean up config for next run
     with open("config/config.yaml", "r", encoding="utf-8") as f:

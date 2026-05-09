@@ -125,9 +125,7 @@ class CloneDetector:
 
         return fragments, total_files, total_lines
 
-    def _detect_all_clone_types(
-        self, fragments: List[CodeFragment]
-    ) -> List[CloneGroup]:
+    def _detect_all_clone_types(self, fragments: List[CodeFragment]) -> List[CloneGroup]:
         """Detect clones of all types (Issue #398: extracted).
 
         Returns:
@@ -148,9 +146,7 @@ class CloneDetector:
         clone_groups.extend(type3_groups)
 
         # Type 4: Semantic clones (from semantic fingerprints)
-        type4_groups = self._detect_type4_clones(
-            fragments, type1_groups, type2_groups, type3_groups
-        )
+        type4_groups = self._detect_type4_clones(fragments, type1_groups, type2_groups, type3_groups)
         clone_groups.extend(type4_groups)
 
         return clone_groups
@@ -175,9 +171,7 @@ class CloneDetector:
 
         # Calculate statistics
         total_duplicated_lines = sum(g.total_duplicated_lines for g in clone_groups)
-        duplication_percentage = (
-            (total_duplicated_lines / total_lines * 100) if total_lines > 0 else 0
-        )
+        duplication_percentage = (total_duplicated_lines / total_lines * 100) if total_lines > 0 else 0
 
         return CloneDetectionReport(
             scan_path=directory,
@@ -220,9 +214,7 @@ class CloneDetector:
         clone_groups = self._detect_all_clone_types(fragments)
 
         # Build and return report
-        report = self._build_clone_report(
-            directory, fragments, clone_groups, total_files, total_lines
-        )
+        report = self._build_clone_report(directory, fragments, clone_groups, total_files, total_lines)
 
         logger.info(
             "Clone detection complete: %d groups, %.1f%% duplication",
@@ -341,9 +333,7 @@ class CloneDetector:
                 fragments.append(fragment)
         return fragments
 
-    def _maybe_create_fragment(
-        self, node: ast.AST, file_path: str, lines: List[str]
-    ) -> Optional[CodeFragment]:
+    def _maybe_create_fragment(self, node: ast.AST, file_path: str, lines: List[str]) -> Optional[CodeFragment]:
         """
         Create a fragment from node if it's a function or class.
 
@@ -437,9 +427,7 @@ class CloneDetector:
 
         return clone_groups
 
-    def _collect_type1_fragment_keys(
-        self, type1_groups: List[CloneGroup]
-    ) -> Set[Tuple[str, int, int]]:
+    def _collect_type1_fragment_keys(self, type1_groups: List[CloneGroup]) -> Set[Tuple[str, int, int]]:
         """Collect fragment keys from Type 1 groups for exclusion (Issue #665: extracted helper)."""
         type1_fragments: Set[Tuple[str, int, int]] = set()
         for group in type1_groups:
@@ -453,9 +441,7 @@ class CloneDetector:
                 )
         return type1_fragments
 
-    def _create_type2_clone_group(
-        self, hash_value: str, valid_fps: List[Fingerprint]
-    ) -> CloneGroup:
+    def _create_type2_clone_group(self, hash_value: str, valid_fps: List[Fingerprint]) -> CloneGroup:
         """Create a Type 2 clone group from fingerprints (Issue #665: extracted helper)."""
         instances = [
             CloneInstance(
@@ -498,14 +484,12 @@ class CloneDetector:
             valid_fps = [
                 fp
                 for fp in fingerprints
-                if (fp.fragment.file_path, fp.fragment.start_line, fp.fragment.end_line)
-                not in type1_fragments
+                if (fp.fragment.file_path, fp.fragment.start_line, fp.fragment.end_line) not in type1_fragments
             ]
 
             # Check if all fragments are already in Type 1
             all_in_type1 = all(
-                (fp.fragment.file_path, fp.fragment.start_line, fp.fragment.end_line)
-                in type1_fragments
+                (fp.fragment.file_path, fp.fragment.start_line, fp.fragment.end_line) in type1_fragments
                 for fp in fingerprints
             )
 
@@ -514,15 +498,11 @@ class CloneDetector:
 
             # Create group if we have enough valid fingerprints
             if len(valid_fps) >= 2:
-                clone_groups.append(
-                    self._create_type2_clone_group(hash_value, valid_fps)
-                )
+                clone_groups.append(self._create_type2_clone_group(hash_value, valid_fps))
 
         return clone_groups
 
-    def _create_clone_instance(
-        self, fragment: CodeFragment, similarity_score: float
-    ) -> CloneInstance:
+    def _create_clone_instance(self, fragment: CodeFragment, similarity_score: float) -> CloneInstance:
         """Create a CloneInstance for a code fragment.
 
         Issue #620.
@@ -590,9 +570,7 @@ class CloneDetector:
 
         total_lines = sum(i.fragment.line_count for i in instances)
         severity = self._calculate_severity(len(instances), total_lines)
-        group_hash = hashlib.sha256(
-            f"{frag1.file_path}:{frag1.start_line}".encode()
-        ).hexdigest()[:16]
+        group_hash = hashlib.sha256(f"{frag1.file_path}:{frag1.start_line}".encode()).hexdigest()[:16]
 
         return CloneGroup(
             clone_type=CloneType.TYPE_3,
@@ -652,15 +630,9 @@ class CloneDetector:
         Returns:
             List of CloneGroup objects for Type 3 clones
         """
-        existing_fragments = self._collect_existing_fragments(
-            type1_groups + type2_groups
-        )
+        existing_fragments = self._collect_existing_fragments(type1_groups + type2_groups)
 
-        unclassified = [
-            f
-            for f in fragments
-            if (f.file_path, f.start_line, f.end_line) not in existing_fragments
-        ]
+        unclassified = [f for f in fragments if (f.file_path, f.start_line, f.end_line) not in existing_fragments]
 
         clone_groups: List[CloneGroup] = []
         processed: Set[Tuple[str, int, int]] = set()
@@ -669,9 +641,7 @@ class CloneDetector:
             if (frag1.file_path, frag1.start_line, frag1.end_line) in processed:
                 continue
 
-            similar_fragments = self._find_similar_fragments(
-                frag1, unclassified, i, processed
-            )
+            similar_fragments = self._find_similar_fragments(frag1, unclassified, i, processed)
 
             if similar_fragments:
                 group = self._create_type3_clone_group(frag1, similar_fragments)
@@ -702,22 +672,16 @@ class CloneDetector:
         Returns:
             List of CloneGroup objects for Type 4 clones
         """
-        existing_fragments = self._collect_existing_fragments(
-            type1_groups + type2_groups + type3_groups
-        )
+        existing_fragments = self._collect_existing_fragments(type1_groups + type2_groups + type3_groups)
 
         clone_groups: List[CloneGroup] = []
         for hash_value, fingerprints in self._semantic_fingerprints.items():
-            group = self._maybe_create_type4_group(
-                hash_value, fingerprints, existing_fragments
-            )
+            group = self._maybe_create_type4_group(hash_value, fingerprints, existing_fragments)
             if group:
                 clone_groups.append(group)
         return clone_groups
 
-    def _collect_existing_fragments(
-        self, groups: List[CloneGroup]
-    ) -> Set[Tuple[str, int, int]]:
+    def _collect_existing_fragments(self, groups: List[CloneGroup]) -> Set[Tuple[str, int, int]]:
         """
         Collect fragment identifiers from existing groups.
 
@@ -781,9 +745,7 @@ class CloneDetector:
             total_duplicated_lines=total_lines,
         )
 
-    def _should_skip_type4_group(
-        self, fingerprints: List, existing_fragments: Set[Tuple[str, int, int]]
-    ) -> bool:
+    def _should_skip_type4_group(self, fingerprints: List, existing_fragments: Set[Tuple[str, int, int]]) -> bool:
         """
         Check if this semantic group should be skipped.
 
@@ -796,23 +758,18 @@ class CloneDetector:
         """
         # Check if all are from same structural group
         structural_hashes = {
-            self.ast_hasher.hash_structural(fp.fragment.ast_node)
-            for fp in fingerprints
-            if fp.fragment.ast_node
+            self.ast_hasher.hash_structural(fp.fragment.ast_node) for fp in fingerprints if fp.fragment.ast_node
         }
         if len(structural_hashes) == 1:
             return True  # Already caught by structural detection
 
         # Check if all fragments are already classified
         return all(
-            (fp.fragment.file_path, fp.fragment.start_line, fp.fragment.end_line)
-            in existing_fragments
+            (fp.fragment.file_path, fp.fragment.start_line, fp.fragment.end_line) in existing_fragments
             for fp in fingerprints
         )
 
-    def _calculate_severity(
-        self, instance_count: int, total_lines: int
-    ) -> CloneSeverity:
+    def _calculate_severity(self, instance_count: int, total_lines: int) -> CloneSeverity:
         """
         Calculate severity based on clone metrics.
 
@@ -849,9 +806,7 @@ class CloneDetector:
             dist[key] = dist.get(key, 0) + 1
         return dist
 
-    def _calculate_severity_distribution(
-        self, groups: List[CloneGroup]
-    ) -> Dict[str, int]:
+    def _calculate_severity_distribution(self, groups: List[CloneGroup]) -> Dict[str, int]:
         """
         Calculate distribution of severities.
 
@@ -867,9 +822,7 @@ class CloneDetector:
             dist[key] = dist.get(key, 0) + 1
         return dist
 
-    def _find_top_cloned_files(
-        self, groups: List[CloneGroup], top_n: int = 10
-    ) -> List[Dict[str, Any]]:
+    def _find_top_cloned_files(self, groups: List[CloneGroup], top_n: int = 10) -> List[Dict[str, Any]]:
         """
         Find files with the most clones.
 
@@ -880,17 +833,13 @@ class CloneDetector:
         Returns:
             List of dictionaries with file statistics
         """
-        file_stats: Dict[str, Dict[str, int]] = defaultdict(
-            lambda: {"clone_count": 0, "duplicated_lines": 0}
-        )
+        file_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: {"clone_count": 0, "duplicated_lines": 0})
 
         for group in groups:
             for instance in group.instances:
                 file_path = instance.fragment.file_path
                 file_stats[file_path]["clone_count"] += 1
-                file_stats[file_path][
-                    "duplicated_lines"
-                ] += instance.fragment.line_count
+                file_stats[file_path]["duplicated_lines"] += instance.fragment.line_count
 
         # Sort by clone count
         sorted_files = sorted(
@@ -908,9 +857,7 @@ class CloneDetector:
             for path, stats in sorted_files
         ]
 
-    def _prioritize_refactoring(
-        self, groups: List[CloneGroup], top_n: int = 10
-    ) -> List[Dict[str, Any]]:
+    def _prioritize_refactoring(self, groups: List[CloneGroup], top_n: int = 10) -> List[Dict[str, Any]]:
         """
         Prioritize clone groups for refactoring.
 
@@ -931,11 +878,7 @@ class CloneDetector:
                 CloneSeverity.LOW: 25,
                 CloneSeverity.INFO: 10,
             }
-            score = (
-                severity_scores[group.severity]
-                + len(group.instances) * 10
-                + group.total_duplicated_lines
-            )
+            score = severity_scores[group.severity] + len(group.instances) * 10 + group.total_duplicated_lines
             scored_groups.append((group, score))
 
         # Sort by score (descending)
@@ -950,9 +893,7 @@ class CloneDetector:
                 "priority_score": score,
                 "refactoring_suggestion": group.refactoring_suggestion,
                 "estimated_effort": group.estimated_effort,
-                "files_affected": list(
-                    set(i.fragment.file_path for i in group.instances)
-                ),
+                "files_affected": list(set(i.fragment.file_path for i in group.instances)),
             }
             for group, score in sorted_groups
         ]
@@ -995,9 +936,7 @@ class CloneDetector:
         if not template:
             return "Review and consider consolidating duplicated code."
 
-        fragment_type = (
-            group.instances[0].fragment.fragment_type if group.instances else "code"
-        )
+        fragment_type = group.instances[0].fragment.fragment_type if group.instances else "code"
         return template.format(count=len(group.instances), fragment_type=fragment_type)
 
     def _estimate_refactoring_effort(self, group: CloneGroup) -> str:

@@ -52,16 +52,12 @@ class CausalEdge(BaseModel):
         default=None,
         description="Source entity UUID if resolved to Knowledge Base entity",
     )
-    target_name: str = Field(
-        ..., description="Effect entity name (e.g., 'query_latency')"
-    )
+    target_name: str = Field(..., description="Effect entity name (e.g., 'query_latency')")
     target_entity_id: Optional[UUID] = Field(
         default=None,
         description="Target entity UUID if resolved to Knowledge Base entity",
     )
-    effect_type: EffectType = Field(
-        ..., description="Type of causal effect (CAUSES, ENABLES, PREVENTS, etc.)"
-    )
+    effect_type: EffectType = Field(..., description="Type of causal effect (CAUSES, ENABLES, PREVENTS, etc.)")
     condition: str = Field(
         default="",
         description="Condition under which causality holds (e.g., 'when cache is full')",
@@ -72,25 +68,15 @@ class CausalEdge(BaseModel):
         le=1.0,
         description="Confidence score (1.0=explicit, <0.7=inferred)",
     )
-    evidence_text: str = Field(
-        default="", description="Quoted evidence sentence from source text"
-    )
-    evidence_source: Optional[str] = Field(
-        default=None, description="Source document/section identifier"
-    )
-    source_chunk_ids: List[UUID] = Field(
-        default_factory=list, description="Chunks where relationship was extracted"
-    )
+    evidence_text: str = Field(default="", description="Quoted evidence sentence from source text")
+    evidence_source: Optional[str] = Field(default=None, description="Source document/section identifier")
+    source_chunk_ids: List[UUID] = Field(default_factory=list, description="Chunks where relationship was extracted")
     bidirectional: bool = Field(
         default=False,
         description="Whether the inverse relationship also holds (rare for causality)",
     )
-    created_at: datetime = Field(
-        default_factory=_utcnow, description="Causal edge creation timestamp"
-    )
-    updated_at: datetime = Field(
-        default_factory=_utcnow, description="Last update timestamp"
-    )
+    created_at: datetime = Field(default_factory=_utcnow, description="Causal edge creation timestamp")
+    updated_at: datetime = Field(default_factory=_utcnow, description="Last update timestamp")
 
     def to_causal_string(self) -> str:
         """Format as human-readable causal statement."""

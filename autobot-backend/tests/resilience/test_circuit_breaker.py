@@ -65,9 +65,7 @@ class TestCircuitBreaker:
 
     def test_half_open_state_tests_recovery(self):
         """Test that circuit attempts recovery in HALF_OPEN state."""
-        config = CircuitBreakerConfig(
-            failure_threshold=1, recovery_timeout=0.1, success_threshold=1
-        )
+        config = CircuitBreakerConfig(failure_threshold=1, recovery_timeout=0.1, success_threshold=1)
         breaker = CircuitBreaker("api", config)
 
         # Open circuit
@@ -86,9 +84,7 @@ class TestCircuitBreaker:
 
     def test_half_open_returns_to_open_on_failure(self):
         """Test that HALF_OPEN returns to OPEN if recovery fails."""
-        config = CircuitBreakerConfig(
-            failure_threshold=1, recovery_timeout=0.1, success_threshold=1
-        )
+        config = CircuitBreakerConfig(failure_threshold=1, recovery_timeout=0.1, success_threshold=1)
         breaker = CircuitBreaker("api", config)
 
         # Open circuit
@@ -256,14 +252,10 @@ class TestCircuitBreakerIntegration:
 
         # Simulate timeout errors
         with pytest.raises(TimeoutError):
-            breaker.call(
-                lambda: (_ for _ in ()).throw(TimeoutError("ChromaDB timeout"))
-            )
+            breaker.call(lambda: (_ for _ in ()).throw(TimeoutError("ChromaDB timeout")))
 
         with pytest.raises(TimeoutError):
-            breaker.call(
-                lambda: (_ for _ in ()).throw(TimeoutError("ChromaDB timeout"))
-            )
+            breaker.call(lambda: (_ for _ in ()).throw(TimeoutError("ChromaDB timeout")))
 
         assert breaker.state == CircuitBreakerState.OPEN
 

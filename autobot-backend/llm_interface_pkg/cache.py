@@ -79,16 +79,12 @@ class LLMResponseCache:
         self._memory_cache_access: List[str] = []  # LRU tracking
         # Issue #743: Read from SSOT config, allow explicit override
         self._memory_cache_max_size = (
-            memory_cache_max_size
-            if memory_cache_max_size is not None
-            else config.cache.l1.llm_response
+            memory_cache_max_size if memory_cache_max_size is not None else config.cache.l1.llm_response
         )
 
         # L2 Redis cache configuration
         # Issue #743: Read from SSOT config, allow explicit override
-        self._redis_ttl = (
-            redis_ttl if redis_ttl is not None else config.cache.l2.llm_response
-        )
+        self._redis_ttl = redis_ttl if redis_ttl is not None else config.cache.l2.llm_response
         self._redis_database = redis_database
 
         # Cache metrics
@@ -189,9 +185,7 @@ class LLMResponseCache:
         Returns:
             CachedResponse if found, None otherwise
         """
-        redis_client = get_redis_client(
-            async_client=True, database=self._redis_database
-        )
+        redis_client = get_redis_client(async_client=True, database=self._redis_database)
         if not redis_client:
             return None
 
@@ -254,9 +248,7 @@ class LLMResponseCache:
                     self._metrics["l1_evictions"] += 1
         return evicted
 
-    async def _store_memory_cache(
-        self, cache_key: str, response: CachedResponse
-    ) -> None:
+    async def _store_memory_cache(self, cache_key: str, response: CachedResponse) -> None:
         """
         Store response in L1 memory cache with LRU eviction.
 
@@ -276,9 +268,7 @@ class LLMResponseCache:
             if cache_key not in self._memory_cache_access:
                 self._memory_cache_access.append(cache_key)
 
-    async def set(
-        self, cache_key: str, response: CachedResponse, skip_redis: bool = False
-    ) -> None:
+    async def set(self, cache_key: str, response: CachedResponse, skip_redis: bool = False) -> None:
         """
         Cache response in both L1 memory and L2 Redis.
 
@@ -295,27 +285,13 @@ class LLMResponseCache:
 
         # Store in L2 Redis cache
         try:
-            redis_client = get_redis_client(
-                async_client=True, database=self._redis_database
-            )
+            redis_client = get_redis_client(async_client=True, database=self._redis_database)
             if redis_client:
                 # Optimize metadata storage - only keep essential data
                 essential_metadata = {
-                    "request_id": (
-                        response.metadata.get("request_id")
-                        if response.metadata
-                        else None
-                    ),
-                    "chunks_received": (
-                        response.metadata.get("chunks_received")
-                        if response.metadata
-                        else None
-                    ),
-                    "streaming": (
-                        response.metadata.get("streaming", False)
-                        if response.metadata
-                        else False
-                    ),
+                    "request_id": (response.metadata.get("request_id") if response.metadata else None),
+                    "chunks_received": (response.metadata.get("chunks_received") if response.metadata else None),
+                    "streaming": (response.metadata.get("streaming", False) if response.metadata else False),
                 }
 
                 data = {
@@ -327,9 +303,7 @@ class LLMResponseCache:
                 }
 
                 await redis_client.set(cache_key, json.dumps(data), ex=self._redis_ttl)
-                logger.debug(
-                    f"Cached in L1+L2: {cache_key[:24]}... (TTL={self._redis_ttl}s)"
-                )
+                logger.debug(f"Cached in L1+L2: {cache_key[:24]}... (TTL={self._redis_ttl}s)")
         except Exception as e:
             logger.debug(f"L2 Redis cache storage failed (non-critical): {e}")
 
@@ -403,9 +377,7 @@ class LLMResponseCache:
             Number of entries deleted
         """
         try:
-            redis_client = get_redis_client(
-                async_client=True, database=self._redis_database
-            )
+            redis_client = get_redis_client(async_client=True, database=self._redis_database)
             if redis_client:
                 keys = []
                 async for key in redis_client.scan_iter(match=pattern):

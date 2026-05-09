@@ -50,9 +50,7 @@ async def get_error_rate(redis_client: Any, fallback_count: int = 0) -> float:
 
         # Get total API calls from last hour for rate calculation
         api_key = f"{REDIS_METRIC_KEYS['api_calls']}:{current_hour.timestamp()}"
-        api_calls = await get_redis_metric(
-            redis_client, api_key, 1
-        )  # Avoid division by zero
+        api_calls = await get_redis_metric(redis_client, api_key, 1)  # Avoid division by zero
 
         # Calculate error rate as percentage
         error_rate = (error_count / api_calls) * 100 if api_calls > 0 else 0.0
@@ -64,9 +62,7 @@ async def get_error_rate(redis_client: Any, fallback_count: int = 0) -> float:
         return 0.0
 
 
-async def get_user_interactions_count(
-    redis_client: Any, fallback_count: int = 0
-) -> int:
+async def get_user_interactions_count(redis_client: Any, fallback_count: int = 0) -> int:
     """Get current user interactions count from last 24 hours"""
     try:
         if not redis_client:
@@ -127,16 +123,10 @@ def calculate_progression_velocity(
         return 0.0
 
     # Calculate change in phase completion
-    first_completion = recent_snapshots[0].system_metrics.get(
-        TrackingMetric.PHASE_COMPLETION, 0
-    )
-    last_completion = recent_snapshots[-1].system_metrics.get(
-        TrackingMetric.PHASE_COMPLETION, 0
-    )
+    first_completion = recent_snapshots[0].system_metrics.get(TrackingMetric.PHASE_COMPLETION, 0)
+    last_completion = recent_snapshots[-1].system_metrics.get(TrackingMetric.PHASE_COMPLETION, 0)
 
-    days_elapsed = (
-        recent_snapshots[-1].timestamp - recent_snapshots[0].timestamp
-    ).days or 1
+    days_elapsed = (recent_snapshots[-1].timestamp - recent_snapshots[0].timestamp).days or 1
 
     return (last_completion - first_completion) / days_elapsed
 
@@ -157,16 +147,12 @@ async def get_metrics_summary(
                 "last_update": datetime.now(tz=timezone.utc).isoformat(),
             },
             "api_tracking": {
-                "total_api_calls_24h": await get_api_calls_count(
-                    redis_client, api_call_count
-                ),
+                "total_api_calls_24h": await get_api_calls_count(redis_client, api_call_count),
                 "current_session_calls": api_call_count,
                 "last_update": datetime.now(tz=timezone.utc).isoformat(),
             },
             "user_interactions": {
-                "total_interactions_24h": await get_user_interactions_count(
-                    redis_client, user_interaction_count
-                ),
+                "total_interactions_24h": await get_user_interactions_count(redis_client, user_interaction_count),
                 "current_session_interactions": user_interaction_count,
                 "last_update": datetime.now(tz=timezone.utc).isoformat(),
             },

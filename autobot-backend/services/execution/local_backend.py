@@ -90,11 +90,7 @@ class LocalBackend(ExecutionBackend):
                     result.stderr = stderr_data.decode(encoding="utf-8", errors="replace")
                     result.return_code = process.returncode or 0
 
-                    result.status = (
-                        ExecutionStatus.SUCCESS
-                        if result.return_code == 0
-                        else ExecutionStatus.FAILED
-                    )
+                    result.status = ExecutionStatus.SUCCESS if result.return_code == 0 else ExecutionStatus.FAILED
 
                 except asyncio.TimeoutError:
                     process.kill()
@@ -118,9 +114,7 @@ class LocalBackend(ExecutionBackend):
         finally:
             result.completed_at = now_utc()
             if result.started_at:
-                result.execution_time_ms = (
-                    result.completed_at - result.started_at
-                ).total_seconds() * 1000
+                result.execution_time_ms = (result.completed_at - result.started_at).total_seconds() * 1000
 
         return result
 
@@ -167,8 +161,7 @@ class LocalBackend(ExecutionBackend):
         if task.language.lower() not in supported_languages:
             return (
                 False,
-                f"Language '{task.language}' not supported locally. "
-                f"Supported: {', '.join(supported_languages)}",
+                f"Language '{task.language}' not supported locally. " f"Supported: {', '.join(supported_languages)}",
             )
 
         # Check active process limit

@@ -68,9 +68,7 @@ async def _persist_to_chromadb(
 
         collection = await get_code_collection_async()
         if collection is None:
-            logger.warning(
-                "[#6747] Cross-file findings ready but ChromaDB unavailable; skipping persistence"
-            )
+            logger.warning("[#6747] Cross-file findings ready but ChromaDB unavailable; skipping persistence")
             return 0
 
         # The batch helper expects a starting index; we use a high offset to
@@ -79,9 +77,7 @@ async def _persist_to_chromadb(
         import time as _time
 
         start_idx = int(_time.time() * 1000) & 0x7FFFFFFF
-        await _store_problems_batch_to_chromadb(
-            collection, problems, start_idx, source_id=source_id
-        )
+        await _store_problems_batch_to_chromadb(collection, problems, start_idx, source_id=source_id)
         return len(problems)
     except Exception as exc:
         logger.warning("[#6747] Failed to persist cross-file findings: %s", exc)
@@ -122,9 +118,7 @@ async def run_cross_file_analysis(
 
     detector = AntiPatternDetector()
     try:
-        findings = await detector.analyze_cross_file_only(
-            root_path=root_path, exclude_patterns=exclude_patterns
-        )
+        findings = await detector.analyze_cross_file_only(root_path=root_path, exclude_patterns=exclude_patterns)
     except Exception as exc:
         logger.warning("[#6747] Cross-file analysis failed: %s", exc)
         return 0

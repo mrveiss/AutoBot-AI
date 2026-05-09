@@ -84,7 +84,8 @@ class TestTruncateLargeFile:
 
         # Extract truncated count from marker
         import re
-        match = re.search(r'\.\.\.([\d]+) chars TRUNCATED', result)
+
+        match = re.search(r"\.\.\.([\d]+) chars TRUNCATED", result)
         assert match is not None
         truncated_count = int(match.group(1))
         assert truncated_count > 0
@@ -342,28 +343,28 @@ class TestDetectStructuredFormat:
         assert _detect_structured_format('{"key": "value"}') == "json"
 
     def test_json_array(self):
-        assert _detect_structured_format('[1, 2, 3]') == "json"
+        assert _detect_structured_format("[1, 2, 3]") == "json"
 
     def test_json_with_leading_whitespace(self):
         assert _detect_structured_format('  \n{"a":1}') == "json"
 
     def test_xml_element(self):
-        assert _detect_structured_format('<root><child/></root>') == "xml"
+        assert _detect_structured_format("<root><child/></root>") == "xml"
 
     def test_xml_declaration(self):
         assert _detect_structured_format('<?xml version="1.0"?><root/>') == "xml"
 
     def test_html_doctype(self):
-        assert _detect_structured_format('<!DOCTYPE html><html/>') == "xml"
+        assert _detect_structured_format("<!DOCTYPE html><html/>") == "xml"
 
     def test_plain_text_unknown(self):
-        assert _detect_structured_format('hello world') == "unknown"
+        assert _detect_structured_format("hello world") == "unknown"
 
     def test_python_code_unknown(self):
-        assert _detect_structured_format('def foo():\n    pass\n') == "unknown"
+        assert _detect_structured_format("def foo():\n    pass\n") == "unknown"
 
     def test_markdown_unknown(self):
-        assert _detect_structured_format('# Title\n\nContent') == "unknown"
+        assert _detect_structured_format("# Title\n\nContent") == "unknown"
 
 
 class TestJsonBoundaryHelpers:
@@ -407,19 +408,14 @@ class TestJsonBoundaryHelpers:
         cut = _json_tail_boundary(content, target)
         tail = content[cut:]
         first_char = tail.lstrip("\n")[0]
-        assert first_char not in (" ", "\t"), (
-            f"Tail doesn't start cleanly: {tail[:40]!r}"
-        )
+        assert first_char not in (" ", "\t"), f"Tail doesn't start cleanly: {tail[:40]!r}"
 
 
 class TestXmlBoundaryHelpers:
     """Issue #4395: XML boundary helper unit tests."""
 
     def _make_large_xml(self, n: int = 300) -> str:
-        items = "\n".join(
-            f"  <item id=\"{i}\">\n    <value>entry{i}</value>\n  </item>"
-            for i in range(n)
-        )
+        items = "\n".join(f'  <item id="{i}">\n    <value>entry{i}</value>\n  </item>' for i in range(n))
         return f"<root>\n{items}\n</root>"
 
     def test_head_boundary_is_lte_target(self):
@@ -433,18 +429,14 @@ class TestXmlBoundaryHelpers:
         target = 3000
         cut = _xml_head_boundary(content, target)
         # Character just before cut should be '>' (possibly with whitespace)
-        assert content[cut - 1] == ">", (
-            f"Expected '>' at position {cut-1}, got {content[cut-2:cut+2]!r}"
-        )
+        assert content[cut - 1] == ">", f"Expected '>' at position {cut-1}, got {content[cut-2:cut+2]!r}"
 
     def test_tail_boundary_starts_at_opening_tag(self):
         content = self._make_large_xml()
         target = len(content) - 3000
         cut = _xml_tail_boundary(content, target)
         tail = content[cut:]
-        assert tail.lstrip().startswith("<"), (
-            f"Tail doesn't start with '<': {tail[:40]!r}"
-        )
+        assert tail.lstrip().startswith("<"), f"Tail doesn't start with '<': {tail[:40]!r}"
 
 
 class TestStructuredDataTruncation:
@@ -487,9 +479,7 @@ class TestStructuredDataTruncation:
         content = json.dumps(data, indent=2)
 
         result = _truncate_large_file(content, max_chars=20000)
-        assert result.lstrip()[0] in ("{", "["), (
-            f"Result doesn't start with JSON opener: {result[:20]!r}"
-        )
+        assert result.lstrip()[0] in ("{", "["), f"Result doesn't start with JSON opener: {result[:20]!r}"
 
     def test_json_small_stays_unchanged(self):
         """Small JSON under threshold must be returned as-is (no boundary fiddling)."""
@@ -514,8 +504,7 @@ class TestStructuredDataTruncation:
     def test_xml_head_ends_on_closing_tag(self):
         """Head of truncated XML should end with a complete closing tag."""
         items = "\n".join(
-            f'  <record id="{i}"><name>item{i}</name><data>{"x" * 50}</data></record>'
-            for i in range(300)
+            f'  <record id="{i}"><name>item{i}</name><data>{"x" * 50}</data></record>' for i in range(300)
         )
         content = f"<records>\n{items}\n</records>"
         assert len(content) > 20000
@@ -529,8 +518,7 @@ class TestStructuredDataTruncation:
     def test_xml_tail_starts_on_opening_tag(self):
         """Tail of truncated XML should begin with an opening tag."""
         items = "\n".join(
-            f'  <record id="{i}"><name>item{i}</name><data>{"x" * 50}</data></record>'
-            for i in range(300)
+            f'  <record id="{i}"><name>item{i}</name><data>{"x" * 50}</data></record>' for i in range(300)
         )
         content = f"<records>\n{items}\n</records>"
         assert len(content) > 20000
@@ -547,9 +535,7 @@ class TestStructuredDataTruncation:
 
     def test_xml_truncation_marker_present(self):
         """Large XML gets a truncation marker."""
-        items = "\n".join(
-            f'  <item id="{i}"><val>{"data" * 30}</val></item>' for i in range(200)
-        )
+        items = "\n".join(f'  <item id="{i}"><val>{"data" * 30}</val></item>' for i in range(200))
         content = f"<root>\n{items}\n</root>"
         assert len(content) > 20000
 

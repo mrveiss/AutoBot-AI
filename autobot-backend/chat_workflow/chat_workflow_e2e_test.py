@@ -67,9 +67,7 @@ async def test_chat_workflow():
             chat_request = {"chatId": chat_id, "message": test["message"]}
 
             try:
-                async with session.post(
-                    get_test_backend_url() + "/api/chat", json=chat_request
-                ) as response:
+                async with session.post(get_test_backend_url() + "/api/chat", json=chat_request) as response:
                     if response.status == 200:
                         result = await response.json()
                         response_text = result.get("response", "")
@@ -84,28 +82,20 @@ async def test_chat_workflow():
                                 "steps",
                             ]
                         ):
-                            print(
-                                "   ✅ Workflow orchestration triggered!"
-                            )  # noqa: print
+                            print("   ✅ Workflow orchestration triggered!")  # noqa: print
 
                             # Try to extract workflow info
                             if "workflow_id" in response_text:
                                 print("   🔄 Workflow initiated")  # noqa: print
                             if "agents" in response_text.lower():
-                                print(
-                                    "   🤖 Multi-agent coordination detected"
-                                )  # noqa: print
+                                print("   🤖 Multi-agent coordination detected")  # noqa: print
                             if "steps" in response_text.lower():
                                 print("   📋 Workflow steps planned")  # noqa: print
                         else:
                             print("   💬 Direct chat response")  # noqa: print
 
                         # Show response preview
-                        preview = (
-                            response_text[:200] + "..."
-                            if len(response_text) > 200
-                            else response_text
-                        )
+                        preview = response_text[:200] + "..." if len(response_text) > 200 else response_text
                         print(f"   Response: {preview}")  # noqa: print
 
                     else:
@@ -124,9 +114,7 @@ async def test_chat_workflow():
         print("-" * 40)  # noqa: print
 
         try:
-            async with session.get(
-                get_test_backend_url() + "/api/workflow/workflows"
-            ) as response:
+            async with session.get(get_test_backend_url() + "/api/workflow/workflows") as response:
                 if response.status == 200:
                     workflows_data = await response.json()
                     active_count = workflows_data.get("active_workflows", 0)
@@ -136,23 +124,15 @@ async def test_chat_workflow():
 
                     if workflows:
                         for workflow in workflows[:3]:  # Show first 3
-                            print(
-                                f"\n   Workflow: {workflow.get('id', 'N/A')[:8]}..."
-                            )  # noqa: print
+                            print(f"\n   Workflow: {workflow.get('id', 'N/A')[:8]}...")  # noqa: print
                             print(f"   Status: {workflow.get('status')}")  # noqa: print
-                            print(  # noqa: print
-                                f"   Classification: {workflow.get('classification')}"
-                            )
+                            print(f"   Classification: {workflow.get('classification')}")  # noqa: print
                             print(  # noqa: print
                                 f"   Progress: {workflow.get('steps_completed')}/{workflow.get('total_steps')}"
                             )
-                            print(  # noqa: print
-                                f"   Agents: {', '.join(workflow.get('agents_involved', []))}"
-                            )
+                            print(f"   Agents: {', '.join(workflow.get('agents_involved', []))}")  # noqa: print
                 else:
-                    print(
-                        f"❌ Failed to get workflows: {response.status}"
-                    )  # noqa: print
+                    print(f"❌ Failed to get workflows: {response.status}")  # noqa: print
         except Exception as e:
             print(f"❌ Error checking workflows: {e}")  # noqa: print
 
@@ -184,15 +164,9 @@ async def test_direct_workflow_execution():
                         workflow_response = result.get("workflow_response", {})
 
                         print(f"   Workflow ID: {workflow_id[:8]}...")  # noqa: print
-                        print(  # noqa: print
-                            f"   Classification: {workflow_response.get('message_classification')}"
-                        )
-                        print(  # noqa: print
-                            f"   Planned steps: {workflow_response.get('planned_steps')}"
-                        )
-                        print(  # noqa: print
-                            f"   Agents: {', '.join(workflow_response.get('agents_involved', []))}"
-                        )
+                        print(f"   Classification: {workflow_response.get('message_classification')}")  # noqa: print
+                        print(f"   Planned steps: {workflow_response.get('planned_steps')}")  # noqa: print
+                        print(f"   Agents: {', '.join(workflow_response.get('agents_involved', []))}")  # noqa: print
 
                         # Show workflow preview
                         preview = workflow_response.get("workflow_preview", [])
@@ -201,14 +175,10 @@ async def test_direct_workflow_execution():
                             for step in preview[:5]:  # Show first 5 steps
                                 print(f"   - {step}")  # noqa: print
                     else:
-                        print(
-                            "   ℹ️  Direct response (no workflow needed)"
-                        )  # noqa: print
+                        print("   ℹ️  Direct response (no workflow needed)")  # noqa: print
 
                 else:
-                    print(
-                        f"❌ Workflow execution failed: {response.status}"
-                    )  # noqa: print
+                    print(f"❌ Workflow execution failed: {response.status}")  # noqa: print
                     error = await response.text()
                     print(f"   Error: {error[:200]}")  # noqa: print
 

@@ -73,9 +73,7 @@ class AgentResponseJudge(BaseLLMJudge):
             "relevance_threshold": self.relevance_threshold,
         }
 
-        return await self.make_judgment(
-            subject=response, criteria=criteria, context=eval_context
-        )
+        return await self.make_judgment(subject=response, criteria=criteria, context=eval_context)
 
     def _build_request_context_section(
         self,
@@ -145,9 +143,7 @@ Please evaluate this response on the following dimensions (score 0.0 to 1.0):
    - Is the effort proportional to the request?
 """
 
-    def _build_agent_specific_section(
-        self, agent_type: str, context: Dict[str, Any]
-    ) -> str:
+    def _build_agent_specific_section(self, agent_type: str, context: Dict[str, Any]) -> str:
         """Issue #665: Extracted from _prepare_judgment_prompt to reduce function length."""
         relevance_threshold = context.get("relevance_threshold", 0.8)
         quality_threshold = context.get("quality_threshold", 0.7)
@@ -221,25 +217,15 @@ Focus on practical assessment that helps improve agent performance and user expe
             tuple: (is_good_quality: bool, overall_score: float, summary: str)
         """
         try:
-            judgment = await self.evaluate_agent_response(
-                request, response, agent_type, context
-            )
+            judgment = await self.evaluate_agent_response(request, response, agent_type, context)
 
             # Check quality and relevance thresholds
             relevance_score = next(
-                (
-                    s.score
-                    for s in judgment.criterion_scores
-                    if s.dimension == JudgmentDimension.RELEVANCE
-                ),
+                (s.score for s in judgment.criterion_scores if s.dimension == JudgmentDimension.RELEVANCE),
                 0.0,
             )
             quality_score = next(
-                (
-                    s.score
-                    for s in judgment.criterion_scores
-                    if s.dimension == JudgmentDimension.QUALITY
-                ),
+                (s.score for s in judgment.criterion_scores if s.dimension == JudgmentDimension.QUALITY),
                 0.0,
             )
 
@@ -299,16 +285,8 @@ Focus on practical assessment that helps improve agent performance and user expe
         Issue #620.
         """
         if above:
-            return [
-                score.dimension.value
-                for score in criterion_scores
-                if score.score >= threshold
-            ]
-        return [
-            score.dimension.value
-            for score in criterion_scores
-            if score.score < threshold
-        ]
+            return [score.dimension.value for score in criterion_scores if score.score >= threshold]
+        return [score.dimension.value for score in criterion_scores if score.score < threshold]
 
     async def get_improvement_feedback(
         self,
@@ -324,9 +302,7 @@ Focus on practical assessment that helps improve agent performance and user expe
             Dict with improvement suggestions and performance metrics
         """
         try:
-            judgment = await self.evaluate_agent_response(
-                request, response, agent_type, context
-            )
+            judgment = await self.evaluate_agent_response(request, response, agent_type, context)
 
             return {
                 "overall_assessment": {
@@ -334,16 +310,12 @@ Focus on practical assessment that helps improve agent performance and user expe
                     "recommendation": judgment.recommendation,
                     "confidence": judgment.confidence.value,
                 },
-                "detailed_feedback": self._build_feedback_by_dimension(
-                    judgment.criterion_scores
-                ),
+                "detailed_feedback": self._build_feedback_by_dimension(judgment.criterion_scores),
                 "priority_improvements": self._categorize_scores_by_threshold(
                     judgment.criterion_scores, 0.7, above=False
                 ),
                 "improvement_suggestions": judgment.improvement_suggestions,
-                "strengths": self._categorize_scores_by_threshold(
-                    judgment.criterion_scores, 0.8, above=True
-                ),
+                "strengths": self._categorize_scores_by_threshold(judgment.criterion_scores, 0.8, above=True),
                 "areas_for_improvement": self._categorize_scores_by_threshold(
                     judgment.criterion_scores, 0.7, above=False
                 ),
@@ -373,9 +345,7 @@ Focus on practical assessment that helps improve agent performance and user expe
         """
         try:
             # Evaluate and rank each response
-            evaluations = await self._evaluate_all_responses(
-                request, responses, agent_types, context
-            )
+            evaluations = await self._evaluate_all_responses(request, responses, agent_types, context)
             evaluations.sort(key=lambda x: x["evaluation"].overall_score, reverse=True)
 
             # Generate comparative insights
@@ -396,9 +366,7 @@ Focus on practical assessment that helps improve agent performance and user expe
                     "consensus_strengths": self._find_consensus_strengths(evaluations),
                     "common_weaknesses": self._find_common_weaknesses(evaluations),
                 },
-                "recommendation": (
-                    f"Best response from {evaluations[0]['agent_type']} agent"
-                ),
+                "recommendation": (f"Best response from {evaluations[0]['agent_type']} agent"),
             }
 
         except Exception as e:
@@ -419,9 +387,7 @@ Focus on practical assessment that helps improve agent performance and user expe
         """Evaluate all agent responses (Issue #665: extracted helper)."""
         evaluations = []
         for i, (response, agent_type) in enumerate(zip(responses, agent_types)):
-            evaluation = await self.evaluate_agent_response(
-                request, response, agent_type, context
-            )
+            evaluation = await self.evaluate_agent_response(request, response, agent_type, context)
             evaluations.append(
                 {
                     "response_index": i,
@@ -432,9 +398,7 @@ Focus on practical assessment that helps improve agent performance and user expe
             )
         return evaluations
 
-    def _find_dimension_leaders(
-        self, evaluations: List[Dict[str, Any]]
-    ) -> Dict[str, Dict[str, Any]]:
+    def _find_dimension_leaders(self, evaluations: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         """Find best performing agent for each dimension (Issue #665: extracted helper)."""
         dimension_leaders = {}
         for dimension in JudgmentDimension:
@@ -442,9 +406,7 @@ Focus on practical assessment that helps improve agent performance and user expe
             best_agent = None
             for eval_data in evaluations:
                 scores = eval_data["evaluation"].criterion_scores
-                dim_score = next(
-                    (s.score for s in scores if s.dimension == dimension), 0.0
-                )
+                dim_score = next((s.score for s in scores if s.dimension == dimension), 0.0)
                 if dim_score > best_score:
                     best_score = dim_score
                     best_agent = eval_data["agent_type"]
@@ -466,9 +428,7 @@ Focus on practical assessment that helps improve agent performance and user expe
             all_good = True
             for eval_data in evaluations:
                 scores = eval_data["evaluation"].criterion_scores
-                dim_score = next(
-                    (s.score for s in scores if s.dimension == dimension), 0.0
-                )
+                dim_score = next((s.score for s in scores if s.dimension == dimension), 0.0)
                 if dim_score < 0.7:  # Threshold for "good"
                     all_good = False
                     break
@@ -488,9 +448,7 @@ Focus on practical assessment that helps improve agent performance and user expe
             all_weak = True
             for eval_data in evaluations:
                 scores = eval_data["evaluation"].criterion_scores
-                dim_score = next(
-                    (s.score for s in scores if s.dimension == dimension), 0.0
-                )
+                dim_score = next((s.score for s in scores if s.dimension == dimension), 0.0)
                 if dim_score >= 0.7:  # Threshold for "good"
                     all_weak = False
                     break

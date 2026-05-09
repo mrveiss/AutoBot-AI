@@ -31,7 +31,6 @@ from services.knowledge.cognition_seeder import (
     _load_manifest,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helper factories
 # ---------------------------------------------------------------------------
@@ -64,8 +63,7 @@ def _make_seeder(tmp_chromadb=None) -> CognitionSeeder:
 def test_load_manifest_parses_yaml(tmp_path):
     manifest = tmp_path / "seed.yaml"
     manifest.write_text(
-        textwrap.dedent(
-            """\
+        textwrap.dedent("""\
             collections:
               - name: cognition_store
                 sources:
@@ -75,8 +73,7 @@ def test_load_manifest_parses_yaml(tmp_path):
                   - path: docs/api/
                     priority: medium
                     refresh: never
-            """
-        ),
+            """),
         encoding="utf-8",
     )
     result = _load_manifest(str(manifest))
@@ -178,16 +175,14 @@ async def test_seed_from_manifest_processes_sources(tmp_path):
 
     manifest = tmp_path / "cognition_seed.yaml"
     manifest.write_text(
-        textwrap.dedent(
-            f"""\
+        textwrap.dedent(f"""\
             collections:
               - name: cognition_store
                 sources:
                   - path: docs/developer/
                     priority: high
                     refresh: on_change
-            """
-        ),
+            """),
         encoding="utf-8",
     )
 

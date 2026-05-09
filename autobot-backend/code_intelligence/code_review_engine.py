@@ -244,8 +244,7 @@ BUILTIN_PATTERNS: dict[str, ReviewPattern] = {
         category=ReviewCategory.SECURITY,
         severity=ReviewSeverity.WARNING,
         pattern=(
-            r'["\'](?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}'
-            r'(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)["\']'
+            r'["\'](?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}' r'(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)["\']'
         ),
         message="Hardcoded IP address found. Use configuration.",
         suggestion="Move IP addresses to NetworkConstants or environment variables.",
@@ -481,9 +480,7 @@ class CodeReviewEngine(_BaseClass):
             use_semantic_analysis: Enable LLM-based semantic review (Issue #554)
         """
         # Issue #554: Initialize semantic analysis infrastructure if enabled
-        self.use_semantic_analysis = (
-            use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
-        )
+        self.use_semantic_analysis = use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
 
         if self.use_semantic_analysis:
             super().__init__()
@@ -505,9 +502,7 @@ class CodeReviewEngine(_BaseClass):
         for pid, pdef in self.patterns.items():
             if pdef.pattern:
                 try:
-                    self._compiled_patterns[pid] = re.compile(
-                        pdef.pattern, re.IGNORECASE | re.MULTILINE
-                    )
+                    self._compiled_patterns[pid] = re.compile(pdef.pattern, re.IGNORECASE | re.MULTILINE)
                 except re.error as e:
                     logger.warning("Invalid pattern %s: %s", pid, e)
 
@@ -544,9 +539,7 @@ class CodeReviewEngine(_BaseClass):
             context_after=ctx_after,
         )
 
-    def _check_pattern_matches(
-        self, path: Path, content: str, lines: list[str], file_path: str
-    ) -> list[ReviewComment]:
+    def _check_pattern_matches(self, path: Path, content: str, lines: list[str], file_path: str) -> list[ReviewComment]:
         """
         Check all compiled patterns against file content.
 
@@ -575,9 +568,7 @@ class CodeReviewEngine(_BaseClass):
                 )
         return comments
 
-    def review_file(
-        self, file_path: str, content: Optional[str] = None
-    ) -> list[ReviewComment]:
+    def review_file(self, file_path: str, content: Optional[str] = None) -> list[ReviewComment]:
         """
         Review a single file for issues.
 
@@ -700,9 +691,7 @@ class CodeReviewEngine(_BaseClass):
             if not diff_file.is_deleted:
                 all_comments.extend(self._process_diff_file_comments(diff_file))
 
-        return self._create_review_result(
-            diff_files, all_comments, total_additions, total_deletions
-        )
+        return self._create_review_result(diff_files, all_comments, total_additions, total_deletions)
 
     def review_commit_range(self, commit_range: str = "HEAD~1..HEAD") -> ReviewResult:
         """
@@ -758,9 +747,7 @@ class CodeReviewEngine(_BaseClass):
         self.patterns[pattern.id] = pattern
         if pattern.pattern:
             try:
-                self._compiled_patterns[pattern.id] = re.compile(
-                    pattern.pattern, re.IGNORECASE | re.MULTILINE
-                )
+                self._compiled_patterns[pattern.id] = re.compile(pattern.pattern, re.IGNORECASE | re.MULTILINE)
             except re.error as e:
                 logger.warning("Invalid pattern %s: %s", pattern.id, e)
 
@@ -810,9 +797,7 @@ class CodeReviewEngine(_BaseClass):
             lines=[],
         )
 
-    def _parse_hunk_line(
-        self, line: str, current_hunk: DiffHunk, current_file: Optional[DiffFile]
-    ) -> None:
+    def _parse_hunk_line(self, line: str, current_hunk: DiffHunk, current_file: Optional[DiffFile]) -> None:
         """Parse a hunk content line (Issue #335 - extracted helper)."""
         if line.startswith("+") and not line.startswith("+++"):
             current_hunk.lines.append({"type": "add", "content": line[1:]})
@@ -830,9 +815,7 @@ class CodeReviewEngine(_BaseClass):
                 }
             )
 
-    def _handle_file_metadata(
-        self, line: str, current_file: Optional[DiffFile]
-    ) -> bool:
+    def _handle_file_metadata(self, line: str, current_file: Optional[DiffFile]) -> bool:
         """Handle file metadata lines (Issue #315 - reduce nesting)."""
         if not current_file:
             return False
@@ -919,9 +902,7 @@ class CodeReviewEngine(_BaseClass):
             return j
         return func_end
 
-    def _check_function_length(
-        self, file_path: str, lines: list[str]
-    ) -> list[ReviewComment]:
+    def _check_function_length(self, file_path: str, lines: list[str]) -> list[ReviewComment]:
         """Check for functions exceeding maximum length."""
         comments = []
         func_pattern = re.compile(r"^(\s*)(async\s+)?def\s+(\w+)\s*\(")
@@ -958,9 +939,7 @@ class CodeReviewEngine(_BaseClass):
 
         return comments
 
-    def _check_nesting_depth(
-        self, file_path: str, lines: list[str]
-    ) -> list[ReviewComment]:
+    def _check_nesting_depth(self, file_path: str, lines: list[str]) -> list[ReviewComment]:
         """Check for deeply nested code."""
         comments = []
         reported_lines = set()
@@ -989,9 +968,7 @@ class CodeReviewEngine(_BaseClass):
 
         return comments
 
-    def _check_test_assertions(
-        self, file_path: str, content: str, lines: list[str]
-    ) -> list[ReviewComment]:
+    def _check_test_assertions(self, file_path: str, content: str, lines: list[str]) -> list[ReviewComment]:
         """Check test functions for assertions."""
         comments = []
 
@@ -1011,9 +988,7 @@ class CodeReviewEngine(_BaseClass):
                 has_assertion = False
                 for j in range(i + 1, len(lines)):
                     test_line = lines[j]
-                    if test_line.strip() and not test_line.startswith(
-                        " " * (indent + 1)
-                    ):
+                    if test_line.strip() and not test_line.startswith(" " * (indent + 1)):
                         break
                     if "assert" in test_line.lower() or "pytest.raises" in test_line:
                         has_assertion = True
@@ -1040,9 +1015,7 @@ class CodeReviewEngine(_BaseClass):
         if not comments:
             return 100.0
 
-        total_deduction = sum(
-            self.SEVERITY_WEIGHTS.get(c.severity, 1) for c in comments
-        )
+        total_deduction = sum(self.SEVERITY_WEIGHTS.get(c.severity, 1) for c in comments)
         return max(0, 100 - total_deduction)
 
     def _generate_summary(self, comments: list[ReviewComment]) -> dict[str, Any]:
@@ -1065,9 +1038,7 @@ class CodeReviewEngine(_BaseClass):
             "info_count": by_severity.get("info", 0) + by_severity.get("suggestion", 0),
             "top_issues": [
                 {"category": cat, "count": count}
-                for cat, count in sorted(
-                    by_category.items(), key=lambda x: x[1], reverse=True
-                )[:5]
+                for cat, count in sorted(by_category.items(), key=lambda x: x[1], reverse=True)[:5]
             ],
         }
 

@@ -41,9 +41,7 @@ class NPUWorkerTester:
                     logger.info("NPU worker health check", data=data)
                     return True
                 else:
-                    logger.error(
-                        "NPU worker health check failed", status=response.status
-                    )
+                    logger.error("NPU worker health check failed", status=response.status)
                     return False
         except Exception as e:
             logger.error("NPU worker health check error", error=str(e))
@@ -77,9 +75,7 @@ class NPUWorkerTester:
                 },
             }
 
-            async with self.session.post(
-                f"{self.npu_url}/models/load", json=model_request
-            ) as response:
+            async with self.session.post(f"{self.npu_url}/models/load", json=model_request) as response:
                 if response.status == 200:
                     data = await response.json()
                     logger.info("Model loading test", data=data)
@@ -102,9 +98,7 @@ class NPUWorkerTester:
                 "temperature": 0.7,
             }
 
-            async with self.session.post(
-                f"{self.npu_url}/inference", json=inference_request
-            ) as response:
+            async with self.session.post(f"{self.npu_url}/inference", json=inference_request) as response:
                 if response.status == 200:
                     data = await response.json()
                     logger.info("Inference test", data=data)

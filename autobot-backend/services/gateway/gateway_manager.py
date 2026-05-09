@@ -72,9 +72,7 @@ class GatewayManager:
             )
             self.logger.info(f"Registered adapter for platform: {adapter.platform_name}")
 
-    def register_response_handler(
-        self, platform: str, handler: Callable[[NormalizedResponse], None]
-    ) -> None:
+    def register_response_handler(self, platform: str, handler: Callable[[NormalizedResponse], None]) -> None:
         """
         Register handler for platform responses.
 
@@ -120,18 +118,12 @@ class GatewayManager:
 
         elapsed_ms = (time.time() - start_time) * 1000
         if elapsed_ms > 50:
-            self.logger.warning(
-                f"Normalization for {platform} took {elapsed_ms:.1f}ms (>50ms target)"
-            )
+            self.logger.warning(f"Normalization for {platform} took {elapsed_ms:.1f}ms (>50ms target)")
 
-        self.logger.debug(
-            f"Normalized message from {platform} user {unified.user_id} in {elapsed_ms:.1f}ms"
-        )
+        self.logger.debug(f"Normalized message from {platform} user {unified.user_id} in {elapsed_ms:.1f}ms")
         return unified
 
-    async def denormalize_response(
-        self, unified_response: NormalizedResponse
-    ) -> Dict[str, Any]:
+    async def denormalize_response(self, unified_response: NormalizedResponse) -> Dict[str, Any]:
         """
         Convert unified response back to platform-specific format.
 
@@ -188,9 +180,7 @@ class GatewayManager:
             if unified_message.platform in self.response_handlers:
                 handler = self.response_handlers[unified_message.platform]
                 await handler(platform_response)
-                self.logger.debug(
-                    f"Routed response to {unified_message.platform} handler"
-                )
+                self.logger.debug(f"Routed response to {unified_message.platform} handler")
         except Exception as e:
             self.logger.error(f"Error routing message: {e}", exc_info=True)
 
@@ -215,6 +205,7 @@ class GatewayManager:
             agent_handler: Async handler for normalized messages
             workers: Number of concurrent workers
         """
+
         async def message_processor(raw_message: Dict[str, Any]) -> None:
             try:
                 unified = await self.normalize_message(raw_message)

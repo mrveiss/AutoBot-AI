@@ -138,9 +138,7 @@ async def startup_websocket(websocket: WebSocket):
     try:
         # Send current status immediately
         current_status = await get_startup_status()
-        await websocket.send_text(
-            json.dumps({"type": "status", "data": current_status})
-        )
+        await websocket.send_text(json.dumps({"type": "status", "data": current_status}))
 
         # Send recent messages (get copy under lock)
         with _startup_lock:
@@ -169,9 +167,7 @@ async def startup_websocket(websocket: WebSocket):
     operation="update_startup_phase",
     error_code_prefix="STARTUP",
 )
-async def update_startup_phase(
-    phase: str, message: str, progress: int, icon: str = "🚀", details: str = None
-):
+async def update_startup_phase(phase: str, message: str, progress: int, icon: str = "🚀", details: str = None):
     """Update startup phase (called by startup script or other services)"""
     try:
         phase_enum = StartupPhase(phase)
@@ -193,9 +189,7 @@ def init_startup_messages():
         "Initializing the AutoBot intelligence system...",
     )
 
-    add_startup_message(
-        StartupPhase.INITIALIZING, "Preparing system components...", 5, "🔍"
-    )
+    add_startup_message(StartupPhase.INITIALIZING, "Preparing system components...", 5, "🔍")
 
 
 # Initialize on import - this provides initial messages immediately

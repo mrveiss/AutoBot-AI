@@ -347,9 +347,7 @@ class TestPatternAnalyzer:
 
         # Compile patterns
         self._flaky_patterns = [re.compile(p) for p in self.FLAKY_PATTERNS]
-        self._external_patterns = [
-            re.compile(p) for p in self.EXTERNAL_DEPENDENCY_PATTERNS
-        ]
+        self._external_patterns = [re.compile(p) for p in self.EXTERNAL_DEPENDENCY_PATTERNS]
         self._database_patterns = [re.compile(p) for p in self.DATABASE_PATTERNS]
         self._exclude_patterns = [re.compile(p) for p in self.exclude_patterns]
         self._test_patterns = [re.compile(p) for p in self.test_file_patterns]
@@ -443,16 +441,12 @@ class TestPatternAnalyzer:
     # Anti-Pattern Detection Methods
     # =========================================================================
 
-    def _detect_empty_test(
-        self, func: ast.FunctionDef, file_path: str
-    ) -> Optional[TestAntiPatternResult]:
+    def _detect_empty_test(self, func: ast.FunctionDef, file_path: str) -> Optional[TestAntiPatternResult]:
         """Detect tests with no assertions or only pass statements."""
         assertions = self._count_assertions(func)
         body_is_pass = len(func.body) == 1 and isinstance(func.body[0], ast.Pass)
         body_is_docstring_only = (
-            len(func.body) == 1
-            and isinstance(func.body[0], ast.Expr)
-            and isinstance(func.body[0].value, ast.Constant)
+            len(func.body) == 1 and isinstance(func.body[0], ast.Expr) and isinstance(func.body[0].value, ast.Constant)
         )
 
         if assertions == 0 or body_is_pass or body_is_docstring_only:
@@ -468,9 +462,7 @@ class TestPatternAnalyzer:
             )
         return None
 
-    def _detect_no_assertion(
-        self, func: ast.FunctionDef, file_path: str
-    ) -> Optional[TestAntiPatternResult]:
+    def _detect_no_assertion(self, func: ast.FunctionDef, file_path: str) -> Optional[TestAntiPatternResult]:
         """Detect tests without any assertions."""
         assertions = self._count_assertions(func)
 
@@ -480,10 +472,7 @@ class TestPatternAnalyzer:
             # Issue #380: Use module-level constant
             has_code = any(
                 not isinstance(stmt, _EMPTY_STMT_TYPES)
-                or (
-                    isinstance(stmt, ast.Expr)
-                    and not isinstance(stmt.value, ast.Constant)
-                )
+                or (isinstance(stmt, ast.Expr) and not isinstance(stmt.value, ast.Constant))
                 for stmt in func.body
             )
             if has_code:
@@ -499,17 +488,12 @@ class TestPatternAnalyzer:
                 )
         return None
 
-    def _detect_overly_complex_test(
-        self, func: ast.FunctionDef, file_path: str
-    ) -> Optional[TestAntiPatternResult]:
+    def _detect_overly_complex_test(self, func: ast.FunctionDef, file_path: str) -> Optional[TestAntiPatternResult]:
         """Detect tests that are too complex."""
         lines = self._get_function_lines(func)
         branches = self._count_branches(func)
 
-        if (
-            lines > self.COMPLEX_TEST_LINE_THRESHOLD
-            or branches > self.COMPLEX_TEST_BRANCH_THRESHOLD
-        ):
+        if lines > self.COMPLEX_TEST_LINE_THRESHOLD or branches > self.COMPLEX_TEST_BRANCH_THRESHOLD:
             return TestAntiPatternResult(
                 pattern_type=TestAntiPatternType.OVERLY_COMPLEX_TEST,
                 severity=TestPatternSeverity.MEDIUM,
@@ -522,9 +506,7 @@ class TestPatternAnalyzer:
             )
         return None
 
-    def _detect_multiple_assertions(
-        self, func: ast.FunctionDef, file_path: str
-    ) -> Optional[TestAntiPatternResult]:
+    def _detect_multiple_assertions(self, func: ast.FunctionDef, file_path: str) -> Optional[TestAntiPatternResult]:
         """Detect tests with too many assertions (may test multiple things)."""
         assertions = self._count_assertions(func)
 
@@ -563,17 +545,14 @@ class TestPatternAnalyzer:
                 line_number=func.lineno,
                 test_name=func.name,
                 description=(
-                    f"Test '{func.name}' contains patterns that may cause flakiness "
-                    "(time.sleep, random, datetime)"
+                    f"Test '{func.name}' contains patterns that may cause flakiness " "(time.sleep, random, datetime)"
                 ),
                 suggestion="Use deterministic mocks for time, random, and datetime operations",
                 metrics={},
             )
         return None
 
-    def _detect_sleep_calls(
-        self, func: ast.FunctionDef, file_path: str
-    ) -> Optional[TestAntiPatternResult]:
+    def _detect_sleep_calls(self, func: ast.FunctionDef, file_path: str) -> Optional[TestAntiPatternResult]:
         """Detect explicit sleep calls in tests."""
         for node in ast.walk(func):
             if isinstance(node, ast.Call):
@@ -637,9 +616,7 @@ class TestPatternAnalyzer:
             )
         return None
 
-    def _detect_missing_docstring(
-        self, func: ast.FunctionDef, file_path: str
-    ) -> Optional[TestAntiPatternResult]:
+    def _detect_missing_docstring(self, func: ast.FunctionDef, file_path: str) -> Optional[TestAntiPatternResult]:
         """Detect tests without docstrings."""
         docstring = ast.get_docstring(func)
 
@@ -656,9 +633,7 @@ class TestPatternAnalyzer:
             )
         return None
 
-    def _detect_test_naming_issues(
-        self, func: ast.FunctionDef, file_path: str
-    ) -> Optional[TestAntiPatternResult]:
+    def _detect_test_naming_issues(self, func: ast.FunctionDef, file_path: str) -> Optional[TestAntiPatternResult]:
         """Detect poor test naming conventions."""
         name = func.name
 
@@ -704,9 +679,7 @@ class TestPatternAnalyzer:
             priority=TestPatternSeverity.MEDIUM,
         )
 
-    def _create_function_gap(
-        self, source_file: str, node: ast.FunctionDef
-    ) -> CoverageGap:
+    def _create_function_gap(self, source_file: str, node: ast.FunctionDef) -> CoverageGap:
         """Create gap for untested function (Issue #315 - extracted helper)."""
         return CoverageGap(
             source_file=source_file,
@@ -759,9 +732,7 @@ class TestPatternAnalyzer:
             if module_name not in tested_modules:
                 gaps.append(self._create_module_gap(source_file, module_name))
 
-            gaps.extend(
-                self._find_untested_functions(source_file, module_name, tested_modules)
-            )
+            gaps.extend(self._find_untested_functions(source_file, module_name, tested_modules))
 
         return gaps
 
@@ -820,9 +791,7 @@ class TestPatternAnalyzer:
 
         # Assertion density (assertions per test)
         if total_tests > 0:
-            metrics[TestQualityMetric.ASSERTION_DENSITY] = (
-                total_assertions / total_tests
-            )
+            metrics[TestQualityMetric.ASSERTION_DENSITY] = total_assertions / total_tests
         else:
             metrics[TestQualityMetric.ASSERTION_DENSITY] = 0.0
 
@@ -830,9 +799,7 @@ class TestPatternAnalyzer:
         if total_tests > 0:
             avg_lines = total_lines / total_tests
             # Scale: <20 lines = 100, >50 lines = 0
-            metrics[TestQualityMetric.COMPLEXITY_SCORE] = max(
-                0, 100 - (avg_lines - 20) * 2.5
-            )
+            metrics[TestQualityMetric.COMPLEXITY_SCORE] = max(0, 100 - (avg_lines - 20) * 2.5)
         else:
             metrics[TestQualityMetric.COMPLEXITY_SCORE] = 0.0
 
@@ -873,13 +840,9 @@ class TestPatternAnalyzer:
         anti_patterns: List[TestAntiPatternResult],
     ) -> Dict[TestQualityMetric, float]:
         """Calculate overall test quality metrics."""
-        total_tests, total_assertions, total_lines = self._aggregate_test_file_stats(
-            test_files
-        )
+        total_tests, total_assertions, total_lines = self._aggregate_test_file_stats(test_files)
 
-        metrics = self._compute_individual_metrics(
-            total_tests, total_assertions, total_lines, anti_patterns
-        )
+        metrics = self._compute_individual_metrics(total_tests, total_assertions, total_lines, anti_patterns)
 
         metrics[TestQualityMetric.OVERALL_SCORE] = self._compute_overall_score(metrics)
 
@@ -919,9 +882,7 @@ class TestPatternAnalyzer:
 
         return test_files, source_files
 
-    def _aggregate_test_analysis(
-        self, test_files: List[str]
-    ) -> tuple[int, int, List[TestAntiPatternResult]]:
+    def _aggregate_test_analysis(self, test_files: List[str]) -> tuple[int, int, List[TestAntiPatternResult]]:
         """Analyze test files and aggregate results. Issue #620.
 
         Args:
@@ -942,9 +903,7 @@ class TestPatternAnalyzer:
 
         return total_tests, total_assertions, all_anti_patterns
 
-    def _build_severity_distribution(
-        self, anti_patterns: List[TestAntiPatternResult]
-    ) -> Dict[str, int]:
+    def _build_severity_distribution(self, anti_patterns: List[TestAntiPatternResult]) -> Dict[str, int]:
         """Build severity distribution from anti-patterns. Issue #620.
 
         Args:
@@ -978,9 +937,7 @@ class TestPatternAnalyzer:
         suggestions: List[str] = []
 
         if len(coverage_gaps) > 0:
-            suggestions.append(
-                f"Add tests for {len(coverage_gaps)} untested modules/functions"
-            )
+            suggestions.append(f"Add tests for {len(coverage_gaps)} untested modules/functions")
         if severity_dist.get("high", 0) > 0:
             suggestions.append(f"Fix {severity_dist['high']} high-severity test issues")
         if quality_metrics.get(TestQualityMetric.OVERALL_SCORE, 0) < 70:
@@ -988,9 +945,7 @@ class TestPatternAnalyzer:
 
         return suggestions
 
-    def _run_basic_detectors(
-        self, func: ast.FunctionDef, file_path: str
-    ) -> List[TestAntiPatternResult]:
+    def _run_basic_detectors(self, func: ast.FunctionDef, file_path: str) -> List[TestAntiPatternResult]:
         """Run basic detectors that don't need file content. Issue #620.
 
         Args:
@@ -1041,9 +996,7 @@ class TestPatternAnalyzer:
                 patterns.append(result)
         return patterns
 
-    def _generate_file_suggestions(
-        self, test_count: int, assertion_count: int
-    ) -> List[str]:
+    def _generate_file_suggestions(self, test_count: int, assertion_count: int) -> List[str]:
         """Generate suggestions based on test file analysis. Issue #620.
 
         Args:
@@ -1086,9 +1039,7 @@ class TestPatternAnalyzer:
             for func in tests:
                 assertion_count += self._count_assertions(func)
                 anti_patterns.extend(self._run_basic_detectors(func, file_path))
-                anti_patterns.extend(
-                    self._run_content_detectors(func, file_path, content)
-                )
+                anti_patterns.extend(self._run_content_detectors(func, file_path, content))
 
             suggestions = self._generate_file_suggestions(test_count, assertion_count)
 
@@ -1136,9 +1087,7 @@ class TestPatternAnalyzer:
         quality_metrics = self._calculate_quality_metrics(test_files, all_anti_patterns)
 
         # Generate suggestions
-        suggestions = self._generate_analysis_suggestions(
-            coverage_gaps, severity_dist, quality_metrics
-        )
+        suggestions = self._generate_analysis_suggestions(coverage_gaps, severity_dist, quality_metrics)
 
         return TestAnalysisReport(
             scan_path=directory,
@@ -1181,8 +1130,7 @@ def analyze_tests(path: str) -> TestAnalysisReport:
             coverage_gaps=report.coverage_gaps,
             quality_metrics=report.metrics,
             severity_distribution={
-                s.value: sum(1 for p in report.anti_patterns if p.severity == s)
-                for s in TestPatternSeverity
+                s.value: sum(1 for p in report.anti_patterns if p.severity == s) for s in TestPatternSeverity
             },
             suggestions=report.suggestions,
         )

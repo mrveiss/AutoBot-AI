@@ -210,9 +210,7 @@ async def rerank_results(
     - **reranked_results**: Results sorted by rerank score
     - **original_count**: Number of input results
     """
-    logger.info(
-        f"Reranking {len(request.results)} results for query: '{request.query}'"
-    )
+    logger.info(f"Reranking {len(request.results)} results for query: '{request.query}'")
 
     # Perform reranking
     reranked_results = await rag_service.rerank_results(
@@ -529,9 +527,7 @@ async def run_rag_benchmark(
         # warning.  reason="redis_down" - analytics Redis unreachable.
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="rag_benchmark", reason="redis_down"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="rag_benchmark", reason="redis_down").inc()
         return {
             "published": 0,
             "total": len(report.results),
@@ -550,8 +546,7 @@ async def run_rag_benchmark(
 
     published = await publish_feedback_events(redis, report.results)
     logger.info(
-        "run_rag_benchmark: split=%s published %d/%d feedback events "
-        "(held_out_score=%s)",
+        "run_rag_benchmark: split=%s published %d/%d feedback events " "(held_out_score=%s)",
         report.split_used,
         published,
         len(report.results),

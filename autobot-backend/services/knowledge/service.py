@@ -116,8 +116,7 @@ class ChatKnowledgeService:
             self.doc_searcher.initialize()
 
         logger.info(
-            "ChatKnowledgeService initialized with intent detection, "
-            "conversation-aware RAG, doc_search=%s",
+            "ChatKnowledgeService initialized with intent detection, " "conversation-aware RAG, doc_search=%s",
             enable_doc_search,
         )
 
@@ -201,21 +200,15 @@ class ChatKnowledgeService:
         start_time = time.time()
 
         try:
-            return await self._search_filter_and_format(
-                query, top_k, score_threshold, categories, start_time
-            )
+            return await self._search_filter_and_format(query, top_k, score_threshold, categories, start_time)
 
         except Exception as e:
             # Graceful degradation - don't break chat flow
-            logger.error(
-                "Knowledge retrieval failed for query '%s...': %s", query[:50], e
-            )
+            logger.error("Knowledge retrieval failed for query '%s...': %s", query[:50], e)
             logger.debug("Returning empty knowledge context due to error")
             return "", []
 
-    def _filter_by_score(
-        self, results: List[SearchResult], threshold: float
-    ) -> List[SearchResult]:
+    def _filter_by_score(self, results: List[SearchResult], threshold: float) -> List[SearchResult]:
         """
         Filter search results by relevance score.
 
@@ -236,11 +229,7 @@ class ChatKnowledgeService:
                 logger.warning("Skipping non-SearchResult item: %s", type(result))
                 continue
             # Prefer rerank_score if available (cross-encoder is more accurate)
-            score = (
-                result.rerank_score
-                if result.rerank_score is not None
-                else result.hybrid_score
-            )
+            score = result.rerank_score if result.rerank_score is not None else result.hybrid_score
 
             if score >= threshold:
                 filtered.append(result)
@@ -276,11 +265,7 @@ class ChatKnowledgeService:
         # Add each fact with ranking
         for i, fact in enumerate(facts, 1):
             # Use rerank_score if available for display
-            score = (
-                fact.rerank_score
-                if fact.rerank_score is not None
-                else fact.hybrid_score
-            )
+            score = fact.rerank_score if fact.rerank_score is not None else fact.hybrid_score
 
             # Format: "1. [score: 0.95] Fact content here"
             context_lines.append(f"{i}. [score: {score:.2f}] {fact.content.strip()}")
@@ -305,11 +290,7 @@ class ChatKnowledgeService:
 
         for i, fact in enumerate(facts, 1):
             # Extract relevant metadata
-            score = (
-                fact.rerank_score
-                if fact.rerank_score is not None
-                else fact.hybrid_score
-            )
+            score = fact.rerank_score if fact.rerank_score is not None else fact.hybrid_score
 
             citation = {
                 "id": fact.metadata.get("id", f"citation_{i}"),
@@ -333,9 +314,7 @@ class ChatKnowledgeService:
 
         return citations
 
-    def _match_category_keywords(
-        self, query_lower: str, keywords: frozenset, category: str
-    ) -> Optional[List[str]]:
+    def _match_category_keywords(self, query_lower: str, keywords: frozenset, category: str) -> Optional[List[str]]:
         """
         Check if query matches any keywords for a category.
 
@@ -393,9 +372,7 @@ class ChatKnowledgeService:
 
         return None
 
-    def _should_skip_retrieval(
-        self, intent_result: QueryIntentResult, force_retrieval: bool
-    ) -> bool:
+    def _should_skip_retrieval(self, intent_result: QueryIntentResult, force_retrieval: bool) -> bool:
         """
         Determine if knowledge retrieval should be skipped.
 
@@ -472,9 +449,7 @@ class ChatKnowledgeService:
         if self._should_skip_retrieval(intent_result, force_retrieval):
             return "", [], intent_result
 
-        effective_categories = self._get_effective_categories(
-            intent_result, query, categories, enable_smart_categories
-        )
+        effective_categories = self._get_effective_categories(intent_result, query, categories, enable_smart_categories)
 
         self._log_retrieval_start(intent_result, effective_categories)
 
@@ -617,9 +592,7 @@ class ChatKnowledgeService:
 
         # Enhance query and determine categories (Issue #665: uses helpers)
         enhanced_query = self._enhance_query_with_context(query, conversation_history)
-        effective_categories = self._get_effective_categories(
-            intent_result, query, categories, enable_smart_categories
-        )
+        effective_categories = self._get_effective_categories(intent_result, query, categories, enable_smart_categories)
         search_query = self._get_search_query(query, enhanced_query)
 
         # Perform retrieval from knowledge facts (autobot_memory)
@@ -633,13 +606,10 @@ class ChatKnowledgeService:
         # Issue #1261: Also search indexed documentation (autobot_docs)
         doc_context = self._retrieve_documentation_context(query)
         if doc_context:
-            context_string = (
-                doc_context + "\n\n" + context_string if context_string else doc_context
-            )
+            context_string = doc_context + "\n\n" + context_string if context_string else doc_context
 
         logger.info(
-            "[Conversation RAG] Completed in %.3fs - %d citations, "
-            "enhanced=%s, categories=%s, docs=%s",
+            "[Conversation RAG] Completed in %.3fs - %d citations, " "enhanced=%s, categories=%s, docs=%s",
             time.time() - start_time,
             len(citations),
             enhanced_query.enhancement_applied,
@@ -648,9 +618,7 @@ class ChatKnowledgeService:
         )
         return context_string, citations, intent_result, enhanced_query
 
-    def _retrieve_documentation_context(
-        self, query: str, n_results: int = 3, score_threshold: float = 0.3
-    ) -> str:
+    def _retrieve_documentation_context(self, query: str, n_results: int = 3, score_threshold: float = 0.3) -> str:
         """Retrieve documentation context if query matches doc patterns.
 
         Issue #1261: Searches autobot_docs ChromaDB collection to provide
@@ -753,14 +721,10 @@ class ChatKnowledgeService:
             start_time = time.time()
 
             if not self.doc_searcher.is_documentation_query(query):
-                logger.debug(
-                    "[Doc Search] Query not documentation-related: '%s...'", query[:50]
-                )
+                logger.debug("[Doc Search] Query not documentation-related: '%s...'", query[:50])
                 return "", []
 
-            return self._search_and_format_documentation(
-                query, n_results, score_threshold, start_time
-            )
+            return self._search_and_format_documentation(query, n_results, score_threshold, start_time)
 
         except Exception as e:
             logger.error("Documentation retrieval failed: %s", e)

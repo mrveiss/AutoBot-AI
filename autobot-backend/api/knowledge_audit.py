@@ -76,18 +76,14 @@ async def get_user_activity_log(
         logger.warning("get_user_activity_log: KB uninitialized - raising 503")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="audit_user_activity", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="audit_user_activity", reason="kb_uninit").inc()
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
         audit_log = await _get_audit_log(kb)
 
         user_id = current_user.get("user_id") or current_user.get("username", "")
-        events = await audit_log.get_user_activity(
-            user_id=user_id, limit=pagination.limit, offset=pagination.offset
-        )
+        events = await audit_log.get_user_activity(user_id=user_id, limit=pagination.limit, offset=pagination.offset)
 
         return {"events": events, "count": len(events), "user_id": user_id}
 
@@ -128,9 +124,7 @@ async def get_fact_access_log(
         logger.warning("get_fact_access_log: KB uninitialized - raising 503")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="audit_fact_access", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="audit_fact_access", reason="kb_uninit").inc()
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
@@ -147,9 +141,7 @@ async def get_fact_access_log(
 
         user_id = current_user.get("user_id") or current_user.get("username", "")
         if metadata.get("owner_id") != user_id:
-            raise HTTPException(
-                status_code=403, detail="Only the owner can view access logs"
-            )
+            raise HTTPException(status_code=403, detail="Only the owner can view access logs")
 
         # Get access log
         audit_log = await _get_audit_log(kb)
@@ -191,9 +183,7 @@ async def get_organization_audit_log(
     """
     org_id = current_user.get("org_id")
     if not org_id:
-        raise HTTPException(
-            status_code=400, detail="User not associated with an organization"
-        )
+        raise HTTPException(status_code=400, detail="User not associated with an organization")
 
     user_role = current_user.get("role", "")
     if user_role not in ("admin", "org_admin"):
@@ -202,14 +192,10 @@ async def get_organization_audit_log(
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None:
         # Issue #5407: KB instance not initialized - emit counter before 503.
-        logger.warning(
-            "get_organization_audit_log: KB uninitialized - raising 503"
-        )
+        logger.warning("get_organization_audit_log: KB uninitialized - raising 503")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="audit_organization", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="audit_organization", reason="kb_uninit").inc()
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
@@ -264,18 +250,14 @@ async def get_permission_changes(
         logger.warning("get_permission_changes: KB uninitialized - raising 503")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="audit_permission_changes", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="audit_permission_changes", reason="kb_uninit").inc()
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
         audit_log = await _get_audit_log(kb)
 
         user_id = current_user.get("user_id") or current_user.get("username", "")
-        events = await audit_log.get_permission_changes(
-            fact_id=fact_id, user_id=user_id, limit=limit
-        )
+        events = await audit_log.get_permission_changes(fact_id=fact_id, user_id=user_id, limit=limit)
 
         return {"events": events, "count": len(events)}
 
@@ -319,9 +301,7 @@ async def generate_compliance_report(
     if not org_id:
         user_org_id = current_user.get("org_id")
         if not user_org_id:
-            raise HTTPException(
-                status_code=400, detail="User not associated with an organization"
-            )
+            raise HTTPException(status_code=400, detail="User not associated with an organization")
         org_id = user_org_id
 
     user_role = current_user.get("role", "")
@@ -331,14 +311,10 @@ async def generate_compliance_report(
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None:
         # Issue #5407: KB instance not initialized - emit counter before 503.
-        logger.warning(
-            "generate_compliance_report: KB uninitialized - raising 503"
-        )
+        logger.warning("generate_compliance_report: KB uninitialized - raising 503")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="audit_compliance_report", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="audit_compliance_report", reason="kb_uninit").inc()
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
@@ -387,9 +363,7 @@ async def get_compliance_summary(
     """
     org_id = current_user.get("org_id")
     if not org_id:
-        raise HTTPException(
-            status_code=400, detail="User not associated with an organization"
-        )
+        raise HTTPException(status_code=400, detail="User not associated with an organization")
 
     user_role = current_user.get("role", "")
     if user_role not in ("admin", "org_admin"):
@@ -401,9 +375,7 @@ async def get_compliance_summary(
         logger.warning("get_compliance_summary: KB uninitialized - raising 503")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="audit_compliance_summary", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="audit_compliance_summary", reason="kb_uninit").inc()
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:

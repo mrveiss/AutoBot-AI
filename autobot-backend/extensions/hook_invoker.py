@@ -65,9 +65,7 @@ class HookInvocationConfig:
         """Validate configuration consistency."""
         if self.mode == InvocationMode.TRANSFORM:
             if not self.transform_key:
-                raise ValueError(
-                    "TRANSFORM mode requires transform_key"
-                )
+                raise ValueError("TRANSFORM mode requires transform_key")
 
 
 class HookInvoker:
@@ -119,12 +117,8 @@ class HookInvoker:
     def _register_default_configs(self) -> None:
         """Register default invocation configurations for all hooks."""
         # Message preparation hooks
-        self._configs[HookPoint.BEFORE_MESSAGE_PROCESS] = HookInvocationConfig(
-            mode=InvocationMode.COLLECT
-        )
-        self._configs[HookPoint.BEFORE_PROMPT_BUILD] = HookInvocationConfig(
-            mode=InvocationMode.COLLECT
-        )
+        self._configs[HookPoint.BEFORE_MESSAGE_PROCESS] = HookInvocationConfig(mode=InvocationMode.COLLECT)
+        self._configs[HookPoint.BEFORE_PROMPT_BUILD] = HookInvocationConfig(mode=InvocationMode.COLLECT)
         self._configs[HookPoint.AFTER_PROMPT_BUILD] = HookInvocationConfig(
             mode=InvocationMode.TRANSFORM,
             transform_key="prompt",
@@ -132,12 +126,8 @@ class HookInvoker:
         )
 
         # LLM interaction hooks
-        self._configs[HookPoint.BEFORE_LLM_CALL] = HookInvocationConfig(
-            mode=InvocationMode.CANCELLABLE
-        )
-        self._configs[HookPoint.DURING_LLM_STREAMING] = HookInvocationConfig(
-            mode=InvocationMode.COLLECT
-        )
+        self._configs[HookPoint.BEFORE_LLM_CALL] = HookInvocationConfig(mode=InvocationMode.CANCELLABLE)
+        self._configs[HookPoint.DURING_LLM_STREAMING] = HookInvocationConfig(mode=InvocationMode.COLLECT)
         self._configs[HookPoint.AFTER_LLM_RESPONSE] = HookInvocationConfig(
             mode=InvocationMode.TRANSFORM,
             transform_key="response",
@@ -150,21 +140,15 @@ class HookInvoker:
             transform_key="llm_response",
             expected_type=str,
         )
-        self._configs[HookPoint.BEFORE_TOOL_EXECUTE] = HookInvocationConfig(
-            mode=InvocationMode.CANCELLABLE
-        )
+        self._configs[HookPoint.BEFORE_TOOL_EXECUTE] = HookInvocationConfig(mode=InvocationMode.CANCELLABLE)
         self._configs[HookPoint.AFTER_TOOL_EXECUTE] = HookInvocationConfig(
             mode=InvocationMode.TRANSFORM,
             transform_key="tool_result",
         )
-        self._configs[HookPoint.TOOL_ERROR] = HookInvocationConfig(
-            mode=InvocationMode.COLLECT
-        )
+        self._configs[HookPoint.TOOL_ERROR] = HookInvocationConfig(mode=InvocationMode.COLLECT)
 
         # Continuation loop hooks
-        self._configs[HookPoint.BEFORE_CONTINUATION] = HookInvocationConfig(
-            mode=InvocationMode.CANCELLABLE
-        )
+        self._configs[HookPoint.BEFORE_CONTINUATION] = HookInvocationConfig(mode=InvocationMode.CANCELLABLE)
         self._configs[HookPoint.AFTER_CONTINUATION] = HookInvocationConfig(
             mode=InvocationMode.TRANSFORM,
             transform_key="response",
@@ -177,29 +161,19 @@ class HookInvoker:
         )
 
         # Error handling hooks
-        self._configs[HookPoint.REPAIRABLE_ERROR] = HookInvocationConfig(
-            mode=InvocationMode.COLLECT
-        )
-        self._configs[HookPoint.CRITICAL_ERROR] = HookInvocationConfig(
-            mode=InvocationMode.COLLECT
-        )
+        self._configs[HookPoint.REPAIRABLE_ERROR] = HookInvocationConfig(mode=InvocationMode.COLLECT)
+        self._configs[HookPoint.CRITICAL_ERROR] = HookInvocationConfig(mode=InvocationMode.COLLECT)
 
         # Response hooks
         self._configs[HookPoint.BEFORE_RESPONSE_SEND] = HookInvocationConfig(
             mode=InvocationMode.TRANSFORM,
             transform_key="response",
         )
-        self._configs[HookPoint.AFTER_RESPONSE_SEND] = HookInvocationConfig(
-            mode=InvocationMode.COLLECT
-        )
+        self._configs[HookPoint.AFTER_RESPONSE_SEND] = HookInvocationConfig(mode=InvocationMode.COLLECT)
 
         # Session lifecycle hooks
-        self._configs[HookPoint.SESSION_CREATE] = HookInvocationConfig(
-            mode=InvocationMode.COLLECT
-        )
-        self._configs[HookPoint.SESSION_DESTROY] = HookInvocationConfig(
-            mode=InvocationMode.COLLECT
-        )
+        self._configs[HookPoint.SESSION_CREATE] = HookInvocationConfig(mode=InvocationMode.COLLECT)
+        self._configs[HookPoint.SESSION_DESTROY] = HookInvocationConfig(mode=InvocationMode.COLLECT)
 
         # Knowledge integration hooks
         self._configs[HookPoint.BEFORE_RAG_QUERY] = HookInvocationConfig(
@@ -213,12 +187,8 @@ class HookInvoker:
         )
 
         # Approval flow hooks
-        self._configs[HookPoint.APPROVAL_REQUIRED] = HookInvocationConfig(
-            mode=InvocationMode.UNTIL_HANDLED
-        )
-        self._configs[HookPoint.APPROVAL_RECEIVED] = HookInvocationConfig(
-            mode=InvocationMode.COLLECT
-        )
+        self._configs[HookPoint.APPROVAL_REQUIRED] = HookInvocationConfig(mode=InvocationMode.UNTIL_HANDLED)
+        self._configs[HookPoint.APPROVAL_RECEIVED] = HookInvocationConfig(mode=InvocationMode.COLLECT)
 
         # Prompt pipeline hooks (Issue #3405)
         self._configs[HookPoint.SYSTEM_PROMPT_READY] = HookInvocationConfig(
@@ -232,9 +202,7 @@ class HookInvoker:
             expected_type=str,
         )
 
-    def register_config(
-        self, hook: HookPoint, config: HookInvocationConfig
-    ) -> None:
+    def register_config(self, hook: HookPoint, config: HookInvocationConfig) -> None:
         """
         Register or override a hook's invocation configuration.
 
@@ -280,9 +248,7 @@ class HookInvoker:
             if cfg.mode == InvocationMode.COLLECT:
                 return await self._invoke_collect(hook, context)
             elif cfg.mode == InvocationMode.TRANSFORM:
-                return await self._invoke_transform(
-                    hook, context, cfg.transform_key, cfg.expected_type
-                )
+                return await self._invoke_transform(hook, context, cfg.transform_key, cfg.expected_type)
             elif cfg.mode == InvocationMode.UNTIL_HANDLED:
                 return await self._invoke_until_handled(hook, context)
             elif cfg.mode == InvocationMode.CANCELLABLE:
@@ -299,9 +265,7 @@ class HookInvoker:
             )
             raise
 
-    async def _invoke_collect(
-        self, hook: HookPoint, context: HookContext
-    ) -> List[Any]:
+    async def _invoke_collect(self, hook: HookPoint, context: HookContext) -> List[Any]:
         """
         Collect all non-None results from extensions.
 
@@ -346,9 +310,7 @@ class HookInvoker:
                 )
         return result
 
-    async def _invoke_until_handled(
-        self, hook: HookPoint, context: HookContext
-    ) -> Optional[Any]:
+    async def _invoke_until_handled(self, hook: HookPoint, context: HookContext) -> Optional[Any]:
         """
         Invoke until one extension handles (returns truthy value).
 
@@ -361,9 +323,7 @@ class HookInvoker:
         """
         return await self.manager.invoke_until_handled(hook, context)
 
-    async def _invoke_cancellable(
-        self, hook: HookPoint, context: HookContext
-    ) -> bool:
+    async def _invoke_cancellable(self, hook: HookPoint, context: HookContext) -> bool:
         """
         Invoke with veto semantics - False cancels operation.
 
@@ -395,7 +355,4 @@ class HookInvoker:
         Returns:
             List of (hook_name, mode) tuples
         """
-        return [
-            (hook.name, cfg.mode.value)
-            for hook, cfg in self._configs.items()
-        ]
+        return [(hook.name, cfg.mode.value) for hook, cfg in self._configs.items()]

@@ -41,6 +41,7 @@ from knowledge.pipeline.config import get_audio_pipeline_config
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_config(sources=None, **extra):
     return ConnectorConfig(
         connector_id="test-audio-001",
@@ -59,6 +60,7 @@ def _make_config(sources=None, **extra):
 # _source_id_for
 # ---------------------------------------------------------------------------
 
+
 def test_source_id_stable():
     sid1 = _source_id_for("https://youtu.be/abc123")
     sid2 = _source_id_for("https://youtu.be/abc123")
@@ -74,13 +76,17 @@ def test_source_id_differs_for_different_sources():
 # _is_youtube_url
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("url,expected", [
-    ("https://www.youtube.com/watch?v=dQw4w9WgXcQ", True),
-    ("https://youtu.be/dQw4w9WgXcQ", True),
-    ("http://youtube.com/watch?v=xyz", True),
-    ("https://example.com/audio.mp3", False),
-    ("not_a_url", False),
-])
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("https://www.youtube.com/watch?v=dQw4w9WgXcQ", True),
+        ("https://youtu.be/dQw4w9WgXcQ", True),
+        ("http://youtube.com/watch?v=xyz", True),
+        ("https://example.com/audio.mp3", False),
+        ("not_a_url", False),
+    ],
+)
 def test_is_youtube_url(url, expected):
     assert _is_youtube_url(url) == expected
 
@@ -88,6 +94,7 @@ def test_is_youtube_url(url, expected):
 # ---------------------------------------------------------------------------
 # _validate_local_path
 # ---------------------------------------------------------------------------
+
 
 def test_validate_local_path_rejects_relative():
     with pytest.raises(ValueError, match="absolute"):
@@ -122,6 +129,7 @@ def test_validate_local_path_accepts_valid_mp3():
 # AudioConnector.test_connection
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_connection_returns_false_when_no_sources():
     connector = AudioConnector(_make_config(sources=[]))
@@ -149,11 +157,10 @@ async def test_connection_returns_true_for_existing_local_file():
 # AudioConnector.discover_sources
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_discover_sources_returns_one_per_source():
-    connector = AudioConnector(
-        _make_config(sources=["https://youtu.be/abc", "https://example.com/x.mp3"])
-    )
+    connector = AudioConnector(_make_config(sources=["https://youtu.be/abc", "https://example.com/x.mp3"]))
     sources = await connector.discover_sources()
     assert len(sources) == 2
     assert sources[0].source_id == _source_id_for("https://youtu.be/abc")
@@ -163,11 +170,10 @@ async def test_discover_sources_returns_one_per_source():
 # AudioConnector.detect_changes
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_detect_changes_all_added():
-    connector = AudioConnector(
-        _make_config(sources=["https://youtu.be/abc"])
-    )
+    connector = AudioConnector(_make_config(sources=["https://youtu.be/abc"]))
     changes = await connector.detect_changes()
     assert len(changes) == 1
     assert changes[0].change_type == "added"
@@ -176,9 +182,7 @@ async def test_detect_changes_all_added():
 @pytest.mark.asyncio
 async def test_detect_changes_incremental_still_returns_all():
     """Audio sources are immutable — incremental sync re-indexes them."""
-    connector = AudioConnector(
-        _make_config(sources=["https://youtu.be/abc"])
-    )
+    connector = AudioConnector(_make_config(sources=["https://youtu.be/abc"]))
     changes = await connector.detect_changes(since=datetime.utcnow())
     assert len(changes) == 1
 
@@ -186,6 +190,7 @@ async def test_detect_changes_incremental_still_returns_all():
 # ---------------------------------------------------------------------------
 # AudioConnector.fetch_content — NPU path
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_fetch_content_uses_npu_when_available():
@@ -213,6 +218,7 @@ async def test_fetch_content_uses_npu_when_available():
 # AudioConnector.fetch_content — CPU fallback
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_fetch_content_falls_back_to_cpu_whisper():
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
@@ -222,12 +228,15 @@ async def test_fetch_content_falls_back_to_cpu_whisper():
         connector = AudioConnector(_make_config(sources=[tmp_path]))
         source_id = _source_id_for(tmp_path)
 
-        with patch(
-            "knowledge.connectors.audio_connector._transcribe_with_npu",
-            new=AsyncMock(return_value=None),  # NPU unavailable
-        ), patch(
-            "knowledge.connectors.audio_connector._transcribe_with_whisper_cpu",
-            return_value="CPU fallback transcript",
+        with (
+            patch(
+                "knowledge.connectors.audio_connector._transcribe_with_npu",
+                new=AsyncMock(return_value=None),  # NPU unavailable
+            ),
+            patch(
+                "knowledge.connectors.audio_connector._transcribe_with_whisper_cpu",
+                return_value="CPU fallback transcript",
+            ),
         ):
             result = await connector.fetch_content(source_id)
 
@@ -241,6 +250,7 @@ async def test_fetch_content_falls_back_to_cpu_whisper():
 # AudioConnector.fetch_content — unknown source_id
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_fetch_content_returns_none_for_unknown_source_id():
     connector = AudioConnector(_make_config(sources=[]))
@@ -251,6 +261,7 @@ async def test_fetch_content_returns_none_for_unknown_source_id():
 # ---------------------------------------------------------------------------
 # get_audio_pipeline_config
 # ---------------------------------------------------------------------------
+
 
 def test_audio_pipeline_config_has_transcribe_audio_first():
     cfg = get_audio_pipeline_config()

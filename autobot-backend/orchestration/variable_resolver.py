@@ -81,9 +81,7 @@ class StepOutput:
 
         metadata = {k: v for k, v in result.items() if k not in ("stdout", "success")}
 
-        return cls(
-            status=status, stdout=stdout, parsed_json=parsed_json, metadata=metadata
-        )
+        return cls(status=status, stdout=stdout, parsed_json=parsed_json, metadata=metadata)
 
 
 # ---------------------------------------------------------------------------
@@ -145,9 +143,7 @@ class VariableResolver:
 
         def _replace(match: re.Match) -> str:
             step_id, accessor = match.group(1), match.group(2)
-            value = self._resolve_accessor(
-                step_id, accessor, step_outputs, match.group(0)
-            )
+            value = self._resolve_accessor(step_id, accessor, step_outputs, match.group(0))
             if value is _UNSET:
                 return match.group(0)
             if isinstance(value, (dict, list)):

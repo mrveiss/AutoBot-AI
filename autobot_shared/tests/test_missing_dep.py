@@ -124,6 +124,7 @@ def test_optional_import_resolves_real_module() -> None:
 
     result = optional_import("os.path", ["join", "exists"])
     import os.path
+
     assert result["join"] is os.path.join
     assert result["exists"] is os.path.exists
 
@@ -161,6 +162,7 @@ def test_optional_import_globals_update_pattern() -> None:
     fake_globals: dict[str, object] = {}
     fake_globals.update(optional_import("os.path", ["sep"]))
     import os.path
+
     assert fake_globals["sep"] == os.path.sep
 
 

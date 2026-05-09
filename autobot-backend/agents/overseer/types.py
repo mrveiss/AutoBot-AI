@@ -100,9 +100,7 @@ class AgentTask:
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": (
-                self.completed_at.isoformat() if self.completed_at else None
-            ),
+            "completed_at": (self.completed_at.isoformat() if self.completed_at else None),
             "error": self.error,
         }
 
@@ -168,8 +166,7 @@ class StepResult:
                 {
                     "summary": self.command_explanation.summary,
                     "breakdown": [
-                        {"part": p.part, "explanation": p.explanation}
-                        for p in self.command_explanation.breakdown
+                        {"part": p.part, "explanation": p.explanation} for p in self.command_explanation.breakdown
                     ],
                     "security_notes": self.command_explanation.security_notes,
                 }

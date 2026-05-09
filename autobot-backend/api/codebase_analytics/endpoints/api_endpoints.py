@@ -94,9 +94,7 @@ async def get_frontend_api_calls() -> JSONResponse:
     error_code_prefix="CODEBASE",
 )
 async def get_endpoint_coverage(
-    source_id: Optional[str] = Query(
-        None, description="#1772: source_id for API consistency"
-    ),
+    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
 ) -> JSONResponse:
     """
     Get full API endpoint coverage analysis.

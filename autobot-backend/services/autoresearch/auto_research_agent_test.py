@@ -93,9 +93,7 @@ def _make_metrics(improved: bool = True) -> ImprovementMetrics:
         result_val_bpb=4.5 if improved else 5.1,
         improvement=0.5 if improved else -0.1,
         improvement_pct=10.0 if improved else -2.0,
-        state=(
-            ExperimentState.KEPT.value if improved else ExperimentState.DISCARDED.value
-        ),
+        state=(ExperimentState.KEPT.value if improved else ExperimentState.DISCARDED.value),
     )
 
 
@@ -344,9 +342,7 @@ class TestApprovalGate:
         gate = self._gate()
         gate.get_approval_status = AsyncMock(return_value="approved")
 
-        result = await gate.wait_for_approval(
-            session_id="s", experiment_id="e", poll_interval=0.01, timeout=5.0
-        )
+        result = await gate.wait_for_approval(session_id="s", experiment_id="e", poll_interval=0.01, timeout=5.0)
         assert result == "approved"
 
     @pytest.mark.asyncio
@@ -354,9 +350,7 @@ class TestApprovalGate:
         gate = self._gate()
         gate.get_approval_status = AsyncMock(return_value="pending")
 
-        result = await gate.wait_for_approval(
-            session_id="s", experiment_id="e", poll_interval=0.01, timeout=0.05
-        )
+        result = await gate.wait_for_approval(session_id="s", experiment_id="e", poll_interval=0.01, timeout=0.05)
         assert result == "timeout"
 
 
@@ -365,15 +359,14 @@ class TestApprovalGate:
 # ---------------------------------------------------------------------------
 
 
-def _make_checkpoint_gate(decision: CheckpointDecision = CheckpointDecision.APPROVED,
-                          redirect_text: Optional[str] = None) -> MagicMock:
+def _make_checkpoint_gate(
+    decision: CheckpointDecision = CheckpointDecision.APPROVED, redirect_text: Optional[str] = None
+) -> MagicMock:
     """Return a mock ResearchCheckpointGate that returns the given decision."""
     gate = MagicMock(spec=ResearchCheckpointGate)
     gate.request = AsyncMock(return_value="autoresearch:checkpoint:s:query_plan:decision")
     gate.wait_for_decision = AsyncMock(
-        return_value=CheckpointResult(
-            decision=decision, redirect_instructions=redirect_text
-        )
+        return_value=CheckpointResult(decision=decision, redirect_instructions=redirect_text)
     )
     return gate
 
@@ -436,9 +429,7 @@ class TestAutoResearchAgentLoop:
         runner.run_experiment = AsyncMock(side_effect=lambda e: _make_experiment())
         agent = _make_agent(runner_mock=runner)
 
-        session = await agent.run_experiment_loop(
-            topic="attention mechanisms", max_iterations=2
-        )
+        session = await agent.run_experiment_loop(topic="attention mechanisms", max_iterations=2)
 
         assert session.iterations_completed == 2
         assert session.status == SessionStatus.COMPLETED
@@ -462,9 +453,7 @@ class TestAutoResearchAgentLoop:
         runner = AsyncMock()
         # All experiments fail to improve (high val_bpb = worse)
         runner.run_experiment = AsyncMock(
-            side_effect=lambda e: _make_experiment(
-                state=ExperimentState.DISCARDED, val_bpb=6.0, baseline=5.0
-            )
+            side_effect=lambda e: _make_experiment(state=ExperimentState.DISCARDED, val_bpb=6.0, baseline=5.0)
         )
         agent = _make_agent(runner_mock=runner)
 
@@ -497,16 +486,12 @@ class TestAutoResearchAgentLoop:
         """ApprovalGate.request_approval is called when improvement exceeds threshold."""
         runner = AsyncMock()
         # 20% improvement — above the 5% default threshold
-        improved_exp = _make_experiment(
-            state=ExperimentState.KEPT, val_bpb=4.0, baseline=5.0
-        )
+        improved_exp = _make_experiment(state=ExperimentState.KEPT, val_bpb=4.0, baseline=5.0)
         runner.run_experiment = AsyncMock(return_value=improved_exp)
 
         approval_gate = MagicMock(spec=ApprovalGate)
         approval_gate.check_approval_needed = MagicMock(return_value=True)
-        approval_gate.request_approval = AsyncMock(
-            return_value="autoresearch:approval:status:s:e"
-        )
+        approval_gate.request_approval = AsyncMock(return_value="autoresearch:approval:status:s:e")
         approval_gate.wait_for_approval = AsyncMock(return_value="approved")
 
         import httpx
@@ -683,8 +668,10 @@ class TestResearchCheckpointGate:
         gate = self._gate()
         gate.get_decision = AsyncMock(return_value="approved")
         result = await gate.wait_for_decision(
-            "s1", ResearchCheckpointType.QUERY_PLAN.value,
-            timeout=5.0, poll_interval=0.01,
+            "s1",
+            ResearchCheckpointType.QUERY_PLAN.value,
+            timeout=5.0,
+            poll_interval=0.01,
         )
         assert result.decision == CheckpointDecision.APPROVED
 
@@ -693,8 +680,10 @@ class TestResearchCheckpointGate:
         gate = self._gate()
         gate.get_decision = AsyncMock(return_value="cancelled")
         result = await gate.wait_for_decision(
-            "s1", ResearchCheckpointType.SOURCE_SELECTION.value,
-            timeout=5.0, poll_interval=0.01,
+            "s1",
+            ResearchCheckpointType.SOURCE_SELECTION.value,
+            timeout=5.0,
+            poll_interval=0.01,
         )
         assert result.decision == CheckpointDecision.CANCELLED
 
@@ -703,8 +692,10 @@ class TestResearchCheckpointGate:
         gate = self._gate()
         gate.get_decision = AsyncMock(return_value="redirect:focus on regularisation")
         result = await gate.wait_for_decision(
-            "s1", ResearchCheckpointType.DRAFT_CONCLUSIONS.value,
-            timeout=5.0, poll_interval=0.01,
+            "s1",
+            ResearchCheckpointType.DRAFT_CONCLUSIONS.value,
+            timeout=5.0,
+            poll_interval=0.01,
         )
         assert result.decision == CheckpointDecision.REDIRECT
         assert result.redirect_instructions == "focus on regularisation"
@@ -714,8 +705,10 @@ class TestResearchCheckpointGate:
         gate = self._gate()
         gate.get_decision = AsyncMock(return_value="pending")
         result = await gate.wait_for_decision(
-            "s1", ResearchCheckpointType.QUERY_PLAN.value,
-            timeout=0.05, poll_interval=0.01,
+            "s1",
+            ResearchCheckpointType.QUERY_PLAN.value,
+            timeout=0.05,
+            poll_interval=0.01,
         )
         assert result.decision == CheckpointDecision.TIMEOUT
 
@@ -792,14 +785,14 @@ class TestAutoResearchAgentCheckpoints:
         config = AutoResearchConfig()
         config.checkpoints_enabled = True
         import httpx
+
         transport = httpx.MockTransport(handler=_mock_http_handler)
         http_client = httpx.AsyncClient(transport=transport)
         agent = AutoResearchAgent(
             config=config,
             store=AsyncMock(),
             runner=runner,
-            approval_gate=MagicMock(spec=ApprovalGate,
-                                    check_approval_needed=MagicMock(return_value=False)),
+            approval_gate=MagicMock(spec=ApprovalGate, check_approval_needed=MagicMock(return_value=False)),
             checkpoint_gate=gate,
             http_client=http_client,
         )
@@ -808,10 +801,7 @@ class TestAutoResearchAgentCheckpoints:
         session = await agent.run_experiment_loop(topic="original topic", max_iterations=1)
         assert session.status == SessionStatus.COMPLETED
         # The hypothesis statement should mention the user's redirect
-        assert any(
-            "learning rate schedule" in h.statement
-            for h in session.hypotheses
-        )
+        assert any("learning rate schedule" in h.statement for h in session.hypotheses)
 
     @pytest.mark.asyncio
     async def test_checkpoint_timeout_auto_proceeds(self):

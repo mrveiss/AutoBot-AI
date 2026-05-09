@@ -77,10 +77,10 @@ class NousPortalProvider(BaseProvider):
         if self._api_key:
             return self._api_key
         key = (
-            self._get_setting("api_key") or
-            os.getenv("HF_TOKEN") or
-            os.getenv("HUGGINGFACE_API_TOKEN") or
-            os.getenv("NOUS_API_KEY")
+            self._get_setting("api_key")
+            or os.getenv("HF_TOKEN")
+            or os.getenv("HUGGINGFACE_API_TOKEN")
+            or os.getenv("NOUS_API_KEY")
         )
         self._api_key = key
         return self._api_key
@@ -90,9 +90,9 @@ class NousPortalProvider(BaseProvider):
         if self._base_url:
             return self._base_url
         url = (
-            self._get_setting("base_url") or
-            os.getenv("NOUS_API_BASE_URL") or
-            "https://api-inference.huggingface.co/v1"  # HF Inference API
+            self._get_setting("base_url")
+            or os.getenv("NOUS_API_BASE_URL")
+            or "https://api-inference.huggingface.co/v1"  # HF Inference API
         )
         self._base_url = url
         return url
@@ -105,15 +105,11 @@ class NousPortalProvider(BaseProvider):
         try:
             from openai import AsyncOpenAI
         except ImportError as exc:
-            raise ImportError(
-                "openai package not installed. Run: pip install openai"
-            ) from exc
+            raise ImportError("openai package not installed. Run: pip install openai") from exc
 
         api_key = self._resolve_api_key()
         if not api_key:
-            raise ValueError(
-                "Nous API key not found. Set HF_TOKEN or provide api_key in settings."
-            )
+            raise ValueError("Nous API key not found. Set HF_TOKEN or provide api_key in settings.")
 
         base_url = self._resolve_base_url()
         self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
@@ -129,25 +125,18 @@ class NousPortalProvider(BaseProvider):
         Returns:
             LLMResponse with content populated or error field set.
         """
-        with _tracer.start_as_current_span(
-            "nous.chat_completion", kind=SpanKind.CLIENT
-        ) as span:
+        with _tracer.start_as_current_span("nous.chat_completion", kind=SpanKind.CLIENT) as span:
             try:
                 self._total_requests += 1
                 self._ensure_client()
 
                 # Convert to OpenAI format
-                messages = [
-                    {"role": msg.role, "content": msg.content}
-                    for msg in request.messages
-                ]
+                messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
                 # Merge API kwargs
                 api_kwargs = request.metadata.get("api_kwargs", {})
                 chat_kwargs = {
-                    "model": request.model_name or self._get_setting(
-                        "default_model", NOUS_MODELS[0]
-                    ),
+                    "model": request.model_name or self._get_setting("default_model", NOUS_MODELS[0]),
                     "messages": messages,
                     "temperature": api_kwargs.get("temperature", 0.7),
                     "max_tokens": api_kwargs.get("max_tokens", 2048),
@@ -213,23 +202,16 @@ class NousPortalProvider(BaseProvider):
         Yields:
             String chunks of the generated text.
         """
-        with _tracer.start_as_current_span(
-            "nous.stream_completion", kind=SpanKind.CLIENT
-        ) as span:
+        with _tracer.start_as_current_span("nous.stream_completion", kind=SpanKind.CLIENT) as span:
             try:
                 self._total_requests += 1
                 self._ensure_client()
 
-                messages = [
-                    {"role": msg.role, "content": msg.content}
-                    for msg in request.messages
-                ]
+                messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
                 api_kwargs = request.metadata.get("api_kwargs", {})
                 chat_kwargs = {
-                    "model": request.model_name or self._get_setting(
-                        "default_model", NOUS_MODELS[0]
-                    ),
+                    "model": request.model_name or self._get_setting("default_model", NOUS_MODELS[0]),
                     "messages": messages,
                     "temperature": api_kwargs.get("temperature", 0.7),
                     "max_tokens": api_kwargs.get("max_tokens", 2048),

@@ -46,9 +46,7 @@ router = APIRouter(prefix="/knowledge/organization", tags=["knowledge-organizati
     operation="get_organization_policy",
     error_code_prefix="KNOWLEDGE_ORGANIZATION",
 )
-async def get_organization_policy(
-    request: Request, current_user: Dict = Depends(get_current_user)
-):
+async def get_organization_policy(request: Request, current_user: Dict = Depends(get_current_user)):
     """Get organization knowledge policy.
 
     Issue #679: Organization-level knowledge policy settings.
@@ -58,9 +56,7 @@ async def get_organization_policy(
     """
     org_id = current_user.get("org_id")
     if not org_id:
-        raise HTTPException(
-            status_code=400, detail="User not associated with an organization"
-        )
+        raise HTTPException(status_code=400, detail="User not associated with an organization")
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None:
@@ -115,9 +111,7 @@ async def update_organization_policy(
     """
     org_id = current_user.get("org_id")
     if not org_id:
-        raise HTTPException(
-            status_code=400, detail="User not associated with an organization"
-        )
+        raise HTTPException(status_code=400, detail="User not associated with an organization")
 
     user_role = current_user.get("role", "")
     if user_role not in ("admin", "org_admin"):
@@ -210,13 +204,7 @@ def _get_organization_team_count(current_user: Dict) -> int:
     if team_memberships is None:
         return 0
     org_id = str(current_user.org_id) if hasattr(current_user, "org_id") else None
-    return len(
-        [
-            m.team
-            for m in team_memberships
-            if m.team and str(m.team.org_id) == org_id and not m.team.is_deleted
-        ]
-    )
+    return len([m.team for m in team_memberships if m.team and str(m.team.org_id) == org_id and not m.team.is_deleted])
 
 
 @router.get("/stats", response_model=KnowledgeOrganizationStatsResponse)
@@ -225,9 +213,7 @@ def _get_organization_team_count(current_user: Dict) -> int:
     operation="get_organization_knowledge_stats",
     error_code_prefix="KNOWLEDGE_ORGANIZATION",
 )
-async def get_organization_knowledge_stats(
-    request: Request, current_user: Dict = Depends(get_current_user)
-):
+async def get_organization_knowledge_stats(request: Request, current_user: Dict = Depends(get_current_user)):
     """Get knowledge statistics for the organization.
 
     Issue #679: Organization-level analytics.
@@ -237,9 +223,7 @@ async def get_organization_knowledge_stats(
     """
     org_id = current_user.get("org_id")
     if not org_id:
-        raise HTTPException(
-            status_code=400, detail="User not associated with an organization"
-        )
+        raise HTTPException(status_code=400, detail="User not associated with an organization")
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None or not kb.ownership_manager:
@@ -247,19 +231,14 @@ async def get_organization_knowledge_stats(
 
     try:
         # Get all organization facts
-        fact_ids = await kb.ownership_manager.get_organization_facts(
-            organization_id=str(org_id)
-        )
+        fact_ids = await kb.ownership_manager.get_organization_facts(organization_id=str(org_id))
 
         # Analyze facts
         analysis = await _analyze_organization_facts(kb, fact_ids)
 
         # Get top contributors
         top_contributors = sorted(
-            [
-                {"user_id": uid, "count": count}
-                for uid, count in analysis["user_contributions"].items()
-            ],
+            [{"user_id": uid, "count": count} for uid, count in analysis["user_contributions"].items()],
             key=lambda x: x["count"],
             reverse=True,
         )[:10]
@@ -353,9 +332,7 @@ async def cleanup_organization_knowledge(
 
     org_id = current_user.get("org_id")
     if not org_id:
-        raise HTTPException(
-            status_code=400, detail="User not associated with an organization"
-        )
+        raise HTTPException(status_code=400, detail="User not associated with an organization")
 
     user_role = current_user.get("role", "")
     if user_role not in ("admin", "org_admin"):
@@ -367,9 +344,7 @@ async def cleanup_organization_knowledge(
 
     try:
         org_id = str(org_id)
-        fact_ids = await kb.ownership_manager.get_organization_facts(
-            organization_id=org_id
-        )
+        fact_ids = await kb.ownership_manager.get_organization_facts(organization_id=org_id)
 
         cutoff_date = now_utc() - timedelta(days=retention_days)
         deleted_count = await _delete_expired_facts(kb, fact_ids, cutoff_date)

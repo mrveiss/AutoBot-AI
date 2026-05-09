@@ -76,15 +76,11 @@ class APIRegistry:
 
             # Exact path match but different method
             if endpoint_path == path_lower and endpoint_method != method:
-                similar.append(
-                    f"{endpoint_method} {endpoint_info['path']} (different method)"
-                )
+                similar.append(f"{endpoint_method} {endpoint_info['path']} (different method)")
 
             # Similar path (contains or partial match)
             elif path_lower in endpoint_path or endpoint_path in path_lower:
-                similar.append(
-                    f"{endpoint_method} {endpoint_info['path']} (similar path)"
-                )
+                similar.append(f"{endpoint_method} {endpoint_info['path']} (similar path)")
 
         return similar[:5]  # Limit to 5 suggestions
 
@@ -173,9 +169,7 @@ async def get_system_info():
 async def enhanced_404_handler(request: Request, exc: HTTPException):
     """Enhanced 404 handler that provides helpful suggestions in developer mode"""
     developer_mode = unified_config_manager.get_nested("developer.enabled", False)
-    enhanced_errors = unified_config_manager.get_nested(
-        "developer.enhanced_errors", True
-    )
+    enhanced_errors = unified_config_manager.get_nested("developer.enhanced_errors", True)
 
     if not developer_mode or not enhanced_errors:
         return JSONResponse(status_code=404, content={"detail": "Not Found"})
@@ -198,9 +192,7 @@ async def enhanced_404_handler(request: Request, exc: HTTPException):
     }
 
     if not similar_endpoints:
-        response_content["developer_info"][
-            "suggestion"
-        ] = "Check available endpoints at /api/developer/endpoints"
+        response_content["developer_info"]["suggestion"] = "Check available endpoints at /api/developer/endpoints"
 
     return JSONResponse(status_code=404, content=response_content)
 
@@ -209,9 +201,7 @@ async def enhanced_404_handler(request: Request, exc: HTTPException):
 async def enhanced_405_handler(request: Request, exc: HTTPException):
     """Enhanced 405 handler for developer mode"""
     developer_mode = unified_config_manager.get_nested("developer.enabled", False)
-    enhanced_errors = unified_config_manager.get_nested(
-        "developer.enhanced_errors", True
-    )
+    enhanced_errors = unified_config_manager.get_nested("developer.enhanced_errors", True)
 
     if not developer_mode or not enhanced_errors:
         return JSONResponse(status_code=405, content={"detail": "Method Not Allowed"})
@@ -232,9 +222,7 @@ async def enhanced_405_handler(request: Request, exc: HTTPException):
             "requested_path": path,
             "allowed_methods": allowed_methods,
             "suggestion": (
-                f"Try one of: {', '.join(allowed_methods)}"
-                if allowed_methods
-                else "No methods available for this path"
+                f"Try one of: {', '.join(allowed_methods)}" if allowed_methods else "No methods available for this path"
             ),
         },
     }

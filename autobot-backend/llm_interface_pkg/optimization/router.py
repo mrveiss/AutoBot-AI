@@ -141,13 +141,9 @@ class OptimizationRouter:
     def _initialize_provider_optimizations(self) -> None:
         """Initialize optimization sets for each provider type."""
         for provider in ProviderType:
-            self._enabled_optimizations[provider] = self._get_applicable_optimizations(
-                provider
-            )
+            self._enabled_optimizations[provider] = self._get_applicable_optimizations(provider)
 
-    def _get_applicable_optimizations(
-        self, provider: ProviderType
-    ) -> Set[OptimizationCategory]:
+    def _get_applicable_optimizations(self, provider: ProviderType) -> Set[OptimizationCategory]:
         """
         Get applicable optimizations for a provider type.
 
@@ -174,9 +170,7 @@ class OptimizationRouter:
         """Check if provider is a cloud API provider."""
         return provider in self.CLOUD_PROVIDERS
 
-    def should_apply(
-        self, optimization: OptimizationCategory, provider: ProviderType
-    ) -> bool:
+    def should_apply(self, optimization: OptimizationCategory, provider: ProviderType) -> bool:
         """
         Check if an optimization should be applied for a provider.
 
@@ -218,9 +212,7 @@ class OptimizationRouter:
         """
         return self._enabled_optimizations.get(provider, set())
 
-    def get_enabled_optimizations(
-        self, provider: ProviderType
-    ) -> Set[OptimizationCategory]:
+    def get_enabled_optimizations(self, provider: ProviderType) -> Set[OptimizationCategory]:
         """
         Get all enabled optimizations for a provider (respects config).
 
@@ -250,9 +242,7 @@ class OptimizationRouter:
             summary[opt.value] = enabled
         return summary
 
-    def get_quantization_kwargs(
-        self, model_config: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def get_quantization_kwargs(self, model_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Return ``from_pretrained`` kwargs for active quantization config (#1943).
 
         When ``quantization_enabled`` is True and ``quantization_type`` is not

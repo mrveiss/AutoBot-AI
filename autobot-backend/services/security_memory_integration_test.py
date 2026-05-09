@@ -32,9 +32,7 @@ class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         """Set up test fixtures."""
         self.mock_memory_graph = AsyncMock()
-        self.integration = SecurityMemoryIntegration(
-            memory_graph=self.mock_memory_graph
-        )
+        self.integration = SecurityMemoryIntegration(memory_graph=self.mock_memory_graph)
         self.integration._initialized = True
 
     async def test_create_assessment_entity(self):
@@ -55,22 +53,16 @@ class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
         self.mock_memory_graph.create_entity.assert_called_once()
         call_args = self.mock_memory_graph.create_entity.call_args
         self.assertEqual(call_args[1]["entity_type"], "task")
-        self.assertIn(
-            "Security assessment: Test Assessment", call_args[1]["observations"]
-        )
+        self.assertIn("Security assessment: Test Assessment", call_args[1]["observations"])
         self.assertIn("security", call_args[1]["tags"])
         self.assertEqual(result["name"], "Security Assessment: Test Assessment")
 
     async def test_create_host_entity(self):
         """Test creating host entity and assessment-host relation."""
-        self.mock_memory_graph.create_entity = AsyncMock(
-            return_value={"name": "Host: 192.168.1.10", "id": "host-123"}
-        )
+        self.mock_memory_graph.create_entity = AsyncMock(return_value={"name": "Host: 192.168.1.10", "id": "host-123"})
         self.mock_memory_graph.create_relation = AsyncMock(return_value=True)
 
-        with patch.object(
-            self.integration._findings_index, "index_finding", new_callable=AsyncMock
-        ) as mock_index:
+        with patch.object(self.integration._findings_index, "index_finding", new_callable=AsyncMock) as mock_index:
             result = await self.integration.create_host_entity(
                 assessment_id="test-001",
                 ip="192.168.1.10",
@@ -104,9 +96,7 @@ class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
         )
         self.mock_memory_graph.create_relation = AsyncMock(return_value=True)
 
-        with patch.object(
-            self.integration._findings_index, "index_finding", new_callable=AsyncMock
-        ) as mock_index:
+        with patch.object(self.integration._findings_index, "index_finding", new_callable=AsyncMock) as mock_index:
             result = await self.integration.create_service_entity(
                 assessment_id="test-001",
                 host_ip="192.168.1.10",
@@ -141,9 +131,7 @@ class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
         )
         self.mock_memory_graph.create_relation = AsyncMock(return_value=True)
 
-        with patch.object(
-            self.integration._findings_index, "index_finding", new_callable=AsyncMock
-        ) as mock_index:
+        with patch.object(self.integration._findings_index, "index_finding", new_callable=AsyncMock) as mock_index:
             result = await self.integration.create_vulnerability_entity(
                 assessment_id="test-001",
                 host_ip="192.168.1.10",
@@ -173,28 +161,18 @@ class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
         ]
         self.mock_memory_graph.search_entities = AsyncMock(return_value=mock_results)
 
-        results = await self.integration.search_security_findings(
-            query="192.168.1.10", limit=10
-        )
+        results = await self.integration.search_security_findings(query="192.168.1.10", limit=10)
 
         self.assertEqual(len(results), 2)
-        self.assertTrue(
-            all(r["metadata"]["type"] in ["target_host", "service"] for r in results)
-        )
+        self.assertTrue(all(r["metadata"]["type"] in ["target_host", "service"] for r in results))
 
     async def test_chromadb_indexing_on_entity_creation(self):
         """Test ChromaDB index is called when entities are created."""
-        self.mock_memory_graph.create_entity = AsyncMock(
-            return_value={"name": "Host: 10.0.0.1", "id": "123"}
-        )
+        self.mock_memory_graph.create_entity = AsyncMock(return_value={"name": "Host: 10.0.0.1", "id": "123"})
         self.mock_memory_graph.create_relation = AsyncMock(return_value=True)
 
-        with patch.object(
-            self.integration._findings_index, "index_finding", new_callable=AsyncMock
-        ) as mock_index:
-            await self.integration.create_host_entity(
-                assessment_id="test-001", ip="10.0.0.1", status="up"
-            )
+        with patch.object(self.integration._findings_index, "index_finding", new_callable=AsyncMock) as mock_index:
+            await self.integration.create_host_entity(assessment_id="test-001", ip="10.0.0.1", status="up")
 
             mock_index.assert_called_once()
             call_args = mock_index.call_args
@@ -204,9 +182,7 @@ class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
 
     async def test_chromadb_failure_doesnt_break_flow(self):
         """Test ChromaDB errors are handled gracefully."""
-        self.mock_memory_graph.create_entity = AsyncMock(
-            return_value={"name": "Host: 10.0.0.1", "id": "123"}
-        )
+        self.mock_memory_graph.create_entity = AsyncMock(return_value={"name": "Host: 10.0.0.1", "id": "123"})
         self.mock_memory_graph.create_relation = AsyncMock(return_value=True)
 
         with patch.object(
@@ -215,9 +191,7 @@ class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
             new_callable=AsyncMock,
             side_effect=Exception("ChromaDB connection failed"),
         ):
-            result = await self.integration.create_host_entity(
-                assessment_id="test-001", ip="10.0.0.1", status="up"
-            )
+            result = await self.integration.create_host_entity(assessment_id="test-001", ip="10.0.0.1", status="up")
 
             self.assertEqual(result["name"], "Host: 10.0.0.1")
             self.mock_memory_graph.create_entity.assert_called_once()

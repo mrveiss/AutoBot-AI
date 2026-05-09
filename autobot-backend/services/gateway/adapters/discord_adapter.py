@@ -32,9 +32,7 @@ class DiscordAdapter(BaseAdapter):
             metadata=metadata,
         )
 
-    async def denormalize_response(
-        self, unified_response: NormalizedResponse
-    ) -> Dict[str, Any]:
+    async def denormalize_response(self, unified_response: NormalizedResponse) -> Dict[str, Any]:
         """Convert unified response to Discord format."""
         discord_response = {
             "channel_id": unified_response.channel_id,
@@ -43,9 +41,7 @@ class DiscordAdapter(BaseAdapter):
 
         # Discord thread replies reference the message
         if unified_response.response_type == "thread_reply":
-            discord_response["message_reference"] = {
-                "message_id": unified_response.metadata.get("message_id")
-            }
+            discord_response["message_reference"] = {"message_id": unified_response.metadata.get("message_id")}
 
         return discord_response
 

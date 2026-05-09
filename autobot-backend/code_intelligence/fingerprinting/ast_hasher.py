@@ -104,9 +104,7 @@ class ASTHasher:
             return handler(self, node, node_type)
 
         # Fallback for any other node types
-        children = tuple(
-            self._node_to_structure(child) for child in ast.iter_child_nodes(node)
-        )
+        children = tuple(self._node_to_structure(child) for child in ast.iter_child_nodes(node))
         return (node_type, children)
 
     # =========================================================================
@@ -127,9 +125,7 @@ class ASTHasher:
         body_tuple = tuple(self._node_to_structure(n) for n in node.body)
         return (node_type, node.name, args_tuple, body_tuple)
 
-    def _handle_async_function_def(
-        self, node: ast.AsyncFunctionDef, node_type: str
-    ) -> Tuple:
+    def _handle_async_function_def(self, node: ast.AsyncFunctionDef, node_type: str) -> Tuple:
         """Handle AsyncFunctionDef AST nodes."""
         args_tuple = self._args_to_structure(node.args)
         body_tuple = tuple(self._node_to_structure(n) for n in node.body)
@@ -232,11 +228,7 @@ class ASTHasher:
     def _handle_withitem(self, node: ast.withitem, node_type: str) -> Tuple:
         """Handle withitem AST nodes."""
         context = self._node_to_structure(node.context_expr)
-        optional_vars = (
-            self._node_to_structure(node.optional_vars)
-            if node.optional_vars
-            else ("None",)
-        )
+        optional_vars = self._node_to_structure(node.optional_vars) if node.optional_vars else ("None",)
         return ("withitem", context, optional_vars)
 
     def _handle_list(self, node: ast.List, node_type: str) -> Tuple:
@@ -360,9 +352,7 @@ class ASTHasher:
         value = self._node_to_structure(node.value)
         return (node_type, value)
 
-    def _handle_formatted_value(
-        self, node: ast.FormattedValue, node_type: str
-    ) -> Tuple:
+    def _handle_formatted_value(self, node: ast.FormattedValue, node_type: str) -> Tuple:
         """Handle FormattedValue AST nodes (f-string values)."""
         value = self._node_to_structure(node.value)
         return (node_type, value, node.conversion)
@@ -523,9 +513,7 @@ class ASTHasher:
         elif isinstance(node, ast.UnaryOp):
             features["operator_types"].add(type(node.op).__name__)
 
-    def _count_features(
-        self, node: ast.AST, features: Dict[str, Any], depth: int
-    ) -> None:
+    def _count_features(self, node: ast.AST, features: Dict[str, Any], depth: int) -> None:
         """
         Recursively count features in an AST node.
 

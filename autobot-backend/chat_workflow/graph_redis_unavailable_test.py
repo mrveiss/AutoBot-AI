@@ -33,9 +33,7 @@ _STUBS: dict = {
     "langgraph.checkpoint": types.ModuleType("langgraph.checkpoint"),
     "langgraph.checkpoint.redis": types.ModuleType("langgraph.checkpoint.redis"),
     # Empty stub — no AsyncRedisSaver attribute → simulates broken redisvl chain
-    "langgraph.checkpoint.redis.aio": types.ModuleType(
-        "langgraph.checkpoint.redis.aio"
-    ),
+    "langgraph.checkpoint.redis.aio": types.ModuleType("langgraph.checkpoint.redis.aio"),
     "langgraph.graph": types.ModuleType("langgraph.graph"),
     "langgraph.types": types.ModuleType("langgraph.types"),
     "typing_extensions": types.ModuleType("typing_extensions"),
@@ -84,9 +82,7 @@ def _load_graph_isolated():
     if orig is not _SENTINEL:
         delattr(aio_mod, "AsyncRedisSaver")
     try:
-        spec = importlib.util.spec_from_file_location(
-            f"_graph_redis_unavail_{id(object())}", _GRAPH_PATH
-        )
+        spec = importlib.util.spec_from_file_location(f"_graph_redis_unavail_{id(object())}", _GRAPH_PATH)
         assert spec is not None and spec.loader is not None
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)  # type: ignore[union-attr]
@@ -105,9 +101,7 @@ def test_graph_loads_when_async_redis_saver_unavailable():
 def test_redis_checkpointer_available_flag_is_false_when_import_fails():
     """_REDIS_CHECKPOINTER_AVAILABLE must be False when AsyncRedisSaver is unavailable."""
     mod = _load_graph_isolated()
-    assert hasattr(
-        mod, "_REDIS_CHECKPOINTER_AVAILABLE"
-    ), "graph.py must expose _REDIS_CHECKPOINTER_AVAILABLE"
+    assert hasattr(mod, "_REDIS_CHECKPOINTER_AVAILABLE"), "graph.py must expose _REDIS_CHECKPOINTER_AVAILABLE"
     assert mod._REDIS_CHECKPOINTER_AVAILABLE is False
 
 

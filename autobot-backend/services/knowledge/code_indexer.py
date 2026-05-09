@@ -151,13 +151,15 @@ def _py_call_graph(
             pair = (current_scope, target_name)
             if pair not in seen:
                 seen.add(pair)
-                edges.append({
-                    "source": current_scope,
-                    "target_name": target_name,
-                    "kind": "calls",
-                    "source_path": source_path,
-                    "origin": "extracted",
-                })
+                edges.append(
+                    {
+                        "source": current_scope,
+                        "target_name": target_name,
+                        "kind": "calls",
+                        "source_path": source_path,
+                        "origin": "extracted",
+                    }
+                )
 
     for child in node.children:
         _py_call_graph(child, source_path, nodes, edges, seen, current_scope)
@@ -170,8 +172,12 @@ def _js_structural(node: Any, source_path: str, nodes: dict, parent_scope: Optio
         name = name_node.text.decode("utf-8") if name_node else f"anon_{node.start_point[0]}"
         nid = _make_node_id(name, source_path, parent=parent_scope)
         nodes[nid] = {
-            "id": nid, "name": name, "kind": "function",
-            "source_path": source_path, "line": node.start_point[0] + 1, "parent": parent_scope,
+            "id": nid,
+            "name": name,
+            "kind": "function",
+            "source_path": source_path,
+            "line": node.start_point[0] + 1,
+            "parent": parent_scope,
         }
         for child in node.children:
             _js_structural(child, source_path, nodes, parent_scope=nid)
@@ -182,15 +188,24 @@ def _js_structural(node: Any, source_path: str, nodes: dict, parent_scope: Optio
             name = name_node.text.decode("utf-8")
             nid = _make_node_id(name, source_path, parent=parent_scope)
             nodes[nid] = {
-                "id": nid, "name": name, "kind": "class",
-                "source_path": source_path, "line": node.start_point[0] + 1, "parent": parent_scope,
+                "id": nid,
+                "name": name,
+                "kind": "class",
+                "source_path": source_path,
+                "line": node.start_point[0] + 1,
+                "parent": parent_scope,
             }
     for child in node.children:
         _js_structural(child, source_path, nodes, parent_scope)
 
 
 def _js_call_graph(
-    node: Any, source_path: str, nodes: dict, edges: list, seen: set, current_scope: Optional[str],
+    node: Any,
+    source_path: str,
+    nodes: dict,
+    edges: list,
+    seen: set,
+    current_scope: Optional[str],
     parent_scope: Optional[str] = None,
 ) -> None:
     """Helper for JS/TS call-graph extraction."""
@@ -212,10 +227,15 @@ def _js_call_graph(
             pair = (current_scope, target_name)
             if pair not in seen:
                 seen.add(pair)
-                edges.append({
-                    "source": current_scope, "target_name": target_name,
-                    "kind": "calls", "source_path": source_path, "origin": "extracted",
-                })
+                edges.append(
+                    {
+                        "source": current_scope,
+                        "target_name": target_name,
+                        "kind": "calls",
+                        "source_path": source_path,
+                        "origin": "extracted",
+                    }
+                )
     for child in node.children:
         _js_call_graph(child, source_path, nodes, edges, seen, current_scope)
 
@@ -364,10 +384,7 @@ class CodeIndexer:
             return aggregate
 
     async def _upsert_node(self, node: dict, rel_path: str, calls_by_source: dict[str, list[str]]) -> bool:
-        content = (
-            f"{node['kind'].upper()} {node['name']}\n"
-            f"File: {rel_path} line {node.get('line', 0)}"
-        )
+        content = f"{node['kind'].upper()} {node['name']}\n" f"File: {rel_path} line {node.get('line', 0)}"
         metadata: dict[str, Any] = {
             "source": "autobot_code",
             "node_kind": node["kind"],
@@ -410,8 +427,6 @@ class CodeIndexer:
     def _save_cache(self) -> None:
         try:
             self._cache_file.parent.mkdir(parents=True, exist_ok=True)
-            self._cache_file.write_text(
-                json.dumps(self._hash_cache, indent=2), encoding="utf-8"
-            )
+            self._cache_file.write_text(json.dumps(self._hash_cache, indent=2), encoding="utf-8")
         except OSError as e:
             logger.warning("Could not save code index cache: %s", e)

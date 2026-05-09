@@ -67,11 +67,7 @@ async def get_project_status(detailed: bool = False):
             completed_phases=status["completed_phases"],
             active_phases=status["active_phases"],
             overall_completion=status["overall_completion"],
-            next_suggested_phase=(
-                str(status["next_suggested_phase"])
-                if status["next_suggested_phase"]
-                else None
-            ),
+            next_suggested_phase=(str(status["next_suggested_phase"]) if status["next_suggested_phase"] else None),
             phases=phases,
         )
 
@@ -171,11 +167,7 @@ async def get_all_phases():
                         "validation_target": cap.validation_target,
                         "required": cap.required,
                         "implemented": cap.implemented,
-                        "last_validated": (
-                            cap.last_validated.isoformat()
-                            if cap.last_validated
-                            else None
-                        ),
+                        "last_validated": (cap.last_validated.isoformat() if cap.last_validated else None),
                         "validation_details": cap.validation_details,
                     }
                 )
@@ -186,9 +178,7 @@ async def get_all_phases():
                 "completion_percentage": info.completion_percentage,
                 "is_active": info.is_active,
                 "is_completed": info.is_completed,
-                "last_validated": (
-                    info.last_validated.isoformat() if info.last_validated else None
-                ),
+                "last_validated": (info.last_validated.isoformat() if info.last_validated else None),
                 "prerequisites": [p.value for p in info.prerequisites],
                 "capabilities": capabilities,
             }

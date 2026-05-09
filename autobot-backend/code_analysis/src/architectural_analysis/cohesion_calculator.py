@@ -47,18 +47,14 @@ class CohesionCalculator:
 
         return self._compute_cohesion_ratio(attribute_refs)
 
-    def _collect_attribute_references(
-        self, methods: List[ast.FunctionDef]
-    ) -> Dict[str, List[str]]:
+    def _collect_attribute_references(self, methods: List[ast.FunctionDef]) -> Dict[str, List[str]]:
         """Collect attribute references from methods."""
         attribute_refs: Dict[str, List[str]] = {}
         for method in methods:
             self._collect_self_attributes(method, attribute_refs)
         return attribute_refs
 
-    def _collect_self_attributes(
-        self, method: ast.FunctionDef, attribute_refs: Dict[str, List[str]]
-    ) -> None:
+    def _collect_self_attributes(self, method: ast.FunctionDef, attribute_refs: Dict[str, List[str]]) -> None:
         """Collect self.* attribute references from a method."""
         for child in ast.walk(method):
             if not self._is_self_attribute(child):
@@ -70,17 +66,11 @@ class CohesionCalculator:
 
     def _is_self_attribute(self, node: ast.AST) -> bool:
         """Check if node is a self.* attribute access."""
-        return (
-            isinstance(node, ast.Attribute)
-            and isinstance(node.value, ast.Name)
-            and node.value.id == "self"
-        )
+        return isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "self"
 
     def _compute_cohesion_ratio(self, attribute_refs: Dict[str, List[str]]) -> float:
         """Compute cohesion ratio from attribute references."""
-        shared_attributes = sum(
-            1 for methods_list in attribute_refs.values() if len(methods_list) > 1
-        )
+        shared_attributes = sum(1 for methods_list in attribute_refs.values() if len(methods_list) > 1)
         total_attributes = len(attribute_refs)
         return shared_attributes / total_attributes if total_attributes > 0 else 0.5
 

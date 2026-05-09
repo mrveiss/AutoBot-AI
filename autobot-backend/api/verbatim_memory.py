@@ -101,7 +101,5 @@ async def delete_session_verbatim(
 
     store = await get_verbatim_store()
     deleted = await store.delete_session(session_id)
-    logger.info(
-        "verbatim_memory: deleted %d chunks for session %s", deleted, session_id
-    )
+    logger.info("verbatim_memory: deleted %d chunks for session %s", deleted, session_id)
     return {"session_id": session_id, "deleted_count": deleted}

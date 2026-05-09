@@ -242,9 +242,7 @@ class TestDockerBackend:
 
     async def test_initialization_without_docker(self):
         """Test error when Docker is not available."""
-        with patch(
-            "services.execution.docker_backend.docker", None
-        ):
+        with patch("services.execution.docker_backend.docker", None):
             with pytest.raises(RuntimeError, match="docker"):
                 DockerBackend()
 

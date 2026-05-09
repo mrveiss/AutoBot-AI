@@ -54,9 +54,7 @@ class WebCrawlerConnector(AbstractConnector):
         cfg = config.config
         self._seed_urls: List[str] = cfg.get("urls", [])
         self._max_depth: int = int(cfg.get("max_depth", 1))
-        self._playwright_url: str = cfg.get(
-            "playwright_service_url", self._default_playwright_url()
-        )
+        self._playwright_url: str = cfg.get("playwright_service_url", self._default_playwright_url())
 
     # ------------------------------------------------------------------
     # AbstractConnector interface
@@ -70,9 +68,7 @@ class WebCrawlerConnector(AbstractConnector):
             client = get_http_client()
             async with await client.get("%s/health" % self._playwright_url) as resp:
                 if resp.status == 200:
-                    self.logger.info(
-                        "Playwright service healthy at %s", self._playwright_url
-                    )
+                    self.logger.info("Playwright service healthy at %s", self._playwright_url)
                     return True
                 self.logger.warning("Playwright health returned %s", resp.status)
                 return False
@@ -110,9 +106,7 @@ class WebCrawlerConnector(AbstractConnector):
             return None
         return await self._extract_url(url)
 
-    async def detect_changes(
-        self, since: Optional[datetime] = None
-    ) -> List[ChangeInfo]:
+    async def detect_changes(self, since: Optional[datetime] = None) -> List[ChangeInfo]:
         """Detect page changes by comparing content hash against stored hash.
 
         When *since* is None (first sync), all URLs are treated as 'added'.
@@ -165,7 +159,9 @@ class WebCrawlerConnector(AbstractConnector):
         except Exception:
             from constants.network_constants import NetworkConstants
 
-            return f"http://{os.environ.get('AUTOBOT_BROWSER_SERVICE_HOST', '')}:{NetworkConstants.BROWSER_SERVICE_PORT}"
+            return (
+                f"http://{os.environ.get('AUTOBOT_BROWSER_SERVICE_HOST', '')}:{NetworkConstants.BROWSER_SERVICE_PORT}"
+            )
 
     def _find_url_for_source_id(self, source_id: str) -> Optional[str]:
         """Return the URL that corresponds to *source_id* from seed list."""
@@ -182,13 +178,9 @@ class WebCrawlerConnector(AbstractConnector):
         try:
             client = get_http_client()
             payload = {"url": url}
-            async with await client.post(
-                "%s/extract" % self._playwright_url, json=payload
-            ) as resp:
+            async with await client.post("%s/extract" % self._playwright_url, json=payload) as resp:
                 if resp.status != 200:
-                    self.logger.error(
-                        "Playwright /extract returned %s for %s", resp.status, url
-                    )
+                    self.logger.error("Playwright /extract returned %s for %s", resp.status, url)
                     return None
 
                 data = await resp.json()
@@ -220,9 +212,7 @@ class WebCrawlerConnector(AbstractConnector):
             self.logger.error("Error extracting %s: %s", url, exc)
             return None
 
-    async def _has_content_changed(
-        self, url: str, source_id: str, get_redis_client_fn
-    ) -> bool:
+    async def _has_content_changed(self, url: str, source_id: str, get_redis_client_fn) -> bool:
         """Return True when the current page hash differs from the stored hash."""
         try:
             result = await self._extract_url(url)
@@ -232,13 +222,9 @@ class WebCrawlerConnector(AbstractConnector):
             current_hash = hashlib.sha256(result.content.encode("utf-8")).hexdigest()
 
             redis = get_redis_client_fn(database="knowledge")
-            stored_hash_bytes = await _redis_get_async(
-                redis, "connector:hash:%s" % source_id
-            )
+            stored_hash_bytes = await _redis_get_async(redis, "connector:hash:%s" % source_id)
             stored_hash = (
-                stored_hash_bytes.decode("utf-8")
-                if isinstance(stored_hash_bytes, bytes)
-                else stored_hash_bytes
+                stored_hash_bytes.decode("utf-8") if isinstance(stored_hash_bytes, bytes) else stored_hash_bytes
             )
 
             if stored_hash != current_hash:

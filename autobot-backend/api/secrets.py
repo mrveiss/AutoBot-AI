@@ -75,9 +75,7 @@ class RateLimiter:
         """Check if request is allowed under rate limit"""
         now = time()
         # Clean old requests
-        self.requests[client_id] = [
-            t for t in self.requests[client_id] if now - t < self.window
-        ]
+        self.requests[client_id] = [t for t in self.requests[client_id] if now - t < self.window]
         # Check limit
         if len(self.requests[client_id]) >= self.max_requests:
             return False
@@ -88,9 +86,7 @@ class RateLimiter:
     def get_remaining(self, client_id: str) -> int:
         """Get remaining requests for client"""
         now = time()
-        self.requests[client_id] = [
-            t for t in self.requests[client_id] if now - t < self.window
-        ]
+        self.requests[client_id] = [t for t in self.requests[client_id] if now - t < self.window]
         return max(0, self.max_requests - len(self.requests[client_id]))
 
 
@@ -101,10 +97,7 @@ rate_limiter = RateLimiter()
 def validate_secret_name(name: str) -> str:
     """Validate and sanitize secret name"""
     if not SECRET_NAME_PATTERN.match(name):
-        raise ValueError(
-            "Secret name must contain only alphanumeric characters, "
-            "underscores, hyphens, and dots"
-        )
+        raise ValueError("Secret name must contain only alphanumeric characters, " "underscores, hyphens, and dots")
     return name
 
 
@@ -198,9 +191,7 @@ class SecretsManager:
                     self._cache_mtime = current_mtime
                     return deepcopy(self._secrets_cache)
             except (json.JSONDecodeError, FileNotFoundError) as e:
-                logger.warning(
-                    "Secrets file corrupted or missing: %s, initializing empty", e
-                )
+                logger.warning("Secrets file corrupted or missing: %s, initializing empty", e)
                 self._secrets_cache = {}
                 self._cache_mtime = None
                 return deepcopy(self._secrets_cache)
@@ -274,9 +265,7 @@ class SecretsManager:
         logger.info("Created %s (ID: %s)", request.get_log_summary(), secret.id)
         return secret
 
-    def get_secret(
-        self, secret_id: str, chat_id: Optional[str] = None
-    ) -> Optional[Dict]:
+    def get_secret(self, secret_id: str, chat_id: Optional[str] = None) -> Optional[Dict]:
         """Get a secret with access control"""
         secrets = self._load_secrets()
         secret_data = secrets.get(secret_id)
@@ -287,9 +276,7 @@ class SecretsManager:
         # Check access permissions
         if secret_data["scope"] == SecretScope.CHAT:
             if not chat_id or secret_data["chat_id"] != chat_id:
-                raise PermissionError(
-                    "Access denied: Chat-scoped secret from different chat"
-                )
+                raise PermissionError("Access denied: Chat-scoped secret from different chat")
 
         # Return secret with decrypted value
         secret_data = secret_data.copy()
@@ -298,9 +285,7 @@ class SecretsManager:
 
         return secret_data
 
-    def list_secrets(
-        self, chat_id: Optional[str] = None, scope: Optional[SecretScope] = None
-    ) -> List[Dict]:
+    def list_secrets(self, chat_id: Optional[str] = None, scope: Optional[SecretScope] = None) -> List[Dict]:
         """List secrets with access control"""
         secrets = self._load_secrets()
         result = []
@@ -339,10 +324,7 @@ class SecretsManager:
         # Check access permissions
         if secret_data["scope"] == SecretScope.CHAT:
             if not chat_id or secret_data["chat_id"] != chat_id:
-                raise PermissionError(
-                    "Access denied: Cannot modify chat-scoped secret from "
-                    "different chat"
-                )
+                raise PermissionError("Access denied: Cannot modify chat-scoped secret from " "different chat")
 
         # Update fields
         if request.name is not None:
@@ -352,9 +334,7 @@ class SecretsManager:
         if request.tags is not None:
             secret_data["tags"] = request.tags
         if request.expires_at is not None:
-            secret_data["expires_at"] = (
-                request.expires_at.isoformat() if request.expires_at else None
-            )
+            secret_data["expires_at"] = request.expires_at.isoformat() if request.expires_at else None
         if request.metadata is not None:
             secret_data["metadata"] = request.metadata
 
@@ -363,9 +343,7 @@ class SecretsManager:
         secrets[secret_id] = secret_data
         self._save_secrets(secrets)
 
-        logger.info(  # codeql[py/clear-text-logging-sensitive-data]
-            "Updated secret (ID: %s...)", secret_id[:8]
-        )
+        logger.info("Updated secret (ID: %s...)", secret_id[:8])  # codeql[py/clear-text-logging-sensitive-data]
 
         # Return updated secret model
         safe_data = secret_data.copy()
@@ -383,22 +361,15 @@ class SecretsManager:
         # Check access permissions
         if secret_data["scope"] == SecretScope.CHAT:
             if not chat_id or secret_data["chat_id"] != chat_id:
-                raise PermissionError(
-                    "Access denied: Cannot delete chat-scoped secret from "
-                    "different chat"
-                )
+                raise PermissionError("Access denied: Cannot delete chat-scoped secret from " "different chat")
 
         del secrets[secret_id]
         self._save_secrets(secrets)
 
-        logger.info(  # codeql[py/clear-text-logging-sensitive-data]
-            "Deleted secret (ID: %s...)", secret_id[:8]
-        )
+        logger.info("Deleted secret (ID: %s...)", secret_id[:8])  # codeql[py/clear-text-logging-sensitive-data]
         return True
 
-    def transfer_secrets(
-        self, request: SecretTransferRequest, chat_id: Optional[str] = None
-    ) -> Metadata:
+    def transfer_secrets(self, request: SecretTransferRequest, chat_id: Optional[str] = None) -> Metadata:
         """Transfer secrets between scopes"""
         secrets = self._load_secrets()
         transferred = []
@@ -434,9 +405,7 @@ class SecretsManager:
                 secret_data["chat_id"] = None
 
             secret_data["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
-            secret_data["metadata"]["transfer_history"] = secret_data["metadata"].get(
-                "transfer_history", []
-            )
+            secret_data["metadata"]["transfer_history"] = secret_data["metadata"].get("transfer_history", [])
             secret_data["metadata"]["transfer_history"].append(
                 {
                     "timestamp": datetime.now(tz=timezone.utc).isoformat(),
@@ -466,10 +435,7 @@ class SecretsManager:
 
         # Find all secrets for this chat
         for secret_id, secret_data in secrets.items():
-            if (
-                secret_data["scope"] == SecretScope.CHAT
-                and secret_data["chat_id"] == chat_id
-            ):
+            if secret_data["scope"] == SecretScope.CHAT and secret_data["chat_id"] == chat_id:
                 chat_secrets.append(
                     {
                         "id": secret_id,
@@ -485,18 +451,13 @@ class SecretsManager:
             "total_count": len(chat_secrets),
         }
 
-    def delete_chat_secrets(
-        self, chat_id: str, secret_ids: Optional[List[str]] = None
-    ) -> Metadata:
+    def delete_chat_secrets(self, chat_id: str, secret_ids: Optional[List[str]] = None) -> Metadata:
         """Delete specific or all secrets for a chat"""
         secrets = self._load_secrets()
         deleted = []
 
         for secret_id, secret_data in list(secrets.items()):
-            if (
-                secret_data["scope"] == SecretScope.CHAT
-                and secret_data["chat_id"] == chat_id
-            ):
+            if secret_data["scope"] == SecretScope.CHAT and secret_data["chat_id"] == chat_id:
                 if secret_ids is None or secret_id in secret_ids:
                     del secrets[secret_id]
                     deleted.append({"id": secret_id, "name": secret_data["name"]})
@@ -609,9 +570,7 @@ async def create_secret(
         raise HTTPException(status_code=400, detail="Internal server error")
     except Exception as e:
         audit_log("CREATE", "N/A", http_request, success=False, details=str(e))
-        logger.error(  # codeql[py/clear-text-logging-sensitive-data]
-            "Failed to create secret: %s", e
-        )
+        logger.error("Failed to create secret: %s", e)  # codeql[py/clear-text-logging-sensitive-data]
         raise HTTPException(status_code=500, detail="Failed to create secret")
 
 
@@ -631,9 +590,7 @@ async def list_secrets(
     check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-        secrets = await asyncio.to_thread(
-            secrets_manager.list_secrets, chat_id=chat_id, scope=scope
-        )
+        secrets = await asyncio.to_thread(secrets_manager.list_secrets, chat_id=chat_id, scope=scope)
         audit_log("LIST", "N/A", http_request, details=f"count={len(secrets)}")
         return JSONResponse(
             status_code=200,
@@ -661,13 +618,8 @@ async def get_secret_types(
     return JSONResponse(
         status_code=200,
         content={
-            "types": [
-                {"value": t.value, "label": t.value.replace("_", " ").title()}
-                for t in SecretType
-            ],
-            "scopes": [
-                {"value": s.value, "label": s.value.title()} for s in SecretScope
-            ],
+            "types": [{"value": t.value, "label": t.value.replace("_", " ").title()} for t in SecretType],
+            "scopes": [{"value": s.value, "label": s.value.title()} for s in SecretScope],
         },
     )
 
@@ -769,20 +721,14 @@ async def get_secret(
     check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-        secret = await asyncio.to_thread(
-            secrets_manager.get_secret, secret_id, chat_id=chat_id
-        )
+        secret = await asyncio.to_thread(secrets_manager.get_secret, secret_id, chat_id=chat_id)
         if not secret:
-            audit_log(
-                "ACCESS", secret_id, http_request, success=False, details="not_found"
-            )
+            audit_log("ACCESS", secret_id, http_request, success=False, details="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
 
         # Issue #608: Track secret usage in memory graph when accessed within a chat
         if chat_id:
-            memory_graph: Optional[AutoBotMemoryGraph] = getattr(
-                http_request.app.state, "memory_graph", None
-            )
+            memory_graph: Optional[AutoBotMemoryGraph] = getattr(http_request.app.state, "memory_graph", None)
             if memory_graph:
                 try:
                     await memory_graph.create_secret_entity(
@@ -803,9 +749,7 @@ async def get_secret(
                         chat_id,
                     )
                 except Exception as graph_err:
-                    logger.warning(
-                        "[Issue #608] Failed to create secret entity: %s", graph_err
-                    )
+                    logger.warning("[Issue #608] Failed to create secret entity: %s", graph_err)
 
         audit_log("ACCESS", secret_id, http_request, details="value_retrieved")
         return JSONResponse(status_code=200, content=secret)
@@ -822,9 +766,7 @@ async def get_secret(
         raise
     except Exception as e:
         audit_log("ACCESS", secret_id, http_request, success=False, details=str(e))
-        logger.error(  # codeql[py/clear-text-logging-sensitive-data]
-            "Failed to get secret: %s", e
-        )
+        logger.error("Failed to get secret: %s", e)  # codeql[py/clear-text-logging-sensitive-data]
         raise HTTPException(status_code=500, detail="Failed to get secret")
 
 
@@ -845,13 +787,9 @@ async def update_secret(
     check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-        secret = await asyncio.to_thread(
-            secrets_manager.update_secret, secret_id, request, chat_id=chat_id
-        )
+        secret = await asyncio.to_thread(secrets_manager.update_secret, secret_id, request, chat_id=chat_id)
         if not secret:
-            audit_log(
-                "UPDATE", secret_id, http_request, success=False, details="not_found"
-            )
+            audit_log("UPDATE", secret_id, http_request, success=False, details="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
 
         # Convert datetime objects to strings for JSON serialization
@@ -885,9 +823,7 @@ async def update_secret(
         raise
     except Exception as e:
         audit_log("UPDATE", secret_id, http_request, success=False, details=str(e))
-        logger.error(  # codeql[py/clear-text-logging-sensitive-data]
-            "Failed to update secret: %s", e
-        )
+        logger.error("Failed to update secret: %s", e)  # codeql[py/clear-text-logging-sensitive-data]
         raise HTTPException(status_code=500, detail="Failed to update secret")
 
 
@@ -907,13 +843,9 @@ async def delete_secret(
     check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-        success = await asyncio.to_thread(
-            secrets_manager.delete_secret, secret_id, chat_id=chat_id
-        )
+        success = await asyncio.to_thread(secrets_manager.delete_secret, secret_id, chat_id=chat_id)
         if not success:
-            audit_log(
-                "DELETE", secret_id, http_request, success=False, details="not_found"
-            )
+            audit_log("DELETE", secret_id, http_request, success=False, details="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
 
         audit_log("DELETE", secret_id, http_request)
@@ -944,9 +876,7 @@ async def delete_secret(
         raise
     except Exception as e:
         audit_log("DELETE", secret_id, http_request, success=False, details=str(e))
-        logger.error(  # codeql[py/clear-text-logging-sensitive-data]
-            "Failed to delete secret: %s", e
-        )
+        logger.error("Failed to delete secret: %s", e)  # codeql[py/clear-text-logging-sensitive-data]
         raise HTTPException(status_code=500, detail="Failed to delete secret")
 
 
@@ -966,9 +896,7 @@ async def transfer_secrets(
     check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-        result = await asyncio.to_thread(
-            secrets_manager.transfer_secrets, request, chat_id=chat_id
-        )
+        result = await asyncio.to_thread(secrets_manager.transfer_secrets, request, chat_id=chat_id)
         audit_log(
             "TRANSFER",
             ",".join(result.get("transferred", [])),
@@ -1028,12 +956,8 @@ async def delete_chat_secrets(
     check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-        result = await asyncio.to_thread(
-            secrets_manager.delete_chat_secrets, chat_id, secret_ids
-        )
-        deleted_ids = [
-            s.get("id", "unknown") for s in result.get("deleted_secrets", [])
-        ]
+        result = await asyncio.to_thread(secrets_manager.delete_chat_secrets, chat_id, secret_ids)
+        deleted_ids = [s.get("id", "unknown") for s in result.get("deleted_secrets", [])]
         audit_log(
             "BULK_DELETE",
             ",".join(deleted_ids),
@@ -1044,9 +968,7 @@ async def delete_chat_secrets(
             status_code=200,
             content={
                 "status": "success",
-                "message": (
-                    f"Deleted {result['total_deleted']} secrets for chat {chat_id}"
-                ),
+                "message": (f"Deleted {result['total_deleted']} secrets for chat {chat_id}"),
                 "result": result,
             },
         )

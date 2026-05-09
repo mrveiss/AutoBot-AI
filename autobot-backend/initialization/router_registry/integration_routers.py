@@ -80,9 +80,7 @@ INTEGRATION_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
 ]
 
 
-def _load_single_integration_router(
-    module_path: str, prefix: str, tags: List[str], name: str
-) -> Tuple | None:
+def _load_single_integration_router(module_path: str, prefix: str, tags: List[str], name: str) -> Tuple | None:
     """
     Load a single integration router with graceful fallback.
 
@@ -107,9 +105,7 @@ def _load_single_integration_router(
         logger.warning("⚠️ Optional router not available: %s - %s", name, e)
         return None
     except AttributeError as e:
-        logger.warning(
-            "⚠️ Router not found in module %s: %s - %s", module_path, name, e
-        )
+        logger.warning("⚠️ Router not found in module %s: %s - %s", module_path, name, e)
         return None
 
 

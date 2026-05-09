@@ -71,9 +71,7 @@ class NotionConnector(AbstractConnector):
         result = await self._notion_request("GET", "/users/me")
         healthy = result.get("status_code") == 200
         if not healthy:
-            self.logger.warning(
-                "Notion test_connection failed: HTTP %s", result.get("status_code")
-            )
+            self.logger.warning("Notion test_connection failed: HTTP %s", result.get("status_code"))
         return healthy
 
     async def discover_sources(self) -> List[SourceInfo]:
@@ -97,9 +95,7 @@ class NotionConnector(AbstractConnector):
             return None
 
         page_body = page_result.get("body", {})
-        blocks_result = await self._notion_request(
-            "GET", "/blocks/%s/children?page_size=100" % source_id
-        )
+        blocks_result = await self._notion_request("GET", "/blocks/%s/children?page_size=100" % source_id)
         blocks = []
         if blocks_result.get("status_code") == 200:
             blocks = blocks_result.get("body", {}).get("results", [])
@@ -127,9 +123,7 @@ class NotionConnector(AbstractConnector):
             },
         )
 
-    async def detect_changes(
-        self, since: Optional[datetime] = None
-    ) -> List[ChangeInfo]:
+    async def detect_changes(self, since: Optional[datetime] = None) -> List[ChangeInfo]:
         """Return ChangeInfo for pages added or modified since *since*.
 
         When *since* is None all pages are reported as 'added'.  Otherwise the
@@ -233,9 +227,7 @@ class NotionConnector(AbstractConnector):
             if hasattr(result, "__await__"):
                 await result
         except Exception as exc:
-            self.logger.warning(
-                "Redis store_timestamp failed for %s: %s", page_id, exc
-            )
+            self.logger.warning("Redis store_timestamp failed for %s: %s", page_id, exc)
 
     async def _store_hash(self, page_id: str, content_hash: str) -> None:
         """Persist content hash for *page_id* in Redis."""
@@ -266,9 +258,7 @@ class NotionConnector(AbstractConnector):
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(
-                    method, url, headers=headers, json=json_data
-                ) as resp:
+                async with session.request(method, url, headers=headers, json=json_data) as resp:
                     body = await resp.json(content_type=None)
                     return {"status_code": resp.status, "body": body}
         except aiohttp.ClientError as exc:

@@ -29,7 +29,6 @@ from services.mcp_isolated_runtime import (
 )
 from services.mcp_isolation_config import BridgePolicy, IsolationMode
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -154,9 +153,7 @@ class TestWorkerSpawnAndCleanup:
     @pytest.mark.asyncio
     async def test_stop_terminates_process(self):
         """stop() sends shutdown then terminates the worker process."""
-        shutdown_resp = (
-            json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}) + "\n"
-        ).encode("utf-8")
+        shutdown_resp = (json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}) + "\n").encode("utf-8")
         fake_proc = _make_fake_proc(response_lines=[shutdown_resp])
 
         client = IsolatedBridgeClient("filesystem_mcp", _make_policy())
@@ -171,9 +168,7 @@ class TestWorkerSpawnAndCleanup:
     @pytest.mark.asyncio
     async def test_stop_kills_when_terminate_times_out(self):
         """stop() falls back to kill() when graceful shutdown stalls."""
-        shutdown_resp = (
-            json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}) + "\n"
-        ).encode("utf-8")
+        shutdown_resp = (json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}) + "\n").encode("utf-8")
         fake_proc = _make_fake_proc(response_lines=[shutdown_resp])
 
         # Simulate process that never exits after terminate
@@ -425,9 +420,7 @@ class TestGracefulShutdownLifecycle:
         """shutdown_all() calls stop() on every registered client."""
         reg = IsolatedBridgeRegistry()
 
-        shutdown_resp = (
-            json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}) + "\n"
-        ).encode("utf-8")
+        shutdown_resp = (json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}) + "\n").encode("utf-8")
 
         procs = [
             _make_fake_proc(response_lines=[shutdown_resp]),
@@ -452,9 +445,7 @@ class TestGracefulShutdownLifecycle:
     async def test_registry_shutdown_clears_client_map(self):
         """After shutdown_all() the registry returns new clients on next get_or_create."""
         reg = IsolatedBridgeRegistry()
-        shutdown_resp = (
-            json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}) + "\n"
-        ).encode("utf-8")
+        shutdown_resp = (json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}) + "\n").encode("utf-8")
 
         fake = _make_fake_proc(response_lines=[shutdown_resp])
         with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=fake)):
@@ -479,9 +470,7 @@ class TestGracefulShutdownLifecycle:
     @pytest.mark.asyncio
     async def test_health_check_returns_true_for_alive_worker(self):
         """health_check() returns True when worker responds with pong."""
-        pong = (
-            json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"pong": True}}) + "\n"
-        ).encode("utf-8")
+        pong = (json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"pong": True}}) + "\n").encode("utf-8")
         fake_proc = _make_fake_proc(response_lines=[pong])
 
         client = IsolatedBridgeClient("filesystem_mcp", _make_policy())
@@ -493,9 +482,7 @@ class TestGracefulShutdownLifecycle:
     @pytest.mark.asyncio
     async def test_health_check_returns_false_for_dead_worker(self):
         """health_check() returns False when no pong field in response."""
-        no_pong = (
-            json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}) + "\n"
-        ).encode("utf-8")
+        no_pong = (json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}) + "\n").encode("utf-8")
         fake_proc = _make_fake_proc(response_lines=[no_pong])
 
         client = IsolatedBridgeClient("filesystem_mcp", _make_policy())

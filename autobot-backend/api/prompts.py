@@ -130,9 +130,7 @@ def _process_prompt_results(results: list, prompts: list, defaults: dict) -> Non
             defaults[default_info[0]] = default_info[1]
 
 
-async def _load_all_prompts(
-    prompts_dir: str, semaphore: asyncio.Semaphore, prompts: list, defaults: dict
-) -> None:
+async def _load_all_prompts(prompts_dir: str, semaphore: asyncio.Semaphore, prompts: list, defaults: dict) -> None:
     """Load all prompt files from directory concurrently (Issue #315: extracted).
 
     Args:
@@ -179,16 +177,11 @@ async def _load_prompts_with_cancellation(
         if not prompts:
             raise HTTPException(
                 status_code=504,
-                detail=(
-                    "Prompts loading timed out. Please try again or "
-                    "contact administrator."
-                ),
+                detail=("Prompts loading timed out. Please try again or " "contact administrator."),
             )
 
 
-async def _collect_prompt_files(
-    directory: str, base_path: str, semaphore: asyncio.Semaphore
-) -> list:
+async def _collect_prompt_files(directory: str, base_path: str, semaphore: asyncio.Semaphore) -> list:
     """Collect prompt file read tasks recursively (Issue #315: extracted).
 
     Returns:
@@ -245,10 +238,7 @@ async def get_prompts(admin_check: bool = Depends(check_admin_permission)):
         current_time = time.time()
         async with _cache_lock:
             if _prompts_cache and (current_time - _cache_timestamp) < _cache_ttl:
-                logger.info(
-                    f"Returning cached prompts "
-                    f"({len(_prompts_cache.get('prompts', []))} items)"
-                )
+                logger.info(f"Returning cached prompts " f"({len(_prompts_cache.get('prompts', []))} items)")
                 return _prompts_cache
 
         # Adjust path to look for prompts directory at project root
@@ -269,9 +259,7 @@ async def get_prompts(admin_check: bool = Depends(check_admin_permission)):
         if not await asyncio.to_thread(os.path.exists, prompts_dir):
             logger.warning("Prompts directory %s not found", prompts_dir)
         else:
-            await _load_prompts_with_cancellation(
-                prompts_dir, semaphore, prompts, defaults
-            )
+            await _load_prompts_with_cancellation(prompts_dir, semaphore, prompts, defaults)
 
         # Cache the results (thread-safe)
         async with _cache_lock:
@@ -308,9 +296,7 @@ async def clear_prompts_cache(admin_check: bool = Depends(check_admin_permission
     return {"status": "success", "message": "Prompts cache cleared"}
 
 
-def _build_prompt_save_response(
-    prompt_id: str, file_path: str, content: str, prompts_dir: str
-) -> dict:
+def _build_prompt_save_response(prompt_id: str, file_path: str, content: str, prompts_dir: str) -> dict:
     """Helper for save_prompt. Ref: #1088."""
     prompt_name = os.path.basename(file_path).rsplit(".", 1)[0]
     prompt_type = (
@@ -322,11 +308,7 @@ def _build_prompt_save_response(
         "id": prompt_id,
         "name": prompt_name,
         "type": prompt_type if prompt_type else "custom",
-        "path": (
-            file_path.replace(prompts_dir + "/", "")
-            if prompts_dir in file_path
-            else file_path
-        ),
+        "path": (file_path.replace(prompts_dir + "/", "") if prompts_dir in file_path else file_path),
         "content": content,
     }
 
@@ -338,9 +320,7 @@ def _build_prompt_save_response(
     operation="save_prompt",
     error_code_prefix="PROMPTS",
 )
-async def save_prompt(
-    prompt_id: str, request: dict, admin_check: bool = Depends(check_admin_permission)
-):
+async def save_prompt(prompt_id: str, request: dict, admin_check: bool = Depends(check_admin_permission)):
     """Save or update a prompt file by ID.
 
     Issue #744: Requires admin authentication.
@@ -365,9 +345,7 @@ async def save_prompt(
 
         # Ensure the directory exists
         # Issue #358 - avoid blocking
-        await asyncio.to_thread(
-            os.makedirs, os.path.dirname(resolved_path), exist_ok=True
-        )
+        await asyncio.to_thread(os.makedirs, os.path.dirname(resolved_path), exist_ok=True)
 
         # Write the content to the file - PERFORMANCE FIX: Convert to async file I/O
         # Issue #514: Use per-file locking to prevent concurrent write corruption
@@ -376,9 +354,7 @@ async def save_prompt(
             async with aiofiles.open(resolved_path, "w", encoding="utf-8") as f:  # codeql[py/path-injection]
                 await f.write(content)
         logger.info("Saved prompt %s to %s", prompt_id, resolved_path)
-        return _build_prompt_save_response(
-            prompt_id, resolved_path, content, prompts_dir
-        )
+        return _build_prompt_save_response(prompt_id, resolved_path, content, prompts_dir)
     except OSError as e:
         logger.error("Failed to write prompt file %s: %s", prompt_id, e)
         raise HTTPException(status_code=500, detail="Failed to save prompt file")
@@ -387,9 +363,7 @@ async def save_prompt(
         raise HTTPException(status_code=500, detail="Error saving prompt")
 
 
-async def _write_prompt_from_default(
-    prompt_id: str, default_file_path: str, prompts_dir: str
-) -> dict:
+async def _write_prompt_from_default(prompt_id: str, default_file_path: str, prompts_dir: str) -> dict:
     """Read the default prompt file and overwrite the custom location. Ref: #2735.
 
     Uses per-file locking (#514) to prevent concurrent write corruption.
@@ -398,19 +372,13 @@ async def _write_prompt_from_default(
     """
     if not await asyncio.to_thread(os.path.exists, default_file_path):
         logger.warning("No default found for prompt %s", prompt_id)
-        raise HTTPException(
-            status_code=404, detail=f"No default prompt found for {prompt_id}"
-        )
+        raise HTTPException(status_code=404, detail=f"No default prompt found for {prompt_id}")
 
     async with aiofiles.open(default_file_path, "r", encoding="utf-8") as f:  # codeql[py/path-injection]
         default_content = await f.read()
 
-    custom_file_path = str(
-        validate_relative_path(prompt_id.replace("_", "/"), prompts_dir)
-    )
-    await asyncio.to_thread(
-        os.makedirs, os.path.dirname(custom_file_path), exist_ok=True
-    )
+    custom_file_path = str(validate_relative_path(prompt_id.replace("_", "/"), prompts_dir))
+    await asyncio.to_thread(os.makedirs, os.path.dirname(custom_file_path), exist_ok=True)
 
     # Issue #514: per-file locking to prevent concurrent write corruption
     file_lock = await _get_prompt_file_lock(custom_file_path)
@@ -430,9 +398,7 @@ async def _write_prompt_from_default(
         "name": prompt_name,
         "type": prompt_type if prompt_type else "custom",
         "path": (
-            custom_file_path.replace(prompts_dir + "/", "")
-            if prompts_dir in custom_file_path
-            else custom_file_path
+            custom_file_path.replace(prompts_dir + "/", "") if prompts_dir in custom_file_path else custom_file_path
         ),
         "content": default_content,
     }
@@ -444,9 +410,7 @@ async def _write_prompt_from_default(
     operation="revert_prompt",
     error_code_prefix="PROMPTS",
 )
-async def revert_prompt(
-    prompt_id: str, admin_check: bool = Depends(check_admin_permission)
-):
+async def revert_prompt(prompt_id: str, admin_check: bool = Depends(check_admin_permission)):
     """Revert a prompt to its default version.
 
     Issue #744: Requires admin authentication.
@@ -464,16 +428,12 @@ async def revert_prompt(
                 prompts_dir,
             )
         )
-        return await _write_prompt_from_default(
-            prompt_id, default_file_path, prompts_dir
-        )
+        return await _write_prompt_from_default(prompt_id, default_file_path, prompts_dir)
     except HTTPException:
         # Re-raise HTTP exceptions (e.g. 404 from _write_prompt_from_default) — #2745
         raise
     except OSError as e:
-        logger.error(
-            "Failed to read/write prompt file during revert %s: %s", prompt_id, e
-        )
+        logger.error("Failed to read/write prompt file during revert %s: %s", prompt_id, e)
         raise HTTPException(status_code=500, detail="Failed to access prompt file")
     except Exception as e:
         logger.error("Error reverting prompt %s: %s", prompt_id, str(e))

@@ -71,9 +71,7 @@ class OllamaAdapter(AdapterBase):
         try:
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=5.0)
-            async with await http_client.get(
-                f"{ollama_url}{PATH_OLLAMA_TAGS}", timeout=timeout
-            ) as resp:
+            async with await http_client.get(f"{ollama_url}{PATH_OLLAMA_TAGS}", timeout=timeout) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     models = [m["name"] for m in data.get("models", [])]
@@ -100,10 +98,7 @@ class OllamaAdapter(AdapterBase):
             )
 
         elapsed = time.time() - start
-        healthy = (
-            any(d.level != DiagnosticLevel.ERROR for d in diagnostics)
-            and len(models) > 0
-        )
+        healthy = any(d.level != DiagnosticLevel.ERROR for d in diagnostics) and len(models) > 0
 
         return EnvironmentTestResult(
             healthy=healthy,

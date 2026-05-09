@@ -115,9 +115,7 @@ class SecurityFixAgent:
             logger.error("Failed to create backup: %se ")
             return ""
 
-    def scan_for_vulnerabilities(
-        self, content: str, file_path: str
-    ) -> List[Dict[str, Any]]:
+    def scan_for_vulnerabilities(self, content: str, file_path: str) -> List[Dict[str, Any]]:
         """Scan content for XSS vulnerabilities."""
         vulnerabilities = []
 
@@ -172,9 +170,7 @@ class SecurityFixAgent:
         helpers_needed = set()
 
         # Sort vulnerabilities by position (end to start) to avoid offset issues
-        sorted_vulns = sorted(
-            vulnerabilities, key=lambda x: x["position"]["start"], reverse=True
-        )
+        sorted_vulns = sorted(vulnerabilities, key=lambda x: x["position"]["start"], reverse=True)
 
         for vuln in sorted_vulns:
             vuln_type = vuln["type"]
@@ -192,11 +188,7 @@ class SecurityFixAgent:
                     # Replace in content
                     start_pos = vuln["position"]["start"]
                     end_pos = vuln["position"]["end"]
-                    fixed_content = (
-                        fixed_content[:start_pos]
-                        + fixed_match
-                        + fixed_content[end_pos:]
-                    )
+                    fixed_content = fixed_content[:start_pos] + fixed_match + fixed_content[end_pos:]
 
                     fix_applied = {
                         "type": vuln_type,
@@ -260,9 +252,7 @@ class SecurityFixAgent:
             """,
         }
 
-        return "\n".join(
-            [helpers[helper] for helper in helpers_needed if helper in helpers]
-        )
+        return "\n".join([helpers[helper] for helper in helpers_needed if helper in helpers])
 
     def validate_html_structure(self, content: str) -> bool:
         """Basic HTML structure validation."""
@@ -287,9 +277,7 @@ class SecurityFixAgent:
         severity_icon = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}
         for vuln in vulnerabilities:
             icon = severity_icon.get(vuln["severity"], "⚪")
-            logger.info(
-                f"  {icon} Line {vuln['line']}: {vuln['type']} ({vuln['severity']})"
-            )
+            logger.info(f"  {icon} Line {vuln['line']}: {vuln['type']} ({vuln['severity']})")
             logger.info("     Match: {vuln['match'][:100]}")
 
     def _apply_fixes_and_write(
@@ -304,9 +292,7 @@ class SecurityFixAgent:
         Raises ValueError if HTML structure validation fails.
         """
         logger.info("\n🔧 Applying security fixes...")
-        fixed_content, fixes_applied = self.apply_security_fixes(
-            original_content, vulnerabilities
-        )
+        fixed_content, fixes_applied = self.apply_security_fixes(original_content, vulnerabilities)
         if not self.validate_html_structure(fixed_content):
             raise ValueError("HTML structure validation failed")
         with open(file_path, "w", encoding="utf-8") as f:
@@ -335,9 +321,7 @@ class SecurityFixAgent:
                     "fixes_applied": 0,
                 }
 
-            logger.warning(
-                "Found %slen(vulnerabilities)  potential XSS vulnerabilities:"
-            )
+            logger.warning("Found %slen(vulnerabilities)  potential XSS vulnerabilities:")
 
             # Issue #1183: Delegate vuln logging to extracted helper
             self._log_vulnerability_details(vulnerabilities)
@@ -352,9 +336,7 @@ class SecurityFixAgent:
 
             try:
                 # Issue #1183: Delegate fix/write to extracted helper
-                fixes_applied, fixed_hash = self._apply_fixes_and_write(
-                    original_content, vulnerabilities, file_path
-                )
+                fixes_applied, fixed_hash = self._apply_fixes_and_write(original_content, vulnerabilities, file_path)
             except ValueError as ve:
                 logger.info("❌ Fixed content failed HTML structure validation")
                 return {"file": file_path, "status": "error", "error": str(ve)}
@@ -405,15 +387,11 @@ class SecurityFixAgent:
             "files_fixed": len([r for r in results if r["status"] == "fixed"]),
             "files_clean": len([r for r in results if r["status"] == "clean"]),
             "files_error": len([r for r in results if r["status"] == "error"]),
-            "total_vulnerabilities": sum(
-                r.get("vulnerabilities_found", 0) for r in results
-            ),
+            "total_vulnerabilities": sum(r.get("vulnerabilities_found", 0) for r in results),
             "total_fixes": sum(r.get("fixes_applied", 0) for r in results),
         }
 
-    def _populate_report_data(
-        self, results: List[Dict[str, Any]], stats: Dict[str, int]
-    ) -> None:
+    def _populate_report_data(self, results: List[Dict[str, Any]], stats: Dict[str, int]) -> None:
         """
         Populate self.report with summary, results, and recommendations.
         Issue #281: Extracted from generate_report to reduce function length.
@@ -474,9 +452,7 @@ class SecurityFixAgent:
                 content += f"- **File:** `{vuln['file']}`\n"
                 content += f"- **Line:** {vuln['line']}\n"
                 content += f"- **Severity:** {vuln['severity']}\n"
-                match_preview = vuln["match"][:100] + (
-                    "..." if len(vuln["match"]) > 100 else ""
-                )
+                match_preview = vuln["match"][:100] + ("..." if len(vuln["match"]) > 100 else "")
                 content += f"- **Pattern:** `{match_preview}`\n\n"
 
         return content
@@ -494,12 +470,8 @@ class SecurityFixAgent:
                 content += f"**Fix {i}:** {fix['type'].replace('_', ' ').title()}\n"
                 content += f"- **Line:** {fix['line']}\n"
                 content += f"- **Severity:** {fix['severity']}\n"
-                orig_preview = fix["original"][:80] + (
-                    "..." if len(fix["original"]) > 80 else ""
-                )
-                fixed_preview = fix["fixed"][:80] + (
-                    "..." if len(fix["fixed"]) > 80 else ""
-                )
+                orig_preview = fix["original"][:80] + ("..." if len(fix["original"]) > 80 else "")
+                fixed_preview = fix["fixed"][:80] + ("..." if len(fix["fixed"]) > 80 else "")
                 content += f"- **Original:** `{orig_preview}`\n"
                 content += f"- **Fixed:** `{fixed_preview}`\n\n"
 
@@ -523,9 +495,7 @@ class SecurityFixAgent:
             content += f"- Status: {result['status'].upper()}\n"
 
             if result["status"] == "fixed":
-                content += (
-                    f"- Vulnerabilities Found: {result['vulnerabilities_found']}\n"
-                )
+                content += f"- Vulnerabilities Found: {result['vulnerabilities_found']}\n"
                 content += f"- Fixes Applied: {result['fixes_applied']}\n"
                 content += f"- Backup Created: `{result['backup_path']}`\n"
             elif result["status"] == "error":

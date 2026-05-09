@@ -53,9 +53,7 @@ except ValueError:
 # Issue #660: Embedding mode for ChromaDB storage
 # Options: "precompute" (5-10x faster), "auto" (let ChromaDB handle), "skip" (no embeddings)
 # Default: "precompute" for optimal performance
-CHROMADB_EMBEDDING_MODE = os.getenv(
-    "CODEBASE_INDEX_EMBEDDING_MODE", "precompute"
-).lower()
+CHROMADB_EMBEDDING_MODE = os.getenv("CODEBASE_INDEX_EMBEDDING_MODE", "precompute").lower()
 if CHROMADB_EMBEDDING_MODE not in ("precompute", "auto", "skip"):
     logger.warning("Invalid CODEBASE_INDEX_EMBEDDING_MODE, using 'precompute'")
     CHROMADB_EMBEDDING_MODE = "precompute"
@@ -72,9 +70,7 @@ except ValueError:
 
 # Enable incremental indexing (only re-index changed files)
 # Default: False (full re-index - current behavior)
-INCREMENTAL_INDEXING_ENABLED = (
-    os.getenv("CODEBASE_INDEX_INCREMENTAL", "false").lower() == "true"
-)
+INCREMENTAL_INDEXING_ENABLED = os.getenv("CODEBASE_INDEX_INCREMENTAL", "false").lower() == "true"
 
 # Redis key prefix for file hashes — imported from progress_tracker (SSOT)
 
@@ -123,9 +119,7 @@ async def _generate_batch_embeddings(
             generate_codebase_embeddings_batch,
         )
 
-        embeddings = await generate_codebase_embeddings_batch(
-            documents, batch_size=batch_size
-        )
+        embeddings = await generate_codebase_embeddings_batch(documents, batch_size=batch_size)
 
         if embeddings and len(embeddings) == len(documents):
             return embeddings
@@ -232,9 +226,7 @@ async def _generate_batch_embeddings_fallback(
 
     for i in range(0, total_docs, batch_size):
         batch_docs = documents[i : i + batch_size]
-        batch_result = await _process_embedding_batch(
-            chunker, batch_docs, i, batch_size, total_docs
-        )
+        batch_result = await _process_embedding_batch(chunker, batch_docs, i, batch_size, total_docs)
         all_embeddings.extend(batch_result)
 
     elapsed = asyncio.get_running_loop().time() - start_time
@@ -248,9 +240,7 @@ async def _generate_batch_embeddings_fallback(
     return all_embeddings
 
 
-def _prepare_problem_document(
-    problem: Dict, problem_idx: int, source_id: Optional[str] = None
-) -> tuple:
+def _prepare_problem_document(problem: Dict, problem_idx: int, source_id: Optional[str] = None) -> tuple:
     """
     Prepare a problem document for ChromaDB storage.
 
@@ -300,9 +290,7 @@ async def _store_problems_batch_to_chromadb(
     try:
         ids, documents, metadatas = [], [], []
         for i, problem in enumerate(problems):
-            doc_id, problem_doc, metadata = _prepare_problem_document(
-                problem, start_idx + i, source_id=source_id
-            )
+            doc_id, problem_doc, metadata = _prepare_problem_document(problem, start_idx + i, source_id=source_id)
             ids.append(doc_id)
             documents.append(problem_doc)
             metadatas.append(metadata)
@@ -322,9 +310,7 @@ async def _store_problems_batch_to_chromadb(
                         documents=documents,
                         metadatas=metadatas,
                     )
-                    logger.info(
-                        "Retry stored %d problems after stale collection", len(problems)
-                    )
+                    logger.info("Retry stored %d problems after stale collection", len(problems))
                     return
                 except Exception as retry_err:
                     logger.error("Retry also failed for problems batch: %s", retry_err)
@@ -334,9 +320,7 @@ async def _store_problems_batch_to_chromadb(
             logger.error("Failed to batch store problems to ChromaDB (#1712): %s", e)
 
 
-async def _clear_redis_codebase_cache(
-    task_id: str, source_id: Optional[str] = None
-) -> None:
+async def _clear_redis_codebase_cache(task_id: str, source_id: Optional[str] = None) -> None:
     """
     Clear Redis cache entries for codebase data.
 
@@ -354,9 +338,7 @@ async def _clear_redis_codebase_cache(
             keys_to_delete = []
             cursor = 0
             while True:
-                cursor, keys = await redis_client.scan(
-                    cursor=cursor, match=pattern, count=100
-                )
+                cursor, keys = await redis_client.scan(cursor=cursor, match=pattern, count=100)
                 keys_to_delete.extend(keys)
                 if cursor == 0:
                     break
@@ -365,9 +347,7 @@ async def _clear_redis_codebase_cache(
                 keys_to_delete = [
                     k
                     for k in keys_to_delete
-                    if not k.decode("utf-8", errors="ignore").startswith(
-                        FILE_HASH_REDIS_PREFIX
-                    )
+                    if not k.decode("utf-8", errors="ignore").startswith(FILE_HASH_REDIS_PREFIX)
                 ]
             if keys_to_delete:
                 await redis_client.delete(*keys_to_delete)
@@ -431,29 +411,21 @@ async def _delete_source_documents(collection, task_id: str, source_id: str):
         )
 
 
-async def _drop_and_create_collection(
-    async_client, collection_name: str, collection_meta: dict, task_id: str
-):
+async def _drop_and_create_collection(async_client, collection_name: str, collection_meta: dict, task_id: str):
     """Drop and recreate a ChromaDB collection for global re-indexing.
 
     Issue #1213: Extracted from _recreate_chromadb_collection.
     """
     try:
         await async_client.delete_collection(collection_name)
-        logger.info(
-            "[Task %s] Dropped ChromaDB collection '%s'", task_id, collection_name
-        )
+        logger.info("[Task %s] Dropped ChromaDB collection '%s'", task_id, collection_name)
     except Exception:
-        logger.info(
-            "[Task %s] No existing collection '%s' to drop", task_id, collection_name
-        )
+        logger.info("[Task %s] No existing collection '%s' to drop", task_id, collection_name)
     new_collection = await async_client.get_or_create_collection(
         name=collection_name,
         metadata=collection_meta,
     )
-    logger.info(
-        "[Task %s] Created fresh ChromaDB collection '%s'", task_id, collection_name
-    )
+    logger.info("[Task %s] Created fresh ChromaDB collection '%s'", task_id, collection_name)
     return new_collection
 
 
@@ -471,9 +443,7 @@ async def _recreate_chromadb_collection(task_id: str, source_id: Optional[str] =
 
     chroma_path = str(Path(__file__).parent.parent.parent.parent / "data" / "chromadb")
     collection_name = "autobot_code"
-    collection_meta = {
-        "description": "Codebase analytics: functions, classes, problems, duplicates"
-    }
+    collection_meta = {"description": "Codebase analytics: functions, classes, problems, duplicates"}
 
     try:
         async_client = await get_async_default_client(
@@ -490,9 +460,7 @@ async def _recreate_chromadb_collection(task_id: str, source_id: Optional[str] =
             await _delete_source_documents(collection, task_id, source_id)
             return collection
 
-        return await _drop_and_create_collection(
-            async_client, collection_name, collection_meta, task_id
-        )
+        return await _drop_and_create_collection(async_client, collection_name, collection_meta, task_id)
 
     except Exception as e:
         logger.error(
@@ -549,18 +517,14 @@ async def _initialize_chromadb_collection(
             current_file="Dropping and recreating collection...",
             phase="init",
         )
-        code_collection = await _recreate_chromadb_collection(
-            task_id, source_id=source_id
-        )
+        code_collection = await _recreate_chromadb_collection(task_id, source_id=source_id)
         if not code_collection:
             code_collection = await get_code_collection_async()
 
     return code_collection
 
 
-def _prepare_function_document(
-    func: Dict, idx: int, source_id: Optional[str] = None
-) -> tuple:
+def _prepare_function_document(func: Dict, idx: int, source_id: Optional[str] = None) -> tuple:
     """Prepare a function document for ChromaDB storage (Issue #281: extracted)."""
     doc_text = f"""
 Function: {func['name']}
@@ -576,9 +540,7 @@ Docstring: {func.get('docstring', 'No documentation')}
         "file_path": func.get("file_path", ""),
         "start_line": str(func.get("line", 0)),
         "parameters": ",".join(func.get("args", [])),
-        "language": (
-            "python" if func.get("file_path", "").endswith(".py") else "javascript"
-        ),
+        "language": ("python" if func.get("file_path", "").endswith(".py") else "javascript"),
     }
     if source_id:
         metadata["source_id"] = source_id
@@ -587,9 +549,7 @@ Docstring: {func.get('docstring', 'No documentation')}
     return f"{prefix}function_{idx}_{func['name']}", doc_text, metadata
 
 
-def _prepare_class_document(
-    cls: Dict, idx: int, source_id: Optional[str] = None
-) -> tuple:
+def _prepare_class_document(cls: Dict, idx: int, source_id: Optional[str] = None) -> tuple:
     """Prepare a class document for ChromaDB storage (Issue #281: extracted)."""
     doc_text = f"""
 Class: {cls['name']}
@@ -614,9 +574,7 @@ Docstring: {cls.get('docstring', 'No documentation')}
     return f"{prefix}class_{idx}_{cls['name']}", doc_text, metadata
 
 
-def _prepare_stats_document(
-    analysis_results: Dict, source_id: Optional[str] = None
-) -> tuple:
+def _prepare_stats_document(analysis_results: Dict, source_id: Optional[str] = None) -> tuple:
     """Prepare stats document for ChromaDB storage (Issue #281: extracted)."""
     stats = analysis_results["stats"]
 
@@ -671,9 +629,7 @@ async def _prepare_functions_batch(
     """
     items_prepared = 0
     for idx, func in enumerate(functions):
-        doc_id, doc_text, metadata = _prepare_function_document(
-            func, idx, source_id=source_id
-        )
+        doc_id, doc_text, metadata = _prepare_function_document(func, idx, source_id=source_id)
         batch_ids.append(doc_id)
         batch_documents.append(doc_text)
         batch_metadatas.append(metadata)
@@ -709,9 +665,7 @@ async def _prepare_classes_batch(
     """
     items_prepared = items_offset
     for idx, cls in enumerate(classes):
-        doc_id, doc_text, metadata = _prepare_class_document(
-            cls, idx, source_id=source_id
-        )
+        doc_id, doc_text, metadata = _prepare_class_document(cls, idx, source_id=source_id)
         batch_ids.append(doc_id)
         batch_documents.append(doc_text)
         batch_metadatas.append(metadata)
@@ -741,11 +695,7 @@ async def _prepare_batch_data(
     batch_documents = []
     batch_metadatas = []
 
-    total_items = (
-        len(analysis_results["all_functions"])
-        + len(analysis_results["all_classes"])
-        + 1
-    )
+    total_items = len(analysis_results["all_functions"]) + len(analysis_results["all_classes"]) + 1
 
     await update_progress(
         operation="Preparing functions",
@@ -784,9 +734,7 @@ async def _prepare_batch_data(
         source_id=source_id,
     )
 
-    _append_stats_document(
-        analysis_results, batch_ids, batch_documents, batch_metadatas, source_id
-    )
+    _append_stats_document(analysis_results, batch_ids, batch_documents, batch_metadatas, source_id)
 
     update_phase("prepare", "completed")
     return batch_ids, batch_documents, batch_metadatas
@@ -800,9 +748,7 @@ def _append_stats_document(
     source_id: Optional[str] = None,
 ) -> None:
     """Append the codebase_stats document to the batch lists (Issue #2735)."""
-    stats_id, stats_doc, stats_meta = _prepare_stats_document(
-        analysis_results, source_id=source_id
-    )
+    stats_id, stats_doc, stats_meta = _prepare_stats_document(analysis_results, source_id=source_id)
     batch_ids.append(stats_id)
     batch_documents.append(stats_doc)
     batch_metadatas.append(stats_meta)
@@ -823,9 +769,7 @@ async def _upsert_with_stale_retry(
     Issue #1249: Extracted from _store_single_batch for length compliance.
     """
     try:
-        await code_collection.upsert(
-            ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings
-        )
+        await code_collection.upsert(ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings)
     except Exception as e:
         err_msg = str(e).lower()
         if "does not exist" in err_msg or "not found" in err_msg:
@@ -838,9 +782,7 @@ async def _upsert_with_stale_retry(
             new_collection = await get_code_collection_async()
             if new_collection is None:
                 raise
-            await new_collection.upsert(
-                ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings
-            )
+            await new_collection.upsert(ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings)
         else:
             raise
 
@@ -859,9 +801,7 @@ def _slice_batch(
     Issue #660: Preserves optional pre-computed embeddings slice.
     """
     end_idx = min(start_idx + batch_size, len(batch_ids))
-    slice_embeddings = (
-        batch_embeddings[start_idx:end_idx] if batch_embeddings is not None else None
-    )
+    slice_embeddings = batch_embeddings[start_idx:end_idx] if batch_embeddings is not None else None
     return (
         batch_ids[start_idx:end_idx],
         batch_documents[start_idx:end_idx],
@@ -996,10 +936,7 @@ async def _generate_embeddings_with_progress(
             operation="Generating embeddings",
             current=processed,
             total=total_docs,
-            current_file=(
-                f"Embeddings: {processed}/{total_docs} "
-                f"({processed * 100 // total_docs}%)"
-            ),
+            current_file=(f"Embeddings: {processed}/{total_docs} " f"({processed * 100 // total_docs}%)"),
             phase="embed",
         )
 
@@ -1035,9 +972,7 @@ async def _precompute_embeddings(
     )
 
     try:
-        batch_embeddings = await _generate_embeddings_with_progress(
-            batch_documents, total_docs, update_progress
-        )
+        batch_embeddings = await _generate_embeddings_with_progress(batch_documents, total_docs, update_progress)
         if len(batch_embeddings) != total_docs:
             logger.error(
                 "[Task %s] Embedding count mismatch: %d vs %d docs",
@@ -1187,8 +1122,7 @@ def _log_chromadb_storage_config(
     Issue #620: Extracted from _store_batches_to_chromadb. Issue #620.
     """
     logger.info(
-        "[Task %s] ChromaDB storage config: batch_size=%d, parallel_batches=%d, "
-        "total_batches=%d, embeddings=%s",
+        "[Task %s] ChromaDB storage config: batch_size=%d, parallel_batches=%d, " "total_batches=%d, embeddings=%s",
         task_id,
         CHROMADB_BATCH_SIZE,
         PARALLEL_BATCH_COUNT,
@@ -1300,9 +1234,7 @@ async def _store_batches_to_chromadb(
         CODEBASE_INDEX_PARALLEL_BATCHES: Concurrent batches (default: 1)
         CODEBASE_INDEX_EMBEDDING_MODE: "precompute", "auto", or "skip" (default: precompute)
     """
-    batch_embeddings = await _precompute_embeddings(
-        batch_documents, task_id, update_progress, update_phase
-    )
+    batch_embeddings = await _precompute_embeddings(batch_documents, task_id, update_progress, update_phase)
     update_phase("store", "running")
 
     total_items = len(batch_ids)
@@ -1358,9 +1290,7 @@ async def _store_hardcodes_to_redis(
 
     redis_client = await get_redis_connection()
     if not redis_client:
-        logger.warning(
-            "[Task %s] Redis unavailable, skipping hardcodes storage", task_id
-        )
+        logger.warning("[Task %s] Redis unavailable, skipping hardcodes storage", task_id)
         return 0
 
     # Group hardcodes by type
@@ -1379,13 +1309,9 @@ async def _store_hardcodes_to_redis(
         try:
             await asyncio.to_thread(redis_client.set, key, json.dumps(items))
             stored_count += len(items)
-            logger.debug(
-                "[Task %s] Stored %s hardcodes of type '%s'", task_id, len(items), htype
-            )
+            logger.debug("[Task %s] Stored %s hardcodes of type '%s'", task_id, len(items), htype)
         except Exception as e:
-            logger.error(
-                "[Task %s] Failed to store hardcodes type '%s': %s", task_id, htype, e
-            )
+            logger.error("[Task %s] Failed to store hardcodes type '%s': %s", task_id, htype, e)
 
     logger.info(
         "[Task %s] Stored %s hardcodes to Redis (%s types)",

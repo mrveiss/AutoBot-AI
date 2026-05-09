@@ -209,9 +209,7 @@ class CaptchaSolver:
             if captcha_type == CaptchaType.UNKNOWN:
                 captcha_type = await self._detect_captcha_type(image)
 
-            result = await self._route_to_solver(
-                image, captcha_type, expected_length, char_set
-            )
+            result = await self._route_to_solver(image, captcha_type, expected_length, char_set)
             result.processing_time_ms = (time.time() - start_time) * 1000
             return result
 
@@ -284,9 +282,7 @@ class CaptchaSolver:
         import pytesseract
 
         try:
-            data = pytesseract.image_to_data(
-                image, config=config, output_type=pytesseract.Output.DICT
-            )
+            data = pytesseract.image_to_data(image, config=config, output_type=pytesseract.Output.DICT)
 
             texts = []
             confidences = []
@@ -320,9 +316,7 @@ class CaptchaSolver:
             return SolverConfidence.MEDIUM
         return SolverConfidence.LOW
 
-    def _build_text_captcha_failure(
-        self, best_result: Optional[str]
-    ) -> CaptchaSolveResult:
+    def _build_text_captcha_failure(self, best_result: Optional[str]) -> CaptchaSolveResult:
         """
         Build failure result for text CAPTCHA solving. Issue #620.
         """
@@ -364,9 +358,7 @@ class CaptchaSolver:
         best_result, best_confidence = None, 0.0
 
         for processed_image in processed_images:
-            text, confidence = self._process_ocr_result(
-                processed_image, config, char_set, expected_length
-            )
+            text, confidence = self._process_ocr_result(processed_image, config, char_set, expected_length)
             if text and confidence > best_confidence:
                 best_confidence = confidence
                 best_result = text
@@ -464,9 +456,7 @@ class CaptchaSolver:
 
         # 5. Scaled up (2x) for small CAPTCHAs
         if image.width < 200:
-            scaled = gray.resize(
-                (gray.width * 2, gray.height * 2), PILImage.Resampling.LANCZOS
-            )
+            scaled = gray.resize((gray.width * 2, gray.height * 2), PILImage.Resampling.LANCZOS)
             results.append(scaled.point(lambda x: 255 if x > 128 else 0))
 
         # 6. Denoised with median filter

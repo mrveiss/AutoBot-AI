@@ -67,9 +67,7 @@ def get_redis_connection(database: str = "main"):
     try:
         client = get_redis_client(async_client=False, database=database)
         if client is None:
-            raise ConnectionError(
-                f"Failed to get Redis client for database '{database}'"
-            )
+            raise ConnectionError(f"Failed to get Redis client for database '{database}'")
         return client
     except Exception as e:
         logger.error("Failed to connect to Redis database '%s': %s", database, str(e))
@@ -108,10 +106,7 @@ def _clear_single_redis_database(db_name: str, db_number: int) -> dict:
         }
 
 
-
-def _process_data_type_stats_results(
-    data_types: List[str], stats_results: list
-) -> Dict[str, Dict]:
+def _process_data_type_stats_results(data_types: List[str], stats_results: list) -> Dict[str, Dict]:
     """Process parallel stats results into a dictionary. (Issue #315 - extracted)"""
     data_type_stats = {}
     for dt, dt_stats in zip(data_types, stats_results):
@@ -187,26 +182,19 @@ async def clear_redis_cache(database: str):
 
     if database == "all":
         for db_name, db_number in REDIS_DATABASES.items():
-            result = await asyncio.to_thread(
-                _clear_single_redis_database, db_name, db_number
-            )
+            result = await asyncio.to_thread(_clear_single_redis_database, db_name, db_number)
             cleared_databases.append(result)
     else:
         if database not in REDIS_DATABASES:
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    f"Unknown database '{database}'. "
-                    f"Available: {list(REDIS_DATABASES.keys())}"
-                ),
+                detail=(f"Unknown database '{database}'. " f"Available: {list(REDIS_DATABASES.keys())}"),
             )
         db_number = REDIS_DATABASES[database]
         redis_conn = get_redis_connection(database)
         keys_before = await asyncio.to_thread(redis_conn.dbsize)
         await asyncio.to_thread(redis_conn.flushdb)
-        cleared_databases.append(
-            {"name": database, "database": db_number, "keys_cleared": keys_before}
-        )
+        cleared_databases.append({"name": database, "database": db_number, "keys_cleared": keys_before})
         logger.info(
             "Cleared Redis database %s (%s) - %s keys removed",
             database,
@@ -266,9 +254,7 @@ async def save_cache_config(config_data: Metadata):
     ]
     for field in required_fields:
         if field not in config_data:
-            raise HTTPException(
-                status_code=400, detail=f"Missing required field: {field}"
-            )
+            raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
 
     try:
         redis_conn = get_redis_connection("config")
@@ -372,9 +358,7 @@ async def get_advanced_cache_stats(
             *[advanced_cache.get_stats(dt) for dt in data_types], return_exceptions=True
         )
         # Build result dict using helper (Issue #315 - reduces nesting)
-        global_stats["data_type_stats"] = _process_data_type_stats_results(
-            data_types, stats_results
-        )
+        global_stats["data_type_stats"] = _process_data_type_stats_results(data_types, stats_results)
         return CacheStatsResponse(**global_stats)
 
     except Exception as e:
@@ -813,8 +797,7 @@ async def warm_startup_cache():
                 logger.warning("Failed to warm cache for %s", data_type)
 
         logger.info(
-            f"Startup cache warming completed: "
-            f"{warmed_count}/{len(_ESSENTIAL_CACHE_DATA_TYPES)} data types warmed"
+            f"Startup cache warming completed: " f"{warmed_count}/{len(_ESSENTIAL_CACHE_DATA_TYPES)} data types warmed"
         )
         return warmed_count
 

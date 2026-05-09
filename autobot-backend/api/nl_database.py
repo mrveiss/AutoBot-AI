@@ -45,9 +45,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-async def _resolve_db_url(
-    db_secret_id: Optional[str], request: Request
-) -> Optional[str]:
+async def _resolve_db_url(db_secret_id: Optional[str], request: Request) -> Optional[str]:
     """
     Resolve a database URL from a secret ID.
 
@@ -82,9 +80,7 @@ async def _resolve_db_url(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error(  # codeql[py/clear-text-logging-sensitive-data]
-            "Failed to resolve database secret: %s", exc
-        )
+        logger.error("Failed to resolve database secret: %s", exc)  # codeql[py/clear-text-logging-sensitive-data]
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve database credentials",

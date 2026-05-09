@@ -67,9 +67,7 @@ class TestRewriteQuery:
         svc = _make_rag_service()
         tool = AgenticSearchTool(svc, AgenticSearchConfig(rewrite_enabled=True))
 
-        with patch.object(
-            tool, "_call_llm", AsyncMock(side_effect=RuntimeError("timeout"))
-        ):
+        with patch.object(tool, "_call_llm", AsyncMock(side_effect=RuntimeError("timeout"))):
             result = await tool.rewrite_query("original query")
 
         assert result == "original query"
@@ -110,9 +108,7 @@ class TestIterativeSearch:
         mock_check = MagicMock()
         mock_check.verdict = SufficiencyVerdict.SUFFICIENT
 
-        with patch(
-            "knowledge.search_components.agentic_search.get_context_sufficiency_evaluator"
-        ) as mock_eval_factory:
+        with patch("knowledge.search_components.agentic_search.get_context_sufficiency_evaluator") as mock_eval_factory:
             evaluator = MagicMock()
             evaluator.evaluate = AsyncMock(return_value=mock_check)
             mock_eval_factory.return_value = evaluator
@@ -136,9 +132,7 @@ class TestIterativeSearch:
         mock_check = MagicMock()
         mock_check.verdict = SufficiencyVerdict.INSUFFICIENT
 
-        with patch(
-            "knowledge.search_components.agentic_search.get_context_sufficiency_evaluator"
-        ) as mock_eval_factory:
+        with patch("knowledge.search_components.agentic_search.get_context_sufficiency_evaluator") as mock_eval_factory:
             evaluator = MagicMock()
             evaluator.evaluate = AsyncMock(return_value=mock_check)
             mock_eval_factory.return_value = evaluator
@@ -160,9 +154,7 @@ class TestIterativeSearch:
         mock_check = MagicMock()
         mock_check.verdict = SufficiencyVerdict.INSUFFICIENT
 
-        with patch(
-            "knowledge.search_components.agentic_search.get_context_sufficiency_evaluator"
-        ) as mock_eval_factory:
+        with patch("knowledge.search_components.agentic_search.get_context_sufficiency_evaluator") as mock_eval_factory:
             evaluator = MagicMock()
             evaluator.evaluate = AsyncMock(return_value=mock_check)
             mock_eval_factory.return_value = evaluator
@@ -188,9 +180,7 @@ class TestKnowledgeSearch:
 
         context = await tool.knowledge_search("query")
 
-        svc.advanced_search.assert_called_once_with(
-            "query", max_results=5, categories=None
-        )
+        svc.advanced_search.assert_called_once_with("query", max_results=5, categories=None)
         assert "direct result" in context
 
     @pytest.mark.asyncio
@@ -207,9 +197,7 @@ class TestKnowledgeSearch:
         mock_check.verdict = SufficiencyVerdict.SUFFICIENT
 
         with patch.object(tool, "rewrite_query", AsyncMock(return_value="rewritten")):
-            with patch(
-                "knowledge.search_components.agentic_search.get_context_sufficiency_evaluator"
-            ) as mock_factory:
+            with patch("knowledge.search_components.agentic_search.get_context_sufficiency_evaluator") as mock_factory:
                 evaluator = MagicMock()
                 evaluator.evaluate = AsyncMock(return_value=mock_check)
                 mock_factory.return_value = evaluator

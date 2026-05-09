@@ -48,9 +48,7 @@ _CLASS_DEF_RE = re.compile(r"class\s+(\w+)")
 _ASYNC_FUNC_RE = re.compile(r"async\s+def\s+(\w+)")
 
 # Issue #336: Keyword heuristics dispatch table for intent classification
-KEYWORD_INTENT_FALLBACKS: Dict[Tuple[str, ...], "QueryIntent"] = (
-    {}
-)  # Populated after enum defined
+KEYWORD_INTENT_FALLBACKS: Dict[Tuple[str, ...], "QueryIntent"] = {}  # Populated after enum defined
 
 # Issue #3355: prefix moved to router registry (feature_routers.py)
 router = APIRouter(tags=["natural-language-search", "code-search"])
@@ -375,9 +373,7 @@ def _generate_intent_query(intent: QueryIntent, entity: str) -> Optional[str]:
     return None
 
 
-async def _add_explanation_to_result(
-    result_dict: Dict[str, Any], code_explainer: "CodeExplainer"
-) -> None:
+async def _add_explanation_to_result(result_dict: Dict[str, Any], code_explainer: "CodeExplainer") -> None:
     """Add LLM explanation to search result (Issue #315 - extracted)."""
     try:
         explanation = await code_explainer.explain_code(
@@ -511,9 +507,7 @@ class NaturalLanguageQueryParser:
         question_type = self._determine_question_type(normalized)
 
         # Generate optimized search terms
-        search_terms = self._generate_search_terms(
-            normalized, entities, keywords, intent
-        )
+        search_terms = self._generate_search_terms(normalized, entities, keywords, intent)
 
         return ParsedQuery(
             original_query=original,
@@ -592,11 +586,7 @@ class NaturalLanguageQueryParser:
     def _extract_keywords(self, query: str) -> List[str]:
         """Extract important keywords from the query."""
         words = query.split()
-        keywords = [
-            w
-            for w in words
-            if w not in self.stopwords and len(w) > 2 and not w.isdigit()
-        ]
+        keywords = [w for w in words if w not in self.stopwords and len(w) > 2 and not w.isdigit()]
         return keywords
 
     def _determine_question_type(self, query: str) -> str:
@@ -658,9 +648,7 @@ class QuerySuggestionGenerator:
         """Initialize suggestion generator with query parser."""
         self.parser = NaturalLanguageQueryParser()
 
-    def generate_suggestions(
-        self, parsed_query: ParsedQuery, search_results: List[Any]
-    ) -> List[SearchSuggestion]:
+    def generate_suggestions(self, parsed_query: ParsedQuery, search_results: List[Any]) -> List[SearchSuggestion]:
         """Generate query suggestions based on parsed query and results."""
         suggestions = []
 
@@ -832,9 +820,7 @@ def _parse_llm_explanation_response(response: str) -> dict:
                 result[key] = line.replace(prefix, "").strip()
                 break
         if line.startswith("CONCEPTS:"):
-            result["concepts"] = [
-                c.strip() for c in line.replace("CONCEPTS:", "").split(",")
-            ]
+            result["concepts"] = [c.strip() for c in line.replace("CONCEPTS:", "").split(",")]
     return result
 
 
@@ -865,9 +851,7 @@ class CodeExplainer:
         # Try LLM-based explanation first
         if self.llm_available:
             try:
-                return await self._llm_explain(
-                    code_snippet, file_path, line_number, context
-                )
+                return await self._llm_explain(code_snippet, file_path, line_number, context)
             except Exception as e:
                 logger.warning("LLM explanation failed: %s, using heuristic", e)
 
@@ -921,16 +905,13 @@ CONCEPTS: <comma-separated list>
             file_path=file_path,
             line_number=line_number,
             summary=parsed.get("summary") or "Code snippet",
-            detailed_explanation=parsed.get("explanation")
-            or "No detailed explanation available",
+            detailed_explanation=parsed.get("explanation") or "No detailed explanation available",
             purpose=parsed.get("purpose") or "Unknown purpose",
             key_concepts=parsed.get("concepts") or ["code"],
             related_code=[],
         )
 
-    def _heuristic_explain(
-        self, code: str, file_path: str, line_number: int
-    ) -> CodeExplanation:
+    def _heuristic_explain(self, code: str, file_path: str, line_number: int) -> CodeExplanation:
         """Generate heuristic explanation without LLM."""
         summary = "Code snippet"
         purpose = "Implementation code"
@@ -1004,26 +985,10 @@ _code_explainer = CodeExplainer()
 def _convert_search_result_to_dict(result) -> dict:
     """Convert a search result to dictionary format (Issue #665: extracted helper)."""
     return {
-        "file_path": (
-            result.file_path
-            if hasattr(result, "file_path")
-            else str(result.get("file_path", ""))
-        ),
-        "line_number": (
-            result.line_number
-            if hasattr(result, "line_number")
-            else result.get("line_number", 0)
-        ),
-        "content": (
-            result.content[:500]
-            if hasattr(result, "content")
-            else str(result.get("content", ""))[:500]
-        ),
-        "confidence": (
-            result.confidence
-            if hasattr(result, "confidence")
-            else result.get("confidence", 0.0)
-        ),
+        "file_path": (result.file_path if hasattr(result, "file_path") else str(result.get("file_path", ""))),
+        "line_number": (result.line_number if hasattr(result, "line_number") else result.get("line_number", 0)),
+        "content": (result.content[:500] if hasattr(result, "content") else str(result.get("content", ""))[:500]),
+        "confidence": (result.confidence if hasattr(result, "confidence") else result.get("confidence", 0.0)),
     }
 
 
@@ -1186,9 +1151,7 @@ async def get_query_suggestions(query: str):
     operation="explain_code_snippet",
     error_code_prefix="NATURAL_LANGUAGE_SEARCH",
 )
-async def explain_code_snippet(
-    code: str, file_path: str = "<unknown>", line_number: int = 0
-):
+async def explain_code_snippet(code: str, file_path: str = "<unknown>", line_number: int = 0):
     """
     Generate an explanation for a code snippet.
 
@@ -1244,9 +1207,7 @@ async def list_supported_intents():
                     QueryIntent.FIND_ERROR_HANDLING: ["How are Redis errors handled?"],
                     QueryIntent.FIND_CONFIGURATION: ["Where is logging configured?"],
                     QueryIntent.FIND_TESTS: ["What tests exist for auth?"],
-                    QueryIntent.FIND_DEPENDENCIES: [
-                        "What does the API module depend on?"
-                    ],
+                    QueryIntent.FIND_DEPENDENCIES: ["What does the API module depend on?"],
                     QueryIntent.FIND_PATTERN: ["Find all async functions"],
                     QueryIntent.EXPLAIN_CODE: ["Explain the router initialization"],
                     QueryIntent.COMPARE_CODE: ["Compare Redis and in-memory cache"],
@@ -1267,10 +1228,7 @@ async def list_supported_intents():
 async def list_supported_domains():
     """List all supported query domains with keywords."""
     return {
-        "domains": [
-            {"domain": domain.value, "keywords": DOMAIN_KEYWORDS.get(domain, [])}
-            for domain in QueryDomain
-        ]
+        "domains": [{"domain": domain.value, "keywords": DOMAIN_KEYWORDS.get(domain, [])} for domain in QueryDomain]
     }
 
 

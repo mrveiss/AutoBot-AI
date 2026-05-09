@@ -58,9 +58,7 @@ class Archive:
     # Selection
     # ------------------------------------------------------------------
 
-    def select_parent(
-        self, strategy: str = "random_weighted"
-    ) -> Optional[VariantArchiveEntry]:
+    def select_parent(self, strategy: str = "random_weighted") -> Optional[VariantArchiveEntry]:
         """Return a parent entry using *strategy*.
 
         Supported strategies
@@ -82,9 +80,7 @@ class Archive:
 
         return self._weighted_random(candidates)
 
-    def _weighted_random(
-        self, candidates: List[VariantArchiveEntry]
-    ) -> VariantArchiveEntry:
+    def _weighted_random(self, candidates: List[VariantArchiveEntry]) -> VariantArchiveEntry:
         """Weighted-random selection; uniform fallback when all weights are 0."""
         weights = [max(e.score, 0.0) for e in candidates]
         total = sum(weights)

@@ -311,9 +311,7 @@ class SystemCommandAgent(StandardizedAgent):
             }
         return pm_info["install"].format(package=package_name), None
 
-    async def _verify_installation(
-        self, tool_name: str, result: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _verify_installation(self, tool_name: str, result: Dict[str, Any]) -> Dict[str, Any]:
         """Verify tool installation success (Issue #398: extracted)."""
         if result["status"] != "success":
             return result
@@ -340,9 +338,7 @@ class SystemCommandAgent(StandardizedAgent):
                 "message": f"{tool_name} is already installed",
             }
 
-        install_command, error = await self._determine_install_command(
-            tool_info, chat_id
-        )
+        install_command, error = await self._determine_install_command(tool_info, chat_id)
         if error:
             return error
 
@@ -385,9 +381,7 @@ class SystemCommandAgent(StandardizedAgent):
             "duration": result["duration"],
             "output_lines": result["line_count"],
             "message": (
-                "Command completed successfully"
-                if exit_code == 0
-                else f"Command failed with exit code {exit_code}"
+                "Command completed successfully" if exit_code == 0 else f"Command failed with exit code {exit_code}"
             ),
         }
 
@@ -419,14 +413,10 @@ class SystemCommandAgent(StandardizedAgent):
         terminal, session_id = self._get_or_create_terminal(chat_id)
 
         try:
-            await self._publish_execution_event(
-                chat_id, command, "started", description
-            )
+            await self._publish_execution_event(chat_id, command, "started", description)
             await terminal.start_session(command, env=env, cwd=cwd)
             result = await terminal.wait_for_completion(timeout=timeout)
-            await self._publish_execution_event(
-                chat_id, command, "completed", result=result
-            )
+            await self._publish_execution_event(chat_id, command, "completed", result=result)
             return self._build_execution_result(result)
         except Exception as e:
             logger.error("Error executing command: %s", e)
@@ -436,9 +426,7 @@ class SystemCommandAgent(StandardizedAgent):
                 "message": "Command execution failed",
             }
         finally:
-            if session_id in self.active_sessions and not self._is_persistent_session(
-                command
-            ):
+            if session_id in self.active_sessions and not self._is_persistent_session(command):
                 del self.active_sessions[session_id]
 
     async def execute_command_with_output(
@@ -489,9 +477,7 @@ class SystemCommandAgent(StandardizedAgent):
 
         try:
             # Wait for confirmation with timeout
-            confirmed = await asyncio.wait_for(
-                confirmation_future, timeout=TimingConstants.SHORT_TIMEOUT
-            )
+            confirmed = await asyncio.wait_for(confirmation_future, timeout=TimingConstants.SHORT_TIMEOUT)
             return confirmed
         except asyncio.TimeoutError:
             return False  # Default to not executing dangerous commands
@@ -547,9 +533,7 @@ class SystemCommandAgent(StandardizedAgent):
             "safe": risk_level != "high",
             "risk_level": risk_level,
             "issues": issues,
-            "recommendation": (
-                "Proceed with caution" if issues else "Command appears safe"
-            ),
+            "recommendation": ("Proceed with caution" if issues else "Command appears safe"),
         }
 
     async def get_active_sessions(self) -> List[Dict[str, Any]]:
@@ -566,9 +550,7 @@ class SystemCommandAgent(StandardizedAgent):
             )
         return sessions
 
-    async def send_input_to_session(
-        self, chat_id: str, user_input: str, is_password: bool = False
-    ):
+    async def send_input_to_session(self, chat_id: str, user_input: str, is_password: bool = False):
         """Send input to an active terminal session"""
         session_id = f"{chat_id}_terminal"
         if session_id in self.active_sessions:

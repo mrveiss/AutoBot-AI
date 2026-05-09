@@ -181,15 +181,11 @@ def test_no_duplicate_class_names_across_schema_modules() -> None:
             if class_name in INTENTIONAL_SHARED:
                 continue
             if class_name in seen and seen[class_name] != module_name:
-                collisions.append(
-                    f"{class_name!r}: defined in both "
-                    f"{seen[class_name]} and {module_name}"
-                )
+                collisions.append(f"{class_name!r}: defined in both " f"{seen[class_name]} and {module_name}")
             else:
                 seen[class_name] = module_name
     assert not collisions, (
         "Cross-module class-name collisions detected — same name in two "
         "schemas_*.py files will shadow on whichever import path resolves "
-        "last. Rename one or add to INTENTIONAL_SHARED with justification:\n  - "
-        + "\n  - ".join(collisions)
+        "last. Rename one or add to INTENTIONAL_SHARED with justification:\n  - " + "\n  - ".join(collisions)
     )

@@ -32,9 +32,7 @@ class SlackAdapter(BaseAdapter):
             metadata=metadata,
         )
 
-    async def denormalize_response(
-        self, unified_response: NormalizedResponse
-    ) -> Dict[str, Any]:
+    async def denormalize_response(self, unified_response: NormalizedResponse) -> Dict[str, Any]:
         """Convert unified response to Slack format."""
         slack_response = {
             "channel": unified_response.channel_id,

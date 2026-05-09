@@ -51,11 +51,7 @@ class TestNestedLoopDetection:
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            nested_results = [
-                r
-                for r in results
-                if r.issue_type == PerformanceIssueType.NESTED_LOOP_COMPLEXITY
-            ]
+            nested_results = [r for r in results if r.issue_type == PerformanceIssueType.NESTED_LOOP_COMPLEXITY]
 
             assert len(nested_results) >= 1
             assert nested_results[0].severity in (
@@ -81,18 +77,12 @@ class TestNestedLoopDetection:
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            nested_results = [
-                r
-                for r in results
-                if r.issue_type == PerformanceIssueType.NESTED_LOOP_COMPLEXITY
-            ]
+            nested_results = [r for r in results if r.issue_type == PerformanceIssueType.NESTED_LOOP_COMPLEXITY]
 
             # Should detect high complexity
             assert len(nested_results) >= 1
             # Triple nesting should be HIGH severity
-            high_severity = [
-                r for r in nested_results if r.severity == PerformanceSeverity.HIGH
-            ]
+            high_severity = [r for r in nested_results if r.severity == PerformanceSeverity.HIGH]
             assert len(high_severity) >= 1
 
     def test_nested_list_comprehension(self):
@@ -112,11 +102,7 @@ class TestNestedLoopDetection:
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            complexity_results = [
-                r
-                for r in results
-                if r.issue_type == PerformanceIssueType.QUADRATIC_COMPLEXITY
-            ]
+            complexity_results = [r for r in results if r.issue_type == PerformanceIssueType.QUADRATIC_COMPLEXITY]
 
             # Should detect nested comprehensions
             assert len(complexity_results) >= 1
@@ -143,11 +129,7 @@ class TestNPlusOneQueryDetection:
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            n_plus_one_results = [
-                r
-                for r in results
-                if r.issue_type == PerformanceIssueType.N_PLUS_ONE_QUERY
-            ]
+            n_plus_one_results = [r for r in results if r.issue_type == PerformanceIssueType.N_PLUS_ONE_QUERY]
 
             assert len(n_plus_one_results) >= 1
             assert n_plus_one_results[0].severity == PerformanceSeverity.HIGH
@@ -168,11 +150,7 @@ class TestNPlusOneQueryDetection:
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            query_results = [
-                r
-                for r in results
-                if r.issue_type == PerformanceIssueType.N_PLUS_ONE_QUERY
-            ]
+            query_results = [r for r in results if r.issue_type == PerformanceIssueType.N_PLUS_ONE_QUERY]
 
             assert len(query_results) >= 1
 
@@ -198,9 +176,7 @@ class TestAsyncSyncMismatch:
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            sync_results = [
-                r for r in results if r.issue_type == PerformanceIssueType.SYNC_IN_ASYNC
-            ]
+            sync_results = [r for r in results if r.issue_type == PerformanceIssueType.SYNC_IN_ASYNC]
 
             assert len(sync_results) >= 1
             assert sync_results[0].severity == PerformanceSeverity.CRITICAL
@@ -221,11 +197,7 @@ class TestAsyncSyncMismatch:
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            blocking_results = [
-                r
-                for r in results
-                if r.issue_type == PerformanceIssueType.BLOCKING_IO_IN_ASYNC
-            ]
+            blocking_results = [r for r in results if r.issue_type == PerformanceIssueType.BLOCKING_IO_IN_ASYNC]
 
             assert len(blocking_results) >= 1
             assert "aio" in blocking_results[0].recommendation.lower()
@@ -248,11 +220,7 @@ class TestAsyncSyncMismatch:
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            sequential_results = [
-                r
-                for r in results
-                if r.issue_type == PerformanceIssueType.SEQUENTIAL_AWAITS
-            ]
+            sequential_results = [r for r in results if r.issue_type == PerformanceIssueType.SEQUENTIAL_AWAITS]
 
             assert len(sequential_results) >= 1
             assert "gather" in sequential_results[0].recommendation.lower()
@@ -274,9 +242,7 @@ class TestAsyncSyncMismatch:
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            sync_results = [
-                r for r in results if r.issue_type == PerformanceIssueType.SYNC_IN_ASYNC
-            ]
+            sync_results = [r for r in results if r.issue_type == PerformanceIssueType.SYNC_IN_ASYNC]
 
             assert len(sync_results) == 0
 
@@ -310,9 +276,7 @@ class TestAsyncSyncMismatch:
                 return result.scalars().all()
         """)
 
-        with tempfile.NamedTemporaryFile(
-            suffix=".py", delete=False, mode="w", encoding="utf-8"
-        ) as f:
+        with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w", encoding="utf-8") as f:
             f.write(code)
             f.flush()
 
@@ -344,20 +308,14 @@ class TestAsyncSyncMismatch:
                 return data, row
         """)
 
-        with tempfile.NamedTemporaryFile(
-            suffix=".py", delete=False, mode="w", encoding="utf-8"
-        ) as f:
+        with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w", encoding="utf-8") as f:
             f.write(code)
             f.flush()
 
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            blocking_results = [
-                r
-                for r in results
-                if r.issue_type == PerformanceIssueType.BLOCKING_IO_IN_ASYNC
-            ]
+            blocking_results = [r for r in results if r.issue_type == PerformanceIssueType.BLOCKING_IO_IN_ASYNC]
 
             assert blocking_results == [], (
                 f"False positive: directly-awaited call flagged as blocking: "
@@ -385,11 +343,7 @@ class TestStringConcatenation:
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            concat_results = [
-                r
-                for r in results
-                if r.issue_type == PerformanceIssueType.EXCESSIVE_STRING_CONCAT
-            ]
+            concat_results = [r for r in results if r.issue_type == PerformanceIssueType.EXCESSIVE_STRING_CONCAT]
 
             assert len(concat_results) >= 1
             assert "join" in concat_results[0].recommendation.lower()
@@ -411,11 +365,7 @@ class TestStringConcatenation:
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            concat_results = [
-                r
-                for r in results
-                if r.issue_type == PerformanceIssueType.EXCESSIVE_STRING_CONCAT
-            ]
+            concat_results = [r for r in results if r.issue_type == PerformanceIssueType.EXCESSIVE_STRING_CONCAT]
 
             assert len(concat_results) >= 1
             assert concat_results[0].severity == PerformanceSeverity.MEDIUM
@@ -440,11 +390,7 @@ class TestListLookup:
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            lookup_results = [
-                r
-                for r in results
-                if r.issue_type == PerformanceIssueType.LIST_FOR_LOOKUP
-            ]
+            lookup_results = [r for r in results if r.issue_type == PerformanceIssueType.LIST_FOR_LOOKUP]
 
             assert len(lookup_results) >= 1
             assert "set" in lookup_results[0].recommendation.lower()
@@ -473,11 +419,7 @@ class TestHTTPRequestsInLoop:
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            http_results = [
-                r
-                for r in results
-                if r.issue_type == PerformanceIssueType.UNBATCHED_API_CALLS
-            ]
+            http_results = [r for r in results if r.issue_type == PerformanceIssueType.UNBATCHED_API_CALLS]
 
             assert len(http_results) >= 1
             assert http_results[0].severity == PerformanceSeverity.HIGH
@@ -551,9 +493,7 @@ class TestDirectoryAnalysis:
                         pass
         """))
 
-        analyzer = PerformanceAnalyzer(
-            project_root=str(tmp_path), exclude_patterns=["venv"]
-        )
+        analyzer = PerformanceAnalyzer(project_root=str(tmp_path), exclude_patterns=["venv"])
         results = analyzer.analyze_directory()
 
         # Should not analyze files in venv
@@ -727,9 +667,7 @@ class TestSeverityLevels:
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            critical_results = [
-                r for r in results if r.severity == PerformanceSeverity.CRITICAL
-            ]
+            critical_results = [r for r in results if r.severity == PerformanceSeverity.CRITICAL]
 
             assert len(critical_results) >= 1
 
@@ -748,11 +686,7 @@ class TestSeverityLevels:
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            n_plus_one = [
-                r
-                for r in results
-                if r.issue_type == PerformanceIssueType.N_PLUS_ONE_QUERY
-            ]
+            n_plus_one = [r for r in results if r.issue_type == PerformanceIssueType.N_PLUS_ONE_QUERY]
 
             if n_plus_one:
                 assert n_plus_one[0].severity == PerformanceSeverity.HIGH
@@ -774,11 +708,7 @@ class TestSeverityLevels:
             analyzer = PerformanceAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            concat_results = [
-                r
-                for r in results
-                if r.issue_type == PerformanceIssueType.EXCESSIVE_STRING_CONCAT
-            ]
+            concat_results = [r for r in results if r.issue_type == PerformanceIssueType.EXCESSIVE_STRING_CONCAT]
 
             if concat_results:
                 assert concat_results[0].severity == PerformanceSeverity.MEDIUM

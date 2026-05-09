@@ -40,9 +40,7 @@ def _make_connection(
     )
 
 
-def _make_db(
-    connection: AgentConnection | None = None, delete_count: int = 0
-) -> AsyncMock:
+def _make_db(connection: AgentConnection | None = None, delete_count: int = 0) -> AsyncMock:
     """Return a mock that satisfies the AgentTopologyDB Protocol."""
     db = AsyncMock()
     db.get_agent_connections.return_value = [connection] if connection else []
@@ -65,9 +63,7 @@ async def test_get_collaborators_queries_db():
     db = _make_db(conn)
     topology = AgentTopology(db)
 
-    result = await topology.get_collaborators(
-        "agent_a", task_type="research", min_weight=0.4, limit=3
-    )
+    result = await topology.get_collaborators("agent_a", task_type="research", min_weight=0.4, limit=3)
 
     db.get_agent_connections.assert_awaited_once_with(
         from_agent="agent_a",
@@ -123,9 +119,7 @@ async def test_record_outcome_creates_connections_for_all_pairs():
     db = _make_db(conn)
     topology = AgentTopology(db)
 
-    await topology.record_outcome(
-        "wf-3", ["agent_a", "agent_b", "agent_c"], "analysis", True
-    )
+    await topology.record_outcome("wf-3", ["agent_a", "agent_b", "agent_c"], "analysis", True)
 
     assert db.get_or_create_agent_connection.await_count == 3
     assert db.update_agent_connection.await_count == 3
@@ -135,10 +129,7 @@ async def test_record_outcome_creates_connections_for_all_pairs():
         ("agent_a", "agent_c"),
         ("agent_b", "agent_c"),
     }
-    actual_pairs = {
-        (c.args[0], c.args[1])
-        for c in db.get_or_create_agent_connection.await_args_list
-    }
+    actual_pairs = {(c.args[0], c.args[1]) for c in db.get_or_create_agent_connection.await_args_list}
     assert actual_pairs == expected_pairs
 
 

@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class NotificationReason(str, Enum):
     """GitHub notification reason types."""
+
     AUTHOR = "author"
     REVIEW_REQUESTED = "review_requested"
     MENTION = "mention"
@@ -29,6 +30,7 @@ class NotificationReason(str, Enum):
 @dataclass
 class NotificationFilter:
     """Configuration for notification filtering."""
+
     reason: NotificationReason
     action: str  # "archive", "keep", "review"
     description: str
@@ -112,9 +114,7 @@ class NotificationSuppressionManager:
         self.suppressed_count = 0
         self.kept_count = 0
 
-    def classify_notification(
-        self, reason: str, updated_at: str
-    ) -> tuple[bool, str]:
+    def classify_notification(self, reason: str, updated_at: str) -> tuple[bool, str]:
         """
         Classify a notification and determine if it should be suppressed.
 
@@ -156,9 +156,5 @@ class NotificationSuppressionManager:
             "total_processed": total,
             "suppressed": self.suppressed_count,
             "kept": self.kept_count,
-            "suppression_rate": (
-                f"{100 * self.suppressed_count / total:.1f}%"
-                if total > 0
-                else "0%"
-            ),
+            "suppression_rate": (f"{100 * self.suppressed_count / total:.1f}%" if total > 0 else "0%"),
         }

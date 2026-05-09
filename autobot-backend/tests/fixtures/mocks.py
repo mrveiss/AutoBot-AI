@@ -123,9 +123,7 @@ def make_llm_response(
 
         return LLMResponse(content=content, error=error, model=model, provider=provider)
     except Exception:
-        return _MockLLMResponseShim(
-            content=content, error=error, model=model, provider=provider
-        )
+        return _MockLLMResponseShim(content=content, error=error, model=model, provider=provider)
 
 
 # Back-compat alias — internal callers still reference the underscore name.

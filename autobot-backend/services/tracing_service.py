@@ -99,9 +99,7 @@ class TracingService:
             "AUTOBOT_JAEGER_ENDPOINT",
             f"http://{NetworkConstants.REDIS_VM_IP}:4317",  # Default: Redis VM
         )
-        self._console_export = (
-            os.getenv("AUTOBOT_TRACE_CONSOLE", "false").lower() == "true"
-        )
+        self._console_export = os.getenv("AUTOBOT_TRACE_CONSOLE", "false").lower() == "true"
 
         # Issue #697: Configurable sampling strategy
         # AUTOBOT_TRACE_SAMPLE_RATE: 0.0-1.0 (0.1 = 10% sampling in production)
@@ -249,8 +247,7 @@ class TracingService:
 
             self._enabled = True
             logger.info(
-                f"OpenTelemetry tracing initialized for {self._service_name} "
-                f"(version {self._service_version})"
+                f"OpenTelemetry tracing initialized for {self._service_name} " f"(version {self._service_version})"
             )
             return True
 

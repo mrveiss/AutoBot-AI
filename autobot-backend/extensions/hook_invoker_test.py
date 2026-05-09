@@ -35,9 +35,7 @@ class TestHookInvocationConfig:
 
     def test_transform_mode_requires_key(self):
         """Should reject TRANSFORM mode without transform_key."""
-        cfg = HookInvocationConfig(
-            mode=InvocationMode.TRANSFORM, transform_key=None
-        )
+        cfg = HookInvocationConfig(mode=InvocationMode.TRANSFORM, transform_key=None)
         with pytest.raises(ValueError, match="transform_key"):
             cfg.validate()
 
@@ -75,9 +73,7 @@ class TestHookInvokerInitialization:
         manager = ExtensionManager()
         invoker = HookInvoker(manager)
         for hp in HookPoint:
-            assert invoker.get_config(hp) is not None, (
-                f"HookPoint.{hp.name} missing explicit config in HookInvoker"
-            )
+            assert invoker.get_config(hp) is not None, f"HookPoint.{hp.name} missing explicit config in HookInvoker"
 
     def test_message_preparation_hooks_configured(self):
         """Should configure message preparation hooks."""
@@ -124,9 +120,7 @@ class TestHookInvokerInvocation:
         # Mock the manager's invoke_hook method
         manager.invoke_hook = AsyncMock(return_value=[1, 2, 3])
 
-        results = await invoker.invoke(
-            HookPoint.BEFORE_MESSAGE_PROCESS, ctx
-        )
+        results = await invoker.invoke(HookPoint.BEFORE_MESSAGE_PROCESS, ctx)
         assert results == [1, 2, 3]
         manager.invoke_hook.assert_called_once()
 
@@ -139,13 +133,9 @@ class TestHookInvokerInvocation:
         ctx = HookContext(session_id="test", data={"prompt": "original"})
 
         # Mock the manager's invoke_with_transform method
-        manager.invoke_with_transform = AsyncMock(
-            return_value="modified"
-        )
+        manager.invoke_with_transform = AsyncMock(return_value="modified")
 
-        result = await invoker.invoke(
-            HookPoint.AFTER_PROMPT_BUILD, ctx
-        )
+        result = await invoker.invoke(HookPoint.AFTER_PROMPT_BUILD, ctx)
         assert result == "modified"
         manager.invoke_with_transform.assert_called_once()
 
@@ -160,9 +150,7 @@ class TestHookInvokerInvocation:
         # Mock the manager's invoke_until_handled method
         manager.invoke_until_handled = AsyncMock(return_value="handled")
 
-        result = await invoker.invoke(
-            HookPoint.APPROVAL_REQUIRED, ctx
-        )
+        result = await invoker.invoke(HookPoint.APPROVAL_REQUIRED, ctx)
         assert result == "handled"
         manager.invoke_until_handled.assert_called_once()
 
@@ -177,9 +165,7 @@ class TestHookInvokerInvocation:
         # Mock the manager's invoke_cancellable method
         manager.invoke_cancellable = AsyncMock(return_value=True)
 
-        result = await invoker.invoke(
-            HookPoint.BEFORE_LLM_CALL, ctx
-        )
+        result = await invoker.invoke(HookPoint.BEFORE_LLM_CALL, ctx)
         assert result is True
         manager.invoke_cancellable.assert_called_once()
 
@@ -191,14 +177,10 @@ class TestHookInvokerInvocation:
 
         ctx = HookContext(session_id="test")
 
-        override_cfg = HookInvocationConfig(
-            mode=InvocationMode.UNTIL_HANDLED
-        )
+        override_cfg = HookInvocationConfig(mode=InvocationMode.UNTIL_HANDLED)
         manager.invoke_until_handled = AsyncMock(return_value="result")
 
-        result = await invoker.invoke(
-            HookPoint.BEFORE_MESSAGE_PROCESS, ctx, config=override_cfg
-        )
+        result = await invoker.invoke(HookPoint.BEFORE_MESSAGE_PROCESS, ctx, config=override_cfg)
         assert result == "result"
         manager.invoke_until_handled.assert_called_once()
 
@@ -214,9 +196,7 @@ class TestHookInvokerInvocation:
         manager.invoke_with_transform = AsyncMock(return_value=123)
 
         with patch("extensions.hook_invoker.logger") as mock_logger:
-            result = await invoker.invoke(
-                HookPoint.AFTER_PROMPT_BUILD, ctx
-            )
+            result = await invoker.invoke(HookPoint.AFTER_PROMPT_BUILD, ctx)
             assert result == 123
             mock_logger.warning.assert_called()
 
@@ -257,9 +237,7 @@ class TestHookInvokerInvocation:
         hooks = invoker.list_hooks()
         hook_names = {h[0] for h in hooks}
         for hp in HookPoint:
-            assert hp.name in hook_names, (
-                f"HookPoint.{hp.name} missing from list_hooks() output"
-            )
+            assert hp.name in hook_names, f"HookPoint.{hp.name} missing from list_hooks() output"
 
         # Verify specific hook names and modes are present
         assert "BEFORE_MESSAGE_PROCESS" in hook_names
@@ -323,11 +301,7 @@ class TestHookInvokerIntegration:
         manager.register(ext)
 
         invoker = HookInvoker(manager)
-        ctx = HookContext(
-            session_id="test", data={"prompt": "original prompt"}
-        )
+        ctx = HookContext(session_id="test", data={"prompt": "original prompt"})
 
-        result = await invoker.invoke(
-            HookPoint.AFTER_PROMPT_BUILD, ctx
-        )
+        result = await invoker.invoke(HookPoint.AFTER_PROMPT_BUILD, ctx)
         assert result == "[MODIFIED] original prompt"

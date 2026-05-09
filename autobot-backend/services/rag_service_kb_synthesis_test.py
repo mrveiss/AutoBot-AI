@@ -7,7 +7,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -81,13 +80,16 @@ class TestGetKbSynthesisContext:
         docs = ["Summary A", "Summary B"]
         client = _mock_client(("kb_synthesis", docs))
 
-        with patch(
-            "utils.chromadb_client.get_async_chromadb_client",
-            new_callable=AsyncMock,
-            return_value=client,
-        ), patch(
-            "services.knowledge.synthesis_schema_loader.load_synthesis_schema",
-            side_effect=FileNotFoundError("no schema"),
+        with (
+            patch(
+                "utils.chromadb_client.get_async_chromadb_client",
+                new_callable=AsyncMock,
+                return_value=client,
+            ),
+            patch(
+                "services.knowledge.synthesis_schema_loader.load_synthesis_schema",
+                side_effect=FileNotFoundError("no schema"),
+            ),
         ):
             result = await svc._get_kb_synthesis_context("test query")
 
@@ -128,13 +130,16 @@ class TestGetKbSynthesisContext:
             ("kb_synthesis_notes", ["Notes doc"]),
         )
 
-        with patch(
-            "utils.chromadb_client.get_async_chromadb_client",
-            new_callable=AsyncMock,
-            return_value=client,
-        ), patch(
-            "services.knowledge.synthesis_schema_loader.load_synthesis_schema",
-            return_value=schema,
+        with (
+            patch(
+                "utils.chromadb_client.get_async_chromadb_client",
+                new_callable=AsyncMock,
+                return_value=client,
+            ),
+            patch(
+                "services.knowledge.synthesis_schema_loader.load_synthesis_schema",
+                return_value=schema,
+            ),
         ):
             result = await svc._get_kb_synthesis_context("multi query")
 
@@ -154,9 +159,7 @@ class TestGetKbSynthesisContext:
         succeeding_col = _mock_collection(["Surviving doc"])
 
         client = AsyncMock()
-        client.get_or_create_collection = AsyncMock(
-            side_effect=[failing_col, succeeding_col]
-        )
+        client.get_or_create_collection = AsyncMock(side_effect=[failing_col, succeeding_col])
 
         from services.knowledge.synthesis_schema_loader import (
             CollectionConfig,
@@ -174,13 +177,16 @@ class TestGetKbSynthesisContext:
             ]
         )
 
-        with patch(
-            "utils.chromadb_client.get_async_chromadb_client",
-            new_callable=AsyncMock,
-            return_value=client,
-        ), patch(
-            "services.knowledge.synthesis_schema_loader.load_synthesis_schema",
-            return_value=schema,
+        with (
+            patch(
+                "utils.chromadb_client.get_async_chromadb_client",
+                new_callable=AsyncMock,
+                return_value=client,
+            ),
+            patch(
+                "services.knowledge.synthesis_schema_loader.load_synthesis_schema",
+                return_value=schema,
+            ),
         ):
             result = await svc._get_kb_synthesis_context("query")
 
@@ -200,13 +206,16 @@ class TestGetKbSynthesisContext:
         client = AsyncMock()
         client.get_or_create_collection = AsyncMock(return_value=empty_col)
 
-        with patch(
-            "utils.chromadb_client.get_async_chromadb_client",
-            new_callable=AsyncMock,
-            return_value=client,
-        ), patch(
-            "services.knowledge.synthesis_schema_loader.load_synthesis_schema",
-            side_effect=FileNotFoundError("no schema"),
+        with (
+            patch(
+                "utils.chromadb_client.get_async_chromadb_client",
+                new_callable=AsyncMock,
+                return_value=client,
+            ),
+            patch(
+                "services.knowledge.synthesis_schema_loader.load_synthesis_schema",
+                side_effect=FileNotFoundError("no schema"),
+            ),
         ):
             result = await svc._get_kb_synthesis_context("nothing here")
 

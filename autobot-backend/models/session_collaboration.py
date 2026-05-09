@@ -107,14 +107,10 @@ class SessionCollaboration(Base):
 
         # Check collaborators
         user_id_str = str(user_id)
-        collaborators_dict = (
-            self.collaborators if isinstance(self.collaborators, dict) else {}
-        )
+        collaborators_dict = self.collaborators if isinstance(self.collaborators, dict) else {}
         return collaborators_dict.get(user_id_str)
 
-    def has_permission(
-        self, user_id: uuid.UUID, required_level: PermissionLevel
-    ) -> bool:
+    def has_permission(self, user_id: uuid.UUID, required_level: PermissionLevel) -> bool:
         """
         Check if user has at least the required permission level.
 
@@ -151,9 +147,7 @@ class SessionCollaboration(Base):
             user_id: User to add
             permission: Permission level to grant
         """
-        collaborators_dict = (
-            self.collaborators if isinstance(self.collaborators, dict) else {}
-        )
+        collaborators_dict = self.collaborators if isinstance(self.collaborators, dict) else {}
         collaborators_dict[str(user_id)] = permission.value
         self.collaborators = collaborators_dict
 
@@ -167,9 +161,7 @@ class SessionCollaboration(Base):
         Returns:
             True if removed, False if not found
         """
-        collaborators_dict = (
-            self.collaborators if isinstance(self.collaborators, dict) else {}
-        )
+        collaborators_dict = self.collaborators if isinstance(self.collaborators, dict) else {}
         user_id_str = str(user_id)
 
         if user_id_str in collaborators_dict:
@@ -202,14 +194,10 @@ class SessionCollaboration(Base):
             permission: Permission level for invitation
             expires_at: Optional expiration timestamp
         """
-        invitations_list = (
-            self.invitations if isinstance(self.invitations, list) else []
-        )
+        invitations_list = self.invitations if isinstance(self.invitations, list) else []
 
         # Remove existing invitation for this user
-        invitations_list = [
-            inv for inv in invitations_list if inv.get("user_id") != str(user_id)
-        ]
+        invitations_list = [inv for inv in invitations_list if inv.get("user_id") != str(user_id)]
 
         invitation = {
             "user_id": str(user_id),
@@ -233,15 +221,11 @@ class SessionCollaboration(Base):
         Returns:
             True if removed, False if not found
         """
-        invitations_list = (
-            self.invitations if isinstance(self.invitations, list) else []
-        )
+        invitations_list = self.invitations if isinstance(self.invitations, list) else []
         user_id_str = str(user_id)
 
         original_len = len(invitations_list)
-        invitations_list = [
-            inv for inv in invitations_list if inv.get("user_id") != user_id_str
-        ]
+        invitations_list = [inv for inv in invitations_list if inv.get("user_id") != user_id_str]
 
         if len(invitations_list) < original_len:
             self.invitations = invitations_list

@@ -79,9 +79,7 @@ async def analyze_failure(request: FailureAnalysisRequest):
 
     try:
         engine = get_engine()
-        report = await engine.analyze_failure(
-            request.task_id, request.error_description
-        )
+        report = await engine.analyze_failure(request.task_id, request.error_description)
 
         # Check if analysis succeeded
         if report.analysis_status == "failed":
@@ -137,9 +135,7 @@ async def health_check():
 )
 async def analyze_failure_get(
     task_id: str = Query(..., description="Task ID to analyze"),
-    error_description: Optional[str] = Query(
-        None, description="Optional error description"
-    ),
+    error_description: Optional[str] = Query(None, description="Optional error description"),
 ):
     """
     Alternative GET endpoint for failure analysis (useful for integration testing).
@@ -151,7 +147,5 @@ async def analyze_failure_get(
     Returns:
         CausalAnalysisReport serialized
     """
-    request = FailureAnalysisRequest(
-        task_id=task_id, error_description=error_description
-    )
+    request = FailureAnalysisRequest(task_id=task_id, error_description=error_description)
     return await analyze_failure(request)

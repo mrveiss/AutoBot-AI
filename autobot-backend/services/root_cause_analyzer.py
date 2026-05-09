@@ -50,9 +50,7 @@ class RootCauseReport:
     explanations: List[str] = field(default_factory=list)
     confounders: List[CausalEvent] = field(default_factory=list)
     chain_depth: int = 0
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(tz=timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
     analysis_status: str = "success"  # success, partial, failed
     error_message: Optional[str] = None
 
@@ -60,9 +58,7 @@ class RootCauseReport:
         """Convert report to dictionary for API serialization."""
         return {
             "task_id": self.task_id,
-            "root_event": (
-                self._event_to_dict(self.root_event) if self.root_event else None
-            ),
+            "root_event": (self._event_to_dict(self.root_event) if self.root_event else None),
             "causal_chain": [self._event_to_dict(e) for e in self.causal_chain],
             "confidence": self.confidence,
             "explanations": self.explanations,
@@ -283,9 +279,7 @@ class RootCauseAnalyzer:
 
         return confounders
 
-    def _generate_explanations(
-        self, chain: List[CausalEvent], confounders: List[CausalEvent]
-    ) -> List[str]:
+    def _generate_explanations(self, chain: List[CausalEvent], confounders: List[CausalEvent]) -> List[str]:
         """
         Generate human-readable causal explanations.
 
@@ -304,10 +298,7 @@ class RootCauseAnalyzer:
         # Root cause explanation
         if len(chain) > 0:
             root = chain[-1]
-            explanations.append(
-                f"Root cause: {root.name or root.event_type} "
-                f"({root.timestamp or 'unknown time'})"
-            )
+            explanations.append(f"Root cause: {root.name or root.event_type} " f"({root.timestamp or 'unknown time'})")
 
         # Immediate cause explanation
         if len(chain) > 1:
@@ -326,16 +317,11 @@ class RootCauseAnalyzer:
         # Confounder explanation
         if confounders:
             confounder_names = ", ".join([c.name or c.event_type for c in confounders])
-            explanations.append(
-                f"Contributing factors: {confounder_names} "
-                "(multiple causes amplified failure)"
-            )
+            explanations.append(f"Contributing factors: {confounder_names} " "(multiple causes amplified failure)")
 
         # Confidence level explanation
         if len(chain) >= 3:
-            explanations.append(
-                "High confidence: Multi-level causal path traced successfully"
-            )
+            explanations.append("High confidence: Multi-level causal path traced successfully")
         elif len(chain) == 2:
             explanations.append("Medium confidence: Direct cause identified")
         else:

@@ -97,11 +97,7 @@ class BaseProvider(ABC):
             "provider": self.provider_name,
             "total_requests": self._total_requests,
             "total_errors": self._total_errors,
-            "error_rate": (
-                self._total_errors / self._total_requests
-                if self._total_requests
-                else 0.0
-            ),
+            "error_rate": (self._total_errors / self._total_requests if self._total_requests else 0.0),
         }
 
     def _get_setting(self, key: str, default: Any = None) -> Any:

@@ -60,9 +60,7 @@ class TestNlpExtractsNamedEntities:
 
         names = [e.name for e in entities]
         # spaCy en_core_web_sm recognises "Microsoft" as ORG → ORGANIZATION
-        assert any(
-            "microsoft" in n.lower() for n in names
-        ), f"Expected 'Microsoft' in extracted entities, got: {names}"
+        assert any("microsoft" in n.lower() for n in names), f"Expected 'Microsoft' in extracted entities, got: {names}"
 
     def test_returns_entity_model_instances(self) -> None:
         """All items returned by _nlp_extract() must be Entity instances."""
@@ -114,9 +112,7 @@ class TestNlpDeduplication:
         entities = extractor._nlp_extract(chunks, doc_id)
         canonical_names = [e.canonical_name for e in entities]
         microsoft_entries = [n for n in canonical_names if n == "microsoft"]
-        assert (
-            len(microsoft_entries) == 1
-        ), f"Expected one 'microsoft' entry after dedup, got: {canonical_names}"
+        assert len(microsoft_entries) == 1, f"Expected one 'microsoft' entry after dedup, got: {canonical_names}"
 
     def test_extraction_count_increments_on_duplicate(self) -> None:
         extractor = EntityExtractor(mode="nlp")
