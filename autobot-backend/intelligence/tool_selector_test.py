@@ -103,8 +103,8 @@ def test_tool_selector_system_merge_preserves_all_intents() -> None:
 
 def test_processed_goal_has_parameters_field() -> None:
     """``goal.parameters`` is read by ``tool_selector._format_command``."""
-    from intelligence.goal_processor import GoalCategory, ProcessedGoal
     from autobot_shared.status_enums import RiskLevel
+    from intelligence.goal_processor import GoalCategory, ProcessedGoal
 
     field_names = {f.name for f in dataclasses.fields(ProcessedGoal)}
     assert "parameters" in field_names, "#7245: ProcessedGoal.parameters required by tool_selector — missing"
