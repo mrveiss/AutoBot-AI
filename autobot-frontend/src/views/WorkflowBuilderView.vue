@@ -259,7 +259,7 @@
         </div>
         <div class="header-actions">
           <div class="status-badge" :class="systemStatusClass">
-            <i :class="statusIcon"></i>
+            <Icon :name="statusIcon" />
             <span>{{ statusLabel }}</span>
           </div>
         </div>
@@ -274,12 +274,12 @@
       <!-- Error State -->
       <div v-else-if="error" class="error-container">
         <div class="error-icon">
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" />
         </div>
         <h3>{{ $t('workflow.views.failedToLoad') }}</h3>
         <p>{{ error }}</p>
         <button @click="refreshAll" class="btn-primary">
-          <i class="fas fa-redo"></i> {{ $t('workflow.views.retry') }}
+          <Icon name="redo" /> {{ $t('workflow.views.retry') }}
         </button>
       </div>
 
@@ -290,7 +290,7 @@
           <div class="stats-grid">
             <div class="stat-card" :class="{ active: orchestrationHealthy }">
               <div class="stat-icon" :class="orchestrationHealthy ? 'healthy' : 'unhealthy'">
-                <i class="fas fa-cogs"></i>
+                <Icon name="cogs" />
               </div>
               <div class="stat-info">
                 <span class="stat-value">{{ orchestrationHealthy ? $t('workflow.views.ready') : $t('workflow.views.offline') }}</span>
@@ -300,7 +300,7 @@
 
             <div class="stat-card">
               <div class="stat-icon">
-                <i class="fas fa-tasks"></i>
+                <Icon name="tasks" />
               </div>
               <div class="stat-info">
                 <span class="stat-value">{{ activeWorkflows.length }}</span>
@@ -310,7 +310,7 @@
 
             <div class="stat-card">
               <div class="stat-icon">
-                <i class="fas fa-users"></i>
+                <Icon name="users" />
               </div>
               <div class="stat-info">
                 <span class="stat-value">{{ totalAgents }}</span>
@@ -320,7 +320,7 @@
 
             <div class="stat-card">
               <div class="stat-icon">
-                <i class="fas fa-layer-group"></i>
+                <Icon name="layer-group" />
               </div>
               <div class="stat-info">
                 <span class="stat-value">{{ Object.keys(executionStrategies).length }}</span>
@@ -332,22 +332,22 @@
           <div class="overview-sections">
             <!-- Quick Actions Card -->
             <div class="overview-card">
-              <h4><i class="fas fa-bolt"></i> {{ $t('workflow.views.quickActions') }}</h4>
+              <h4><Icon name="bolt" /> {{ $t('workflow.views.quickActions') }}</h4>
               <div class="quick-actions-grid">
                 <button class="quick-action" @click="activeSection = 'canvas'">
-                  <i class="fas fa-plus-circle"></i>
+                  <Icon name="plus-circle" />
                   <span>{{ $t('workflow.views.newWorkflow') }}</span>
                 </button>
                 <button class="quick-action" @click="activeSection = 'templates'">
-                  <i class="fas fa-clone"></i>
+                  <Icon name="clone" />
                   <span>{{ $t('workflow.views.useTemplate') }}</span>
                 </button>
                 <button class="quick-action" @click="activeSection = 'natural-language'">
-                  <i class="fas fa-magic"></i>
+                  <Icon name="magic" />
                   <span>{{ $t('workflow.views.naturalLanguage') }}</span>
                 </button>
                 <button class="quick-action" @click="activeSection = 'runner'">
-                  <i class="fas fa-play"></i>
+                  <Icon name="play" />
                   <span>{{ $t('workflow.views.viewRunner') }}</span>
                 </button>
               </div>
@@ -355,7 +355,7 @@
 
             <!-- Strategies Card -->
             <div class="overview-card" v-if="Object.keys(executionStrategies).length > 0">
-              <h4><i class="fas fa-chess"></i> {{ $t('workflow.views.executionStrategies') }}</h4>
+              <h4><Icon name="chess" /> {{ $t('workflow.views.executionStrategies') }}</h4>
               <div class="strategies-grid">
                 <div
                   v-for="(strategy, key) in executionStrategies"
@@ -363,7 +363,7 @@
                   class="strategy-item"
                 >
                   <div class="strategy-header">
-                    <i :class="getStrategyIcon(key)"></i>
+                    <Icon :name="getStrategyIcon(key)" />
                     <span class="strategy-name">{{ strategy.name }}</span>
                   </div>
                   <p class="strategy-description">{{ strategy.description }}</p>
@@ -374,7 +374,7 @@
 
             <!-- Recent Examples Card -->
             <div class="overview-card" v-if="Object.keys(exampleWorkflows).length > 0">
-              <h4><i class="fas fa-lightbulb"></i> {{ $t('workflow.views.exampleWorkflows') }}</h4>
+              <h4><Icon name="lightbulb" /> {{ $t('workflow.views.exampleWorkflows') }}</h4>
               <div class="examples-list">
                 <div
                   v-for="(example, key) in exampleWorkflows"
@@ -421,7 +421,7 @@
         <section v-if="activeSection === 'natural-language'" class="section-natural-language">
           <div class="nl-container">
             <div class="nl-header">
-              <h3><i class="fas fa-magic"></i> {{ $t('workflow.views.createFromDescription') }}</h3>
+              <h3><Icon name="magic" /> {{ $t('workflow.views.createFromDescription') }}</h3>
               <p>{{ $t('workflow.views.createFromDescriptionHelp') }}</p>
             </div>
 
@@ -453,7 +453,7 @@
                   @click="createFromNaturalLanguage"
                   :disabled="!naturalLanguageInput.trim() || executingWorkflow"
                 >
-                  <i class="fas fa-wand-magic-sparkles"></i>
+                  <Icon name="wand-magic-sparkles" />
                   {{ executingWorkflow ? $t('workflow.views.creating') : $t('workflow.views.createWorkflow') }}
                 </button>
               </div>
@@ -462,15 +462,15 @@
             <!-- Pending Approval -->
             <div v-if="pendingApproval" class="approval-panel">
               <div class="approval-header">
-                <i class="fas fa-clipboard-check"></i>
+                <Icon name="clipboard-check" />
                 <h4>{{ $t('workflow.views.planAwaitingApproval') }}</h4>
               </div>
 
               <div class="approval-summary">
                 <p>{{ pendingApproval.plan_summary }}</p>
                 <div class="approval-meta">
-                  <span><i class="fas fa-list-ol"></i> {{ $t('workflow.views.stepsCount', { count: pendingApproval.total_steps }) }}</span>
-                  <span><i class="fas fa-clock"></i> ~{{ Math.round(pendingApproval.estimated_total_duration / 60) }} {{ $t('workflow.views.min') }}</span>
+                  <span><Icon name="list-ol" /> {{ $t('workflow.views.stepsCount', { count: pendingApproval.total_steps }) }}</span>
+                  <span><Icon name="clock" /> ~{{ Math.round(pendingApproval.estimated_total_duration / 60) }} {{ $t('workflow.views.min') }}</span>
                 </div>
               </div>
 
@@ -491,10 +491,10 @@
 
               <div class="approval-actions">
                 <button class="btn-success" @click="handleApprovePlan">
-                  <i class="fas fa-check"></i> {{ $t('workflow.views.approveAndRun') }}
+                  <Icon name="check" /> {{ $t('workflow.views.approveAndRun') }}
                 </button>
                 <button class="btn-danger" @click="handleRejectPlan">
-                  <i class="fas fa-times"></i> {{ $t('workflow.views.reject') }}
+                  <Icon name="times" /> {{ $t('workflow.views.reject') }}
                 </button>
               </div>
             </div>
@@ -587,9 +587,9 @@
         <section v-if="activeSection === 'agents'" class="section-agents">
           <div class="agents-container">
             <div class="agents-header">
-              <h3><i class="fas fa-users-cog"></i> {{ $t('workflow.views.agentCapabilities') }}</h3>
+              <h3><Icon name="users-cog" /> {{ $t('workflow.views.agentCapabilities') }}</h3>
               <button @click="loadAgentCapabilities" class="btn-refresh-sm" :disabled="loadingCapabilities">
-                <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingCapabilities }"></i>
+                <Icon name="sync-alt" :spin="loadingCapabilities" />
               </button>
             </div>
 
@@ -605,7 +605,7 @@
                 class="agent-card"
               >
                 <div class="agent-header">
-                  <i class="fas fa-robot"></i>
+                  <Icon name="robot" />
                   <span class="agent-name">{{ name }}</span>
                 </div>
 
@@ -660,6 +660,8 @@ import {
 import type { WorkflowTemplateSummary } from '@/types/workflowTemplates';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+import Icon from '@/components/ui/Icon.vue';
+import type { IconName } from '@/components/ui/Icon.vue';
 import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue';
 import WorkflowTemplateGallery from '@/components/workflow/WorkflowTemplateGallery.vue';
 import WorkflowRunner from '@/components/workflow/WorkflowRunner.vue';
@@ -815,13 +817,13 @@ const systemStatusClass = computed(() => {
   return 'unhealthy';
 });
 
-const statusIcon = computed(() => {
-  const icons: Record<string, string> = {
-    healthy: 'fas fa-check-circle',
-    degraded: 'fas fa-exclamation-triangle',
-    unhealthy: 'fas fa-times-circle',
+const statusIcon = computed((): IconName => {
+  const icons: Record<string, IconName> = {
+    healthy: 'check-circle',
+    degraded: 'exclamation-triangle',
+    unhealthy: 'times-circle',
   };
-  return icons[systemStatusClass.value] || 'fas fa-question';
+  return icons[systemStatusClass.value] || 'question-circle';
 });
 
 const statusLabel = computed(() => {
@@ -889,15 +891,15 @@ const allWorkflowsForNotificationPicker = computed(() => {
 });
 
 // Methods
-function getStrategyIcon(strategy: string): string {
-  const icons: Record<string, string> = {
-    sequential: 'fas fa-arrow-right',
-    parallel: 'fas fa-columns',
-    pipeline: 'fas fa-stream',
-    collaborative: 'fas fa-users',
-    adaptive: 'fas fa-random',
+function getStrategyIcon(strategy: string): IconName {
+  const icons: Record<string, IconName> = {
+    sequential: 'arrow-right',
+    parallel: 'columns',
+    pipeline: 'stream',
+    collaborative: 'users',
+    adaptive: 'random',
   };
-  return icons[strategy] || 'fas fa-cog';
+  return icons[strategy] || 'cog';
 }
 
 /** Refresh agent performance and capabilities (#2155). */
@@ -1005,7 +1007,7 @@ async function handleSaveWorkflow(name: string, description: string): Promise<vo
     name,
     description,
     category: 'custom',
-    icon: 'fas fa-project-diagram',
+    icon: 'project-diagram' as IconName,
     steps,
   };
   const workflowId = await createWorkflowFromTemplate(template, sessionId.value);
@@ -1122,7 +1124,7 @@ async function handleReRunWorkflow(workflowId: string): Promise<void> {
     name: existing.name,
     description: existing.description,
     category: 'custom',
-    icon: 'fas fa-redo',
+    icon: 'redo' as IconName,
     steps: existing.steps.map(({ command, description, explanation, requires_confirmation, risk_level, estimated_duration, dependencies }) => ({
       command,
       description,
@@ -1216,11 +1218,11 @@ watch(hasActiveWorkflows, (hasActive) => {
 .category-nav {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 0;
+  padding: var(--spacing-3) var(--spacing-0);
 }
 
 .category-divider {
-  padding: 12px 20px 8px;
+  padding: var(--spacing-3) var(--spacing-5) var(--spacing-2);
   font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
@@ -1237,7 +1239,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .health-indicator {
   font-size: 0.65rem;
-  padding: 1px 6px;
+  padding: var(--spacing-px) var(--spacing-1-5);
   border-radius: var(--radius-lg);
   text-transform: uppercase;
   font-weight: 600;
@@ -1262,7 +1264,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   cursor: pointer;
   transition: all var(--duration-150) var(--ease-in-out);
   color: var(--text-secondary);
@@ -1304,7 +1306,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   font-size: var(--text-xs);
   font-family: var(--font-mono);
   background: var(--bg-tertiary);
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-xl);
   color: var(--text-tertiary);
   font-weight: 500;
@@ -1321,14 +1323,14 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .sidebar-actions {
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   border-top: 1px solid var(--border-default);
 }
 
 .btn-refresh {
   width: 100%;
   height: 36px;
-  padding: 0 12px;
+  padding: var(--spacing-0) var(--spacing-3);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
@@ -1385,7 +1387,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
+  padding: var(--spacing-5) var(--spacing-6);
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-default);
 }
@@ -1412,7 +1414,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 8px 14px;
+  padding: var(--spacing-2) var(--spacing-3-5);
   border-radius: var(--radius-2xl);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -1551,7 +1553,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .overview-card h4 {
-  margin: 0 0 16px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-4);
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
@@ -1560,7 +1562,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   gap: var(--spacing-2);
 }
 
-.overview-card h4 i {
+.overview-card h4 svg {
   color: var(--color-primary);
 }
 
@@ -1591,8 +1593,10 @@ watch(hasActiveWorkflows, (hasActive) => {
   color: var(--color-primary);
 }
 
-.quick-action i {
+.quick-action svg {
   font-size: var(--text-xl);
+  width: 24px;
+  height: 24px;
 }
 
 .quick-action span {
@@ -1620,7 +1624,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   margin-bottom: var(--spacing-2);
 }
 
-.strategy-header i {
+.strategy-header svg {
   color: var(--color-primary);
 }
 
@@ -1632,7 +1636,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 .strategy-description {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0 0 8px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2);
 }
 
 .strategy-best-for {
@@ -1649,7 +1653,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .example-item {
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
   cursor: pointer;
@@ -1675,7 +1679,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .example-strategy {
   font-size: var(--text-xs);
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--color-primary-bg);
   color: var(--color-primary);
   border-radius: var(--radius-xl);
@@ -1709,12 +1713,12 @@ watch(hasActiveWorkflows, (hasActive) => {
   gap: var(--spacing-2-5);
 }
 
-.nl-header h3 i {
+.nl-header h3 svg {
   color: var(--color-primary);
 }
 
 .nl-header p {
-  margin: 8px 0 0;
+  margin: var(--spacing-2) var(--spacing-0) var(--spacing-0);
   color: var(--text-secondary);
 }
 
@@ -1754,7 +1758,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 16px 0;
+  margin: var(--spacing-4) var(--spacing-0);
 }
 
 .checkbox-option {
@@ -1772,7 +1776,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .strategy-select {
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -1801,8 +1805,9 @@ watch(hasActiveWorkflows, (hasActive) => {
   margin-bottom: var(--spacing-4);
 }
 
-.approval-header i {
-  font-size: var(--text-xl);
+.approval-header svg {
+  width: var(--text-xl);
+  height: var(--text-xl);
   color: var(--color-warning);
 }
 
@@ -1812,7 +1817,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .approval-summary p {
-  margin: 0 0 8px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2);
   color: var(--text-secondary);
 }
 
@@ -1830,7 +1835,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .approval-steps {
-  margin: 16px 0;
+  margin: var(--spacing-4) var(--spacing-0);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2);
@@ -1861,7 +1866,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .risk-badge {
   font-size: var(--text-xs);
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-xl);
   text-transform: uppercase;
 }
@@ -1923,7 +1928,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   gap: var(--spacing-2-5);
 }
 
-.agents-header h3 i {
+.agents-header h3 svg {
   color: var(--color-primary);
 }
 
@@ -1973,8 +1978,9 @@ watch(hasActiveWorkflows, (hasActive) => {
   margin-bottom: var(--spacing-3);
 }
 
-.agent-header i {
-  font-size: var(--text-lg);
+.agent-header svg {
+  width: var(--text-lg);
+  height: var(--text-lg);
   color: var(--color-primary);
 }
 
@@ -1992,7 +1998,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .capability-tag {
   font-size: var(--text-xs);
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--bg-secondary);
   color: var(--text-secondary);
   border-radius: var(--radius-xl);
@@ -2041,7 +2047,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 /* Buttons */
 .btn-primary {
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
@@ -2066,7 +2072,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .btn-success {
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   background: var(--color-success);
   color: var(--text-on-primary);
   border: none;
@@ -2085,7 +2091,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .btn-danger {
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   background: var(--color-error);
   color: var(--text-on-primary);
   border: none;

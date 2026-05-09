@@ -4,11 +4,25 @@
 """Skills Governance API — gap detection, draft management, approvals, and governance config."""
 
 import logging
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+
+from api.schemas_agent import (
+    ApprovalDecision,
+    GapRequest,
+    GovernanceModeUpdate,
+)
+from api.schemas_code import (
+    SkillsApprovalDecisionResponse,
+    SkillsApprovalItem,
+    SkillsDraftListItem,
+    SkillsDraftPromoteResponse,
+    SkillsDraftTestResponse,
+    SkillsGapResponse,
+    SkillsGovernanceConfigResponse,
+    SkillsGovernanceUpdateResponse,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,11 +36,10 @@ from skills.models import (
     SkillApproval,
     SkillPackage,
     SkillState,
-    TrustLevel,
 )
 from skills.promoter import SkillPromoter
 from skills.validator import SkillValidator
-from autobot_shared.time_utils import now_utc
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -35,27 +48,6 @@ _GOVERNANCE_SINGLETON_ID = 1
 _STATUS_PENDING = "pending"
 _STATUS_APPROVED = "approved"
 _STATUS_REJECTED = "rejected"
-
-
-class GapRequest(BaseModel):
-    """Request body for generating a skill to fill a capability gap."""
-
-    task: str = Field(...)
-    agent_output: str = Field("")
-
-
-class ApprovalDecision(BaseModel):
-    """Request body for approving or rejecting a skill approval record."""
-
-    approved: bool
-    trust_level: TrustLevel = TrustLevel.MONITORED
-    notes: str = ""
-
-
-class GovernanceModeUpdate(BaseModel):
-    """Request body for updating the active governance mode."""
-
-    mode: GovernanceMode
 
 
 async def _get_skill_draft(session: AsyncSession, skill_id: str) -> SkillPackage:
@@ -85,7 +77,12 @@ def _governance_default() -> Dict[str, Any]:
     return {"mode": "semi_auto", "gap_detection_enabled": True}
 
 
-@router.post("/gaps", summary="Generate a skill to fill a capability gap")
+@router.post("/gaps", summary="Generate a skill to fill a capability gap", response_model=SkillsGapResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="detect_gap",
+    error_code_prefix="SKILLS_GOVERNANCE",
+)
 async def detect_gap(
     req: GapRequest,
     _: None = Depends(check_admin_permission),
@@ -131,7 +128,12 @@ async def detect_gap(
     }
 
 
-@router.get("/drafts", summary="List all skill drafts")
+@router.get("/drafts", summary="List all skill drafts", response_model=List[SkillsDraftListItem])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_drafts",
+    error_code_prefix="SKILLS_GOVERNANCE",
+)
 async def list_drafts() -> List[Dict[str, Any]]:
     """Return all SkillPackage records in DRAFT state."""
     engine = get_skills_engine()
@@ -153,7 +155,12 @@ async def list_drafts() -> List[Dict[str, Any]]:
     ]
 
 
-@router.post("/drafts/{skill_id}/test", summary="Validate a skill draft")
+@router.post("/drafts/{skill_id}/test", summary="Validate a skill draft", response_model=SkillsDraftTestResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_draft",
+    error_code_prefix="SKILLS_GOVERNANCE",
+)
 async def test_draft(
     skill_id: str,
     _: None = Depends(check_admin_permission),
@@ -173,7 +180,12 @@ async def test_draft(
     }
 
 
-@router.post("/drafts/{skill_id}/promote", summary="Promote a draft skill to builtin")
+@router.post("/drafts/{skill_id}/promote", summary="Promote a draft skill to builtin", response_model=SkillsDraftPromoteResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="promote_draft",
+    error_code_prefix="SKILLS_GOVERNANCE",
+)
 async def promote_draft(
     skill_id: str,
     _: None = Depends(check_admin_permission),
@@ -228,7 +240,12 @@ async def promote_draft(
     return {"promoted": True, "path": promoted_path, "name": skill.name}
 
 
-@router.get("/approvals", summary="List pending skill approvals")
+@router.get("/approvals", summary="List pending skill approvals", response_model=List[SkillsApprovalItem])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_approvals",
+    error_code_prefix="SKILLS_GOVERNANCE",
+)
 async def list_approvals() -> List[Dict[str, Any]]:
     """Return all SkillApproval records with status 'pending'."""
     engine = get_skills_engine()
@@ -250,7 +267,12 @@ async def list_approvals() -> List[Dict[str, Any]]:
     ]
 
 
-@router.post("/approvals/{approval_id}", summary="Approve or reject a skill approval")
+@router.post("/approvals/{approval_id}", summary="Approve or reject a skill approval", response_model=SkillsApprovalDecisionResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="decide_approval",
+    error_code_prefix="SKILLS_GOVERNANCE",
+)
 async def decide_approval(
     approval_id: str,
     body: ApprovalDecision,
@@ -269,7 +291,12 @@ async def decide_approval(
     return {"approval_id": approval_id, "status": approval.status}
 
 
-@router.get("/", summary="Get current governance configuration")
+@router.get("/", summary="Get current governance configuration", response_model=SkillsGovernanceConfigResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_governance",
+    error_code_prefix="SKILLS_GOVERNANCE",
+)
 async def get_governance() -> Dict[str, Any]:
     """Return the active GovernanceConfig, or the default if none exists."""
     engine = get_skills_engine()
@@ -287,7 +314,12 @@ async def get_governance() -> Dict[str, Any]:
     }
 
 
-@router.put("/", summary="Update the governance mode")
+@router.put("/", summary="Update the governance mode", response_model=SkillsGovernanceUpdateResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_governance",
+    error_code_prefix="SKILLS_GOVERNANCE",
+)
 async def update_governance(
     body: GovernanceModeUpdate,
     _: None = Depends(check_admin_permission),

@@ -286,7 +286,7 @@ async function handleDelete(voiceId: string, name: string) {
 
 .voice-badge {
   font-size: var(--text-xs);
-  padding: 2px 6px;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   border-radius: var(--radius-sm, 4px);
   font-weight: 500;
 }

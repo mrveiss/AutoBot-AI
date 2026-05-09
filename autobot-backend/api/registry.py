@@ -10,8 +10,18 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
+from api.system_health import ComponentHealth, register_health_probe
+from api.schemas_workflows import (
+    RegistryEndpointsResponse,
+    RegistryHealthResponse,
+    RegistryRouterDetailResponse,
+    RegistryRoutersResponse,
+    RegistryTagRoutersResponse,
+    RegistryTagsResponse,
+    RegistryValidateResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Create FastAPI router
@@ -476,12 +486,12 @@ def get_endpoint_documentation() -> List[Dict]:
 # ============================================================================
 
 
+@router.get("/endpoints", response_model=RegistryEndpointsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_endpoints",
     error_code_prefix="REGISTRY",
 )
-@router.get("/endpoints")
 async def list_endpoints():
     """List all registered API endpoints"""
     return {
@@ -490,12 +500,12 @@ async def list_endpoints():
     }
 
 
+@router.get("/routers", response_model=RegistryRoutersResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_routers",
     error_code_prefix="REGISTRY",
 )
-@router.get("/routers")
 async def list_routers():
     """List all registered routers with full configuration"""
     routers_data = {}
@@ -514,12 +524,12 @@ async def list_routers():
     return routers_data
 
 
+@router.get("/router/{router_name}", response_model=RegistryRouterDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_router_details",
     error_code_prefix="REGISTRY",
 )
-@router.get("/router/{router_name}")
 async def get_router_details(router_name: str):
     """Get details for a specific router"""
     config = registry.get_router_by_name(router_name)
@@ -539,12 +549,12 @@ async def get_router_details(router_name: str):
     }
 
 
+@router.get("/tags", response_model=RegistryTagsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_tags",
     error_code_prefix="REGISTRY",
 )
-@router.get("/tags")
 async def list_tags():
     """List all unique tags across all routers"""
     all_tags = set()
@@ -553,12 +563,12 @@ async def list_tags():
     return {"tags": sorted(list(all_tags))}
 
 
+@router.get("/tags/{tag}", response_model=RegistryTagRoutersResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_routers_by_tag",
     error_code_prefix="REGISTRY",
 )
-@router.get("/tags/{tag}")
 async def get_routers_by_tag(tag: str):
     """Get all routers with a specific tag"""
     routers_with_tag = registry.get_routers_by_tag(tag)
@@ -569,24 +579,49 @@ async def get_routers_by_tag(tag: str):
     }
 
 
+@router.get("/validate", response_model=RegistryValidateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="validate_dependencies",
     error_code_prefix="REGISTRY",
 )
-@router.get("/validate")
 async def validate_dependencies():
     """Validate router dependencies"""
     errors = registry.validate_dependencies()
     return {"valid": len(errors) == 0, "errors": errors}
 
 
+@register_health_probe("registry")
+async def probe_registry(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the API endpoint registry."""
+    try:
+        if not registry.routers:
+            return ComponentHealth(
+                name="registry",
+                status="degraded",
+                detail="no routers registered",
+            )
+        return ComponentHealth(
+            name="registry",
+            status="ok",
+            data={"total_routers": len(registry.routers)},
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="registry",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
+@router.get("/health", response_model=RegistryHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="registry_health",
     error_code_prefix="REGISTRY",
 )
-@router.get("/health")
 async def registry_health():
     """Health check for registry system"""
     return {

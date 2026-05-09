@@ -17,15 +17,28 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
+from api.schemas_workflows import (
+    ConnectionTestRequest,
+    IssueCreateRequest,
+    IssueUpdateRequest,
+    ProviderInfo,
+)
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.project_management_integration import (
     AsanaIntegration,
     JiraIntegration,
     TrelloIntegration,
 )
+from api.schemas_code import (
+    PMIssueCreateResponse,
+    PMIssueSearchResponse,
+    PMIssueUpdateResponse,
+    PMIssuesResponse,
+    PMProjectsResponse,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -38,60 +51,6 @@ router = APIRouter(
 # =============================================================================
 # Request/Response Models
 # =============================================================================
-
-
-class ConnectionTestRequest(BaseModel):
-    """Request to test project management connection."""
-
-    provider: str = Field(..., description="Provider: jira, trello, or asana")
-    base_url: Optional[str] = Field(None, description="Base URL for the service")
-    api_key: Optional[str] = Field(None, description="API key")
-    api_secret: Optional[str] = Field(None, description="API secret")
-    token: Optional[str] = Field(None, description="Auth token")
-    username: Optional[str] = Field(None, description="Username")
-    password: Optional[str] = Field(None, description="Password")
-
-
-class ProviderInfo(BaseModel):
-    """Information about a supported provider."""
-
-    provider: str
-    name: str
-    description: str
-    auth_type: str
-    base_url_required: bool
-    documentation_url: str
-
-
-class IssueCreateRequest(BaseModel):
-    """Request to create a new issue/card/task."""
-
-    title: str = Field(..., description="Issue title/name")
-    description: Optional[str] = Field(None, description="Description")
-    project_key: Optional[str] = Field(
-        None, description="Project key (Jira) or ID (Trello/Asana)"
-    )
-    issue_type: Optional[str] = Field("Task", description="Issue type (Jira)")
-    list_id: Optional[str] = Field(None, description="List ID (Trello)")
-    workspace_gid: Optional[str] = Field(None, description="Workspace GID (Asana)")
-
-
-class IssueUpdateRequest(BaseModel):
-    """Request to update an issue/card/task."""
-
-    title: Optional[str] = Field(None, description="New title")
-    description: Optional[str] = Field(None, description="New description")
-    status: Optional[str] = Field(None, description="New status")
-    transition_id: Optional[str] = Field(None, description="Transition ID (Jira)")
-    list_id: Optional[str] = Field(None, description="Target list ID (Trello)")
-    completed: Optional[bool] = Field(None, description="Completion status (Asana)")
-
-
-class SearchRequest(BaseModel):
-    """Request to search issues."""
-
-    query: str = Field(..., description="Search query or JQL")
-    max_results: Optional[int] = Field(50, description="Maximum results")
 
 
 # =============================================================================
@@ -165,6 +124,11 @@ def _validate_provider(provider: str) -> None:
 
 
 @router.post("/test-connection", response_model=IntegrationHealth)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_connection",
+    error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
+)
 async def test_connection(
     request: ConnectionTestRequest,
 ) -> IntegrationHealth:
@@ -192,6 +156,11 @@ async def test_connection(
 
 
 @router.get("/providers", response_model=List[ProviderInfo])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_providers",
+    error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
+)
 async def list_providers() -> List[ProviderInfo]:
     """List all supported project management providers.
 
@@ -200,7 +169,12 @@ async def list_providers() -> List[ProviderInfo]:
     return list(SUPPORTED_PROVIDERS.values())
 
 
-@router.get("/{provider}/projects")
+@router.get("/{provider}/projects", response_model=PMProjectsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_projects",
+    error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
+)
 async def list_projects(
     provider: str,
     base_url: Optional[str] = Query(None),
@@ -240,7 +214,12 @@ async def list_projects(
         return await integration.execute_action("list_workspaces", {})
 
 
-@router.get("/{provider}/issues")
+@router.get("/{provider}/issues", response_model=PMIssuesResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_issues",
+    error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
+)
 async def list_issues(
     provider: str,
     base_url: Optional[str] = Query(None),
@@ -339,7 +318,12 @@ def _build_create_params(provider: str, request: IssueCreateRequest) -> tuple:
         return "create_task", params
 
 
-@router.post("/{provider}/issues")
+@router.post("/{provider}/issues", response_model=PMIssueCreateResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_issue",
+    error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
+)
 async def create_issue(
     provider: str,
     request: IssueCreateRequest,
@@ -401,7 +385,12 @@ def _build_update_params(
         return "update_task", params
 
 
-@router.patch("/{provider}/issues/{issue_id}")
+@router.patch("/{provider}/issues/{issue_id}", response_model=PMIssueUpdateResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_issue",
+    error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
+)
 async def update_issue(
     provider: str,
     issue_id: str,
@@ -428,7 +417,12 @@ async def update_issue(
     return await integration.execute_action(action, params)
 
 
-@router.get("/{provider}/search")
+@router.get("/{provider}/search", response_model=PMIssueSearchResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_issues",
+    error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
+)
 async def search_issues(
     provider: str,
     query: str = Query(..., description="Search query or JQL"),

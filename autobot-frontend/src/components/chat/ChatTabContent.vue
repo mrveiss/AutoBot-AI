@@ -44,7 +44,7 @@
       <VisualBrowserPanel class="flex-1" />
     </div>
 
-    <!-- noVNC Tab Content (Issue #715: Dynamic hosts from user config) -->
+    <!-- noVNC Tab Content (Issue #715: Dynamic hosts from user config, Issue #4977: DesktopInterface) -->
     <div v-else-if="activeTab === 'novnc'" class="flex-1 flex flex-col min-h-0">
       <div class="flex-1 flex flex-col bg-black">
         <!-- Host selector header for VNC -->
@@ -60,27 +60,14 @@
               @open-secrets-manager="emit('open-secrets-manager')"
             />
           </div>
-          <a
-            v-if="selectedVncHost && dynamicVncUrl"
-            :href="dynamicVncUrl"
-            target="_blank"
-            class="text-autobot-text-muted hover:text-autobot-text-secondary underline"
-            :title="$t('chat.tabContent.openInNewWindow')"
-          >
-            <i class="fas fa-external-link-alt mr-1"></i>
-            {{ $t('chat.tabContent.openInNewWindow') }}
-          </a>
         </div>
-        <!-- VNC content - show iframe when host selected -->
-        <template v-if="selectedVncHost && dynamicVncUrl">
-          <iframe
-            :key="`vnc-${selectedVncHost.id}`"
-            :src="dynamicVncUrl"
-            class="flex-1 w-full border-0"
-            title="noVNC Remote Desktop"
-            allowfullscreen
-          ></iframe>
-        </template>
+        <!-- VNC content - DesktopInterface when host selected (Issue #4977) -->
+        <DesktopInterface
+          v-if="selectedVncHost"
+          :key="`vnc-${selectedVncHost.id}`"
+          :host="selectedVncHost"
+          class="flex-1"
+        />
         <!-- Empty state when no host selected -->
         <div v-else class="flex-1 flex items-center justify-center text-autobot-text-muted">
           <div class="text-center">
@@ -137,7 +124,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, defineAsyncComponent } from 'vue'
+import { ref, watch, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -153,6 +140,7 @@ import FileBrowser from '@/components/file-browser/FileBrowser.vue'
 import VisualBrowserPanel from '@/components/chat/VisualBrowserPanel.vue'  // Issue #1130: screenshot-based browser
 import HostSelector from '@/components/ui/HostSelector.vue'  // Issue #715: Dynamic host selection
 import SSHTerminal from '@/components/terminal/SSHTerminal.vue'    // Issue #715: SSH terminal component
+import DesktopInterface from '@/components/desktop/DesktopInterface.vue'  // Issue #4977: full VNC component
 
 /**
  * Infrastructure host type for SSH/VNC connections.
@@ -188,15 +176,6 @@ const selectedSshHost = ref<InfrastructureHost | null>(null)
 const selectedVncHost = ref<InfrastructureHost | null>(null)
 const sshHostSelectorRef = ref<InstanceType<typeof HostSelector>>()
 const vncHostSelectorRef = ref<InstanceType<typeof HostSelector>>()
-
-// Dynamic VNC URL based on selected host
-const dynamicVncUrl = computed(() => {
-  if (!selectedVncHost.value) return null
-  const host = selectedVncHost.value
-  // noVNC websockify URL format: ws://host:vncport
-  // The backend VNC proxy will handle the connection
-  return `http://${host.host}:${host.vnc_port || 6080}/vnc.html?autoconnect=true`
-})
 
 // Host selection handlers
 const onSshHostSelected = (host: InfrastructureHost) => {

@@ -22,9 +22,8 @@ from autobot_shared.time_utils import parse_utc_iso
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
 
-from auth_middleware import auth_middleware
+from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.models.pagination import PaginationParams
 from services.audit_logger import AuditResult, get_audit_logger
@@ -33,55 +32,23 @@ from utils.catalog_http_exceptions import (
     raise_server_error,
     raise_validation_error,
 )
+from api.schemas_common import DataResponse
+from api.schemas_system import (
+    AuditCleanupRequest,
+    AuditQueryRequest,
+    AuditQueryResponse,
+    AuditStatisticsResponse,
+)
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 logger = logging.getLogger(__name__)
-
-
-class AuditQueryRequest(BaseModel):
-    """Audit log query parameters"""
-
-    start_time: Optional[datetime] = Field(None, description="Start of time range")
-    end_time: Optional[datetime] = Field(None, description="End of time range")
-    operation: Optional[str] = Field(None, description="Filter by operation type")
-    user_id: Optional[str] = Field(None, description="Filter by user")
-    session_id: Optional[str] = Field(None, description="Filter by session")
-    vm_name: Optional[str] = Field(None, description="Filter by VM source")
-    result: Optional[AuditResult] = Field(None, description="Filter by result")
-    limit: int = Field(100, ge=1, le=1000, description="Maximum entries to return")
-    offset: int = Field(0, ge=0, description="Pagination offset")
-
-
-class AuditQueryResponse(BaseModel):
-    """Audit log query response"""
-
-    success: bool
-    total_returned: int
-    has_more: bool
-    entries: List[dict]
-    query: dict
-
-
-class AuditStatisticsResponse(BaseModel):
-    """Audit statistics response"""
-
-    success: bool
-    statistics: dict
-    vm_info: dict
-
-
-class CleanupRequest(BaseModel):
-    """Audit log cleanup request"""
-
-    days_to_keep: int = Field(90, ge=7, le=365, description="Days of logs to retain")
-    confirm: bool = Field(False, description="Confirm cleanup operation")
 
 
 def check_admin_permission(request: Request) -> bool:
     """Check if user has admin permission for audit log access"""
     try:
         # Get user from auth middleware
-        user_data = auth_middleware.get_user_from_request(request)
+        user_data = get_auth_middleware().get_user_from_request(request)
 
         if not user_data:
             raise_auth_error(
@@ -135,12 +102,12 @@ def _build_query_dict(
     }
 
 
+@router.get("/logs", response_model=AuditQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="query_audit_logs",
     error_code_prefix="AUDIT",
 )
-@router.get("/logs", response_model=AuditQueryResponse)
 async def query_audit_logs(
     request: Request,
     start_time: Optional[str] = Query(None, description="Start time (ISO format)"),
@@ -203,12 +170,12 @@ async def query_audit_logs(
         raise_server_error("API_0003", "Audit log query error")
 
 
+@router.get("/statistics", response_model=AuditStatisticsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_audit_statistics",
     error_code_prefix="AUDIT",
 )
-@router.get("/statistics", response_model=AuditStatisticsResponse)
 async def get_audit_statistics(
     request: Request, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -235,12 +202,12 @@ async def get_audit_statistics(
         raise_server_error("API_0003", "Statistics error")
 
 
+@router.get("/session/{session_id}", response_model=AuditQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_audit_trail",
     error_code_prefix="AUDIT",
 )
-@router.get("/session/{session_id}", response_model=AuditQueryResponse)
 async def get_session_audit_trail(
     request: Request,
     session_id: str,
@@ -279,12 +246,12 @@ async def get_session_audit_trail(
         raise_server_error("API_0003", "Session audit query error")
 
 
+@router.get("/user/{user_id}", response_model=AuditQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_user_audit_trail",
     error_code_prefix="AUDIT",
 )
-@router.get("/user/{user_id}", response_model=AuditQueryResponse)
 async def get_user_audit_trail(
     request: Request,
     user_id: str,
@@ -323,12 +290,12 @@ async def get_user_audit_trail(
         raise_server_error("API_0003", "User audit query error")
 
 
+@router.get("/failures", response_model=AuditQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_failed_operations",
     error_code_prefix="AUDIT",
 )
-@router.get("/failures", response_model=AuditQueryResponse)
 async def get_failed_operations(
     request: Request,
     hours: int = Query(24, ge=1, le=168, description="Hours of history to check"),
@@ -372,15 +339,15 @@ async def get_failed_operations(
         raise_server_error("API_0003", "Failed operations query error")
 
 
+@router.post("/cleanup", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_old_logs",
     error_code_prefix="AUDIT",
 )
-@router.post("/cleanup")
 async def cleanup_old_logs(
     request: Request,
-    cleanup_request: CleanupRequest,
+    cleanup_request: AuditCleanupRequest,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -417,12 +384,12 @@ async def cleanup_old_logs(
         raise_server_error("API_0003", "Cleanup error")
 
 
+@router.get("/operations", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_operation_types",
     error_code_prefix="AUDIT",
 )
-@router.get("/operations")
 async def list_operation_types(
     request: Request, admin_check: bool = Depends(check_admin_permission)
 ):

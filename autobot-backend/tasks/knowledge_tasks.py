@@ -656,6 +656,18 @@ def cleanup_orphan_documents(self, dry_run: bool = False) -> Metadata:
 def _resolve_cache_directories() -> list:
     """Return list of cache/temp directory Paths that cleanup_generated_files manages.
 
+    Covered directories and the modules that write to them:
+    - ``DATA_DIR/cache`` — ``utils/graceful_degradation.py`` writes
+      ``data/cache/claude_responses/*.json`` via ``GracefulDegradationManager``;
+      rglob covers all subdirectories recursively.
+    - ``TEMP_DIR`` — miscellaneous temporary scratch space.
+
+    Directories intentionally excluded:
+    - ``DATA_DIR/embeddings_cache`` — no write sites found in the codebase.
+    - ``DATA_DIR/chunks_temp`` — no write sites found in the codebase.
+    - ``DATA_DIR/exports`` — only ``KnowledgeDocuments.export_all_data()`` could
+      write here, but that method has no call sites and is therefore dead code.
+
     Only directories that actually exist are returned; the task silently skips
     missing paths to avoid errors in fresh installs.
     """
@@ -665,12 +677,8 @@ def _resolve_cache_directories() -> list:
 
     candidates = [
         PATH.DATA_DIR / "cache",
-        PATH.DATA_DIR / "embeddings_cache",
-        PATH.DATA_DIR / "chunks_temp",
-        PATH.DATA_DIR / "exports",
         PATH.TEMP_DIR,
     ]
-    # Include legacy hash-cache json file's parent only if explicit dir exists.
     return [p for p in candidates if isinstance(p, Path) and p.exists()]
 
 
@@ -808,6 +816,41 @@ def cleanup_generated_files(
             "dry_run": dry_run,
             "ttl_days": effective_ttl,
         }
+
+
+# =========================================================================
+# Issue #5081: Prune done entries from the sync queue DONE zset
+# =========================================================================
+
+
+@celery_app.task(bind=True, name="tasks.prune_sync_queue_done")
+def prune_sync_queue_done(self) -> dict:
+    """Remove expired entries from the doc_sync:queue:done zset.
+
+    Issue #5081: The DONE zset grew unbounded because prune_done() was only
+    callable via admin API.  This task is scheduled via Celery Beat so
+    pruning runs automatically on a configurable cron.
+
+    Returns:
+        Dict with pruning statistics:
+            - status: 'success' | 'failed'
+            - pruned: Number of entries removed
+    """
+    from services.knowledge.sync_queue import get_document_sync_queue
+
+    try:
+        self.update_state(
+            state="PROGRESS",
+            meta={"current": 0, "total": 1, "status": "Pruning sync queue done entries..."},
+        )
+        logger.info("Starting sync queue done-entry pruning...")
+        queue = get_document_sync_queue()
+        pruned = _run_async_in_loop(queue.prune_done())
+        logger.info("prune_sync_queue_done: pruned=%d", pruned)
+        return {"status": "success", "pruned": pruned}
+    except Exception as e:
+        logger.exception("prune_sync_queue_done failed: %s", e)
+        return {"status": "failed", "error": str(e), "pruned": 0}
 
 
 # =========================================================================

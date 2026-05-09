@@ -9,22 +9,90 @@ Allows monitoring of system resilience and graceful degradation state.
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
+from api.system_health import ComponentHealth, register_health_probe
 from services.resilience.circuit_breaker_manager import (
     get_circuit_breaker_manager,
 )
 from services.resilience.error_budget import get_error_budget_tracker
 from services.resilience.fallback_manager import get_fallback_manager
+from api.schemas_workflows import (
+    CircuitBreakerResetResponse,
+    CircuitBreakerStatusResponse,
+    ErrorBudgetResetResponse,
+    ErrorBudgetStatusResponse,
+    ResilienceHealthResponse,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/resilience", tags=["resilience"])
 
 
-@router.get("/health")
+@register_health_probe("error_resilience")
+async def probe_error_resilience(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333 / #6907: probe reflects actual breaker + budget state.
+
+    Singleton resolution alone hid the failure mode the file was designed
+    to surface (Issue #4342). Reports ``degraded`` when any circuit
+    breaker is open or any error budget is exhausted, and passes the
+    affected names through ``data`` for diagnostic dashboards.
+    """
+    try:
+        cb_status = get_circuit_breaker_manager().get_status()
+        budget_status = get_error_budget_tracker().get_status()
+        get_fallback_manager()  # liveness only — no rich state to inspect
+        open_breakers = [
+            name for name, cb in cb_status.items() if cb.get("state") == "open"
+        ]
+        exhausted_budgets = [
+            name
+            for name, budget in budget_status.items()
+            if budget.get("has_budget") is False
+        ]
+        if open_breakers or exhausted_budgets:
+            return ComponentHealth(
+                name="error_resilience",
+                status="degraded",
+                detail=(
+                    f"{len(open_breakers)} breaker(s) open, "
+                    f"{len(exhausted_budgets)} budget(s) exhausted"
+                ),
+                data={
+                    "open_breakers": open_breakers,
+                    "exhausted_budgets": exhausted_budgets,
+                    "total_breakers": len(cb_status),
+                    "total_budgets": len(budget_status),
+                },
+            )
+        return ComponentHealth(
+            name="error_resilience",
+            status="ok",
+            data={
+                "total_breakers": len(cb_status),
+                "total_budgets": len(budget_status),
+            },
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="error_resilience",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
+@router.get("/health", response_model=ResilienceHealthResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_resilience_health",
+    error_code_prefix="ERROR_RESILIENCE",
+)
 async def get_resilience_health() -> Dict[str, Any]:
     """
     Get overall system resilience health.
@@ -48,7 +116,12 @@ async def get_resilience_health() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Failed to get resilience health")
 
 
-@router.get("/circuit-breakers")
+@router.get("/circuit-breakers", response_model=CircuitBreakerStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_circuit_breaker_status",
+    error_code_prefix="ERROR_RESILIENCE",
+)
 async def get_circuit_breaker_status() -> Dict[str, Any]:
     """
     Get status of all circuit breakers.
@@ -66,7 +139,12 @@ async def get_circuit_breaker_status() -> Dict[str, Any]:
         )
 
 
-@router.get("/error-budgets")
+@router.get("/error-budgets", response_model=ErrorBudgetStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_error_budget_status",
+    error_code_prefix="ERROR_RESILIENCE",
+)
 async def get_error_budget_status() -> Dict[str, Any]:
     """
     Get status of all error budgets.
@@ -84,7 +162,12 @@ async def get_error_budget_status() -> Dict[str, Any]:
         )
 
 
-@router.post("/circuit-breakers/{service_name}/reset")
+@router.post("/circuit-breakers/{service_name}/reset", response_model=CircuitBreakerResetResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reset_circuit_breaker",
+    error_code_prefix="ERROR_RESILIENCE",
+)
 async def reset_circuit_breaker(service_name: str) -> Dict[str, str]:
     """
     Manually reset circuit breaker for service.
@@ -106,7 +189,12 @@ async def reset_circuit_breaker(service_name: str) -> Dict[str, str]:
         )
 
 
-@router.post("/error-budgets/{component}/reset")
+@router.post("/error-budgets/{component}/reset", response_model=ErrorBudgetResetResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reset_error_budget",
+    error_code_prefix="ERROR_RESILIENCE",
+)
 async def reset_error_budget(component: str) -> Dict[str, str]:
     """
     Manually reset error budget for component.

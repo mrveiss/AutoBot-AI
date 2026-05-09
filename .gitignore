@@ -6,6 +6,7 @@ venvs/
 bin/
 lib/
 !scripts/lib/
+!autobot-infrastructure/shared/scripts/hooks/lib/
 lib64/
 include/
 share/

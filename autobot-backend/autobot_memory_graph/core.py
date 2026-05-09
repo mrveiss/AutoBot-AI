@@ -107,16 +107,36 @@ class AutoBotMemoryGraphCore:
     AutoBotMemoryGraph class which combines this core with all mixins.
     """
 
-    def __init__(self):
-        """Initialize the memory graph core."""
+    def __init__(self, chat_history_manager: Optional[Any] = None) -> None:
+        """Initialize the memory graph core.
+
+        Args:
+            chat_history_manager: Optional ChatHistoryManager instance to wire in
+                so memory graph mixins can read/write chat history. Restored in
+                #6613 — the kwarg was lost in a refactor but
+                ``chat_history/base.py`` still passes it.
+        """
         self.redis_client: Optional[Any] = None
-        self.chat_history_manager: Optional[Any] = None
+        self.chat_history_manager: Optional[Any] = chat_history_manager
         self.embedding_cache: Dict[str, List[float]] = {}
         self.embedding_model_name: str = config.embedding_model
         self.embedding_dimensions: int = config.embedding_dimensions
         self._initialized: bool = False
         self._lock: asyncio.Lock = asyncio.Lock()
         self.index_name: str = f"{config.index_prefix}:idx"
+
+    def ensure_initialized(self) -> None:
+        """Sync guard — raise if ``initialize()`` has not been awaited.
+
+        Mixin methods call this before performing operations that require the
+        Redis client and search index. Restored in #6613 — multiple call sites
+        in user_session.py / property_graph_mixin.py / queries.py / relations.py
+        rely on it but the method had been removed in a refactor.
+        """
+        if not self._initialized:
+            raise RuntimeError(
+                "AutoBotMemoryGraph not initialized — call await initialize() first"
+            )
 
     async def initialize(self) -> None:
         """

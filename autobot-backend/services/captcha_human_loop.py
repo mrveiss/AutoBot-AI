@@ -46,11 +46,18 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 from autobot_shared.time_utils import utc_timestamp
-from playwright.async_api import Page
+
+try:
+    # playwright is an optional runtime dep; the captcha-resolution flow only
+    # runs when browser automation is enabled. `Page` is used purely as a type
+    # hint in this module (#6667).
+    from playwright.async_api import Page
+except ImportError:  # pragma: no cover
+    from typing import Any as Page  # type: ignore[assignment, misc]
 
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
-from event_manager import event_manager
+from event_manager import get_event_manager
 
 logger = logging.getLogger(__name__)
 
@@ -507,7 +514,7 @@ class CaptchaHumanLoop:
         screenshot_b64: str,
     ) -> None:
         """Send WebSocket notification that CAPTCHA was detected."""
-        await event_manager.publish(
+        await get_event_manager().publish(
             "captcha_detected",
             {
                 "captcha_id": captcha_id,
@@ -523,7 +530,7 @@ class CaptchaHumanLoop:
 
     async def _notify_captcha_timeout(self, captcha_id: str, url: str) -> None:
         """Send WebSocket notification that CAPTCHA resolution timed out."""
-        await event_manager.publish(
+        await get_event_manager().publish(
             "captcha_timeout",
             {
                 "captcha_id": captcha_id,
@@ -537,7 +544,7 @@ class CaptchaHumanLoop:
         self, captcha_id: str, url: str, status: CaptchaResolutionStatus
     ) -> None:
         """Send WebSocket notification that CAPTCHA was resolved."""
-        await event_manager.publish(
+        await get_event_manager().publish(
             "captcha_resolved",
             {
                 "captcha_id": captcha_id,

@@ -20,7 +20,7 @@ import yaml
 
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.threshold_constants import TimingConstants
-from event_manager import event_manager
+from event_manager import get_event_manager
 from models.npu_models import (
     LoadBalancingConfig,
     NPUWorkerConfig,
@@ -398,7 +398,7 @@ class NPUWorkerManager(AsyncInitializable):
             if event_type in _WORKER_FULL_DATA_EVENTS:
                 event_data["worker"] = worker_details.to_event_dict()
 
-            await event_manager.publish(f"npu.{event_type}", event_data)
+            await get_event_manager().publish(f"npu.{event_type}", event_data)
             logger.debug(f"Emitted event {event_type} for worker {worker_details.config.id}")
 
         except Exception as e:
@@ -577,7 +577,7 @@ class NPUWorkerManager(AsyncInitializable):
         await self._save_workers_to_config()
 
         # Emit worker removed event
-        await event_manager.publish(
+        await get_event_manager().publish(
             "npu.worker.removed",
             {
                 "event": "worker.removed",

@@ -36,11 +36,25 @@ let _scheduledSources: AudioBufferSourceNode[] = []
 let _nextStartTime = 0
 let _activeChunkCount = 0
 
-// Streaming TTS WebSocket connection (#1319)
+// Single shared WebSocket to /api/voice/stream (#6788).
+// Was: useVoiceOutput + useVoiceConversation each opened their own socket to the
+// same endpoint, causing diverging backend state machines and dropped TTS on the
+// second turn. This composable is now the sole owner; consumers subscribe via
+// subscribeVoiceMessages() and send via sendVoiceFrame().
 let _ttsWs: WebSocket | null = null
 let _ttsWsConnecting: Promise<WebSocket> | null = null
 let _ttsWsIdleTimer: ReturnType<typeof setTimeout> | null = null
 const _TTS_WS_IDLE_TIMEOUT = 30_000
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type VoiceMessage = Record<string, any>
+type VoiceMessageHandler = (msg: VoiceMessage) => void
+const _voiceSubscribers = new Set<VoiceMessageHandler>()
+const wsConnected = ref<boolean>(false)
+
+// AbortController for the current in-flight speak() HTTP request.
+// Module-level so a new speak() call can abort the previous one.
+let _speakController: AbortController | null = null
 
 function _getOrCreateContext(): AudioContext {
   if (!_audioContext) {
@@ -194,34 +208,42 @@ function _connectTtsWs(): Promise<WebSocket> {
     ws.onopen = () => {
       _ttsWs = ws
       _ttsWsConnecting = null
+      wsConnected.value = true
       _resetTtsWsIdleTimer()
-      logger.debug('TTS WS connected')
+      logger.debug('Voice WS connected')
       resolve(ws)
     }
     ws.onerror = (e) => {
-      logger.warn('TTS WS error:', e)
+      logger.warn('Voice WS error:', e)
       _ttsWs = null
       _ttsWsConnecting = null
+      wsConnected.value = false
       reject(e)
     }
     ws.onclose = () => {
-      logger.debug('TTS WS closed')
+      logger.debug('Voice WS closed')
       _ttsWs = null
       _ttsWsConnecting = null
+      wsConnected.value = false
     }
     ws.onmessage = (event) => {
       _resetTtsWsIdleTimer()
+      let msg: VoiceMessage
       try {
-        const msg = JSON.parse(event.data)
-        if (msg.type === 'tts_audio' && msg.data) {
-          _playAudioChunkFromBase64(msg.data)
-        } else if (msg.type === 'tts_end') {
-          // Sentence stream complete — isSpeaking cleared by drain
-        } else if (msg.type === 'error') {
-          logger.warn('TTS WS server error:', msg.message)
-        }
+        msg = JSON.parse(event.data)
       } catch (e) {
-        logger.warn('TTS WS message parse error:', e)
+        logger.warn('Voice WS message parse error:', e)
+        return
+      }
+      // Internal: audio playback owned here.
+      if (msg.type === 'tts_audio' && msg.data) {
+        _playAudioChunkFromBase64(msg.data)
+      } else if (msg.type === 'error') {
+        logger.warn('Voice WS server error:', msg.message)
+      }
+      // Fan-out to external subscribers (state machine, transcripts, etc.)
+      for (const handler of _voiceSubscribers) {
+        try { handler(msg) } catch (e) { logger.warn('voice subscriber error:', e) }
       }
     }
   })
@@ -247,6 +269,10 @@ export function useVoiceOutput() {
     if ((!force && !voiceOutputEnabled.value) || !text.trim()) return
     if (isSpeaking.value) _stopCurrentAudio()
 
+    _speakController?.abort()
+    _speakController = new AbortController()
+    const signal = _speakController.signal
+
     try {
       const { effectiveVoiceId } = useVoiceProfiles()
       const { language: prefLang } = usePreferences()
@@ -259,9 +285,10 @@ export function useVoiceOutput() {
       if (language) {
         formData.append('language', language)
       }
-      const response = await fetchWithAuth(`${getApiBase()}/voice/synthesize`, {
+      const response = await fetchWithAuth(`${getApiBase()}/voice/synthesize`, { // fetchWithAuth retained: binary audio blob + FormData body — exempt (#6256)
         method: 'POST',
         body: formData,
+        signal,
       })
       if (!response.ok) {
         logger.warn('TTS synthesize failed:', response.status)
@@ -273,6 +300,7 @@ export function useVoiceOutput() {
       // Issue #1146: clear isSpeaking so watch(isSpeaking) in useVoiceConversation fires
       isSpeaking.value = false
     } catch (e) {
+      if (e instanceof DOMException && (e as DOMException).name === 'AbortError') return
       logger.error('speak() error:', e)
       isSpeaking.value = false
     }
@@ -316,9 +344,31 @@ export function useVoiceOutput() {
     }
   }
 
+  /**
+   * Subscribe to inbound voice WS messages (#6788). Returns an unsubscribe fn.
+   * The subscription drives lazy connection: first subscribe opens the socket;
+   * audio playback (`tts_audio`) is still handled internally by this composable.
+   */
+  function subscribeVoiceMessages(handler: VoiceMessageHandler): () => void {
+    _voiceSubscribers.add(handler)
+    _connectTtsWs().catch(() => { /* logged inside */ })
+    return () => { _voiceSubscribers.delete(handler) }
+  }
+
+  /** Send a frame on the shared voice WS, lazy-connecting if needed (#6788). */
+  async function sendVoiceFrame(payload: VoiceMessage): Promise<void> {
+    try {
+      const ws = await _connectTtsWs()
+      ws.send(JSON.stringify(payload))
+    } catch {
+      logger.warn('sendVoiceFrame: WS unavailable')
+    }
+  }
+
   return {
     voiceOutputEnabled,
     isSpeaking,
+    wsConnected,
     toggleVoiceOutput,
     speak,
     speakStreaming,
@@ -326,5 +376,7 @@ export function useVoiceOutput() {
     unlockAudio,
     playAudioChunk,
     stopSpeaking,
+    subscribeVoiceMessages,
+    sendVoiceFrame,
   }
 }

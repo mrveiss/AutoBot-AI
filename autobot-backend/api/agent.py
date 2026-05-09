@@ -17,13 +17,11 @@ import json
 import logging
 import shlex
 import time
-from datetime import datetime
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import aiohttp
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -32,9 +30,27 @@ from constants.threshold_constants import TimingConstants
 from dependencies import get_config, get_knowledge_base
 from monitoring.prometheus_metrics import get_metrics_manager
 from services.ai_stack_client import AIStackError, get_ai_stack_client
-from type_defs.common import Metadata
 from utils.chat_exceptions import InternalError, SubprocessError
 from utils.response_helpers import create_success_response, handle_ai_stack_error
+
+from api.schemas_common import AgentMessageResponse, DataResponse
+from api.schemas_agent import (
+    AgentAnalysisRequest,
+    AgentCommandApprovalResponse,
+    AgentCommandExecuteResponse,
+    AgentHealthResponse,
+    AgentAvailableData,
+    AgentResearchData,
+    AgentStatusData,
+    CommandApprovalPayload,
+    DevelopmentAnalysisData,
+    EnhancedGoalData,
+    EnhancedGoalPayload,
+    GoalPayload,
+    MultiAgentCoordinationData,
+    MultiAgentTaskPayload,
+    ResearchTaskRequest,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -113,78 +129,6 @@ AGENT_CAPABILITIES = {
         ],
     },
 }
-
-# ====================================================================
-# Request/Response Models
-# ====================================================================
-
-
-class GoalPayload(BaseModel):
-    goal: str
-    use_phi2: bool = False
-    user_role: str = "user"
-
-
-class CommandApprovalPayload(BaseModel):
-    task_id: str
-    approved: bool
-    user_role: str = "user"
-
-
-class EnhancedGoalPayload(BaseModel):
-    """Enhanced goal payload with AI Stack integration (Issue #708 consolidation)."""
-
-    goal: str = Field(
-        ..., min_length=1, max_length=10000, description="Goal description"
-    )
-    agents: Optional[List[str]] = Field(None, description="Specific agents to use")
-    coordination_mode: str = Field(
-        "intelligent",
-        description="Coordination mode (parallel, sequential, intelligent)",
-    )
-    priority: str = Field(
-        "normal", description="Task priority (low, normal, high, urgent)"
-    )
-    context: Optional[str] = Field(None, description="Additional context")
-    use_knowledge_base: bool = Field(True, description="Use knowledge base for context")
-    include_reasoning: bool = Field(False, description="Include reasoning steps")
-    max_execution_time: int = Field(
-        300, ge=30, le=1800, description="Max execution time in seconds"
-    )
-
-
-class MultiAgentTaskPayload(BaseModel):
-    """Multi-agent task coordination payload (Issue #708 consolidation)."""
-
-    task: str = Field(..., min_length=1, description="Task description")
-    agents: List[str] = Field(..., min_items=1, description="Agents to coordinate")
-    coordination_strategy: str = Field("adaptive", description="Coordination strategy")
-    subtasks: Optional[List[Metadata]] = Field(None, description="Predefined subtasks")
-    dependencies: Optional[List[Dict[str, str]]] = Field(
-        None, description="Task dependencies"
-    )
-
-
-class AgentAnalysisRequest(BaseModel):
-    """Agent analysis request for development and optimization (Issue #708 consolidation)."""
-
-    analysis_type: str = Field("comprehensive", description="Analysis type")
-    target_path: Optional[str] = Field(None, description="Specific path to analyze")
-    include_performance: bool = Field(True, description="Include performance analysis")
-    include_optimization: bool = Field(
-        True, description="Include optimization suggestions"
-    )
-
-
-class ResearchTaskRequest(BaseModel):
-    """Research task request using multiple research agents (Issue #708 consolidation)."""
-
-    research_query: str = Field(..., min_length=1, description="Research query")
-    research_depth: str = Field("comprehensive", description="Research depth")
-    include_web: bool = Field(True, description="Include web research")
-    include_code_search: bool = Field(False, description="Include code search")
-    sources: Optional[List[str]] = Field(None, description="Specific sources")
-
 
 async def _kill_timed_out_process(
     process: Optional[asyncio.subprocess.Process],
@@ -755,12 +699,12 @@ async def _execute_goal_with_error_handling(
     return {"message": str(orchestrator_result)}
 
 
+@router.post("/goal", response_model=AgentMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="receive_goal",
     error_code_prefix="AGENT",
 )
-@router.post("/goal")
 async def receive_goal(
     request: Request,
     payload: GoalPayload,
@@ -784,7 +728,7 @@ async def receive_goal(
         JSONResponse: Returns a 403 error if permission is denied, or a 500
             error if an internal error occurs.
     """
-    from event_manager import event_manager
+    from event_manager import get_event_manager
 
     orchestrator = getattr(request.app.state, "orchestrator", None)
     if orchestrator is None:
@@ -806,7 +750,7 @@ async def receive_goal(
     logging.info(f"Received goal via API: {goal}")
 
     # Publish events (Issue #620: uses helper)
-    await _publish_goal_events(event_manager, goal, use_phi2)
+    await _publish_goal_events(get_event_manager(), goal, use_phi2)
 
     # Track task execution start time for Prometheus metrics
     task_start_time = time.time()
@@ -818,16 +762,16 @@ async def receive_goal(
 
     # Process and return result (Issue #620: uses helper)
     return await _handle_goal_result(
-        event_manager, security_layer, user_role, goal, result_dict, task_start_time
+        get_event_manager(), security_layer, user_role, goal, result_dict, task_start_time
     )
 
 
+@router.post("/pause", response_model=AgentMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="pause_agent",
+    operation="pause_agent_api",
     error_code_prefix="AGENT",
 )
-@router.post("/pause")
 async def pause_agent_api(
     request: Request,
     user_role: str = Form("user"),
@@ -839,7 +783,7 @@ async def pause_agent_api(
     without actual functionality. Full implementation will be added with
     backend integration.
     """
-    from event_manager import event_manager
+    from event_manager import get_event_manager
 
     security_layer = request.app.state.security_layer
     orchestrator = getattr(request.app.state, "orchestrator", None)
@@ -871,7 +815,7 @@ async def pause_agent_api(
     security_layer.audit_log("agent_pause", user_role, "success", {})
     # Publish event (non-critical)
     try:
-        await event_manager.publish(
+        await get_event_manager().publish(
             "agent_paused", {"message": "Agent operation paused."}
         )
     except Exception as e:
@@ -879,12 +823,12 @@ async def pause_agent_api(
     return {"message": "Agent paused successfully."}
 
 
+@router.post("/resume", response_model=AgentMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="resume_agent",
+    operation="resume_agent_api",
     error_code_prefix="AGENT",
 )
-@router.post("/resume")
 async def resume_agent_api(
     request: Request,
     user_role: str = Form("user"),
@@ -896,7 +840,7 @@ async def resume_agent_api(
     actual functionality.
     Full implementation will be added with backend integration.
     """
-    from event_manager import event_manager
+    from event_manager import get_event_manager
 
     security_layer = request.app.state.security_layer
     orchestrator = getattr(request.app.state, "orchestrator", None)
@@ -928,7 +872,7 @@ async def resume_agent_api(
     security_layer.audit_log("agent_resume", user_role, "success", {})
     # Publish event (non-critical)
     try:
-        await event_manager.publish(
+        await get_event_manager().publish(
             "agent_resumed", {"message": "Agent operation resumed."}
         )
     except Exception as e:
@@ -936,12 +880,12 @@ async def resume_agent_api(
     return {"message": "Agent resumed successfully."}
 
 
+@router.post("/command_approval", response_model=AgentCommandApprovalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="command_approval",
     error_code_prefix="AGENT",
 )
-@router.post("/command_approval")
 async def command_approval(
     request: Request,
     payload: CommandApprovalPayload,
@@ -978,12 +922,12 @@ async def command_approval(
     return JSONResponse(status_code=500, content={"message": error_message})
 
 
+@router.post("/execute_command", response_model=AgentCommandExecuteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_command",
     error_code_prefix="AGENT",
 )
-@router.post("/execute_command")
 async def execute_command(
     request: Request,
     command_data: dict,
@@ -1009,7 +953,7 @@ async def execute_command(
                       a 403 error if permission is denied,
                       or a 500 error if an internal error occurs.
     """
-    from event_manager import event_manager
+    from event_manager import get_event_manager
 
     security_layer = request.app.state.security_layer
     command = command_data.get("command")
@@ -1019,7 +963,7 @@ async def execute_command(
     if validation_error:
         if not command:
             await _publish_event_safe(
-                event_manager,
+                get_event_manager(),
                 "error",
                 {"message": "No command provided for execution."},
             )
@@ -1027,7 +971,7 @@ async def execute_command(
 
     # Publish start event (Issue #281: uses helper)
     await _publish_event_safe(
-        event_manager, "command_execution_start", {"command": command}
+        get_event_manager(), "command_execution_start", {"command": command}
     )
     logging.info(f"Executing command: {command}")
 
@@ -1038,7 +982,7 @@ async def execute_command(
 
     # Handle result and publish completion event (Issue #620: uses helper)
     return await _handle_command_result(
-        event_manager, security_layer, user_role, command, stdout, stderr, returncode
+        get_event_manager(), security_layer, user_role, command, stdout, stderr, returncode
     )
 
 
@@ -1163,12 +1107,12 @@ def _determine_coordination_mode(payload, selected_agents: list) -> str:
 # ====================================================================
 
 
+@router.post("/goal/enhanced", response_model=DataResponse[EnhancedGoalData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_enhanced_goal",
     error_code_prefix="AGENT",
 )
-@router.post("/goal/enhanced")
 async def execute_enhanced_goal(
     payload: EnhancedGoalPayload,
     request: Request,
@@ -1227,12 +1171,12 @@ async def execute_enhanced_goal(
         await handle_ai_stack_error(e, "Enhanced goal execution")
 
 
+@router.post("/multi-agent/coordinate", response_model=DataResponse[MultiAgentCoordinationData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="coordinate_multi_agent_task",
     error_code_prefix="AGENT",
 )
-@router.post("/multi-agent/coordinate")
 async def coordinate_multi_agent_task(
     payload: MultiAgentTaskPayload,
     request: Request,
@@ -1272,14 +1216,14 @@ async def coordinate_multi_agent_task(
             coordination_mode=payload.coordination_strategy,
         )
 
-        coordination_time = time.monotonic() - coordination_start
+        execution_time = time.monotonic() - coordination_start
 
         return create_success_response(
             {
                 "task": payload.task,
-                "agents": payload.agents,
+                "agents_used": payload.agents,
                 "coordination_strategy": payload.coordination_strategy,
-                "coordination_time": coordination_time,
+                "execution_time": execution_time,
                 "subtasks_count": len(payload.subtasks) if payload.subtasks else 0,
                 "dependencies_count": (
                     len(payload.dependencies) if payload.dependencies else 0
@@ -1293,12 +1237,12 @@ async def coordinate_multi_agent_task(
         await handle_ai_stack_error(e, "Multi-agent coordination")
 
 
+@router.post("/research/comprehensive", response_model=DataResponse[AgentResearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="comprehensive_research_task",
     error_code_prefix="AGENT",
 )
-@router.post("/research/comprehensive")
 async def comprehensive_research_task(
     request_data: ResearchTaskRequest,
     knowledge_base=Depends(get_knowledge_base),
@@ -1358,12 +1302,12 @@ async def comprehensive_research_task(
         await handle_ai_stack_error(e, "Comprehensive research")
 
 
+@router.post("/development/analyze", response_model=DataResponse[DevelopmentAnalysisData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_development_task",
     error_code_prefix="AGENT",
 )
-@router.post("/development/analyze")
 async def analyze_development_task(
     request_data: AgentAnalysisRequest,
     current_user: dict = Depends(get_current_user),
@@ -1397,12 +1341,12 @@ async def analyze_development_task(
         await handle_ai_stack_error(e, "Development analysis")
 
 
+@router.get("/agents/available", response_model=DataResponse[AgentAvailableData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_available_agents",
     error_code_prefix="AGENT",
 )
-@router.get("/agents/available")
 async def list_available_agents():
     """
     List all available AI Stack agents with their capabilities.
@@ -1445,12 +1389,12 @@ async def list_available_agents():
         await handle_ai_stack_error(e, "List available agents")
 
 
+@router.get("/agents/status", response_model=DataResponse[AgentStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agents_status",
     error_code_prefix="AGENT",
 )
-@router.get("/agents/status")
 async def get_agents_status():
     """Get comprehensive status of all AI Stack agents.
 
@@ -1486,12 +1430,12 @@ async def get_agents_status():
         await handle_ai_stack_error(e, "Agent status check")
 
 
+@router.get("/health/enhanced", response_model=AgentHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_agent_health",
     error_code_prefix="AGENT",
 )
-@router.get("/health/enhanced")
 async def enhanced_agent_health():
     """Enhanced health check for agent services."""
     try:

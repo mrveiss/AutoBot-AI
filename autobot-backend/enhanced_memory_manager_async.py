@@ -19,18 +19,9 @@ from typing import Any, Dict, List, Optional
 
 import aiosqlite
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.status_enums import TaskStatus
 
 logger = logging.getLogger(__name__)
-
-
-class TaskStatus(Enum):
-    """Task execution status enumeration"""
-
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
 
 
 class Priority(Enum):

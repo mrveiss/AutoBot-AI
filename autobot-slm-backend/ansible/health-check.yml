@@ -28,10 +28,10 @@
       ansible.builtin.debug:
         msg: |
           Host: {{ inventory_hostname }}
-          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
-          Kernel: {{ ansible_kernel }}
-          Memory: {{ (ansible_memtotal_mb / 1024) | round(1) }} GB
-          CPU: {{ ansible_processor_count }} cores
+          OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}
+          Kernel: {{ ansible_facts['kernel'] }}
+          Memory: {{ (ansible_facts['memtotal_mb'] / 1024) | round(1) }} GB
+          CPU: {{ ansible_facts['processor_count'] }} cores
 
     # ===== SLM Agent Check =====
     - name: Check SLM agent service status

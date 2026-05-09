@@ -186,8 +186,7 @@ import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 import { usePollingJob } from '@/composables/usePollingJob'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import appConfig from '@/config/AppConfig.js'
+import { useAnalyticsSourceManagement } from '@/composables/analytics/useAnalyticsSourceManagement'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SourceManager')
@@ -227,11 +226,25 @@ useBodyScrollLock(toRef(props, 'visible'))
 const { focusFirst } = useInitialFocus(dialogRef)
 watch(() => props.visible, (open) => { if (open) focusFirst() }, { immediate: true })
 
+// ---- Composable -----------------------------------------------------------
+
+const {
+  isLoadingSources,
+  sourcesError,
+  fetchSources,
+  fetchQueueStatus,
+  fetchSourcesForPolling,
+  fetchQueueStatusForPolling,
+  syncSource: apiSyncSource,
+  deleteSource: apiDeleteSource,
+  cancelQueueItem: apiCancelQueueItem,
+} = useAnalyticsSourceManagement()
+
 // ---- State ----------------------------------------------------------------
 
 const sources = ref<CodeSource[]>([])
-const loading = ref(false)
-const loadError = ref<string | null>(null)
+const loading = isLoadingSources
+const loadError = sourcesError
 const syncingId = ref<string | null>(null)
 const deletingId = ref<string | null>(null)
 const queueLength = ref(0)
@@ -239,12 +252,7 @@ const runningTask = ref<RunningTask | null>(null)
 
 // Queue status polling (visible while panel is open, 5s interval)
 const queuePoller = usePollingJob<{ queue_length: number; running: RunningTask | null }>(
-  async (_taskId) => {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/index/queue`)
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    return response.json()
-  },
+  async (_taskId) => fetchQueueStatusForPolling(),
   {
     intervalMs: 5000,
     onDone: (data) => {
@@ -256,13 +264,7 @@ const queuePoller = usePollingJob<{ queue_length: number; running: RunningTask |
 
 // Syncing-source refresh polling (3s interval, stops when no sources are syncing)
 const syncingPoller = usePollingJob<CodeSource[]>(
-  async (_taskId) => {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/sources`)
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    const data = await response.json()
-    return data.sources ?? []
-  },
+  async (_taskId) => fetchSourcesForPolling(),
   {
     intervalMs: 3000,
     isComplete: (srcs) => !srcs.some((s) => s.status === 'syncing'),
@@ -270,45 +272,22 @@ const syncingPoller = usePollingJob<CodeSource[]>(
   }
 )
 
-// ---- API helpers ----------------------------------------------------------
-
-async function getBackendUrl(): Promise<string> {
-  return appConfig.getServiceUrl('backend')
-}
-
 // ---- Data Loading ---------------------------------------------------------
 
 async function loadSources() {
-  loading.value = true
-  loadError.value = null
   try {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/sources`)
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-    const data = await response.json()
-    sources.value = data.sources ?? []
+    sources.value = await fetchSources()
     startSyncingRefreshIfNeeded()
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err)
-    logger.error('Failed to load sources:', msg)
-    loadError.value = `Failed to load sources: ${msg}`
-  } finally {
-    loading.value = false
+  } catch {
+    // error already stored in loadError (sourcesError) by the composable
   }
 }
 
 async function loadQueueStatus() {
-  try {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/index/queue`)
-    if (!response.ok) return
-    const data = await response.json()
-    queueLength.value = data.queue_length ?? 0
-    runningTask.value = data.running ?? null
-  } catch (err: unknown) {
-    logger.warn('Failed to load queue status:', err instanceof Error ? err.message : String(err))
+  const data = await fetchQueueStatus()
+  if (data) {
+    queueLength.value = data.queue_length
+    runningTask.value = data.running
   }
 }
 
@@ -338,15 +317,7 @@ watch(syncingPoller.data, (srcs: CodeSource[] | null) => {
 async function syncSource(source: CodeSource) {
   syncingId.value = source.id
   try {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(
-      `${backendUrl}/api/analytics/codebase/sources/${source.id}/sync`,
-      { method: 'POST' }
-    )
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(`HTTP ${response.status}: ${text}`)
-    }
+    await apiSyncSource(source.id)
     logger.info('Sync started for source:', source.name)
     await loadSources()
     await loadQueueStatus()
@@ -361,15 +332,7 @@ async function deleteSource(source: CodeSource) {
   if (!confirm(t('analytics.sources.confirmDelete', { name: source.name }))) return
   deletingId.value = source.id
   try {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(
-      `${backendUrl}/api/analytics/codebase/sources/${source.id}`,
-      { method: 'DELETE' }
-    )
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(`HTTP ${response.status}: ${text}`)
-    }
+    await apiDeleteSource(source.id)
     logger.info('Deleted source:', source.name)
     await loadSources()
   } catch (err: unknown) {
@@ -382,15 +345,7 @@ async function deleteSource(source: CodeSource) {
 async function cancelQueueItem(sourceId: string | undefined) {
   if (!sourceId) return
   try {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(
-      `${backendUrl}/api/analytics/codebase/index/queue/${sourceId}`,
-      { method: 'DELETE' }
-    )
-    if (!response.ok) {
-      logger.warn('Could not cancel queue item')
-      return
-    }
+    await apiCancelQueueItem(sourceId)
     await loadQueueStatus()
   } catch (err: unknown) {
     logger.error('Cancel queue failed:', err instanceof Error ? err.message : String(err))

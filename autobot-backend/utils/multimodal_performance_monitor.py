@@ -25,7 +25,7 @@ try:
     import torch.cuda
 
     TORCH_AVAILABLE = True
-except ImportError:
+except (ImportError, RuntimeError):
     TORCH_AVAILABLE = False
     torch = None
 

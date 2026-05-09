@@ -13,15 +13,21 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
+from api.schemas_workflows import (
+    CommProviderInfo,
+    SendMessageRequest,
+    TestConnectionRequest,
+    WebhookMessageRequest,
+)
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.communication_integration import (
     DiscordIntegration,
     SlackIntegration,
     TeamsIntegration,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -31,46 +37,15 @@ router = APIRouter(
 )
 
 
-class TestConnectionRequest(BaseModel):
-    """Request model for testing communication provider connections."""
-
-    provider: str = Field(..., description="Provider name: slack, teams, or discord")
-    token: Optional[str] = Field(None, description="Bot token or API token")
-    webhook_url: Optional[str] = Field(None, description="Webhook URL (for Teams)")
-    base_url: Optional[str] = Field(None, description="Custom base URL (optional)")
-
-
-class SendMessageRequest(BaseModel):
-    """Request model for sending messages."""
-
-    channel: Optional[str] = Field(None, description="Channel ID or name (Slack)")
-    channel_id: Optional[str] = Field(None, description="Channel ID (Discord)")
-    text: Optional[str] = Field(None, description="Message text")
-    content: Optional[str] = Field(None, description="Message content (Discord)")
-    title: Optional[str] = Field(None, description="Message title (Teams)")
-
-
-class ProviderInfo(BaseModel):
-    """Information about a supported communication provider."""
-
-    name: str
-    description: str
-    auth_type: str
-    required_fields: List[str]
-
-
-class WebhookMessageRequest(BaseModel):
-    """Request model for webhook messages."""
-
-    webhook_url: str = Field(..., description="Teams webhook URL")
-    text: str = Field(..., description="Message text")
-    title: Optional[str] = Field(None, description="Message title")
-
-
 @router.post(
     "/test-connection",
     response_model=IntegrationHealth,
     summary="Test communication provider connection",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_connection",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
 )
 async def test_connection(request: TestConnectionRequest) -> IntegrationHealth:
     """Test connection to a communication provider."""
@@ -90,25 +65,30 @@ async def test_connection(request: TestConnectionRequest) -> IntegrationHealth:
 
 @router.get(
     "/providers",
-    response_model=List[ProviderInfo],
+    response_model=List[CommProviderInfo],
     summary="List supported communication providers",
 )
-async def list_providers() -> List[ProviderInfo]:
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_providers",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
+)
+async def list_providers() -> List[CommProviderInfo]:
     """Return list of supported communication providers."""
     return [
-        ProviderInfo(
+        CommProviderInfo(
             name="slack",
             description="Slack workspace integration",
             auth_type="bot_token",
             required_fields=["token"],
         ),
-        ProviderInfo(
+        CommProviderInfo(
             name="teams",
             description="Microsoft Teams integration",
             auth_type="webhook_or_token",
             required_fields=["webhook_url or token"],
         ),
-        ProviderInfo(
+        CommProviderInfo(
             name="discord",
             description="Discord server integration",
             auth_type="bot_token",
@@ -121,6 +101,11 @@ async def list_providers() -> List[ProviderInfo]:
     "/{provider}/channels",
     response_model=Dict[str, Any],
     summary="List channels for a provider",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_channels",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
 )
 async def list_channels(
     provider: str,
@@ -175,6 +160,11 @@ async def list_channels(
     response_model=Dict[str, Any],
     summary="Send message to a channel",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_message",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
+)
 async def send_message(
     provider: str,
     token: str,
@@ -205,6 +195,11 @@ async def send_message(
     "/{provider}/channels/{channel_id}/history",
     response_model=Dict[str, Any],
     summary="Get channel message history",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_channel_history",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
 )
 async def get_channel_history(
     provider: str,
@@ -244,6 +239,11 @@ async def get_channel_history(
     "/{provider}/webhooks",
     response_model=Dict[str, Any],
     summary="Send webhook message (Teams)",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_webhook_message",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
 )
 async def send_webhook_message(
     provider: str,

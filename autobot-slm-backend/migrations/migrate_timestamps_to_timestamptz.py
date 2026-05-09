@@ -162,20 +162,14 @@ def migrate(db_url: str) -> None:
             skipped += 1
             continue
 
-        sql = (
-            f"ALTER TABLE {table} "
-            f"ALTER COLUMN {column} TYPE TIMESTAMPTZ "
-            f"USING {column} AT TIME ZONE 'UTC'"
-        )
+        sql = f"ALTER TABLE {table} " f"ALTER COLUMN {column} TYPE TIMESTAMPTZ " f"USING {column} AT TIME ZONE 'UTC'"
         logger.info("Converting %s.%s → TIMESTAMPTZ", table, column)
         cursor.execute(sql)
         converted += 1
 
     conn.commit()
     conn.close()
-    logger.info(
-        "Migration complete: %d columns converted, %d skipped", converted, skipped
-    )
+    logger.info("Migration complete: %d columns converted, %d skipped", converted, skipped)
 
 
 def main():

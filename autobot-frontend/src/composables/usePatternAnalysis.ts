@@ -8,15 +8,17 @@
  * Author: mrveiss
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useExpansion } from '@/composables/useExpansion'
 import appConfig from '@/config/AppConfig.js'
 import { getConfig, getApiBase } from '@/config/ssot-config'
+import apiClient from '@/utils/ApiClient'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage } from '@/utils/errorExtract'
 import { useBackgroundTask } from '@/composables/useBackgroundTask'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('usePatternAnalysis')
 
@@ -162,7 +164,7 @@ export function usePatternAnalysis() {
   )
 
   // Reactive state
-  const loading = ref(false)
+  const { isLoading: loading, wrap } = useLoadingState()
   const analyzing = ref(false)
   const error = ref<string | null>(null)
   const wasInterrupted = ref(false)  // #1250: orphaned task detection
@@ -176,6 +178,11 @@ export function usePatternAnalysis() {
   const complexityHotspots = ref<ComplexityHotspot[]>([])
   const refactoringSuggestions = ref<RefactoringSuggestion[]>([])
   const storageStats = ref<PatternStorageStats | null>(null)
+
+  // AbortControllers — replaced (aborting previous) before each new fetch
+  // _actionController removed: GET/POST helpers now use apiClient (no manual abort needed)
+  let _analyzeController: AbortController | null = null
+  let _pollController: AbortController | null = null
 
   // UI state
   type Section = 'duplicates' | 'regex' | 'complexity' | 'refactoring'
@@ -194,7 +201,7 @@ export function usePatternAnalysis() {
     return analysisReport.value !== null
   })
 
-  // API base URL helper
+  // API base URL helper (used by analyzePatterns and pollTaskStatus)
   const getBackendUrl = async (): Promise<string> => {
     try {
       return await appConfig.getServiceUrl('backend')
@@ -231,9 +238,13 @@ export function usePatternAnalysis() {
     error.value = null
     wasInterrupted.value = false
 
+    _analyzeController?.abort()
+    _analyzeController = new AbortController()
+    const _analyzeSignal = _analyzeController.signal
+
     try {
       const backendUrl = await getBackendUrl()
-      let response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/analyze`, {
+      let response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/analyze`, { // fetchWithAuth retained: AbortController signal + response.status === 409 — exempt (#6256)
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -243,7 +254,8 @@ export function usePatternAnalysis() {
           enable_duplicate_detection: enableDuplicates,
           similarity_threshold: similarityThreshold,
           run_in_background: runInBackground
-        })
+        }),
+        signal: _analyzeSignal,
       })
 
       // Issue #647: Handle 409 Conflict by clearing stuck tasks and retrying
@@ -251,8 +263,9 @@ export function usePatternAnalysis() {
         logger.info('Another analysis is running, attempting to clear stuck tasks...')
 
         // Try to clear stuck tasks with force=true
-        const clearResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=true`, {
-          method: 'POST'
+        const clearResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=true`, { // fetchWithAuth retained: AbortController signal — exempt (#6256)
+          method: 'POST',
+          signal: _analyzeSignal,
         })
 
         if (clearResponse.ok) {
@@ -260,7 +273,7 @@ export function usePatternAnalysis() {
           logger.info('Cleared stuck tasks:', clearResult)
 
           // Retry the analysis
-          response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/analyze`, {
+          response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/analyze`, { // fetchWithAuth retained: AbortController signal + response.status === 409 — exempt (#6256)
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -270,7 +283,8 @@ export function usePatternAnalysis() {
               enable_duplicate_detection: enableDuplicates,
               similarity_threshold: similarityThreshold,
               run_in_background: runInBackground
-            })
+            }),
+            signal: _analyzeSignal,
           })
         }
       }
@@ -299,11 +313,11 @@ export function usePatternAnalysis() {
           wasInterrupted.value = false
           error.value = null
 
-          await fetchWithAuth(
+          await fetchWithAuth( // fetchWithAuth retained: AbortController signal — exempt (#6256)
             `${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=true`,
-            { method: 'POST' },
+            { method: 'POST', signal: _analyzeSignal },
           )
-          const retryResp = await fetchWithAuth(
+          const retryResp = await fetchWithAuth( // fetchWithAuth retained: AbortController signal + response.status check — exempt (#6256)
             `${backendUrl}/api/analytics/codebase/patterns/analyze`,
             {
               method: 'POST',
@@ -316,6 +330,7 @@ export function usePatternAnalysis() {
                 similarity_threshold: similarityThreshold,
                 run_in_background: true,
               }),
+              signal: _analyzeSignal,
             },
           )
           if (retryResp.ok) {
@@ -340,6 +355,7 @@ export function usePatternAnalysis() {
 
       throw new Error('Unexpected response format')
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === 'AbortError') { analyzing.value = false; return false }
       error.value = extractErrorMessage(e, 'Analysis failed')
       logger.error('Pattern analysis failed:', e)
       analyzing.value = false
@@ -375,8 +391,11 @@ export function usePatternAnalysis() {
         async () => {
           try {
             const backendUrl = await getBackendUrl()
-            const response = await fetchWithAuth(
-              `${backendUrl}/api/analytics/codebase/patterns/status/${taskId}`
+            _pollController?.abort()
+            _pollController = new AbortController()
+            const response = await fetchWithAuth( // fetchWithAuth retained: AbortController signal + partial-results streaming — exempt (#6256)
+              `${backendUrl}/api/analytics/codebase/patterns/status/${taskId}`,
+              { signal: _pollController.signal },
             )
             if (!response.ok) {
               throw new Error(`Status check failed: ${response.statusText}`)
@@ -447,6 +466,10 @@ export function usePatternAnalysis() {
 
             return { done: false, outcome: 'running' }
           } catch (e: unknown) {
+            if (e instanceof DOMException && e.name === 'AbortError') {
+              analyzing.value = false
+              return { done: true, outcome: 'error' }
+            }
             consecutiveErrors++
             const msg = extractErrorMessage(e, 'Unknown poll error')
             logger.warn(
@@ -479,29 +502,24 @@ export function usePatternAnalysis() {
    */
   const getCachedSummary = async (): Promise<boolean> => {
     try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/cached-summary`)
-
-      if (!response.ok) {
-        return false
-      }
-
-      const data = await response.json()
-      if (data.has_cached_data && data.total_patterns > 0) {
+      const data = await apiClient.get<Record<string, unknown>>(
+        '/api/analytics/codebase/patterns/cached-summary',
+      )
+      if (data.has_cached_data && (data.total_patterns as number) > 0) {
         // Update report from cached data
         analysisReport.value = {
           analysis_summary: {
             scan_path: '',
             timestamp: new Date().toISOString(),
-            files_analyzed: data.files_analyzed || 0,
+            files_analyzed: (data.files_analyzed as number) || 0,
             lines_analyzed: 0,
             duration_seconds: 0,
-            total_patterns_found: data.total_patterns || 0,
-            potential_loc_reduction: data.potential_loc_reduction || 0,
+            total_patterns_found: (data.total_patterns as number) || 0,
+            potential_loc_reduction: (data.potential_loc_reduction as number) || 0,
             complexity_score: 'N/A'
           },
-          pattern_counts: data.pattern_type_distribution || {},
-          severity_distribution: data.severity_distribution || {},
+          pattern_counts: (data.pattern_type_distribution as Record<string, number>) || {},
+          severity_distribution: (data.severity_distribution as Record<string, number>) || {},
           duplicate_patterns: [],
           regex_opportunities: [],
           complexity_hotspots: [],
@@ -522,14 +540,11 @@ export function usePatternAnalysis() {
    * First tries cached data, falls back to full analysis if no cache
    */
   const getSummary = async (path?: string): Promise<void> => {
-    loading.value = true
     error.value = null
-
-    try {
+    await wrap(async () => {
       // First try to get cached summary (fast path)
       const hasCached = await getCachedSummary()
       if (hasCached) {
-        loading.value = false
         return
       }
 
@@ -565,12 +580,10 @@ export function usePatternAnalysis() {
           other_patterns: []
         }
       }
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       error.value = extractErrorMessage(e, 'Summary fetch failed')
       logger.error('Pattern summary fetch failed:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
@@ -581,33 +594,24 @@ export function usePatternAnalysis() {
     minSimilarity: number = 0.8,
     limit: number = 50
   ): Promise<void> => {
-    loading.value = true
     error.value = null
-
-    try {
-      const backendUrl = await getBackendUrl()
+    await wrap(async () => {
       const params = new URLSearchParams({
         min_similarity: minSimilarity.toString(),
         limit: limit.toString()
       })
       if (path) params.append('path', path)
 
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/duplicates?${params}`)
-
-      if (!response.ok) {
-        throw new Error(`Duplicates fetch failed: ${response.statusText}`)
-      }
-
-      const data = await response.json()
+      const data = await apiClient.get<{ status: string; duplicates?: DuplicatePattern[] }>(
+        `/api/analytics/codebase/patterns/duplicates?${params}`,
+      )
       if (data.status === 'success') {
         duplicatePatterns.value = data.duplicates || []
       }
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       error.value = extractErrorMessage(e, 'Duplicates fetch failed')
       logger.error('Duplicate patterns fetch failed:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
@@ -617,30 +621,21 @@ export function usePatternAnalysis() {
     path?: string,
     limit: number = 50
   ): Promise<void> => {
-    loading.value = true
     error.value = null
-
-    try {
-      const backendUrl = await getBackendUrl()
+    await wrap(async () => {
       const params = new URLSearchParams({ limit: limit.toString() })
       if (path) params.append('path', path)
 
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/regex-opportunities?${params}`)
-
-      if (!response.ok) {
-        throw new Error(`Regex opportunities fetch failed: ${response.statusText}`)
-      }
-
-      const data = await response.json()
+      const data = await apiClient.get<{ status: string; opportunities?: RegexOpportunity[] }>(
+        `/api/analytics/codebase/patterns/regex-opportunities?${params}`,
+      )
       if (data.status === 'success') {
         regexOpportunities.value = data.opportunities || []
       }
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       error.value = extractErrorMessage(e, 'Regex opportunities fetch failed')
       logger.error('Regex opportunities fetch failed:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
@@ -651,33 +646,24 @@ export function usePatternAnalysis() {
     minComplexity: number = 10,
     limit: number = 50
   ): Promise<void> => {
-    loading.value = true
     error.value = null
-
-    try {
-      const backendUrl = await getBackendUrl()
+    await wrap(async () => {
       const params = new URLSearchParams({
         min_complexity: minComplexity.toString(),
         limit: limit.toString()
       })
       if (path) params.append('path', path)
 
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/complexity-hotspots?${params}`)
-
-      if (!response.ok) {
-        throw new Error(`Complexity hotspots fetch failed: ${response.statusText}`)
-      }
-
-      const data = await response.json()
+      const data = await apiClient.get<{ status: string; hotspots?: ComplexityHotspot[] }>(
+        `/api/analytics/codebase/patterns/complexity-hotspots?${params}`,
+      )
       if (data.status === 'success') {
         complexityHotspots.value = data.hotspots || []
       }
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       error.value = extractErrorMessage(e, 'Complexity hotspots fetch failed')
       logger.error('Complexity hotspots fetch failed:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
@@ -687,120 +673,86 @@ export function usePatternAnalysis() {
     path?: string,
     maxSuggestions: number = 20
   ): Promise<void> => {
-    loading.value = true
     error.value = null
-
-    try {
-      const backendUrl = await getBackendUrl()
+    await wrap(async () => {
       const params = new URLSearchParams({ max_suggestions: maxSuggestions.toString() })
       if (path) params.append('path', path)
 
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/refactoring-suggestions?${params}`)
-
-      if (!response.ok) {
-        throw new Error(`Refactoring suggestions fetch failed: ${response.statusText}`)
-      }
-
-      const data = await response.json()
+      const data = await apiClient.get<{ status: string; suggestions?: RefactoringSuggestion[] }>(
+        `/api/analytics/codebase/patterns/refactoring-suggestions?${params}`,
+      )
       if (data.status === 'success') {
         refactoringSuggestions.value = data.suggestions || []
       }
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       error.value = extractErrorMessage(e, 'Refactoring suggestions fetch failed')
       logger.error('Refactoring suggestions fetch failed:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
    * Get pattern storage stats
    */
   const getStorageStats = async (): Promise<void> => {
-    loading.value = true
-
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/storage/stats`)
-
-      if (!response.ok) {
-        throw new Error(`Storage stats fetch failed: ${response.statusText}`)
-      }
-
-      const data = await response.json()
+    await wrap(async () => {
+      const data = await apiClient.get<{ status: string; stats?: PatternStorageStats }>(
+        '/api/analytics/codebase/patterns/storage/stats',
+      )
       if (data.status === 'success') {
-        storageStats.value = data.stats
+        storageStats.value = data.stats ?? null
       }
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       logger.error('Storage stats fetch failed:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
    * Clear pattern storage
    */
   const clearStorage = async (): Promise<boolean> => {
-    loading.value = true
-
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/storage/clear`, {
-        method: 'DELETE'
-      })
-
-      if (!response.ok) {
-        throw new Error(`Clear storage failed: ${response.statusText}`)
-      }
-
-      const data = await response.json()
+    return wrap(async () => {
+      const data = await apiClient.delete<{ status: string }>(
+        '/api/analytics/codebase/patterns/storage/clear',
+      )
       if (data.status === 'success') {
         storageStats.value = null
         return true
       }
       return false
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       logger.error('Clear storage failed:', e)
       return false
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
    * Get markdown report
    */
   const getReport = async (path?: string): Promise<string | null> => {
-    loading.value = true
-
-    try {
-      const backendUrl = await getBackendUrl()
+    return wrap(async () => {
       const params = path ? `?path=${encodeURIComponent(path)}` : ''
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/report${params}`)
-
-      if (!response.ok) {
-        throw new Error(`Report fetch failed: ${response.statusText}`)
-      }
-
-      const data = await response.json()
+      const data = await apiClient.get<{ status: string; report?: string }>(
+        `/api/analytics/codebase/patterns/report${params}`,
+      )
       if (data.status === 'success') {
-        return data.report
+        return data.report ?? null
       }
       return null
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       logger.error('Report fetch failed:', e)
       return null
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
    * Reset all state
    */
+  onUnmounted(() => {
+    _analyzeController?.abort()
+    _pollController?.abort()
+  })
+
   const reset = (): void => {
-    loading.value = false
     analyzing.value = false
     error.value = null
     wasInterrupted.value = false
@@ -819,10 +771,8 @@ export function usePatternAnalysis() {
    * Issue #208: Optimized loading for already indexed data
    */
   const loadCachedData = async (): Promise<boolean> => {
-    loading.value = true
     error.value = null
-
-    try {
+    return wrap(async () => {
       // Load summary and stats in parallel from cache
       const [hasCachedSummary] = await Promise.all([
         getCachedSummary(),
@@ -830,12 +780,10 @@ export function usePatternAnalysis() {
       ])
 
       return hasCachedSummary
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       logger.error('Failed to load cached data:', e)
       return false
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
@@ -858,17 +806,9 @@ export function usePatternAnalysis() {
    */
   const clearStuckTasks = async (force: boolean = false): Promise<{ cleared: number; message: string }> => {
     try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(
-        `${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=${force}`,
-        { method: 'POST' }
+      const result = await apiClient.post<{ cleared_count: number; message: string }>(
+        `/api/analytics/codebase/patterns/tasks/clear-stuck?force=${force}`,
       )
-
-      if (!response.ok) {
-        throw new Error(`Failed to clear tasks: ${response.statusText}`)
-      }
-
-      const result = await response.json()
       logger.info('Cleared stuck tasks:', result)
       return { cleared: result.cleared_count, message: result.message }
     } catch (e: unknown) {
@@ -883,14 +823,9 @@ export function usePatternAnalysis() {
    */
   const listTasks = async (): Promise<{ total: number; running: number; tasks: AnalysisTaskEntry[] }> => {
     try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/tasks`)
-
-      if (!response.ok) {
-        throw new Error(`Failed to list tasks: ${response.statusText}`)
-      }
-
-      return await response.json()
+      return await apiClient.get<{ total: number; running: number; tasks: AnalysisTaskEntry[] }>(
+        '/api/analytics/codebase/patterns/tasks',
+      )
     } catch (e: unknown) {
       logger.error('Failed to list tasks:', e)
       throw e

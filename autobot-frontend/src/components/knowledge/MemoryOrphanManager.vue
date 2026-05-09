@@ -115,10 +115,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import apiClient from '@/utils/ApiClient.ts'
-import { getApiBase } from '@/config/ssot-config'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useKnowledgeOrphans } from '@/composables/knowledge/useKnowledgeOrphans'
 
 const { t } = useI18n()
 
@@ -130,31 +129,22 @@ const emit = defineEmits<{
 }>()
 
 // Types
-interface OrphanedEntity {
-  id: string
-  name: string
-  session_id: string
-  created_at?: string
-  observations?: string[]
-}
-
-interface OrphanScanResult {
-  total_conversation_entities: number
-  active_sessions: number
-  orphaned_count: number
-  orphaned_entities: OrphanedEntity[]
-}
-
 interface StatusMessage {
   type: 'success' | 'error' | 'warning' | 'info'
   text: string
   icon: string
 }
 
+// Composable
+const {
+  memoryOrphanScanResult: orphanScanResult,
+  isScanningMemory: isScanning,
+  isCleaningMemory: isCleaning,
+  scanMemoryOrphans,
+  cleanupMemoryOrphans,
+} = useKnowledgeOrphans()
+
 // State
-const orphanScanResult = ref<OrphanScanResult | null>(null)
-const isScanning = ref(false)
-const isCleaning = ref(false)
 const statusMessage = ref<StatusMessage | null>(null)
 
 // Methods
@@ -180,47 +170,22 @@ const showStatus = (type: StatusMessage['type'], text: string) => {
 const scanOrphans = async () => {
   if (isScanning.value || isCleaning.value) return
 
+  statusMessage.value = null
+
   try {
-    isScanning.value = true
-    orphanScanResult.value = null
-    statusMessage.value = null
+    const data = await scanMemoryOrphans()
 
-    const response = await apiClient.get<Response>(`${getApiBase()}/memory/entities/orphans`)
-
-    // Check if we got a valid Response object
-    if (!response || typeof response.ok === 'undefined') {
-      throw new Error('Invalid response from server - request may have timed out')
-    }
-
-    if (!response.ok) {
-      // Safely get error text - response.text may not exist if request failed
-      const errorText = typeof response.text === 'function'
-        ? await response.text().catch(() => '')
-        : ''
-      throw new Error(errorText || `Server error: ${response.status}`)
-    }
-
-    const data = await response.json()
-
-    if (data.success) {
-      orphanScanResult.value = data.data as OrphanScanResult
-
-      if (data.data.orphaned_count > 0) {
-        showStatus('warning',
-          t('knowledge.memoryOrphan.foundOrphans', { count: data.data.orphaned_count }))
-      } else {
-        showStatus('success',
-          t('knowledge.memoryOrphan.allActive', { count: data.data.total_conversation_entities }))
-      }
+    if (data.orphaned_count > 0) {
+      showStatus('warning',
+        t('knowledge.memoryOrphan.foundOrphans', { count: data.orphaned_count }))
     } else {
-      throw new Error(data.message || 'Failed to scan for orphans')
+      showStatus('success',
+        t('knowledge.memoryOrphan.allActive', { count: data.total_conversation_entities }))
     }
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     logger.error('Failed to scan for memory orphans:', error)
     showStatus('error', errorMessage || t('knowledge.memoryOrphan.scanError'))
-  } finally {
-    isScanning.value = false
   }
 }
 
@@ -236,49 +201,23 @@ const cleanupOrphans = async () => {
   if (!confirmed) return
 
   try {
-    isCleaning.value = true
+    const data = await cleanupMemoryOrphans()
 
-    const response = await apiClient.delete<Response>(`${getApiBase()}/memory/entities/orphans?dry_run=false`)
+    const deletedCount = data.deleted_count
+    const failedCount = data.failed_count || 0
 
-    // Check if we got a valid Response object
-    if (!response || typeof response.ok === 'undefined') {
-      throw new Error('Invalid response from server - request may have timed out')
-    }
-
-    if (!response.ok) {
-      // Safely get error text - response.text may not exist if request failed
-      const errorText = typeof response.text === 'function'
-        ? await response.text().catch(() => '')
-        : ''
-      throw new Error(errorText || `Server error: ${response.status}`)
-    }
-
-    const data = await response.json()
-
-    if (data.success) {
-      const deletedCount = data.data.deleted_count
-      const failedCount = data.data.failed_count || 0
-
-      if (failedCount > 0) {
-        showStatus('warning', t('knowledge.memoryOrphan.partialDelete', { deleted: deletedCount, failed: failedCount }))
-      } else {
-        showStatus('success', t('knowledge.memoryOrphan.deleteSuccess', { count: deletedCount }))
-      }
-
-      // Clear the scan result after cleanup
-      orphanScanResult.value = null
-
-      // Emit event so parent can refresh
-      emit('cleanup-complete')
+    if (failedCount > 0) {
+      showStatus('warning', t('knowledge.memoryOrphan.partialDelete', { deleted: deletedCount, failed: failedCount }))
     } else {
-      throw new Error(data.message || 'Failed to cleanup orphans')
+      showStatus('success', t('knowledge.memoryOrphan.deleteSuccess', { count: deletedCount }))
     }
+
+    // Emit event so parent can refresh
+    emit('cleanup-complete')
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     logger.error('Failed to cleanup memory orphans:', error)
     showStatus('error', errorMessage || t('knowledge.memoryOrphan.cleanupError'))
-  } finally {
-    isCleaning.value = false
   }
 }
 </script>

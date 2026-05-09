@@ -9,7 +9,7 @@
 - name: "AutoBot Health Check and Validation"
   hosts: all
   gather_facts: true
-  serial: "{{ ansible_serial | default(0) }}"  # Check all VMs in parallel
+  serial: "{{ ansible_facts['serial'] | default(0) }}"  # Check all VMs in parallel
 
   vars:
     health_check_timeout: 30
@@ -28,9 +28,9 @@
       debug:
         msg:
           - "AutoBot Health Check Starting"
-          - "VM: {{ inventory_hostname }} ({{ ansible_default_ipv4.address }})"
+          - "VM: {{ inventory_hostname }} ({{ ansible_facts['default_ipv4'].address }})"
           - "Role: {{ group_names | join(', ') }}"
-          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
       tags: always
 
   tasks:
@@ -630,7 +630,7 @@
         content: |
           AutoBot Health Check Report
           ===========================
-          Date: {{ ansible_date_time.iso8601 }}
+          Date: {{ ansible_facts['date_time'].iso8601 }}
 
           VM Health Status:
           - Frontend VM: {{ overall_health.frontend_vm.services_status }}
@@ -651,6 +651,6 @@
           2. Check system logs for errors
           3. Validate application functionality
           4. Monitor resource usage
-        dest: "/var/log/autobot/health-check-report-{{ ansible_date_time.iso8601_basic_short }}.txt"
+        dest: "/var/log/autobot/health-check-report-{{ ansible_facts['date_time'].iso8601_basic_short }}.txt"
         mode: '0644'
       become: true

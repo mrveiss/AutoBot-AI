@@ -185,6 +185,7 @@ import { ref, onMounted, onUnmounted, watch, useId, toRef } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { secretsApiClient } from '@/utils/SecretsApiClient';
 import { getBackendUrl } from '@/config/ssot-config';
+import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
 import Icon, { type IconName } from '@/components/ui/Icon.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
@@ -272,7 +273,7 @@ const loadHosts = async () => {
     // Fetch both secrets (infrastructure_host type) and legacy hosts
     const [secretsResponse, legacyHostsResponse] = await Promise.all([
       secretsApiClient.getSecrets({}) as Promise<Record<string, any>>,
-      fetch(`${backendUrl}/api/infrastructure/hosts`)
+      fetchWithAuth(`${backendUrl}/api/infrastructure/hosts`)
         .then(r => r.ok ? r.json() : { hosts: [] })
         .catch(() => ({ hosts: [] }))
     ]);

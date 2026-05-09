@@ -18,7 +18,7 @@ from autobot_shared.ssot_config import QUALITY_MODEL
 from autobot_shared.time_utils import now_utc
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.registry import TaskRegistry
-from llm_interface_pkg import LLMInterface
+from services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class ContextGeneratorCognifier(BaseCognifier):
         self.model = model or os.getenv("CONTEXT_MODEL", QUALITY_MODEL)
         days = ttl_days or int(os.getenv("CONTEXT_SUMMARY_TTL_DAYS", "30"))
         self.ttl_seconds = days * 86400
-        self.llm = LLMInterface()
+        self.llm = get_llm_service()
 
     async def process(self, context: PipelineContext) -> PipelineContext:
         if not self.is_enabled() or not context.chunks:
@@ -87,8 +87,8 @@ class ContextGeneratorCognifier(BaseCognifier):
     async def _call_llm_for_summary(self, doc_text: str) -> str:
         prompt = _SUMMARY_PROMPT.format(doc_text=doc_text[:_DOC_TEXT_LIMIT])
         try:
-            response = await self.llm.chat_completion(
-                messages=[{"role": "user", "content": prompt}]
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}]
             )
             return response.content.strip()
         except Exception as e:  # noqa: BLE001
@@ -111,8 +111,8 @@ class ContextGeneratorCognifier(BaseCognifier):
             return ""
         prompt = _CHUNK_PROMPT.format(doc_summary=doc_summary, chunk_text=chunk_text)
         try:
-            response = await self.llm.chat_completion(
-                messages=[{"role": "user", "content": prompt}]
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}]
             )
             return response.content.strip()
         except Exception as e:  # noqa: BLE001

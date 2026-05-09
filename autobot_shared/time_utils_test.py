@@ -3,6 +3,7 @@
 Both helpers ship as production code with implicit format invariants;
 these tests pin the invariants so future format changes fail loudly.
 """
+
 import time
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
@@ -12,7 +13,6 @@ from autobot_shared.time_utils import (
     parse_utc_iso,
     utc_timestamp,
 )
-
 
 _Z_FMT = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -42,9 +42,7 @@ def test_utc_timestamp_is_utc_not_local() -> None:
     s = utc_timestamp()
     parsed = datetime.fromisoformat(s)
     assert parsed.tzinfo is not None, f"expected aware datetime, got naive: {s}"
-    assert parsed.utcoffset() == timedelta(0), (
-        f"expected UTC offset 0, got {parsed.utcoffset()} from {s}"
-    )
+    assert parsed.utcoffset() == timedelta(0), f"expected UTC offset 0, got {parsed.utcoffset()} from {s}"
     assert s.endswith("+00:00"), f"expected +00:00 suffix (UTC), got: {s}"
 
 
@@ -57,9 +55,9 @@ def test_now_utc_returns_aware_datetime() -> None:
 def test_now_utc_offset_is_zero() -> None:
     """Offset must be exactly UTC, not local timezone."""
     dt = now_utc()
-    assert dt.utcoffset() == timedelta(0), (
-        f"expected UTC offset 0, got {dt.utcoffset()} — implementation may use local tz"
-    )
+    assert dt.utcoffset() == timedelta(
+        0
+    ), f"expected UTC offset 0, got {dt.utcoffset()} — implementation may use local tz"
 
 
 def test_now_utc_close_to_real_now() -> None:
@@ -135,6 +133,7 @@ def test_parse_utc_iso_comparable_with_now_utc() -> None:
 def test_parse_utc_iso_invalid_raises() -> None:
     """Malformed input raises ValueError (caller handles)."""
     import pytest
+
     with pytest.raises(ValueError):
         parse_utc_iso("not-a-date")
 

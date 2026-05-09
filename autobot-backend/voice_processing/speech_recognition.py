@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 import numpy as np
 
 from enhanced_memory_manager_async import TaskPriority
-from task_execution_tracker import task_tracker
+from task_execution_tracker import get_task_tracker
 from voice_processing.models import AudioInput, SpeechRecognitionResult
 from voice_processing.types import SpeechQuality
 
@@ -129,7 +129,7 @@ class SpeechRecognitionEngine:
             language: BCP-47 language code (e.g. "en", "de"). Defaults to "en".
         """
 
-        async with task_tracker.track_task(
+        async with get_task_tracker().track_task(
             "Speech Recognition",
             f"Transcribing audio: {audio_input.audio_id}",
             agent_type="voice_processing",

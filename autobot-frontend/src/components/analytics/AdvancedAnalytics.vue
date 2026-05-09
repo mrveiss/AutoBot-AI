@@ -557,7 +557,7 @@ onMounted(() => {
 }
 
 .tab-btn {
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   border: none;
   background: none;
   color: var(--text-secondary);
@@ -640,7 +640,7 @@ onMounted(() => {
 
 .badge {
   display: inline-block;
-  padding: 0.25rem 0.5rem;
+  padding: var(--spacing-1) var(--spacing-2);
   background: var(--bg-tertiary);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
@@ -669,12 +669,12 @@ onMounted(() => {
 }
 
 .recommendation-item ul {
-  margin: 0.5rem 0 0 1.5rem;
+  margin: var(--spacing-2) var(--spacing-0) var(--spacing-0) var(--spacing-6);
   padding: var(--spacing-0);
 }
 
 .recommendation-item li {
-  margin: 0.25rem 0;
+  margin: var(--spacing-1) var(--spacing-0);
 }
 
 .severity-high {
@@ -697,7 +697,7 @@ onMounted(() => {
 
 .export-card p {
   color: var(--text-secondary);
-  margin: 0.5rem 0 1rem;
+  margin: var(--spacing-2) var(--spacing-0) var(--spacing-4);
 }
 
 .export-actions {

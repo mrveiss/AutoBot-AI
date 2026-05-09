@@ -24,7 +24,22 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from api.schemas_system import (
+    AlertCheckResponse,
+    AlertManagerResponse,
+    ClaudeApiStatusResponse,
+    CurrentMetricsResponse,
+    GitHubStatusResponse,
+    MetricsQuery,
+    MonitoringActionResponse,
+    MonitoringStatus,
+    OptimizationRecommendation,
+    PerformanceAlert,
+    ServicesSummaryResponse,
+    TestPerformanceResponse,
+    ThresholdUpdate,
+    ThresholdUpdateResponse,
+)
 
 # Hardware monitor moved to monitoring_hardware.py (Issue #213)
 from api.monitoring_hardware import hardware_monitor
@@ -59,6 +74,7 @@ from utils.performance_monitor import (
     start_monitoring,
     stop_monitoring,
 )
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 
@@ -256,58 +272,6 @@ router = APIRouter(tags=["AutoBot Monitoring"])
 # Performance optimization: O(1) lookup for critical service statuses (Issue #326)
 CRITICAL_SERVICE_STATUSES = {"critical", "offline"}
 
-
-class MonitoringStatus(BaseModel):
-    """Monitoring system status"""
-
-    active: bool
-    uptime_seconds: float
-    collection_interval: float
-    hardware_acceleration: Dict[str, bool]
-    metrics_collected: int
-    alerts_count: int
-
-
-class PerformanceAlert(BaseModel):
-    """Performance alert model"""
-
-    category: str
-    severity: str
-    message: str
-    recommendation: str
-    timestamp: float
-
-
-class OptimizationRecommendation(BaseModel):
-    """Performance optimization recommendation"""
-
-    category: str
-    priority: str
-    recommendation: str
-    action: str
-    expected_improvement: str
-
-
-class MetricsQuery(BaseModel):
-    """Query parameters for metrics retrieval"""
-
-    categories: Optional[List[str]] = Field(
-        None, description="Metric categories to include"
-    )
-    time_range_minutes: int = Field(
-        10, ge=1, le=1440, description="Time range in minutes"
-    )
-    include_trends: bool = Field(True, description="Include trend analysis")
-    include_alerts: bool = Field(True, description="Include recent alerts")
-
-
-class ThresholdUpdate(BaseModel):
-    """Performance threshold update"""
-
-    category: str
-    metric: str
-    threshold: float
-    comparison: str = Field(..., pattern="^(gt|lt|eq)$")
 
 
 # WebSocket connection manager for real-time updates
@@ -514,12 +478,12 @@ def _compute_overall_status(svc_list: list) -> dict:
     }
 
 
+@router.get("/services/health", response_model=ServicesSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_services_health",
     error_code_prefix="MONITORING",
 )
-@router.get("/services/health")
 async def get_services_health():
     """Return service health in ServicesSummary format for frontend.
 
@@ -545,12 +509,12 @@ async def get_services_health():
     return summary
 
 
+@router.get("/status", response_model=MonitoringStatus)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_monitoring_status",
     error_code_prefix="MONITORING",
 )
-@router.get("/status", response_model=MonitoringStatus)
 async def get_monitoring_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -582,12 +546,12 @@ async def get_monitoring_status(
     )
 
 
+@router.post("/start", response_model=MonitoringActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="start_monitoring",
+    operation="start_monitoring_endpoint",
     error_code_prefix="MONITORING",
 )
-@router.post("/start")
 async def start_monitoring_endpoint(
     admin_check: bool = Depends(check_admin_permission),
     background_tasks: BackgroundTasks = None,
@@ -622,12 +586,12 @@ async def start_monitoring_endpoint(
     }
 
 
+@router.post("/stop", response_model=MonitoringActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="stop_monitoring",
+    operation="stop_monitoring_endpoint",
     error_code_prefix="MONITORING",
 )
-@router.post("/stop")
 async def stop_monitoring_endpoint(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -646,12 +610,12 @@ async def stop_monitoring_endpoint(
     }
 
 
+@router.get("/dashboard", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_performance_dashboard",
+    operation="get_dashboard_endpoint",
     error_code_prefix="MONITORING",
 )
-@router.get("/dashboard")
 async def get_dashboard_endpoint(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -669,12 +633,12 @@ async def get_dashboard_endpoint(
     return dashboard
 
 
+@router.get("/dashboard/overview", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_dashboard_overview",
     error_code_prefix="MONITORING",
 )
-@router.get("/dashboard/overview")
 async def get_dashboard_overview(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -692,12 +656,12 @@ async def get_dashboard_overview(
     return dashboard
 
 
+@router.get("/metrics/current", response_model=CurrentMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_current_metrics",
     error_code_prefix="MONITORING",
 )
-@router.get("/metrics/current")
 async def get_current_metrics(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -710,12 +674,12 @@ async def get_current_metrics(
     }
 
 
+@router.post("/metrics/query", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="query_metrics",
     error_code_prefix="MONITORING",
 )
-@router.post("/metrics/query")
 async def query_metrics(
     admin_check: bool = Depends(check_admin_permission),
     query: MetricsQuery = None,
@@ -783,13 +747,13 @@ async def query_metrics(
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_optimization_recommendations",
-    error_code_prefix="MONITORING",
-)
 @router.get(
     "/optimization/recommendations", response_model=List[OptimizationRecommendation]
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_optimization_recommendations_endpoint",
+    error_code_prefix="MONITORING",
 )
 async def get_optimization_recommendations_endpoint(
     admin_check: bool = Depends(check_admin_permission),
@@ -809,12 +773,12 @@ async def get_optimization_recommendations_endpoint(
     ]
 
 
+@router.get("/alerts", response_model=List[PerformanceAlert])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_alerts",
     error_code_prefix="MONITORING",
 )
-@router.get("/alerts", response_model=List[PerformanceAlert])
 async def get_performance_alerts(
     admin_check: bool = Depends(check_admin_permission),
     severity: Optional[str] = Query(None, description="Filter by severity"),
@@ -847,12 +811,12 @@ async def get_performance_alerts(
     ]
 
 
+@router.get("/alerts/check", response_model=AlertCheckResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_alerts",
     error_code_prefix="MONITORING",
 )
-@router.get("/alerts/check")
 async def check_alerts(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -887,12 +851,12 @@ async def check_alerts(
     }
 
 
+@router.get("/alerts/alertmanager", response_model=AlertManagerResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_alertmanager_alerts",
     error_code_prefix="MONITORING",
 )
-@router.get("/alerts/alertmanager")
 async def get_alertmanager_alerts(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -929,12 +893,12 @@ async def get_alertmanager_alerts(
     }
 
 
+@router.post("/thresholds/update", response_model=ThresholdUpdateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_performance_threshold",
     error_code_prefix="MONITORING",
 )
-@router.post("/thresholds/update")
 async def update_performance_threshold(
     admin_check: bool = Depends(check_admin_permission),
     threshold: ThresholdUpdate = None,
@@ -963,12 +927,12 @@ async def update_performance_threshold(
         }
 
 
+@router.get("/export/metrics", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_metrics",
     error_code_prefix="MONITORING",
 )
-@router.get("/export/metrics")
 async def export_metrics(
     admin_check: bool = Depends(check_admin_permission),
     format: str = Query("json", pattern="^(json|csv)$"),
@@ -1124,13 +1088,13 @@ async def realtime_monitoring_websocket(websocket: WebSocket):
 
 # Helper functions
 # Performance monitoring decorator endpoint
+@router.post("/test/performance", response_model=TestPerformanceResponse)
+@monitor_performance("api_test")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_performance_monitoring",
     error_code_prefix="MONITORING",
 )
-@router.post("/test/performance")
-@monitor_performance("api_test")
 async def test_performance_monitoring(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1154,12 +1118,12 @@ async def test_performance_monitoring(
 
 
 # Issue #1190: Hardware stub endpoints for analytics dashboard
+@router.get("/hardware/npu", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_hardware_npu",
+    operation="get_hardware_npu_status",
     error_code_prefix="MONITORING",
 )
-@router.get("/hardware/npu")
 async def get_hardware_npu_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1167,12 +1131,12 @@ async def get_hardware_npu_status(
     return await hardware_monitor.get_npu_status()
 
 
+@router.get("/hardware/gpu", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_hardware_gpu",
+    operation="get_hardware_gpu_status",
     error_code_prefix="MONITORING",
 )
-@router.get("/hardware/gpu")
 async def get_hardware_gpu_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1180,12 +1144,12 @@ async def get_hardware_gpu_status(
     return await hardware_monitor.get_gpu_status()
 
 
+@router.get("/hardware/system", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_hardware_system",
+    operation="get_hardware_system_status",
     error_code_prefix="MONITORING",
 )
-@router.get("/hardware/system")
 async def get_hardware_system_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1196,12 +1160,12 @@ async def get_hardware_system_status(
 # External API status endpoints — extracted from monitoring_compat.py (Issue #1283)
 
 
+@router.get("/claude-api/status", response_model=ClaudeApiStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_claude_api_status",
     error_code_prefix="MONITORING",
 )
-@router.get("/claude-api/status")
 async def get_claude_api_status():
     """Get Claude API status via Prometheus metrics.
 
@@ -1235,12 +1199,12 @@ async def get_claude_api_status():
     }
 
 
+@router.get("/github/status", response_model=GitHubStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_github_status",
     error_code_prefix="MONITORING",
 )
-@router.get("/github/status")
 async def get_github_status():
     """Get GitHub API status via Prometheus metrics.
 

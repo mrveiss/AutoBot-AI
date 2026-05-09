@@ -11,6 +11,7 @@ import { ref, computed } from 'vue'
 import { useApiWithState } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { useLoadingState } from '@/composables/useLoadingState'
 import type {
   BatchJob,
   BatchTemplate,
@@ -29,6 +30,7 @@ import type {
 } from '@/types/batch-processing'
 import { isTerminalStatus } from '@/types/batch-processing'
 import { getApiBase } from '@/config/ssot-config'
+import { useProbeBackedHealth } from '@/composables/useProbeBackedHealth'
 
 const logger = createLogger('useBatchProcessing')
 
@@ -254,27 +256,32 @@ export function useBatchProcessingApi() {
     },
 
     /**
-     * Get batch service health status
+     * Get batch service health status.
+     *
+     * Issue #6902: migrated off the legacy /api/batch-jobs/health (sunset
+     * 2026-09-02) onto the canonical aggregator at /api/system/health. The
+     * `batch_jobs` probe populates `data.redis_connected`; `active_jobs` and
+     * `total_jobs` were never returned by the legacy backend response, so
+     * the fallback values match the prior behaviour.
      */
-    async getHealth(): Promise<BatchHealthResponse | null> {
-      return withErrorHandling(
-        async () => {
-          const response = await api.get(`${getApiBase()}/batch-jobs/health`)
-          return await response.json()
-        },
-        {
-          errorMessage: 'Failed to check batch service health',
-          fallbackValue: {
-            status: 'unavailable',
-            active_jobs: 0,
-            total_jobs: 0,
-            redis_connected: false,
-            message: 'Service unavailable'
-          },
-          silent: true
-        }
-      )
-    }
+    getHealth: useProbeBackedHealth<BatchHealthResponse>({
+      probeName: 'batch_jobs',
+      buildHealthy: (probe, data) => ({
+        status: 'healthy',
+        active_jobs: 0,
+        total_jobs: 0,
+        redis_connected: Boolean(data.redis_connected),
+        message: probe.detail,
+      }),
+      buildUnavailable: (message) => ({
+        status: 'unavailable',
+        active_jobs: 0,
+        total_jobs: 0,
+        redis_connected: false,
+        message,
+      }),
+      errorMessage: 'Failed to check batch service health',
+    }),
   }
 }
 
@@ -291,7 +298,7 @@ export function useBatchProcessingState() {
   const runningCount = ref(0)
   const completedCount = ref(0)
   const failedCount = ref(0)
-  const loading = ref(false)
+  const { isLoading: loading, wrap } = useLoadingState()
   const errors = ref<string[]>([])
   const error = computed<string | null>(() =>
     errors.value.length > 0 ? errors.value.join('; ') : null,
@@ -309,11 +316,11 @@ export function useBatchProcessingState() {
 
   // Templates state
   const templates = ref<BatchTemplate[]>([])
-  const templatesLoading = ref(false)
+  const { isLoading: templatesLoading, wrap: wrapTemplates } = useLoadingState()
 
   // Schedules state
   const schedules = ref<BatchSchedule[]>([])
-  const schedulesLoading = ref(false)
+  const { isLoading: schedulesLoading, wrap: wrapSchedules } = useLoadingState()
 
   // Polling state
   const isPolling = ref(false)
@@ -342,26 +349,24 @@ export function useBatchProcessingState() {
    * Load batch jobs list
    */
   async function loadJobs() {
-    loading.value = true
     errors.value = []
-
-    try {
-      const result = await batchApi.listJobs(filter.value)
-      if (result) {
-        jobs.value = result.jobs
-        totalCount.value = result.total_count
-        pendingCount.value = result.pending_count
-        runningCount.value = result.running_count
-        completedCount.value = result.completed_count
-        failedCount.value = result.failed_count
+    await wrap(async () => {
+      try {
+        const result = await batchApi.listJobs(filter.value)
+        if (result) {
+          jobs.value = result.jobs
+          totalCount.value = result.total_count
+          pendingCount.value = result.pending_count
+          runningCount.value = result.running_count
+          completedCount.value = result.completed_count
+          failedCount.value = result.failed_count
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Unknown error'
+        errors.value = [...errors.value, msg]
+        logger.error('Failed to load batch jobs:', e)
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Unknown error'
-      errors.value = [...errors.value, msg]
-      logger.error('Failed to load batch jobs:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
@@ -476,15 +481,12 @@ export function useBatchProcessingState() {
    * Load templates
    */
   async function loadTemplates() {
-    templatesLoading.value = true
-    try {
+    await wrapTemplates(async () => {
       const result = await batchApi.listTemplates()
       if (result) {
         templates.value = result.templates
       }
-    } finally {
-      templatesLoading.value = false
-    }
+    })
   }
 
   /**
@@ -513,15 +515,12 @@ export function useBatchProcessingState() {
    * Load schedules
    */
   async function loadSchedules() {
-    schedulesLoading.value = true
-    try {
+    await wrapSchedules(async () => {
       const result = await batchApi.listSchedules()
       if (result) {
         schedules.value = result.schedules
       }
-    } finally {
-      schedulesLoading.value = false
-    }
+    })
   }
 
   /**

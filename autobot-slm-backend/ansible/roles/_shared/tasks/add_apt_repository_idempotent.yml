@@ -1,0 +1,95 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Idempotent apt repository add — preserves device-shipped repo (#7218).
+#
+# Closes #7218 — composability follow-up to #7144's `add_ppa_if_missing`
+# helper in install.sh. Same conflict-prevention semantics, applicable to
+# any role that adds an apt repository (Grafana, NodeSource, PostgreSQL
+# pgdg, OpenVINO, Docker, etc.).
+#
+# Why: DGX Spark and other AI workstation images ship many PPAs/repos
+# pre-configured (deb822 .sources format with inline GPG key). Re-adding
+# via apt_repository creates a legacy .list duplicate with mismatched
+# Signed-By, and `apt-get update` then aborts with:
+#   E:Conflicting values set for option Signed-By regarding source <url>
+#
+# This task:
+#   1. Greps /etc/apt/sources.list.d/ for the repo's URL pattern
+#   2. If found → skip apt_repository (preserve device-shipped config)
+#      and sweep any stale legacy `.list` duplicate that would conflict
+#   3. If not found → call apt_repository as normal
+#
+# Contract:
+#   apt_repo_match    (str)       Substring grep pattern that uniquely
+#                                 identifies this repo in source files.
+#                                 e.g. "ansible/ansible", "grafana.com/oss",
+#                                 "nodesource.com", "postgresql.org/pub".
+#   apt_repo_spec     (str)       Repo line for ansible.builtin.apt_repository
+#                                 (e.g. "ppa:ansible/ansible" or full
+#                                 "deb https://... main"). Used only when
+#                                 the repo isn't already configured.
+#   apt_repo_filename (str)       Filename for new repo entries (without
+#                                 .list suffix). Used by apt_repository's
+#                                 `filename:` parameter and by stale-dup
+#                                 sweep matching.
+#   apt_repo_label    (str)       Friendly name for log messages, e.g.
+#                                 "Grafana", "NodeSource", "PostgreSQL pgdg".
+#
+# Example:
+#   - include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
+#     vars:
+#       apt_repo_match: "grafana.com/oss"
+#       apt_repo_spec: "deb https://packages.grafana.com/oss/deb stable main"
+#       apt_repo_filename: "grafana"
+#       apt_repo_label: "Grafana"
+
+- name: "{{ apt_repo_label }} | Detect existing apt repo for {{ apt_repo_match }}"
+  ansible.builtin.shell: >-
+    grep -rqs -- "{{ apt_repo_match }}" /etc/apt/sources.list.d/ 2>/dev/null
+    && echo PRESENT
+    || echo MISSING
+  register: _apt_repo_present
+  changed_when: false
+  failed_when: false
+  become: true
+  tags: ['packages']
+
+- name: "{{ apt_repo_label }} | Sweep stale legacy .list duplicate when device-shipped .sources exists"
+  # If a .sources file is present AND a sibling .list file exists for the
+  # same repo, the two diverge on Signed-By and apt-get update aborts. The
+  # .sources is the canonical (deb822 + inline key) form; remove the .list.
+  ansible.builtin.shell: |
+    set -e
+    SOURCES_HIT=$(find /etc/apt/sources.list.d/ -maxdepth 1 -name '*.sources' \
+                  -exec grep -lq -- "{{ apt_repo_match }}" {} \; -print 2>/dev/null | head -1)
+    if [ -n "$SOURCES_HIT" ]; then
+      for f in /etc/apt/sources.list.d/{{ apt_repo_filename }}.list \
+               /etc/apt/sources.list.d/ppa_*{{ apt_repo_filename }}*.list; do
+        if [ -f "$f" ]; then
+          rm -f "$f"
+          echo "Removed stale duplicate $f"
+        fi
+      done
+    fi
+  register: _apt_repo_sweep
+  changed_when: "'Removed stale duplicate' in _apt_repo_sweep.stdout"
+  become: true
+  when: _apt_repo_present.stdout | trim == 'PRESENT'
+  tags: ['packages']
+
+- name: "{{ apt_repo_label }} | Preserve device-shipped repo (skip apt_repository)"
+  ansible.builtin.debug:
+    msg: "{{ apt_repo_label }} repo already configured at /etc/apt/sources.list.d/ — preserving device-shipped config"
+  when: _apt_repo_present.stdout | trim == 'PRESENT'
+  tags: ['packages']
+
+- name: "{{ apt_repo_label }} | Add apt repository (not previously configured)"
+  ansible.builtin.apt_repository:
+    repo: "{{ apt_repo_spec }}"
+    state: present
+    filename: "{{ apt_repo_filename }}"
+  become: true
+  when: _apt_repo_present.stdout | trim == 'MISSING'
+  tags: ['packages']

@@ -141,7 +141,7 @@ const selectMode = (mode: EnforcementMode) => {
 }
 
 .selector-header h3 {
-  margin: 0 0 8px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
@@ -237,7 +237,7 @@ const selectMode = (mode: EnforcementMode) => {
 
 .current-badge {
   font-size: var(--text-xs);
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--color-primary);
   color: var(--text-on-primary);
   border-radius: var(--radius-default);
@@ -245,7 +245,7 @@ const selectMode = (mode: EnforcementMode) => {
 }
 
 .option-description {
-  margin: 0 0 10px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2-5);
   font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.4;

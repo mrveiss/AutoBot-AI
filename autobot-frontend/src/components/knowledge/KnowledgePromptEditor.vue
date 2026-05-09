@@ -15,47 +15,25 @@
  * - Unsaved changes warning
  */
 
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useKnowledgePrompt } from '@/composables/knowledge/useKnowledgePrompt'
+import type { Prompt, PromptVersion } from '@/composables/knowledge/useKnowledgePrompt'
 
 const logger = createLogger('KnowledgePromptEditor')
 
 const { t } = useI18n()
 
 // =============================================================================
-// Type Definitions
-// =============================================================================
-
-interface Prompt {
-  id: string
-  name: string
-  category: 'system' | 'agents' | 'templates'
-  content: string
-  description?: string
-  variables?: string[]
-  lastModified?: string
-  version?: number
-}
-
-interface PromptVersion {
-  version: number
-  content: string
-  timestamp: string
-  author?: string
-}
-
-// =============================================================================
 // State
 // =============================================================================
 
-const isLoading = ref(false)
-const isSaving = ref(false)
+const { isLoading, isSaving, isLoadingHistory, fetchPrompts, savePrompt, fetchHistory, revertPrompt } =
+  useKnowledgePrompt()
 const error = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 
@@ -70,7 +48,6 @@ const selectedCategory = ref<'all' | 'system' | 'agents' | 'templates'>('all')
 const showHistoryModal = ref(false)
 const promptHistory = ref<PromptVersion[]>([])
 const selectedVersion = ref<PromptVersion | null>(null)
-const isLoadingHistory = ref(false)
 
 // Unsaved changes tracking
 const hasUnsavedChanges = computed(() => {
@@ -143,20 +120,12 @@ const categoryLabels = computed<Record<string, string>>(() => ({
 // =============================================================================
 
 async function loadPrompts(): Promise<void> {
-  isLoading.value = true
   error.value = null
-
   try {
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/prompts`)
-
-    if (data?.prompts) {
-      prompts.value = data.prompts
-    }
+    prompts.value = await fetchPrompts()
   } catch (err) {
     logger.error('Failed to load prompts:', err)
     error.value = t('knowledge.promptEditor.errorLoadPrompts')
-  } finally {
-    isLoading.value = false
   }
 }
 
@@ -173,18 +142,13 @@ function selectPrompt(prompt: Prompt): void {
   successMessage.value = null
 }
 
-async function savePrompt(): Promise<void> {
+async function handleSavePrompt(): Promise<void> {
   if (!selectedPrompt.value) return
 
-  isSaving.value = true
   error.value = null
   successMessage.value = null
-
   try {
-    const data = await apiClient.put<Record<string, any>>(
-      `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}`,
-      { content: editedContent.value }
-    )
+    const data = await savePrompt(selectedPrompt.value.id, editedContent.value)
 
     if (data?.status === 'success') {
       // Update local state
@@ -197,13 +161,11 @@ async function savePrompt(): Promise<void> {
         successMessage.value = null
       }, 3000)
     } else {
-      error.value = data?.message || t('knowledge.promptEditor.errorSavePrompt')
+      error.value = (data?.message as string) || t('knowledge.promptEditor.errorSavePrompt')
     }
   } catch (err) {
     logger.error('Failed to save prompt:', err)
     error.value = t('knowledge.promptEditor.errorSavePrompt')
-  } finally {
-    isSaving.value = false
   }
 }
 
@@ -215,23 +177,8 @@ function revertChanges(): void {
 async function loadHistory(): Promise<void> {
   if (!selectedPrompt.value) return
 
-  isLoadingHistory.value = true
   showHistoryModal.value = true
-
-  try {
-    const data = await apiClient.get<Record<string, any>>(
-      `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}/history`
-    )
-
-    if (data?.versions) {
-      promptHistory.value = data.versions
-    }
-  } catch (err) {
-    logger.error('Failed to load history:', err)
-    promptHistory.value = []
-  } finally {
-    isLoadingHistory.value = false
-  }
+  promptHistory.value = await fetchHistory(selectedPrompt.value.id)
 }
 
 async function revertToVersion(version: PromptVersion): Promise<void> {
@@ -241,13 +188,8 @@ async function revertToVersion(version: PromptVersion): Promise<void> {
     return
   }
 
-  isSaving.value = true
-
   try {
-    const data = await apiClient.post<Record<string, any>>(
-      `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}/revert`,
-      { version: version.version }
-    )
+    const data = await revertPrompt(selectedPrompt.value.id, version.version)
 
     if (data?.status === 'success') {
       selectedPrompt.value.content = version.content
@@ -258,8 +200,6 @@ async function revertToVersion(version: PromptVersion): Promise<void> {
   } catch (err) {
     logger.error('Failed to revert:', err)
     error.value = t('knowledge.promptEditor.errorRevert')
-  } finally {
-    isSaving.value = false
   }
 }
 
@@ -419,7 +359,7 @@ onBeforeUnmount(() => {
               <BaseButton
                 variant="primary"
                 size="sm"
-                @click="savePrompt"
+                @click="handleSavePrompt"
                 :disabled="!hasUnsavedChanges || isSaving"
               >
                 <i v-if="isSaving" class="fas fa-spinner fa-spin"></i>
@@ -568,7 +508,7 @@ onBeforeUnmount(() => {
 
 .search-input {
   width: 100%;
-  padding: 0.5rem 0.75rem 0.5rem 2.25rem;
+  padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-9);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -577,7 +517,7 @@ onBeforeUnmount(() => {
 }
 
 .category-filter {
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -590,7 +530,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   font-size: var(--text-sm);
 }
 
@@ -642,7 +582,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 0.5rem 0;
+  padding: var(--spacing-2) var(--spacing-0);
   font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-secondary);
@@ -653,7 +593,7 @@ onBeforeUnmount(() => {
 .category-header .count {
   margin-left: auto;
   background: var(--bg-card);
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-2xl);
   font-weight: 500;
 }
@@ -665,7 +605,7 @@ onBeforeUnmount(() => {
 }
 
 .prompt-item {
-  padding: 0.625rem 0.75rem;
+  padding: var(--spacing-2-5) var(--spacing-3);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--duration-150);
@@ -723,7 +663,7 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.875rem 1.5rem;
+  padding: var(--spacing-3-5) var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-card);
 }
@@ -741,7 +681,7 @@ onBeforeUnmount(() => {
 }
 
 .version-badge {
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--bg-secondary);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
@@ -749,7 +689,7 @@ onBeforeUnmount(() => {
 }
 
 .unsaved-badge {
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--color-warning-bg);
   color: var(--color-warning-dark);
   border-radius: var(--radius-default);
@@ -795,7 +735,7 @@ onBeforeUnmount(() => {
 
 /* Editor Footer */
 .editor-footer {
-  padding: 0.75rem 1.5rem;
+  padding: var(--spacing-3) var(--spacing-6);
   border-top: 1px solid var(--border-default);
   background: var(--bg-secondary);
   display: flex;
@@ -829,7 +769,7 @@ onBeforeUnmount(() => {
 }
 
 .variable-tag {
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--color-info-bg);
   color: var(--color-info);
   border-radius: var(--radius-default);
@@ -863,7 +803,7 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   cursor: pointer;

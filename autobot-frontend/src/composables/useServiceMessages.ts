@@ -12,6 +12,7 @@ import { useApiWithState } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('useServiceMessages')
 
@@ -57,7 +58,7 @@ export function useServiceMessages() {
 
   const messages = ref<ServiceMessageEntry[]>([])
   const chainMessages = ref<ServiceMessageEntry[]>([])
-  const loading = ref(false)
+  const { isLoading: loading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
 
   const isPolling = ref(false)
@@ -68,37 +69,36 @@ export function useServiceMessages() {
     receiver?: string
     msg_type?: string
   }): Promise<LatestMessagesResponse | null> {
-    loading.value = true
     error.value = null
-    try {
-      const result = await withErrorHandling(
-        async () => {
-          const sp = new URLSearchParams()
-          if (params?.count) sp.append('count', String(params.count))
-          if (params?.sender) sp.append('sender', params.sender)
-          if (params?.receiver) sp.append('receiver', params.receiver)
-          if (params?.msg_type) sp.append('msg_type', params.msg_type)
-          const qs = sp.toString()
-          const url = `${getApiBase()}/service-messages/latest${qs ? `?${qs}` : ''}`
-          const resp = await api.get(url)
-          return (await resp.json()) as LatestMessagesResponse
-        },
-        {
-          errorMessage: 'Failed to fetch service messages',
-          fallbackValue: { success: false, count: 0, messages: [] }
+    return wrap(async () => {
+      try {
+        const result = await withErrorHandling(
+          async () => {
+            const sp = new URLSearchParams()
+            if (params?.count) sp.append('count', String(params.count))
+            if (params?.sender) sp.append('sender', params.sender)
+            if (params?.receiver) sp.append('receiver', params.receiver)
+            if (params?.msg_type) sp.append('msg_type', params.msg_type)
+            const qs = sp.toString()
+            const url = `${getApiBase()}/service-messages/latest${qs ? `?${qs}` : ''}`
+            const resp = await api.get(url)
+            return (await resp.json()) as LatestMessagesResponse
+          },
+          {
+            errorMessage: 'Failed to fetch service messages',
+            fallbackValue: { success: false, count: 0, messages: [] }
+          }
+        )
+        if (result && result.success) {
+          messages.value = result.messages
         }
-      )
-      if (result && result.success) {
-        messages.value = result.messages
+        return result
+      } catch (e) {
+        error.value = e instanceof Error ? e.message : 'Unknown error'
+        logger.error('fetchLatest failed:', e)
+        return null
       }
-      return result
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Unknown error'
-      logger.error('fetchLatest failed:', e)
-      return null
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   async function fetchMessage(
@@ -116,32 +116,31 @@ export function useServiceMessages() {
   async function fetchChain(
     correlationId: string
   ): Promise<CorrelationChainResponse | null> {
-    loading.value = true
     error.value = null
-    try {
-      const result = await withErrorHandling(
-        async () => {
-          const resp = await api.get(
-            `${getApiBase()}/service-messages/chain/${correlationId}`
-          )
-          return (await resp.json()) as CorrelationChainResponse
-        },
-        {
-          errorMessage: 'Failed to fetch correlation chain',
-          fallbackValue: null
+    return wrap(async () => {
+      try {
+        const result = await withErrorHandling(
+          async () => {
+            const resp = await api.get(
+              `${getApiBase()}/service-messages/chain/${correlationId}`
+            )
+            return (await resp.json()) as CorrelationChainResponse
+          },
+          {
+            errorMessage: 'Failed to fetch correlation chain',
+            fallbackValue: null
+          }
+        )
+        if (result && result.success) {
+          chainMessages.value = result.messages
         }
-      )
-      if (result && result.success) {
-        chainMessages.value = result.messages
+        return result
+      } catch (e) {
+        error.value = e instanceof Error ? e.message : 'Unknown error'
+        logger.error('fetchChain failed:', e)
+        return null
       }
-      return result
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Unknown error'
-      logger.error('fetchChain failed:', e)
-      return null
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   let _stopServiceMessagesPoller: (() => void) | null = null

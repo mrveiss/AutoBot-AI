@@ -23,21 +23,24 @@ Endpoints:
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import List
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, validator
 
 from agents.graph_entity_extractor import ExtractionResult, GraphEntityExtractor
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
-from type_defs.common import Metadata
 from utils.request_utils import generate_request_id
-
-# Issue #380: Module-level frozenset for valid message roles
-_VALID_ROLES = frozenset({"user", "assistant", "system"})
+from api.schemas_knowledge import (
+    BatchExtractionRequest,
+    BatchExtractionResponse,
+    EntityExtractionHealthResponse,
+    EntityExtractionRequest,
+    EntityExtractionResponse,
+    ExtractionMessage,
+)
 
 # ====================================================================
 # Router Configuration
@@ -46,93 +49,6 @@ _VALID_ROLES = frozenset({"user", "assistant", "system"})
 router = APIRouter(tags=["entity-extraction"])
 logger = logging.getLogger(__name__)
 
-# ====================================================================
-# Request/Response Models
-# ====================================================================
-
-
-class Message(BaseModel):
-    """Message in conversation."""
-
-    role: str = Field(..., description="Message role (user/assistant/system)")
-    content: str = Field(..., min_length=1, description="Message content")
-
-    @validator("role")
-    def validate_role(cls, v):
-        """Validate role is valid."""
-        if v not in _VALID_ROLES:  # Issue #380: use module constant
-            raise ValueError(f"Role must be one of {_VALID_ROLES}")
-        return v
-
-
-class EntityExtractionRequest(BaseModel):
-    """Request model for entity extraction."""
-
-    conversation_id: str = Field(
-        ..., min_length=1, max_length=200, description="Conversation identifier"
-    )
-    messages: List[Message] = Field(
-        ..., min_items=1, description="Conversation messages"
-    )
-    session_metadata: Optional[Metadata] = Field(
-        None, description="Optional session metadata"
-    )
-
-    @validator("conversation_id")
-    def validate_conversation_id(cls, v):
-        """Validate conversation ID is not just whitespace."""
-        if not v.strip():
-            raise ValueError("Conversation ID cannot be empty or whitespace")
-        return v.strip()
-
-
-class BatchExtractionRequest(BaseModel):
-    """Request model for batch entity extraction."""
-
-    conversations: List[EntityExtractionRequest] = Field(
-        ..., min_items=1, max_items=50, description="Conversations to process (max 50)"
-    )
-
-
-class EntityExtractionResponse(BaseModel):
-    """Response model for entity extraction."""
-
-    success: bool = Field(..., description="Whether extraction succeeded")
-    conversation_id: str = Field(..., description="Conversation identifier")
-    facts_analyzed: int = Field(..., description="Number of facts analyzed")
-    entities_created: int = Field(..., description="Number of entities created")
-    relations_created: int = Field(..., description="Number of relations created")
-    processing_time: float = Field(..., description="Processing time in seconds")
-    errors: List[str] = Field(default_factory=list, description="Errors encountered")
-    request_id: str = Field(..., description="Unique request identifier")
-
-
-class BatchExtractionResponse(BaseModel):
-    """Response model for batch extraction."""
-
-    success: bool = Field(..., description="Whether batch succeeded")
-    total_conversations: int = Field(..., description="Total conversations processed")
-    successful_extractions: int = Field(
-        ..., description="Number of successful extractions"
-    )
-    failed_extractions: int = Field(..., description="Number of failed extractions")
-    results: List[EntityExtractionResponse] = Field(
-        ..., description="Individual extraction results"
-    )
-    total_processing_time: float = Field(
-        ..., description="Total processing time in seconds"
-    )
-    request_id: str = Field(..., description="Unique request identifier")
-
-
-class HealthResponse(BaseModel):
-    """Response model for health check."""
-
-    status: str = Field(
-        ..., description="Service status (healthy, degraded, unhealthy)"
-    )
-    components: Dict[str, str] = Field(..., description="Component health status")
-    timestamp: str = Field(..., description="Timestamp of health check")
 
 
 # ====================================================================
@@ -174,7 +90,7 @@ def get_entity_extractor(request: Request) -> GraphEntityExtractor:
 # ====================================================================
 
 
-def _prepare_extraction_messages(messages: List[Message]) -> list:
+def _prepare_extraction_messages(messages: List[ExtractionMessage]) -> list:
     """
     Convert Pydantic messages to dict format for extraction.
 
@@ -241,12 +157,12 @@ def _build_extraction_response(
 # ====================================================================
 
 
+@router.post("/extract", response_model=EntityExtractionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="entity_extraction",
-    error_code_prefix="ENTITY_EXTRACT",
+    operation="extract_entities",
+    error_code_prefix="ENTITY_EXTRACTION",
 )
-@router.post("/extract", response_model=EntityExtractionResponse)
 async def extract_entities(
     extraction_request: EntityExtractionRequest = Body(...),
     extractor: GraphEntityExtractor = Depends(get_entity_extractor),
@@ -377,12 +293,12 @@ def _process_extraction_results(
     return successful_results, failed_results
 
 
+@router.post("/extract-batch", response_model=BatchExtractionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="batch_entity_extraction",
-    error_code_prefix="ENTITY_EXTRACT",
+    operation="extract_entities_batch",
+    error_code_prefix="ENTITY_EXTRACTION",
 )
-@router.post("/extract-batch", response_model=BatchExtractionResponse)
 async def extract_entities_batch(
     batch_request: BatchExtractionRequest = Body(...),
     extractor: GraphEntityExtractor = Depends(get_entity_extractor),
@@ -447,12 +363,12 @@ async def extract_entities_batch(
         raise HTTPException(status_code=500, detail="Batch extraction failed")
 
 
+@router.get("/extract/health", response_model=EntityExtractionHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="entity_extraction_health",
-    error_code_prefix="ENTITY_EXTRACT",
+    error_code_prefix="ENTITY_EXTRACTION",
 )
-@router.get("/extract/health", response_model=HealthResponse)
 async def entity_extraction_health(
     extractor: GraphEntityExtractor = Depends(get_entity_extractor),
     current_user: dict = Depends(get_current_user),

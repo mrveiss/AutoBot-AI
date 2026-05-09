@@ -1,0 +1,19 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Shared cleanup task: unconditionally delete a legacy/pre-rename directory.
+#
+# Closes #7058 — replaces 16 near-identical legacy-dir tasks across 5 role
+# clean.yml files. NO role currently deploys to these paths, so removal is
+# always safe.
+#
+# Contract:
+#   caller_role (str)  Display label for task name, e.g. "Backend".
+#   dir_name    (str)  Path tail under /opt/autobot/, e.g. "npu-worker".
+
+- name: "{{ caller_role }} | Clean: legacy {{ dir_name }} dir"
+  ansible.builtin.file:
+    path: "/opt/autobot/{{ dir_name }}"
+    state: absent
+  tags: ['clean']

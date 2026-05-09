@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 import yaml
 from jinja2 import Environment, FileSystemLoader, Template
 
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.ttl_constants import TTL_24_HOURS
 
 logger = logging.getLogger(__name__)
@@ -168,6 +169,16 @@ def _is_binary_content(content: str) -> bool:
     return "\x00" in content
 
 
+def _is_cjk(ch: str) -> bool:
+    """Return True if *ch* is a CJK ideograph (each character is its own word)."""
+    cp = ord(ch)
+    return (
+        0x3000 <= cp <= 0x9FFF  # CJK Unified Ideographs + CJK Symbols/Punctuation
+        or 0xF900 <= cp <= 0xFAFF  # CJK Compatibility Ideographs
+        or 0x20000 <= cp <= 0x2FA1F  # CJK Extension B–F + Compatibility Supplement
+    )
+
+
 def _snap_to_char_boundary(content: str, pos: int, search_forward: bool = True) -> int:
     """
     Snap a string slice position to a Unicode-safe word boundary.
@@ -176,6 +187,10 @@ def _snap_to_char_boundary(content: str, pos: int, search_forward: bool = True) 
     splits possible), but this helper snaps the cut to the nearest whitespace so
     truncation does not break mid-word for multi-byte characters (emoji 4-byte,
     CJK 3-byte, accented 2-byte).
+
+    Issue #4436: CJK text has no spaces between characters — each codepoint is its
+    own word, so whitespace snapping is unnecessary. When the character at *pos* is
+    CJK, return *pos* immediately instead of scanning and falling back anyway.
 
     Args:
         content: The full string being sliced.
@@ -189,6 +204,9 @@ def _snap_to_char_boundary(content: str, pos: int, search_forward: bool = True) 
     limit = 100  # Maximum chars to search for a boundary
     length = len(content)
     pos = max(0, min(pos, length))
+
+    if pos < length and _is_cjk(content[pos]):
+        return pos
 
     if search_forward:
         end = min(pos + limit, length)
@@ -327,6 +345,46 @@ _YAML_EXTENSIONS = frozenset({".yml", ".yaml"})
 
 # Issue #4484: Section assembly order for YAML-sectioned prompts
 _YAML_SECTION_ORDER = ("role", "objective", "tools", "examples", "instructions")
+
+
+def _get_ssot_template_vars() -> Dict[str, str]:
+    """
+    Build a dict of SSOT-derived Jinja variables available to every prompt template.
+
+    Issue #6724: lets prompts reference deployment IPs/ports as ``{{ vm_main }}``
+    instead of hardcoding the literal IP. Caller kwargs to ``get()`` still win
+    over these defaults. Returns an empty dict if SSOT config can't be loaded so
+    legacy templates with literal text continue to render.
+    """
+    try:
+        from autobot_shared.ssot_config import config
+
+        return {
+            "vm_main": config.vm.main,
+            "vm_frontend": config.vm.frontend,
+            "vm_npu": config.vm.npu,
+            "vm_redis": config.vm.redis,
+            "vm_aistack": config.vm.aistack,
+            "vm_chromadb": config.vm.chromadb,
+            "vm_browser": config.vm.browser,
+            "vm_tts": config.vm.tts,
+            "vm_slm": config.vm.slm,
+            "vm_ollama": config.vm.ollama,
+            "port_backend": str(config.port.backend),
+            "port_frontend": str(config.port.frontend),
+            "port_redis": str(config.port.redis),
+            "port_npu": str(config.port.npu),
+            "port_aistack": str(config.port.aistack),
+            "port_chromadb": str(config.port.chromadb),
+            "port_browser": str(config.port.browser),
+            "port_tts": str(config.port.tts),
+            "port_slm": str(config.port.slm),
+            "port_ollama": str(config.port.ollama),
+            "port_vnc": str(config.port.vnc),
+        }
+    except Exception as exc:
+        logger.debug("Could not load SSOT vars for prompt templates: %s", exc)
+        return {}
 
 
 class PromptManager:
@@ -600,9 +658,13 @@ class PromptManager:
         Raises:
             KeyError: If prompt key is not found
         """
+        # Issue #6724: inject SSOT VM/port defaults so templates can use {{ vm_main }}
+        # etc. without each caller needing to pass them. Caller kwargs win on conflict.
+        merged_kwargs = {**_get_ssot_template_vars(), **kwargs}
+
         # Issue #4484: handle YAML section overrides
         if overrides and prompt_key in self.yaml_sections:
-            return self._get_with_overrides(prompt_key, overrides, **kwargs)
+            return self._get_with_overrides(prompt_key, overrides, **merged_kwargs)
 
         if prompt_key not in self.templates:
             # Try fallback strategies
@@ -617,7 +679,7 @@ class PromptManager:
 
         try:
             template = self.templates[prompt_key]
-            return template.render(**kwargs)
+            return template.render(**merged_kwargs)
         except Exception as e:
             logger.error("Error rendering template '%s': %s", prompt_key, e)
             # Return raw content as fallback
@@ -1185,8 +1247,7 @@ class PromptManager:
             logger.debug("Redis prompts cache save failed: %s", e)
 
 
-# Global prompt manager instance
-prompt_manager = PromptManager()
+get_prompt_manager = lazy_singleton(PromptManager)
 
 
 def get_prompt(prompt_key: str, **kwargs) -> str:
@@ -1200,7 +1261,7 @@ def get_prompt(prompt_key: str, **kwargs) -> str:
     Returns:
         Rendered prompt content
     """
-    return prompt_manager.get(prompt_key, **kwargs)
+    return get_prompt_manager().get(prompt_key, **kwargs)
 
 
 def _build_dynamic_context(
@@ -1210,6 +1271,7 @@ def _build_dynamic_context(
     available_tools: Optional[List[str]],
     recent_context: Optional[str],
     additional_params: Optional[Dict],
+    tool_descriptions: Optional[Dict] = None,
 ) -> str:
     """
     Build dynamic context section for optimized prompts.
@@ -1224,13 +1286,14 @@ def _build_dynamic_context(
         available_tools: List of available tool names
         recent_context: Recent conversation context or task history
         additional_params: Additional dynamic parameters
+        tool_descriptions: Optional mapping of tool_name -> compressed description (Issue #5827)
 
     Returns:
         Rendered dynamic context string
     """
     try:
         dynamic_template_key = "default.agent.system.dynamic_context"
-        return prompt_manager.get(
+        return get_prompt_manager().get(
             dynamic_template_key,
             session_id=session_id or "N/A",
             current_date=datetime.now(tz=timezone.utc).strftime("%Y-%m-%d"),
@@ -1240,6 +1303,7 @@ def _build_dynamic_context(
             available_tools=available_tools or [],
             recent_context=recent_context or "",
             additional_params=additional_params or {},
+            tool_descriptions=tool_descriptions,
         )
     except KeyError:
         logger.warning(
@@ -1259,6 +1323,7 @@ def get_optimized_prompt(
     available_tools: Optional[List[str]] = None,
     recent_context: Optional[str] = None,
     additional_params: Optional[Dict] = None,
+    tool_descriptions: Optional[Dict] = None,
 ) -> str:
     """
     Get a prompt optimized for vLLM prefix caching.
@@ -1275,12 +1340,13 @@ def get_optimized_prompt(
         available_tools: List of available tool names
         recent_context: Recent conversation context or task history
         additional_params: Additional dynamic parameters
+        tool_descriptions: Optional mapping of tool_name -> compressed description (Issue #5827)
 
     Returns:
         Combined prompt with static prefix + dynamic suffix
     """
     # Get static base prompt with includes rendered (will be cached by vLLM)
-    base_prompt = prompt_manager.get(base_prompt_key)
+    base_prompt = get_prompt_manager().get(base_prompt_key)
 
     # Build dynamic context section (Issue #620: extracted helper)
     dynamic_context = _build_dynamic_context(
@@ -1290,6 +1356,7 @@ def get_optimized_prompt(
         available_tools,
         recent_context,
         additional_params,
+        tool_descriptions,
     )
 
     # Combine: static prefix + dynamic suffix (CRITICAL for vLLM prefix caching)
@@ -1306,14 +1373,14 @@ def list_available_prompts(filter_pattern: Optional[str] = None) -> List[str]:
     Returns:
         List of matching prompt keys
     """
-    return prompt_manager.list_prompts(filter_pattern)
+    return get_prompt_manager().list_prompts(filter_pattern)
 
 
 def reload_prompts() -> None:
     """
     Convenience function to reload all prompts.
     """
-    prompt_manager.reload()
+    get_prompt_manager().reload()
 
 
 # Issue #1327: Supported languages for prompt language injection.

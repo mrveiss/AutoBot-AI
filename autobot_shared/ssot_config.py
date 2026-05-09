@@ -75,9 +75,7 @@ DEFAULT_EMBEDDING_MODEL = "nomic-embed-text:latest"
 ROUTING_MODEL = "llama3.2:1b"  # Orchestrator only, no tool use
 CLASSIFICATION_MODEL = "gemma2:2b"  # Intent detection, classification
 LIGHT_PROCESSING_MODEL = "phi3:mini"  # Extraction, formatting, lightweight tasks
-INSTRUCTION_MODEL = (
-    "mistral:7b-instruct"  # RAG, entity extraction, instruction following
-)
+INSTRUCTION_MODEL = "mistral:7b-instruct"  # RAG, entity extraction, instruction following
 SYSTEM_MODEL = "dolphin-llama3:8b"  # System commands, security (uncensored)
 QUALITY_MODEL = DEFAULT_LLM_MODEL  # User-facing chat, research, code analysis
 
@@ -131,13 +129,9 @@ class PortConfig(BaseSettings):
     vnc: int = Field(default=6080, alias="AUTOBOT_VNC_PORT")
     browser: int = Field(default=9001, alias="AUTOBOT_BROWSER_SERVICE_PORT")  # Issue #4052: 9001; 3000 is Grafana
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
-    chromadb: int = Field(
-        default=8100, alias="AUTOBOT_CHROMADB_PORT"
-    )  # Issue #3094: 8100 matches Ansible deploy
+    chromadb: int = Field(default=8100, alias="AUTOBOT_CHROMADB_PORT")  # Issue #3094: 8100 matches Ansible deploy
     npu: int = Field(default=8081, alias="AUTOBOT_NPU_WORKER_PORT")
-    tts: int = Field(
-        default=8083, alias="AUTOBOT_TTS_WORKER_PORT"
-    )  # Issue #928; #3431: 8082 WSL2/Hyper-V reserved
+    tts: int = Field(default=8083, alias="AUTOBOT_TTS_WORKER_PORT")  # Issue #928; #3431: 8082 WSL2/Hyper-V reserved
     slm: int = Field(default=8000, alias="AUTOBOT_SLM_PORT")  # Issue #768
     prometheus: int = Field(default=9090, alias="AUTOBOT_PROMETHEUS_PORT")
     grafana: int = Field(default=3000, alias="AUTOBOT_GRAFANA_PORT")
@@ -165,32 +159,20 @@ class LLMConfig(BaseSettings):
     )
 
     # Primary models — each role maps to its optimal 6-tier (#2553)
-    default_model: str = Field(
-        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_DEFAULT_LLM_MODEL"
-    )
-    embedding_model: str = Field(
-        default=DEFAULT_EMBEDDING_MODEL, alias="AUTOBOT_EMBEDDING_MODEL"
-    )
-    classification_model: str = Field(
-        default=CLASSIFICATION_MODEL, alias="AUTOBOT_CLASSIFICATION_MODEL"
-    )
+    default_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_DEFAULT_LLM_MODEL")
+    embedding_model: str = Field(default=DEFAULT_EMBEDDING_MODEL, alias="AUTOBOT_EMBEDDING_MODEL")
+    classification_model: str = Field(default=CLASSIFICATION_MODEL, alias="AUTOBOT_CLASSIFICATION_MODEL")
     reasoning_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_REASONING_MODEL")
     rag_model: str = Field(default=INSTRUCTION_MODEL, alias="AUTOBOT_RAG_MODEL")
     coding_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_CODING_MODEL")
 
     # 6-tier model fields (#2553)
-    light_processing_model: str = Field(
-        default=LIGHT_PROCESSING_MODEL, alias="AUTOBOT_LIGHT_PROCESSING_MODEL"
-    )
-    instruction_model: str = Field(
-        default=INSTRUCTION_MODEL, alias="AUTOBOT_INSTRUCTION_MODEL"
-    )
+    light_processing_model: str = Field(default=LIGHT_PROCESSING_MODEL, alias="AUTOBOT_LIGHT_PROCESSING_MODEL")
+    instruction_model: str = Field(default=INSTRUCTION_MODEL, alias="AUTOBOT_INSTRUCTION_MODEL")
     system_model: str = Field(default=SYSTEM_MODEL, alias="AUTOBOT_SYSTEM_MODEL")
 
     # Agent/workflow models — each maps to its optimal tier (#2553)
-    orchestrator_model: str = Field(
-        default=ROUTING_MODEL, alias="AUTOBOT_ORCHESTRATOR_MODEL"
-    )
+    orchestrator_model: str = Field(default=ROUTING_MODEL, alias="AUTOBOT_ORCHESTRATOR_MODEL")
     agent_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_AGENT_MODEL")
     research_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_RESEARCH_MODEL")
     analysis_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_ANALYSIS_MODEL")
@@ -203,16 +185,11 @@ class LLMConfig(BaseSettings):
     provider: str = Field(default="ollama", alias="AUTOBOT_LLM_PROVIDER")
 
     # Provider-specific endpoints (each provider can have its own URL)
-    ollama_endpoint: str = Field(
-        default="http://127.0.0.1:11434", alias="AUTOBOT_OLLAMA_ENDPOINT"
-    )
-    openai_endpoint: str = Field(
-        default="https://api.openai.com/v1", alias="AUTOBOT_OPENAI_ENDPOINT"
-    )
-    anthropic_endpoint: str = Field(
-        default="https://api.anthropic.com/v1", alias="AUTOBOT_ANTHROPIC_ENDPOINT"
-    )
+    ollama_endpoint: str = Field(default="http://127.0.0.1:11434", alias="AUTOBOT_OLLAMA_ENDPOINT")
+    openai_endpoint: str = Field(default="https://api.openai.com/v1", alias="AUTOBOT_OPENAI_ENDPOINT")
+    anthropic_endpoint: str = Field(default="https://api.anthropic.com/v1", alias="AUTOBOT_ANTHROPIC_ENDPOINT")
     custom_endpoint: str = Field(default="", alias="AUTOBOT_CUSTOM_LLM_ENDPOINT")
+    lmstudio_host: str = Field(default="http://127.0.0.1:1234", alias="LMSTUDIO_HOST")
 
     # GPU Ollama endpoint for model-to-endpoint routing (#1070)
     ollama_gpu_endpoint: str = Field(default="", alias="AUTOBOT_OLLAMA_GPU_ENDPOINT")
@@ -221,9 +198,7 @@ class LLMConfig(BaseSettings):
     # Connection pool size for Ollama requests (#1154)
     # Default 6 matches typical concurrent capacity for RTX 4070 (8GB VRAM)
     # Override with AUTOBOT_OLLAMA_POOL_MAX_CONNECTIONS
-    ollama_pool_max_connections: int = Field(
-        default=6, alias="AUTOBOT_OLLAMA_POOL_MAX_CONNECTIONS"
-    )
+    ollama_pool_max_connections: int = Field(default=6, alias="AUTOBOT_OLLAMA_POOL_MAX_CONNECTIONS")
 
     # API keys (optional - can also come from provider-specific env vars)
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
@@ -231,18 +206,10 @@ class LLMConfig(BaseSettings):
 
     # LlamaIndex-specific configuration for RAG/vectorization
     # These are explicit settings - no fallbacks. Must be configured correctly.
-    llamaindex_llm_provider: str = Field(
-        default="ollama", alias="AUTOBOT_LLAMAINDEX_LLM_PROVIDER"
-    )
-    llamaindex_llm_endpoint: str = Field(
-        default="http://127.0.0.1:11434", alias="AUTOBOT_LLAMAINDEX_LLM_ENDPOINT"
-    )
-    llamaindex_llm_model: str = Field(
-        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_LLAMAINDEX_LLM_MODEL"
-    )
-    llamaindex_embedding_provider: str = Field(
-        default="ollama", alias="AUTOBOT_LLAMAINDEX_EMBEDDING_PROVIDER"
-    )
+    llamaindex_llm_provider: str = Field(default="ollama", alias="AUTOBOT_LLAMAINDEX_LLM_PROVIDER")
+    llamaindex_llm_endpoint: str = Field(default="http://127.0.0.1:11434", alias="AUTOBOT_LLAMAINDEX_LLM_ENDPOINT")
+    llamaindex_llm_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_LLAMAINDEX_LLM_MODEL")
+    llamaindex_embedding_provider: str = Field(default="ollama", alias="AUTOBOT_LLAMAINDEX_EMBEDDING_PROVIDER")
     llamaindex_embedding_endpoint: str = Field(
         default="http://127.0.0.1:11434", alias="AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT"
     )
@@ -262,11 +229,7 @@ class LLMConfig(BaseSettings):
             Ollama base URL (no /api suffix)
         """
         if self.ollama_gpu_endpoint and self.ollama_gpu_models:
-            gpu_set = {
-                m.strip().lower()
-                for m in self.ollama_gpu_models.split(",")
-                if m.strip()
-            }
+            gpu_set = {m.strip().lower() for m in self.ollama_gpu_models.split(",") if m.strip()}
             if model_name.strip().lower() in gpu_set:
                 return self.ollama_gpu_endpoint
         return self.ollama_endpoint
@@ -419,6 +382,7 @@ class LLMConfig(BaseSettings):
             "openai": self.openai_endpoint,
             "anthropic": self.anthropic_endpoint,
             "custom": self.custom_endpoint,
+            "lmstudio": self.lmstudio_host,
         }
         return endpoints.get(provider.lower(), self.ollama_endpoint)
 
@@ -491,22 +455,16 @@ class TimeoutConfig(BaseSettings):
     # ------------------------------------------------------------------ #
 
     # Quick subprocess (health query, lspci, xrandr, …)
-    subprocess_short: float = Field(
-        default=5.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_SHORT"
-    )
+    subprocess_short: float = Field(default=5.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_SHORT")
 
     # Standard subprocess (git operations, rsync small payload)
     subprocess: float = Field(default=30.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS")
 
     # Long-running subprocess (Ansible playbook, large rsync, deploy)
-    subprocess_long: float = Field(
-        default=300.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_LONG"
-    )
+    subprocess_long: float = Field(default=300.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_LONG")
 
     # Very long subprocess (full deployment pipeline, TLS provisioning)
-    subprocess_deploy: float = Field(
-        default=600.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_DEPLOY"
-    )
+    subprocess_deploy: float = Field(default=600.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_DEPLOY")
 
     # ------------------------------------------------------------------ #
     # MCP / skill processes (seconds)                                      #
@@ -529,9 +487,7 @@ class TimeoutConfig(BaseSettings):
     # ------------------------------------------------------------------ #
 
     # Default cap for a background task before it is considered hung
-    background_task: float = Field(
-        default=600.0, alias="AUTOBOT_TIMEOUT_BACKGROUND_TASK"
-    )
+    background_task: float = Field(default=600.0, alias="AUTOBOT_TIMEOUT_BACKGROUND_TASK")
 
     # ------------------------------------------------------------------ #
     # A2A task manager (seconds)                                           #
@@ -567,9 +523,7 @@ class TimeoutConfig(BaseSettings):
     # ------------------------------------------------------------------ #
 
     connection_pool_read: float = Field(default=60.0, alias="AUTOBOT_POOL_READ_TIMEOUT")
-    connection_pool_write: float = Field(
-        default=30.0, alias="AUTOBOT_POOL_WRITE_TIMEOUT"
-    )
+    connection_pool_write: float = Field(default=30.0, alias="AUTOBOT_POOL_WRITE_TIMEOUT")
     connection_pool: float = Field(default=30.0, alias="AUTOBOT_POOL_TIMEOUT")
 
     # ------------------------------------------------------------------ #
@@ -741,9 +695,7 @@ class CacheL1Config(BaseSettings):
         alias="AUTOBOT_CACHE_L1_LLM_RESPONSE",
         description="Max items in LLM response cache",
     )
-    ast: int = Field(
-        default=1000, alias="AUTOBOT_CACHE_L1_AST", description="Max items in AST cache"
-    )
+    ast: int = Field(default=1000, alias="AUTOBOT_CACHE_L1_AST", description="Max items in AST cache")
     file_content: int = Field(
         default=500,
         alias="AUTOBOT_CACHE_L1_FILE_CONTENT",
@@ -853,6 +805,30 @@ class CacheConfig(BaseSettings):
     redis: CacheRedisConfig = Field(default_factory=CacheRedisConfig)
     l1: CacheL1Config = Field(default_factory=CacheL1Config)
     l2: CacheL2Config = Field(default_factory=CacheL2Config)
+
+
+class AuthConfig(BaseSettings):
+    """Authentication domain configuration.
+
+    Controls auth-level defaults that are shared across middleware and API layers.
+    Override via environment variable (e.g. AUTOBOT_AUTH_DOMAIN=corp.example.com).
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    domain: str = Field(
+        default="autobot.local",
+        alias="AUTOBOT_AUTH_DOMAIN",
+        description=(
+            "Email domain used for synthetic/fallback user accounts. "
+            "Default 'autobot.local' is used for auth-disabled, single-user, "
+            "and dev-mode synthetic accounts."
+        ),
+    )
 
 
 class PermissionMode(str, Enum):
@@ -984,20 +960,14 @@ class TLSConfig(BaseSettings):
     mode: TLSMode = Field(default=TLSMode.DISABLED, alias="AUTOBOT_TLS_MODE")
     cert_dir: str = Field(default="certs", alias="AUTOBOT_TLS_CERT_DIR")
     ca_cert: str = Field(default="certs/ca/ca-cert.pem", alias="AUTOBOT_TLS_CA_CERT")
-    remote_cert_dir: str = Field(
-        default="/etc/autobot/certs", alias="AUTOBOT_TLS_REMOTE_CERT_DIR"
-    )
+    remote_cert_dir: str = Field(default="/etc/autobot/certs", alias="AUTOBOT_TLS_REMOTE_CERT_DIR")
     # Service-specific TLS settings
     redis_tls_enabled: bool = Field(default=False, alias="AUTOBOT_REDIS_TLS_ENABLED")
     redis_tls_port: int = Field(default=6380, alias="AUTOBOT_REDIS_TLS_PORT")
-    backend_tls_enabled: bool = Field(
-        default=False, alias="AUTOBOT_BACKEND_TLS_ENABLED"
-    )
+    backend_tls_enabled: bool = Field(default=False, alias="AUTOBOT_BACKEND_TLS_ENABLED")
     backend_tls_port: int = Field(default=8443, alias="AUTOBOT_BACKEND_TLS_PORT")
     # Issue #164: Frontend TLS (HTTPS) support
-    frontend_tls_enabled: bool = Field(
-        default=False, alias="AUTOBOT_FRONTEND_TLS_ENABLED"
-    )
+    frontend_tls_enabled: bool = Field(default=False, alias="AUTOBOT_FRONTEND_TLS_ENABLED")
     frontend_tls_port: int = Field(default=443, alias="AUTOBOT_FRONTEND_TLS_PORT")
     # SLM TLS settings (admin server)
     slm_tls_enabled: bool = Field(default=False, alias="AUTOBOT_SLM_TLS_ENABLED")
@@ -1011,12 +981,7 @@ class TLSConfig(BaseSettings):
     @property
     def any_service_tls_enabled(self) -> bool:
         """Check if any service has TLS enabled."""
-        return (
-            self.redis_tls_enabled
-            or self.backend_tls_enabled
-            or self.frontend_tls_enabled
-            or self.slm_tls_enabled
-        )
+        return self.redis_tls_enabled or self.backend_tls_enabled or self.frontend_tls_enabled or self.slm_tls_enabled
 
 
 class DatabasePoolConfig(BaseSettings):
@@ -1099,6 +1064,14 @@ class PathConfig(BaseSettings):
     logs_dir: str = Field(default="logs", alias="AUTOBOT_LOG_DIR")
     models_dir: str = Field(default="models", alias="AUTOBOT_MODELS_DIR")
     docs_dir: str = Field(default="docs", alias="AUTOBOT_DOCS_DIR")
+    # code_source lives at /opt/autobot/code_source, a sibling of autobot-backend/ —
+    # NOT inside base_dir. Absolute default ensures correct resolution regardless
+    # of what AUTOBOT_BASE_DIR is set to.
+    code_source_dir: str = Field(default="/opt/autobot/code_source", alias="AUTOBOT_CODE_SOURCE")
+
+    # VNC password file — absolute path, not relative to base_dir.
+    # Override via AUTOBOT_VNC_PASSWD_FILE env var.
+    vnc_passwd_file: str = Field(default="/home/autobot/.vnc/x11vnc.passwd", alias="AUTOBOT_VNC_PASSWD_FILE")
 
     def resolve(self, relative: str) -> Path:
         """Resolve a path relative to base_dir."""
@@ -1132,6 +1105,16 @@ class PathConfig(BaseSettings):
         """Absolute path to the docs directory."""
         return self.resolve(self.docs_dir)
 
+    @property
+    def code_source_path(self) -> Path:
+        """Absolute path to the code source directory (git repo root on deployment)."""
+        return self.resolve(self.code_source_dir)
+
+    @property
+    def vnc_passwd_path(self) -> Path:
+        """Absolute path to the x11vnc password file."""
+        return Path(self.vnc_passwd_file)
+
 
 class FeatureConfig(BaseSettings):
     """Feature flags configuration."""
@@ -1147,18 +1130,14 @@ class FeatureConfig(BaseSettings):
     debug_mode: bool = Field(default=False, alias="AUTOBOT_DEBUG_MODE")
     hot_reload: bool = Field(default=True, alias="AUTOBOT_HOT_RELOAD")
     single_user_mode: bool = Field(default=True, alias="AUTOBOT_SINGLE_USER_MODE")
-    permission_system_v2: bool = Field(
-        default=False, alias="AUTOBOT_PERMISSION_SYSTEM_V2"
-    )
+    permission_system_v2: bool = Field(default=False, alias="AUTOBOT_PERMISSION_SYSTEM_V2")
 
     # Subsystem feature flags — issue #3017
     # Set AUTOBOT_FEATURE_<NAME>=false to disable a subsystem on a given node.
     npu_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_NPU")
     voice_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_VOICE")
     browser_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_BROWSER")
-    computer_vision_enabled: bool = Field(
-        default=True, alias="AUTOBOT_FEATURE_COMPUTER_VISION"
-    )
+    computer_vision_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_COMPUTER_VISION")
     training_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_TRAINING")
     osint_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_OSINT")
 
@@ -1171,12 +1150,8 @@ class FeatureConfig(BaseSettings):
     # are already claimed by those fields).
     npu: bool = Field(default=True, alias="AUTOBOT_FEATURE_NPU_2")
     voice: bool = Field(default=True, alias="AUTOBOT_FEATURE_VOICE_2")
-    browser_automation: bool = Field(
-        default=True, alias="AUTOBOT_FEATURE_BROWSER_AUTOMATION"
-    )
-    computer_vision: bool = Field(
-        default=False, alias="AUTOBOT_FEATURE_COMPUTER_VISION_CV"
-    )
+    browser_automation: bool = Field(default=True, alias="AUTOBOT_FEATURE_BROWSER_AUTOMATION")
+    computer_vision: bool = Field(default=False, alias="AUTOBOT_FEATURE_COMPUTER_VISION_CV")
     training: bool = Field(default=False, alias="AUTOBOT_FEATURE_TRAINING_TR")
     graph_rag: bool = Field(default=True, alias="AUTOBOT_FEATURE_GRAPH_RAG")
     mcp: bool = Field(default=True, alias="AUTOBOT_FEATURE_MCP")
@@ -1219,6 +1194,7 @@ class AutoBotConfig(BaseSettings):
     feature: FeatureConfig = Field(default_factory=FeatureConfig)
     permission: PermissionConfig = Field(default_factory=PermissionConfig)
     database_pool: DatabasePoolConfig = Field(default_factory=DatabasePoolConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)
     path: PathConfig = Field(
         default_factory=PathConfig, alias="AUTOBOT_PATH_CONFIG"
     )  # Issue #3397; alias avoids collision with system PATH env var
@@ -1255,6 +1231,14 @@ class AutoBotConfig(BaseSettings):
         description=(
             "Cron schedule for cleanup_generated_files task. "
             "Default 04:00 UTC nightly. 5-field cron: 'm h dom mon dow'."
+        ),
+    )
+    knowledge_sync_queue_prune_schedule: str = Field(
+        default="0 5 * * *",
+        alias="AUTOBOT_KNOWLEDGE_SYNC_QUEUE_PRUNE_SCHEDULE",
+        description=(
+            "Cron schedule for prune_sync_queue_done task. "
+            "Default 05:00 UTC nightly. 5-field cron: 'm h dom mon dow'."
         ),
     )
     knowledge_cache_ttl_days: int = Field(
@@ -1321,10 +1305,7 @@ class AutoBotConfig(BaseSettings):
         This allows flexibility: use the configured endpoint or build from host/port.
         """
         # If ollama_endpoint is set and not the default, use it directly
-        if (
-            self.llm.ollama_endpoint
-            and self.llm.ollama_endpoint != "http://127.0.0.1:11434"
-        ):
+        if self.llm.ollama_endpoint and self.llm.ollama_endpoint != "http://127.0.0.1:11434":
             return self.llm.ollama_endpoint
         # Otherwise construct from VM config (allows using different Ollama host)
         return f"http://{self.vm.ollama}:{self.port.ollama}"
@@ -1355,8 +1336,16 @@ class AutoBotConfig(BaseSettings):
 
     @property
     def websocket_url(self) -> str:
-        """Get the WebSocket URL for real-time communication."""
-        return f"ws://{self.vm.main}:{self.port.backend}/ws"
+        """Get the WebSocket URL for real-time communication.
+
+        Issue #6232: Path corrected to /api/ws to match backend route /api/ws/live.
+        Issue #6302: When TLS is enabled the port is omitted so the connection
+        routes through nginx on 443 (TLS termination) rather than hitting the
+        uvicorn TLS listener on backend_tls_port directly.
+        """
+        if self.tls.backend_tls_enabled:
+            return f"wss://{self.vm.main}/api/ws"
+        return f"ws://{self.vm.main}:{self.port.backend}/api/ws"
 
     @property
     def aistack_url(self) -> str:
@@ -1779,6 +1768,7 @@ __all__ = [
     "CacheL1Config",
     "CacheL2Config",
     "DatabasePoolConfig",
+    "AuthConfig",
     "FeatureConfig",
     "get_config",
     "reload_config",

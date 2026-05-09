@@ -1232,7 +1232,7 @@ async def _wire_scheduler_executor() -> None:
     logger.info("[ 98%%] Scheduler: Wiring orchestration executor...")
     try:
         from orchestrator import get_orchestrator_sync
-        from workflow_scheduler import ScheduledWorkflow, workflow_scheduler
+        from workflow_scheduler import ScheduledWorkflow, get_workflow_scheduler
 
         orchestrator = get_orchestrator_sync()
 
@@ -1264,7 +1264,7 @@ async def _wire_scheduler_executor() -> None:
             succeeded = result.get("status") in ("completed", "partially_completed")
             return {"success": succeeded, **result}
 
-        workflow_scheduler.set_workflow_executor(_orchestration_executor)
+        get_workflow_scheduler().set_workflow_executor(_orchestration_executor)
         logger.info("[ 98%%] Scheduler: Orchestration executor wired")
     except Exception as e:
         logger.warning(
@@ -1531,6 +1531,15 @@ async def cleanup_services(app: FastAPI):
                 logger.info("✅ Plugin manager shutdown")
         except Exception as pm_err:
             logger.warning("Plugin manager shutdown failed: %s", pm_err)
+
+        # Issue #4107: Stop isolated MCP bridge worker processes
+        try:
+            from services.mcp_isolated_runtime import get_isolated_registry
+
+            await get_isolated_registry().shutdown_all()
+            logger.info("✅ Isolated MCP bridge workers shutdown")
+        except Exception as mcp_err:
+            logger.warning("Isolated MCP bridge shutdown failed: %s", mcp_err)
 
         # Redis connections automatically managed by get_redis_client()
         logger.info("✅ Cleanup completed successfully")

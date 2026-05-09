@@ -178,6 +178,16 @@ class WorkflowDAG:
         """Outgoing edges from *node_id*."""
         return self._successors.get(node_id, [])
 
+    def predecessors(self, node_id: str) -> List[str]:
+        """IDs of nodes with edges into *node_id* (#7010 cluster 1).
+
+        Public read-only accessor for the predecessor map; needed by branch
+        pruning to detect diamond joins where one branch is taken and the
+        other is pruned — the join node itself must remain executable from
+        the live branch.
+        """
+        return list(self._predecessors.get(node_id, []))
+
     def has_condition_nodes(self) -> bool:
         """True when at least one node is a CONDITION node."""
         return any(n.node_type == NodeType.CONDITION for n in self._nodes.values())
@@ -546,12 +556,28 @@ class DAGExecutor:
         dag: WorkflowDAG,
         ctx: DAGExecutionContext,
     ) -> None:
-        """BFS-mark all descendants of *node_ids* as skipped."""
+        """BFS-mark descendants as skipped, respecting diamond joins (#7010 cluster 1).
+
+        The initial *node_ids* (immediate not-taken-branch targets) are
+        always marked. Their descendants are marked **only if all their
+        predecessors are also skipped** — otherwise the descendant is a
+        join node where another live path will reach it (e.g. the diamond
+        ``cond → (true|false) → end``: ``end`` must execute via
+        ``true_branch`` even when ``false_branch`` is pruned).
+        """
+        initial = set(node_ids)
         queue = list(node_ids)
         while queue:
             nid = queue.pop(0)
             if nid in ctx.skipped_nodes:
                 continue
+            if nid not in initial:
+                # Join check: skip the descendant only if every incoming edge
+                # comes from a node that's also skipped. A live predecessor
+                # means the descendant will be reached via that path.
+                preds = dag.predecessors(nid)
+                if not all(p in ctx.skipped_nodes for p in preds):
+                    continue
             ctx.skipped_nodes.add(nid)
             for edge in dag.successors(nid):
                 queue.append(edge.target)
@@ -747,5 +773,40 @@ def workflow_has_condition_nodes(
 
 
 def build_dag(steps: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> WorkflowDAG:
-    """Construct a WorkflowDAG from workflow API payloads."""
-    return WorkflowDAG(steps, edges)
+    """Construct a WorkflowDAG from workflow API payloads.
+
+    #7010 cluster 3: tolerates both edge shapes —
+      - Canonical: ``{"source": ..., "target": ..., "label": ...}``
+      - API-facing: ``{"from": ..., "to": ..., "condition": "true"|"false"|None}``
+
+    The API shape is what reaches /api/workflow-automation/execute via the
+    #3172 payload contract; translating here lets callers pass the raw
+    payload without an explicit adapter.
+    """
+
+    def _condition_to_label(value: Any) -> Optional[bool]:
+        if value is None or isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            lower = value.lower()
+            if lower in ("true", "yes"):
+                return True
+            if lower in ("false", "no"):
+                return False
+        return None
+
+    normalized: List[Dict[str, Any]] = []
+    for raw in edges:
+        if "source" in raw and "target" in raw:
+            normalized.append(raw)
+            continue
+        if "from" in raw and "to" in raw:
+            label = _condition_to_label(raw.get("condition"))
+            normalized.append(
+                {"source": raw["from"], "target": raw["to"], "label": label}
+            )
+            continue
+        # Malformed entry — let WorkflowDAG's warn-and-skip handle it.
+        normalized.append(raw)
+
+    return WorkflowDAG(steps, normalized)

@@ -1,0 +1,103 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Pre-commit Hook: No Tag-Pinned 3rd-Party GitHub Actions
+# ========================================================
+#
+# Blocks commits that introduce `uses: <org>/<repo>@vN` for non-actions/*
+# orgs in .github/workflows/ or .github/actions/.
+#
+# Tags are mutable. A compromised maintainer could force-push v3 → a
+# malicious commit that lands silently in CI on next run. SHA pinning
+# makes the action immutable until we explicitly update.
+#
+# Allowed forms:
+#   - actions/checkout@v6                            (first-party)
+#   - dorny/paths-filter@d1c1ffe0...  # v3           (40-char SHA + comment)
+#
+# Rejected forms:
+#   - dorny/paths-filter@v3                          (3rd-party tag-pin)
+#   - dorny/paths-filter@main                        (3rd-party branch-pin)
+#
+# Issue: #7120 (preventive enforcement for #7091)
+# Reference: https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-third-party-actions
+#
+# Install: pre-commit install (uses .pre-commit-config.yaml)
+
+set -uo pipefail
+
+# Source shared library (#7185 — colors + get_staged_files)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/_common.sh
+source "$SCRIPT_DIR/lib/_common.sh"
+
+VIOLATIONS=0
+
+check_file() {
+    local file="$1"
+    [ -f "$file" ] || return 0
+
+    # Match `uses: <action>@<ref>` and inspect <ref>.
+    # Allowed:
+    #   - actions/* (first-party — GitHub-maintained)
+    #   - 40-char hex SHA
+    # Rejected:
+    #   - vN, vN.N, vN.N.N tags for non-actions/* orgs
+    #   - branch names (main, master, latest, ...) for non-actions/* orgs
+
+    local line_num=0
+    local hits=0
+    while IFS= read -r line; do
+        line_num=$((line_num + 1))
+        # Look for `uses: <something>@<ref>` (skip comments)
+        if [[ "$line" =~ ^[[:space:]]*#  ]]; then continue; fi
+        if ! [[ "$line" =~ uses:[[:space:]]+([^@[:space:]]+)@([^[:space:]]+) ]]; then
+            continue
+        fi
+        local action="${BASH_REMATCH[1]}"
+        local ref="${BASH_REMATCH[2]}"
+
+        # Allow actions/* (first-party)
+        if [[ "$action" =~ ^actions/ ]]; then continue; fi
+
+        # Allow 40-char SHA (with or without trailing comment)
+        if [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then continue; fi
+
+        # Anything else is rejected
+        if [ $hits -eq 0 ]; then
+            printf "%b%s%b\n" "$RED" "✗ $file" "$NC"
+            hits=1
+        fi
+        printf "  %bline %d:%b %s\n" "$YELLOW" "$line_num" "$NC" "$line"
+        printf "    %baction:%b %s @%s\n" "$CYAN" "$NC" "$action" "$ref"
+        VIOLATIONS=$((VIOLATIONS + 1))
+    done < "$file"
+}
+
+main() {
+    local files
+    files="$(get_staged_files '^\.github/(workflows|actions)/.*\.ya?ml$' "$@")"
+    [ -z "$files" ] && exit 0
+
+    while IFS= read -r f; do
+        [ -z "$f" ] || check_file "$f"
+    done <<< "$files"
+
+    if [ "$VIOLATIONS" -gt 0 ]; then
+        printf "\n%b%bRejected: %d tag-pinned 3rd-party action(s)%b\n\n" "$RED" "$BOLD" "$VIOLATIONS" "$NC"
+        printf "Tags are mutable. Pin to a 40-char commit SHA instead:\n\n"
+        printf "  %b# Resolve tag → SHA:%b\n" "$CYAN" "$NC"
+        printf "  git ls-remote https://github.com/<org>/<repo>.git 'refs/tags/v3^{}'\n\n"
+        printf "  %b# Then update workflow line to:%b\n" "$CYAN" "$NC"
+        printf "  uses: <org>/<repo>@<40-char-sha>  # v3\n\n"
+        printf "actions/* (first-party) are exempt — all other orgs (including github/*) need SHA pinning.\n"
+        printf "Issue: https://github.com/mrveiss/AutoBot-AI/issues/7091\n"
+        exit 1
+    fi
+    printf "%b%b✓ All 3rd-party actions are SHA-pinned%b\n" "$GREEN" "$BOLD" "$NC"
+    exit 0
+}
+
+main "$@"

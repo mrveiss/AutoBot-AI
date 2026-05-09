@@ -33,8 +33,25 @@ from api.analytics_controller import (
     get_service_address,
 )
 
-# Import models from dedicated module (Issue #185 - split oversized files)
-from api.analytics_models import AnalyticsOverview, RealTimeEvent
+from api.schemas_common import DataResponse
+from api.schemas_analytics import (
+    AnalyticsCollectionStartResponse,
+    AnalyticsCollectionStopResponse,
+    AnalyticsCommunicationPatternsResponse,
+    AnalyticsClearStuckTasksResponse,
+    AnalyticsDashboardAnalyzeResponse,
+    AnalyticsDashboardStatusResponse,
+    AnalyticsDetailedHealthResponse,
+    AnalyticsHistoricalTrendsResponse,
+    AnalyticsOverview,
+    AnalyticsPerformanceMetricsResponse,
+    AnalyticsRealtimeMetricsResponse,
+    AnalyticsRootCauseResponse,
+    AnalyticsStatusResponse,
+    AnalyticsTrackEventResponse,
+    AnalyticsUsageStatisticsResponse,
+    RealTimeEvent,
+)
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase
@@ -112,12 +129,12 @@ async def _get_code_analysis_status() -> Dict[str, Any]:
     }
 
 
+@router.get("/dashboard/overview", response_model=AnalyticsOverview)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_dashboard_overview",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/dashboard/overview", response_model=AnalyticsOverview)
 async def get_dashboard_overview(current_user: Dict = Depends(get_current_user)):
     """Get comprehensive dashboard overview (Issue #398: refactored)."""
     timestamp = datetime.now(tz=timezone.utc).isoformat()
@@ -213,12 +230,12 @@ def _check_resource_alerts(system_resources: Dict) -> List[Dict[str, Any]]:
     return alerts
 
 
+@router.get("/system/health-detailed", response_model=AnalyticsDetailedHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_detailed_system_health",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/system/health-detailed")
 async def get_detailed_system_health(current_user: Dict = Depends(get_current_user)):
     """Get detailed system health with enhanced analytics (Issue #398: refactored)."""
     base_health = await hardware_monitor.get_system_health()
@@ -270,12 +287,12 @@ async def get_detailed_system_health(current_user: Dict = Depends(get_current_us
     return detailed_health
 
 
+@router.get("/performance/metrics", response_model=AnalyticsPerformanceMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_metrics",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/performance/metrics")
 async def get_performance_metrics(current_user: Dict = Depends(get_current_user)):
     """Get comprehensive performance metrics"""
     metrics = await analytics_controller.collect_performance_metrics()
@@ -316,12 +333,12 @@ async def get_performance_metrics(current_user: Dict = Depends(get_current_user)
 # ============================================================================
 
 
+@router.get("/communication/patterns", response_model=AnalyticsCommunicationPatternsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_communication_patterns",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/communication/patterns")
 async def get_communication_patterns(current_user: Dict = Depends(get_current_user)):
     """Get detailed communication pattern analysis"""
     patterns = await analytics_controller.analyze_communication_patterns()
@@ -369,12 +386,12 @@ async def get_communication_patterns(current_user: Dict = Depends(get_current_us
     return patterns
 
 
+@router.get("/usage/statistics", response_model=AnalyticsUsageStatisticsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_usage_statistics",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/usage/statistics")
 async def get_usage_statistics(current_user: Dict = Depends(get_current_user)):
     """Get comprehensive usage statistics"""
     stats = await analytics_controller.get_usage_statistics()
@@ -480,23 +497,23 @@ async def _collect_realtime_metrics_data() -> Dict[str, Any]:
     return realtime_data
 
 
+@router.get("/realtime/metrics", response_model=AnalyticsRealtimeMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_realtime_metrics",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/realtime/metrics")
 async def get_realtime_metrics(current_user: Dict = Depends(get_current_user)):
     """Get current real-time metrics snapshot"""
     return await _collect_realtime_metrics_data()
 
 
+@router.post("/events/track", response_model=AnalyticsTrackEventResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="track_analytics_event",
     error_code_prefix="ANALYTICS",
 )
-@router.post("/events/track")
 async def track_analytics_event(
     event: RealTimeEvent, current_user: Dict = Depends(get_current_user)
 ):
@@ -596,12 +613,12 @@ def _compute_hourly_stats(historical_calls: list) -> dict:
     return dict(hourly_stats)
 
 
+@router.get("/trends/historical", response_model=AnalyticsHistoricalTrendsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_historical_trends",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/trends/historical")
 async def get_historical_trends(
     hours: int = Query(24, description="Number of hours to analyze", ge=1, le=168),
     current_user: Dict = Depends(get_current_user),
@@ -729,12 +746,12 @@ async def websocket_realtime_analytics(websocket: WebSocket):
 # ============================================================================
 
 
+@router.post("/collection/start", response_model=AnalyticsCollectionStartResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_analytics_collection",
     error_code_prefix="ANALYTICS",
 )
-@router.post("/collection/start")
 async def start_analytics_collection(current_user: Dict = Depends(get_current_user)):
     """Start continuous analytics collection"""
     # Initialize session tracking
@@ -755,12 +772,12 @@ async def start_analytics_collection(current_user: Dict = Depends(get_current_us
     }
 
 
+@router.post("/collection/stop", response_model=AnalyticsCollectionStopResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_analytics_collection",
     error_code_prefix="ANALYTICS",
 )
-@router.post("/collection/stop")
 async def stop_analytics_collection(current_user: Dict = Depends(get_current_user)):
     """Stop continuous analytics collection"""
     # Stop metrics collection
@@ -815,12 +832,12 @@ async def _check_analytics_redis_connectivity() -> Dict[str, str]:
     return connectivity
 
 
+@router.get("/status", response_model=AnalyticsStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_analytics_status",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/status")
 async def get_analytics_status(current_user: Dict = Depends(get_current_user)):
     """Get comprehensive analytics system status (Issue #398: refactored)."""
     status = _build_analytics_status_base(analytics_controller.metrics_collector)
@@ -1206,7 +1223,7 @@ async def websocket_live_analytics(websocket: WebSocket):
 # ------------------------------------------------------------------
 
 
-@router.get("/root-cause/{task_id}")
+@router.get("/root-cause/{task_id}", response_model=AnalyticsRootCauseResponse)
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="analyze_root_cause",
@@ -1311,7 +1328,12 @@ async def _run_dashboard_analysis(task_id: str) -> None:
         await _dash_manager.fail_task(task_id, str(e))
 
 
-@router.post("/dashboard/overview/analyze")
+@router.post("/dashboard/overview/analyze", response_model=AnalyticsDashboardAnalyzeResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_dashboard_analysis",
+    error_code_prefix="ANALYTICS",
+)
 async def start_dashboard_analysis(
     background_tasks: BackgroundTasks,
     current_user: Dict = Depends(get_current_user),
@@ -1322,7 +1344,12 @@ async def start_dashboard_analysis(
     return {"task_id": task_id, "status": "pending"}
 
 
-@router.get("/dashboard/overview/status/{task_id}")
+@router.get("/dashboard/overview/status/{task_id}", response_model=AnalyticsDashboardStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dashboard_status",
+    error_code_prefix="ANALYTICS",
+)
 async def get_dashboard_status(task_id: str):
     """Get dashboard overview task status (#1304)."""
     task = await _dash_manager.get_status(task_id)
@@ -1331,7 +1358,12 @@ async def get_dashboard_status(task_id: str):
     return task
 
 
-@router.post("/dashboard/overview/tasks/clear-stuck")
+@router.post("/dashboard/overview/tasks/clear-stuck", response_model=AnalyticsClearStuckTasksResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_stuck_dashboard_tasks",
+    error_code_prefix="ANALYTICS",
+)
 async def clear_stuck_dashboard_tasks(
     force: bool = Query(
         default=False,

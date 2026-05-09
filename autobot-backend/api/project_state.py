@@ -8,65 +8,37 @@ Exposes project development phase information and validation status
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Request
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.system_health import register_singleton_probe
 from project_state_manager import DevelopmentPhase, get_project_state_manager
 from utils.advanced_cache_manager import smart_cache
+from api.schemas_common import DataResponse
+from api.schemas_system import (
+    PhaseStatus,
+    PhaseValidationModel,
+    ProjectStateHealthResponse,
+    ProjectStatus,
+    ValidationResultModel,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/project", tags=["project_state"])
 
 
-# Pydantic models for API responses
-class PhaseStatus(BaseModel):
-    name: str
-    completion: float
-    is_active: bool
-    is_completed: bool
-    capabilities: int
-    implemented_capabilities: int
-
-
-class ProjectStatus(BaseModel):
-    current_phase: str
-    total_phases: int
-    completed_phases: int
-    active_phases: int
-    overall_completion: float
-    next_suggested_phase: Optional[str]
-    phases: Dict[str, PhaseStatus]
-
-
-class ValidationResultModel(BaseModel):
-    check_name: str
-    status: str
-    score: float
-    details: str
-    timestamp: str
-
-
-class PhaseValidationModel(BaseModel):
-    phase_name: str
-    completion_percentage: float
-    is_completed: bool
-    capabilities: List[str]
-    validation_results: List[ValidationResultModel]
-
-
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_project_status",
-    error_code_prefix="PROJECT_STATE",
-)
 @router.get("/status", response_model=ProjectStatus)
 @smart_cache(
     data_type="project_status",
     key_func=lambda detailed=False: f"status:{'detailed' if detailed else 'fast'}",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_project_status",
+    error_code_prefix="PROJECT_STATE",
 )
 async def get_project_status(detailed: bool = False):
     """Get overall project development status
@@ -108,12 +80,12 @@ async def get_project_status(detailed: bool = False):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/validate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_validation",
     error_code_prefix="PROJECT_STATE",
 )
-@router.post("/validate")
 async def run_validation():
     """Run validation on all project phases"""
     try:
@@ -149,12 +121,12 @@ async def run_validation():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/report", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_validation_report",
     error_code_prefix="PROJECT_STATE",
 )
-@router.get("/report")
 async def get_validation_report():
     """Get detailed validation report in markdown format"""
     try:
@@ -176,12 +148,12 @@ async def get_validation_report():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/phases", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_all_phases",
     error_code_prefix="PROJECT_STATE",
 )
-@router.get("/phases")
 async def get_all_phases():
     """Get detailed information about all development phases"""
     try:
@@ -232,12 +204,12 @@ async def get_all_phases():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/phase/{phase_id}/activate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="activate_phase",
     error_code_prefix="PROJECT_STATE",
 )
-@router.post("/phase/{phase_id}/activate")
 async def activate_phase(phase_id: str):
     """Activate a specific development phase"""
     try:
@@ -273,12 +245,12 @@ async def activate_phase(phase_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/auto-progress", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="auto_progress_phases",
     error_code_prefix="PROJECT_STATE",
 )
-@router.post("/auto-progress")
 async def auto_progress_phases():
     """Run automated phase progression logic"""
     try:
@@ -296,12 +268,15 @@ async def auto_progress_phases():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+register_singleton_probe("project_state", get_project_state_manager)
+
+
+@router.get("/health", response_model=ProjectStateHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
     error_code_prefix="PROJECT_STATE",
 )
-@router.get("/health")
 async def health_check():
     """Health check for project state API"""
     try:

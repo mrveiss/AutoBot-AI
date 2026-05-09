@@ -19,7 +19,15 @@ export default defineConfigWithVueTs(
     files: ['**/*.{ts,mts,tsx,vue}'],
   },
 
-  globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**']),
+  globalIgnores([
+    '**/dist/**',
+    '**/dist-ssr/**',
+    '**/coverage/**',
+    // Issue #6784: ESLint rule fixtures contain intentional rule violations
+    // (deny.test.ts) and counter-examples (allow.test.ts). Excluded from
+    // production lint; verify manually with `npx eslint --no-ignore eslint-tests/`.
+    'eslint-tests/**',
+  ]),
 
   pluginVue.configs['flat/essential'],
   vueTsConfigs.recommended,
@@ -51,6 +59,24 @@ export default defineConfigWithVueTs(
       'vue/no-deprecated-filter': 'warn',
       'vue/no-parsing-error': 'warn',
       'prefer-const': 'warn',
+      'vue/no-undef-components': ['error', {
+        ignorePatterns: ['RouterLink', 'RouterView', 'Transition', 'TransitionGroup', 'KeepAlive', 'Teleport', 'Suspense'],
+      }],
+      // Issue #6784: block hardcoded VM-IP fallbacks in `||` / `??` expressions
+      // and any other literal/template containing the deployment range.
+      // Use SSOT (window.location.hostname / VITE_*_HOST env vars) instead.
+      // See docs/developer/HARDCODING_PREVENTION.md.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "Literal[value=/^(https?:\\/\\/)?172\\.16\\.168\\.[0-9]+/]",
+          message: 'Hardcoded AutoBot VM IP (172.16.168.X) — use window.location.hostname or VITE_*_HOST env var (#6784).',
+        },
+        {
+          selector: "TemplateElement[value.cooked=/172\\.16\\.168\\.[0-9]+/]",
+          message: 'Hardcoded AutoBot VM IP in template literal — use window.location.hostname or VITE_*_HOST env var (#6784).',
+        },
+      ],
     },
   },
   ...pluginOxlint.configs['flat/recommended'],

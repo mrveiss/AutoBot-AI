@@ -624,7 +624,7 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: var(--spacing-1-5);
-  padding: 6px 12px;
+  padding: var(--spacing-1-5) var(--spacing-3);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -652,7 +652,7 @@ defineExpose({
 
 .layout-btn,
 .fit-btn {
-  padding: 8px 10px;
+  padding: var(--spacing-2) var(--spacing-2-5);
   background: transparent;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -953,7 +953,7 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 8px 0;
+  padding: var(--spacing-2) var(--spacing-0);
   border-bottom: 1px solid rgba(71, 85, 105, 0.3);
 }
 

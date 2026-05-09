@@ -224,14 +224,91 @@ repositories:
   # Add NodeSource for Node.js
   nodejs:
     key_url: "https://deb.nodesource.com/gpgkey/nodesource.gpg.key"
-    repo: "deb https://deb.nodesource.com/node_20.x {{ ansible_distribution_release }} main"
+    repo: "deb https://deb.nodesource.com/node_20.x {{ ansible_facts['distribution_release'] }} main"
 
   # Add Redis repository
   redis:
     key_url: "https://packages.redis.io/gpg"
-    repo: "deb https://packages.redis.io/deb {{ ansible_distribution_release }} main"
+    repo: "deb https://packages.redis.io/deb {{ ansible_facts['distribution_release'] }} main"
 
   # Add Intel OpenVINO repository (for AI/ML VMs)
   openvino:
     key_url: "https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB"
-    repo: "deb https://apt.repos.intel.com/openvino/2024 {{ ansible_distribution_release }} main"
+    repo: "deb https://apt.repos.intel.com/openvino/2024 {{ ansible_facts['distribution_release'] }} main"
+
+# ==========================================
+# SHARED ROLE-ACTIVE FACTS (#7031)
+# ==========================================
+# Per-host booleans answering "is role X deployed on this host?".
+# Used by both:
+#   - Provision gates (provision-fleet-roles.yml: when: role_X_active)
+#   - Cleanup gates  (roles/*/tasks/clean.yml: when: not role_X_active)
+#
+# Single source of truth — keeps provision and cleanup decisions in sync.
+# Each fact mirrors the union of role checks the provision gate uses:
+#   1. Short role name in node_roles (e.g. 'backend')
+#   2. autobot-prefixed role name in node_roles (e.g. 'autobot-backend')
+#   3. Inventory group membership (e.g. groups['main'], groups['backend'])
+#
+# History: prior to #7031, cleanup gates used only check (1), missing
+# (2) and (3). Co-located/single-host installs (where install.sh writes
+# node_roles=['autobot-backend', 'vnc']) hit the gap and got their dirs
+# wiped between deploy and validate.
+role_backend_active: >-
+  {{ ('backend' in (node_roles | default([]))) or
+     ('autobot-backend' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('main', []) | default([]))) or
+     (inventory_hostname in (groups.get('backend', []) | default([]))) }}
+
+role_frontend_active: >-
+  {{ ('frontend' in (node_roles | default([]))) or
+     ('autobot-frontend' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('frontend', []) | default([]))) }}
+
+role_ai_stack_active: >-
+  {{ ('ai-stack' in (node_roles | default([]))) or
+     ('autobot-ai-stack' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('ai_stack', []) | default([]))) or
+     (inventory_hostname in (groups.get('aiml', []) | default([]))) }}
+
+role_npu_worker_active: >-
+  {{ ('npu-worker' in (node_roles | default([]))) or
+     ('autobot-npu-worker' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('npu_worker', []) | default([]))) or
+     (inventory_hostname in (groups.get('npu_workers', []) | default([]))) or
+     (inventory_hostname in (groups.get('npu', []) | default([]))) }}
+
+role_browser_active: >-
+  {{ ('browser' in (node_roles | default([]))) or
+     ('autobot-browser-worker' in (node_roles | default([]))) or
+     ('browser-service' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('browser', []) | default([]))) or
+     (inventory_hostname in (groups.get('browser_worker', []) | default([]))) }}
+
+role_slm_active: >-
+  {{ (inventory_hostname == '00-SLM-Manager') or
+     (inventory_hostname in (groups.get('slm_server', []) | default([]))) or
+     (inventory_hostname in (groups.get('slm', []) | default([]))) }}
+
+# #7051: facts for the remaining provision gates so provision-fleet-roles.yml
+# can be refactored to use the shared facts uniformly (matches the cleanup-side
+# refactor from #7050).
+role_redis_active: >-
+  {{ ('redis' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('redis', []) | default([]))) or
+     (inventory_hostname in (groups.get('database', []) | default([]))) }}
+
+role_vnc_active: >-
+  {{ ('vnc' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('main', []) | default([]))) or
+     (inventory_hostname in (groups.get('backend', []) | default([]))) or
+     (inventory_hostname in (groups.get('vnc_nodes', []) | default([]))) }}
+
+role_llm_active: >-
+  {{ ('llm' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('ai_stack', []) | default([]))) or
+     (inventory_hostname in (groups.get('llm_nodes', []) | default([]))) }}
+
+role_tts_worker_active: >-
+  {{ ('tts-worker' in (node_roles | default([]))) or
+     ('autobot-tts-worker' in (node_roles | default([]))) }}

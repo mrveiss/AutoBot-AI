@@ -8,44 +8,27 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
+from api.schemas_code import (
+    VCSBranchesResponse,
+    VCSCommitInfoResponse,
+    VCSPullRequestsResponse,
+    VCSRepositoriesResponse,
+)
+from api.schemas_workflows import VCSConnectionTestRequest, VCSProviderInfo
 from auth_middleware import check_admin_permission
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.version_control_integration import (
     BitbucketIntegration,
     GitLabIntegration,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
     tags=["integrations-version-control"],
     dependencies=[Depends(check_admin_permission)],
 )
-
-
-class ConnectionTestRequest(BaseModel):
-    """Request model for testing VCS connection."""
-
-    provider: str = Field(..., description="VCS provider (gitlab, bitbucket)")
-    api_key: str = Field(..., description="API key or access token")
-    settings: Dict[str, Any] = Field(
-        default_factory=dict, description="Provider-specific settings"
-    )
-
-
-class ProviderInfo(BaseModel):
-    """Information about a VCS provider."""
-
-    id: str = Field(..., description="Provider identifier")
-    name: str = Field(..., description="Provider display name")
-    description: str = Field(..., description="Provider description")
-    required_settings: List[str] = Field(
-        default_factory=list, description="Required configuration settings"
-    )
-    optional_settings: List[str] = Field(
-        default_factory=list, description="Optional configuration settings"
-    )
 
 
 SUPPORTED_PROVIDERS = {
@@ -110,7 +93,12 @@ def _create_integration(provider: str, config: IntegrationConfig) -> Any:
 
 
 @router.post("/test-connection", response_model=IntegrationHealth)
-async def test_connection(request: ConnectionTestRequest) -> IntegrationHealth:
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_connection",
+    error_code_prefix="INTEGRATION_VERSION_CONTROL",
+)
+async def test_connection(request: VCSConnectionTestRequest) -> IntegrationHealth:
     """Test VCS provider connection.
 
     Args:
@@ -144,8 +132,13 @@ async def test_connection(request: ConnectionTestRequest) -> IntegrationHealth:
         raise HTTPException(status_code=500, detail="Connection test failed")
 
 
-@router.get("/providers", response_model=List[ProviderInfo])
-async def get_providers() -> List[ProviderInfo]:
+@router.get("/providers", response_model=List[VCSProviderInfo])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_providers",
+    error_code_prefix="INTEGRATION_VERSION_CONTROL",
+)
+async def get_providers() -> List[VCSProviderInfo]:
     """Get list of supported VCS providers.
 
     Returns:
@@ -154,7 +147,7 @@ async def get_providers() -> List[ProviderInfo]:
     providers = []
     for provider_id, info in SUPPORTED_PROVIDERS.items():
         providers.append(
-            ProviderInfo(
+            VCSProviderInfo(
                 id=provider_id,
                 name=info["name"],
                 description=info["description"],
@@ -165,7 +158,12 @@ async def get_providers() -> List[ProviderInfo]:
     return providers
 
 
-@router.get("/{provider}/repositories")
+@router.get("/{provider}/repositories", response_model=VCSRepositoriesResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_repositories",
+    error_code_prefix="INTEGRATION_VERSION_CONTROL",
+)
 async def list_repositories(
     provider: str,
     api_key: str = Query(..., description="API key or access token"),
@@ -206,7 +204,12 @@ async def list_repositories(
         raise HTTPException(status_code=500, detail="Failed to list repositories")
 
 
-@router.get("/{provider}/repositories/{repo_id}/branches")
+@router.get("/{provider}/repositories/{repo_id}/branches", response_model=VCSBranchesResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_branches",
+    error_code_prefix="INTEGRATION_VERSION_CONTROL",
+)
 async def list_branches(
     provider: str,
     repo_id: str,
@@ -273,7 +276,12 @@ def _build_pr_params(
         return "list_pull_requests", params
 
 
-@router.get("/{provider}/repositories/{repo_id}/pull-requests")
+@router.get("/{provider}/repositories/{repo_id}/pull-requests", response_model=VCSPullRequestsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_pull_requests",
+    error_code_prefix="INTEGRATION_VERSION_CONTROL",
+)
 async def list_pull_requests(
     provider: str,
     repo_id: str,
@@ -296,7 +304,12 @@ async def list_pull_requests(
         raise HTTPException(status_code=500, detail="Failed to list pull requests")
 
 
-@router.get("/{provider}/repositories/{repo_id}/commits")
+@router.get("/{provider}/repositories/{repo_id}/commits", response_model=VCSCommitInfoResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_commit_info",
+    error_code_prefix="INTEGRATION_VERSION_CONTROL",
+)
 async def get_commit_info(
     provider: str,
     repo_id: str,

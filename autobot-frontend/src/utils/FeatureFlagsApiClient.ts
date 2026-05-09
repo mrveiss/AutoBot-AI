@@ -12,6 +12,7 @@ import appConfig from '@/config/AppConfig.js';
 import { NetworkConstants } from '@/constants/network';
 import { createLogger } from '@/utils/debugUtils';
 import { getApiBase } from '@/config/ssot-config';
+import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import type { ApiResponse } from '@/types/api';
 
 const logger = createLogger('FeatureFlagsApiClient');
@@ -119,7 +120,7 @@ class FeatureFlagsApiClient {
     };
 
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         ...options,
         headers: { ...defaultHeaders, ...options.headers },
       });

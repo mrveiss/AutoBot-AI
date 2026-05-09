@@ -2,6 +2,7 @@ import axios from 'axios'
 import type { AxiosInstance, AxiosResponse, AxiosRequestConfig } from 'axios'
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import type { ChatMessage } from '@/types/api'
 
 // Create scoped logger for ChatRepository
@@ -107,6 +108,14 @@ interface BackendSessionEntry {
   lastModified?: string
 }
 
+/** RAG source entry persisted at the top level of a backend message (Issue #4448). */
+interface BackendRagSource {
+  title?: string
+  path?: string
+  score?: number
+  chunk_id?: string
+}
+
 /** Minimal message shape returned by the backend get-session endpoint */
 interface BackendMessageEntry {
   id?: string
@@ -118,6 +127,8 @@ interface BackendMessageEntry {
   type?: string
   metadata?: Record<string, unknown>
   rawData?: Record<string, unknown>
+  /** Issue #4448: RAG retrieval sources persisted alongside the message. */
+  sources?: BackendRagSource[]
 }
 
 /**
@@ -227,12 +238,9 @@ export class ChatRepository {
 
       // Use native fetch API for proper SSE streaming support
       const url = `${this.baseURL}${getApiBase()}/chats/${chatId}/message`
-      const fetchHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
-      const authToken = this._getAuthToken()
-      if (authToken) fetchHeaders['Authorization'] = `Bearer ${authToken}`
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         method: 'POST',
-        headers: fetchHeaders,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: message,
           context: metadata
@@ -319,9 +327,19 @@ export class ChatRepository {
   }
 
   // Create new chat session
-  async createNewChat(title?: string, metadata?: Record<string, unknown>): Promise<ChatSession> {
+  async createNewChat(
+    title?: string,
+    metadata?: Record<string, unknown>,
+    id?: string,
+  ): Promise<ChatSession> {
     try {
+      // #6746: pass the client-minted UUID so backend's create_session uses
+      // it as-is instead of minting a new one. Without this, frontend creates
+      // local UUID-A but backend creates UUID-B, and any subsequent
+      // /api/chats/{id}/message calls land in different sessions — that's the
+      // root of #6745 "answer arrived in different session".
       const response = await this.post(`${getApiBase()}/chat/sessions`, {
+        id,
         title: title || 'New Chat',
         metadata: metadata || {}
       })
@@ -397,7 +415,17 @@ export class ChatRepository {
           type: normalizedType,
           // CRITICAL FIX: Backend saves approval metadata in rawData, not metadata
           // Check both rawData (old format) and metadata (new format) for backward compatibility
-          metadata: msg.metadata || msg.rawData || {}
+          metadata: msg.metadata || msg.rawData || {},
+          // Issue #4448: Map top-level sources for RAG citation display.
+          // Normalise to RagSource shape; treat missing array as empty.
+          sources: Array.isArray(msg.sources)
+            ? msg.sources.map((s) => ({
+                title: s.title ?? s.path ?? '',
+                path: s.path ?? '',
+                score: typeof s.score === 'number' ? s.score : 0,
+                chunk_id: s.chunk_id ?? '',
+              }))
+            : []
         }
         logger.debug(`Message ${index + 1}: sender=${msg.sender} -> ${transformed.sender}, type=${rawType} -> ${normalizedType}, content length=${transformed.content.length}`)
         return transformed

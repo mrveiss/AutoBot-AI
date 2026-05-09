@@ -288,13 +288,7 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
 
 
 class LongTermMemoryManager:
-    """
-    Backward compatibility wrapper for memory_manager.py
-
-    Used by 2 files:
-    - src/orchestrator.py
-    - analysis/refactoring/test_memory_path_utils.py
-    """
+    """Backward compatibility wrapper for memory_manager.py."""
 
     def __init__(
         self, config_path: Optional[str] = None, db_path: str = "data/agent_memory.db"

@@ -98,7 +98,7 @@
       ansible.builtin.debug:
         msg:
           - "Service Key Rotation"
-          - "Timestamp: {{ ansible_date_time.iso8601 }}"
+          - "Timestamp: {{ ansible_facts['date_time'].iso8601 }}"
           - "Generator: {{ key_generator }}"
           - "Redis: {{ redis_host }}:{{ redis_port }}"
       tags: [generate]
@@ -258,7 +258,7 @@
       ansible.builtin.assert:
         that:
           - key_file_stat.stat.exists
-          - (ansible_date_time.epoch | int) - (key_file_stat.stat.mtime | int) < 600
+          - (ansible_facts['date_time'].epoch | int) - (key_file_stat.stat.mtime | int) < 600
         fail_msg: >-
           Key file for {{ this_service_id }} is missing or stale
           (older than 10 minutes)
@@ -324,7 +324,7 @@
         msg:
           - "Key Rotation Complete"
           - "=============================================="
-          - "Timestamp: {{ ansible_date_time.iso8601 }}"
+          - "Timestamp: {{ ansible_facts['date_time'].iso8601 }}"
           - "Keys generated: 6 services"
           - "Keys distributed: all VMs"
           - "Backend: restarted and healthy"

@@ -12,11 +12,18 @@ from fastapi import APIRouter, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from monitoring.prometheus_metrics import get_metrics_manager
+from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 
 
-@router.get("")
+@router.get("", response_model=None)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="metrics_endpoint",
+    error_code_prefix="PROMETHEUS_ENDPOINT",
+)
 async def metrics_endpoint():
     """
     Expose Prometheus metrics in text/plain format for scraping

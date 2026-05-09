@@ -20,7 +20,7 @@ from autobot_shared.ssot_config import (
 from config import config
 from constants.path_constants import PATH
 from knowledge_base import KnowledgeBase
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 
 from .base_agent import DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
@@ -38,7 +38,7 @@ class KBLibrarianAgent(StandardizedAgent):
         """Initialize KB librarian agent (#3387: migrated to StandardizedAgent)."""
         super().__init__("kb_librarian", DeploymentMode.LOCAL)
         self.knowledge_base = KnowledgeBase()
-        self.llm = LLMInterface()
+        self.llm = get_llm_service()
 
         # Use explicit SSOT config - raises AgentConfigurationError if not set
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
@@ -255,9 +255,9 @@ class KBLibrarianAgent(StandardizedAgent):
 
         # Generate response using LLM
         try:
-            response = await self.llm.generate_response(prompt)
+            llm_response = await self.llm.chat([{"role": "user", "content": prompt}])
             return {
-                "answer": response,
+                "answer": llm_response.content,
                 "knowledge_base_results": kb_results,
                 "sources": [result["source"] for result in kb_results],
             }

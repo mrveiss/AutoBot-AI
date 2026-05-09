@@ -21,7 +21,7 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from constants.threshold_constants import LLMDefaults
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
 from .standardized_agent import StandardizedAgent
@@ -130,7 +130,7 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
     def __init__(self):
         """Initialize the System Commands Agent with explicit LLM configuration."""
         super().__init__("enhanced_system_commands")
-        self.llm_interface = LLMInterface()
+        self.llm_interface = get_llm_service()
 
         # Use explicit SSOT config - raises AgentConfigurationError if not set
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
@@ -189,8 +189,15 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
         messages.append({"role": "user", "content": request})
         return messages
 
-    def _build_success_response(self, command_info: Dict[str, Any]) -> Dict[str, Any]:
-        """Build success response with metadata (Issue #398: extracted)."""
+    def _build_command_payload(self, command_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Build the system-commands-specific payload dict.
+
+        Returned as the ``result`` field of the AgentResponse the base class
+        ``StandardizedAgent._build_success_response`` constructs (#6650). The
+        prior name shadowed the base method with an incompatible signature,
+        so any AI Stack ``/agents/system_commands/process`` request would
+        crash with a TypeError. (Issue #398: extracted.)
+        """
         return {
             "status": "success" if command_info.get("is_safe", False) else "warning",
             **command_info,
@@ -222,7 +229,7 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
         try:
             logger.info("System Commands Agent processing: %s...", request[:50])
             messages = self._build_command_messages(request, context)
-            response = await self.llm_interface.chat_completion(
+            response = await self.llm_interface.chat(
                 messages=messages,
                 llm_type="system_commands",
                 temperature=0.3,
@@ -234,7 +241,7 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
                 command_info.get("command", "")
             )
             command_info.update(security_check)
-            return self._build_success_response(command_info)
+            return self._build_command_payload(command_info)
         except Exception as e:
             logger.error("System Commands Agent error: %s", e)
             return self._build_error_response(e)

@@ -62,46 +62,44 @@ def get_knowledge_base(config: ConfigManager = Depends(get_config)):
 
 def get_llm_interface(config: ConfigManager = Depends(get_config)):
     """
-    Dependency injection provider for LLM interface.
+    Dependency injection provider for the LLM service.
+
+    The function name is retained for back-compat with any FastAPI route that
+    references ``LLMInterfaceDep`` below; the returned instance is now an
+    ``LLMService`` (the canonical post-#3185 successor to LLMInterface).
 
     Args:
         config: Configuration manager instance
 
     Returns:
-        LLMInterface: LLM interface instance configured with the provided config
+        LLMService: shared singleton instance.
     """
-    from llm_interface import LLMInterface
+    # #6983: migrated from LLMInterface() to LLMService singleton (#3185 missed this caller)
+    from services.llm_service import get_llm_service
 
-    return LLMInterface()
+    return get_llm_service()
 
 
 def get_orchestrator(
     config: ConfigManager = Depends(get_config),
-    llm_interface=Depends(get_llm_interface),
-    knowledge_base=Depends(get_knowledge_base),
-    diagnostics=Depends(get_diagnostics),
 ):
     """
     Lazy loading dependency injection provider for orchestrator.
 
     Args:
         config: Configuration manager instance
-        llm_interface: LLM interface instance
-        knowledge_base: Knowledge base instance
-        diagnostics: Diagnostics instance
 
     Returns:
-        Orchestrator: instance configured with all dependencies
+        Orchestrator: instance configured with the provided config manager.
     """
     # Lazy import to reduce startup time
     from orchestrator import Orchestrator
 
-    return Orchestrator(
-        config_manager=config,
-        llm_interface=llm_interface,
-        knowledge_base=knowledge_base,
-        diagnostics=diagnostics,
-    )
+    # #6983: Orchestrator.__init__ takes only ``config_mgr``; the previous
+    # call passed three extra args (llm_interface, knowledge_base, diagnostics)
+    # that have no matching parameter — would TypeError at first invocation.
+    # Orchestrator self-instantiates its sub-components from the config.
+    return Orchestrator(config_mgr=config)
 
 
 def get_security_layer(config: ConfigManager = Depends(get_config)):

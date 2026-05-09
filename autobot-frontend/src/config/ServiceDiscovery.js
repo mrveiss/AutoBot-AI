@@ -175,6 +175,7 @@ export default class ServiceDiscovery {
         protocol: 'redis',
         fallbackHosts: [cfg.vm.redis, 'localhost', '127.0.0.1']
       },
+      // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
       vnc_desktop: {
         envVar: 'VITE_DESKTOP_VNC_URL',
         hostVar: 'VITE_DESKTOP_VNC_HOST',
@@ -339,6 +340,7 @@ export default class ServiceDiscovery {
       }
 
       // Handle VNC services
+      // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
       if (serviceName.startsWith('vnc_')) {
         const vncType = serviceName.replace('vnc_', '');
         return buildDefaultVncUrl(vncType);
@@ -427,6 +429,7 @@ export default class ServiceDiscovery {
 
       // Use different endpoints based on service type
       let testEndpoint = `${getApiBase()}/system/health`;
+      // DORMANT: VNC health-check preserved for #5136 re-integration (#1130).
       if (serviceName.startsWith('vnc_')) {
         testEndpoint = '/vnc.html';
       } else if (serviceName === 'redis') {

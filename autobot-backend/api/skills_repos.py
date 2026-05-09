@@ -7,26 +7,23 @@ import logging
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from skills.db import get_skills_engine
 from skills.models import RepoType, SkillRepo
+from api.schemas_code import (
+    AddRepoRequest,
+    SkillRepoAddResponse,
+    SkillRepoBrowseResponse,
+    SkillRepoItem,
+    SkillRepoSyncResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-class AddRepoRequest(BaseModel):
-    """Request body for registering a new skill repository."""
-
-    name: str = Field(..., description="Human-readable repo name")
-    url: str = Field(..., description="git URL, local path, HTTP URL, or MCP URL")
-    repo_type: RepoType = Field(...)
-    auto_sync: bool = Field(False)
-    sync_interval: int = Field(60, description="Sync interval in minutes")
 
 
 async def _sync_packages(repo: SkillRepo) -> List[Dict[str, Any]]:
@@ -57,7 +54,12 @@ async def _get_repo_by_id(session: AsyncSession, repo_id: str) -> SkillRepo:
     return repo
 
 
-@router.post("/", summary="Register a new skill repository")
+@router.post("/", summary="Register a new skill repository", response_model=SkillRepoAddResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_repo",
+    error_code_prefix="SKILLS_REPOS",
+)
 async def add_repo(
     body: AddRepoRequest,
     _: None = Depends(check_admin_permission),
@@ -86,8 +88,13 @@ async def add_repo(
     return {"id": repo.id, "name": repo.name, "status": "registered"}
 
 
-@router.get("", summary="List all registered skill repositories")
-@router.get("/", include_in_schema=False)
+@router.get("", summary="List all registered skill repositories", response_model=List[SkillRepoItem])
+@router.get("/", include_in_schema=False, response_model=List[SkillRepoItem])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_repos",
+    error_code_prefix="SKILLS_REPOS",
+)
 async def list_repos() -> List[Dict[str, Any]]:
     """Return all registered skill repositories."""
     engine = get_skills_engine()
@@ -110,7 +117,12 @@ async def list_repos() -> List[Dict[str, Any]]:
     ]
 
 
-@router.post("/{repo_id}/sync", summary="Sync packages from a repository")
+@router.post("/{repo_id}/sync", summary="Sync packages from a repository", response_model=SkillRepoSyncResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="sync_repo",
+    error_code_prefix="SKILLS_REPOS",
+)
 async def sync_repo(
     repo_id: str,
     _: None = Depends(check_admin_permission),
@@ -134,7 +146,12 @@ async def sync_repo(
     return {"synced": len(packages), "repo": repo.name}
 
 
-@router.get("/{repo_id}/browse", summary="Browse packages in a repository")
+@router.get("/{repo_id}/browse", summary="Browse packages in a repository", response_model=SkillRepoBrowseResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="browse_repo",
+    error_code_prefix="SKILLS_REPOS",
+)
 async def browse_repo(repo_id: str) -> Dict[str, Any]:
     """List the skill package names available in the specified repository."""
     engine = get_skills_engine()

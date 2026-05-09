@@ -11,9 +11,15 @@ import asyncio
 import time
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Request
 
+from api.schemas_knowledge import (
+    BenchmarkRequest,
+    NPUOptimizationRequest,
+    NPUSearchRequest,
+    NPUSearchResponse,
+)
+from api.system_health import register_singleton_probe
 from ai_hardware_accelerator import HardwareDevice
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_llm_logger
@@ -21,58 +27,18 @@ from autobot_shared.logging_manager import get_llm_logger
 # Import NPU semantic search components
 from npu_semantic_search import get_npu_search_engine
 from type_defs.common import Metadata
+from api.schemas_knowledge import (
+    EnhancedSearchBenchmarkResponse,
+    EnhancedSearchConnectivityResponse,
+    EnhancedSearchHardwareStatusResponse,
+    EnhancedSearchHealthResponse,
+    EnhancedSearchOptimizeResponse,
+    EnhancedSearchPerformanceAnalyticsResponse,
+)
 
 logger = get_llm_logger("enhanced_search_api")
 
 router = APIRouter(tags=["Enhanced Search"])
-
-
-# Pydantic models for API
-class SearchRequest(BaseModel):
-    """Enhanced search request model."""
-
-    query: str = Field(..., description="Search query")
-    similarity_top_k: int = Field(
-        10, description="Number of results to return", ge=1, le=100
-    )
-    filters: Optional[Metadata] = Field(None, description="Optional metadata filters")
-    enable_npu_acceleration: bool = Field(True, description="Enable NPU acceleration")
-    force_device: Optional[str] = Field(
-        None, description="Force specific device (npu/gpu/cpu)"
-    )
-
-
-class SearchResponse(BaseModel):
-    """Enhanced search response model."""
-
-    query: str
-    results: List[Metadata]
-    metrics: Metadata
-    total_results: int
-    search_time_ms: float
-    device_used: str
-    cache_hit: bool = False
-
-
-class BenchmarkRequest(BaseModel):
-    """Benchmark request model."""
-
-    test_queries: List[str] = Field(..., description="List of test queries")
-    iterations: int = Field(
-        3, description="Number of iterations per query", ge=1, le=10
-    )
-
-
-class OptimizationRequest(BaseModel):
-    """Optimization request model."""
-
-    workload_type: str = Field(
-        "balanced",
-        description=(
-            "Workload type: latency_optimized, throughput_optimized, quality_optimized,"
-            "balanced"
-        ),
-    )
 
 
 def _parse_force_device(force_device_str: Optional[str]) -> Optional[HardwareDevice]:
@@ -131,13 +97,13 @@ def _convert_metrics_to_api_format(metrics) -> dict:
     }
 
 
+@router.post("/semantic", response_model=NPUSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_semantic_search",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.post("/semantic", response_model=SearchResponse)
-async def enhanced_semantic_search(request: SearchRequest):
+async def enhanced_semantic_search(request: NPUSearchRequest):
     """
     Perform NPU-enhanced semantic search.
 
@@ -175,7 +141,7 @@ async def enhanced_semantic_search(request: SearchRequest):
             metrics.device_used,
         )
 
-        return SearchResponse(
+        return NPUSearchResponse(
             query=request.query,
             results=results_data,
             metrics=metrics_data,
@@ -191,12 +157,12 @@ async def enhanced_semantic_search(request: SearchRequest):
         raise HTTPException(status_code=500, detail="Search failed")
 
 
+@router.get("/hardware/status", response_model=EnhancedSearchHardwareStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_hardware_status",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.get("/hardware/status")
 async def get_hardware_status():
     """
     Get current hardware status and utilization metrics.
@@ -220,12 +186,12 @@ async def get_hardware_status():
         raise HTTPException(status_code=500, detail="Failed to get hardware status")
 
 
+@router.post("/benchmark", response_model=EnhancedSearchBenchmarkResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="benchmark_search_performance",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.post("/benchmark")
 async def benchmark_search_performance(request: BenchmarkRequest):
     """
     Benchmark search performance across different hardware configurations.
@@ -251,13 +217,13 @@ async def benchmark_search_performance(request: BenchmarkRequest):
         raise HTTPException(status_code=500, detail="Benchmark failed")
 
 
+@router.post("/optimize", response_model=EnhancedSearchOptimizeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="optimize_search_engine",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.post("/optimize")
-async def optimize_search_engine(request: OptimizationRequest):
+async def optimize_search_engine(request: NPUOptimizationRequest):
     """
     Optimize search engine for specific workload types.
 
@@ -283,12 +249,12 @@ async def optimize_search_engine(request: OptimizationRequest):
         raise HTTPException(status_code=500, detail="Optimization failed")
 
 
+@router.get("/performance/analytics", response_model=EnhancedSearchPerformanceAnalyticsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_analytics",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.get("/performance/analytics")
 async def get_performance_analytics():
     """
     Get comprehensive performance analytics and recommendations.
@@ -331,12 +297,12 @@ async def get_performance_analytics():
         )
 
 
+@router.get("/test/connectivity", response_model=EnhancedSearchConnectivityResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_npu_connectivity",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.get("/test/connectivity")
 async def test_npu_connectivity():
     """
     Test NPU Worker connectivity and capabilities.
@@ -525,13 +491,16 @@ def _generate_system_recommendations(
     return recommendations
 
 
+register_singleton_probe("enhanced_search", get_npu_search_engine, async_getter=True)
+
+
 # Health check endpoint
+@router.get("/health", response_model=EnhancedSearchHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.get("/health")
 async def health_check():
     """Health check for enhanced search service."""
     try:

@@ -112,7 +112,7 @@ class JenkinsIntegration(BaseIntegration):
         }
         handler = action_map.get(action)
         if not handler:
-            raise ValueError(f"Unknown action: {action}")
+            return {"error": f"Unknown action: {action}"}
         return await handler(params)
 
     async def _list_jobs(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -253,7 +253,7 @@ class GitLabCIIntegration(BaseIntegration):
         }
         handler = action_map.get(action)
         if not handler:
-            raise ValueError(f"Unknown action: {action}")
+            return {"error": f"Unknown action: {action}"}
         return await handler(params)
 
     async def _list_pipelines(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -389,7 +389,7 @@ class CircleCIIntegration(BaseIntegration):
         }
         handler = action_map.get(action)
         if not handler:
-            raise ValueError(f"Unknown action: {action}")
+            return {"error": f"Unknown action: {action}"}
         return await handler(params)
 
     async def _list_pipelines(self, params: Dict[str, Any]) -> Dict[str, Any]:

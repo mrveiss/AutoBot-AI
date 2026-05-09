@@ -1,4 +1,4 @@
--e ../autobot-shared
+-e ../autobot_shared
 
 # NPU/AI
 openvino>=2026.0.0

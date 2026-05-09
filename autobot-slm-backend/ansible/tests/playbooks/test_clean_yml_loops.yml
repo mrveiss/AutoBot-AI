@@ -1,0 +1,68 @@
+# AutoBot - Test playbook: clean.yml include_tasks loops fire correctly (#7058)
+#
+# Each role's clean.yml was refactored from inline tasks into include_tasks
+# loops over a shared parameterized task at roles/_shared/tasks/. This test
+# runs every clean.yml in --check mode and asserts:
+#   - The loop unrolls (loop_var, vars passing all wired correctly)
+#   - The shared task name renders ("{{ caller_role }} | Clean: ...")
+#   - The role_*_active gate via lookup('vars', role_check_fact) resolves
+#
+# Without this test, a typo in any role's loop_control or vars block goes
+# undetected until somebody runs the full provision-fleet-roles playbook.
+#
+# Usage:
+#   cd autobot-slm-backend/ansible
+#   ansible-playbook --check --connection=local -i 'localhost,' \
+#                    tests/playbooks/test_clean_yml_loops.yml
+---
+- name: "Test: every clean.yml include_tasks loop fires (#7058) — single-host (skip wrong-node)"
+  hosts: localhost
+  gather_facts: false
+  any_errors_fatal: true
+  vars:
+    # Single-host: every role active. NO wrong-node deletes should fire.
+    role_backend_active: true
+    role_frontend_active: true
+    role_slm_active: true
+    role_ai_stack_active: true
+    role_npu_worker_active: true
+    role_browser_active: true
+
+  tasks:
+    - name: "Run backend clean.yml"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/backend/tasks/clean.yml"
+
+    - name: "Run frontend clean.yml"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/frontend/tasks/clean.yml"
+
+    - name: "Run ai-stack clean.yml"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/ai-stack/tasks/clean.yml"
+
+    - name: "Run browser clean.yml"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/browser/tasks/clean.yml"
+
+    - name: "Run npu-worker clean.yml"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/npu-worker/tasks/clean.yml"
+
+    - name: "Run slm_manager clean.yml"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/slm_manager/tasks/clean.yml"
+
+
+- name: "Test: clean.yml SLM-only host wipes co-located non-SLM dirs"
+  hosts: localhost
+  gather_facts: false
+  any_errors_fatal: true
+  vars:
+    # SLM-only host: ONLY slm role active. Wrong-node deletes SHOULD fire
+    # for every dir gated on a non-slm role_*_active fact (i.e. all of them
+    # in slm_manager/clean.yml).
+    role_backend_active: false
+    role_frontend_active: false
+    role_slm_active: true
+    role_ai_stack_active: false
+    role_npu_worker_active: false
+    role_browser_active: false
+
+  tasks:
+    - name: "Run slm_manager clean.yml — SLM-only host"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/slm_manager/tasks/clean.yml"

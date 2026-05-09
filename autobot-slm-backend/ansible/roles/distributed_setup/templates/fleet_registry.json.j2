@@ -1,5 +1,5 @@
 {
-  "generated_at": "{{ ansible_date_time.iso8601 }}",
+  "generated_at": "{{ ansible_facts['date_time'].iso8601 }}",
   "coordinator": {
     "host": "{{ coordinator_host }}",
     "port": {{ backend_nginx_port }}

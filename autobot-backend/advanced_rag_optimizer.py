@@ -814,12 +814,27 @@ class AdvancedRAGOptimizer:
         return optimized_results
 
     def _log_search_completion(self, metrics: RAGMetrics, context: Any) -> None:
-        """Log search completion metrics (Issue #665: extracted helper)."""
-        logger.info("Advanced search completed:")
-        logger.info("  - Total time: %.3fs", metrics.total_time)
-        logger.info("  - Documents considered: %s", metrics.documents_considered)
-        logger.info("  - Final results: %s", metrics.final_results_count)
-        logger.info("  - Query type: %s", context.query_type)
+        """Log search completion metrics (Issue #665: extracted helper).
+
+        #6791: when total_time exceeds the perceptual budget, escalate to
+        WARNING and emit per-stage timing breakdown so operators can identify
+        the slow stage (query processing vs retrieval vs reranking) without
+        re-running with debug logging. The fields already exist on RAGMetrics
+        — they just weren't being surfaced.
+        """
+        slow_threshold_s = 5.0  # perceptual UX budget for chat replies
+        is_slow = metrics.total_time >= slow_threshold_s
+        log_fn = logger.warning if is_slow else logger.info
+        log_fn("Advanced search completed%s:", " (SLOW)" if is_slow else "")
+        log_fn("  - Total time: %.3fs", metrics.total_time)
+        log_fn("  - Query processing: %.3fs", metrics.query_processing_time)
+        log_fn("  - Retrieval (ChromaDB + embedding): %.3fs", metrics.retrieval_time)
+        log_fn("  - Reranking: %.3fs", metrics.reranking_time)
+        log_fn("  - Documents considered: %s", metrics.documents_considered)
+        log_fn("  - Final results: %s", metrics.final_results_count)
+        log_fn("  - Query type: %s", context.query_type)
+        log_fn("  - GPU acceleration: %s", metrics.gpu_acceleration_used)
+        log_fn("  - Hybrid search: %s", metrics.hybrid_search_enabled)
 
     def _build_context_parts(
         self,

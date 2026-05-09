@@ -13,13 +13,17 @@ Features:
 """
 
 import logging
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
 
-from auth_middleware import auth_middleware
+from api.schemas_system import (
+    HealthStatusResponse,
+    ServiceOperationResponse,
+    ServiceStatusResponse,
+)
+from api.system_health import ComponentHealth, register_health_probe
+from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.redis_service_manager import RedisConnectionError, RedisServiceManager
 
@@ -77,7 +81,7 @@ def check_admin_permission(request: Request) -> str:
     Raises:
         HTTPException: If user lacks admin permissions
     """
-    user_data = auth_middleware.get_user_from_request(request)
+    user_data = get_auth_middleware().get_user_from_request(request)
 
     if not user_data:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -101,7 +105,7 @@ def check_operator_permission(request: Request) -> str:
     Raises:
         HTTPException: If user lacks operator/admin permissions
     """
-    user_data = auth_middleware.get_user_from_request(request)
+    user_data = get_auth_middleware().get_user_from_request(request)
 
     if not user_data:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -117,54 +121,13 @@ def check_operator_permission(request: Request) -> str:
     return user_data.get("username", "unknown")
 
 
-# Pydantic models
-class ServiceOperationResponse(BaseModel):
-    """Service operation response"""
-
-    success: bool
-    operation: str = Field(..., description="Operation type: start, stop, restart")
-    message: str
-    duration_seconds: float
-    timestamp: datetime
-    new_status: str = Field(
-        ..., description="New service status: running, stopped, failed, unknown"
-    )
-    error: Optional[str] = None
-
-
-class ServiceStatusResponse(BaseModel):
-    """Service status response"""
-
-    status: str = Field(
-        ..., description="Service status: running, stopped, failed, unknown"
-    )
-    pid: Optional[int] = None
-    uptime_seconds: Optional[float] = None
-    memory_mb: Optional[float] = None
-    last_check: datetime
-
-
-class HealthStatusResponse(BaseModel):
-    """Health status response"""
-
-    overall_status: str = Field(
-        ..., description="Overall health: healthy, degraded, critical"
-    )
-    service_running: bool
-    connectivity: bool
-    response_time_ms: float
-    last_successful_command: Optional[datetime] = None
-    error_count_last_hour: int = 0
-    recommendations: list = Field(default_factory=list)
-
-
 # API Endpoints
+@router.post("/start", response_model=ServiceOperationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
-@router.post("/start", response_model=ServiceOperationResponse)
 async def start_redis_service(
     request: Request, manager: RedisServiceManager = Depends(get_service_manager)
 ):
@@ -202,12 +165,12 @@ async def start_redis_service(
         raise HTTPException(status_code=500, detail="Service start failed")
 
 
+@router.post("/stop", response_model=ServiceOperationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
-@router.post("/stop", response_model=ServiceOperationResponse)
 async def stop_redis_service(
     request: Request, manager: RedisServiceManager = Depends(get_service_manager)
 ):
@@ -247,12 +210,12 @@ async def stop_redis_service(
         raise HTTPException(status_code=500, detail="Service stop failed")
 
 
+@router.post("/restart", response_model=ServiceOperationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="restart_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
-@router.post("/restart", response_model=ServiceOperationResponse)
 async def restart_redis_service(
     request: Request, manager: RedisServiceManager = Depends(get_service_manager)
 ):
@@ -290,12 +253,12 @@ async def restart_redis_service(
         raise HTTPException(status_code=500, detail="Service restart failed")
 
 
+@router.get("/status", response_model=ServiceStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_status",
     error_code_prefix="REDIS_SERVICE",
 )
-@router.get("/status", response_model=ServiceStatusResponse)
 async def get_redis_status(manager: RedisServiceManager = Depends(get_service_manager)):
     """
     Get current Redis service status
@@ -318,12 +281,42 @@ async def get_redis_status(manager: RedisServiceManager = Depends(get_service_ma
         raise HTTPException(status_code=500, detail="Failed to get status")
 
 
+@register_health_probe("redis_service")
+async def probe_redis_service(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for Redis service-manager health."""
+    try:
+        manager = await get_service_manager()
+        health = await manager.get_health()
+        overall = (health.overall_status or "").lower()
+        if overall in ("healthy", "ok"):
+            return ComponentHealth(name="redis_service", status="ok")
+        if overall in ("degraded", "warning"):
+            return ComponentHealth(
+                name="redis_service",
+                status="degraded",
+                detail=health.overall_status,
+            )
+        return ComponentHealth(
+            name="redis_service",
+            status="down",
+            detail=health.overall_status or "service unhealthy",
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="redis_service",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
+@router.get("/health", response_model=HealthStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_health",
     error_code_prefix="REDIS_SERVICE",
 )
-@router.get("/health", response_model=HealthStatusResponse)
 async def get_redis_health(manager: RedisServiceManager = Depends(get_service_manager)):
     """
     Get detailed Redis service health status

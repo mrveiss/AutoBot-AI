@@ -242,12 +242,20 @@ def _create_api_error_response(
     error_code = f"{error_code_prefix}_{abs(hash(type(e).__name__)) % 10000:04d}"
     status_code = APIErrorResponse.get_status_code_for_category(category)
 
+    exc_type = type(e).__name__
+    exc_msg = str(e)
+    message = (
+        f"Operation failed ({func_operation}): {exc_type}: {exc_msg}"
+        if exc_msg
+        else f"Operation failed ({func_operation}): {exc_type}"
+    )
+
     return APIErrorResponse(
         category=category,
-        message="Operation failed",
+        message=message,
         code=error_code,
         status_code=status_code,
-        details={"operation": func_operation},
+        details={"operation": func_operation, "exception_type": exc_type, "exception_message": exc_msg},
         trace_id=trace_id,
     )
 

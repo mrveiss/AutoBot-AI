@@ -325,14 +325,14 @@ async def _llm_evaluate(
     import asyncio
 
     try:
-        from llm_interface_pkg.interface import LLMInterface
+        from services.llm_service import get_llm_service
 
-        llm = LLMInterface()
+        llm = get_llm_service()
         messages = _build_sufficiency_messages(query, context)
 
         start = time.monotonic()
         response = await asyncio.wait_for(
-            llm.chat_completion(
+            llm.chat(
                 messages=messages,
                 llm_type="task",
                 max_tokens=5,

@@ -7,13 +7,16 @@ Provides REST endpoints for hot reloading chat workflow modules during developme
 """
 
 import logging
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
+from api.schemas_common import DataResponse
+from api.schemas_system import HotReloadHealthResponse, ReloadRequest, ReloadResponse
 
 logger = logging.getLogger(__name__)
 
@@ -24,29 +27,12 @@ router = APIRouter(
 )
 
 
-class ReloadRequest(BaseModel):
-    """Request model for module reload"""
-
-    module_name: str = None
-    force: bool = False
-
-
-class ReloadResponse(BaseModel):
-    """Response model for reload operations"""
-
-    success: bool
-    message: str
-    results: Metadata = {}
-    reloaded_modules: list = []
-    errors: list = []
-
-
+@router.post("/chat-workflow", response_model=ReloadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reload_chat_workflow",
     error_code_prefix="HOT_RELOAD",
 )
-@router.post("/chat-workflow", response_model=ReloadResponse)
 async def reload_chat_workflow():
     """
     Reload all chat workflow modules without restarting the backend
@@ -87,12 +73,12 @@ async def reload_chat_workflow():
         raise HTTPException(status_code=500, detail="Failed to reload chat workflow")
 
 
+@router.post("/module", response_model=ReloadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reload_module",
     error_code_prefix="HOT_RELOAD",
 )
-@router.post("/module", response_model=ReloadResponse)
 async def reload_module(request: ReloadRequest):
     """
     Reload a specific module
@@ -132,12 +118,12 @@ async def reload_module(request: ReloadRequest):
         raise HTTPException(status_code=500, detail="Failed to reload module")
 
 
+@router.get("/status", response_model=Metadata)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_reload_status",
     error_code_prefix="HOT_RELOAD",
 )
-@router.get("/status", response_model=Metadata)
 async def get_reload_status():
     """
     Get hot reload manager status
@@ -153,12 +139,12 @@ async def get_reload_status():
         raise HTTPException(status_code=500, detail="Failed to get status")
 
 
+@router.post("/start", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_hot_reload",
     error_code_prefix="HOT_RELOAD",
 )
-@router.post("/start")
 async def start_hot_reload():
     """
     Start the hot reload manager
@@ -183,12 +169,12 @@ async def start_hot_reload():
         raise HTTPException(status_code=500, detail="Failed to start hot reload")
 
 
+@router.post("/stop", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_hot_reload",
     error_code_prefix="HOT_RELOAD",
 )
-@router.post("/stop")
 async def stop_hot_reload():
     """
     Stop the hot reload manager
@@ -205,12 +191,36 @@ async def stop_hot_reload():
         raise HTTPException(status_code=500, detail="Failed to stop hot reload")
 
 
+@register_health_probe("hot_reload")
+async def probe_hot_reload(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for hot-reload file watcher."""
+    try:
+        from utils.hot_reload_manager import hot_reload_manager
+
+        status = await hot_reload_manager.get_status()
+        if status.get("running"):
+            return ComponentHealth(name="hot_reload", status="ok")
+        return ComponentHealth(
+            name="hot_reload",
+            status="degraded",
+            detail="watcher not running",
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="hot_reload",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
+@router.get("/health", response_model=HotReloadHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="hot_reload_health",
     error_code_prefix="HOT_RELOAD",
 )
-@router.get("/health")
 async def hot_reload_health():
     """
     Health check for hot reload functionality

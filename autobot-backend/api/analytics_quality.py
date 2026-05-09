@@ -13,16 +13,28 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 from autobot_shared.time_utils import parse_utc_iso
-from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
 from auth_middleware import check_admin_permission
+from api.schemas_common import DataResponse
+from api.schemas_analytics import (
+    HealthScore,
+    MetricCategory,
+    QualityComplexityResponse,
+    QualityDrillDownResponse,
+    QualityGrade,
+    QualityHealthScoreResponse,
+    QualityMetricsResponse,
+    QualityPatternsResponse,
+    QualitySnapshotResponse,
+    QualityTrendsResponse,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -32,84 +44,6 @@ router = APIRouter(tags=["code-quality", "analytics"])  # Prefix set in router_r
 # ============================================================================
 # Models
 # ============================================================================
-
-
-class QualityGrade(str, Enum):
-    """Quality grades from A to F."""
-
-    A = "A"
-    B = "B"
-    C = "C"
-    D = "D"
-    F = "F"
-
-
-class MetricCategory(str, Enum):
-    """Categories of quality metrics."""
-
-    MAINTAINABILITY = "maintainability"
-    RELIABILITY = "reliability"
-    SECURITY = "security"
-    PERFORMANCE = "performance"
-    TESTABILITY = "testability"
-    DOCUMENTATION = "documentation"
-
-
-class QualityMetric(BaseModel):
-    """Individual quality metric."""
-
-    name: str
-    category: MetricCategory
-    value: float = Field(..., ge=0, le=100)
-    grade: QualityGrade
-    trend: float = Field(
-        default=0, description="Percentage change from previous period"
-    )
-    details: Optional[dict[str, Any]] = None
-
-
-class HealthScore(BaseModel):
-    """Overall codebase health score."""
-
-    overall: float = Field(..., ge=0, le=100)
-    grade: QualityGrade
-    trend: float = Field(default=0)
-    breakdown: dict[str, float] = Field(default_factory=dict)
-    recommendations: list[str] = Field(default_factory=list)
-
-
-class PatternDistribution(BaseModel):
-    """Distribution of code patterns."""
-
-    pattern_type: str
-    count: int
-    percentage: float
-    severity: str
-    examples: list[str] = Field(default_factory=list)
-
-
-class ComplexityMetrics(BaseModel):
-    """Code complexity analysis."""
-
-    average_cyclomatic: float
-    max_cyclomatic: int
-    average_cognitive: float
-    max_cognitive: int
-    hotspots: list[dict[str, Any]] = Field(default_factory=list)
-    distribution: dict[str, int] = Field(default_factory=dict)
-
-
-class QualitySnapshot(BaseModel):
-    """Complete quality snapshot at a point in time."""
-
-    timestamp: datetime
-    health_score: HealthScore
-    metrics: list[QualityMetric]
-    patterns: list[PatternDistribution]
-    complexity: ComplexityMetrics
-    file_count: int
-    line_count: int
-    issues_count: int
 
 
 # ============================================================================
@@ -171,6 +105,7 @@ def calculate_health_score(metrics: dict[str, float]) -> HealthScore:
 
 async def get_quality_data_from_storage(
     source_root: Optional["Path"] = None,
+    source_id: Optional[str] = None,
 ) -> dict[str, Any]:
     """Retrieve quality data from Redis or ChromaDB.
 
@@ -181,10 +116,14 @@ async def get_quality_data_from_storage(
     they reside under source_root before contributing to metrics.  The Redis
     cache key is namespaced by the resolved path so per-project results are
     stored independently.
+    Issue #6670: Accepts optional source_id used to look up per-source
+    codebase_stats from ChromaDB; without it, per-source dashboards always
+    fell back to the global stats document and returned no_data.
 
     Args:
         source_root: Absolute path to the project clone directory, or None
                      for global (unscoped) results.
+        source_id:   Project source ID for per-source ChromaDB stats lookup.
     """
     # Derive a stable cache key suffix from the resolved path (if scoped)
     cache_suffix = f":{source_root}" if source_root else ""
@@ -206,8 +145,10 @@ async def get_quality_data_from_storage(
     except Exception as e:
         logger.warning("Failed to get quality data from Redis: %s", e)
 
-    # Calculate real metrics from ChromaDB (Issue #541, #543)
-    real_data = await calculate_real_quality_metrics(source_root=source_root)
+    # Calculate real metrics from ChromaDB (Issue #541, #543, #6670)
+    real_data = await calculate_real_quality_metrics(
+        source_root=source_root, source_id=source_id
+    )
     if real_data:
         # Cache the calculated data
         try:
@@ -237,6 +178,7 @@ async def get_quality_data_from_storage(
 
 async def _get_problems_from_chromadb(
     source_root: Optional["Path"] = None,
+    source_id: Optional[str] = None,
 ) -> tuple[list[dict], dict[str, Any]]:
     """Fetch problems and stats from ChromaDB.
 
@@ -244,9 +186,17 @@ async def _get_problems_from_chromadb(
     resolves to a path under source_root are included.  This scopes quality
     metrics to the selected project's files only.
 
+    Issue #6670: When source_id is provided, the codebase_stats document is
+    looked up under the per-source key ``codebase_stats_{source_id}`` first,
+    falling back to the global ``codebase_stats`` document. This matches the
+    write path in chromadb_storage.py:649 and the read pattern already used
+    by sources.py:447-456 and stats.py:222.
+
     Args:
         source_root: Absolute path used to filter problem file paths.  Pass
                      None to return all problems regardless of location.
+        source_id:   Optional project source ID used to look up per-source
+                     codebase_stats.  Pass None for the global stats key.
 
     Returns:
         Tuple of (problems list, codebase stats dict)
@@ -285,18 +235,26 @@ async def _get_problems_from_chromadb(
                     }
                 )
 
-        # Fetch codebase stats
-        stats_results = await collection.get(
-            ids=["codebase_stats"],
-            include=["metadatas"],
-        )
+        # Fetch codebase stats — per-source key first, fall back to global (#6670, #1716)
+        stats_results = None
+        if source_id:
+            stats_results = await collection.get(
+                ids=[f"codebase_stats_{source_id}"],
+                include=["metadatas"],
+            )
+        if not stats_results or not stats_results.get("metadatas"):
+            stats_results = await collection.get(
+                ids=["codebase_stats"],
+                include=["metadatas"],
+            )
         if stats_results and stats_results.get("metadatas"):
             stats = stats_results["metadatas"][0]
 
         logger.debug(
-            "Fetched %d problems from ChromaDB (source_root=%s)",
+            "Fetched %d problems from ChromaDB (source_root=%s, source_id=%s)",
             len(problems),
             source_root,
+            source_id,
         )
     except Exception as e:
         logger.warning("Failed to fetch problems from ChromaDB: %s", e)
@@ -683,6 +641,7 @@ def _calculate_all_quality_scores(
 
 async def calculate_real_quality_metrics(
     source_root: Optional["Path"] = None,
+    source_id: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """Calculate real quality metrics from ChromaDB analysis data.
 
@@ -691,15 +650,20 @@ async def calculate_real_quality_metrics(
     Issue #3441: Accepts optional source_root to scope metrics to a project
     directory.  When provided, only problems under source_root contribute to
     the returned scores.
+    Issue #6670: Accepts optional source_id forwarded to ChromaDB stats lookup
+    so per-source codebase_stats documents are read.
 
     Args:
         source_root: Absolute path used to filter problems.  None means global.
+        source_id:   Project source ID for per-source stats lookup.
 
     Returns:
         Dict with calculated quality metrics, or None if no data available
     """
     # Fetch data from ChromaDB (scoped to source_root when provided)
-    problems, stats = await _get_problems_from_chromadb(source_root=source_root)
+    problems, stats = await _get_problems_from_chromadb(
+        source_root=source_root, source_id=source_id
+    )
 
     # Issue #543: If no data, return None - endpoints will return no_data status
     if not problems and not stats:
@@ -965,7 +929,12 @@ manager = ConnectionManager()
 # ============================================================================
 
 
-@router.get("/health-score")
+@router.get("/health-score", response_model=QualityHealthScoreResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_health_score",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 async def get_health_score(
     admin_check: bool = Depends(check_admin_permission),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
@@ -980,7 +949,7 @@ async def get_health_score(
     project's clone directory so only files under source_root contribute.
     """
     source_root = await _resolve_source_root_or_404(source_id)
-    data = await get_quality_data_from_storage(source_root=source_root)
+    data = await get_quality_data_from_storage(source_root=source_root, source_id=source_id)
 
     # Issue #543: Handle no data case
     if data is None:
@@ -1003,7 +972,12 @@ async def get_health_score(
     }
 
 
-@router.get("/metrics")
+@router.get("/metrics", response_model=QualityMetricsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_quality_metrics",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 async def get_quality_metrics(
     category: Optional[MetricCategory] = Query(None, description="Filter by category"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1019,7 +993,7 @@ async def get_quality_metrics(
     project's clone directory so only files under source_root contribute.
     """
     source_root = await _resolve_source_root_or_404(source_id)
-    data = await get_quality_data_from_storage(source_root=source_root)
+    data = await get_quality_data_from_storage(source_root=source_root, source_id=source_id)
 
     # Issue #543: Handle no data case
     if data is None:
@@ -1062,7 +1036,12 @@ async def get_quality_metrics(
     }
 
 
-@router.get("/patterns")
+@router.get("/patterns", response_model=QualityPatternsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pattern_distribution",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 async def get_pattern_distribution(
     severity: Optional[str] = Query(None, description="Filter by severity"),
     limit: int = Query(20, ge=1, le=100),
@@ -1079,7 +1058,7 @@ async def get_pattern_distribution(
     project's clone directory so only files under source_root contribute.
     """
     source_root = await _resolve_source_root_or_404(source_id)
-    data = await get_quality_data_from_storage(source_root=source_root)
+    data = await get_quality_data_from_storage(source_root=source_root, source_id=source_id)
 
     # Issue #543: Handle no data case
     if data is None:
@@ -1115,7 +1094,12 @@ async def get_pattern_distribution(
     return {"status": "success", "patterns": result}
 
 
-@router.get("/complexity")
+@router.get("/complexity", response_model=QualityComplexityResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_complexity_metrics",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 async def get_complexity_metrics(
     top_n: int = Query(10, ge=1, le=50, description="Number of hotspots to return"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1131,7 +1115,7 @@ async def get_complexity_metrics(
     project's clone directory so only files under source_root contribute.
     """
     source_root = await _resolve_source_root_or_404(source_id)
-    data = await get_quality_data_from_storage(source_root=source_root)
+    data = await get_quality_data_from_storage(source_root=source_root, source_id=source_id)
 
     # Issue #543: Handle no data case
     if data is None:
@@ -1232,7 +1216,12 @@ def _calculate_trend_statistics(scores: list) -> dict:
     }
 
 
-@router.get("/trends")
+@router.get("/trends", response_model=QualityTrendsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_quality_trends",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 async def get_quality_trends(
     period: str = Query("30d", pattern="^(7d|14d|30d|90d)$"),
     metric: Optional[str] = Query(None, description="Specific metric to trend"),
@@ -1249,7 +1238,7 @@ async def get_quality_trends(
     project's clone directory so only files under source_root contribute.
     """
     source_root = await _resolve_source_root_or_404(source_id)
-    data = await get_quality_data_from_storage(source_root=source_root)
+    data = await get_quality_data_from_storage(source_root=source_root, source_id=source_id)
 
     if data is None:
         return _no_data_response()
@@ -1267,7 +1256,12 @@ async def get_quality_trends(
     }
 
 
-@router.get("/snapshot")
+@router.get("/snapshot", response_model=QualitySnapshotResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_quality_snapshot",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 async def get_quality_snapshot(
     admin_check: bool = Depends(check_admin_permission),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
@@ -1282,7 +1276,7 @@ async def get_quality_snapshot(
     project's clone directory so only files under source_root contribute.
     """
     source_root = await _resolve_source_root_or_404(source_id)
-    data = await get_quality_data_from_storage(source_root=source_root)
+    data = await get_quality_data_from_storage(source_root=source_root, source_id=source_id)
 
     # Issue #543: Handle no data case
     if data is None:
@@ -1335,7 +1329,12 @@ async def get_quality_snapshot(
     }
 
 
-@router.get("/drill-down/{category}")
+@router.get("/drill-down/{category}", response_model=QualityDrillDownResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="drill_down_category",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 async def drill_down_category(
     category: str,
     file_filter: Optional[str] = Query(None, description="Filter by file path"),
@@ -1384,7 +1383,12 @@ async def drill_down_category(
     }
 
 
-@router.get("/export")
+@router.get("/export", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_quality_report",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 async def export_quality_report(
     format: str = Query("json", pattern="^(json|csv|pdf)$"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1457,6 +1461,11 @@ _WS_MESSAGE_HANDLERS = {
 
 
 @router.websocket("/ws")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="websocket_quality_updates",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 async def websocket_quality_updates(websocket: WebSocket):
     """
     WebSocket endpoint for real-time quality updates.

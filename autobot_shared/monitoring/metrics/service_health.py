@@ -60,16 +60,12 @@ class ServiceHealthMetricsRecorder(BaseMetricsRecorder):
 
     def record_response_time(self, service_name: str, response_time: float) -> None:
         """Record service response time."""
-        self.service_response_time.labels(service_name=service_name).observe(
-            response_time
-        )
+        self.service_response_time.labels(service_name=service_name).observe(response_time)
 
     def update_status(self, service_name: str, status: str) -> None:
         """Update service status."""
         status_value = _SERVICE_STATUS_VALUES.get(status.lower(), 0)
-        self.service_status.labels(service_name=service_name, status=status).set(
-            status_value
-        )
+        self.service_status.labels(service_name=service_name, status=status).set(status_value)
 
 
 __all__ = ["ServiceHealthMetricsRecorder"]

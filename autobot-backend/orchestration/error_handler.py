@@ -32,7 +32,7 @@ from typing import Any, Dict, Optional
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
-from constants.ttl_constants import TTL_7_DAYS
+from constants.ttl_constants import TTL_30_DAYS
 from retry_mechanism import BackoffStrategy, RetryConfig, RetryMechanism
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,12 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 CHECKPOINT_KEY_PREFIX = "autobot:workflow:checkpoint:"
-CHECKPOINT_TTL = TTL_7_DAYS
+# #3231 / #7010 cluster 2: paused workflows awaiting human approval must
+# survive ≥30 days. Aligns with autobot_shared/ssot_config.py's
+# `checkpoint_ttl_minutes` default of 43200 (30 days) for LangGraph
+# checkpoint keys. Earlier TTL_7_DAYS was a stale carryover from when this
+# value was used for short-term retry retention only.
+CHECKPOINT_TTL = TTL_30_DAYS
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +223,28 @@ class WorkflowCheckpointManager:
                 "Failed to save checkpoint for workflow=%s step=%s: %s",
                 workflow_id,
                 checkpoint.step_id,
+                exc,
+            )
+
+    def refresh_ttl(self, workflow_id: str) -> None:
+        """Refresh the TTL on a workflow's checkpoint hash key.
+
+        Per #3231: an active session that resumes work on a paused workflow
+        must reset the 30-day window so the checkpoint survives further idle
+        time. Callers invoke this on every read/resume of a checkpoint.
+
+        Redis errors are logged at warning level but never raised — a TTL
+        refresh failure must not break the calling resume flow. Worst case
+        the key expires earlier than intended; the next save() resets it.
+        """
+        redis = self._get_redis()
+        key = self._checkpoint_key(workflow_id)
+        try:
+            redis.expire(key, CHECKPOINT_TTL)
+        except Exception as exc:
+            logger.warning(
+                "Failed to refresh checkpoint TTL for workflow=%s: %s",
+                workflow_id,
                 exc,
             )
 

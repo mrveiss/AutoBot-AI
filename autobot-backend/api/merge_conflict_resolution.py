@@ -22,7 +22,6 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -35,6 +34,13 @@ from code_intelligence.merge_conflict_resolver import (
     ResolutionStrategy,
     analyze_repository,
 )
+from api.schemas_common import DataResponse
+from api.schemas_code import (
+    ApplyResolutionRequest,
+    ConflictAnalysisRequest,
+    ConflictResolutionRequest,
+    RepositoryAnalysisRequest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,59 +50,6 @@ router = APIRouter()
 # =============================================================================
 # Request/Response Models
 # =============================================================================
-
-
-class ConflictAnalysisRequest(BaseModel):
-    """Request model for conflict analysis."""
-
-    file_path: str = Field(
-        ...,
-        description="Path to file with merge conflicts",
-    )
-
-
-class ConflictResolutionRequest(BaseModel):
-    """Request model for conflict resolution."""
-
-    file_path: str = Field(
-        ...,
-        description="Path to file with merge conflicts",
-    )
-    strategy: Optional[str] = Field(
-        default=None,
-        description=(
-            "Resolution strategy: semantic_merge, accept_both, pattern_based, "
-            "accept_ours, accept_theirs, manual_review"
-        ),
-    )
-    safe_mode: bool = Field(
-        default=True,
-        description="Enable safe mode (require review for complex conflicts)",
-    )
-    validate: bool = Field(
-        default=True,
-        description="Validate resolved code for syntax errors",
-    )
-
-
-class RepositoryAnalysisRequest(BaseModel):
-    """Request model for repository-wide conflict analysis."""
-
-    repo_path: str = Field(
-        ...,
-        description="Path to git repository",
-    )
-
-
-class ApplyResolutionRequest(BaseModel):
-    """Request model for applying a resolution to file."""
-
-    file_path: str = Field(..., description="Path to file")
-    resolved_content: str = Field(..., description="Resolved file content")
-    create_backup: bool = Field(
-        default=True,
-        description="Create backup before applying",
-    )
 
 
 # =============================================================================
@@ -246,12 +199,12 @@ def _build_no_conflicts_response(file_path: str) -> JSONResponse:
 # =============================================================================
 
 
+@router.post("/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_conflicts",
-    error_code_prefix="MERGE_CONFLICT",
+    error_code_prefix="MERGE_CONFLICT_RESOLUTION",
 )
-@router.post("/analyze")
 async def analyze_conflicts(
     request: ConflictAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -301,12 +254,12 @@ async def analyze_conflicts(
         )
 
 
+@router.post("/resolve", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resolve_conflicts",
-    error_code_prefix="MERGE_CONFLICT",
+    error_code_prefix="MERGE_CONFLICT_RESOLUTION",
 )
-@router.post("/resolve")
 async def resolve_conflicts(
     request: ConflictResolutionRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -369,12 +322,12 @@ async def resolve_conflicts(
         )
 
 
+@router.post("/analyze-repository", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_repository",
-    error_code_prefix="MERGE_CONFLICT",
+    operation="analyze_repository_conflicts",
+    error_code_prefix="MERGE_CONFLICT_RESOLUTION",
 )
-@router.post("/analyze-repository")
 async def analyze_repository_conflicts(
     request: RepositoryAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -431,12 +384,12 @@ async def analyze_repository_conflicts(
         )
 
 
+@router.post("/apply", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="apply_resolution",
-    error_code_prefix="MERGE_CONFLICT",
+    error_code_prefix="MERGE_CONFLICT_RESOLUTION",
 )
-@router.post("/apply")
 async def apply_resolution(
     request: ApplyResolutionRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -499,12 +452,12 @@ async def apply_resolution(
         )
 
 
+@router.get("/strategies", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_resolution_strategies",
-    error_code_prefix="MERGE_CONFLICT",
+    error_code_prefix="MERGE_CONFLICT_RESOLUTION",
 )
-@router.get("/strategies")
 async def get_resolution_strategies(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -566,12 +519,12 @@ async def get_resolution_strategies(
     )
 
 
+@router.get("/check", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_file_conflicts",
-    error_code_prefix="MERGE_CONFLICT",
+    error_code_prefix="MERGE_CONFLICT_RESOLUTION",
 )
-@router.get("/check")
 async def check_file_conflicts(
     file_path: str = Query(..., description="Path to file to check"),
     admin_check: bool = Depends(check_admin_permission),

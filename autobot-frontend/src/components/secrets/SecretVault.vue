@@ -18,6 +18,7 @@ import { useDebounce } from '@/composables/useDebounce'
 import { useVirtualList } from '@/composables/useVirtualList'
 import { secretsApiClient } from '@/utils/SecretsApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('SecretVault')
 const { t } = useI18n()
@@ -57,7 +58,7 @@ const filterType = ref<SecretType | 'all'>('all')
 const showAddSecret = ref(false)
 const revealedSecrets = ref<Set<string>>(new Set())
 const sortBy = ref<'name' | 'type' | 'recent'>('name')
-const isLoading = ref(false)
+const { isLoading, wrap } = useLoadingState()
 const error = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 
@@ -188,8 +189,8 @@ const shareSecret = (secretId: string) => {
 const revokeSecret = async (secretId: string) => {
   if (!window.confirm(t('secrets.vault.revokeConfirm'))) return
 
+  await wrap(async () => {
   try {
-    isLoading.value = true
     await secretsApiClient.deleteSecret(secretId)
     secrets.value = secrets.value.filter(s => s.id !== secretId)
     emit('delete', secretId)
@@ -199,9 +200,8 @@ const revokeSecret = async (secretId: string) => {
     logger.error('Failed to revoke secret:', err)
     error.value = t('secrets.vault.revokeError')
     setTimeout(() => { error.value = null }, 3000)
-  } finally {
-    isLoading.value = false
   }
+  })
 }
 
 // Format date
@@ -213,8 +213,8 @@ const formatDate = (date: string | Date | undefined): string => {
 
 // Load secrets from backend
 const loadSecrets = async () => {
-  isLoading.value = true
   error.value = null
+  await wrap(async () => {
   try {
     const response = (await secretsApiClient.getSecrets({})) as { secrets?: SecretItem[] }
     secrets.value = response.secrets || []
@@ -223,9 +223,8 @@ const loadSecrets = async () => {
     logger.error('Failed to load secrets:', err)
     error.value = t('secrets.vault.loadError')
     secrets.value = []
-  } finally {
-    isLoading.value = false
   }
+  })
 }
 
 // Secret type options

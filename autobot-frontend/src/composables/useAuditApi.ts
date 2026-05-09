@@ -11,6 +11,7 @@ import { ref, computed } from 'vue'
 import { useApiWithState } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { useLoadingState } from '@/composables/useLoadingState'
 import type {
   AuditEntry,
   AuditQueryParams,
@@ -191,8 +192,9 @@ export function useAuditState() {
   const vmInfo = ref<{ vm_source: string; vm_name: string } | null>(null)
   const operationCategories = ref<Record<string, string[]>>({})
   const totalOperations = ref(0)
-  const loading = ref(false)
-  const loadingStats = ref(false)
+  const { isLoading: loading, wrap } = useLoadingState()
+  const { isLoading: loadingStats, wrap: wrapStats } = useLoadingState()
+  const { isLoading: loadingTrail, wrap: wrapTrail } = useLoadingState()
   const error = ref<string | null>(null)
   const hasMore = ref(false)
   const totalReturned = ref(0)
@@ -216,7 +218,6 @@ export function useAuditState() {
   // Session/User trail data
   const sessionTrail = ref<AuditEntry[]>([])
   const userTrail = ref<AuditEntry[]>([])
-  const loadingTrail = ref(false)
 
   // Computed
   const successEntries = computed(() =>
@@ -282,42 +283,38 @@ export function useAuditState() {
    * Load audit logs with current filter
    */
   async function loadLogs() {
-    loading.value = true
     error.value = null
-
-    try {
-      const params = buildQueryParams()
-      const result = await auditApi.queryLogs(params)
-      if (result && result.success) {
-        entries.value = result.entries
-        hasMore.value = result.has_more
-        totalReturned.value = result.total_returned
+    await wrap(async () => {
+      try {
+        const params = buildQueryParams()
+        const result = await auditApi.queryLogs(params)
+        if (result && result.success) {
+          entries.value = result.entries
+          hasMore.value = result.has_more
+          totalReturned.value = result.total_returned
+        }
+      } catch (e) {
+        error.value = e instanceof Error ? e.message : 'Unknown error'
+        logger.error('Failed to load audit logs:', e)
       }
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Unknown error'
-      logger.error('Failed to load audit logs:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
    * Load audit statistics
    */
   async function loadStatistics() {
-    loadingStats.value = true
-
-    try {
-      const result = await auditApi.getStatistics()
-      if (result && result.success) {
-        statistics.value = result.statistics
-        vmInfo.value = result.vm_info
+    await wrapStats(async () => {
+      try {
+        const result = await auditApi.getStatistics()
+        if (result && result.success) {
+          statistics.value = result.statistics
+          vmInfo.value = result.vm_info
+        }
+      } catch (e) {
+        logger.error('Failed to load audit statistics:', e)
       }
-    } catch (e) {
-      logger.error('Failed to load audit statistics:', e)
-    } finally {
-      loadingStats.value = false
-    }
+    })
   }
 
   /**
@@ -340,18 +337,16 @@ export function useAuditState() {
    */
   async function loadSessionTrail(sessionId: string) {
     selectedSessionId.value = sessionId
-    loadingTrail.value = true
-
-    try {
-      const result = await auditApi.getSessionAuditTrail(sessionId)
-      if (result && result.success) {
-        sessionTrail.value = result.entries
+    await wrapTrail(async () => {
+      try {
+        const result = await auditApi.getSessionAuditTrail(sessionId)
+        if (result && result.success) {
+          sessionTrail.value = result.entries
+        }
+      } catch (e) {
+        logger.error('Failed to load session trail:', e)
       }
-    } catch (e) {
-      logger.error('Failed to load session trail:', e)
-    } finally {
-      loadingTrail.value = false
-    }
+    })
   }
 
   /**
@@ -359,37 +354,33 @@ export function useAuditState() {
    */
   async function loadUserTrail(userId: string, days: number = 7) {
     selectedUserId.value = userId
-    loadingTrail.value = true
-
-    try {
-      const result = await auditApi.getUserAuditTrail(userId, days)
-      if (result && result.success) {
-        userTrail.value = result.entries
+    await wrapTrail(async () => {
+      try {
+        const result = await auditApi.getUserAuditTrail(userId, days)
+        if (result && result.success) {
+          userTrail.value = result.entries
+        }
+      } catch (e) {
+        logger.error('Failed to load user trail:', e)
       }
-    } catch (e) {
-      logger.error('Failed to load user trail:', e)
-    } finally {
-      loadingTrail.value = false
-    }
+    })
   }
 
   /**
    * Load failed operations for security monitoring
    */
   async function loadFailedOperations(hours: number = 24) {
-    loading.value = true
-
-    try {
-      const result = await auditApi.getFailedOperations(hours)
-      if (result && result.success) {
-        entries.value = result.entries
-        totalReturned.value = result.total_returned
+    await wrap(async () => {
+      try {
+        const result = await auditApi.getFailedOperations(hours)
+        if (result && result.success) {
+          entries.value = result.entries
+          totalReturned.value = result.total_returned
+        }
+      } catch (e) {
+        logger.error('Failed to load failed operations:', e)
       }
-    } catch (e) {
-      logger.error('Failed to load failed operations:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**

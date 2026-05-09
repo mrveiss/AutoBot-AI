@@ -17,11 +17,24 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.agent_analytics import AgentType, TaskStatus, get_agent_analytics
+from api.schemas_analytics import (
+    AgentAllPerformanceResponse,
+    AgentComparisonResponse,
+    AgentHistoryResponse,
+    AgentMetricsResponse,
+    AgentPerformanceTrendsResponse,
+    AgentRecentTasksResponse,
+    AgentRecommendationsResponse,
+    AgentTaskCompleteResponse,
+    CompleteTaskRequest,
+    TrackTaskRequest,
+    AgentTaskStartResponse,
+    AgentTypesResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agents", tags=["analytics", "agents"])
@@ -32,72 +45,17 @@ router = APIRouter(prefix="/agents", tags=["analytics", "agents"])
 # ============================================================================
 
 
-class AgentMetricsResponse(BaseModel):
-    """Agent metrics response model"""
-
-    agent_id: str
-    agent_type: str
-    total_tasks: int
-    completed_tasks: int
-    failed_tasks: int
-    cancelled_tasks: int
-    timeout_tasks: int
-    avg_duration_ms: float
-    total_tokens_used: int
-    error_rate: float
-    success_rate: float
-    last_activity: Optional[str]
-
-
-class TaskRecordResponse(BaseModel):
-    """Task record response model"""
-
-    agent_id: str
-    agent_type: str
-    task_id: str
-    task_name: str
-    status: str
-    started_at: str
-    completed_at: Optional[str]
-    duration_ms: Optional[float]
-    tokens_used: Optional[int]
-    error_message: Optional[str]
-
-
-class TrackTaskRequest(BaseModel):
-    """Request to track a task start"""
-
-    agent_id: str = Field(..., description="Unique agent identifier")
-    agent_type: str = Field(..., description="Type of agent")
-    task_id: str = Field(..., description="Unique task identifier")
-    task_name: str = Field(..., description="Human-readable task name")
-    input_size: Optional[int] = Field(None, description="Size of input data")
-    metadata: Optional[dict] = Field(None, description="Additional metadata")
-
-
-class CompleteTaskRequest(BaseModel):
-    """Request to complete a task"""
-
-    task_id: str = Field(..., description="Task identifier")
-    status: str = Field(
-        ..., description="Final status (completed, failed, cancelled, timeout)"
-    )
-    output_size: Optional[int] = Field(None, description="Size of output data")
-    tokens_used: Optional[int] = Field(None, description="Tokens consumed")
-    error_message: Optional[str] = Field(None, description="Error message if failed")
-
-
 # ============================================================================
 # AGENT METRICS ENDPOINTS
 # ============================================================================
 
 
+@router.get("/performance", response_model=AgentAllPerformanceResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_all_agents_performance",
-    error_code_prefix="AGENT",
+    error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.get("/performance")
 async def get_all_agents_performance(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -127,12 +85,12 @@ async def get_all_agents_performance(
     }
 
 
+@router.get("/performance/{agent_id}", response_model=AgentMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_performance",
-    error_code_prefix="AGENT",
+    error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.get("/performance/{agent_id}", response_model=AgentMetricsResponse)
 async def get_agent_performance(
     agent_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -170,12 +128,12 @@ async def get_agent_performance(
 # ============================================================================
 
 
+@router.get("/{agent_id}/history", response_model=AgentHistoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_history",
-    error_code_prefix="AGENT",
+    error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.get("/{agent_id}/history")
 async def get_agent_history(
     agent_id: str,
     limit: int = Query(default=100, ge=1, le=1000, description="Max records to return"),
@@ -198,12 +156,12 @@ async def get_agent_history(
     }
 
 
+@router.get("/tasks/recent", response_model=AgentRecentTasksResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_recent_tasks",
-    error_code_prefix="AGENT",
+    error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.get("/tasks/recent")
 async def get_recent_tasks(
     limit: int = Query(default=100, ge=1, le=1000, description="Max records to return"),
     admin_check: bool = Depends(check_admin_permission),
@@ -229,12 +187,12 @@ async def get_recent_tasks(
 # ============================================================================
 
 
+@router.get("/comparison", response_model=AgentComparisonResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="compare_agents",
-    error_code_prefix="AGENT",
+    error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.get("/comparison")
 async def compare_agents(
     agent_ids: Optional[str] = Query(
         None, description="Comma-separated agent IDs to compare (all if not specified)"
@@ -320,12 +278,12 @@ def _check_agent_metrics(metrics) -> list:
     return recommendations
 
 
+@router.get("/recommendations", response_model=AgentRecommendationsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_recommendations",
-    error_code_prefix="AGENT",
+    error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.get("/recommendations")
 async def get_agent_recommendations(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -373,12 +331,12 @@ async def get_agent_recommendations(
 # ============================================================================
 
 
+@router.get("/trends", response_model=AgentPerformanceTrendsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_trends",
-    error_code_prefix="AGENT",
+    error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.get("/trends")
 async def get_performance_trends(
     agent_id: Optional[str] = Query(
         None, description="Specific agent ID (all if not specified)"
@@ -399,12 +357,12 @@ async def get_performance_trends(
     return trends
 
 
+@router.get("/types", response_model=AgentTypesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_types",
-    error_code_prefix="AGENT",
+    error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.get("/types")
 async def get_agent_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -426,12 +384,12 @@ async def get_agent_types(
 # ============================================================================
 
 
+@router.post("/tasks/start", response_model=AgentTaskStartResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="track_task_start",
-    error_code_prefix="AGENT",
+    error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.post("/tasks/start")
 async def track_task_start(
     request: TrackTaskRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -459,12 +417,12 @@ async def track_task_start(
     }
 
 
+@router.post("/tasks/complete", response_model=AgentTaskCompleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="track_task_complete",
-    error_code_prefix="AGENT",
+    error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.post("/tasks/complete")
 async def track_task_complete(
     request: CompleteTaskRequest,
     admin_check: bool = Depends(check_admin_permission),

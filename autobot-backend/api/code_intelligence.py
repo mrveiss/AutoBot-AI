@@ -22,8 +22,24 @@ from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
-
+from api.schemas_code import (
+    CachedSecurityScoreResponse,
+    ClearStuckResponse,
+    CodeIntelAnalysisRequest,
+    CodeIntelligenceTaskStatusResponse,
+    CodeIntelQuickScanRequest,
+    CodeIntelSuggestionsRequest,
+    FindingsPlaceholderResponse,
+    PerformanceAnalysisRequest,
+    PerformanceFileScanRequest,
+    RedisAnalysisRequest,
+    RedisFileScanRequest,
+    SecurityAnalysisRequest,
+    SecurityFileScanRequest,
+    StartTaskResponse,
+    SuggestionsResponse,
+)
+from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import parse_utc_iso
@@ -47,6 +63,9 @@ from utils.background_task_manager import BackgroundTaskManager
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
 logger = logging.getLogger(__name__)
+
+
+
 
 router = APIRouter()
 
@@ -661,53 +680,14 @@ async def _generate_report_response(
     )
 
 
-class AnalysisRequest(BaseModel):
-    """Request model for code analysis (directory or inline code)."""
-
-    path: Optional[str] = Field(
-        default=None,
-        description="Directory path to analyze",
-    )
-    code: Optional[str] = Field(
-        default=None,
-        description="Inline code to analyze",
-    )
-    language: Optional[str] = Field(
-        default=None,
-        description="Language of the inline code",
-    )
-    filename: Optional[str] = Field(
-        default=None,
-        description="Virtual filename for inline code",
-    )
-    include_suggestions: Optional[bool] = Field(
-        default=None,
-        description="Whether to include improvement suggestions",
-    )
-    exclude_dirs: Optional[list] = Field(
-        default=None,
-        description="Directories to exclude from analysis",
-    )
-    min_severity: Optional[str] = Field(
-        default=None,
-        description="Minimum severity level to include",
-    )
-
-
-class QuickScanRequest(BaseModel):
-    """Request for quick single-file scan."""
-
-    file_path: str = Field(..., description="Path to Python file to analyze")
-
-
+@router.post("/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_codebase",
-    error_code_prefix="CODE_INTEL",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/analyze")
 async def analyze_codebase(
-    request: AnalysisRequest,
+    request: CodeIntelAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -748,7 +728,7 @@ async def analyze_codebase(
         raise_internal_error("Analysis failed")
 
 
-def _analyze_inline_code(request: AnalysisRequest) -> JSONResponse:
+def _analyze_inline_code(request: CodeIntelAnalysisRequest) -> JSONResponse:
     """Analyze inline code snippet. Issue #1008."""
     code = request.code
     lines = code.split("\n")
@@ -812,23 +792,14 @@ def _analyze_inline_code(request: AnalysisRequest) -> JSONResponse:
     )
 
 
-class SuggestionsRequest(BaseModel):
-    """Request model for code suggestions. Issue #1006."""
-
-    code: str = Field(..., description="Code to get suggestions for")
-    language: Optional[str] = Field(
-        default="python", description="Programming language"
-    )
-
-
+@router.post("/suggestions", response_model=SuggestionsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_suggestions",
-    error_code_prefix="CODE_INTEL",
+    operation="get_code_suggestions",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/suggestions")
 async def get_code_suggestions(
-    request: SuggestionsRequest,
+    request: CodeIntelSuggestionsRequest,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Return code improvement suggestions. Issue #1006."""
@@ -850,14 +821,14 @@ async def get_code_suggestions(
     return {"suggestions": suggestions}
 
 
+@router.post("/scan-file", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="quick_scan",
-    error_code_prefix="CODE_INTEL",
+    operation="quick_scan_file",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/scan-file")
 async def quick_scan_file(
-    request: QuickScanRequest,
+    request: CodeIntelQuickScanRequest,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -899,12 +870,12 @@ async def quick_scan_file(
         raise_internal_error("Scan failed")
 
 
+@router.get("/health-score", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_health_score",
-    error_code_prefix="CODE_INTEL",
+    operation="get_codebase_health_score",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/health-score")
 async def get_codebase_health_score(
     path: str = Query(..., description="Directory path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -950,12 +921,12 @@ async def get_codebase_health_score(
         raise_internal_error("Health check failed")
 
 
+@router.get("/pattern-types", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_pattern_types",
-    error_code_prefix="CODE_INTEL",
+    operation="get_supported_pattern_types",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/pattern-types")
 async def get_supported_pattern_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -985,35 +956,12 @@ async def get_supported_pattern_types(
 # =============================================================================
 
 
-class RedisAnalysisRequest(BaseModel):
-    """Request model for Redis optimization analysis."""
-
-    path: str = Field(
-        ...,
-        description="Directory or file path to analyze for Redis optimizations",
-    )
-    exclude_patterns: Optional[list] = Field(
-        default=None,
-        description="Glob patterns to exclude from analysis",
-    )
-    min_severity: Optional[str] = Field(
-        default=None,
-        description="Minimum severity level to include (info, low, medium, high, critical)",
-    )
-
-
-class RedisFileScanRequest(BaseModel):
-    """Request for scanning a single file for Redis optimizations."""
-
-    file_path: str = Field(..., description="Path to Python file to analyze")
-
-
+@router.post("/redis/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_redis_usage",
-    error_code_prefix="CODE_INTEL",
+    operation="analyze_redis_usage_endpoint",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/redis/analyze")
 async def analyze_redis_usage_endpoint(
     request: RedisAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1054,12 +1002,12 @@ async def analyze_redis_usage_endpoint(
         raise_internal_error("Redis analysis failed")
 
 
+@router.post("/redis/scan-file", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="scan_redis_file",
-    error_code_prefix="CODE_INTEL",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/redis/scan-file")
 async def scan_redis_file(
     request: RedisFileScanRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1103,12 +1051,12 @@ async def scan_redis_file(
         raise_internal_error("Scan failed")
 
 
+@router.get("/redis/optimization-types", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_optimization_types",
-    error_code_prefix="CODE_INTEL",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/redis/optimization-types")
 async def get_redis_optimization_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1139,12 +1087,12 @@ _REDIS_HEALTH_CACHE_TTL = TTL_5_MINUTES
 _REDIS_HEALTH_TIMEOUT = 30.0  # seconds
 
 
+@router.get("/redis/health-score", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_redis_health",
-    error_code_prefix="CODE_INTEL",
+    operation="get_redis_usage_health_score",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/redis/health-score")
 async def get_redis_usage_health_score(
     path: str = Query(..., description="Directory path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1226,35 +1174,12 @@ async def _run_redis_health_analysis(path: str) -> Dict[str, Any]:
 # ============================================================================
 
 
-class SecurityAnalysisRequest(BaseModel):
-    """Request model for security analysis."""
-
-    path: str = Field(
-        ...,
-        description="Directory path to analyze for security vulnerabilities",
-    )
-    exclude_patterns: Optional[list] = Field(
-        default=None,
-        description="Patterns to exclude from analysis (e.g., ['test_*', 'venv'])",
-    )
-    min_severity: Optional[str] = Field(
-        default=None,
-        description="Minimum severity level to include (info, low, medium, high, critical)",
-    )
-
-
-class SecurityFileScanRequest(BaseModel):
-    """Request for single file security scan."""
-
-    file_path: str = Field(..., description="Path to Python file to analyze")
-
-
+@router.post("/security/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="security_analyze",
-    error_code_prefix="SECURITY",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/security/analyze")
 async def security_analyze(
     request: SecurityAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1302,12 +1227,12 @@ async def security_analyze(
         raise_internal_error("Security analysis failed")
 
 
+@router.post("/security/scan-file", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="security_scan_file",
-    error_code_prefix="SECURITY",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/security/scan-file")
 async def security_scan_file(
     request: SecurityFileScanRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1359,12 +1284,12 @@ async def security_scan_file(
         raise_internal_error("File scan failed")
 
 
+@router.get("/security/vulnerability-types", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_vulnerability_types",
-    error_code_prefix="SECURITY",
+    operation="list_vulnerability_types",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/security/vulnerability-types")
 async def list_vulnerability_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1398,12 +1323,12 @@ async def list_vulnerability_types(
     )
 
 
+@router.get("/security/score", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="security_score",
-    error_code_prefix="SECURITY",
+    operation="get_security_score",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/security/score")
 async def get_security_score(
     path: str = Query(..., description="Directory path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1455,12 +1380,12 @@ async def get_security_score(
         raise_internal_error("Security score calculation failed")
 
 
+@router.get("/security/report", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="security_report",
-    error_code_prefix="SECURITY",
+    operation="get_security_report",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/security/report")
 async def get_security_report(
     path: str = Query(..., description="Directory path to analyze"),
     format: str = Query(default="json", description="Report format: json or markdown"),
@@ -1493,35 +1418,12 @@ async def get_security_report(
 # ============================================================================
 
 
-class PerformanceAnalysisRequest(BaseModel):
-    """Request model for performance analysis."""
-
-    path: str = Field(
-        ...,
-        description="Directory path to analyze for performance issues",
-    )
-    exclude_patterns: Optional[list] = Field(
-        default=None,
-        description="Patterns to exclude from analysis",
-    )
-    min_severity: Optional[str] = Field(
-        default=None,
-        description="Minimum severity level to include",
-    )
-
-
-class PerformanceFileScanRequest(BaseModel):
-    """Request for single file performance scan."""
-
-    file_path: str = Field(..., description="Path to Python file to analyze")
-
-
+@router.post("/performance/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="performance_analyze",
-    error_code_prefix="PERFORMANCE",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/performance/analyze")
 async def performance_analyze(
     request: PerformanceAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1568,12 +1470,12 @@ async def performance_analyze(
         raise_internal_error("Performance analysis failed")
 
 
+@router.post("/performance/scan-file", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="performance_scan_file",
-    error_code_prefix="PERFORMANCE",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/performance/scan-file")
 async def performance_scan_file(
     request: PerformanceFileScanRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1625,12 +1527,12 @@ async def performance_scan_file(
         raise_internal_error("File scan failed")
 
 
+@router.get("/performance/issue-types", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_performance_issue_types",
-    error_code_prefix="PERFORMANCE",
+    operation="list_performance_issue_types",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/performance/issue-types")
 async def list_performance_issue_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1664,12 +1566,12 @@ async def list_performance_issue_types(
     )
 
 
+@router.get("/performance/score", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="performance_score",
-    error_code_prefix="PERFORMANCE",
+    operation="get_performance_score",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/performance/score")
 async def get_performance_score(
     path: str = Query(..., description="Directory path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1730,12 +1632,12 @@ async def get_performance_score(
         raise_internal_error("Performance score calculation failed")
 
 
+@router.get("/performance/report", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="performance_report",
-    error_code_prefix="PERFORMANCE",
+    operation="get_performance_report",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/performance/report")
 async def get_performance_report(
     path: str = Query(..., description="Directory path to analyze"),
     format: str = Query(default="json", description="Report format: json or markdown"),
@@ -1768,12 +1670,12 @@ async def get_performance_report(
 from code_intelligence.code_evolution_miner import CodeEvolutionMiner
 
 
+@router.post("/evolution/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_evolution",
-    error_code_prefix="EVOLUTION",
+    operation="analyze_code_evolution",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/evolution/analyze")
 async def analyze_code_evolution(
     path: str = Query(..., description="Repository path to analyze"),
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
@@ -1824,12 +1726,12 @@ async def analyze_code_evolution(
         raise_internal_error("Evolution analysis failed")
 
 
+@router.get("/evolution/patterns", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pattern_evolution",
-    error_code_prefix="EVOLUTION",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/evolution/patterns")
 async def get_pattern_evolution(
     path: str = Query(..., description="Repository path to analyze"),
     pattern_type: Optional[str] = Query(None, description="Filter by pattern type"),
@@ -1880,12 +1782,12 @@ async def get_pattern_evolution(
         raise_internal_error("Pattern evolution failed")
 
 
+@router.get("/evolution/refactorings", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_refactorings",
-    error_code_prefix="EVOLUTION",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/evolution/refactorings")
 async def detect_refactorings(
     path: str = Query(..., description="Repository path to analyze"),
     limit: int = Query(
@@ -1936,12 +1838,12 @@ async def detect_refactorings(
         raise_internal_error("Refactoring detection failed")
 
 
+@router.get("/evolution/timeline", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_timeline",
-    error_code_prefix="EVOLUTION",
+    operation="get_evolution_timeline",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/evolution/timeline")
 async def get_evolution_timeline(
     path: str = Query(..., description="Repository path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -2004,12 +1906,12 @@ def _build_evolution_summary(evolution_report: dict) -> dict:
     }
 
 
+@router.get("/evolution/report", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_evolution_report",
-    error_code_prefix="EVOLUTION",
+    operation="get_full_evolution_report",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/evolution/report")
 async def get_full_evolution_report(
     path: str = Query(..., description="Repository path to analyze"),
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
@@ -2110,7 +2012,12 @@ async def _run_security_analysis(task_id: str, path: str) -> None:
         await _sec_manager.fail_task(task_id, str(e))
 
 
-@router.get("/security/score/cached")
+@router.get("/security/score/cached", response_model=CachedSecurityScoreResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cached_security_score",
+    error_code_prefix="CODE_INTELLIGENCE",
+)
 async def get_cached_security_score():
     """Return the latest completed security score result (#1540)."""
     cached = await _sec_manager.get_latest_result()
@@ -2124,7 +2031,12 @@ async def get_cached_security_score():
     return {"status": "no_data"}
 
 
-@router.post("/security/score/analyze")
+@router.post("/security/score/analyze", response_model=StartTaskResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_security_analysis",
+    error_code_prefix="CODE_INTELLIGENCE",
+)
 async def start_security_analysis(
     background_tasks: BackgroundTasks,
     path: str = Query(..., description="Directory path to analyze"),
@@ -2154,7 +2066,12 @@ async def start_security_analysis(
     return {"task_id": task_id, "status": "pending"}
 
 
-@router.get("/security/score/status/{task_id}")
+@router.get("/security/score/status/{task_id}", response_model=CodeIntelligenceTaskStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_security_score_status",
+    error_code_prefix="CODE_INTELLIGENCE",
+)
 async def get_security_score_status(task_id: str):
     """Get security score analysis task status (#1304)."""
     task = await _sec_manager.get_status(task_id)
@@ -2163,7 +2080,12 @@ async def get_security_score_status(task_id: str):
     return task
 
 
-@router.post("/security/score/tasks/clear-stuck")
+@router.post("/security/score/tasks/clear-stuck", response_model=ClearStuckResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_stuck_sec_tasks",
+    error_code_prefix="CODE_INTELLIGENCE",
+)
 async def clear_stuck_sec_tasks(
     force: bool = Query(
         default=False,
@@ -2183,12 +2105,12 @@ async def clear_stuck_sec_tasks(
 # These GET stubs prevent 404s and return a consistent "not yet implemented" response.
 
 
+@router.get("/security/findings", response_model=FindingsPlaceholderResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_security_findings",
-    error_code_prefix="CODE_INTEL",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/security/findings")
 async def get_security_findings(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -2206,12 +2128,12 @@ async def get_security_findings(
     }
 
 
+@router.get("/performance/findings", response_model=FindingsPlaceholderResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_findings",
-    error_code_prefix="CODE_INTEL",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/performance/findings")
 async def get_performance_findings(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -2229,12 +2151,12 @@ async def get_performance_findings(
     }
 
 
+@router.get("/redis/findings", response_model=FindingsPlaceholderResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_findings",
-    error_code_prefix="CODE_INTEL",
+    error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/redis/findings")
 async def get_redis_findings(
     admin_check: bool = Depends(check_admin_permission),
 ):

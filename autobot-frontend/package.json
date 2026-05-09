@@ -32,6 +32,8 @@
     "build-only": "vite build",
     "type-check": "vue-tsc --noEmit -p tsconfig.app.json",
     "check:i18n": "node scripts/check-i18n-keys.mjs",
+"check:locales": "python3 scripts/check-locale-completeness.py",
+    "check-ts-delta": "bash scripts/check-ts-delta.sh",
     "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore",
     "lint:eslint": "eslint . --fix",
     "lint": "run-s lint:*",
@@ -54,9 +56,9 @@
     "@xterm/xterm": "^6.0.0",
     "3d-force-graph": "^1.80.0",
     "apexcharts": "^5.10.4",
-    "cytoscape": "^3.33.1",
+    "cytoscape": "^3.33.3",
     "cytoscape-fcose": "^2.2.0",
-    "dompurify": "^3.4.0",
+    "dompurify": "^3.4.2",
     "npm-normalize-package-bin": "^5.0.0",
     "onnxruntime-web": "^1.24.3",
     "pinia": "^3.0.4",
@@ -70,11 +72,23 @@
   },
   "overrides": {
     "minimatch": ">=9.0.7",
-    "uuid": "^14.0.0"
+    "uuid": "^14.0.0",
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    },
+    "@typescript-eslint/utils": {
+      "typescript": "$typescript"
+    },
+    "@vue/eslint-config-typescript": {
+      "typescript": "$typescript"
+    }
   },
   "devDependencies": {
     "@pinia/testing": "^1.0.3",
     "@playwright/test": "^1.59.1",
+    "@storybook/addon-docs": "^10.3.6",
+    "@storybook/vue3": "^10.3.6",
+    "@storybook/vue3-vite": "^10.3.6",
     "@tailwindcss/forms": "^0.5.11",
     "@tailwindcss/postcss": "^4.2.2",
     "@tailwindcss/typography": "^0.5.19",
@@ -97,7 +111,7 @@
     "@types/sizzle": "^2.3.10",
     "@types/statuses": "^2.0.6",
     "@types/tough-cookie": "^4.0.5",
-    "@vitejs/plugin-vue": "^6.0.5",
+    "@vitejs/plugin-vue": "^6.0.6",
     "@vitejs/plugin-vue-jsx": "^5.1.5",
     "@vitest/coverage-v8": "^4.1.2",
     "@vitest/eslint-plugin": "^1.6.15",
@@ -109,14 +123,14 @@
     "cypress": "^15.14.0",
     "esbuild": "^0.28.0",
     "eslint": "^10.2.1",
-    "eslint-plugin-cypress": "^6.3.1",
+    "eslint-plugin-cypress": "^6.4.0",
     "eslint-plugin-oxlint": "~1.58.0",
-    "eslint-plugin-vue": "~10.8.0",
+    "eslint-plugin-vue": "~10.9.0",
     "happy-dom": "^20.9.0",
     "jiti": "^2.6.1",
-    "jsdom": "^29.0.1",
+    "jsdom": "^29.1.0",
     "mock-socket": "^9.3.1",
-    "msw": "^2.12.14",
+    "msw": "^2.13.6",
     "npm-run-all2": "^8.0.4",
     "openapi-typescript": "^7.13.0",
     "oxlint": "~1.58.0",
@@ -124,11 +138,12 @@
     "postcss": "^8.5.8",
     "prettier": "3.8.1",
     "start-server-and-test": "^3.0.2",
-    "tailwindcss": "^4.2.2",
+    "storybook": "^10.3.6",
+    "tailwindcss": "^4.2.4",
     "typescript": "~6.0.3",
     "vite": "^8.0.9",
     "vite-plugin-vue-devtools": "^8.1.1",
-    "vitest": "^4.1.4",
+    "vitest": "^4.1.5",
     "vue-tsc": "^3.2.6"
   }
 }

@@ -168,10 +168,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { useKnowledgeStats } from '@/composables/knowledge/useKnowledgeStats'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
+import { useKnowledgeCategories } from '@/composables/knowledge/useKnowledgeCategories'
 import { formatDate, formatCategoryName, formatFileSize } from '@/utils/formatHelpers'
 import KnowledgeBrowser from './KnowledgeBrowser.vue'
 import DocumentChangeFeed from './DocumentChangeFeed.vue'
@@ -190,6 +189,7 @@ import '@/styles/document-feed-wrapper.css'
 // Domain composables (migrated from useKnowledgeBase BC shim in #5193)
 const { fetchBasicStats } = useKnowledgeStats()
 const { getCategoryIcon, getTypeIcon } = useKnowledgeIcons()
+const { fetchMainCategories, fetchCategoryDocuments } = useKnowledgeCategories()
 
 // Router
 const router = useRouter()
@@ -248,8 +248,7 @@ const viewCategoryDocuments = async (category: any) => {
   selectedCategoryPath.value = category.path
 
   try {
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/categories/${encodeURIComponent(category.path)}`)
-    categoryDocuments.value = data?.documents || []
+    categoryDocuments.value = await fetchCategoryDocuments(category.path)
     showCategoryDocuments.value = true
   } catch (error) {
     logger.error('Error loading category documents:', error)
@@ -280,17 +279,10 @@ const loadMainCategories = async () => {
   isLoadingCategories.value = true
   categoriesError.value = null
   try {
-    // apiClient.get<T> returns parsed JSON or throws on HTTP error — it
-    // never returns a Response-like object with a `status` field. The
-    // previous `if (response && 'status' in response)` guard was dead code
-    // left over from the parseApiResponse wrapper pattern (#5033); the 401 /
-    // 403 handling now lives in the catch below via the thrown error.
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/categories/main`)
-    if (!data?.categories || !Array.isArray(data.categories)) {
-      categoriesError.value = t('knowledge.categories.invalidResponse')
-      return
-    }
-    mainCategories.value = data.categories
+    // fetchMainCategories delegates to apiClient.get<T> which returns parsed
+    // JSON or throws on HTTP error — 401/403 handling lives in the catch
+    // below via the thrown error (#5033).
+    mainCategories.value = await fetchMainCategories()
   } catch (error: unknown) {
     logger.error('Failed to load main categories:', error)
     const status = (error as { status?: number; response?: { status?: number } })?.status
@@ -373,7 +365,7 @@ onUnmounted(() => {
 
 /* Category Selection View */
 .category-selection {
-  padding: 2rem 0;
+  padding: var(--spacing-8) var(--spacing-0);
 }
 
 .selection-header {
@@ -608,7 +600,7 @@ onUnmounted(() => {
 }
 
 .tab-btn {
-  padding: 0.75rem 1.5rem;
+  padding: var(--spacing-3) var(--spacing-6);
   border: none;
   background: none;
   color: var(--text-secondary);
@@ -658,7 +650,7 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 0.625rem 1.25rem;
+  padding: var(--spacing-2-5) var(--spacing-5);
   background: var(--color-info);
   color: var(--text-on-primary);
   text-decoration: none;
@@ -842,7 +834,7 @@ onUnmounted(() => {
 
 .action-button {
   flex: 1;
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   border: none;
   border-radius: var(--radius-md);
   font-weight: 500;
@@ -919,7 +911,7 @@ onUnmounted(() => {
 
 /* KB Message */
 .kb-message {
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
 }
@@ -959,7 +951,7 @@ onUnmounted(() => {
 
 .categories-error-state {
   text-align: center;
-  padding: 3rem 2rem;
+  padding: var(--spacing-12) var(--spacing-8);
   color: var(--color-error-dark);
   background: var(--color-error-bg);
   border: 1px solid var(--color-error-border);
@@ -980,7 +972,7 @@ onUnmounted(() => {
 }
 
 .retry-btn {
-  padding: 0.5rem 1.25rem;
+  padding: var(--spacing-2) var(--spacing-5);
   background: var(--color-error-dark);
   color: #fff;
   border: none;
@@ -1212,7 +1204,7 @@ onUnmounted(() => {
 /* View Documents Button */
 .view-docs-button {
   margin-top: var(--spacing-3);
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   background: var(--color-success);
   color: var(--text-on-success);
   border: none;
@@ -1264,7 +1256,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem 2rem;
+  padding: var(--spacing-6) var(--spacing-8);
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-secondary);
   border-radius: var(--radius-xl) 0.75rem 0 0;
@@ -1280,7 +1272,7 @@ onUnmounted(() => {
 .modal-content {
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem 2rem;
+  padding: var(--spacing-6) var(--spacing-8);
 }
 
 .documents-grid {
@@ -1397,7 +1389,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem 2rem;
+  padding: var(--spacing-6) var(--spacing-8);
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-secondary);
   border-radius: var(--radius-xl) 0.75rem 0 0;
@@ -1421,7 +1413,7 @@ onUnmounted(() => {
   color: var(--color-info);
   font-family: var(--font-mono);
   background: var(--color-info-bg);
-  padding: 0.25rem 0.75rem;
+  padding: var(--spacing-1) var(--spacing-3);
   border-radius: var(--radius-md);
 }
 
@@ -1452,7 +1444,7 @@ onUnmounted(() => {
 }
 
 .system-tab-btn {
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   border: none;
   background: transparent;
   border-radius: var(--radius-md);

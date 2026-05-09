@@ -15,9 +15,10 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import TimingConstants
 from dependency_container import inject_services
-from llm_interface import ChatMessage, LLMResponse
+from llm_interface_pkg.models import ChatMessage, LLMResponse  # Phase 2D #3185
 from retry_mechanism import RetryConfig, RetryStrategy, with_retry
 
 logger = logging.getLogger(__name__)
@@ -366,8 +367,7 @@ class WorkflowManager:
         return self._instance
 
 
-# Global workflow manager
-workflow_manager = WorkflowManager()
+get_workflow_manager = lazy_singleton(WorkflowManager)
 
 
 # Convenience function
@@ -377,7 +377,7 @@ async def process_chat_message(
     """Process chat message through async workflow"""
     try:
         # Add timeout protection to prevent hanging - maximum 25 seconds
-        workflow = await workflow_manager.get_workflow()
+        workflow = await get_workflow_manager().get_workflow()
         result = await asyncio.wait_for(
             workflow.process_chat_message(user_message, chat_id), timeout=25.0
         )

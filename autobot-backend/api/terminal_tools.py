@@ -18,10 +18,12 @@ These endpoints are imported into terminal.py via router inclusion.
 """
 
 import logging
+from typing import Any, Dict
 
 from fastapi import APIRouter
 
-from api.terminal_models import ToolInstallRequest
+from api.schemas_terminal import PackageManagersResponse
+from api.schemas_terminal import ToolInstallRequest
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -33,12 +35,12 @@ router = APIRouter(tags=["terminal-tools"])
 # Tool Management endpoints
 
 
+@router.post("/install-tool", response_model=Dict[str, Any])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="install_tool",
-    error_code_prefix="TERMINAL",
+    error_code_prefix="TERMINAL_TOOLS",
 )
-@router.post("/install-tool")
 async def install_tool(request: ToolInstallRequest):
     """Install a tool with terminal streaming"""
     # Import system command agent for tool installation
@@ -58,12 +60,12 @@ async def install_tool(request: ToolInstallRequest):
     return result
 
 
+@router.post("/check-tool", response_model=Dict[str, Any])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_tool_installed",
-    error_code_prefix="TERMINAL",
+    error_code_prefix="TERMINAL_TOOLS",
 )
-@router.post("/check-tool")
 async def check_tool_installed(tool_name: str):
     """Check if a tool is installed"""
     from agents.system_command_agent import SystemCommandAgent
@@ -73,12 +75,12 @@ async def check_tool_installed(tool_name: str):
     return result
 
 
+@router.post("/validate-command", response_model=Dict[str, Any])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="validate_command",
-    error_code_prefix="TERMINAL",
+    error_code_prefix="TERMINAL_TOOLS",
 )
-@router.post("/validate-command")
 async def validate_command(command: str):
     """Validate command safety"""
     from agents.system_command_agent import SystemCommandAgent
@@ -88,12 +90,12 @@ async def validate_command(command: str):
     return result
 
 
+@router.get("/package-managers", response_model=PackageManagersResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_package_managers",
-    error_code_prefix="TERMINAL",
+    error_code_prefix="TERMINAL_TOOLS",
 )
-@router.get("/package-managers")
 async def get_package_managers():
     """Get available package managers"""
     from agents.system_command_agent import SystemCommandAgent

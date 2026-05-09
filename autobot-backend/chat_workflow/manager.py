@@ -30,6 +30,7 @@ from .llm_handler import LLMHandlerMixin, _emit_after_continuation, _emit_before
 from .models import LLMIterationContext, StreamingMessage, WorkflowSession
 from .session_handler import SessionHandlerMixin, _emit_approval_received, _emit_approval_required
 from .tool_handler import ToolHandlerMixin
+from services.tool_output_filter import get_tool_output_filter
 
 logger = logging.getLogger(__name__)
 
@@ -1682,10 +1683,7 @@ class ChatWorkflowManager(
         if stderr:
             output_text += f"\nStderr: {stderr}"
 
-        # Issue #650: Increased from 500 to 2000 for better continuation context
-        max_output_len = 2000
-        if len(output_text) > max_output_len:
-            output_text = output_text[:max_output_len] + "\n... (output truncated)"
+        output_text = get_tool_output_filter().prepare_and_filter(cmd, output_text)
 
         return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:\n```\n{output_text}\n```"
 
@@ -2662,6 +2660,20 @@ before summarizing.
                     continue
 
                 sender = "system" if wf_msg.type == "terminal_output" else "assistant"
+                # Issue #4448: Extract KB-only citations into top-level sources list.
+                # metadata.citations includes the always-appended llm_training entry —
+                # filter it out so sources contains only knowledge-base references.
+                raw_citations = (wf_msg.metadata or {}).get("citations", [])
+                sources = [
+                    {
+                        "title": c.get("title") or c.get("source", ""),
+                        "path": c.get("source", ""),
+                        "score": c.get("score", 0.0),
+                        "chunk_id": c.get("id", ""),
+                    }
+                    for c in raw_citations
+                    if c.get("type") == "knowledge_base"
+                ]
                 batch.append(
                     chat_mgr._build_message_dict(
                         sender,
@@ -2669,6 +2681,7 @@ before summarizing.
                         wf_msg.type,
                         wf_msg.metadata,
                         None,
+                        sources=sources,
                     )
                 )
 
@@ -2799,6 +2812,18 @@ before summarizing.
             "[ChatWorkflowManager] Initial prompt length: %d characters",
             len(llm_params["prompt"]),
         )
+
+        # Issue #5073: pre-compact hook — fire-and-forget before returning so
+        # the snapshot is enqueued before the next LLM call consumes the context.
+        asyncio.create_task(
+            self._fire_pre_compact_hook(
+                session_id=session.session_id,
+                conversation_history=session.conversation_history or [],
+                user_id=context.get("user_id") if context else None,
+                model_name=llm_params.get("model", ""),
+            )
+        )
+
         return llm_params
 
     def _create_llm_iteration_context(
@@ -2877,6 +2902,71 @@ before summarizing.
         )
         await self._persist_workflow_messages(
             session_id, workflow_messages, combined_response
+        )
+
+        # Issue #5073: fire-and-forget memory tasks via stop hook (non-blocking).
+        # Replaces the direct verbatim-store asyncio.create_task from #5070 with
+        # a Celery-backed stop hook so writes are durable and off the hot path.
+        user_id = context.get("user_id") if context else None
+        turn = len([m for m in workflow_messages if m.type == "response"])
+        asyncio.create_task(
+            self._fire_stop_hook(session_id, message, combined_response, user_id, turn)
+        )
+
+    async def _fire_stop_hook(
+        self,
+        session_id: str,
+        user_message: str,
+        assistant_response: str,
+        user_id: Optional[str],
+        turn_number: int,
+    ) -> None:
+        """Invoke stop hook to enqueue memory tasks after turn completion.
+
+        Issue #5073: Delegates to chat_workflow.stop_hook.on_turn_complete
+        which enqueues write_verbatim + extract_facts Celery tasks.
+        Called via asyncio.create_task — never blocks the response stream.
+        """
+        from chat_workflow.stop_hook import on_turn_complete
+
+        await on_turn_complete(
+            session_id=session_id,
+            user_message=user_message,
+            assistant_response=assistant_response,
+            user_id=user_id,
+            turn_number=turn_number,
+        )
+
+    async def _fire_pre_compact_hook(
+        self,
+        session_id: str,
+        conversation_history: List[Dict[str, Any]],
+        user_id: Optional[str],
+        model_name: str,
+    ) -> None:
+        """Invoke pre-compact hook to snapshot session before context overflow.
+
+        Issue #5073: Delegates to chat_workflow.compact_hook.on_pre_compact
+        which enqueues compact_snapshot_task when usage ≥ 85 %.
+        Called via asyncio.create_task — never blocks the response stream.
+        """
+        from chat_workflow.compact_hook import on_pre_compact
+
+        # Convert WorkflowSession history dicts to the format expected by the hook.
+        messages = [
+            {"role": "user", "content": entry.get("user", "")}
+            for entry in conversation_history
+            if entry.get("user")
+        ] + [
+            {"role": "assistant", "content": entry.get("assistant", "")}
+            for entry in conversation_history
+            if entry.get("assistant")
+        ]
+        await on_pre_compact(
+            session_id=session_id,
+            messages=messages,
+            user_id=user_id,
+            model_name=model_name,
         )
 
     @error_boundary(component="chat_workflow_manager", function="process_message")

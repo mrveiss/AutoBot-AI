@@ -12,8 +12,13 @@
  * Emits @interact({ action, params }) for the parent to proxy to the backend.
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, toRef, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import {
+  useRegionMarking,
+  type PageRegion,
+  type SelectedRegion,
+} from '@/composables/browser/useRegionMarking'
 
 const { t } = useI18n()
 
@@ -23,6 +28,8 @@ interface Props {
   interactive?: boolean
   viewportWidth?: number
   viewportHeight?: number
+  regions?: PageRegion[]
+  markRegionsMode?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -30,15 +37,28 @@ const props = withDefaults(defineProps<Props>(), {
   interactive: true,
   viewportWidth: 1280,
   viewportHeight: 720,
+  regions: () => [],
+  markRegionsMode: false,
 })
 
 const emit = defineEmits<{
   interact: [payload: { action: string; params: Record<string, unknown> }]
+  regionsSelected: [regions: SelectedRegion[]]
 }>()
 
 const showTypeOverlay = ref(false)
 const typeText = ref('')
 const imgRef = ref<HTMLImageElement | null>(null)
+
+// Region-marking state (#5136) — extracted to composable (#6447)
+const { hoveredRegion, popupRegionIndex, popupLabel, regionStyle, popupStyle, openPopup, saveRegion } =
+  useRegionMarking({
+    regions: toRef(props, 'regions') as Ref<PageRegion[]>,
+    imgRef,
+    viewportWidth: toRef(props, 'viewportWidth') as Ref<number>,
+    viewportHeight: toRef(props, 'viewportHeight') as Ref<number>,
+    onRegionsSelected: (regions) => emit('regionsSelected', regions),
+  })
 
 const screenshotSrc = computed(() =>
   props.screenshot ? `data:image/png;base64,${props.screenshot}` : null
@@ -107,6 +127,35 @@ function submitType() {
       <div v-if="loading" class="loading-overlay">
         <div class="loading-spinner" />
       </div>
+
+      <!-- Region-marking overlay (#5136) -->
+      <template v-if="markRegionsMode && regions && regions.length > 0">
+        <div
+          v-for="(region, i) in regions"
+          :key="i"
+          class="region-overlay"
+          :class="{ 'region-hovered': hoveredRegion === i }"
+          :style="regionStyle(region.rect)"
+          @mouseenter="hoveredRegion = i"
+          @mouseleave="hoveredRegion = null"
+          @click.stop="openPopup(i)"
+        />
+        <div
+          v-if="popupRegionIndex !== null"
+          class="region-popup"
+          :style="popupStyle(regions[popupRegionIndex].rect)"
+          @click.stop
+        >
+          <div class="region-popup-selector">{{ regions[popupRegionIndex].selector }}</div>
+          <input
+            v-model="popupLabel"
+            placeholder="Label (e.g. title, price)"
+            class="region-popup-input"
+          />
+          <button class="region-popup-save" @click="saveRegion(popupRegionIndex)">Save</button>
+          <button class="region-popup-cancel" @click="popupRegionIndex = null">Cancel</button>
+        </div>
+      </template>
     </div>
 
     <!-- No screenshot placeholder -->
@@ -243,7 +292,7 @@ function submitType() {
 .toolbar {
   display: flex;
   gap: var(--spacing-1);
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
   background: var(--color-surface, #1e1e2e);
   border-top: 1px solid var(--color-border, #333);
 }
@@ -276,14 +325,14 @@ function submitType() {
 .type-overlay {
   display: flex;
   gap: var(--spacing-1);
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
   background: var(--color-surface, #1e1e2e);
   border-top: 1px solid var(--color-border, #333);
 }
 
 .type-input {
   flex: 1;
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
   border: 1px solid var(--color-border, #333);
   border-radius: var(--radius-default);
   background: var(--color-bg, #121212);
@@ -312,5 +361,69 @@ function submitType() {
   color: white;
   cursor: pointer;
   font-size: var(--text-xs);
+}
+
+/* Region-marking overlay (#5136) */
+.region-overlay {
+  position: absolute;
+  border: 2px solid transparent;
+  transition: border-color 0.1s;
+}
+
+.region-overlay.region-hovered {
+  border-color: rgba(59, 130, 246, 0.8);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.region-popup {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 8px;
+  min-width: 200px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.region-popup-selector {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-bottom: 6px;
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.region-popup-input {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  padding: 4px 6px;
+  color: #e2e8f0;
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+  box-sizing: border-box;
+}
+
+.region-popup-save,
+.region-popup-cancel {
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.region-popup-save {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  margin-right: 4px;
+}
+
+.region-popup-cancel {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid #475569;
 }
 </style>

@@ -27,7 +27,7 @@ import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
 import { setupAsyncComponentErrorHandler } from '@/utils/asyncComponentHelpers'
 import { createLogger } from '@/utils/debugUtils'
-import { getSLMAdminUrl } from '@/config/ssot-config'
+import { getBackendUrl, getSLMAdminUrl } from '@/config/ssot-config'
 
 const logger = createLogger('Router');
 
@@ -42,9 +42,12 @@ import AnalyticsView from '@/views/AnalyticsView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 import PermissionDeniedView from '@/views/PermissionDeniedView.vue'
 import AboutView from '@/views/AboutView.vue'
+import OnboardingWizard from '@/views/OnboardingWizard.vue'
 
 // Route configuration - Issue #729: Business-only routes, infrastructure moved to slm-admin
-const routes: RouteRecordRaw[] = [
+// Exported (#6499) so `nav-items-coverage.test.ts` can verify every top-level
+// `requiresAuth: true` route has a matching entry in `@/config/navItems`.
+export const routes: RouteRecordRaw[] = [
   {
     path: '/',
     redirect: '/home'
@@ -56,12 +59,25 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Login',
       hideInNav: true,
-      requiresAuth: false
+      requiresAuth: false,
+      isPublic: true
     }
   },
   {
     path: '/dashboard',
     redirect: '/home'
+  },
+  // Issue #5061: First-run onboarding wizard
+  {
+    path: '/onboarding',
+    name: 'onboarding',
+    component: OnboardingWizard,
+    meta: {
+      title: 'Setup',
+      hideInNav: true,
+      hideFooter: true,
+      requiresAuth: true
+    }
   },
   {
     path: '/chat',
@@ -71,13 +87,26 @@ const routes: RouteRecordRaw[] = [
       title: 'AI Assistant',
       icon: 'fas fa-robot',
       description: 'Chat with AI assistant',
-      requiresAuth: true
+      requiresAuth: true,
+      hideFooter: true
     },
     children: [
       {
         path: '',
         name: 'chat-default',
         component: () => import('@/components/chat/ChatInterface.vue')
+      },
+      {
+        path: 'terminal',
+        name: 'chat-terminal',
+        component: () => import('@/components/chat/ChatInterface.vue'),
+        meta: { chatTab: 'terminal', requiresAuth: true, title: 'Chat — Terminal' }
+      },
+      {
+        path: 'novnc',
+        name: 'chat-novnc',
+        component: () => import('@/components/chat/ChatInterface.vue'),
+        meta: { chatTab: 'novnc', requiresAuth: true, title: 'Chat — Remote Desktop' }
       },
       {
         path: ':sessionId',
@@ -484,6 +513,26 @@ const routes: RouteRecordRaw[] = [
           parent: 'analytics'
         }
       },
+      // Issue #4465: Usage & Costs moved under analytics
+      {
+        path: 'usage',
+        name: 'analytics-usage',
+        component: () => import('@/views/UsageView.vue'),
+        meta: {
+          title: 'Usage & Costs',
+          parent: 'analytics'
+        }
+      },
+      // Issue #4270: Operations moved under analytics (long-running background tasks monitor)
+      {
+        path: 'operations',
+        name: 'analytics-operations',
+        component: () => import('@/views/OperationsView.vue'),
+        meta: {
+          title: 'Operations',
+          parent: 'analytics'
+        }
+      },
     ]
   },
   // Issue #753: User preferences (appearance, font size, colors, etc.)
@@ -543,41 +592,57 @@ const routes: RouteRecordRaw[] = [
     redirect: '/',
     meta: { title: 'LLM Configuration' }
   },
-  // Issue #4270: Wire OperationDetail via OperationsView — long-running operations tracker
+  // Issue #4270: Operations moved under /analytics/operations
+  { path: '/operations', redirect: '/analytics/operations' },
+  // Issue #6634: Tabbed /agents shell — Registry, Activity, Heartbeat as
+  // sibling tabs under a shared AgentsLayout. Each retains its own URL so
+  // existing nav-item links and bookmarks still work.
   {
-    path: '/operations',
-    name: 'operations',
-    component: () => import('@/views/OperationsView.vue'),
+    path: '/agents',
+    component: () => import('@/views/AgentsLayout.vue'),
     meta: {
-      title: 'Operations',
-      icon: 'fas fa-tasks',
-      description: 'Monitor and manage long-running operations',
-      requiresAuth: true
-    }
-  },
-  // Issue #4703: Wire AgentRegistryView into router (#1794, #1822)
-  {
-    path: '/agents/registry',
-    name: 'agent-registry',
-    component: () => import('@/views/AgentRegistryView.vue'),
-    meta: {
-      title: 'Agent Registry',
-      icon: 'fas fa-robot',
-      description: 'Browse backend and specialized agents, and manage agent settings',
-      requiresAuth: true
-    }
-  },
-  // Issue #1521: Agent Heartbeat Panel — real-time agent run status
-  {
-    path: '/agents/heartbeat',
-    name: 'agent-heartbeat',
-    component: () => import('@/components/agents/HeartbeatPanel.vue'),
-    meta: {
-      title: 'Agent Heartbeat',
-      icon: 'fas fa-heartbeat',
-      description: 'Monitor agent heartbeat and real-time run status',
-      requiresAuth: true
-    }
+      title: 'Agents',
+      requiresAuth: true,
+    },
+    children: [
+      { path: '', redirect: '/agents/registry' },
+      // Issue #4703: Wire AgentRegistryView into router (#1794, #1822)
+      {
+        path: 'registry',
+        name: 'agent-registry',
+        component: () => import('@/views/AgentRegistryView.vue'),
+        meta: {
+          title: 'Agent Registry',
+          icon: 'fas fa-robot',
+          description: 'Browse backend and specialized agents, and manage agent settings',
+          requiresAuth: true,
+        },
+      },
+      // Issue #1521: Agent Heartbeat Panel — real-time agent run status
+      {
+        path: 'heartbeat',
+        name: 'agent-heartbeat',
+        component: () => import('@/components/agents/HeartbeatPanel.vue'),
+        meta: {
+          title: 'Agent Heartbeat',
+          icon: 'fas fa-heartbeat',
+          description: 'Monitor agent heartbeat and real-time run status',
+          requiresAuth: true,
+        },
+      },
+      // Issue #5071: per-agent diary with background append and runtime discovery
+      {
+        path: 'activity',
+        name: 'agent-activity',
+        component: () => import('@/views/AgentActivity.vue'),
+        meta: {
+          title: 'Agent Activity',
+          icon: 'fas fa-journal-whills',
+          description: 'Per-agent diary — recent entries and cross-session journal',
+          requiresAuth: true,
+        },
+      },
+    ],
   },
   // Issue #899: Code Intelligence — merged into /analytics/codebase
   {
@@ -637,6 +702,17 @@ const routes: RouteRecordRaw[] = [
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
   // Redirect any bookmarked /desktop URLs to /chat.
   { path: '/desktop', redirect: '/chat' },
+  // Issue #4977: Standalone noVNC view at /slm/tools/novnc (driven by HostSelector)
+  {
+    path: '/slm/tools/novnc',
+    name: 'SlmNoVnc',
+    component: () => import('@/views/SlmNoVncView.vue'),
+    meta: {
+      title: 'Remote Desktop',
+      requiresAuth: true,
+      hideFooter: true,
+    },
+  },
   // Issue #3502: Custom Dashboard renamed to /home (see home route above)
 
   // Issue #729: Infrastructure routes redirected to slm-admin
@@ -708,19 +784,25 @@ const routes: RouteRecordRaw[] = [
       icon: 'fas fa-puzzle-piece',
       description: 'Browse, install, and manage AutoBot plugins',
       requiresAuth: true
-    }
+    },
+    children: [
+      // Issue #1803: Marketplace as sub-route of plugins
+      {
+        path: 'marketplace',
+        name: 'plugins-marketplace',
+        component: () => import('@/views/MarketplaceView.vue'),
+        meta: {
+          title: 'Marketplace',
+          parent: 'plugins',
+          requiresAuth: true
+        }
+      }
+    ]
   },
-  // Issue #1803: Plugin and agent marketplace
+  // Issue #1803: /marketplace redirects to /plugins/marketplace for backwards compatibility
   {
     path: '/marketplace',
-    name: 'marketplace',
-    component: () => import('@/views/MarketplaceView.vue'),
-    meta: {
-      title: 'Marketplace',
-      icon: 'fas fa-store',
-      description: 'Discover and install community plugins and agents',
-      requiresAuth: true
-    }
+    redirect: '/plugins/marketplace'
   },
   // Issue #729: Secrets stays in autobot-vue - user functionality for chat/agent credentials
   {
@@ -745,17 +827,8 @@ const routes: RouteRecordRaw[] = [
       }
     ]
   },
-  {
-    path: '/usage',
-    name: 'usage',
-    component: () => import('@/views/UsageView.vue'),
-    meta: {
-      title: 'Usage & Cost Tracking',
-      icon: 'fas fa-chart-bar',
-      description: 'Token usage, LLM costs, and billing-ready metrics',
-      requiresAuth: true
-    }
-  },
+  // Issue #4465: Usage moved under /analytics/usage
+  { path: '/usage', redirect: '/analytics/usage' },
   {
     path: '/permission-denied',
     name: 'permission-denied',
@@ -763,7 +836,8 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Permission Denied',
       hideInNav: true,
-      requiresAuth: false
+      requiresAuth: false,
+      isPublic: true
     }
   },
   {
@@ -932,6 +1006,45 @@ router.beforeEach(async (to, from) => {
     if (to.name === 'login' && userStore.isAuthenticated) {
       logger.debug('User already authenticated, redirecting to home')
       return { path: '/home' }
+    }
+
+    // Onboarding redirect (#6452) — first-login users with no preset applied get
+    // routed to /onboarding. Skip for: the onboarding route itself, public routes,
+    // and unauthenticated traffic (already handled above).
+    // sessionStorage cache avoids hitting /api/onboarding/status on every nav —
+    // one fetch per browser session is enough; OnboardingWizard clears it on
+    // successful preset apply so the next nav re-checks.
+    if (
+      userStore.isAuthenticated &&
+      requiresAuth &&
+      to.path !== '/onboarding' &&
+      !to.matched.some(record => record.meta.isPublic === true)
+    ) {
+      let presetApplied = sessionStorage.getItem('onboarding_preset_applied')
+      if (presetApplied === null) {
+        try {
+          const resp = await fetch(`${getBackendUrl()}/api/onboarding/status`, {
+            credentials: 'include',
+            headers: { Accept: 'application/json' },
+          })
+          if (resp.ok) {
+            const data = await resp.json()
+            presetApplied = data?.preset_applied ? '1' : '0'
+            sessionStorage.setItem('onboarding_preset_applied', presetApplied)
+          } else {
+            // Fail-open on non-2xx — don't trap users in onboarding.
+            presetApplied = '1'
+          }
+        } catch (statusErr) {
+          // Fail-open on network error — don't trap users in onboarding.
+          logger.debug('Onboarding status check failed, continuing:', statusErr)
+          presetApplied = '1'
+        }
+      }
+      if (presetApplied === '0') {
+        logger.debug('Onboarding not complete — redirecting to /onboarding')
+        return { path: '/onboarding' }
+      }
     }
 
     // Check for expired tokens

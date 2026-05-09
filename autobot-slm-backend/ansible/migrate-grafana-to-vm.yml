@@ -20,7 +20,7 @@
   hosts: slm_server
   become: true
   vars:
-    backup_dir: "/tmp/grafana-backup-{{ ansible_date_time.epoch }}"
+    backup_dir: "/tmp/grafana-backup-{{ ansible_facts['date_time'].epoch }}"
 
   tasks:
     - name: "Backup | Create backup directory"
@@ -54,7 +54,7 @@
     - name: "Backup | Fetch backup to control node"
       ansible.builtin.fetch:
         src: "{{ backup_dir }}/{{ item }}"
-        dest: "/tmp/grafana-migration-{{ ansible_date_time.date }}/"
+        dest: "/tmp/grafana-migration-{{ ansible_facts['date_time'].date }}/"
         flat: true
       loop:
         - grafana.ini
@@ -64,7 +64,7 @@
 
     - name: "Backup | Display backup location"
       ansible.builtin.debug:
-        msg: "Backup saved to: /tmp/grafana-migration-{{ ansible_date_time.date }}/"
+        msg: "Backup saved to: /tmp/grafana-migration-{{ ansible_facts['date_time'].date }}/"
       tags: ['backup']
 
 - name: "Grafana Migration - Install on Monitoring VM"
@@ -200,7 +200,7 @@
 
     - name: "Restore | Copy dashboards from control node"
       ansible.builtin.unarchive:
-        src: "/tmp/grafana-migration-{{ hostvars[groups['slm_server'][0]].ansible_date_time.date }}/dashboards.tar.gz"
+        src: "/tmp/grafana-migration-{{ hostvars[groups['slm_server'][0]].ansible_facts['date_time'].date }}/dashboards.tar.gz"
         dest: /var/lib/grafana/dashboards/
         owner: root
         group: grafana
@@ -209,7 +209,7 @@
 
     - name: "Restore | Copy provisioning config from control node"
       ansible.builtin.unarchive:
-        src: "/tmp/grafana-migration-{{ hostvars[groups['slm_server'][0]].ansible_date_time.date }}/provisioning.tar.gz"
+        src: "/tmp/grafana-migration-{{ hostvars[groups['slm_server'][0]].ansible_facts['date_time'].date }}/provisioning.tar.gz"
         dest: /etc/grafana/
         owner: root
         group: grafana
@@ -335,7 +335,7 @@
     - name: "Proxy | Backup current nginx config"
       ansible.builtin.copy:
         src: /etc/nginx/sites-available/autobot-slm
-        dest: "/etc/nginx/sites-available/autobot-slm.backup-{{ ansible_date_time.epoch }}"
+        dest: "/etc/nginx/sites-available/autobot-slm.backup-{{ ansible_facts['date_time'].epoch }}"
         remote_src: true
       tags: ['proxy']
 

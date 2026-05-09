@@ -59,9 +59,9 @@ class TaskPatternLearner(AsyncRedisClientMixin):
     async def _get_llm(self):
         """Lazily initialize LLM interface."""
         if self._llm is None:
-            from llm_interface import LLMInterface
+            from services.llm_service import get_llm_service
 
-            self._llm = LLMInterface()
+            self._llm = get_llm_service()
         return self._llm
 
     @staticmethod
@@ -106,7 +106,7 @@ class TaskPatternLearner(AsyncRedisClientMixin):
         try:
             llm = await self._get_llm()
             prompt = self._build_synthesis_prompt(task_type, outcomes, best_outcome)
-            response = await llm.chat_completion(
+            response = await llm.chat(
                 messages=[
                     {"role": "system", "content": self._system_prompt()},
                     {"role": "user", "content": prompt},
@@ -161,7 +161,7 @@ class TaskPatternLearner(AsyncRedisClientMixin):
             content = (
                 response
                 if isinstance(response, (str, dict))
-                else response.get("content", "{}")
+                else getattr(response, "content", "{}")
             )
             data = content if isinstance(content, dict) else json.loads(content)
             avg_score = sum(o.get("score", 0.0) for o in outcomes) / len(outcomes)

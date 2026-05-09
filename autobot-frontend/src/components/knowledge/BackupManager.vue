@@ -123,30 +123,14 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { formatFileSize, formatDateTime } from '@/utils/formatHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useKnowledgeBackup, type BackupOptions } from '@/composables/knowledge/useKnowledgeBackup'
 
 const { t } = useI18n()
 
 const logger = createLogger('BackupManager')
-
-// Types
-interface BackupOptions {
-  includeEmbeddings: boolean
-  compression: boolean
-  description: string
-}
-
-interface BackupInfo {
-  name: string
-  size: number
-  created_at: string
-  description?: string
-  facts_count?: number
-}
 
 interface StatusMessage {
   type: 'success' | 'error' | 'warning' | 'info'
@@ -154,19 +138,28 @@ interface StatusMessage {
   icon: string
 }
 
-// State
+// Composable
+const {
+  backups,
+  isLoadingBackups,
+  isCreatingBackup,
+  isRestoring,
+  isDeletingBackup,
+  loadBackups,
+  createBackup: _createBackup,
+  restoreBackupDryRun,
+  restoreBackupActual,
+  deleteBackup: _deleteBackup,
+} = useKnowledgeBackup()
+
+// Local state
 const backupOptions = ref<BackupOptions>({
   includeEmbeddings: true,
   compression: true,
-  description: ''
+  description: '',
 })
 
-const backups = ref<BackupInfo[]>([])
 const selectedBackup = ref<string | null>(null)
-const isLoadingBackups = ref(false)
-const isCreatingBackup = ref(false)
-const isRestoring = ref(false)
-const isDeletingBackup = ref(false)
 const statusMessage = ref<StatusMessage | null>(null)
 
 // Methods
@@ -175,7 +168,7 @@ const showStatus = (type: StatusMessage['type'], text: string) => {
     success: 'fas fa-check-circle',
     error: 'fas fa-exclamation-circle',
     warning: 'fas fa-exclamation-triangle',
-    info: 'fas fa-info-circle'
+    info: 'fas fa-info-circle',
   }
   statusMessage.value = { type, text, icon: icons[type] }
 
@@ -188,35 +181,9 @@ const showStatus = (type: StatusMessage['type'], text: string) => {
   }
 }
 
-// Use shared formatDateTime from formatHelpers (code review fix)
-
-const loadBackups = async () => {
-  try {
-    isLoadingBackups.value = true
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/backups`)
-
-    if (data.backups) {
-      backups.value = data.backups
-    }
-  } catch (error) {
-    logger.error('Failed to load backups:', error)
-    showStatus('error', t('knowledge.backup.errorLoadBackups'))
-  } finally {
-    isLoadingBackups.value = false
-  }
-}
-
 const createBackup = async () => {
   try {
-    isCreatingBackup.value = true
-
-    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/backup`, {
-      include_embeddings: backupOptions.value.includeEmbeddings,
-      compression: backupOptions.value.compression,
-      description: backupOptions.value.description || undefined
-    })
-
-
+    const data = await _createBackup(backupOptions.value)
     if (data.status === 'success') {
       showStatus('success', t('knowledge.backup.statusBackupCreated', { name: data.backup_name }))
       backupOptions.value.description = ''
@@ -224,90 +191,54 @@ const createBackup = async () => {
     } else {
       throw new Error(data.message || t('knowledge.backup.errorCreateBackup'))
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Failed to create backup:', error)
-    showStatus('error', error.message || t('knowledge.backup.errorCreateBackup'))
-  } finally {
-    isCreatingBackup.value = false
+    showStatus('error', (error instanceof Error ? error.message : null) || t('knowledge.backup.errorCreateBackup'))
   }
 }
 
 const restoreBackup = async (backupName: string) => {
-  const confirmed = window.confirm(
-    t('knowledge.backup.confirmRestore', { name: backupName })
-  )
-
+  const confirmed = window.confirm(t('knowledge.backup.confirmRestore', { name: backupName }))
   if (!confirmed) return
 
   try {
-    isRestoring.value = true
-
-    // First, dry run to validate
-    const dryRunData = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/restore`, {
-      backup_file: backupName,
-      dry_run: true
-    })
-
-
+    const dryRunData = await restoreBackupDryRun(backupName)
     if (dryRunData.status !== 'success') {
       throw new Error(dryRunData.message || t('knowledge.backup.errorValidation'))
     }
 
-    // Confirm actual restore
     const confirmRestore = window.confirm(
-      t('knowledge.backup.backupValidated', { count: dryRunData.total_facts_in_backup })
+      t('knowledge.backup.backupValidated', { count: dryRunData.total_facts_in_backup }),
     )
-
     if (!confirmRestore) return
 
-    // Actual restore
-    const restoreData = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/restore`, {
-      backup_file: backupName,
-      dry_run: false,
-      skip_duplicates: true
-    })
-
-
+    const restoreData = await restoreBackupActual(backupName)
     if (restoreData.status === 'success') {
       showStatus('success', t('knowledge.backup.statusRestored', { count: restoreData.restored }))
     } else {
       throw new Error(restoreData.message || t('knowledge.backup.errorRestoreBackup'))
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Failed to restore backup:', error)
-    showStatus('error', error.message || t('knowledge.backup.errorRestoreBackup'))
-  } finally {
-    isRestoring.value = false
+    showStatus('error', (error instanceof Error ? error.message : null) || t('knowledge.backup.errorRestoreBackup'))
   }
 }
 
 const deleteBackup = async (backupName: string) => {
-  const confirmed = window.confirm(
-    t('knowledge.backup.confirmDelete', { name: backupName })
-  )
-
+  const confirmed = window.confirm(t('knowledge.backup.confirmDelete', { name: backupName }))
   if (!confirmed) return
 
   try {
-    isDeletingBackup.value = true
-
-    const data = await apiClient.delete<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/backup`, {
-      body: JSON.stringify({ backup_file: backupName }),
-      headers: { 'Content-Type': 'application/json' }
-    } as any)
-
-
+    const data = await _deleteBackup(backupName)
     if (data.status === 'success') {
       showStatus('success', t('knowledge.backup.statusDeleted'))
       await loadBackups()
     } else {
       throw new Error(data.message || t('knowledge.backup.errorDeleteBackup'))
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Failed to delete backup:', error)
-    showStatus('error', error.message || t('knowledge.backup.errorDeleteBackup'))
-  } finally {
-    isDeletingBackup.value = false
+    showStatus('error', (error instanceof Error ? error.message : null) || t('knowledge.backup.errorDeleteBackup'))
   }
 }
 

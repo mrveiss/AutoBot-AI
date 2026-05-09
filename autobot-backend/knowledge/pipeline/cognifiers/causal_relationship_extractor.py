@@ -19,7 +19,7 @@ from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
 from knowledge.pipeline.models.causal_edge import CausalEdge, EffectType
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.registry import TaskRegistry
-from llm_interface_pkg import LLMInterface
+from services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ class CausalRelationshipExtractor(BaseCognifier):
         self.mode = mode
         self.nlp_threshold = nlp_threshold
         self.min_confidence = min_confidence
-        self.llm = LLMInterface()
+        self.llm = get_llm_service()
 
     def _select_mode(self, chunks: List[ProcessedChunk]) -> str:
         """
@@ -320,8 +320,8 @@ class CausalRelationshipExtractor(BaseCognifier):
         """
         try:
             prompt = CAUSAL_EXTRACTION_PROMPT.format(text=chunk.content)
-            response = await self.llm.chat_completion(
-                messages=[{"role": "user", "content": prompt}]
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}]
             )
             parsed = parse_llm_json_response(response.content)
             raw_edges = parsed if isinstance(parsed, list) else []

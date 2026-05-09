@@ -29,47 +29,47 @@ describe('iconMappings utility', () => {
 
   describe('getStatusIcon', () => {
     it('should return correct icon for healthy status', () => {
-      expect(getStatusIcon('healthy')).toBe('fas fa-check-circle')
+      expect(getStatusIcon('healthy')).toBe('check-circle')
     })
 
     it('should return correct icon for warning status', () => {
-      expect(getStatusIcon('warning')).toBe('fas fa-exclamation-triangle')
+      expect(getStatusIcon('warning')).toBe('exclamation-triangle')
     })
 
     it('should return correct icon for error status', () => {
-      expect(getStatusIcon('error')).toBe('fas fa-times-circle')
+      expect(getStatusIcon('error')).toBe('times-circle')
     })
 
     it('should return correct icon for degraded status', () => {
-      expect(getStatusIcon('degraded')).toBe('fas fa-exclamation-triangle')
+      expect(getStatusIcon('degraded')).toBe('exclamation-triangle')
     })
 
     it('should return correct icon for critical status', () => {
       // 'critical' is not a direct key in statusIcons — falls through to unknown
-      expect(getStatusIcon('critical')).toBe('fas fa-question-circle')
+      expect(getStatusIcon('critical')).toBe('question-circle')
     })
 
     it('should return correct icon for offline status', () => {
-      expect(getStatusIcon('offline')).toBe('fas fa-times-circle')
+      expect(getStatusIcon('offline')).toBe('times-circle')
     })
 
     it('should return correct icon for unknown status', () => {
-      expect(getStatusIcon('unknown')).toBe('fas fa-question-circle')
+      expect(getStatusIcon('unknown')).toBe('question-circle')
     })
 
     it('should handle case-insensitive input', () => {
-      expect(getStatusIcon('HEALTHY')).toBe('fas fa-check-circle')
-      expect(getStatusIcon('Warning')).toBe('fas fa-exclamation-triangle')
-      expect(getStatusIcon('ErRoR')).toBe('fas fa-times-circle')
+      expect(getStatusIcon('HEALTHY')).toBe('check-circle')
+      expect(getStatusIcon('Warning')).toBe('exclamation-triangle')
+      expect(getStatusIcon('ErRoR')).toBe('times-circle')
     })
 
     it('should return unknown icon for invalid status', () => {
-      expect(getStatusIcon('invalid-status')).toBe('fas fa-question-circle')
-      expect(getStatusIcon('foobar')).toBe('fas fa-question-circle')
+      expect(getStatusIcon('invalid-status')).toBe('question-circle')
+      expect(getStatusIcon('foobar')).toBe('question-circle')
     })
 
     it('should handle empty string gracefully', () => {
-      expect(getStatusIcon('')).toBe('fas fa-question-circle')
+      expect(getStatusIcon('')).toBe('question-circle')
     })
 
     it('should throw on null/undefined input', () => {

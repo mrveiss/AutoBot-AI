@@ -116,7 +116,7 @@ const config: SLMConfig = {
     grafana: getEnvNumber('VITE_GRAFANA_PORT', 3000),
     prometheus: getEnvNumber('VITE_PROMETHEUS_PORT', 9090),
     redis: getEnvNumber('VITE_REDIS_PORT', 6379),
-    vnc: getEnvNumber('VITE_DESKTOP_VNC_PORT', 6080),
+    vnc: getEnvNumber('VITE_DESKTOP_VNC_PORT', 6080), // DORMANT: VNC replaced by screenshot panel (#1130); see #5136
     ollama: getEnvNumber('VITE_OLLAMA_PORT', 11434),
     elasticsearch: getEnvNumber('VITE_ELASTICSEARCH_PORT', 9200),
     tlsFrontend: getEnvNumber('VITE_TLS_FRONTEND_PORT', 443),
@@ -192,6 +192,7 @@ export function getHosts(): SLMConfig['hosts'] {
  * Get VNC-enabled hosts with port configuration.
  * Returns empty -- VNC hosts are discovered dynamically via the SLM API
  * from nodes that have the 'vnc' role active (#2900).
+ * DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
  */
 export function getVNCHosts(): Array<{ id: string; name: string; host: string; port: number; description: string }> {
   return []

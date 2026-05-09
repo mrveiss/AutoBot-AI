@@ -170,9 +170,7 @@ class TaskProgressTracker:
         """Send periodic heartbeat messages until cancelled."""
         hint = _get_slow_task_hint(self._task_name)
         display_name = (
-            self._task_name[:_TASK_NAME_MAX_LEN] + "…"
-            if len(self._task_name) > _TASK_NAME_MAX_LEN
-            else self._task_name
+            self._task_name[:_TASK_NAME_MAX_LEN] + "…" if len(self._task_name) > _TASK_NAME_MAX_LEN else self._task_name
         )
         try:
             while True:

@@ -52,14 +52,10 @@ class HTTPClientManager:
             self._pool_min = 20  # Minimum pool size
             self._pool_max = 200  # Maximum pool size
             self._current_pool_size = 100  # Start at default
-            self._pool_adjustment_interval = (
-                TimingConstants.STANDARD_TIMEOUT
-            )  # Adjust every 60s
+            self._pool_adjustment_interval = TimingConstants.STANDARD_TIMEOUT  # Adjust every 60s
             self._last_adjustment_time = 0
             self._active_requests = 0  # Track concurrent requests
-            self._pending_pool_recreation = (
-                False  # Issue #352: Track deferred recreation
-            )
+            self._pending_pool_recreation = False  # Issue #352: Track deferred recreation
 
     async def get_session(self) -> ClientSession:
         """
@@ -106,13 +102,9 @@ class HTTPClientManager:
             headers={"User-Agent": "AutoBot/1.0"},
         )
 
-        logger.info(
-            f"Created new aiohttp ClientSession with pool size: {self._current_pool_size}"
-        )
+        logger.info(f"Created new aiohttp ClientSession with pool size: {self._current_pool_size}")
 
-    def _calculate_new_pool_size(
-        self, utilization: float, error_rate: float
-    ) -> tuple[int, bool]:
+    def _calculate_new_pool_size(self, utilization: float, error_rate: float) -> tuple[int, bool]:
         """
         Calculate new pool size based on utilization and error metrics.
 
@@ -140,10 +132,7 @@ class HTTPClientManager:
         elif utilization < 0.2 and error_rate < 0.01 and old_size > self._pool_min:
             new_size = max(int(old_size * 0.85), self._pool_min)
             adjusted = True
-            logger.info(
-                f"Decreased connection pool: {old_size} → {new_size} "
-                f"(utilization: {utilization:.1%})"
-            )
+            logger.info(f"Decreased connection pool: {old_size} → {new_size} " f"(utilization: {utilization:.1%})")
 
         return new_size, adjusted
 
@@ -180,16 +169,8 @@ class HTTPClientManager:
 
         async with self._counter_lock:
             # Calculate utilization metrics
-            utilization = (
-                self._active_requests / self._current_pool_size
-                if self._current_pool_size > 0
-                else 0
-            )
-            error_rate = (
-                self._error_count / self._request_count
-                if self._request_count > 0
-                else 0
-            )
+            utilization = self._active_requests / self._current_pool_size if self._current_pool_size > 0 else 0
+            error_rate = self._error_count / self._request_count if self._request_count > 0 else 0
 
             # Issue #620: Use helper for pool size calculation
             new_size, adjusted = self._calculate_new_pool_size(utilization, error_rate)
@@ -277,10 +258,7 @@ class HTTPClientManager:
 
         # Issue #352: Apply deferred recreation outside of lock to avoid deadlock
         if should_recreate:
-            logger.info(
-                "Applying deferred session recreation "
-                f"(new pool size: {self._current_pool_size})"
-            )
+            logger.info("Applying deferred session recreation " f"(new pool size: {self._current_pool_size})")
             await self._create_session()
 
     async def get(self, url: str, **kwargs) -> aiohttp.ClientResponse:
@@ -306,9 +284,7 @@ class HTTPClientManager:
             response.raise_for_status()
             return await response.json()
 
-    async def post_json(
-        self, url: str, json_data: Dict[str, Any], **kwargs
-    ) -> Dict[str, Any]:
+    async def post_json(self, url: str, json_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
         Make a POST request with JSON data and return JSON response.
 
@@ -341,21 +317,13 @@ class HTTPClientManager:
 
     def get_stats(self) -> Dict[str, Any]:
         """Get client usage statistics."""
-        utilization = (
-            self._active_requests / self._current_pool_size
-            if self._current_pool_size > 0
-            else 0
-        )
+        utilization = self._active_requests / self._current_pool_size if self._current_pool_size > 0 else 0
 
         return {
             "total_requests": self._request_count,
             "total_errors": self._error_count,
             "active_requests": self._active_requests,
-            "error_rate": (
-                self._error_count / self._request_count
-                if self._request_count > 0
-                else 0
-            ),
+            "error_rate": (self._error_count / self._request_count if self._request_count > 0 else 0),
             "session_active": bool(self._session and not self._session.closed),
             "pool_size": {
                 "current": self._current_pool_size,
@@ -465,9 +433,7 @@ async def example_usage():
 
     # POST request with JSON
     try:
-        response_data = await http_client.post_json(
-            "https://api.example.com/submit", json_data={"key": "value"}
-        )
+        response_data = await http_client.post_json("https://api.example.com/submit", json_data={"key": "value"})
         logger.info("Response: %s", response_data)
     except aiohttp.ClientError as e:
         logger.error("Request failed: %s", e)

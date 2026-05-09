@@ -26,6 +26,9 @@ from agents.overseer.types import (
 )
 from auth_middleware import get_current_user
 from chat_history import ChatHistoryManager
+from api.schemas_common import DataResponse
+from api.schemas_system import OverseerStatusResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -443,6 +446,11 @@ class OverseerWebSocketHandler:
 
 
 @router.websocket("/ws/{session_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="overseer_websocket",
+    error_code_prefix="OVERSEER_HANDLERS",
+)
 async def overseer_websocket(websocket: WebSocket, session_id: str):
     """
     WebSocket endpoint for Overseer Agent.
@@ -470,7 +478,12 @@ async def overseer_websocket(websocket: WebSocket, session_id: str):
         await handler.disconnect()
 
 
-@router.post("/query/{session_id}")
+@router.post("/query/{session_id}", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="submit_query",
+    error_code_prefix="OVERSEER_HANDLERS",
+)
 async def submit_query(
     session_id: str,
     query: str,
@@ -515,7 +528,12 @@ async def submit_query(
         return {"success": False, "error": "Internal server error"}
 
 
-@router.get("/status/{session_id}")
+@router.get("/status/{session_id}", response_model=OverseerStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_status",
+    error_code_prefix="OVERSEER_HANDLERS",
+)
 async def get_status(
     session_id: str,
     current_user: dict = Depends(get_current_user),

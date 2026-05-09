@@ -21,10 +21,20 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
-
-from constants.threshold_constants import QueryDefaults
+from fastapi import APIRouter, HTTPException, Request
+from api.system_health import ComponentHealth, register_health_probe
+from api.schemas_knowledge import (
+    NLCodeExplanationResponse,
+    NLDomainsResponse,
+    NLIntentsResponse,
+    NLQuerySuggestionsResponse,
+    NLSearchHealthResponse,
+    NLSearchRequest,
+    NLSearchResponse,
+    ParsedQueryResponse,
+    SearchResultWithExplanation,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -980,64 +990,6 @@ CONCEPTS: <comma-separated list>
 # =============================================================================
 
 
-class NLSearchRequest(BaseModel):
-    """Request model for natural language search."""
-
-    query: str = Field(..., description="Natural language query")
-    max_results: int = Field(
-        default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
-        description="Maximum results to return",
-    )
-    include_explanations: bool = Field(
-        default=True, description="Include LLM-generated explanations"
-    )
-    language_filter: Optional[str] = Field(
-        default=None, description="Filter by programming language"
-    )
-
-
-class ParsedQueryResponse(BaseModel):
-    """Response model for parsed query."""
-
-    original_query: str
-    normalized_query: str
-    intent: str
-    domain: str
-    entities: List[str]
-    keywords: List[str]
-    search_terms: List[str]
-    confidence: float
-    question_type: str
-
-
-class SearchResultWithExplanation(BaseModel):
-    """Search result with optional explanation."""
-
-    file_path: str
-    line_number: int
-    content: str
-    confidence: float
-    summary: Optional[str] = None
-    explanation: Optional[str] = None
-    key_concepts: Optional[List[str]] = None
-
-
-class NLSearchResponse(BaseModel):
-    """Response model for natural language search."""
-
-    query: ParsedQueryResponse
-    results: List[SearchResultWithExplanation]
-    suggestions: List[Dict[str, Any]]
-    total_results: int
-    search_time_ms: float
-
-
-class QuerySuggestionResponse(BaseModel):
-    """Response model for query suggestions."""
-
-    suggestions: List[Dict[str, Any]]
-
-
 # =============================================================================
 # API Endpoints
 # =============================================================================
@@ -1104,6 +1056,11 @@ def _convert_suggestions_to_dicts(suggestions: list) -> list:
 
 
 @router.post("/search", response_model=NLSearchResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="natural_language_search",
+    error_code_prefix="NATURAL_LANGUAGE_SEARCH",
+)
 async def natural_language_search(request: NLSearchRequest):
     """
     Search codebase using natural language queries.
@@ -1159,6 +1116,11 @@ async def natural_language_search(request: NLSearchRequest):
 
 
 @router.post("/parse", response_model=ParsedQueryResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="parse_query",
+    error_code_prefix="NATURAL_LANGUAGE_SEARCH",
+)
 async def parse_query(query: str):
     """
     Parse a natural language query without searching.
@@ -1184,7 +1146,12 @@ async def parse_query(query: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/suggestions")
+@router.get("/suggestions", response_model=NLQuerySuggestionsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_query_suggestions",
+    error_code_prefix="NATURAL_LANGUAGE_SEARCH",
+)
 async def get_query_suggestions(query: str):
     """
     Get query suggestions for a given query.
@@ -1213,7 +1180,12 @@ async def get_query_suggestions(query: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/explain")
+@router.post("/explain", response_model=NLCodeExplanationResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="explain_code_snippet",
+    error_code_prefix="NATURAL_LANGUAGE_SEARCH",
+)
 async def explain_code_snippet(
     code: str, file_path: str = "<unknown>", line_number: int = 0
 ):
@@ -1240,7 +1212,12 @@ async def explain_code_snippet(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/intents")
+@router.get("/intents", response_model=NLIntentsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_supported_intents",
+    error_code_prefix="NATURAL_LANGUAGE_SEARCH",
+)
 async def list_supported_intents():
     """List all supported query intents with examples."""
     return {
@@ -1281,7 +1258,12 @@ async def list_supported_intents():
     }
 
 
-@router.get("/domains")
+@router.get("/domains", response_model=NLDomainsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_supported_domains",
+    error_code_prefix="NATURAL_LANGUAGE_SEARCH",
+)
 async def list_supported_domains():
     """List all supported query domains with keywords."""
     return {
@@ -1292,7 +1274,37 @@ async def list_supported_domains():
     }
 
 
-@router.get("/health")
+@register_health_probe("natural_language_search")
+async def probe_natural_language_search(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the NL search code explainer."""
+    try:
+        if _code_explainer is None:
+            return ComponentHealth(
+                name="natural_language_search",
+                status="down",
+                detail="code explainer not initialized",
+            )
+        return ComponentHealth(
+            name="natural_language_search",
+            status="ok",
+            data={"llm_available": bool(_code_explainer.llm_available)},
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="natural_language_search",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
+@router.get("/health", response_model=NLSearchHealthResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="NATURAL_LANGUAGE_SEARCH",
+)
 async def health_check():
     """Health check endpoint.
 

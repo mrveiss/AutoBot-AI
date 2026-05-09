@@ -12,75 +12,25 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.schemas_agent import (
+    AgentDelegateRequest,
+    AgentSummary,
+    ChainOfCommandResponse,
+    DelegationResponse,
+    DelegationStatusUpdate,
+    OrgNodeResponse,
+    UpdateOrgRequest,
+    UpsertOrgRequest,
+)
 from api.user_management.dependencies import get_db_session
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.agent_org_service import AgentOrgService
 from services.delegation_service import DelegationService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-# -- Schemas ---------------------------------------------------------------
-
-
-class OrgNodeResponse(BaseModel):
-    """Single node in the org tree response (#1405)."""
-
-    agent_id: str
-    name: str
-    org_role: str
-    title: Optional[str] = None
-    capabilities: Optional[str] = None
-    direct_reports_count: int = 0
-    children: List["OrgNodeResponse"] = Field(default_factory=list)
-
-
-OrgNodeResponse.model_rebuild()
-
-
-class AgentSummary(BaseModel):
-    """Compact agent summary used in chain of command (#1405)."""
-
-    agent_id: str
-    name: str
-    org_role: str
-    title: Optional[str] = None
-
-
-class ChainOfCommandResponse(BaseModel):
-    """Ordered list from agent to org root (#1405)."""
-
-    chain: List[AgentSummary]
-
-
-class UpdateOrgRequest(BaseModel):
-    """Request body for PATCH /agents/{agent_id}/org (#1405)."""
-
-    reports_to: Optional[str] = Field(
-        default=None,
-        description="agent_id of the new manager, or null to clear",
-    )
-    org_role: Optional[str] = Field(
-        default=None,
-        description="One of: manager, coordinator, specialist, worker",
-    )
-    title: Optional[str] = Field(default=None, description="Human-readable job title")
-    capabilities: Optional[str] = Field(
-        default=None, description="Free-text capability description"
-    )
-
-
-class UpsertOrgRequest(BaseModel):
-    """Request body for PUT /agents/{agent_id}/org (#1405)."""
-
-    name: str
-    org_role: str = "worker"
-    reports_to: Optional[str] = None
-    title: Optional[str] = None
-    capabilities: Optional[str] = None
 
 
 # -- Endpoints -------------------------------------------------------------
@@ -90,6 +40,11 @@ class UpsertOrgRequest(BaseModel):
     "/org",
     response_model=List[OrgNodeResponse],
     tags=["agent-org"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_org_tree",
+    error_code_prefix="AGENT_ORG",
 )
 async def get_org_tree(
     session: AsyncSession = Depends(get_db_session),
@@ -107,6 +62,11 @@ async def get_org_tree(
     "/{agent_id}/chain",
     response_model=ChainOfCommandResponse,
     tags=["agent-org"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_chain_of_command",
+    error_code_prefix="AGENT_ORG",
 )
 async def get_chain_of_command(
     agent_id: str,
@@ -132,6 +92,11 @@ async def get_chain_of_command(
     response_model=List[AgentSummary],
     tags=["agent-org"],
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_direct_reports",
+    error_code_prefix="AGENT_ORG",
+)
 async def get_direct_reports(
     agent_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -145,6 +110,11 @@ async def get_direct_reports(
     "/{agent_id}/org",
     response_model=AgentSummary,
     tags=["agent-org"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_agent_org",
+    error_code_prefix="AGENT_ORG",
 )
 async def update_agent_org(
     agent_id: str,
@@ -188,6 +158,11 @@ async def update_agent_org(
     tags=["agent-org"],
     status_code=status.HTTP_200_OK,
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="upsert_agent_org",
+    error_code_prefix="AGENT_ORG",
+)
 async def upsert_agent_org(
     agent_id: str,
     body: UpsertOrgRequest,
@@ -220,6 +195,11 @@ async def upsert_agent_org(
     response_model=Dict[str, Any],
     tags=["agent-org"],
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_role_defaults",
+    error_code_prefix="AGENT_ORG",
+)
 async def get_role_defaults(
     agent_id: str,
     role: str,
@@ -228,38 +208,6 @@ async def get_role_defaults(
     """Return default permission set for the given org role (#1405)."""
     svc = AgentOrgService(session)
     return svc.get_role_defaults(role)
-
-
-# -- Delegation schemas (#1753) -------------------------------------------
-
-
-class DelegateRequest(BaseModel):
-    """Request body for POST /{manager_id}/delegate (#1753)."""
-
-    assignee_id: str = Field(..., description="Direct report to assign to")
-    task_description: str = Field(..., description="What the assignee should do")
-    context: Optional[Dict[str, Any]] = Field(
-        default=None, description="Extra context for the task"
-    )
-
-
-class DelegationResponse(BaseModel):
-    """Response for a task delegation (#1753)."""
-
-    id: str
-    delegator_id: str
-    assignee_id: str
-    task_description: str
-    status: str
-    escalated_to: Optional[str] = None
-    created_at: Optional[str] = None
-
-
-class DelegationStatusUpdate(BaseModel):
-    """Request body for PATCH /delegations/{id}/status (#1753)."""
-
-    status: str = Field(..., description="New status value")
-    result: Optional[Dict[str, Any]] = None
 
 
 def _delegation_to_response(d) -> DelegationResponse:
@@ -284,9 +232,14 @@ def _delegation_to_response(d) -> DelegationResponse:
     status_code=status.HTTP_201_CREATED,
     tags=["agent-delegation"],
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delegate_task",
+    error_code_prefix="AGENT_ORG",
+)
 async def delegate_task(
     manager_id: str,
-    body: DelegateRequest,
+    body: AgentDelegateRequest,
     session: AsyncSession = Depends(get_db_session),
 ) -> DelegationResponse:
     """
@@ -314,6 +267,11 @@ async def delegate_task(
     response_model=DelegationResponse,
     tags=["agent-delegation"],
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="escalate_delegation",
+    error_code_prefix="AGENT_ORG",
+)
 async def escalate_delegation(
     delegation_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -336,6 +294,11 @@ async def escalate_delegation(
     response_model=DelegationResponse,
     tags=["agent-delegation"],
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_delegation_status",
+    error_code_prefix="AGENT_ORG",
+)
 async def update_delegation_status(
     delegation_id: str,
     body: DelegationStatusUpdate,
@@ -357,6 +320,11 @@ async def update_delegation_status(
     response_model=Dict[str, Any],
     tags=["agent-delegation"],
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_delegation_activity",
+    error_code_prefix="AGENT_ORG",
+)
 async def get_delegation_activity(
     agent_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -370,6 +338,11 @@ async def get_delegation_activity(
     "/{agent_id}/delegations",
     response_model=List[DelegationResponse],
     tags=["agent-delegation"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_agent_delegations",
+    error_code_prefix="AGENT_ORG",
 )
 async def list_agent_delegations(
     agent_id: str,

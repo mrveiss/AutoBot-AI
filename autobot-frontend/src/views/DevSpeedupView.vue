@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n'
 import { useDevSpeedup } from '@/composables/useDevSpeedup'
 import type { CodeSnippet, CodeTemplate } from '@/composables/useDevSpeedup'
 import { createLogger } from '@/utils/debugUtils'
+import Icon from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
 const logger = createLogger('DevSpeedupView')
@@ -132,7 +133,7 @@ const templateCategories = computed(() => {
 
     <!-- Error Alert -->
     <div v-if="error" class="alert alert-error">
-      <i class="fas fa-exclamation-circle"></i>
+      <Icon name="exclamation-circle" />
       <div class="alert-content">
         <strong>{{ $t('views.devSpeedup.error') }}</strong>
         <p>{{ error }}</p>
@@ -142,16 +143,16 @@ const templateCategories = computed(() => {
     <!-- Tabs -->
     <nav class="tab-nav">
       <button @click="activeTab = 'search'" :class="['tab-btn', { active: activeTab === 'search' }]">
-        <i class="fas fa-search"></i> {{ $t('views.devSpeedup.quickSearch') }}
+        <Icon name="search" /> {{ $t('views.devSpeedup.quickSearch') }}
       </button>
       <button @click="activeTab = 'snippets'" :class="['tab-btn', { active: activeTab === 'snippets' }]">
-        <i class="fas fa-puzzle-piece"></i> {{ $t('views.devSpeedup.snippetsTab', { count: snippets.length }) }}
+        <Icon name="puzzle-piece" /> {{ $t('views.devSpeedup.snippetsTab', { count: snippets.length }) }}
       </button>
       <button @click="activeTab = 'templates'" :class="['tab-btn', { active: activeTab === 'templates' }]">
-        <i class="fas fa-file-code"></i> {{ $t('views.devSpeedup.templatesTab', { count: templates.length }) }}
+        <Icon name="file-code" /> {{ $t('views.devSpeedup.templatesTab', { count: templates.length }) }}
       </button>
       <button @click="activeTab = 'actions'" :class="['tab-btn', { active: activeTab === 'actions' }]">
-        <i class="fas fa-bolt"></i> {{ $t('views.devSpeedup.quickActions') }}
+        <Icon name="bolt" /> {{ $t('views.devSpeedup.quickActions') }}
       </button>
     </nav>
 
@@ -196,7 +197,7 @@ const templateCategories = computed(() => {
         </div>
 
         <div v-else-if="searchQuery && !isLoading" class="empty-state">
-          <i class="fas fa-search"></i>
+          <Icon name="search" />
           <p>{{ $t('views.devSpeedup.noResults') }}</p>
         </div>
       </div>
@@ -242,7 +243,7 @@ const templateCategories = computed(() => {
         </div>
 
         <div v-else class="empty-state">
-          <i class="fas fa-puzzle-piece"></i>
+          <Icon name="puzzle-piece" />
           <p>{{ $t('views.devSpeedup.noSnippets') }}</p>
         </div>
       </div>
@@ -282,7 +283,7 @@ const templateCategories = computed(() => {
         </div>
 
         <div v-else class="empty-state">
-          <i class="fas fa-file-code"></i>
+          <Icon name="file-code" />
           <p>{{ $t('views.devSpeedup.noTemplates') }}</p>
         </div>
       </div>
@@ -656,9 +657,10 @@ const templateCategories = computed(() => {
   color: var(--text-secondary);
 }
 
-.empty-state i {
-  font-size: var(--text-3xl);
-  margin-bottom: var(--spacing-3);
+.empty-state svg {
+  width: var(--text-3xl);
+  height: var(--text-3xl);
+  margin: 0 auto var(--spacing-3);
   display: block;
   color: var(--text-muted);
 }

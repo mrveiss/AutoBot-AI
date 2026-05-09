@@ -3,6 +3,7 @@
 > **Full rules:** [`docs/developer/CLAUDE_RULES.md`](docs/developer/CLAUDE_RULES.md) — read when starting a new task
 > **Full workflow:** [`docs/developer/CLAUDE_WORKFLOW.md`](docs/developer/CLAUDE_WORKFLOW.md) — read when needed
 > **Reference (IPs, playbooks):** [`docs/developer/AUTOBOT_REFERENCE.md`](docs/developer/AUTOBOT_REFERENCE.md)
+> **Architecture exceptions:** [`docs/developer/ARCHITECTURE_EXCEPTIONS.md`](docs/developer/ARCHITECTURE_EXCEPTIONS.md)
 > **Worktrees:** Use `.worktrees/` (project-local, gitignored) for all parallel/isolated work
 
 ---
@@ -181,6 +182,8 @@ Default behavior:
 
 **Only stop to ask** if: a specific issue has unresolved dependencies, an architectural decision is needed, or the pre-flight checklist finds a problem (dirty branch, unresolved PRs, etc.).
 
+**Domain schema files (resolved #5799):** `schemas_common.py` now has only 5 cross-domain classes. Domain schemas live in `schemas_terminal.py`, `schemas_analytics.py`, `schemas_knowledge.py`, `schemas_agent.py`, `schemas_system.py`, `schemas_workflows.py`, `schemas_code.py`. New response schemas go in the matching domain file — parallel batches targeting different domain files can now run concurrently without conflicts.
+
 ---
 
 ## Parallel Agents Strategy
@@ -204,6 +207,7 @@ When spawning multiple agents for batch work with `/batch-implement`:
 
 After agents complete:
 
+0. **Gate 0 — Squash-duplicate check:** For each PR branch, run the squash-duplicate detection command (see `docs/developer/CLAUDE_WORKFLOW.md` "Gate 0") to verify no commits are already in `Dev_new_gui`. If all commits are duplicates, close the issue without merging.
 1. **Enumerate ALL open PRs:** `gh pr list --state open` to count expected PRs before starting review.
 2. **Track in checklist:** One line per PR to verify nothing is skipped.
 3. **Review each PR:**
@@ -278,6 +282,7 @@ Sub-agents without Bash permissions cannot complete git operations and will stal
 
 **Use `/pre-merge-validate <PR>` before merging any code:**
 
+0. **Squash-Duplicate Detection:** Run Gate 0 (see `docs/developer/CLAUDE_WORKFLOW.md`) to detect commits already squash-merged to `Dev_new_gui` — avoids wasted merge work on already-landed changes.
 1. **Syntax + Imports:** Catches SyntaxError, ImportError
 2. **Call-Site Impact:** Finds removed functions with live callers (prevents `_init_redis()` incidents)
 3. **Function Signatures:** Detects signature changes with existing callers
@@ -321,6 +326,21 @@ done
    - Are all edge cases handled? (review code, check error handling)
    - Are tests passing? (run test suite for changed modules)
    - Is documentation updated if needed? (check docs/)
+   - **Integration check (#6836 gate):** for every NEW module added by this issue, at least one production caller must import it:
+
+     ```bash
+     NEW_FILES=$(git diff --name-only --diff-filter=A origin/Dev_new_gui...HEAD \
+       | grep -E '\.(py|ts|vue)$' | grep -vE '(_test\.|\.test\.|/tests/|/__tests__/)')
+     for f in $NEW_FILES; do
+       stem=$(basename "$f" | sed 's/\.[^.]*$//')
+       grep -rn "from .*\b${stem}\b\|import .*\b${stem}\b" \
+         autobot-backend autobot-frontend --include="*.py" --include="*.ts" --include="*.vue" \
+         | grep -v __pycache__ | grep -vE '(_test\.|\.test\.|/tests/)' | grep -v "^${f}:" | wc -l
+     done
+     ```
+
+     Result must be ≥1 for each new module. **Zero callers ⇒ closure blocked**, even if tests pass — see #6836 for the orchestration audit that proved this gap (3,906 LOC of completed-but-unwired features whose trackers had been closed prematurely).
+   - **Deliberate-deferral override:** if a new module is genuinely infrastructure-only (Protocol, scaffold) and has no caller *by design*, file a follow-up wire-in issue *first* and reference it in the closure comment under `### Wire-in deferred to #NNNN`.
 4. **Document the proof**
    - Commit hash(es): `<hash>: <commit message>`
    - Acceptance criteria met: `✅ Criterion 1`, `✅ Criterion 2`, etc.

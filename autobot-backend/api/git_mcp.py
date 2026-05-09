@@ -28,20 +28,33 @@ import asyncio
 import logging
 import re
 import subprocess
-from datetime import datetime, timezone
+
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
+
+from api.schemas_code import (
+    GitBlameRequest,
+    GitBranchRequest,
+    GitDiffRequest,
+    GitLogRequest,
+    GitMCPInfoResponse,
+    GitMCPOperationResponse,
+    GitMCPServiceStatusResponse,
+    GitShowRequest,
+    GitStatusRequest,
+    MCPTool,
+)
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.ssot_config import PROJECT_ROOT
 from autobot_shared.time_utils import now_utc
-from constants.threshold_constants import QueryDefaults
-from type_defs.common import JSONObject, Metadata
+
+from services.tool_output_filter import get_tool_output_filter
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
@@ -292,9 +305,12 @@ async def _run_git_process(cmd: List[str], repo_path: str, timeout: int) -> Meta
     stdout_str = stdout.decode("utf-8", errors="replace")
     stderr_str = stderr.decode("utf-8", errors="replace")
 
-    # Check output size
+    # Check output size, then apply semantic filter
     if len(stdout_str) > MAX_OUTPUT_SIZE:
-        stdout_str = stdout_str[:MAX_OUTPUT_SIZE] + "\n... (output truncated)"
+        stdout_str = stdout_str[:MAX_OUTPUT_SIZE]
+    stdout_str = get_tool_output_filter().prepare_and_filter(
+        " ".join(cmd[:3]), stdout_str, exit_code=process.returncode
+    )
 
     return {
         "success": process.returncode == 0,
@@ -334,186 +350,6 @@ async def execute_git_command(
     except Exception as e:
         logger.error("Git command execution error: %s", e)
         raise HTTPException(status_code=500, detail="Git command failed")
-
-
-# Pydantic Models
-
-
-class MCPTool(BaseModel):
-    """Standard MCP tool definition"""
-
-    name: str
-    description: str
-    input_schema: JSONObject
-
-
-class GitStatusRequest(BaseModel):
-    """Git status request model"""
-
-    repo_path: str = Field(
-        default=DEFAULT_REPO_PATH,
-        description="Repository path (must be whitelisted)",
-    )
-    short: Optional[bool] = Field(default=False, description="Use short format output")
-
-
-class GitLogRequest(BaseModel):
-    """Git log request model"""
-
-    repo_path: str = Field(
-        default=DEFAULT_REPO_PATH,
-        description="Repository path",
-    )
-    max_count: Optional[int] = Field(
-        default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
-        ge=1,
-        le=MAX_LOG_ENTRIES,
-        description=f"Maximum number of commits (1-{MAX_LOG_ENTRIES})",
-    )
-    oneline: Optional[bool] = Field(default=False, description="Use one-line format")
-    file_path: Optional[str] = Field(
-        default=None, description="Filter log to specific file"
-    )
-
-    @field_validator("file_path")
-    @classmethod
-    def validate_file_path(cls, v):
-        """Ensure file path is safe"""
-        if v:
-            if not _SAFE_PATH_RE.match(v):
-                raise ValueError("Invalid file path format")
-            if ".." in v:
-                raise ValueError("Path traversal not allowed")
-            if v.startswith("/"):
-                raise ValueError("Absolute paths not allowed")
-        return v
-
-    @field_validator("repo_path")
-    @classmethod
-    def validate_repo_path(cls, v):
-        """Basic validation for repository path"""
-        if not v or not v.strip():
-            raise ValueError("Repository path cannot be empty")
-        if _SHELL_METACHAR_RE.search(v):
-            raise ValueError("Invalid characters in repository path")
-        return v.strip()
-
-
-class GitDiffRequest(BaseModel):
-    """Git diff request model"""
-
-    repo_path: str = Field(
-        default=DEFAULT_REPO_PATH,
-        description="Repository path",
-    )
-    staged: Optional[bool] = Field(
-        default=False, description="Show staged changes only"
-    )
-    file_path: Optional[str] = Field(default=None, description="Diff specific file")
-    commit: Optional[str] = Field(
-        default=None, description="Compare with specific commit"
-    )
-
-    @field_validator("file_path")
-    @classmethod
-    def validate_file_path(cls, v):
-        """Ensure file path is safe"""
-        if v:
-            if not _SAFE_PATH_RE.match(v):
-                raise ValueError("Invalid file path format")
-            if ".." in v:
-                raise ValueError("Path traversal not allowed")
-            if v.startswith("/"):
-                raise ValueError("Absolute paths not allowed")
-        return v
-
-    @field_validator("commit")
-    @classmethod
-    def validate_commit_ref(cls, v):
-        """Ensure commit reference is safe"""
-        if v and not _COMMIT_REF_RE.match(v):
-            raise ValueError("Invalid commit reference format")
-        return v
-
-    @field_validator("repo_path")
-    @classmethod
-    def validate_repo_path(cls, v):
-        """Basic validation for repository path"""
-        if not v or not v.strip():
-            raise ValueError("Repository path cannot be empty")
-        if _SHELL_METACHAR_RE.search(v):
-            raise ValueError("Invalid characters in repository path")
-        return v.strip()
-
-
-class GitBranchRequest(BaseModel):
-    """Git branch request model"""
-
-    repo_path: str = Field(
-        default=DEFAULT_REPO_PATH,
-        description="Repository path",
-    )
-    all_branches: Optional[bool] = Field(
-        default=False, description="Show remote branches too"
-    )
-
-
-class GitBlameRequest(BaseModel):
-    """Git blame request model"""
-
-    repo_path: str = Field(
-        default=DEFAULT_REPO_PATH,
-        description="Repository path",
-    )
-    file_path: str = Field(..., description="File to blame")
-    line_start: Optional[int] = Field(
-        default=None, ge=1, description="Starting line number"
-    )
-    line_end: Optional[int] = Field(
-        default=None, ge=1, description="Ending line number"
-    )
-
-    @field_validator("file_path")
-    @classmethod
-    def validate_file_path(cls, v):
-        """Ensure file path is safe"""
-        if not _SAFE_PATH_RE.match(v):
-            raise ValueError("Invalid file path format")
-        if ".." in v:
-            raise ValueError("Path traversal not allowed")
-        if v.startswith("/"):
-            raise ValueError("Absolute paths not allowed")
-        return v
-
-    @field_validator("repo_path")
-    @classmethod
-    def validate_repo_path(cls, v):
-        """Basic validation for repository path"""
-        if not v or not v.strip():
-            raise ValueError("Repository path cannot be empty")
-        if _SHELL_METACHAR_RE.search(v):
-            raise ValueError("Invalid characters in repository path")
-        return v.strip()
-
-
-class GitShowRequest(BaseModel):
-    """Git show request model"""
-
-    repo_path: str = Field(
-        default=DEFAULT_REPO_PATH,
-        description="Repository path",
-    )
-    ref: str = Field(
-        default="HEAD", description="Commit or ref to show (default: HEAD)"
-    )
-
-    @field_validator("ref")
-    @classmethod
-    def validate_ref(cls, v):
-        """Ensure ref is safe"""
-        if not _FULL_REF_RE.match(v):
-            raise ValueError("Invalid ref format")
-        return v
 
 
 # MCP Tool Definitions
@@ -714,12 +550,12 @@ def _get_git_change_tools() -> List[MCPTool]:
     ]
 
 
+@router.get("/mcp/tools", response_model=List[MCPTool])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_git_mcp_tools",
     error_code_prefix="GIT_MCP",
 )
-@router.get("/mcp/tools")
 async def get_git_mcp_tools() -> List[MCPTool]:
     """
     Return all available Git Operations MCP tools
@@ -737,12 +573,12 @@ async def get_git_mcp_tools() -> List[MCPTool]:
 # Tool Implementations
 
 
+@router.post("/mcp/status", response_model=GitMCPOperationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="git_status_mcp",
     error_code_prefix="GIT_MCP",
 )
-@router.post("/mcp/status")
 async def git_status_mcp(request: GitStatusRequest) -> Metadata:
     """
     Get git repository status
@@ -776,12 +612,12 @@ async def git_status_mcp(request: GitStatusRequest) -> Metadata:
     }
 
 
+@router.post("/mcp/log", response_model=GitMCPOperationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="git_log_mcp",
     error_code_prefix="GIT_MCP",
 )
-@router.post("/mcp/log")
 async def git_log_mcp(request: GitLogRequest) -> Metadata:
     """
     Get commit history
@@ -823,12 +659,12 @@ async def git_log_mcp(request: GitLogRequest) -> Metadata:
     }
 
 
+@router.post("/mcp/diff", response_model=GitMCPOperationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="git_diff_mcp",
     error_code_prefix="GIT_MCP",
 )
-@router.post("/mcp/diff")
 async def git_diff_mcp(request: GitDiffRequest) -> Metadata:
     """
     Show git diff
@@ -874,12 +710,12 @@ async def git_diff_mcp(request: GitDiffRequest) -> Metadata:
     }
 
 
+@router.post("/mcp/branch", response_model=GitMCPOperationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="git_branch_mcp",
     error_code_prefix="GIT_MCP",
 )
-@router.post("/mcp/branch")
 async def git_branch_mcp(request: GitBranchRequest) -> Metadata:
     """
     List git branches
@@ -927,12 +763,12 @@ async def git_branch_mcp(request: GitBranchRequest) -> Metadata:
     }
 
 
+@router.post("/mcp/blame", response_model=GitMCPOperationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="git_blame_mcp",
     error_code_prefix="GIT_MCP",
 )
-@router.post("/mcp/blame")
 async def git_blame_mcp(request: GitBlameRequest) -> Metadata:
     """
     Show git blame for a file
@@ -971,12 +807,12 @@ async def git_blame_mcp(request: GitBlameRequest) -> Metadata:
     }
 
 
+@router.post("/mcp/show", response_model=GitMCPOperationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="git_show_mcp",
     error_code_prefix="GIT_MCP",
 )
-@router.post("/mcp/show")
 async def git_show_mcp(request: GitShowRequest) -> Metadata:
     """
     Show git commit details
@@ -1009,7 +845,12 @@ async def git_show_mcp(request: GitShowRequest) -> Metadata:
     }
 
 
-@router.get("/mcp/info")
+@router.get("/mcp/info", response_model=GitMCPInfoResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_git_repo_info",
+    error_code_prefix="GIT_MCP",
+)
 async def get_git_repo_info() -> Metadata:
     """
     Get information about whitelisted repositories
@@ -1067,12 +908,12 @@ async def get_git_repo_info() -> Metadata:
     }
 
 
+@router.get("/mcp/service_status", response_model=GitMCPServiceStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_git_mcp_status",
     error_code_prefix="GIT_MCP",
 )
-@router.get("/mcp/service_status")
 async def get_git_mcp_status() -> Metadata:
     """
     Get Git MCP service status

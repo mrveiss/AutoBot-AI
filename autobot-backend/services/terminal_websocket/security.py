@@ -10,12 +10,11 @@ Command risk assessment and security enforcement for terminal operations.
 import logging
 from typing import Set
 
-from api.terminal_models import (
-    MODERATE_RISK_PATTERNS,
-    RISKY_COMMAND_PATTERNS,
+from api.schemas_terminal import (
     CommandRiskLevel,
     SecurityLevel,
 )
+from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 
 logger = logging.getLogger(__name__)
 

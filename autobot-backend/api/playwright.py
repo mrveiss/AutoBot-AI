@@ -7,16 +7,17 @@ Provides native API access to containerized Playwright functionality
 """
 
 import logging
+from typing import Optional
 
 import aiohttp
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel
-
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from auth_middleware import check_admin_permission
+
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
-from autobot_shared.ssot_config import config as _ssot_config
 from constants.network_constants import NetworkConstants
+from research_browser_manager import get_research_browser_manager
 from services.playwright_service import (
     get_playwright_service,
     playwright_service,
@@ -24,49 +25,30 @@ from services.playwright_service import (
     send_test_message_embedded,
     test_frontend_embedded,
 )
+from api.schemas_common import DataResponse
+import base64
+
+from api.schemas_code import (
+    FrontendTestRequest,
+    PlaywrightBrowserActionResponse,
+    PlaywrightCapabilitiesResponse,
+    PlaywrightHealthResponse,
+    PlaywrightInteractRequest,
+    PlaywrightNavigateRequest,
+    PlaywrightQuickTestResponse,
+    PlaywrightReloadRequest,
+    PlaywrightScreenshotRequest,
+    PlaywrightSearchRequest,
+    PlaywrightStatusResponse,
+    PlaywrightWorkerStatusResponse,
+    SnapshotWithRegionsRequest,
+    SnapshotWithRegionsResponse,
+    TestMessageRequest,
+)
+from api.schemas_system import PlaywrightEmbeddedResultResponse
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = logging.getLogger(__name__)
-
-
-class SearchRequest(BaseModel):
-    query: str
-    search_engine: str = "duckduckgo"
-    max_results: int = 5
-
-
-class TestMessageRequest(BaseModel):
-    message: str = "what network scanning tools do we have available?"
-    frontend_url: str = _ssot_config.frontend_url
-
-
-class FrontendTestRequest(BaseModel):
-    frontend_url: str = _ssot_config.frontend_url
-
-
-class ScreenshotRequest(BaseModel):
-    url: str
-    full_page: bool = True
-    wait_timeout: int = 5000
-
-
-class NavigateRequest(BaseModel):
-    url: str
-    wait_until: str = "networkidle"
-    timeout: int = 30000
-
-
-class ReloadRequest(BaseModel):
-    wait_until: str = "networkidle"
-
-
-class InteractRequest(BaseModel):
-    action: str  # click, scroll, type, hover
-    x: float | None = None
-    y: float | None = None
-    deltaX: float = 0
-    deltaY: float = 0
-    text: str | None = None
 
 
 # Browser VM connection
@@ -75,12 +57,12 @@ BROWSER_VM_URL = (
 )
 
 
+@router.get("/status", response_model=PlaywrightStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_playwright_status",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.get("/status")
 async def get_playwright_status():
     """Get Playwright service status and capabilities"""
     try:
@@ -98,12 +80,40 @@ async def get_playwright_status():
         }
 
 
+@register_health_probe("playwright")
+async def probe_playwright(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for playwright module.
+
+    Lightweight check: inspect the module-level singleton without forcing
+    creation (which would require env-var resolution and a network probe).
+    ``ok`` if already initialized; ``degraded`` if not yet initialized.
+    """
+    try:
+        from services import playwright_service as _ps_mod
+
+        if getattr(_ps_mod, "_playwright_service", None) is None:
+            return ComponentHealth(
+                name="playwright",
+                status="degraded",
+                detail="service not yet initialized",
+            )
+        return ComponentHealth(name="playwright", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="playwright",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
+@router.get("/health", response_model=PlaywrightHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.get("/health")
 async def health_check():
     """Health check endpoint for Playwright service"""
     try:
@@ -125,13 +135,13 @@ async def health_check():
         raise HTTPException(status_code=503, detail="Playwright service unavailable")
 
 
+@router.post("/search", response_model=PlaywrightEmbeddedResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="web_search",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/search")
-async def web_search(request: SearchRequest):
+async def web_search(request: PlaywrightSearchRequest):
     """
     Perform web search using embedded Playwright
 
@@ -166,12 +176,12 @@ async def web_search(request: SearchRequest):
         raise HTTPException(status_code=500, detail="Web search failed")
 
 
+@router.post("/test-frontend", response_model=PlaywrightEmbeddedResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_frontend",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/test-frontend")
 async def test_frontend(request: FrontendTestRequest):
     """
     Test frontend functionality using embedded Playwright
@@ -200,12 +210,12 @@ async def test_frontend(request: FrontendTestRequest):
         raise HTTPException(status_code=500, detail="Frontend test failed")
 
 
+@router.post("/send-test-message", response_model=PlaywrightEmbeddedResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_test_message",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/send-test-message")
 async def send_test_message(request: TestMessageRequest):
     """
     Send test message through frontend using embedded Playwright
@@ -238,13 +248,13 @@ async def send_test_message(request: TestMessageRequest):
         raise HTTPException(status_code=500, detail="Test message failed")
 
 
+@router.post("/screenshot", response_model=PlaywrightEmbeddedResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="capture_screenshot",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/screenshot")
-async def capture_screenshot(request: ScreenshotRequest):
+async def capture_screenshot(request: PlaywrightScreenshotRequest):
     """
     Capture screenshot of webpage using embedded Playwright
 
@@ -277,12 +287,12 @@ async def capture_screenshot(request: ScreenshotRequest):
         raise HTTPException(status_code=500, detail="Screenshot failed")
 
 
+@router.post("/automation/quick-test", response_model=PlaywrightQuickTestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="quick_automation_test",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/automation/quick-test")
 async def quick_automation_test(background_tasks: BackgroundTasks):
     """
     Quick automation test to verify all Playwright functionality
@@ -340,13 +350,13 @@ async def quick_automation_test(background_tasks: BackgroundTasks):
     }
 
 
+@router.post("/navigate", response_model=PlaywrightBrowserActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="navigate",
+    operation="navigate_to_url",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/navigate")
-async def navigate_to_url(request: NavigateRequest):
+async def navigate_to_url(request: PlaywrightNavigateRequest):
     """
     Navigate to a URL using Playwright on Browser VM
 
@@ -385,13 +395,13 @@ async def navigate_to_url(request: NavigateRequest):
         raise HTTPException(status_code=500, detail="Navigation failed")
 
 
+@router.post("/reload", response_model=PlaywrightBrowserActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="reload",
+    operation="reload_page",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/reload")
-async def reload_page(request: ReloadRequest):
+async def reload_page(request: PlaywrightReloadRequest):
     """
     Reload the current page using Playwright on Browser VM
 
@@ -426,12 +436,12 @@ async def reload_page(request: ReloadRequest):
         raise HTTPException(status_code=500, detail="Reload failed")
 
 
+@router.post("/back", response_model=PlaywrightBrowserActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="go_back",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/back")
 async def go_back():
     """
     Navigate back in browser history using Playwright on Browser VM
@@ -468,12 +478,12 @@ async def go_back():
         raise HTTPException(status_code=500, detail="Back navigation failed")
 
 
+@router.post("/forward", response_model=PlaywrightBrowserActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="go_forward",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/forward")
 async def go_forward():
     """
     Navigate forward in browser history using Playwright on Browser VM
@@ -512,12 +522,12 @@ async def go_forward():
         raise HTTPException(status_code=500, detail="Forward navigation failed")
 
 
+@router.get("/worker-status", response_model=PlaywrightWorkerStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="worker_status",
+    operation="get_worker_status",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.get("/worker-status")
 async def get_worker_status():
     """
     Get browser worker connectivity status from Browser VM (#1130)
@@ -530,9 +540,17 @@ async def get_worker_status():
             f"{BROWSER_VM_URL}/status",
             timeout=aiohttp.ClientTimeout(total=10),
         ) as response:
-            result = await response.json()
-            logger.info("Worker status: %s", result.get("status"))
-            return result
+            data = await response.json()
+            logger.info("Worker status: %s", data.get("status"))
+            # Browser VM returns null fields when no session is connected;
+            # PlaywrightWorkerStatusResponse.browser_connected is non-nullable
+            # so coerce to bool here (None -> False).
+            page_open = data.get("page_open")
+            return {
+                "status": str(data.get("status") or "unknown"),
+                "browser_connected": bool(data.get("browser_connected")),
+                "page_open": page_open if isinstance(page_open, bool) else None,
+            }
     except aiohttp.ClientError as e:
         logger.warning("Browser VM unreachable: %s", e)
         return {
@@ -545,12 +563,12 @@ async def get_worker_status():
         return {"status": "error", "browser_connected": False, "page_open": False}
 
 
+@router.post("/worker-screenshot", response_model=PlaywrightBrowserActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="worker_screenshot",
+    operation="take_worker_screenshot",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/worker-screenshot")
 async def take_worker_screenshot():
     """
     Take screenshot of the persistent navigation page on Browser VM (#1130)
@@ -583,13 +601,13 @@ async def take_worker_screenshot():
         raise HTTPException(status_code=500, detail="Screenshot failed")
 
 
+@router.post("/interact", response_model=PlaywrightBrowserActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="interact",
+    operation="interact_with_page",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/interact")
-async def interact_with_page(request: InteractRequest):
+async def interact_with_page(request: PlaywrightInteractRequest):
     """Proxy interactive browser actions to Browser VM (#1416)"""
     allowed = {"click", "scroll", "type", "hover"}
     if request.action not in allowed:
@@ -634,12 +652,12 @@ async def interact_with_page(request: InteractRequest):
         raise HTTPException(status_code=500, detail="Interaction failed")
 
 
+@router.get("/capabilities", response_model=PlaywrightCapabilitiesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_capabilities",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.get("/capabilities")
 async def get_capabilities():
     """Get Playwright service capabilities and features"""
     return {
@@ -692,3 +710,113 @@ async def get_capabilities():
             "description": "Docker container with native API integration",
         },
     }
+
+
+# JavaScript used by snapshot_with_regions to walk the DOM and collect regions.
+_JS_COLLECT_REGIONS = """
+() => {
+  const results = [];
+  const seen = new Set();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  while (walker.nextNode()) {
+    const el = walker.currentNode;
+    const rect = el.getBoundingClientRect();
+    const area = rect.width * rect.height;
+    if (area < 20) continue;
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
+    if (rect.width === 0 || rect.height === 0) continue;
+    const key = `${Math.round(rect.x)},${Math.round(rect.y)},${Math.round(rect.width)},${Math.round(rect.height)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const role = el.getAttribute('role') || el.tagName.toLowerCase();
+    const textPreview = (el.textContent || '').trim().slice(0, 80);
+    if (!textPreview && !el.getAttribute('aria-label') && !el.getAttribute('alt')) continue;
+    let selector = el.tagName.toLowerCase();
+    if (el.id) selector = `#${el.id}`;
+    else if (el.className && typeof el.className === 'string') {
+      const cls = el.className.trim().split(/\\s+/)[0];
+      if (cls) selector = `.${cls}`;
+    }
+    let xpath = '';
+    let node = el;
+    while (node && node !== document.body) {
+      const tag = node.tagName.toLowerCase();
+      const idx = Array.from(node.parentElement?.children || []).filter(c => c.tagName === node.tagName).indexOf(node) + 1;
+      xpath = `/${tag}[${idx}]${xpath}`;
+      node = node.parentElement;
+    }
+    xpath = `/html/body${xpath}`;
+    results.push({
+      selector,
+      xpath,
+      rect: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
+      textPreview: textPreview || el.getAttribute('aria-label') || el.getAttribute('alt') || '',
+      role
+    });
+  }
+  return results.slice(0, 200);
+}
+"""
+
+
+@router.post(
+    "/snapshot-with-regions",
+    response_model=DataResponse[SnapshotWithRegionsResponse],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="snapshot_with_regions",
+    error_code_prefix="PLAYWRIGHT",
+)
+async def snapshot_with_regions(request: SnapshotWithRegionsRequest):
+    """
+    Take a screenshot of a research browser session and return detected page regions.
+
+    Returns a base64 PNG screenshot together with a list of interactive DOM regions
+    (selector, xpath, bounding rect, text preview, ARIA role) so the frontend can
+    overlay clickable highlights for scraping-template creation. (#5136)
+    """
+    manager = get_research_browser_manager()
+    session = manager.get_session(request.session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.page is None:
+        raise HTTPException(status_code=400, detail="Browser page not initialized")
+
+    logger.info(
+        "snapshot-with-regions: session=%s goal=%r", request.session_id, request.goal
+    )
+
+    screenshot_bytes: bytes = await session.page.screenshot(type="png")
+    screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
+
+    raw_regions: list = await session.page.evaluate(_JS_COLLECT_REGIONS)
+
+    viewport_size = session.page.viewport_size or {}
+
+    regions = [
+        {
+            "selector": r.get("selector", ""),
+            "xpath": r.get("xpath", ""),
+            "rect": r.get("rect", {"x": 0, "y": 0, "w": 0, "h": 0}),
+            "text_preview": r.get("textPreview", ""),
+            "role": r.get("role", ""),
+        }
+        for r in raw_regions
+    ]
+
+    logger.info(
+        "snapshot-with-regions: captured %d regions for session %s",
+        len(regions),
+        request.session_id,
+    )
+
+    return DataResponse(
+        data=SnapshotWithRegionsResponse(
+            screenshot=screenshot_b64,
+            regions=regions,
+            viewport=dict(viewport_size),
+        )
+    )

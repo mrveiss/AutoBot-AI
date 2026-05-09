@@ -32,7 +32,7 @@ export interface MemoOptions {
 
 interface CacheEntry<T> {
   value: T
-  deps: any[]
+  deps: unknown[]
   timestamp: number
 }
 
@@ -46,7 +46,7 @@ interface CacheEntry<T> {
  */
 export function useComputedMemo<T>(
   computeFn: () => T,
-  dependencies: () => any[],
+  dependencies: () => unknown[],
   options: MemoOptions = {}
 ): ComputedRef<T> {
   const { ttl = 120000, debug = false } = options
@@ -95,12 +95,13 @@ export function useComputedMemo<T>(
 /**
  * Compare two dependency arrays for equality
  */
-function depsEqual(a: any[], b: any[]): boolean {
+function depsEqual(a: unknown[], b: unknown[]): boolean {
   if (a.length !== b.length) return false
 
   for (let i = 0; i < a.length; i++) {
-    const aVal = isRef(a[i]) ? a[i].value : a[i]
-    const bVal = isRef(b[i]) ? b[i].value : b[i]
+    const aItem = a[i], bItem = b[i]
+    const aVal = isRef(aItem) ? aItem.value : aItem
+    const bVal = isRef(bItem) ? bItem.value : bItem
 
     if (!shallowEqual(aVal, bVal)) {
       return false
@@ -113,7 +114,7 @@ function depsEqual(a: any[], b: any[]): boolean {
 /**
  * Shallow equality check for arrays and objects
  */
-function shallowEqual(a: any, b: any): boolean {
+function shallowEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true
   if (a == null || b == null) return false
 
@@ -137,9 +138,9 @@ function shallowEqual(a: any, b: any): boolean {
  * @param options Memoization options
  * @returns Computed ref with memoization
  */
-export function useAggregationMemo<T extends number | Record<string, any>>(
+export function useAggregationMemo<T extends number | Record<string, unknown>>(
   computeFn: () => T,
-  dependencies: () => any[],
+  dependencies: () => unknown[],
   options: MemoOptions = {}
 ): ComputedRef<T> {
   return useComputedMemo(computeFn, dependencies, {
@@ -157,9 +158,9 @@ export function useAggregationMemo<T extends number | Record<string, any>>(
  * @param options Memoization options
  * @returns Computed ref with memoization
  */
-export function useGroupingMemo<T extends Record<string, any>>(
+export function useGroupingMemo<T extends Record<string, unknown>>(
   computeFn: () => T,
-  dependencies: () => any[],
+  dependencies: () => unknown[],
   options: MemoOptions = {}
 ): ComputedRef<T> {
   return useComputedMemo(computeFn, dependencies, {

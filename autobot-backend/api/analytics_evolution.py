@@ -21,7 +21,6 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
 
 from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 from auth_middleware import check_admin_permission
@@ -30,6 +29,14 @@ from autobot_shared.redis_client import get_redis_client
 from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.time_utils import parse_utc_iso
+from api.schemas_common import DataResponse
+from api.schemas_analytics import (
+    DateRangeParams,
+    EvolutionAnalysisRequest,
+    EvolutionAnalysisResponse,
+    EvolutionQualitySnapshot,
+    PatternSnapshot,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -213,50 +220,12 @@ def _filter_timeline_by_metrics(
     return filtered_timeline
 
 
-class QualitySnapshot(BaseModel):
-    """A point-in-time quality snapshot"""
-
-    timestamp: str
-    overall_score: float = Field(ge=0, le=100)
-    maintainability: float = Field(ge=0, le=100)
-    testability: float = Field(ge=0, le=100)
-    documentation: float = Field(ge=0, le=100)
-    complexity: float = Field(ge=0, le=100)
-    security: float = Field(ge=0, le=100)
-    performance: float = Field(ge=0, le=100)
-    total_files: int = 0
-    total_lines: int = 0
-    total_functions: int = 0
-    total_classes: int = 0
-    anti_patterns_count: int = 0
-    problems_count: int = 0
-
-
-class PatternSnapshot(BaseModel):
-    """Pattern adoption snapshot"""
-
-    timestamp: str
-    pattern_type: str
-    count: int
-    severity_distribution: Dict[str, int] = {}
-    top_files: List[str] = []
-
-
-class EvolutionTimelineRequest(BaseModel):
-    """Request for timeline data"""
-
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-    granularity: str = "daily"  # hourly, daily, weekly, monthly
-    metrics: List[str] = ["overall_score", "complexity", "maintainability"]
-
-
 def get_evolution_redis():
     """Get Redis client for evolution data storage"""
     return get_redis_client(database="analytics")
 
 
-async def store_quality_snapshot(snapshot: QualitySnapshot) -> bool:
+async def store_quality_snapshot(snapshot: EvolutionQualitySnapshot) -> bool:
     """Store a quality snapshot in Redis.
 
     Issue #361: Uses asyncio.to_thread() to avoid blocking event loop
@@ -358,15 +327,14 @@ def _build_timeline_response(
     }
 
 
+@router.get("/timeline", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_evolution_timeline",
-    error_code_prefix="EVOLUTION",
+    error_code_prefix="ANALYTICS_EVOLUTION",
 )
-@router.get("/timeline")
 async def get_evolution_timeline(
-    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
-    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    date_range: DateRangeParams = Depends(),
     granularity: str = Query(
         "daily", description="Data granularity: hourly, daily, weekly, monthly"
     ),
@@ -383,6 +351,10 @@ async def get_evolution_timeline(
     Issue #3441: When source_id is provided, timeline snapshots are read from
     the ``evolution:{source_id}:`` key namespace so only that project's
     history is returned.
+
+    Issue #7110: ``start_date`` / ``end_date`` query params consolidated into
+    ``DateRangeParams`` ``Depends()``. The two query params are unchanged at
+    the HTTP boundary — only the Python signature shifts.
     """
     await _resolve_source_or_404(source_id)
     evolution_prefix, _snap, _pat = _build_evolution_prefixes(source_id)
@@ -400,7 +372,7 @@ async def get_evolution_timeline(
         )
 
     try:
-        start_ts, end_ts = _parse_date_range(start_date, end_date)
+        start_ts, end_ts = _parse_date_range(date_range.start_date, date_range.end_date)
         timeline_data = await asyncio.to_thread(
             _fetch_timeline_snapshots, redis_client, start_ts, end_ts, evolution_prefix
         )
@@ -413,7 +385,11 @@ async def get_evolution_timeline(
         )
         return JSONResponse(
             _build_timeline_response(
-                filtered_timeline, start_date, end_date, granularity, requested_metrics
+                filtered_timeline,
+                date_range.start_date,
+                date_range.end_date,
+                granularity,
+                requested_metrics,
             )
         )
 
@@ -428,12 +404,12 @@ async def get_evolution_timeline(
         )
 
 
+@router.get("/patterns", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pattern_evolution",
-    error_code_prefix="EVOLUTION",
+    error_code_prefix="ANALYTICS_EVOLUTION",
 )
-@router.get("/patterns")
 async def get_pattern_evolution(
     pattern_type: Optional[str] = Query(
         None, description="Filter by pattern type (e.g., god_class, long_method)"
@@ -602,12 +578,12 @@ def _build_trends_success_response(
     }
 
 
+@router.get("/trends", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_quality_trends",
-    error_code_prefix="EVOLUTION",
+    error_code_prefix="ANALYTICS_EVOLUTION",
 )
-@router.get("/trends")
 async def get_quality_trends(
     days: int = Query(30, description="Number of days to analyze", ge=1, le=365),
     admin_check: bool = Depends(check_admin_permission),
@@ -674,14 +650,14 @@ async def get_quality_trends(
         )
 
 
+@router.post("/snapshot", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="record_snapshot",
-    error_code_prefix="EVOLUTION",
+    operation="record_quality_snapshot",
+    error_code_prefix="ANALYTICS_EVOLUTION",
 )
-@router.post("/snapshot")
 async def record_quality_snapshot(
-    snapshot: QualitySnapshot,
+    snapshot: EvolutionQualitySnapshot,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -711,12 +687,12 @@ async def record_quality_snapshot(
         )
 
 
+@router.post("/pattern-snapshot", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_pattern_snapshot",
-    error_code_prefix="EVOLUTION",
+    error_code_prefix="ANALYTICS_EVOLUTION",
 )
-@router.post("/pattern-snapshot")
 async def record_pattern_snapshot(
     snapshot: PatternSnapshot,
     admin_check: bool = Depends(check_admin_permission),
@@ -830,12 +806,12 @@ def _generate_json_export_response(timeline_data: list) -> JSONResponse:
     )
 
 
+@router.get("/export", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_evolution_data",
-    error_code_prefix="EVOLUTION",
+    error_code_prefix="ANALYTICS_EVOLUTION",
 )
-@router.get("/export")
 async def export_evolution_data(
     format: str = Query("json", description="Export format: json, csv"),
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
@@ -891,12 +867,12 @@ async def export_evolution_data(
         )
 
 
+@router.get("/summary", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_evolution_summary",
-    error_code_prefix="EVOLUTION",
+    error_code_prefix="ANALYTICS_EVOLUTION",
 )
-@router.get("/summary")
 async def get_evolution_summary(
     admin_check: bool = Depends(check_admin_permission),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
@@ -1165,33 +1141,6 @@ def _generate_demo_trends(days: int) -> Dict[str, Any]:
 # =============================================================================
 
 
-class EvolutionAnalysisRequest(BaseModel):
-    """Request to trigger code evolution analysis"""
-
-    repo_path: str = Field(description="Path to git repository to analyze")
-    start_date: Optional[str] = Field(
-        None, description="Start date for analysis (ISO format)"
-    )
-    end_date: Optional[str] = Field(
-        None, description="End date for analysis (ISO format)"
-    )
-    commit_limit: int = Field(
-        100, description="Maximum number of commits to analyze", ge=1, le=1000
-    )
-
-
-class EvolutionAnalysisResponse(BaseModel):
-    """Response from evolution analysis"""
-
-    status: str
-    message: str
-    commits_analyzed: int = 0
-    emerging_patterns: List[Dict[str, Any]] = []
-    declining_patterns: List[Dict[str, Any]] = []
-    refactorings_detected: int = 0
-    analysis_duration_seconds: float = 0.0
-
-
 async def _store_pattern_snapshots(analysis_result: Dict) -> int:
     """
     Store pattern snapshots from analysis results (Issue #243).
@@ -1253,12 +1202,12 @@ def _validate_evolution_repo_path(repo_path_str: str):
     return repo_path, None  # codeql[py/path-injection]
 
 
+@router.post("/analyze", response_model=EvolutionAnalysisResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="trigger_evolution_analysis",
-    error_code_prefix="EVOLUTION",
+    error_code_prefix="ANALYTICS_EVOLUTION",
 )
-@router.post("/analyze", response_model=EvolutionAnalysisResponse)
 async def trigger_evolution_analysis(
     request: EvolutionAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),

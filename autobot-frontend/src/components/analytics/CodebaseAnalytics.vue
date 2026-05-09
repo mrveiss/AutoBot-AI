@@ -444,11 +444,10 @@
 import { ref, computed, onMounted, onUnmounted, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import appConfig from '@/config/AppConfig.js'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
 import { useToast } from '@/composables/useToast'
+import { getCssVar } from '@/composables/useCssVars'
 import { useCodebaseExport, type SectionType } from '@/composables/analytics/useCodebaseExport'
 import type { ScanDefinition } from '@/composables/useAnalyticsScanRunner'
 import { useIndexingJob } from '@/composables/analytics/useIndexingJob'
@@ -525,6 +524,7 @@ const {
   sourceIdQuery,
   withSourceId,
   loadSources,
+  loadSourceById,
   handleSelectSource,
   handleSourceSaved,
   handleShareSaved,
@@ -621,6 +621,7 @@ const {
   codeSmellsProgressTitle,
   exportingReport,
   clearingCache,
+  clearCache: clearCache_composable,
   runCodeSmellAnalysis,
   getCodeHealthScore,
   securityScore,
@@ -853,38 +854,17 @@ const handleStop = () => {
   }
 }
 
-// Clear analysis cache
-const clearCache = async () => {
-  clearingCache.value = true
-  progressStatus.value = t('analytics.codebase.status.clearingCache')
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/cache`), {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' }
-    })
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Status ${response.status}: ${errorText}`)
-    }
-    const result = await response.json()
+// Clear analysis cache — delegates to useCodeIntelAnalysis.clearCache (#6068)
+const clearCache = () =>
+  clearCache_composable(withSourceId, () => {
     codebaseStats.value = null
     problemsReport.value = []
     declarationAnalysis.value = []
     duplicateAnalysis.value = []
     hardcodeAnalysis.value = []
     chartData.value = null
-    notify(t('analytics.codebase.notify.cacheCleared', { count: result.deleted_keys || 0 }), 'success')
     progressStatus.value = t('analytics.codebase.status.cacheCleared')
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.error('Cache clear failed:', error)
-    notify(t('analytics.codebase.notify.cacheClearFailed', { error: errorMessage }), 'error')
-    progressStatus.value = t('analytics.codebase.status.cacheClearFailed')
-  } finally {
-    clearingCache.value = false
-  }
-}
+  })
 
 // Run full analysis with scan runner
 const runFullAnalysis = async () => {
@@ -943,26 +923,9 @@ onMounted(async () => {
     return
   }
 
-  // Load source metadata from backend
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const resp = await fetchWithAuth(
-      `${backendUrl}/api/analytics/codebase/sources/${sourceId}`,
-    )
-    if (resp.ok) {
-      const source = await resp.json()
-      selectedSource.value = source
-      rootPath.value = source.clone_path || ''
-      localStorage.setItem(STORAGE_KEY_PATH, rootPath.value)
-    } else {
-      notify(t('analytics.codebase.notify.sourceNotFound'), 'error')
-      analyticsRouter.replace({ name: 'analytics-codebase' })
-      return
-    }
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err)
-    logger.error('Failed to load source metadata:', msg)
-    notify(t('analytics.codebase.notify.sourceNotFound'), 'error')
+  // Load source metadata from backend (#6068: extracted to useSourceRegistry)
+  const loaded = await loadSourceById(sourceId)
+  if (!loaded) {
     analyticsRouter.replace({ name: 'analytics-codebase' })
     return
   }
@@ -1034,7 +997,7 @@ onUnmounted(() => {
 .project-meta-item.status-error { color: var(--color-error, #ef4444); }
 
 .btn-primary {
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   border: none;
   border-radius: var(--radius-lg);
   font-weight: var(--font-semibold);
@@ -1133,7 +1096,7 @@ onUnmounted(() => {
   background: var(--chart-indigo);
   color: var(--text-on-primary);
   border: none;
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--duration-200);
@@ -1187,7 +1150,7 @@ onUnmounted(() => {
 }
 
 .kb-optin-btn {
-  padding: 8px 14px;
+  padding: var(--spacing-2) var(--spacing-3-5);
   background: var(--color-success);
   border: none;
   border-radius: var(--radius-lg);
@@ -1239,7 +1202,7 @@ onUnmounted(() => {
 .project-sub-tabs {
   display: flex;
   gap: var(--spacing-0-5);
-  padding: 0 0 0 0;
+  padding: var(--spacing-0) var(--spacing-0) var(--spacing-0) var(--spacing-0);
   overflow-x: auto;
   border-bottom: 1px solid var(--border-default);
   background-color: var(--bg-secondary);
@@ -1249,7 +1212,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-1-5);
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);

@@ -20,6 +20,12 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from config import unified_config_manager
 from services.config_service import ConfigService
 from type_defs.common import Metadata
+from api.schemas_system import (
+    DeveloperConfigResponse,
+    DeveloperConfigUpdateResponse,
+    DeveloperEndpointsResponse,
+    DeveloperSystemInfoResponse,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -87,12 +93,12 @@ class APIRegistry:
 api_registry = APIRegistry()
 
 
+@router.get("/endpoints", response_model=DeveloperEndpointsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_api_endpoints",
     error_code_prefix="DEVELOPER",
 )
-@router.get("/endpoints")
 async def get_api_endpoints():
     """Get all registered API endpoints (developer mode)"""
     developer_mode = unified_config_manager.get_nested("developer.enabled", False)
@@ -103,12 +109,12 @@ async def get_api_endpoints():
     return api_registry.get_all_endpoints()
 
 
+@router.get("/config", response_model=DeveloperConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_developer_config",
     error_code_prefix="DEVELOPER",
 )
-@router.get("/config")
 async def get_developer_config():
     """Get developer mode configuration"""
     developer_config = unified_config_manager.get_nested("developer", {})
@@ -120,12 +126,12 @@ async def get_developer_config():
     }
 
 
+@router.post("/config", response_model=DeveloperConfigUpdateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_developer_config",
     error_code_prefix="DEVELOPER",
 )
-@router.post("/config")
 async def update_developer_config(config: dict):
     """Update developer mode configuration"""
     # Update the configuration
@@ -141,12 +147,12 @@ async def update_developer_config(config: dict):
     return {"status": "success", "config": current_config}
 
 
+@router.get("/system-info", response_model=DeveloperSystemInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_info",
     error_code_prefix="DEVELOPER",
 )
-@router.get("/system-info")
 async def get_system_info():
     """Get system information for debugging"""
     developer_mode = unified_config_manager.get_nested("developer.enabled", False)

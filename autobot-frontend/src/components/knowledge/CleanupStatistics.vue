@@ -114,10 +114,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useKnowledgeCleanupStats } from '@/composables/knowledge/useKnowledgeCleanupStats'
+import type { CleanupOptions } from '@/composables/knowledge/useKnowledgeCleanupStats'
 
 const logger = createLogger('CleanupStatistics')
 const { t } = useI18n()
@@ -126,40 +126,23 @@ const emit = defineEmits<{
   (e: 'cleanup-complete', result: { action: string; details: string }): void
 }>()
 
-// Types
-interface CleanupOptions {
-  removeEmpty: boolean
-  removeOrphanedTags: boolean
-  fixMetadata: boolean
-}
-
-interface IssuesFound {
-  empty_facts: number
-  orphaned_tags: number
-  malformed_metadata: number
-}
-
-interface ScanResult {
-  dry_run: boolean
-  issues_found: IssuesFound
-}
-
 interface StatusMessage {
   type: 'success' | 'error' | 'warning' | 'info'
   text: string
   icon: string
 }
 
+// Composable
+const { scanResult, isScanning, isCleaning, scanForIssues, runCleanup: doCleanup } =
+  useKnowledgeCleanupStats()
+
 // State
 const options = ref<CleanupOptions>({
   removeEmpty: true,
   removeOrphanedTags: true,
-  fixMetadata: true
+  fixMetadata: true,
 })
 
-const isScanning = ref(false)
-const isCleaning = ref(false)
-const scanResult = ref<ScanResult | null>(null)
 const statusMessage = ref<StatusMessage | null>(null)
 
 // Computed
@@ -175,7 +158,7 @@ const showStatus = (type: StatusMessage['type'], text: string) => {
     success: 'fas fa-check-circle',
     error: 'fas fa-exclamation-circle',
     warning: 'fas fa-exclamation-triangle',
-    info: 'fas fa-info-circle'
+    info: 'fas fa-info-circle',
   }
   statusMessage.value = { type, text, icon: icons[type] }
 
@@ -191,39 +174,23 @@ const showStatus = (type: StatusMessage['type'], text: string) => {
 const runDryScan = async () => {
   if (isScanning.value || isCleaning.value) return
 
+  statusMessage.value = null
+
   try {
-    isScanning.value = true
-    scanResult.value = null
-    statusMessage.value = null
+    const result = await scanForIssues(options.value)
+    const total =
+      (result.issues_found.empty_facts || 0) +
+      (result.issues_found.orphaned_tags || 0) +
+      (result.issues_found.malformed_metadata || 0)
 
-    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/cleanup`, {
-      remove_empty: options.value.removeEmpty,
-      remove_orphaned_tags: options.value.removeOrphanedTags,
-      fix_metadata: options.value.fixMetadata,
-      dry_run: true
-    })
-
-
-    if (data.success !== false) {
-      scanResult.value = {
-        dry_run: true,
-        issues_found: data.issues_found || { empty_facts: 0, orphaned_tags: 0, malformed_metadata: 0 }
-      }
-
-      const total = getTotalIssues.value
-      if (total > 0) {
-        showStatus('warning', t('knowledge.cleanup.foundIssues', { count: total }))
-      } else {
-        showStatus('success', t('knowledge.cleanup.noIssuesFound'))
-      }
+    if (total > 0) {
+      showStatus('warning', t('knowledge.cleanup.foundIssues', { count: total }))
     } else {
-      throw new Error(data.message || 'Scan failed')
+      showStatus('success', t('knowledge.cleanup.noIssuesFound'))
     }
   } catch (error: any) {
     logger.error('Failed to scan for issues:', error)
     showStatus('error', error.message || t('knowledge.cleanup.errorScan'))
-  } finally {
-    isScanning.value = false
   }
 }
 
@@ -232,21 +199,13 @@ const runCleanup = async () => {
   if (!scanResult.value || getTotalIssues.value === 0) return
 
   const confirmed = window.confirm(
-    t('knowledge.cleanup.confirmCleanup', { count: getTotalIssues.value })
+    t('knowledge.cleanup.confirmCleanup', { count: getTotalIssues.value }),
   )
 
   if (!confirmed) return
 
   try {
-    isCleaning.value = true
-
-    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/cleanup`, {
-      remove_empty: options.value.removeEmpty,
-      remove_orphaned_tags: options.value.removeOrphanedTags,
-      fix_metadata: options.value.fixMetadata,
-      dry_run: false
-    })
-
+    const data = await doCleanup(options.value)
 
     if (data.success !== false) {
       const total =
@@ -255,20 +214,17 @@ const runCleanup = async () => {
         (data.fixes_applied?.metadata_fixed || 0)
 
       showStatus('success', t('knowledge.cleanup.cleanupSuccess', { count: total }))
-      scanResult.value = null
 
       emit('cleanup-complete', {
         action: 'Knowledge Base Cleanup',
-        details: `Cleaned ${total} issues`
+        details: `Cleaned ${total} issues`,
       })
     } else {
-      throw new Error(data.message || 'Cleanup failed')
+      throw new Error((data.message as string) || 'Cleanup failed')
     }
   } catch (error: any) {
     logger.error('Failed to run cleanup:', error)
     showStatus('error', error.message || t('knowledge.cleanup.errorCleanup'))
-  } finally {
-    isCleaning.value = false
   }
 }
 </script>

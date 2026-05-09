@@ -1132,7 +1132,7 @@ onUnmounted(() => {
   font-family: monospace;
   font-size: 0.8rem;
   background: var(--bg-secondary);
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-sm);
   overflow-x: auto;
 }
@@ -1275,7 +1275,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-1);
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
   font-size: 0.8rem;
   border-radius: var(--radius-sm);
   background: var(--bg-primary);

@@ -1,0 +1,54 @@
+---
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Reusable TLS-cert stat tasks (#7272)
+#
+# Stats the three standard TLS files in {{ tls_cert_dir }} and registers
+# them so role templates can conditionally emit TLS directives only when
+# the certs actually exist on the target host. Pattern source: #6677
+# (roles/backend) and #6701 (roles/redis), both of which hand-rolled
+# the same dance.
+#
+# Why centralize:
+#   - Safety by default: any new role emitting TLS config picks up the
+#     stat-guard automatically by including this file.
+#   - Single source of truth: cert filename convention changes propagate
+#     in one place (e.g. ``fullchain.pem`` instead of ``server-cert.pem``).
+#   - Discoverable: ``grep -rn "stat_tls_certs.yml"`` lists all consumers.
+#   - Testable: one mock fixture covers many template tests.
+#
+# Usage:
+#   - name: "<role> | Stat TLS certs"
+#     ansible.builtin.include_tasks: ../../_shared/tasks/stat_tls_certs.yml
+#     vars:
+#       tls_cert_dir: "{{ <role>_tls_cert_dir }}"
+#
+# Then in the role's template, gate TLS lines on the registered values:
+#   {% if tls_ca_cert.stat.exists | default(false) %}
+#   tls-ca-cert-file {{ tls_cert_dir }}/ca-cert.pem
+#   {% endif %}
+#
+# Files stat'd:
+#   server-cert.pem  → register: tls_server_cert
+#   server-key.pem   → register: tls_server_key
+#   ca-cert.pem      → register: tls_ca_cert
+#
+# All three are stat'd unconditionally; consumers reference only what
+# they need.
+
+- name: "TLS | Stat server cert at {{ tls_cert_dir }}/server-cert.pem"
+  ansible.builtin.stat:
+    path: "{{ tls_cert_dir }}/server-cert.pem"
+  register: tls_server_cert
+
+- name: "TLS | Stat server key at {{ tls_cert_dir }}/server-key.pem"
+  ansible.builtin.stat:
+    path: "{{ tls_cert_dir }}/server-key.pem"
+  register: tls_server_key
+
+- name: "TLS | Stat CA cert at {{ tls_cert_dir }}/ca-cert.pem"
+  ansible.builtin.stat:
+    path: "{{ tls_cert_dir }}/ca-cert.pem"
+  register: tls_ca_cert

@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.time_utils import utc_timestamp
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 # Issue #3355: prefix moved to router registry (analytics_routers.py)
@@ -286,11 +287,12 @@ def _build_unified_report_response(
     }
 
 
+@router.get("/report", response_model=DataResponse)
 @with_error_handling(
-    category=ErrorCategory.API,
-    error_code_prefix="UNIFIED",
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_unified_report",
+    error_code_prefix="ANALYTICS_REPORTING",
 )
-@router.get("/report")
 async def get_unified_report():
     """
     Get unified analytics report aggregating all analytics sources.
@@ -325,11 +327,12 @@ async def get_unified_report():
     return JSONResponse(content=response)
 
 
+@router.get("/summary", response_model=DataResponse)
 @with_error_handling(
-    category=ErrorCategory.API,
-    error_code_prefix="UNIFIED",
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_quick_summary",
+    error_code_prefix="ANALYTICS_REPORTING",
 )
-@router.get("/summary")
 async def get_quick_summary():
     """
     Get a quick summary of code health.
@@ -361,11 +364,12 @@ async def get_quick_summary():
     )
 
 
+@router.get("/trends", response_model=DataResponse)
 @with_error_handling(
-    category=ErrorCategory.API,
-    error_code_prefix="UNIFIED",
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_trends",
+    error_code_prefix="ANALYTICS_REPORTING",
 )
-@router.get("/trends")
 async def get_trends():
     """
     Get analytics trends over time.

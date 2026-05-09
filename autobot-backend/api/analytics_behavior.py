@@ -17,16 +17,27 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 
 import asyncio
 import logging
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.user_behavior_analytics import UserEvent, get_behavior_analytics
+from api.schemas_analytics import (
+    BehaviorDailyStatsResponse,
+    BehaviorEngagementResponse,
+    BehaviorFeatureComparisonResponse,
+    BehaviorFeatureMetricsResponse,
+    BehaviorHeatmapResponse,
+    BehaviorPeakUsageResponse,
+    BehaviorRecentEventsResponse,
+    BehaviorSummaryResponse,
+    BehaviorTrackEventResponse,
+    TrackEventRequest,
+    UserJourneyResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/behavior", tags=["analytics", "behavior"])
@@ -37,60 +48,17 @@ router = APIRouter(prefix="/behavior", tags=["analytics", "behavior"])
 # ============================================================================
 
 
-class TrackEventRequest(BaseModel):
-    """Request model for tracking user events"""
-
-    event_type: str = Field(
-        ..., description="Type of event (page_view, click, search, etc.)"
-    )
-    feature: str = Field(..., description="Feature area (chat, knowledge, tools, etc.)")
-    user_id: Optional[str] = Field(None, description="User ID if authenticated")
-    session_id: Optional[str] = Field(None, description="Session ID")
-    duration_ms: Optional[int] = Field(
-        None, ge=0, description="Duration in milliseconds"
-    )
-    metadata: Optional[dict] = Field(
-        default_factory=dict, description="Additional metadata"
-    )
-
-
-class FeatureMetricsResponse(BaseModel):
-    """Response model for feature metrics"""
-
-    timestamp: str
-    features: dict
-    total_features: int
-
-
-class UserJourneyResponse(BaseModel):
-    """Response model for user journey"""
-
-    session_id: str
-    steps: list
-    total_steps: int
-    features_visited: list
-
-
-class EngagementMetricsResponse(BaseModel):
-    """Response model for engagement metrics"""
-
-    timestamp: str
-    metrics: dict
-    feature_popularity: list
-    most_popular_feature: Optional[str]
-
-
 # ============================================================================
 # EVENT TRACKING ENDPOINTS
 # ============================================================================
 
 
+@router.post("/track", response_model=BehaviorTrackEventResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="track_user_event",
-    error_code_prefix="BEHAVIOR",
+    error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.post("/track")
 async def track_user_event(
     request: TrackEventRequest,
     current_user: dict = Depends(get_current_user),
@@ -124,12 +92,12 @@ async def track_user_event(
     }
 
 
+@router.get("/events/recent", response_model=BehaviorRecentEventsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_recent_events",
-    error_code_prefix="BEHAVIOR",
+    error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/events/recent")
 async def get_recent_events(
     limit: int = Query(
         default=100, ge=1, le=1000, description="Number of events to return"
@@ -157,12 +125,12 @@ async def get_recent_events(
 # ============================================================================
 
 
+@router.get("/features", response_model=BehaviorFeatureMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_feature_metrics",
-    error_code_prefix="BEHAVIOR",
+    error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/features")
 async def get_feature_metrics(
     feature: Optional[str] = Query(
         None, description="Specific feature to get metrics for"
@@ -182,12 +150,12 @@ async def get_feature_metrics(
     return metrics
 
 
+@router.get("/features/comparison", response_model=BehaviorFeatureComparisonResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_feature_comparison",
-    error_code_prefix="BEHAVIOR",
+    error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/features/comparison")
 async def get_feature_comparison(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -234,12 +202,12 @@ async def get_feature_comparison(
 # ============================================================================
 
 
+@router.get("/journey/{session_id}", response_model=UserJourneyResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_user_journey",
-    error_code_prefix="BEHAVIOR",
+    error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/journey/{session_id}", response_model=UserJourneyResponse)
 async def get_user_journey(
     session_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -267,12 +235,12 @@ async def get_user_journey(
 # ============================================================================
 
 
+@router.get("/engagement", response_model=BehaviorEngagementResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_engagement_metrics",
-    error_code_prefix="BEHAVIOR",
+    error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/engagement")
 async def get_engagement_metrics(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -295,12 +263,12 @@ async def get_engagement_metrics(
 # ============================================================================
 
 
+@router.get("/stats/daily", response_model=BehaviorDailyStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_daily_stats",
-    error_code_prefix="BEHAVIOR",
+    error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/stats/daily")
 async def get_daily_stats(
     days: int = Query(
         default=30, ge=1, le=90, description="Number of days to retrieve"
@@ -320,12 +288,12 @@ async def get_daily_stats(
     return stats
 
 
+@router.get("/stats/heatmap", response_model=BehaviorHeatmapResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_usage_heatmap",
-    error_code_prefix="BEHAVIOR",
+    error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/stats/heatmap")
 async def get_usage_heatmap(
     days: int = Query(default=7, ge=1, le=30, description="Number of days to include"),
     admin_check: bool = Depends(check_admin_permission),
@@ -343,12 +311,12 @@ async def get_usage_heatmap(
     return heatmap
 
 
+@router.get("/stats/peak", response_model=BehaviorPeakUsageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_peak_usage",
-    error_code_prefix="BEHAVIOR",
+    error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/stats/peak")
 async def get_peak_usage(
     days: int = Query(default=7, ge=1, le=30, description="Number of days to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -398,12 +366,12 @@ async def get_peak_usage(
 # ============================================================================
 
 
+@router.get("/summary", response_model=BehaviorSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_behavior_summary",
-    error_code_prefix="BEHAVIOR",
+    error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/summary")
 async def get_behavior_summary(
     admin_check: bool = Depends(check_admin_permission),
 ):

@@ -26,14 +26,21 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, validator
 
+from api.system_health import register_app_state_probe
+
+from api.schemas_knowledge import (
+    GraphRAGHealthResponse,
+    GraphRAGSearchRequest,
+    GraphRAGSearchResponse,
+)
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
 from services.graph_rag_service import GraphRAGService
 from type_defs.common import Metadata
 from utils.request_utils import generate_request_id
+from api.schemas_common import DataResponse
 
 # ====================================================================
 # Router Configuration
@@ -45,57 +52,6 @@ logger = logging.getLogger(__name__)
 # ====================================================================
 # Request/Response Models
 # ====================================================================
-
-
-class GraphRAGSearchRequest(BaseModel):
-    """Request model for graph-aware RAG search."""
-
-    query: str = Field(
-        ..., min_length=1, max_length=1000, description="Search query string"
-    )
-    start_entity: Optional[str] = Field(
-        None,
-        max_length=200,
-        description="Optional starting entity name for graph traversal",
-    )
-    max_depth: int = Field(
-        2, ge=1, le=3, description="Maximum graph traversal depth (1-3 hops)"
-    )
-    max_results: int = Field(
-        5, ge=1, le=20, description="Maximum number of results to return"
-    )
-    enable_reranking: bool = Field(
-        True, description="Whether to apply cross-encoder reranking"
-    )
-    timeout: Optional[float] = Field(
-        None, ge=1.0, le=30.0, description="Optional timeout in seconds (1-30s)"
-    )
-
-    @validator("query")
-    def validate_query(cls, v):
-        """Validate query is not just whitespace."""
-        if not v.strip():
-            raise ValueError("Query cannot be empty or whitespace")
-        return v.strip()
-
-
-class GraphRAGSearchResponse(BaseModel):
-    """Response model for graph-aware RAG search."""
-
-    success: bool = Field(..., description="Whether the search succeeded")
-    results: List[Metadata] = Field(..., description="Search results")
-    metrics: Metadata = Field(..., description="Performance metrics")
-    request_id: str = Field(..., description="Unique request identifier")
-
-
-class GraphRAGHealthResponse(BaseModel):
-    """Response model for health check."""
-
-    status: str = Field(
-        ..., description="Service status (healthy, degraded, unhealthy)"
-    )
-    components: Dict[str, str] = Field(..., description="Component health status")
-    timestamp: str = Field(..., description="Timestamp of health check")
 
 
 # ====================================================================
@@ -185,12 +141,12 @@ def _determine_overall_status(components: Dict[str, str]) -> str:
     return "unhealthy"
 
 
+@router.post("/search", response_model=GraphRAGSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="graph_rag_search",
     error_code_prefix="GRAPH_RAG",
 )
-@router.post("/search", response_model=GraphRAGSearchResponse)
 async def graph_rag_search(
     search_request: GraphRAGSearchRequest = Body(...),
     service: GraphRAGService = Depends(get_graph_rag_service),
@@ -247,12 +203,15 @@ async def graph_rag_search(
         raise HTTPException(status_code=500, detail="Graph-RAG search failed")
 
 
+register_app_state_probe("graph_rag", "graph_rag_service")
+
+
+@router.get("/health", response_model=GraphRAGHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="graph_rag_health",
     error_code_prefix="GRAPH_RAG",
 )
-@router.get("/health", response_model=GraphRAGHealthResponse)
 async def graph_rag_health(
     service: GraphRAGService = Depends(get_graph_rag_service),
     current_user: dict = Depends(get_current_user),
@@ -312,12 +271,12 @@ async def graph_rag_health(
         )
 
 
+@router.get("/metrics", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="graph_rag_metrics",
     error_code_prefix="GRAPH_RAG",
 )
-@router.get("/metrics")
 async def graph_rag_metrics(
     service: GraphRAGService = Depends(get_graph_rag_service),
     current_user: dict = Depends(get_current_user),

@@ -10,10 +10,20 @@
  * Uses Navigator.onLine as fast initial signal, then probes the backend health
  * endpoint for confirmation (handles captive portals and VPN splits).
  *
- * Features tagged as:
- *   - 'local-only'       — always available (Ollama inference, KB search)
- *   - 'requires-network' — disabled when offline (web research, cloud LLMs)
- *   - 'prefers-network'  — works offline with degraded output (analytics sync)
+ * "Online" means the browser can reach the backend. It says nothing about whether
+ * the backend itself can reach external services — server-side features like
+ * web research and cloud LLM calls run from the backend's outbound connectivity
+ * and are NOT gated by this composable.
+ *
+ * FeatureConnectivity tiers (#6566):
+ *   - 'local-only'       — works without browser→backend connectivity at all
+ *                          (purely client-rendered views; no API calls).
+ *   - 'requires-network' — needs the browser to reach the backend; disable
+ *                          submit/CTA buttons when offline. Reserve for features
+ *                          that genuinely cannot be queued (e.g., realtime
+ *                          streams). Do NOT use for backend-executed features
+ *                          like web research, RAG, or cloud LLMs.
+ *   - 'prefers-network'  — works offline via cache/queue; show staleness hints.
  */
 
 import { ref, readonly, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope } from 'vue'

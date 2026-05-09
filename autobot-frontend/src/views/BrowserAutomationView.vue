@@ -14,6 +14,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBrowserAutomation } from '@/composables/useBrowserAutomation'
 import { createLogger } from '@/utils/debugUtils'
+import Icon from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
 const logger = createLogger('BrowserAutomationView')
@@ -137,7 +138,7 @@ function selectSession(session: typeof sessions.value[0]) {
 
     <!-- Error Alert -->
     <div v-if="error" class="alert alert-error">
-      <i class="fas fa-exclamation-circle"></i>
+      <Icon name="exclamation-circle" />
       <div class="alert-content">
         <strong>{{ $t('views.browserAutomation.error') }}</strong>
         <p>{{ error }}</p>
@@ -147,13 +148,13 @@ function selectSession(session: typeof sessions.value[0]) {
     <!-- Tabs -->
     <nav class="tab-nav">
       <button @click="activeTab = 'control'" :class="['tab-btn', { active: activeTab === 'control' }]">
-        <i class="fas fa-gamepad"></i> {{ $t('views.browserAutomation.controlPanel') }}
+        <Icon name="gamepad" /> {{ $t('views.browserAutomation.controlPanel') }}
       </button>
       <button @click="activeTab = 'sessions'" :class="['tab-btn', { active: activeTab === 'sessions' }]">
-        <i class="fas fa-window-restore"></i> {{ $t('views.browserAutomation.sessionsTab', { count: sessions.length }) }}
+        <Icon name="window-restore" /> {{ $t('views.browserAutomation.sessionsTab', { count: sessions.length }) }}
       </button>
       <button @click="activeTab = 'scripts'" :class="['tab-btn', { active: activeTab === 'scripts' }]">
-        <i class="fas fa-code"></i> {{ $t('views.browserAutomation.automationScripts') }}
+        <Icon name="code" /> {{ $t('views.browserAutomation.automationScripts') }}
       </button>
     </nav>
 
@@ -227,7 +228,7 @@ function selectSession(session: typeof sessions.value[0]) {
           </div>
           <div class="card-body actions-panel">
             <button @click="handleScreenshot" :disabled="isLoading" class="btn-action-secondary btn-full">
-              <i class="fas fa-camera"></i> {{ $t('views.browserAutomation.takeScreenshot') }}
+              <Icon name="camera" /> {{ $t('views.browserAutomation.takeScreenshot') }}
             </button>
             <div class="script-block">
               <textarea v-model="scriptInput" rows="4" :placeholder="$t('views.browserAutomation.jsPlaceholder')" class="field-input code-textarea"></textarea>
@@ -256,7 +257,7 @@ function selectSession(session: typeof sessions.value[0]) {
       <!-- Sessions Tab -->
       <div v-show="activeTab === 'sessions'" class="tab-panel">
         <div v-if="sessions.length === 0" class="empty-state">
-          <i class="fas fa-window-restore"></i>
+          <Icon name="window-restore" size="xl" />
           <p>{{ $t('views.browserAutomation.noActiveSessions') }}</p>
         </div>
         <div v-else class="card">
@@ -357,8 +358,7 @@ function selectSession(session: typeof sessions.value[0]) {
 .btn-link:hover { color: var(--color-primary-hover); }
 .btn-link-danger { color: var(--color-error); }
 .btn-link-danger:hover { color: var(--color-error-hover); }
-.empty-state { text-align: center; padding: var(--spacing-12) var(--spacing-4); color: var(--text-secondary); }
-.empty-state i { font-size: var(--text-3xl); margin-bottom: var(--spacing-3); display: block; color: var(--text-muted); }
+.empty-state { text-align: center; padding: var(--spacing-12) var(--spacing-4); color: var(--text-secondary); display: flex; flex-direction: column; align-items: center; gap: var(--spacing-3); }
 .empty-state p { margin: var(--spacing-0); font-size: var(--text-sm); }
 @media (max-width: 768px) {
   .input-action-row { flex-direction: column; }

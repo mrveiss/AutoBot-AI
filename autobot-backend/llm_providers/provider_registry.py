@@ -276,6 +276,14 @@ class ProviderRegistry:
     # Introspection
     # ------------------------------------------------------------------
 
+    def get_provider_by_name(self, name: str) -> Optional[BaseProvider]:
+        """Return the registered provider with the given name, or None (#5132).
+
+        This is the public accessor for ``_providers``; callers should use this
+        instead of accessing the private attribute directly.
+        """
+        return self._providers.get(name)
+
     def list_providers(self) -> List[Dict[str, object]]:
         """Return a serialisable summary of registered providers."""
         return [

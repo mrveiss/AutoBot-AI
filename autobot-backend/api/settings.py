@@ -9,13 +9,26 @@ import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
 
 import aiofiles
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from api.schemas_system import (
+    ClearCacheResponse,
+    ConfigSyncRequest,
+    ConfigSyncResponse,
+    HardwarePriorityRequest,
+    HardwarePriorityResponse,
+    RBACInitRequest,
+    RBACStatusResponse,
+    SettingsTaskQueuedResponse,
+    SettingsTaskStatusResponse,
+    SystemUpdateRequest,
+    UpdateStatusResponse,
+    WorkerStatusResponse,
+)
 
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission
@@ -35,42 +48,17 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# Issue #687: RBAC initialization request model
-import re
-
 # Issue #687: RBAC marker path constant
 RBAC_MARKER_PATH = Path("/etc/autobot/rbac-initialized")
 
 
-class RBACInitRequest(BaseModel):
-    """Request model for RBAC initialization."""
 
-    create_admin: bool = False
-    admin_username: str = "admin"
-
-    @classmethod
-    def validate_admin_username(cls, v: str) -> str:
-        """Validate admin username format."""
-        if len(v) < 3 or len(v) > 32:
-            raise ValueError("Username must be 3-32 characters")
-        if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", v):
-            raise ValueError(
-                "Username must start with a letter and contain only letters, numbers, and underscores"
-            )
-        return v
-
-    def __init__(self, **data):
-        super().__init__(**data)
-        if self.create_admin:
-            self.admin_username = self.validate_admin_username(self.admin_username)
-
-
+@router.get("/", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_settings",
     error_code_prefix="SETTINGS",
 )
-@router.get("/")
 async def get_settings():
     """Get application settings - now uses full config from config.yaml"""
     try:
@@ -80,12 +68,12 @@ async def get_settings():
         raise_server_error("API_0003", "Error getting settings")
 
 
+@router.get("/settings", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_settings_explicit",
     error_code_prefix="SETTINGS",
 )
-@router.get("/settings")
 async def get_settings_explicit():
     """Get application settings.
 
@@ -104,12 +92,12 @@ async def get_settings_explicit():
         raise_server_error("API_0003", "Error getting settings")
 
 
+@router.post("/", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="save_settings",
     error_code_prefix="SETTINGS",
 )
-@router.post("/")
 async def save_settings(
     settings_data: dict,
     session: AsyncSession = Depends(get_db_session),
@@ -138,12 +126,12 @@ async def save_settings(
         raise_server_error("API_0003", "Error saving settings")
 
 
+@router.post("/settings", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="save_settings_explicit",
     error_code_prefix="SETTINGS",
 )
-@router.post("/settings")
 async def save_settings_explicit(
     settings_data: dict,
     session: AsyncSession = Depends(get_db_session),
@@ -180,12 +168,12 @@ async def save_settings_explicit(
         raise_server_error("API_0003", "Error saving settings")
 
 
+@router.get("/backend", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_backend_settings",
     error_code_prefix="SETTINGS",
 )
-@router.get("/backend")
 async def get_backend_settings():
     """Get backend-specific settings"""
     try:
@@ -195,12 +183,12 @@ async def get_backend_settings():
         raise_server_error("API_0003", "Error getting backend settings")
 
 
+@router.post("/backend", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="save_backend_settings",
     error_code_prefix="SETTINGS",
 )
-@router.post("/backend")
 async def save_backend_settings(
     backend_settings: dict,
     session: AsyncSession = Depends(get_db_session),
@@ -224,12 +212,12 @@ async def save_backend_settings(
         raise_server_error("API_0003", "Error saving backend settings")
 
 
+@router.get("/config", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_full_config",
     error_code_prefix="SETTINGS",
 )
-@router.get("/config")
 async def get_full_config():
     """Get complete application configuration"""
     try:
@@ -239,12 +227,12 @@ async def get_full_config():
         raise_server_error("API_0003", "Error getting full config")
 
 
+@router.post("/config", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="save_full_config",
     error_code_prefix="SETTINGS",
 )
-@router.post("/config")
 async def save_full_config(
     config_data: dict,
     session: AsyncSession = Depends(get_db_session),
@@ -268,12 +256,12 @@ async def save_full_config(
         raise_server_error("API_0003", "Error saving full config")
 
 
+@router.post("/clear-cache", response_model=ClearCacheResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_cache",
     error_code_prefix="SETTINGS",
 )
-@router.post("/clear-cache")
 async def clear_cache():
     """Clear application cache - includes config cache"""
     try:
@@ -301,12 +289,12 @@ async def clear_cache():
 # ==================== RBAC Management Endpoints (Issue #687) ====================
 
 
+@router.post("/rbac/initialize", response_model=SettingsTaskQueuedResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="initialize_rbac",
-    error_code_prefix="RBAC",
+    operation="initialize_rbac_endpoint",
+    error_code_prefix="SETTINGS",
 )
-@router.post("/rbac/initialize")
 async def initialize_rbac_endpoint(
     request: RBACInitRequest,
     _: None = Depends(check_admin_permission),
@@ -350,12 +338,12 @@ async def initialize_rbac_endpoint(
         raise_server_error("RBAC_0001", "Error queuing RBAC initialization")
 
 
+@router.get("/rbac/status/{task_id}", response_model=SettingsTaskStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_rbac_task_status",
-    error_code_prefix="RBAC",
+    error_code_prefix="SETTINGS",
 )
-@router.get("/rbac/status/{task_id}")
 async def get_rbac_task_status(
     task_id: str,
     _: None = Depends(check_admin_permission),
@@ -397,12 +385,12 @@ async def get_rbac_task_status(
         raise_server_error("RBAC_0002", "Error getting task status")
 
 
+@router.get("/rbac/status", response_model=RBACStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_rbac_status",
-    error_code_prefix="RBAC",
+    error_code_prefix="SETTINGS",
 )
-@router.get("/rbac/status")
 async def get_rbac_status(
     _: None = Depends(check_admin_permission),
 ):
@@ -439,26 +427,13 @@ async def get_rbac_status(
 UPDATES_MARKER_PATH = Path("/etc/autobot/last-update")
 
 
-class SystemUpdateRequest(BaseModel):
-    """Request model for system updates (Issue #544)."""
 
-    update_type: str = "dependencies"  # 'dependencies' or 'system'
-    target_groups: Optional[list] = None  # Host groups to update (None = all)
-    dry_run: bool = False  # Preview mode
-    force_update: bool = False  # Skip version checks
-
-    def __init__(self, **data):
-        super().__init__(**data)
-        if self.update_type not in ("dependencies", "system"):
-            raise ValueError("update_type must be 'dependencies' or 'system'")
-
-
+@router.post("/updates/run", response_model=SettingsTaskQueuedResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="run_system_update",
-    error_code_prefix="UPDATES",
+    operation="run_system_update_endpoint",
+    error_code_prefix="SETTINGS",
 )
-@router.post("/updates/run")
 async def run_system_update_endpoint(
     request: SystemUpdateRequest,
     _: None = Depends(check_admin_permission),
@@ -521,12 +496,12 @@ async def run_system_update_endpoint(
         raise_server_error("UPDATES_0001", "Error queuing system update")
 
 
+@router.get("/updates/status/{task_id}", response_model=SettingsTaskStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_update_task_status",
-    error_code_prefix="UPDATES",
+    error_code_prefix="SETTINGS",
 )
-@router.get("/updates/status/{task_id}")
 async def get_update_task_status(
     task_id: str,
     _: None = Depends(check_admin_permission),
@@ -610,12 +585,12 @@ def _check_celery_worker_available() -> tuple[bool, str]:
         return False, "Cannot verify worker status"
 
 
+@router.get("/updates/worker-status", response_model=WorkerStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="check_celery_health",
-    error_code_prefix="UPDATES",
+    operation="check_celery_worker_status",
+    error_code_prefix="SETTINGS",
 )
-@router.get("/updates/worker-status")
 async def check_celery_worker_status(
     _: None = Depends(check_admin_permission),
 ):
@@ -633,12 +608,12 @@ async def check_celery_worker_status(
     }
 
 
+@router.post("/updates/check", response_model=SettingsTaskQueuedResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="check_available_updates",
-    error_code_prefix="UPDATES",
+    operation="check_updates_endpoint",
+    error_code_prefix="SETTINGS",
 )
-@router.post("/updates/check")
 async def check_updates_endpoint(
     _: None = Depends(check_admin_permission),
 ):
@@ -685,12 +660,12 @@ async def check_updates_endpoint(
         raise_server_error("UPDATES_0003", "Error queuing update check")
 
 
+@router.get("/updates/status", response_model=UpdateStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_update_status",
-    error_code_prefix="UPDATES",
+    error_code_prefix="SETTINGS",
 )
-@router.get("/updates/status")
 async def get_update_status(
     _: None = Depends(check_admin_permission),
 ):
@@ -772,23 +747,6 @@ def _exceeds_depth(obj: Any, current_depth: int = 0) -> bool:
     return False
 
 
-class ConfigSyncRequest(BaseModel):
-    """Request body for POST /api/settings/sync.
-
-    The *settings* dict is merged into the active settings.json so callers
-    can send partial payloads — only the provided keys are changed.
-    """
-
-    settings: dict
-
-
-class ConfigSyncResponse(BaseModel):
-    """Response body for POST /api/settings/sync."""
-
-    status: str
-    changed: dict  # keys that changed: {key: {"before": old, "after": new}}
-    unchanged_keys: int
-
 
 def _compute_flat_diff(before: dict, after: dict, prefix: str = "") -> dict:
     """Return a flat dict of keys whose values changed between *before* and *after*.
@@ -840,12 +798,12 @@ def _count_unchanged_keys(incoming: dict, changed: dict) -> int:
     return max(0, all_incoming_leaf_count - len(changed))
 
 
+@router.post("/sync", response_model=ConfigSyncResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="sync_config",
     error_code_prefix="SETTINGS",
 )
-@router.post("/sync", response_model=ConfigSyncResponse)
 async def sync_config(
     request: ConfigSyncRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -937,41 +895,13 @@ async def sync_config(
 
 # ==================== Hardware Priority Endpoint (Issue #3288) ====================
 
-_VALID_HARDWARE_TYPES = frozenset({"npu", "gpu", "cpu"})
 
-
-class HardwarePriorityRequest(BaseModel):
-    """Request body for PATCH /api/settings/hardware-priority.
-
-    priority_order must be a permutation of ["npu", "gpu", "cpu"] — all three
-    values required, no duplicates.
-    """
-
-    priority_order: List[str]
-
-    def model_post_init(self, __context) -> None:  # noqa: ANN001
-        given = set(self.priority_order)
-        if given != _VALID_HARDWARE_TYPES or len(self.priority_order) != 3:
-            raise ValueError(
-                f"priority_order must be a permutation of {sorted(_VALID_HARDWARE_TYPES)}, "
-                f"got {self.priority_order}"
-            )
-
-
-class HardwarePriorityResponse(BaseModel):
-    """Response body for PATCH /api/settings/hardware-priority."""
-
-    status: str
-    priority_order: List[str]
-    changed: dict
-
-
+@router.patch("/hardware-priority", response_model=HardwarePriorityResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_hardware_priority",
     error_code_prefix="SETTINGS",
 )
-@router.patch("/hardware-priority", response_model=HardwarePriorityResponse)
 async def update_hardware_priority(
     request: HardwarePriorityRequest,
     session: AsyncSession = Depends(get_db_session),

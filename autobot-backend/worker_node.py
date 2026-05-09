@@ -25,7 +25,7 @@ try:
     import torch
 
     TORCH_AVAILABLE = True
-except ImportError:
+except (ImportError, RuntimeError):
     logger.warning("PyTorch not available or CUDA libraries missing")
     TORCH_AVAILABLE = False
     torch = None
@@ -34,9 +34,9 @@ from autobot_shared.redis_client import get_redis_client
 
 # Import the centralized ConfigManager and Redis client utility
 from config import config as global_config_manager
-from event_manager import event_manager
+from event_manager import get_event_manager
 from knowledge_base import KnowledgeBase
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 from security_layer import SecurityLayer
 from system_integration import SystemIntegration
 from task_handlers import TaskExecutor
@@ -76,7 +76,8 @@ class WorkerNode:
             logger.info("Worker node configured for local task transport. " "No Redis connection.")
 
         # Initialize modules that worker might need for task execution
-        self.llm_interface = LLMInterface()
+        # #6983: migrated from LLMInterface to LLMService (#3185 missed this caller)
+        self.llm_service = get_llm_service()
         self.knowledge_base = KnowledgeBase()
         self.gui_controller = GUIController()
         self.system_integration = SystemIntegration()
@@ -232,7 +233,9 @@ class WorkerNode:
         """Detect available LLM backends."""
         backends = ["ollama"]
 
-        if self.llm_interface.openai_api_key:
+        # #6983: post-LLMService migration, openai_api_key is no longer exposed on the
+        # service surface. Read from config directly — same effective check.
+        if global_config_manager.get_nested("llm_config.openai.api_key"):
             backends.append("openai")
         if global_config_manager.get_nested("llm_config.transformers.model_path"):
             backends.append("transformers")
@@ -254,7 +257,7 @@ class WorkerNode:
             logger.info("Worker capabilities reported to Redis channel '%s'.", channel)
         else:
             logger.debug("Worker capabilities detected (local mode): %s", capabilities)
-            await event_manager.publish("worker_capability_report", capabilities)
+            await get_event_manager().publish("worker_capability_report", capabilities)
 
     def _validate_user_role(self, task_type: str, task_id: str, user_role: Optional[str]) -> Optional[Dict[str, Any]]:
         """Validate that user_role is provided for task execution.
@@ -351,7 +354,7 @@ class WorkerNode:
 
     async def _publish_task_start(self, task_id: str, task_type: str, user_role: str) -> None:
         """Publish task start event and log execution start. Issue #620."""
-        await event_manager.publish(
+        await get_event_manager().publish(
             "worker_task_start",
             {"worker_id": self.worker_id, "task_id": task_id, "type": task_type},
         )
@@ -365,7 +368,7 @@ class WorkerNode:
 
     async def _publish_task_completion(self, task_id: str, result: Dict[str, Any]) -> None:
         """Publish task completion event and log result. Issue #620."""
-        await event_manager.publish(
+        await get_event_manager().publish(
             "worker_task_end",
             {"worker_id": self.worker_id, "task_id": task_id, "result": result},
         )

@@ -10,15 +10,15 @@ Provides REST API access to GPU-accelerated multi-modal AI capabilities
 import logging
 import time
 import uuid
-from typing import Dict, List, Optional, Union
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+
+from api.system_health import ComponentHealth, register_health_probe
 
 from ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from constants.threshold_constants import QueryDefaults
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,
@@ -28,61 +28,20 @@ from multimodal_processor import (
 
 # Import AutoBot multi-modal components
 from npu_semantic_search import get_npu_search_engine
-from type_defs.common import Metadata
+from api.schemas_common import DataResponse
+from api.schemas_knowledge import (
+    CrossModalSearchRequest,
+    CrossModalSearchResponse,
+    EmbeddingRequest,
+    MultiModalResponse,
+    TextProcessingRequest,
+)
+from api.schemas_system import MultimodalHealthResponse
 
 logger = logging.getLogger(__name__)
 
 # Initialize router
 router = APIRouter(tags=["multimodal"])
-
-
-# Pydantic models for request/response
-class CrossModalSearchRequest(BaseModel):
-    query: Union[str, bytes]
-    query_modality: str = Field(..., description="Type of query: text, image, audio")
-    target_modalities: Optional[List[str]] = Field(
-        default=None, description="Target modalities to search"
-    )
-    limit: int = Field(
-        default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
-        ge=1,
-        le=100,
-        description="Maximum results per modality",
-    )
-    similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-
-
-class TextProcessingRequest(BaseModel):
-    text: str = Field(..., description="Text content to process")
-    intent: str = Field(default="analysis", description="Processing intent")
-    metadata: Optional[Metadata] = Field(default=None)
-
-
-class EmbeddingRequest(BaseModel):
-    content: Union[str, bytes]
-    modality: str = Field(..., description="Content modality: text, image, audio")
-    preferred_device: Optional[str] = Field(
-        default=None, description="Preferred processing device"
-    )
-
-
-class MultiModalResponse(BaseModel):
-    success: bool
-    result_id: str
-    modality: str
-    processing_time: float
-    confidence: float
-    result_data: Metadata
-    device_used: Optional[str] = None
-    error_message: Optional[str] = None
-
-
-class CrossModalSearchResponse(BaseModel):
-    query: str
-    query_modality: str
-    results: Dict[str, List[Metadata]]
-    total_found: int
-    processing_time: float
 
 
 # Helper functions
@@ -131,12 +90,12 @@ def _build_image_modal_input(
 # API Endpoints
 
 
+@router.post("/process/image", response_model=MultiModalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="process_image",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/process/image", response_model=MultiModalResponse)
 async def process_image(
     file: UploadFile = File(...),
     intent: str = Form(default="analysis"),
@@ -194,12 +153,12 @@ async def process_image(
         )
 
 
+@router.post("/process/audio", response_model=MultiModalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="process_audio",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/process/audio", response_model=MultiModalResponse)
 async def process_audio(
     file: UploadFile = File(...),
     intent: str = Form(default="voice_command"),
@@ -266,12 +225,12 @@ async def process_audio(
         )
 
 
+@router.post("/process/text", response_model=MultiModalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="process_text",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/process/text", response_model=MultiModalResponse)
 async def process_text(
     request: TextProcessingRequest,
     current_user: dict = Depends(get_current_user),
@@ -325,12 +284,12 @@ async def process_text(
         )
 
 
+@router.post("/embeddings/generate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_embedding",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/embeddings/generate")
 async def generate_embedding(
     request: EmbeddingRequest,
     current_user: dict = Depends(get_current_user),
@@ -381,12 +340,12 @@ async def generate_embedding(
         }
 
 
+@router.post("/search/cross-modal", response_model=CrossModalSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cross_modal_search",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/search/cross-modal", response_model=CrossModalSearchResponse)
 async def cross_modal_search(
     request: CrossModalSearchRequest,
     current_user: dict = Depends(get_current_user),
@@ -454,12 +413,12 @@ async def cross_modal_search(
         )
 
 
+@router.get("/stats", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_multimodal_stats",
     error_code_prefix="MULTIMODAL",
 )
-@router.get("/stats")
 async def get_multimodal_stats(
     current_user: dict = Depends(get_current_user),
 ):
@@ -623,12 +582,12 @@ def _create_combined_input(
     )
 
 
+@router.post("/fusion/combine", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="combine_multimodal_inputs",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/fusion/combine")
 async def combine_multimodal_inputs(
     text: Optional[str] = Form(default=None),
     image_file: Optional[UploadFile] = File(default=None),
@@ -692,12 +651,12 @@ async def combine_multimodal_inputs(
 
 
 # Performance monitoring endpoints
+@router.get("/performance/stats", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_stats",
     error_code_prefix="MULTIMODAL",
 )
-@router.get("/performance/stats")
 async def get_performance_stats(
     current_user: dict = Depends(get_current_user),
 ):
@@ -738,12 +697,12 @@ async def get_performance_stats(
         }
 
 
+@router.post("/performance/optimize", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="optimize_performance",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/performance/optimize")
 async def optimize_performance(
     current_user: dict = Depends(get_current_user),
 ):
@@ -773,12 +732,12 @@ async def optimize_performance(
         }
 
 
+@router.get("/performance/summary", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_summary",
     error_code_prefix="MULTIMODAL",
 )
-@router.get("/performance/summary")
 async def get_performance_summary(
     current_user: dict = Depends(get_current_user),
 ):
@@ -801,12 +760,12 @@ async def get_performance_summary(
         }
 
 
+@router.post("/performance/batch-size", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_batch_size",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/performance/batch-size")
 async def update_batch_size(
     modality: str,
     batch_size: int,
@@ -851,13 +810,36 @@ async def update_batch_size(
         }
 
 
+@register_health_probe("multimodal")
+async def probe_multimodal(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for multimodal module.
+
+    Lightweight check: confirm the module-imported ``unified_processor`` is
+    bound. Skips the lazy torch import the handler performs.
+    """
+    try:
+        if unified_processor is None:
+            return ComponentHealth(
+                name="multimodal", status="down", detail="processor unavailable"
+            )
+        return ComponentHealth(name="multimodal", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="multimodal",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
 # Health check endpoint
+@router.get("/health", response_model=MultimodalHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
     error_code_prefix="MULTIMODAL",
 )
-@router.get("/health")
 async def health_check(
     current_user: dict = Depends(get_current_user),
 ):

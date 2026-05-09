@@ -54,6 +54,21 @@ def _log_connection_error(attempt: int, exc: Exception) -> None:
         logger.debug("AI Stack client error (attempt %s, suppressed): %s", attempt, exc)
 
 
+async def _handle_transient_error(
+    e: Exception,
+    attempt: int,
+    retry_attempts: int,
+    retry_delay: float,
+    final_error: "AIStackError",
+) -> None:
+    """Log and sleep on transient connection errors; raise on final attempt."""
+    _log_connection_error(attempt + 1, e)
+    if attempt < retry_attempts - 1:
+        await asyncio.sleep(retry_delay * (attempt + 1))
+    else:
+        raise final_error from e
+
+
 class AIStackError(Exception):
     """Base exception for AI Stack communication errors."""
 
@@ -93,9 +108,9 @@ async def _process_ai_stack_response(
             None,
             False,
             AIStackError(
-                f"AI Stack request failed: {response.status}",
+                f"AI Stack error: upstream HTTP {response.status}",
                 status_code=response.status,
-                details={"response": response_text, "url": url},
+                details={"response": response_text[:500], "url": url},
             ),
         )
 
@@ -251,20 +266,42 @@ class AIStackClient:
                         raise error
                     return result
 
-            except aiohttp.ClientError as e:
-                _log_connection_error(attempt + 1, e)
-                if attempt < self.retry_attempts - 1:
-                    await asyncio.sleep(self.retry_delay * (attempt + 1))
-                    continue
-
-                raise AIStackError(
-                    "Failed to connect to AI Stack",
-                    details={"error": type(e).__name__, "url": url},
+            except asyncio.TimeoutError as e:
+                await _handle_transient_error(
+                    e, attempt, self.retry_attempts, self.retry_delay,
+                    AIStackError(
+                        f"AI Stack unreachable: connection timed out"
+                        f" ({self.timeout.total}s) to {url}",
+                        details={"error": type(e).__name__, "url": url},
+                    ),
                 )
+                continue
+            except aiohttp.ClientConnectorError as e:
+                await _handle_transient_error(
+                    e, attempt, self.retry_attempts, self.retry_delay,
+                    AIStackError(
+                        f"AI Stack unreachable: connection refused at {url}",
+                        details={
+                            "error": type(e).__name__,
+                            "url": url,
+                            "os_error": str(e.os_error) if e.os_error else None,
+                        },
+                    ),
+                )
+                continue
+            except aiohttp.ClientError as e:
+                await _handle_transient_error(
+                    e, attempt, self.retry_attempts, self.retry_delay,
+                    AIStackError(
+                        f"AI Stack connection error: {type(e).__name__}: {e}",
+                        details={"error": type(e).__name__, "url": url},
+                    ),
+                )
+                continue
             except Exception as e:
-                logger.warning("Unexpected error in AI Stack request: %s", e)
+                logger.warning("Unexpected error in AI Stack request: %s: %s", type(e).__name__, e)
                 raise AIStackError(
-                    "Unexpected error during AI Stack request",
+                    f"Unexpected error during AI Stack request: {type(e).__name__}: {e}",
                     details={"error": type(e).__name__, "url": url},
                 )
 
@@ -288,8 +325,9 @@ class AIStackClient:
     async def health_check(self) -> Metadata:
         """Check AI Stack health status and update connection_status."""
         try:
-            # ChromaDB uses /api/v2 for heartbeat (not /health)
-            response = await self._make_request("GET", "/api/v2")
+            # AI Stack exposes /health (#6649) — /api/v2 is the ChromaDB heartbeat
+            # path and was wrongly applied here, producing a 404 every poll.
+            response = await self._make_request("GET", "/health")
             if self.connection_status != "connected":
                 logger.info("AI Stack connection restored at %s", self.base_url)
             self.connection_status = "connected"

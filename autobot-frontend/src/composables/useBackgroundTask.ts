@@ -13,9 +13,10 @@
  * Author: mrveiss
  */
 
-import { ref, type Ref } from 'vue'
+import { ref, onUnmounted, type Ref } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import { getConfig } from '@/config/ssot-config'
+import apiClient from '@/utils/ApiClient'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
@@ -50,17 +51,18 @@ async function getBackendUrl(): Promise<string> {
  * Clear stuck tasks for a given endpoint.
  * Shared helper used by both 409 recovery and orphan auto-retry.
  */
-async function clearStuckTasks(clearUrl: string): Promise<void> {
-  const backendUrl = await getBackendUrl()
-  await fetchWithAuth(
-    `${backendUrl}${clearUrl}?force=true`,
-    { method: 'POST' },
-  )
+async function clearStuckTasks(clearUrl: string, signal?: AbortSignal): Promise<void> {
+  // Note: apiClient.post does not support AbortSignal; signal parameter kept for API compatibility.
+  void signal
+  await apiClient.post(`${clearUrl}?force=true`)
 }
 
 /**
  * POST to the /analyze endpoint and return the response.
  * Shared helper to avoid duplicating the fetch logic.
+ *
+ * fetchWithAuth retained: callers check response.status === 409 for conflict detection.
+ * ApiClient throws on non-2xx making status inspection impossible. Exempt.
  */
 async function postAnalyze(
   baseUrl: string,
@@ -68,7 +70,7 @@ async function postAnalyze(
   fetchOpts: RequestInit,
 ): Promise<Response> {
   const backendUrl = await getBackendUrl()
-  return fetchWithAuth(`${backendUrl}${baseUrl}/analyze${qs}`, fetchOpts)
+  return fetchWithAuth(`${backendUrl}${baseUrl}/analyze${qs}`, fetchOpts) // fetchWithAuth retained: callers inspect response.status === 409 — exempt (#6256)
 }
 
 /**
@@ -91,6 +93,10 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
 
   const resolvedClearUrl = clearStuckUrl ?? `${baseUrl}/tasks/clear-stuck`
 
+  // AbortControllers for in-flight requests
+  let _startController: AbortController | null = null
+  let _pollController: AbortController | null = null
+
   /**
    * POST to start the analysis, then poll until done.
    * Handles 409 conflict and orphaned tasks by auto-clearing and retrying once.
@@ -109,6 +115,10 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
       return false
     }
 
+    _startController?.abort()
+    _startController = new AbortController()
+    const signal = _startController.signal
+
     running.value = true
     progress.value = 0
     currentStep.value = null
@@ -117,7 +127,7 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
     result.value = null
 
     try {
-      const fetchOpts: RequestInit = { method: 'POST' }
+      const fetchOpts: RequestInit = { method: 'POST', signal }
       if (body) {
         fetchOpts.headers = { 'Content-Type': 'application/json' }
         fetchOpts.body = JSON.stringify(body)
@@ -132,7 +142,7 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
       // Auto-clear stuck tasks on 409 and retry once
       if (response.status === 409 && resolvedClearUrl) {
         logger.info('Task conflict (409), clearing stuck tasks…')
-        await clearStuckTasks(resolvedClearUrl)
+        await clearStuckTasks(resolvedClearUrl, signal)
         response = await postAnalyze(baseUrl, qs, fetchOpts)
       }
 
@@ -160,8 +170,16 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
         error.value = null
         progress.value = 0
 
-        await clearStuckTasks(resolvedClearUrl)
-        const retryResp = await postAnalyze(baseUrl, qs, fetchOpts)
+        // Check abort before retry
+        if (signal.aborted) return false
+
+        await clearStuckTasks(resolvedClearUrl, signal)
+        const retryOpts: RequestInit = { method: 'POST', signal }
+        if (body) {
+          retryOpts.headers = { 'Content-Type': 'application/json' }
+          retryOpts.body = JSON.stringify(body)
+        }
+        const retryResp = await postAnalyze(baseUrl, qs, retryOpts)
         if (!retryResp.ok) {
           throw new Error(`Retry failed: ${retryResp.statusText}`)
         }
@@ -176,6 +194,10 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
 
       return !error.value
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        running.value = false
+        return false
+      }
       error.value = e instanceof Error ? e.message : String(e)
       logger.error('Background task start failed:', e)
       running.value = false
@@ -194,6 +216,10 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
     let consecutiveErrors = 0
     let resolved = false
 
+    _pollController?.abort()
+    _pollController = new AbortController()
+    const pollSignal = _pollController.signal
+
     type PollResult = { done: boolean; outcome: 'completed' | 'failed' | 'orphaned' | 'error' | 'running' }
 
     return new Promise<'completed' | 'failed' | 'orphaned' | 'error'>((resolve) => {
@@ -205,7 +231,10 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
         async () => {
           try {
             const backendUrl = await getBackendUrl()
-            const resp = await fetchWithAuth(`${backendUrl}${baseUrl}/status/${id}`)
+            const resp = await fetchWithAuth( // fetchWithAuth retained: AbortController signal for polling abort — exempt (#6256)
+              `${backendUrl}${baseUrl}/status/${id}`,
+              { signal: pollSignal },
+            )
             if (!resp.ok) throw new Error(`Status ${resp.status}`)
 
             const data: TaskStatus = await resp.json()
@@ -235,6 +264,10 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
 
             return { done: false, outcome: 'running' }
           } catch (e: unknown) {
+            if (e instanceof DOMException && e.name === 'AbortError') {
+              running.value = false
+              return { done: true, outcome: 'error' }
+            }
             consecutiveErrors++
             const msg = e instanceof Error ? e.message : String(e)
             logger.warn(`Poll error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}): ${msg}`)
@@ -269,6 +302,11 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
     taskId.value = null
     taskStatus.value = null
   }
+
+  onUnmounted(() => {
+    _startController?.abort()
+    _pollController?.abort()
+  })
 
   return {
     running,

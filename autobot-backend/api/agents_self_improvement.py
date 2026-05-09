@@ -12,7 +12,13 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel
+
+from api.schemas_agent import (
+    LearnedStrategyResponse,
+    ResetLearningResponse,
+    TaskOutcomeResponse,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -43,42 +49,15 @@ def _get_learner():
     return _pattern_learner
 
 
-class TaskOutcomeResponse(BaseModel):
-    """Serialized task outcome record."""
-
-    task_type: str
-    goal: str
-    output_summary: str
-    strategy_used: str
-    score: float
-    rationale: str
-    timestamp: str
-
-
-class LearnedStrategyResponse(BaseModel):
-    """Serialized learned strategy record."""
-
-    task_type: str
-    best_approach: str
-    best_prompt_template: str
-    avg_score: float
-    sample_size: int
-    confidence: float
-    failure_patterns: List[str]
-    timestamp: str
-
-
-class ResetLearningResponse(BaseModel):
-    """Response for reset-learning operation."""
-
-    success: bool
-    message: str
-
-
 @router.get(
     "/{agent_id}/outcomes",
     response_model=List[TaskOutcomeResponse],
     summary="Get task outcome history for an agent",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_outcomes",
+    error_code_prefix="AGENTS_SELF_IMPROVEMENT",
 )
 async def get_agent_outcomes(
     agent_id: str,
@@ -97,6 +76,11 @@ async def get_agent_outcomes(
     response_model=Optional[LearnedStrategyResponse],
     summary="Get learned strategy for an agent's task type",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_learned_strategies",
+    error_code_prefix="AGENTS_SELF_IMPROVEMENT",
+)
 async def get_learned_strategies(
     agent_id: str,
     task_type: Optional[str] = Query(None, description="Task type to retrieve"),
@@ -114,6 +98,11 @@ async def get_learned_strategies(
     "/{agent_id}/reset-learning",
     response_model=ResetLearningResponse,
     summary="Clear learned state for an agent",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reset_agent_learning",
+    error_code_prefix="AGENTS_SELF_IMPROVEMENT",
 )
 async def reset_agent_learning(
     agent_id: str,

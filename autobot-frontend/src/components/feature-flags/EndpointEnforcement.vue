@@ -286,7 +286,7 @@ const closeModal = () => {
 }
 
 .header-info h3 {
-  margin: 0 0 8px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
@@ -307,7 +307,7 @@ const closeModal = () => {
 }
 
 .btn-add {
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
@@ -328,7 +328,7 @@ const closeModal = () => {
 /* Empty State */
 .empty-state {
   text-align: center;
-  padding: 40px 20px;
+  padding: var(--spacing-10) var(--spacing-5);
 }
 
 .empty-icon {
@@ -345,14 +345,14 @@ const closeModal = () => {
 }
 
 .empty-state h4 {
-  margin: 0 0 8px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .empty-state p {
-  margin: 0 0 20px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-5);
   font-size: var(--text-sm);
   color: var(--text-secondary);
 }
@@ -368,7 +368,7 @@ const closeModal = () => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2-5);
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
@@ -406,7 +406,7 @@ const closeModal = () => {
   font-size: var(--text-sm);
   color: var(--text-primary);
   background: var(--bg-tertiary);
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-default);
 }
 
@@ -420,7 +420,7 @@ const closeModal = () => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1-5);
-  padding: 4px 10px;
+  padding: var(--spacing-1) var(--spacing-2-5);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
   font-weight: 500;
@@ -606,7 +606,7 @@ const closeModal = () => {
 /* Remove Modal */
 .remove-content {
   text-align: center;
-  padding: 20px 0;
+  padding: var(--spacing-5) var(--spacing-0);
 }
 
 .remove-icon {
@@ -623,7 +623,7 @@ const closeModal = () => {
 }
 
 .remove-content h4 {
-  margin: 0 0 8px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2);
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
@@ -637,13 +637,13 @@ const closeModal = () => {
 .remove-content code {
   font-family: var(--font-mono);
   background: var(--bg-tertiary);
-  padding: 2px 6px;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   border-radius: var(--radius-default);
 }
 
 /* Buttons */
 .btn-primary {
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
@@ -668,7 +668,7 @@ const closeModal = () => {
 }
 
 .btn-secondary {
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: none;

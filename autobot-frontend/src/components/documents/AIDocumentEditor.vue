@@ -270,7 +270,7 @@ const formattedUpdatedAt = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   border-bottom: 1px solid var(--color-border, #333);
   gap: var(--spacing-3);
 }
@@ -289,7 +289,7 @@ const formattedUpdatedAt = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   outline: none;
-  padding: 2px 4px;
+  padding: var(--spacing-0-5) var(--spacing-1);
   border-radius: var(--radius-default);
   transition: background var(--duration-150);
 }
@@ -310,7 +310,7 @@ const formattedUpdatedAt = computed(() => {
   border-radius: var(--radius-default);
   font-size: 1.1rem;
   font-weight: 600;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   outline: none;
 }
 .title-input:focus-visible {
@@ -327,13 +327,13 @@ const formattedUpdatedAt = computed(() => {
 .error-banner {
   background: var(--color-error-bg, #3c1515);
   color: var(--color-error, #f87171);
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   font-size: 0.85rem;
   border-bottom: 1px solid var(--color-error, #f87171);
 }
 
 .refine-panel {
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   border-bottom: 1px solid var(--color-border, #333);
   background: var(--color-background-secondary, #252525);
   display: flex;
@@ -397,7 +397,7 @@ const formattedUpdatedAt = computed(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-4);
-  padding: 6px 16px;
+  padding: var(--spacing-1-5) var(--spacing-4);
   font-size: var(--text-xs);
   color: var(--color-text-muted, #888);
   border-top: 1px solid var(--color-border, #333);

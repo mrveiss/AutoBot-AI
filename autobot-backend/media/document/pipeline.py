@@ -38,12 +38,8 @@ logger = logging.getLogger(__name__)
 class DocumentPipeline(BasePipeline):
     """Pipeline for processing document content (PDF, DOCX, TXT, etc.)."""
 
-    def __init__(self):
-        """Initialize document processing pipeline."""
-        super().__init__(
-            pipeline_name="document",
-            supported_types=[MediaType.DOCUMENT, MediaType.TEXT],
-        )
+    PIPELINE_NAME = "document"
+    SUPPORTED_TYPES = [MediaType.DOCUMENT, MediaType.TEXT]
 
     async def _process_impl(self, media_input: MediaInput) -> ProcessingResult:
         """Process document content."""

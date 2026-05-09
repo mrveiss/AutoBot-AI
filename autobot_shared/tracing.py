@@ -95,8 +95,7 @@ def _create_tracer_provider(service_name: str, service_version: Optional[str]):
         provider.add_span_processor(BatchSpanProcessor(exporter))
 
     logger.info(
-        "OpenTelemetry tracing initialized: service=%s, "
-        "sample_rate=%.1f%%, exporter=%s",
+        "OpenTelemetry tracing initialized: service=%s, " "sample_rate=%.1f%%, exporter=%s",
         service_name,
         sample_rate * 100,
         "otlp" if exporter else "none",
@@ -136,8 +135,7 @@ def init_tracing(
         from opentelemetry import trace
     except ImportError:
         logger.warning(
-            "OpenTelemetry SDK not installed. "
-            "Install with: pip install opentelemetry-sdk opentelemetry-api"
+            "OpenTelemetry SDK not installed. " "Install with: pip install opentelemetry-sdk opentelemetry-api"
         )
         return False
 
@@ -182,10 +180,7 @@ def _create_exporter():
             return OTLPSpanExporter(endpoint=endpoint, insecure=True)
 
     except ImportError:
-        logger.warning(
-            "OTLP exporter not installed. "
-            "Install with: pip install opentelemetry-exporter-otlp"
-        )
+        logger.warning("OTLP exporter not installed. " "Install with: pip install opentelemetry-exporter-otlp")
         return None
     except Exception as e:
         logger.error("Failed to create OTLP exporter: %s", e)

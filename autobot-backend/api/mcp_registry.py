@@ -37,14 +37,25 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import aiohttp
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.http_client import get_http_client
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
+
+from .schemas_code import (
+    MCPRegistryBridgesResponse,
+    MCPRegistryCacheInvalidateResponse,
+    MCPRegistryCacheStatsResponse,
+    MCPRegistryHealthResponse,
+    MCPRegistryInfoResponse,
+    MCPRegistryStatsResponse,
+    MCPRegistryToolDetailResponse,
+    MCPRegistryToolsResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -192,36 +203,6 @@ mcp_cache = MCPToolCache(ttl_seconds=CACHE_TTL_SECONDS)
 # ============================================================================
 # Pydantic Models
 # ============================================================================
-
-
-class MCPToolInfo(BaseModel):
-    """Information about an MCP tool"""
-
-    name: str
-    description: str
-    input_schema: Metadata
-    bridge: str  # Which MCP bridge provides this tool
-    endpoint: str  # Full endpoint URL
-
-
-class MCPBridgeInfo(BaseModel):
-    """Information about an MCP bridge"""
-
-    name: str
-    description: str
-    status: str  # "healthy", "degraded", "unavailable"
-    tool_count: int
-    endpoint: str
-    features: List[str]
-
-
-class MCPRegistryStats(BaseModel):
-    """Overall MCP registry statistics"""
-
-    total_bridges: int
-    total_tools: int
-    healthy_bridges: int
-    last_updated: str
 
 
 # ============================================================================
@@ -469,12 +450,12 @@ async def _fetch_bridges_info() -> Metadata:
 # ============================================================================
 
 
+@router.get("/tools", response_model=MCPRegistryToolsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_all_mcp_tools",
     error_code_prefix="MCP_REGISTRY",
 )
-@router.get("/tools")
 async def list_all_mcp_tools() -> Metadata:
     """
     List all available MCP tools from all bridges (with caching)
@@ -517,12 +498,12 @@ async def list_all_mcp_tools() -> Metadata:
     return tools_data
 
 
+@router.get("/bridges", response_model=MCPRegistryBridgesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_mcp_bridges",
     error_code_prefix="MCP_REGISTRY",
 )
-@router.get("/bridges")
 async def get_mcp_bridges() -> Metadata:
     """
     Get information about all MCP bridges (with caching)
@@ -561,12 +542,12 @@ async def get_mcp_bridges() -> Metadata:
     return bridges_data
 
 
+@router.post("/cache/invalidate", response_model=MCPRegistryCacheInvalidateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="invalidate_mcp_cache",
     error_code_prefix="MCP_REGISTRY",
 )
-@router.post("/cache/invalidate")
 async def invalidate_mcp_cache() -> Metadata:
     """
     Manually invalidate MCP Registry cache (Issue #50)
@@ -589,12 +570,12 @@ async def invalidate_mcp_cache() -> Metadata:
     }
 
 
+@router.get("/cache/stats", response_model=MCPRegistryCacheStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_mcp_cache_stats",
     error_code_prefix="MCP_REGISTRY",
 )
-@router.get("/cache/stats")
 async def get_mcp_cache_stats() -> Metadata:
     """
     Get MCP Registry cache statistics (Issue #50)
@@ -696,12 +677,12 @@ def _find_tool_in_list(tools: list, tool_name: str, bridge_name: str) -> dict:
     return tool
 
 
+@router.get("/tools/{bridge_name}/{tool_name}", response_model=MCPRegistryToolDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_mcp_tool_details",
     error_code_prefix="MCP_REGISTRY",
 )
-@router.get("/tools/{bridge_name}/{tool_name}")
 async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
     """
     Get detailed information about a specific MCP tool.
@@ -750,12 +731,37 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@register_health_probe("mcp_registry")
+async def probe_mcp_registry(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the MCP bridge registry."""
+    try:
+        if not MCP_BRIDGES:
+            return ComponentHealth(
+                name="mcp_registry",
+                status="degraded",
+                detail="no MCP bridges configured",
+            )
+        return ComponentHealth(
+            name="mcp_registry",
+            status="ok",
+            data={"bridge_count": len(MCP_BRIDGES)},
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="mcp_registry",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
+@router.get("/health", response_model=MCPRegistryHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_mcp_registry_health",
     error_code_prefix="MCP_REGISTRY",
 )
-@router.get("/health")
 async def get_mcp_registry_health() -> Metadata:
     """Get overall health status of all MCP bridges (always fresh, no cache). Ref: #1088."""
     backend_url = (
@@ -816,12 +822,12 @@ async def get_mcp_registry_health() -> Metadata:
     }
 
 
+@router.get("/stats", response_model=MCPRegistryStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_mcp_registry_stats",
     error_code_prefix="MCP_REGISTRY",
 )
-@router.get("/stats")
 async def get_mcp_registry_stats() -> Metadata:
     """
     Get usage statistics for MCP registry
@@ -864,12 +870,12 @@ async def get_mcp_registry_stats() -> Metadata:
     }
 
 
+@router.get("/", response_model=MCPRegistryInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_mcp_registry_info",
     error_code_prefix="MCP_REGISTRY",
 )
-@router.get("/")
 async def get_mcp_registry_info() -> Metadata:
     """
     Get information about the MCP Registry API

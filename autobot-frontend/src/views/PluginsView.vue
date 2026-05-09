@@ -7,7 +7,7 @@
           <h1 class="page-title">{{ $t('views.plugins.title') }}</h1>
           <p class="page-subtitle">{{ $t('views.plugins.subtitle') }}</p>
         </div>
-        <button class="btn-refresh" :disabled="loading" @click="refresh" :title="$t('views.plugins.refresh')">
+        <button v-if="!isMarketplaceActive" class="btn-refresh" :disabled="loading" @click="refresh" :title="$t('views.plugins.refresh')">
           <svg
             class="refresh-icon"
             :class="{ spinning: loading }"
@@ -22,6 +22,28 @@
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
+        </button>
+        <!-- Issue #6464: Install plugin from ZIP/Git -->
+        <button
+          v-if="!isMarketplaceActive"
+          class="btn-install"
+          @click="installModalOpen = true"
+        >
+          <svg
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            class="install-icon"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 4v16m8-8H4"
+            />
+          </svg>
+          {{ $t('views.plugins.install.button') }}
         </button>
       </div>
 
@@ -71,10 +93,26 @@
           {{ $t('views.plugins.discover') }}
           <span class="tab-badge">{{ discovered.length }}</span>
         </button>
+        <!-- Issue #1803: Marketplace sub-route tab -->
+        <router-link
+          to="/plugins/marketplace"
+          class="tab-btn"
+          :class="{ active: isMarketplaceActive }"
+        >
+          <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
+            />
+          </svg>
+          {{ $t('views.plugins.marketplace') }}
+        </router-link>
       </div>
 
       <!-- Installed Tab -->
-      <div v-if="activeTab === 'installed'">
+      <div v-if="!isMarketplaceActive && activeTab === 'installed'">
         <div v-if="loading" class="loading-state">
           <svg class="spinner" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -190,7 +228,7 @@
       </div>
 
       <!-- Discover Tab -->
-      <div v-if="activeTab === 'discover'">
+      <div v-if="!isMarketplaceActive && activeTab === 'discover'">
         <div v-if="loading" class="loading-state">
           <svg class="spinner" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -268,6 +306,9 @@
           </div>
         </div>
       </div>
+
+      <!-- Marketplace sub-route — Issue #1803 -->
+      <router-view v-if="isMarketplaceActive" />
     </div>
 
     <!-- Plugin Detail Modal -->
@@ -349,6 +390,13 @@
         </div>
       </div>
     </div>
+
+    <!-- Install plugin modal — Issue #6464 -->
+    <PluginInstallModal
+      :open="installModalOpen"
+      @close="installModalOpen = false"
+      @installed="onPluginInstalled"
+    />
   </div>
 </template>
 
@@ -356,14 +404,18 @@
 // Issue #929 - Plugin Manager UI
 // Issue #1359: i18n string extraction
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 import { usePlugins, type PluginInfo, type PluginManifest } from '@/composables/usePlugins'
+import PluginInstallModal from '@/components/plugins/PluginInstallModal.vue'
 
 const { t } = useI18n()
+const route = useRoute()
+const isMarketplaceActive = computed(() => route.path.startsWith('/plugins/marketplace'))
 
 const {
   plugins,
@@ -382,6 +434,13 @@ const {
 } = usePlugins()
 
 const activeTab = ref<'installed' | 'discover'>('installed')
+const installModalOpen = ref(false)
+
+async function onPluginInstalled(): Promise<void> {
+  await listPlugins()
+  await discoverPlugins()
+  activeTab.value = 'discover'
+}
 const actionLoading = ref<Record<string, boolean>>({})
 
 // Modal state
@@ -520,6 +579,7 @@ onMounted(async () => {
  * Issue #929 — Plugin Manager UI
  * ============================================ */
 
+
 .plugins-content {
   width: 100%;
   max-width: 1200px;
@@ -578,6 +638,32 @@ onMounted(async () => {
 
 .refresh-icon.spinning {
   animation: spin 1s linear infinite;
+}
+
+/* ---- Install Button — Issue #6464 ---- */
+.btn-install {
+  background: var(--color-info);
+  border: 1px solid var(--color-info);
+  color: white;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-left: var(--spacing-sm);
+  transition: filter var(--duration-150) var(--ease-in-out);
+}
+
+.btn-install:hover {
+  filter: brightness(1.1);
+}
+
+.install-icon {
+  width: 16px;
+  height: 16px;
 }
 
 /* ---- Error Banner ---- */
@@ -642,7 +728,7 @@ onMounted(async () => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   font-size: var(--text-xs);
-  padding: 1px 6px;
+  padding: var(--spacing-px) var(--spacing-1-5);
   border-radius: var(--radius-xl);
   min-width: 20px;
   text-align: center;
@@ -757,7 +843,7 @@ onMounted(async () => {
 .status-badge {
   font-size: var(--text-xs);
   font-weight: 600;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-xl);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -837,7 +923,7 @@ onMounted(async () => {
   font-size: var(--text-xs);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
-  padding: 1px 6px;
+  padding: var(--spacing-px) var(--spacing-1-5);
   border-radius: var(--radius-default);
   border: 1px solid var(--border-default);
 }
@@ -857,7 +943,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1);
-  padding: 4px 12px;
+  padding: var(--spacing-1) var(--spacing-3);
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -900,7 +986,7 @@ onMounted(async () => {
   background: var(--color-info-bg);
   color: var(--color-info);
   border-color: var(--color-info-border, rgba(59, 130, 246, 0.3));
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
 }
 
 .action-reload:hover:not(:disabled) {
@@ -911,7 +997,7 @@ onMounted(async () => {
   background: var(--color-error-bg);
   color: var(--color-error);
   border-color: var(--color-error-border);
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
 }
 
 .action-unload:hover:not(:disabled) {
@@ -1050,7 +1136,7 @@ onMounted(async () => {
   background: transparent;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  padding: 2px 10px;
+  padding: var(--spacing-0-5) var(--spacing-2-5);
   font-size: var(--text-sm);
   color: var(--text-secondary);
   cursor: pointer;

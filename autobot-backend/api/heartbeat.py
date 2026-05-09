@@ -14,7 +14,6 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -29,6 +28,17 @@ from models.heartbeat import (
     WakeupTrigger,
 )
 from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_state
+from api.schemas_system import (
+    HeartbeatConfigRequest,
+    HeartbeatConfigResponse,
+    HeartbeatRunResponse,
+    HeartbeatTriggerResponse,
+    HeartbeatWakeupQueuedResponse,
+    RunEventResponse,
+    WakeupRequestCreate,
+    WakeupRequestResponse,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -52,80 +62,12 @@ def _get_scheduler() -> HeartbeatScheduler:
     return _scheduler
 
 
-class HeartbeatConfigRequest(BaseModel):
-    """Request body to configure heartbeat for an agent."""
-
-    heartbeat_enabled: bool = False
-    heartbeat_interval_seconds: int = Field(default=300, ge=10)
-    max_run_duration_seconds: int = Field(default=600, ge=10)
-
-
-class HeartbeatConfigResponse(BaseModel):
-    """Response for agent heartbeat config / runtime state."""
-
-    agent_id: str
-    heartbeat_enabled: bool
-    heartbeat_interval_seconds: int
-    max_run_duration_seconds: int
-    current_task_id: Optional[str]
-    last_heartbeat_at: Optional[str]
-    session_params: Optional[Dict[str, Any]]
-    extra: Optional[Dict[str, Any]]
-    created_at: Optional[str]
-    updated_at: Optional[str]
-
-
-class WakeupRequestCreate(BaseModel):
-    """Request body to queue a wakeup for an agent."""
-
-    priority: int = 0
-    context: Optional[Dict[str, Any]] = None
-    reason: Optional[str] = None
-
-
-class WakeupRequestResponse(BaseModel):
-    """Response for a queued wakeup request."""
-
-    id: str
-    agent_id: str
-    priority: int
-    context: Optional[Dict[str, Any]]
-    reason: Optional[str]
-    consumed: bool
-    consumed_at: Optional[str]
-    created_at: Optional[str]
-
-
-class RunEventResponse(BaseModel):
-    """Response for a single run event."""
-
-    id: str
-    event_type: str
-    message: Optional[str]
-    payload: Optional[Dict[str, Any]]
-    occurred_at: str
-
-
-class HeartbeatRunResponse(BaseModel):
-    """Response for a single heartbeat run."""
-
-    id: str
-    agent_id: str
-    status: str
-    trigger: str
-    wakeup_context: Optional[Dict[str, Any]]
-    started_at: Optional[str]
-    finished_at: Optional[str]
-    tokens_used: Optional[int]
-    cost_usd: Optional[float]
-    model: Optional[str]
-    provider: Optional[str]
-    error_message: Optional[str]
-    created_at: Optional[str]
-    events: List[RunEventResponse] = []
-
-
 @router.get("/{agent_id}/config", response_model=HeartbeatConfigResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_config",
+    error_code_prefix="HEARTBEAT",
+)
 async def get_config(
     agent_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -138,6 +80,11 @@ async def get_config(
 
 
 @router.put("/{agent_id}/config", response_model=HeartbeatConfigResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_config",
+    error_code_prefix="HEARTBEAT",
+)
 async def update_config(
     agent_id: str,
     body: HeartbeatConfigRequest,
@@ -163,6 +110,11 @@ async def update_config(
 
 
 @router.patch("/{agent_id}/session", response_model=HeartbeatConfigResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_session",
+    error_code_prefix="HEARTBEAT",
+)
 async def update_session(
     agent_id: str,
     body: Dict[str, Any],
@@ -183,6 +135,11 @@ async def update_session(
 
 
 @router.get("/{agent_id}/runs", response_model=List[HeartbeatRunResponse])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_runs",
+    error_code_prefix="HEARTBEAT",
+)
 async def list_runs(
     agent_id: str,
     limit: int = Query(default=20, ge=1, le=100),
@@ -203,6 +160,11 @@ async def list_runs(
 
 
 @router.get("/{agent_id}/runs/{run_id}", response_model=HeartbeatRunResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_run",
+    error_code_prefix="HEARTBEAT",
+)
 async def get_run(
     agent_id: str,
     run_id: str,
@@ -225,7 +187,12 @@ async def get_run(
     return _run_to_response(run)
 
 
-@router.post("/{agent_id}/wakeup", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/{agent_id}/wakeup", status_code=status.HTTP_202_ACCEPTED, response_model=HeartbeatWakeupQueuedResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="request_wakeup",
+    error_code_prefix="HEARTBEAT",
+)
 async def request_wakeup(
     agent_id: str,
     body: WakeupRequestCreate,
@@ -243,6 +210,11 @@ async def request_wakeup(
 
 
 @router.get("/{agent_id}/wakeup", response_model=List[WakeupRequestResponse])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_wakeup_requests",
+    error_code_prefix="HEARTBEAT",
+)
 async def list_wakeup_requests(
     agent_id: str,
     include_consumed: bool = Query(default=False),
@@ -257,7 +229,12 @@ async def list_wakeup_requests(
     return [_wakeup_to_response(r) for r in result.scalars().all()]
 
 
-@router.post("/{agent_id}/trigger", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/{agent_id}/trigger", status_code=status.HTTP_202_ACCEPTED, response_model=HeartbeatTriggerResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="trigger_manual",
+    error_code_prefix="HEARTBEAT",
+)
 async def trigger_manual(
     agent_id: str,
     scheduler: HeartbeatScheduler = Depends(_get_scheduler),

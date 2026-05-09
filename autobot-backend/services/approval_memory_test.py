@@ -296,7 +296,7 @@ class TestRememberApproval:
     @pytest.mark.asyncio
     async def test_redis_unavailable_returns_false(self, manager):
         """Returns False when Redis is unavailable."""
-        with patch("services.approval_memory.get_async_redis_client", return_value=None):
+        with patch("services.approval_memory.get_async_redis_client", new=AsyncMock(return_value=None)):
             result = await manager.remember_approval("/path", "ls", "user", "safe")
         assert result is False
 

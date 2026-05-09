@@ -13,9 +13,8 @@
       <!-- Chat Sidebar with Unified Loading -->
       <!-- Desktop: inline. Mobile: fixed overlay when showMobileSidebar is true -->
       <UnifiedLoadingView
-        loading-key="chat-sidebar"
         :has-content="store.sessions.length > 0"
-        :auto-timeout-ms="10000"
+        :timeout-ms="10000"
         @loading-complete="handleSidebarLoadingComplete"
         @loading-error="handleSidebarLoadingError"
         @loading-timeout="handleSidebarLoadingTimeout"
@@ -111,9 +110,8 @@
 
         <!-- Scrollable Content Area (Header scrolls away, input stays) -->
         <UnifiedLoadingView
-          loading-key="chat-content"
           :has-content="store.currentMessages.length > 0"
-          :auto-timeout-ms="15000"
+          :timeout-ms="15000"
           @loading-complete="handleContentLoadingComplete"
           @loading-error="handleContentLoadingError"
           @loading-timeout="handleContentLoadingTimeout"
@@ -223,7 +221,7 @@
               <div class="tool-approval-countdown-bar-track">
                 <div
                   class="tool-approval-countdown-bar-fill"
-                  :style="{ width: `${(toolApprovalSecondsLeft / pendingToolApproval.timeout_seconds) * 100}%` }"
+                  :style="{ width: `${(toolApprovalSecondsLeft / Math.max(1, pendingToolApproval?.timeout_seconds ?? 1)) * 100}%` }"
                   :class="toolApprovalSecondsLeft <= 10 ? 'tool-approval-countdown-bar-fill--urgent' : ''"
                 ></div>
               </div>
@@ -270,9 +268,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, provide } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
-import { usePollingJob } from '@/composables/usePollingJob'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
@@ -321,6 +319,10 @@ import MultiModelChat from './MultiModelChat.vue'
 // i18n
 const { t } = useI18n()
 
+// Router — tab routes (#6415)
+const route = useRoute()
+const router = useRouter()
+
 // Stores and controller
 const store = useChatStore()
 const controller = useChatController()
@@ -352,15 +354,19 @@ const _stopCountdown = (): void => {
   }
 }
 
-const _startCountdown = (timeoutSeconds: number): void => {
+const _startCountdown = (timeoutSeconds: number, deadlineTs?: number): void => {
   _stopCountdown()
   toolApprovalSecondsLeft.value = timeoutSeconds
   _countdownInterval = setInterval(() => {
-    if (toolApprovalSecondsLeft.value <= 1) {
-      _stopCountdown()
-      toolApprovalSecondsLeft.value = 0
+    // Issue #5024: use server deadline_ts for drift-free countdown when available
+    const currentApproval = pendingToolApproval.value
+    if (currentApproval?.deadline_ts) {
+      toolApprovalSecondsLeft.value = Math.max(0, Math.round(currentApproval.deadline_ts - Date.now() / 1000))
     } else {
-      toolApprovalSecondsLeft.value -= 1
+      toolApprovalSecondsLeft.value = Math.max(0, toolApprovalSecondsLeft.value - 1)
+    }
+    if (toolApprovalSecondsLeft.value <= 0) {
+      _stopCountdown()
     }
   }, 1000)
 }
@@ -368,7 +374,7 @@ const _startCountdown = (timeoutSeconds: number): void => {
 // Start countdown when a new approval arrives; stop when cleared
 watch(pendingToolApproval, (approval: PendingToolApproval | null) => {
   if (approval) {
-    _startCountdown(approval.timeout_seconds)
+    _startCountdown(approval.timeout_seconds, approval.deadline_ts)
   } else {
     _stopCountdown()
   }
@@ -460,8 +466,9 @@ const pendingCommand = ref({
 })
 const currentWorkflowId = ref<string | null>(null)
 
-// Tab state
-const activeTab = ref<string>('chat')
+// Tab state — initialized from route meta so /chat/terminal and /chat/novnc deep-link correctly
+const activeTab = ref<string>((route.meta.chatTab as string) ?? 'chat')
+watch(() => route.meta.chatTab, (tab: unknown) => { activeTab.value = (tab as string) ?? 'chat' })
 
 // Issue #690: Overseer Agent State
 const overseerEnabled = ref(false)
@@ -526,10 +533,13 @@ const submitOverseerQuery = async (query: string) => {
 // Provide submit function to child components
 provide('submitOverseerQuery', submitOverseerQuery)
 
-// Connection state with stabilized status management
+// Connection state with stabilized status management.
+// #6773: backend-health is now sourced from `appStore.backendStatus`, which is
+// driven by `OptimizedHealthMonitor` (the canonical /api/system/health poller
+// wired in App.vue). Removed the local 60 s heartbeat poller that previously
+// also hit /api/system/health, eliminating duplicate polling.
 const baseConnectionStatus = ref(t('status.connected'))
 const isConnected = ref(true)
-const lastHeartbeat = ref(Date.now())
 const connectionStatus = computed(() => {
   // If typing, show typing status temporarily
   if (store.isTyping) {
@@ -678,15 +688,12 @@ const handleContentLoadingTimeout = () => {
   logger.warn('Content loading timed out')
 }
 
-// Tab change handler - ensures local tab state change without router navigation
+// Tab change handler — updates local state and syncs URL to the named tab route (#6415)
 const handleTabChange = (tabKey: string) => {
   logger.debug('Tab change requested:', tabKey)
-
-  // Prevent any router navigation and only update local state
-  // This fixes the Terminal tab issue where it was triggering unwanted navigation
   activeTab.value = tabKey
-
-  // Log successful tab change
+  const routeName = tabKey === 'chat' ? 'chat-default' : `chat-${tabKey}`
+  router.push({ name: routeName }).catch(() => {})
   logger.debug('Active tab changed to:', activeTab.value)
 }
 
@@ -812,7 +819,7 @@ const onCommandApproved = async (commandData: any) => {
   // The backend polling loop will detect the approval and execute the command.
 
   // Switch to terminal tab to show execution
-  activeTab.value = 'terminal'
+  handleTabChange('terminal')
 
   // Close dialog
   showCommandDialog.value = false
@@ -868,45 +875,31 @@ const onCommandCommented = async (commentData: any) => {
   }
 }
 
-// Connection monitoring - MIGRATED to use AppConfig
-const checkConnection = async () => {
-  try {
-    // MIGRATED: Use AppConfig for connection validation
-    const isConnectionValid = await appConfig.validateConnection()
-
-    if (isConnectionValid) {
-      isConnected.value = true
-      baseConnectionStatus.value = t('status.connected')
-      lastHeartbeat.value = Date.now()
-    } else {
-      isConnected.value = false
-      baseConnectionStatus.value = t('status.disconnected')
-    }
-  } catch (error) {
-    isConnected.value = false
-    baseConnectionStatus.value = t('status.disconnected')
-  }
+// #6773: connection state is mirrored from `appStore.backendStatus`, which
+// `OptimizedHealthMonitor` updates from /api/system/health. Replaces the
+// previous 60 s `appConfig.validateConnection()` poller — that poller was
+// hitting the same endpoint as `OptimizedHealthMonitor`, producing duplicate
+// /api/system/health requests per polling interval.
+const syncConnectionFromStore = (): void => {
+  const cls = appStore.backendStatus.class
+  // 'success' is the only state that maps to "connected"; both 'warning'
+  // (degraded) and 'error' (disconnected) surface as not-connected here, to
+  // preserve the previous boolean semantics expected by isConnected consumers.
+  isConnected.value = cls === 'success'
+  baseConnectionStatus.value = cls === 'success'
+    ? t('status.connected')
+    : t('status.disconnected')
 }
 
-// Heartbeat: check connection every 60 s (reduced from 30 to minimise UI updates)
-const heartbeatPoller = usePollingJob(
-  async () => { await checkConnection(); return null },
-  { intervalMs: 60_000, maxAttempts: Number.MAX_SAFE_INTEGER }
-)
+// React to OptimizedHealthMonitor → appStore updates immediately.
+watch(() => appStore.backendStatus.class, syncConnectionFromStore, { immediate: false })
 
-// Auto-save current session every 2 minutes
-const autoSavePoller = usePollingJob(
-  async () => {
-    if (store.settings.autoSave && store.currentSessionId) {
-      await controller.saveChatSession().catch((error: any) => logger.warn('Auto-save failed:', error))
-    }
-    return null
-  },
-  { intervalMs: 2 * 60 * 1000, maxAttempts: Number.MAX_SAFE_INTEGER }
-)
-
-const startHeartbeat = () => heartbeatPoller.start('')
-const enableAutoSave = () => autoSavePoller.start('')
+// #6746: autosave poller deleted. Backend now persists every chat message
+// via add_messages_batch in the request handler (#6744 fix), so frontend-
+// driven autosave is redundant — and was a session_id churn source: it ran
+// every 2 min against `store.currentSessionId`, which could be racing with
+// pushLocalOnlySessions, syncSessionsWithBackend, or message-poller
+// state churn. Backend writes are now the sole authoritative path.
 
 // Message polling with exponential backoff + circuit breaker (#1100)
 // Prevents 499 cascade: skips in-flight polls, backs off on failure, opens circuit
@@ -1039,6 +1032,12 @@ const initializeChatInterface = async () => {
 }
 
 // Lifecycle
+let _lgMediaQuery: MediaQueryList | null = null
+
+function _onLgBreakpoint(e: MediaQueryListEvent): void {
+  if (e.matches) showMobileSidebar.value = false
+}
+
 onMounted(async () => {
   // Initialize chat interface with streamlined loading
   await initializeChatInterface()
@@ -1046,10 +1045,11 @@ onMounted(async () => {
   // Load NoVNC URL after initialization
   await loadNovncUrl()
 
-  // Start connection monitoring
-  checkConnection()
-  startHeartbeat()
-  enableAutoSave()
+  // #6773: connection state mirrors appStore.backendStatus (driven by
+  // OptimizedHealthMonitor). Seed once from current store state so initial
+  // render reflects the latest known status without an extra fetch.
+  syncConnectionFromStore()
+  // #6746: autosave removed; backend persists messages directly
 
   // Start message polling to fetch new messages
   startMessagePolling()
@@ -1057,16 +1057,19 @@ onMounted(async () => {
   // Add keyboard shortcuts
   document.addEventListener('keydown', handleKeyboardShortcuts)
 
+  // Reset mobile sidebar when viewport reaches desktop width (#4446)
+  _lgMediaQuery = window.matchMedia('(min-width: 1024px)')
+  _lgMediaQuery.addEventListener('change', _onLgBreakpoint)
+
 })
 
 onUnmounted(() => {
   // Clean up event listeners
   document.removeEventListener('keydown', handleKeyboardShortcuts)
+  _lgMediaQuery?.removeEventListener('change', _onLgBreakpoint)
+  _lgMediaQuery = null
 
-  // Clean up intervals
-  heartbeatPoller.stop()
-  autoSavePoller.stop()
-
+  // Clean up intervals (#6773: heartbeatPoller removed — see syncConnectionFromStore)
   _stopCountdown()
   messagePoller.stop()
 })
@@ -1076,14 +1079,12 @@ onUnmounted(() => {
 onActivated(() => {
   logger.debug('[ChatInterface] Activated from keep-alive - resuming operations')
 
-  // Resume heartbeat monitoring
-  startHeartbeat()
-
-  // Resume connection checking
-  checkConnection()
+  // #6773: re-seed connection state from the canonical store on re-activation;
+  // the watch() above keeps it in sync going forward.
+  syncConnectionFromStore()
 
   // Resume auto-save
-  enableAutoSave()
+  // #6746: autosave removed; backend persists messages directly
 
   // Resume message polling
   startMessagePolling()
@@ -1100,9 +1101,8 @@ onDeactivated(() => {
   // Pause message polling (will resume on onActivated)
   messagePoller.stop()
 
-  // Pause intervals while cached
-  heartbeatPoller.stop()
-  autoSavePoller.stop()
+  // #6773: heartbeatPoller removed — connection state is now passive (watcher
+  // on appStore.backendStatus); no interval to pause.
 
   // Clean up keyboard shortcuts while cached
   document.removeEventListener('keydown', handleKeyboardShortcuts)
@@ -1316,13 +1316,13 @@ function _extractCompleteSentences(text: string): string[] {
   border-bottom: 1px solid var(--color-warning-border);
 }
 .tool-approval-header i { color: var(--color-warning); font-size: 1.25rem; }
-.tool-approval-header h3 { @apply text-sm font-semibold; color: var(--text-primary); margin: 0; }
+.tool-approval-header h3 { @apply text-sm font-semibold; color: var(--text-primary); margin: var(--spacing-0); }
 .tool-approval-body { @apply flex flex-col gap-3 px-5 py-4; }
 .tool-approval-row { @apply flex flex-col gap-1; }
 .tool-approval-label { @apply text-xs font-medium; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; }
 .tool-approval-value { @apply text-sm; color: var(--text-primary); }
 .tool-approval-value code { @apply font-mono text-xs px-2 py-0.5 rounded; background: var(--bg-tertiary); }
-.tool-approval-args { @apply text-xs font-mono p-2 rounded overflow-auto max-h-32; background: var(--bg-tertiary); color: var(--text-primary); margin: 0; }
+.tool-approval-args { @apply text-xs font-mono p-2 rounded overflow-auto max-h-32; background: var(--bg-tertiary); color: var(--text-primary); margin: var(--spacing-0); }
 .risk-low    { color: var(--color-success); font-weight: 600; }
 .risk-medium { color: var(--color-warning); font-weight: 600; }
 .risk-high   { color: var(--color-error); font-weight: 600; }

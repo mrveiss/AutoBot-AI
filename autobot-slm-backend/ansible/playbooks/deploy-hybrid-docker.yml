@@ -35,7 +35,7 @@
 
         - name: Add Docker repository
           apt_repository:
-            repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+            repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_facts['distribution_release'] }} stable"
             state: present
 
         - name: Install Docker
@@ -160,7 +160,7 @@
     - name: Wait for Redis to be ready
       wait_for:
         port: 6379
-        host: "{{ ansible_default_ipv4.address }}"
+        host: "{{ ansible_facts['default_ipv4'].address }}"
         delay: 5
         timeout: 60
 
@@ -247,7 +247,7 @@
     - name: Wait for Frontend to be ready
       wait_for:
         port: 5173
-        host: "{{ ansible_default_ipv4.address }}"
+        host: "{{ ansible_facts['default_ipv4'].address }}"
         delay: 10
         timeout: 120
 
@@ -384,7 +384,7 @@
     - name: Wait for services to be ready
       wait_for:
         port: "{{ item }}"
-        host: "{{ ansible_default_ipv4.address }}"
+        host: "{{ ansible_facts['default_ipv4'].address }}"
         delay: 10
         timeout: 120
       loop:
@@ -464,7 +464,7 @@
     - name: Wait for Browser service to be ready
       wait_for:
         port: 3000
-        host: "{{ ansible_default_ipv4.address }}"
+        host: "{{ ansible_facts['default_ipv4'].address }}"
         delay: 10
         timeout: 120
 
@@ -506,7 +506,7 @@
     - name: Create service summary
       set_fact:
         service_summary: |
-          VM: {{ ansible_hostname }} ({{ ansible_default_ipv4.address }})
+          VM: {{ ansible_facts['hostname'] }} ({{ ansible_facts['default_ipv4'].address }})
           Services: {{ docker_status.stdout_lines | length - 1 }} containers running
           Status: Deployment complete
 

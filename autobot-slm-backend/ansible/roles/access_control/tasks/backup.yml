@@ -14,7 +14,7 @@
 
 - name: Get current timestamp
   set_fact:
-    backup_timestamp: "{{ ansible_date_time.epoch }}"
+    backup_timestamp: "{{ ansible_facts['date_time'].epoch }}"
 
 - name: Trigger Redis BGSAVE
   command: "redis-cli -h {{ hostvars[groups['redis'][0]]['ansible_host'] }} -p 6379 BGSAVE"
@@ -31,15 +31,15 @@
 - name: Create backup metadata
   copy:
     content: |
-      Backup created: {{ ansible_date_time.iso8601 }}
+      Backup created: {{ ansible_facts['date_time'].iso8601 }}
       Purpose: Access control deployment
       Redis host: {{ hostvars[groups['redis'][0]]['ansible_host'] }}
       Retention: {{ redis_backup_retention_days }} days
-    dest: "{{ project_root }}/backups/redis/backup_{{ ansible_date_time.epoch }}.txt"
+    dest: "{{ project_root }}/backups/redis/backup_{{ ansible_facts['date_time'].epoch }}.txt"
     owner: "{{ service_user }}"
     group: "{{ service_group }}"
     mode: '0644'
 
 - name: Display backup status
   debug:
-    msg: "Redis backup completed: {{ ansible_date_time.iso8601 }}"
+    msg: "Redis backup completed: {{ ansible_facts['date_time'].iso8601 }}"

@@ -24,27 +24,27 @@ def _build_data_preparation_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="data_exploration",
+            task_id="data_exploration",
             agent_type="system_commands",
             action="Explore and profile the dataset",
             description="System_Commands: Data Exploration",
-            expected_duration_ms=20000,
+            estimated_duration_seconds=20.0,
         ),
         WorkflowStep(
-            id="analysis_research",
+            task_id="analysis_research",
             agent_type="research",
             action="Research appropriate analysis techniques and tools",
             description="Research: Analysis Techniques",
             dependencies=["data_exploration"],
-            expected_duration_ms=25000,
+            estimated_duration_seconds=25.0,
         ),
         WorkflowStep(
-            id="data_cleaning",
+            task_id="data_cleaning",
             agent_type="system_commands",
             action="Clean and prepare data for analysis",
             description="System_Commands: Data Preparation",
             dependencies=["analysis_research"],
-            expected_duration_ms=30000,
+            estimated_duration_seconds=30.0,
         ),
     ]
 
@@ -58,36 +58,36 @@ def _build_data_processing_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="statistical_analysis",
+            task_id="statistical_analysis",
             agent_type="system_commands",
             action="Perform statistical analysis on the data",
             description="System_Commands: Statistical Analysis",
             dependencies=["data_cleaning"],
-            expected_duration_ms=35000,
+            estimated_duration_seconds=35.0,
         ),
         WorkflowStep(
-            id="generate_insights",
+            task_id="generate_insights",
             agent_type="orchestrator",
             action="Generate insights and recommendations from analysis",
             description="Orchestrator: Insights Generation",
             dependencies=["statistical_analysis"],
-            expected_duration_ms=20000,
+            estimated_duration_seconds=20.0,
         ),
         WorkflowStep(
-            id="create_visualizations",
+            task_id="create_visualizations",
             agent_type="system_commands",
             action="Create visualizations and charts for findings",
             description="System_Commands: Data Visualization",
             dependencies=["generate_insights"],
-            expected_duration_ms=25000,
+            estimated_duration_seconds=25.0,
         ),
         WorkflowStep(
-            id="store_analysis",
+            task_id="store_analysis",
             agent_type="knowledge_manager",
             action="Store analysis results and methodology",
             description="Knowledge_Manager: Store Analysis Results",
             dependencies=["create_visualizations"],
-            expected_duration_ms=5000,
+            estimated_duration_seconds=5.0,
         ),
     ]
 
@@ -136,19 +136,19 @@ def _build_log_collection_steps() -> List[WorkflowStep]:
     """Build initial log collection and parsing steps. Issue #620."""
     return [
         WorkflowStep(
-            id="collect_logs",
+            task_id="collect_logs",
             agent_type="system_commands",
             action="Collect and aggregate log files from specified sources",
             description="System_Commands: Log Collection",
-            expected_duration_ms=15000,
+            estimated_duration_seconds=15.0,
         ),
         WorkflowStep(
-            id="parse_logs",
+            task_id="parse_logs",
             agent_type="system_commands",
             action="Parse and normalize log entries",
             description="System_Commands: Log Parsing",
             dependencies=["collect_logs"],
-            expected_duration_ms=25000,
+            estimated_duration_seconds=25.0,
         ),
     ]
 
@@ -157,21 +157,21 @@ def _build_log_analysis_steps() -> List[WorkflowStep]:
     """Build security analysis and pattern detection steps. Issue #620."""
     return [
         WorkflowStep(
-            id="security_analysis",
+            task_id="security_analysis",
             agent_type="security_scanner",
             action="Analyze logs for security events and threats",
             description="Security_Scanner: Security Log Analysis",
             dependencies=["parse_logs"],
             inputs={"scan_type": "log_analysis"},
-            expected_duration_ms=35000,
+            estimated_duration_seconds=35.0,
         ),
         WorkflowStep(
-            id="pattern_detection",
+            task_id="pattern_detection",
             agent_type="system_commands",
             action="Detect patterns and anomalies in log data",
             description="System_Commands: Pattern Detection",
             dependencies=["parse_logs"],
-            expected_duration_ms=30000,
+            estimated_duration_seconds=30.0,
         ),
     ]
 
@@ -180,29 +180,29 @@ def _build_log_reporting_steps() -> List[WorkflowStep]:
     """Build report generation and storage steps. Issue #620."""
     return [
         WorkflowStep(
-            id="generate_report",
+            task_id="generate_report",
             agent_type="orchestrator",
             action="Generate comprehensive log analysis report",
             description="Orchestrator: Analysis Report",
             dependencies=["security_analysis", "pattern_detection"],
-            expected_duration_ms=15000,
+            estimated_duration_seconds=15.0,
         ),
         WorkflowStep(
-            id="create_alerts",
+            task_id="create_alerts",
             agent_type="orchestrator",
             action="Create alerts and monitoring rules based on findings",
             description="Orchestrator: Create Alert Rules (requires your approval)",
             requires_approval=True,
             dependencies=["generate_report"],
-            expected_duration_ms=10000,
+            estimated_duration_seconds=10.0,
         ),
         WorkflowStep(
-            id="store_findings",
+            task_id="store_findings",
             agent_type="knowledge_manager",
             action="Store log analysis findings and alert rules",
             description="Knowledge_Manager: Store Log Analysis",
             dependencies=["create_alerts"],
-            expected_duration_ms=5000,
+            estimated_duration_seconds=5.0,
         ),
     ]
 

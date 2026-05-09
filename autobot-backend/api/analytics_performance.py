@@ -13,16 +13,31 @@ import asyncio
 import logging
 import re
 from datetime import datetime, timezone
-from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.security.path_validator import validate_path
+from api.schemas_common import DataResponse
+from api.schemas_analytics import (
+    ImpactLevel,
+    PerformanceAnalysisResult,
+    PerformanceAnalyzeContentResponse,
+    PerformanceCategoriesResponse,
+    PerformanceHistoryResponse,
+    PerformanceHotspotsResponse,
+    PerformanceIssue,
+    PerformancePatternCategory,
+    PerformancePatternDefinition,
+    PerformancePatternDetailResponse,
+    PerformancePatternToggleResponse,
+    PerformancePatternsListResponse,
+    PerformanceSummaryResponse,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -33,243 +48,176 @@ router = APIRouter(tags=["performance", "analytics"])
 # ============================================================================
 
 
-class ImpactLevel(str, Enum):
-    """Impact level of performance issues."""
-
-    CRITICAL = "critical"  # Significant production impact
-    HIGH = "high"  # Noticeable slowdown
-    MEDIUM = "medium"  # Minor impact
-    LOW = "low"  # Optimization opportunity
-
-
-# Performance optimization: O(1) lookup for high-severity impact levels (Issue #326)
+# Performance optimization: O(1) lookup for high-severity impact levels
 HIGH_SEVERITY_IMPACT_LEVELS = {ImpactLevel.CRITICAL, ImpactLevel.HIGH}
 
-# Issue #380: Module-level frozenset for blocking call detection in async context
+# Module-level frozenset for blocking call detection in async context
 _BLOCKING_CALLS = frozenset({"sleep", "get", "post", "put", "delete", "request"})
 
-# Issue #380: Module-level tuple for mutable default types
+# Module-level tuple for mutable default types
 _MUTABLE_DEFAULT_TYPES = (ast.List, ast.Dict, ast.Set)
-
-
-class PatternCategory(str, Enum):
-    """Categories of performance patterns."""
-
-    QUERY = "query"  # Database/API query patterns
-    LOOP = "loop"  # Loop and iteration patterns
-    ASYNC = "async"  # Async/await patterns
-    CACHE = "cache"  # Caching patterns
-    MEMORY = "memory"  # Memory usage patterns
-    IO = "io"  # I/O operations
-
-
-class PerformanceIssue(BaseModel):
-    """A detected performance issue."""
-
-    id: str
-    pattern_id: str
-    name: str
-    category: PatternCategory
-    impact: ImpactLevel
-    file: str
-    line: int
-    column: int = 0
-    description: str
-    suggestion: str
-    code_snippet: Optional[str] = None
-    estimated_impact: Optional[str] = None  # e.g., "10x slower", "O(n²)"
-
-
-class PerformanceAnalysisResult(BaseModel):
-    """Result of performance analysis."""
-
-    status: str = "success"
-    total_issues: int
-    critical_count: int
-    high_count: int
-    medium_count: int
-    low_count: int
-    issues: list[PerformanceIssue]
-    files_analyzed: int
-    duration_ms: float
-    timestamp: str
-    score: int = Field(ge=0, le=100)  # Performance health score
-
-
-class PatternDefinition(BaseModel):
-    """Definition of a performance pattern to detect."""
-
-    id: str
-    name: str
-    category: PatternCategory
-    impact: ImpactLevel
-    description: str
-    suggestion: str
-    regex_pattern: Optional[str] = None
-    ast_check: bool = False
-    enabled: bool = True
 
 
 # ============================================================================
 # Pattern Definitions
 # ============================================================================
 
-PERFORMANCE_PATTERNS: dict[str, PatternDefinition] = {
+PERFORMANCE_PATTERNS: dict[str, PerformancePatternDefinition] = {
     # Query Patterns
-    "PERF-Q001": PatternDefinition(
+    "PERF-Q001": PerformancePatternDefinition(
         id="PERF-Q001",
         name="N+1 Query Pattern",
-        category=PatternCategory.QUERY,
+        category=PerformancePatternCategory.QUERY,
         impact=ImpactLevel.CRITICAL,
         description="Database query inside loop - causes N+1 query problem",
         suggestion="Use eager loading, batch queries, or SELECT ... IN (...)",
         regex_pattern=r"for\s+\w+\s+in\s+\w+.*:\s*\n\s*.*(?:\.query|\.filter|\.get|\.execute|\.fetch|db\.\w+)",
         ast_check=True,
     ),
-    "PERF-Q002": PatternDefinition(
+    "PERF-Q002": PerformancePatternDefinition(
         id="PERF-Q002",
         name="Unbounded Query",
-        category=PatternCategory.QUERY,
+        category=PerformancePatternCategory.QUERY,
         impact=ImpactLevel.HIGH,
         description="Query without LIMIT clause may return excessive results",
         suggestion="Add LIMIT clause or use pagination",
         regex_pattern=r"\.all\(\)\s*$|SELECT\s+\*\s+FROM\s+\w+(?!\s+(?:WHERE|LIMIT))",
     ),
-    "PERF-Q003": PatternDefinition(
+    "PERF-Q003": PerformancePatternDefinition(
         id="PERF-Q003",
         name="SELECT * Usage",
-        category=PatternCategory.QUERY,
+        category=PerformancePatternCategory.QUERY,
         impact=ImpactLevel.MEDIUM,
         description="SELECT * retrieves all columns unnecessarily",
         suggestion="Specify only required columns",
         regex_pattern=r"SELECT\s+\*\s+FROM",
     ),
     # Loop Patterns
-    "PERF-L001": PatternDefinition(
+    "PERF-L001": PerformancePatternDefinition(
         id="PERF-L001",
         name="Nested Loop O(n²)",
-        category=PatternCategory.LOOP,
+        category=PerformancePatternCategory.LOOP,
         impact=ImpactLevel.HIGH,
         description="Nested loops with O(n²) complexity",
         suggestion="Consider using dict/set for O(1) lookup or algorithm optimization",
         ast_check=True,
     ),
-    "PERF-L002": PatternDefinition(
+    "PERF-L002": PerformancePatternDefinition(
         id="PERF-L002",
         name="List Concatenation in Loop",
-        category=PatternCategory.LOOP,
+        category=PerformancePatternCategory.LOOP,
         impact=ImpactLevel.MEDIUM,
         description="Repeated list concatenation in loop is O(n²)",
         suggestion="Use list.append() or list comprehension",
         regex_pattern=r"for\s+\w+\s+in\s+\w+.*:\s*\n\s*\w+\s*\+\s*=\s*\[",
     ),
-    "PERF-L003": PatternDefinition(
+    "PERF-L003": PerformancePatternDefinition(
         id="PERF-L003",
         name="String Concatenation in Loop",
-        category=PatternCategory.LOOP,
+        category=PerformancePatternCategory.LOOP,
         impact=ImpactLevel.MEDIUM,
         description="String concatenation in loop creates many temporary objects",
         suggestion="Use str.join() or io.StringIO",
         regex_pattern=r"for\s+\w+\s+in\s+\w+.*:\s*\n\s*\w+\s*\+\s*=\s*['\"]",
     ),
     # Async Patterns
-    "PERF-A001": PatternDefinition(
+    "PERF-A001": PerformancePatternDefinition(
         id="PERF-A001",
         name="Sync Call in Async Function",
-        category=PatternCategory.ASYNC,
+        category=PerformancePatternCategory.ASYNC,
         impact=ImpactLevel.CRITICAL,
         description="Blocking synchronous call in async function blocks event loop",
         suggestion="Use async version or run_in_executor()",
         regex_pattern=r"async\s+def\s+\w+.*:\s*\n(?:.*\n)*?\s*(?:time\.sleep|requests\.|urllib\.request|open\()",
     ),
-    "PERF-A002": PatternDefinition(
+    "PERF-A002": PerformancePatternDefinition(
         id="PERF-A002",
         name="Sequential Awaits",
-        category=PatternCategory.ASYNC,
+        category=PerformancePatternCategory.ASYNC,
         impact=ImpactLevel.HIGH,
         description="Multiple awaits that could run concurrently",
         suggestion="Use asyncio.gather() for concurrent execution",
         regex_pattern=r"await\s+\w+\([^)]*\)\s*\n\s*await\s+\w+\(",
     ),
-    "PERF-A003": PatternDefinition(
+    "PERF-A003": PerformancePatternDefinition(
         id="PERF-A003",
         name="Missing Await",
-        category=PatternCategory.ASYNC,
+        category=PerformancePatternCategory.ASYNC,
         impact=ImpactLevel.HIGH,
         description="Async function called without await",
         suggestion="Add await keyword before async function call",
         ast_check=True,
     ),
     # Cache Patterns
-    "PERF-C001": PatternDefinition(
+    "PERF-C001": PerformancePatternDefinition(
         id="PERF-C001",
         name="Repeated Redis GET in Loop",
-        category=PatternCategory.CACHE,
+        category=PerformancePatternCategory.CACHE,
         impact=ImpactLevel.HIGH,
         description="Multiple Redis GET calls in loop",
         suggestion="Use MGET for batch retrieval or pipeline",
         regex_pattern=r"for\s+\w+\s+in\s+\w+.*:\s*\n(?:.*\n)*?\s*redis.*\.get\(",
     ),
-    "PERF-C002": PatternDefinition(
+    "PERF-C002": PerformancePatternDefinition(
         id="PERF-C002",
         name="Missing Cache TTL",
-        category=PatternCategory.CACHE,
+        category=PerformancePatternCategory.CACHE,
         impact=ImpactLevel.MEDIUM,
         description="Cache set without expiration may cause memory issues",
         suggestion="Add TTL/expiration to cache entries",
         regex_pattern=r"\.set\s*\([^,]+,[^,]+\)\s*$",
     ),
-    "PERF-C003": PatternDefinition(
+    "PERF-C003": PerformancePatternDefinition(
         id="PERF-C003",
         name="Cache Key Without Prefix",
-        category=PatternCategory.CACHE,
+        category=PerformancePatternCategory.CACHE,
         impact=ImpactLevel.LOW,
         description="Cache key without namespace prefix may cause collisions",
         suggestion="Use namespaced keys like 'app:entity:id'",
         regex_pattern=r"\.(?:get|set)\s*\(\s*['\"][a-z0-9_]+['\"]",
     ),
     # Memory Patterns
-    "PERF-M001": PatternDefinition(
+    "PERF-M001": PerformancePatternDefinition(
         id="PERF-M001",
         name="Global Mutable Default",
-        category=PatternCategory.MEMORY,
+        category=PerformancePatternCategory.MEMORY,
         impact=ImpactLevel.HIGH,
         description="Mutable default argument causes shared state bug",
         suggestion="Use None default and create mutable in function body",
         regex_pattern=r"def\s+\w+\([^)]*(?:\[\]|\{\}|set\(\))\s*[,)]",
     ),
-    "PERF-M002": PatternDefinition(
+    "PERF-M002": PerformancePatternDefinition(
         id="PERF-M002",
         name="Large List Comprehension",
-        category=PatternCategory.MEMORY,
+        category=PerformancePatternCategory.MEMORY,
         impact=ImpactLevel.MEDIUM,
         description="List comprehension over large data creates full list in memory",
         suggestion="Use generator expression for memory efficiency",
         regex_pattern=r"\[\s*\w+\s+for\s+\w+\s+in\s+(?:range\(\d{5,}|\.all\(\))",
     ),
-    "PERF-M003": PatternDefinition(
+    "PERF-M003": PerformancePatternDefinition(
         id="PERF-M003",
         name="Reading Entire File",
-        category=PatternCategory.MEMORY,
+        category=PerformancePatternCategory.MEMORY,
         impact=ImpactLevel.MEDIUM,
         description="Reading entire file into memory at once",
         suggestion="Use line-by-line iteration or chunked reading",
         regex_pattern=r"\.read\(\)\s*$|\.readlines\(\)",
     ),
     # I/O Patterns
-    "PERF-I001": PatternDefinition(
+    "PERF-I001": PerformancePatternDefinition(
         id="PERF-I001",
         name="Unbuffered File Write",
-        category=PatternCategory.IO,
+        category=PerformancePatternCategory.IO,
         impact=ImpactLevel.MEDIUM,
         description="Many small writes without buffering",
         suggestion="Use buffered writes or write larger chunks",
         regex_pattern=r"for\s+\w+\s+in\s+\w+.*:\s*\n(?:.*\n)*?\s*\w+\.write\(",
     ),
-    "PERF-I002": PatternDefinition(
+    "PERF-I002": PerformancePatternDefinition(
         id="PERF-I002",
         name="Multiple File Opens",
-        category=PatternCategory.IO,
+        category=PerformancePatternCategory.IO,
         impact=ImpactLevel.LOW,
         description="Opening same file multiple times in function",
         suggestion="Open file once and reuse handle",
@@ -318,7 +266,7 @@ class PerformanceVisitor(ast.NodeVisitor):
                         id=f"issue-{len(self.issues)}",
                         pattern_id="PERF-M001",
                         name="Global Mutable Default",
-                        category=PatternCategory.MEMORY,
+                        category=PerformancePatternCategory.MEMORY,
                         impact=ImpactLevel.HIGH,
                         file=self.filename,
                         line=node.lineno,
@@ -342,7 +290,7 @@ class PerformanceVisitor(ast.NodeVisitor):
                     id=f"issue-{len(self.issues)}",
                     pattern_id="PERF-L001",
                     name="Nested Loop O(n²)",
-                    category=PatternCategory.LOOP,
+                    category=PerformancePatternCategory.LOOP,
                     impact=ImpactLevel.HIGH,
                     file=self.filename,
                     line=node.lineno,
@@ -370,7 +318,7 @@ class PerformanceVisitor(ast.NodeVisitor):
                     id=f"issue-{len(self.issues)}",
                     pattern_id="PERF-L001",
                     name="Nested Loop O(n²)",
-                    category=PatternCategory.LOOP,
+                    category=PerformancePatternCategory.LOOP,
                     impact=ImpactLevel.HIGH,
                     file=self.filename,
                     line=node.lineno,
@@ -400,7 +348,7 @@ class PerformanceVisitor(ast.NodeVisitor):
                         id=f"issue-{len(self.issues)}",
                         pattern_id="PERF-A001",
                         name="Sync Call in Async Function",
-                        category=PatternCategory.ASYNC,
+                        category=PerformancePatternCategory.ASYNC,
                         impact=ImpactLevel.CRITICAL,
                         file=self.filename,
                         line=node.lineno,
@@ -429,7 +377,7 @@ def analyze_with_ast(filepath: str, content: str) -> list[PerformanceIssue]:
 
 
 def analyze_with_regex(
-    filepath: str, content: str, patterns: dict[str, PatternDefinition]
+    filepath: str, content: str, patterns: dict[str, PerformancePatternDefinition]
 ) -> list[PerformanceIssue]:
     """Analyze code using regex patterns."""
     issues: list[PerformanceIssue] = []
@@ -531,7 +479,12 @@ def _calculate_analysis_score(
     return critical, high, medium, low, score
 
 
-@router.get("/analyze", response_model=None)
+@router.get("/analyze", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_path",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 async def analyze_path(
     path: str = Query(..., description="Path to analyze"),
     include_ast: bool = Query(True, description="Include AST analysis"),
@@ -594,7 +547,12 @@ async def analyze_path(
     return result
 
 
-@router.post("/analyze-content")
+@router.post("/analyze-content", response_model=List[PerformanceAnalyzeContentResponse])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_content",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 async def analyze_content(
     content: str,
     filename: str = Query("code.py", description="Filename for context"),
@@ -618,10 +576,15 @@ async def analyze_content(
     return issues
 
 
-@router.get("/patterns")
+@router.get("/patterns", response_model=List[PerformancePatternsListResponse])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_patterns",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 async def list_patterns(
     admin_check: bool = Depends(check_admin_permission),
-) -> list[PatternDefinition]:
+) -> list[PerformancePatternDefinition]:
     """List all performance patterns being detected.
 
     Issue #744: Requires admin authentication.
@@ -629,11 +592,16 @@ async def list_patterns(
     return list(PERFORMANCE_PATTERNS.values())
 
 
-@router.get("/patterns/{pattern_id}")
+@router.get("/patterns/{pattern_id}", response_model=PerformancePatternDetailResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pattern",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 async def get_pattern(
     pattern_id: str,
     admin_check: bool = Depends(check_admin_permission),
-) -> PatternDefinition:
+) -> PerformancePatternDefinition:
     """Get details for a specific pattern.
 
     Issue #744: Requires admin authentication.
@@ -643,7 +611,12 @@ async def get_pattern(
     return PERFORMANCE_PATTERNS[pattern_id]
 
 
-@router.post("/patterns/{pattern_id}/toggle")
+@router.post("/patterns/{pattern_id}/toggle", response_model=PerformancePatternToggleResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="toggle_pattern",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 async def toggle_pattern(
     pattern_id: str,
     enabled: bool,
@@ -664,7 +637,12 @@ async def toggle_pattern(
     }
 
 
-@router.get("/history")
+@router.get("/history", response_model=List[PerformanceHistoryResponse])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_history",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 async def get_history(
     limit: int = Query(20, ge=1, le=100),
     admin_check: bool = Depends(check_admin_permission),
@@ -677,7 +655,12 @@ async def get_history(
         return list(_analysis_history[:limit])
 
 
-@router.get("/summary")
+@router.get("/summary", response_model=PerformanceSummaryResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_summary",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 async def get_summary(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict:
@@ -737,7 +720,12 @@ async def get_summary(
         }
 
 
-@router.get("/categories")
+@router.get("/categories", response_model=List[PerformanceCategoriesResponse])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_categories",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 async def get_categories(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict]:
@@ -778,7 +766,12 @@ async def get_categories(
     ]
 
 
-@router.get("/hotspots")
+@router.get("/hotspots", response_model=List[PerformanceHotspotsResponse])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_hotspots",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 async def get_hotspots(
     limit: int = Query(10, ge=1, le=50),
     admin_check: bool = Depends(check_admin_permission),

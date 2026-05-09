@@ -62,8 +62,10 @@ COPY --from=builder /app/dist/ /usr/share/nginx/html/
 # Copy built SLM frontend under /slm/
 COPY --from=slm-builder /app/dist/ /usr/share/nginx/html/slm/
 
-# Copy nginx config
+# Copy nginx config (main + shared includes)
 COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf
+COPY docker/nginx/nginx-common.conf /etc/nginx/nginx-common.conf
+COPY docker/nginx/nginx-locations.conf /etc/nginx/nginx-locations.conf
 
 # Create cache directories
 RUN mkdir -p /var/cache/nginx /var/run \

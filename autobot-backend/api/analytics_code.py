@@ -14,10 +14,19 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.analytics_models import CodeAnalysisRequest
+from api.schemas_analytics import CodeAnalysisRequest
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
+from api.schemas_common import DataResponse
+from api.schemas_analytics import (
+    AnalyticsCodeIndexResponse,
+    AnalyticsCodeStatusResponse,
+    AnalyticsCodeQualityAssessmentResponse,
+    AnalyticsCodeQualityMetricsResponse,
+    AnalyticsCodeCommunicationChainsResponse,
+    AnalyticsCodeQualityScoreResponse,
+)
 
 # Import shared analytics controller from analytics module
 # This will be set after analytics.py is updated
@@ -44,12 +53,12 @@ def set_analytics_dependencies(controller, state):
 # ============================================================================
 
 
+@router.post("/code/index", response_model=AnalyticsCodeIndexResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="index_codebase",
-    error_code_prefix="ANALYTICS",
+    error_code_prefix="ANALYTICS_CODE",
 )
-@router.post("/code/index")
 async def index_codebase(
     request: CodeAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -79,12 +88,12 @@ async def index_codebase(
     }
 
 
+@router.get("/code/status", response_model=AnalyticsCodeStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_analysis_status",
-    error_code_prefix="ANALYTICS",
+    error_code_prefix="ANALYTICS_CODE",
 )
-@router.get("/code/status")
 async def get_code_analysis_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -135,12 +144,12 @@ async def get_code_analysis_status(
     return status
 
 
+@router.get("/quality/assessment", response_model=AnalyticsCodeQualityAssessmentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_quality_assessment",
-    error_code_prefix="ANALYTICS",
+    error_code_prefix="ANALYTICS_CODE",
 )
-@router.get("/quality/assessment")
 async def get_code_quality_assessment(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -204,12 +213,12 @@ async def get_code_quality_assessment(
     return quality_assessment
 
 
+@router.get("/code/quality-metrics", response_model=AnalyticsCodeQualityMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_quality_metrics",
-    error_code_prefix="ANALYTICS",
+    error_code_prefix="ANALYTICS_CODE",
 )
-@router.get("/code/quality-metrics")
 async def get_code_quality_metrics(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -314,12 +323,12 @@ def _build_chain_insights(static_endpoints: list, runtime_patterns: dict) -> lis
     return insights
 
 
+@router.get("/code/communication-chains", response_model=AnalyticsCodeCommunicationChainsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_communication_chains",
-    error_code_prefix="ANALYTICS",
+    error_code_prefix="ANALYTICS_CODE",
 )
-@router.get("/code/communication-chains")
 async def get_communication_chains(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -442,12 +451,12 @@ def _generate_communication_chain_insights(
     return insights
 
 
+@router.post("/code/analyze/communication-chains", response_model=AnalyticsCodeCommunicationChainsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_communication_chains_detailed",
-    error_code_prefix="ANALYTICS",
+    error_code_prefix="ANALYTICS_CODE",
 )
-@router.post("/code/analyze/communication-chains")
 async def analyze_communication_chains_detailed(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -586,12 +595,12 @@ def _score_to_grade(score: float) -> str:
     return "F"
 
 
+@router.get("/code/metrics/quality-score", response_model=AnalyticsCodeQualityScoreResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_quality_score",
-    error_code_prefix="ANALYTICS",
+    error_code_prefix="ANALYTICS_CODE",
 )
-@router.get("/code/metrics/quality-score")
 async def get_code_quality_score(
     admin_check: bool = Depends(check_admin_permission),
 ):

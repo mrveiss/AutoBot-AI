@@ -9,6 +9,7 @@ the standard orchestrator and LangChain orchestrator, eliminating code
 duplication.
 """
 
+import asyncio
 import logging
 import time
 import uuid
@@ -488,9 +489,10 @@ class ToolRegistry:
             is not in the SDK registry.
         """
         try:
-            from tool_sdk.registry import ToolNotFoundError, get_tool_registry
+            from tool_sdk.registry import ToolNotFoundError  # noqa: PLC0415
+            from tool_sdk.registry import get_tool_registry as _get_sdk_registry  # noqa: PLC0415
 
-            registry = get_tool_registry()
+            registry = _get_sdk_registry()
             # Probe registry without instantiating — raises ToolNotFoundError if absent
             try:
                 registry.get(tool_name)
@@ -545,6 +547,55 @@ class ToolRegistry:
             "status": "error",
         }
 
+    def _tool_description(self, name: str) -> str:
+        """Return the raw (uncompressed) description for a single tool. Issue #5871."""
+        import inspect  # noqa: PLC0415
+
+        method = getattr(self, name, None)
+        if method is not None:
+            doc = inspect.getdoc(method)
+            if doc:
+                return doc.split("\n")[0]
+        try:
+            from chat_workflow.tool_handler import _BUILTIN_TOOL_SCHEMAS  # noqa: PLC0415
+
+            schema = _BUILTIN_TOOL_SCHEMAS.get(name, {})
+            desc = (schema or {}).get("description", "")
+            if desc:
+                return desc
+        except ImportError:
+            pass
+        return name
+
+    def get_raw_descriptions(self) -> Dict[str, str]:
+        """Return uncompressed descriptions for all registered tools. Issue #5871."""
+        return {name: self._tool_description(name) for name in self.get_available_tools()}
+
+    async def get_compressed_descriptions(self) -> Dict[str, str]:
+        """Return a mapping of tool_name -> compressed description for all registered tools.
+
+        Uses :func:`tools.description_compressor.compress_description` with Redis
+        caching and Ollama LLM compression.  Falls back to the tool name string for
+        any tool whose description cannot be resolved.
+        """
+        from tools.description_compressor import compress_description  # noqa: PLC0415
+
+        tool_names = self.get_available_tools()
+        tasks = [
+            compress_description(name, {"description": self._tool_description(name)})
+            for name in tool_names
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        compressed: Dict[str, str] = {}
+        for name, result in zip(tool_names, results):
+            if isinstance(result, Exception):
+                logger.warning("compress_description failed for tool '%s': %s", name, result)
+                compressed[name] = self._tool_description(name)
+            else:
+                compressed[name] = result
+        return compressed
+
     def get_available_tools(self) -> List[str]:
         """Get list of available tool names.
 
@@ -580,3 +631,8 @@ class ToolRegistry:
         # (#4557)
         from chat_workflow.tool_handler import BROWSER_TOOL_NAMES  # noqa: PLC0415
         return registry_tools + sorted(BROWSER_TOOL_NAMES)
+
+
+from autobot_shared.singleton_factory import lazy_singleton  # noqa: E402
+
+get_tool_registry = lazy_singleton(ToolRegistry)

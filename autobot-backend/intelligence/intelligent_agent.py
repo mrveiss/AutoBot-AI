@@ -14,6 +14,21 @@ import time
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Dict, FrozenSet, List, Optional
 
+# #7127: running this file directly cannot work — top-level project imports
+# below need sys.path entries that an inline `__main__` block cannot install
+# in time. Guard before the project imports so users get a useful pointer
+# instead of a cryptic ModuleNotFoundError.
+if __name__ == "__main__":
+    import sys as _sys
+
+    print(  # noqa: print
+        "intelligence.intelligent_agent has no runnable __main__ block.\n"
+        "Run the demo via:\n"
+        "  python3 autobot-backend/intelligence/demos/run_intelligent_agent.py",
+        file=_sys.stderr,
+    )
+    raise SystemExit(2)
+
 from intelligence.goal_processor import GoalProcessor, ProcessedGoal
 
 # Issue #380: Module-level frozenset for package managers requiring sudo
@@ -35,7 +50,7 @@ from intelligence.tool_selector import OSAwareToolSelector
 from knowledge_base import KnowledgeBase
 
 # Import existing AutoBot components
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service  # Phase 2D #3185
 from utils.command_validator import CommandValidator
 from worker_node import WorkerNode
 
@@ -101,7 +116,7 @@ class IntelligentAgent:
 
     def __init__(
         self,
-        llm_interface: LLMInterface,
+        llm_interface: Any,  # duck-typed; accepts LLMService (Phase 2D #3185)
         knowledge_base: KnowledgeBase,
         worker_node: WorkerNode,
         command_validator: CommandValidator,
@@ -503,13 +518,16 @@ class IntelligentAgent:
         """Issue #665: Extracted from _handle_complex_goal to reduce function length.
 
         Get LLM analysis response for a complex goal.
+        Note: generate_response() did not exist on LLMInterface; replaced with
+        chat() + .content extraction (Phase 2D #3185).
         """
         system_prompt = self._build_llm_system_prompt(user_input)
-        return await self.llm_interface.generate_response(
-            system_prompt,
+        response = await self.llm_interface.chat(
+            [{"role": "user", "content": system_prompt}],
             temperature=0.3,
             max_tokens=500,
         )
+        return response.content
 
     def _create_analysis_result_chunk(self, llm_response: str) -> StreamChunk:
         """Issue #665: Extracted from _handle_complex_goal to reduce function length."""
@@ -826,7 +844,7 @@ _agent_lock = _asyncio.Lock()
 
 
 async def get_intelligent_agent(
-    llm_interface: LLMInterface = None,
+    llm_interface: Any = None,  # duck-typed; accepts LLMService (Phase 2D #3185)
     knowledge_base: KnowledgeBase = None,
     worker_node: WorkerNode = None,
     command_validator: CommandValidator = None,
@@ -861,61 +879,6 @@ async def get_intelligent_agent(
     return _agent_instance
 
 
-if __name__ == "__main__":
-    """Test the intelligent agent functionality."""
-    import sys
-    from pathlib import Path
-
-    # Add project root for test imports
-    project_root = Path(__file__).parent.parent.parent
-    sys.path.insert(0, str(project_root))
-
-    # Import mock components from test fixtures (Issue #458)
-    from tests.fixtures.mocks import (
-        MockCommandValidator,
-        MockKnowledgeBase,
-        MockLLMInterface,
-        MockWorkerNode,
-    )
-
-    async def test_agent():
-        """Test intelligent agent with mock components."""
-        # Create mock components from tests/fixtures/mocks.py
-        llm = MockLLMInterface()
-        kb = MockKnowledgeBase()
-        wn = MockWorkerNode()
-        cv = MockCommandValidator()
-
-        # Create and initialize agent
-        agent = IntelligentAgent(llm, kb, wn, cv)
-        init_result = await agent.initialize()
-
-        logger.info("=== Initialization Result ===")
-        logger.info("Status: %s", init_result["status"])
-        logger.info("OS: %s", init_result["os_info"]["os_type"])
-        logger.info("Capabilities: %s", init_result["capabilities"]["total_count"])
-        print()  # noqa: print
-
-        # Test natural language processing
-        test_goals = [
-            "what is my ip address?",
-            "list the files in current directory",
-            "show system information",
-        ]
-
-        for goal in test_goals:
-            logger.info("=== Testing Goal: %s ===", goal)
-
-            async for chunk in agent.process_natural_language_goal(goal):
-                timestamp = chunk.timestamp.split("T")[1][:8]
-                chunk_type = chunk.chunk_type.value.upper()
-                content = chunk.content
-
-                logger.info("[%s] %s: %s", timestamp, chunk_type, content)
-
-                if chunk.chunk_type == ChunkType.COMPLETE:
-                    break
-
-            print()  # noqa: print
-
-    asyncio.run(test_agent())
+# Note (#7127): early `__main__` guard at the top of this file handles the
+# "run as script" case before any project import runs. The standalone demo
+# lives at intelligence/demos/run_intelligent_agent.py.

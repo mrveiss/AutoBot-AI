@@ -14,13 +14,18 @@ URLs. This module exposes the correct /api/project/* paths.
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
 from autobot_shared.time_utils import utc_timestamp
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
 from project_state_manager import get_project_state_manager
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.schemas_system import (
+    PhaseStatusItem,
+    ProjectReportResponse,
+    ProjectStatusResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,40 +37,17 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-class PhaseStatusItem(BaseModel):
-    name: str
-    completion: float
-    is_active: bool
-    is_completed: bool
-    capabilities: int
-    implemented_capabilities: int
-
-
-class ProjectStatusResponse(BaseModel):
-    current_phase: str
-    total_phases: int
-    completed_phases: int
-    active_phases: int
-    overall_completion: float
-    next_suggested_phase: Optional[str]
-    phases: Dict[str, PhaseStatusItem]
-
-
-class ProjectReportResponse(BaseModel):
-    status: str
-    overall_completion: float
-    current_phase: str
-    total_phases: int
-    completed_phases: int
-    generated_at: str
-
-
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
 
 @router.get("/status", response_model=ProjectStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_project_status",
+    error_code_prefix="PROJECT",
+)
 async def get_project_status(detailed: bool = False) -> ProjectStatusResponse:
     """Return current project development phase status.
 
@@ -96,6 +78,11 @@ async def get_project_status(detailed: bool = False) -> ProjectStatusResponse:
 
 
 @router.get("/report", response_model=ProjectReportResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_project_report",
+    error_code_prefix="PROJECT",
+)
 async def get_project_report() -> ProjectReportResponse:
     """Return a summary report of project completion and phase state."""
     try:

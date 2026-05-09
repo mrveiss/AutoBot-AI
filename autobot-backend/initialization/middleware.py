@@ -201,6 +201,26 @@ def configure_validation(app: FastAPI):
         logger.warning("Input validation middleware not available: %s", e)
 
 
+def configure_sunset_legacy_health(app: FastAPI):
+    """Issue #6902: telegraph deprecation of legacy /api/<module>/health routes.
+
+    Adds RFC 8594 ``Sunset`` and ``Deprecation`` response headers to every
+    legacy module-local /health endpoint so external scrapers see the
+    deprecation signal at runtime. The canonical aggregator at
+    ``/api/system/health`` and its alias ``/api/health`` are exempted.
+
+    Args:
+        app: FastAPI application instance
+    """
+    try:
+        from middleware.sunset_legacy_health import SunsetLegacyHealthMiddleware
+
+        app.add_middleware(SunsetLegacyHealthMiddleware)
+        logger.info("Sunset-legacy-health middleware enabled (#6902)")
+    except ImportError as e:
+        logger.warning("Sunset-legacy-health middleware not available: %s", e)
+
+
 def configure_middleware(
     app: FastAPI,
     allow_origins: Optional[List[str]] = None,
@@ -257,6 +277,11 @@ def configure_middleware(
     # only to authenticated requests that reach the route handlers.
     if enable_llm_awareness:
         configure_llm_awareness(app)
+
+    # Issue #6902: Sunset/Deprecation headers on legacy /api/<module>/health
+    # routes. Registered last so it runs first on the response path and any
+    # earlier middleware can still inspect/modify the response body.
+    configure_sunset_legacy_health(app)
 
     logger.info("All middleware configured successfully")
 

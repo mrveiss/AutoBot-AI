@@ -1538,6 +1538,22 @@ class FileDriftReport(BaseModel):
     checked_at: str
 
 
+class DriftResolveRequest(BaseModel):
+    """Resync a component from code_source to /opt/autobot/<component>/ (#7149)."""
+
+    component: str
+
+
+class DriftResolveResponse(BaseModel):
+    """Result of a local rsync to resolve drift for a component (#7149)."""
+
+    success: bool
+    component: str
+    message: str
+    source_dir: str
+    deployed_dir: str
+
+
 class PendingNodeResponse(BaseModel):
     """Node that needs code update."""
 

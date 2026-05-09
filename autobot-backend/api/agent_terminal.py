@@ -229,7 +229,6 @@ import logging
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -238,108 +237,39 @@ from autobot_shared.redis_client import get_redis_client
 from services.agent_terminal import AgentSessionState, AgentTerminalService
 from services.command_approval_manager import AgentRole
 from services.command_execution_queue import get_command_queue
+from api.schemas_agent import (
+    AgentTerminalApproveResponse,
+    AgentTerminalExecuteResponse,
+    AgentTerminalInterruptResponse,
+    AgentTerminalResumeResponse,
+)
+from api.schemas_system import (
+    TerminalApproveCommandRequest,
+    TerminalCreateSessionRequest,
+    TerminalExecuteCommandRequest,
+    TerminalHostSelectionRequest,
+    TerminalInterruptRequest,
+    TerminalToolApprovalRequest,
+)
+from api.schemas_terminal import (
+    AgentTerminalCommandStateResponse,
+    AgentTerminalHostSelectionCancelResponse,
+    AgentTerminalHostSelectionGetResponse,
+    AgentTerminalHostSelectionRequestResponse,
+    AgentTerminalHostSelectionSubmitResponse,
+    AgentTerminalInfoResponse,
+    AgentTerminalPendingSelectionsResponse,
+    AgentTerminalSessionCreateResponse,
+    AgentTerminalSessionDeleteResponse,
+    AgentTerminalSessionDetailResponse,
+    AgentTerminalSessionListResponse,
+    AgentTerminalToolApprovalResponse,
+)
 
 logger = logging.getLogger(__name__)
 
 # Create router
 router = APIRouter(prefix="/agent-terminal", tags=["agent-terminal"])
-
-
-# Request/Response Models
-
-
-class CreateSessionRequest(BaseModel):
-    """Request to create agent terminal session"""
-
-    agent_id: str = Field(..., description="Unique identifier for the agent")
-    agent_role: str = Field(
-        ...,
-        description="Role of the agent (chat_agent, automation_agent, system_agent, admin_agent)",
-    )
-    conversation_id: Optional[str] = Field(
-        None, description="Chat conversation ID to link"
-    )
-    host: str = Field(
-        "main",
-        description="Target host (main, frontend, npu-worker, redis, ai-stack, browser)",
-    )
-    metadata: Optional[Dict] = Field(None, description="Additional session metadata")
-
-
-class ExecuteCommandRequest(BaseModel):
-    """Request to execute command in agent session"""
-
-    command: str = Field(..., description="Command to execute")
-    description: Optional[str] = Field(
-        None, description="Description of what command does"
-    )
-    force_approval: bool = Field(
-        False, description="Force user approval even for safe commands"
-    )
-
-
-class ApproveCommandRequest(BaseModel):
-    """Request to approve/deny pending command"""
-
-    approved: bool = Field(..., description="Whether command is approved")
-    user_id: Optional[str] = Field(None, description="User who made the decision")
-    comment: Optional[str] = Field(
-        None, description="Optional comment or reason for the decision"
-    )
-    auto_approve_future: bool = Field(
-        False, description="Auto-approve similar commands in the future"
-    )
-    # Permission v2: Project memory fields
-    remember_for_project: bool = Field(
-        False, description="Remember approval for this project"
-    )
-    project_path: Optional[str] = Field(
-        None, description="Project path for approval memory"
-    )
-
-
-class ToolApprovalRequest(BaseModel):
-    """Request to approve/deny a pending agent tool (event-stream level approval)."""
-
-    approved: bool = Field(..., description="Whether the tool execution is approved")
-    comment: Optional[str] = Field(None, description="Optional reason for the decision")
-    task_id: Optional[str] = Field(
-        None, description="Task ID from the APPROVAL_REQUIRED event"
-    )
-
-
-class InterruptRequest(BaseModel):
-    """Request to interrupt agent and take control"""
-
-    user_id: str = Field(..., description="User requesting control")
-
-
-class HostSelectionRequest(BaseModel):
-    """Request for agent to select an infrastructure host"""
-
-    agent_session_id: Optional[str] = Field(
-        None, description="Agent terminal session ID"
-    )
-    command: Optional[str] = Field(None, description="Command to execute on host")
-    purpose: Optional[str] = Field(None, description="Purpose of the SSH action")
-    preferred_host_id: Optional[str] = Field(
-        None, description="Preferred host ID if any"
-    )
-    allow_auto_select: bool = Field(
-        True, description="Allow auto-selection if default host is set"
-    )
-
-
-class HostSelectionResponse(BaseModel):
-    """Response to host selection request"""
-
-    request_id: str = Field(..., description="Unique request ID for tracking")
-    status: str = Field(..., description="pending_selection, selected, or cancelled")
-    selected_host_id: Optional[str] = Field(None, description="Selected host ID")
-    selected_host_name: Optional[str] = Field(None, description="Selected host name")
-    connection_info: Optional[Dict] = Field(
-        None, description="Connection details (host, port, username)"
-    )
 
 
 # Dependency for AgentTerminalService
@@ -380,15 +310,15 @@ def get_agent_terminal_service(
 # API Endpoints
 
 
+@router.post("/sessions", response_model=AgentTerminalSessionCreateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_agent_terminal_session",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/sessions")
 async def create_agent_terminal_session(
     current_user: dict = Depends(get_current_user),
-    request: CreateSessionRequest = None,
+    request: TerminalCreateSessionRequest = None,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """
@@ -435,12 +365,12 @@ async def create_agent_terminal_session(
     }
 
 
+@router.get("/sessions", response_model=AgentTerminalSessionListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_agent_terminal_sessions",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.get("/sessions")
 async def list_agent_terminal_sessions(
     current_user: dict = Depends(get_current_user),
     agent_id: Optional[str] = None,
@@ -484,12 +414,12 @@ async def list_agent_terminal_sessions(
     }
 
 
+@router.get("/sessions/{session_id}", response_model=AgentTerminalSessionDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_terminal_session",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.get("/sessions/{session_id}")
 async def get_agent_terminal_session(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -511,12 +441,12 @@ async def get_agent_terminal_session(
     }
 
 
+@router.delete("/sessions/{session_id}", response_model=AgentTerminalSessionDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_agent_terminal_session",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.delete("/sessions/{session_id}")
 async def delete_agent_terminal_session(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -538,16 +468,16 @@ async def delete_agent_terminal_session(
     }
 
 
+@router.post("/execute", response_model=AgentTerminalExecuteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_agent_command",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/execute")
 async def execute_agent_command(
     current_user: dict = Depends(get_current_user),
     session_id: str = None,
-    request: ExecuteCommandRequest = None,
+    request: TerminalExecuteCommandRequest = None,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """
@@ -576,16 +506,16 @@ async def execute_agent_command(
     return result
 
 
+@router.post("/sessions/{session_id}/approve", response_model=AgentTerminalApproveResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="approve_agent_command",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/sessions/{session_id}/approve")
 async def approve_agent_command(
     session_id: str,
     current_user: dict = Depends(get_current_user),
-    request: ApproveCommandRequest = None,
+    request: TerminalApproveCommandRequest = None,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """
@@ -617,15 +547,15 @@ async def approve_agent_command(
     return result
 
 
+@router.post("/tools/approve/{approval_id}", response_model=AgentTerminalToolApprovalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="submit_tool_approval",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/tools/approve/{approval_id}")
 async def submit_tool_approval(
     approval_id: str,
-    request: ToolApprovalRequest,
+    request: TerminalToolApprovalRequest,
     current_user: dict = Depends(get_current_user),
 ):
     """Publish an APPROVAL_RESPONSE event for an agent tool approval request.
@@ -656,16 +586,16 @@ async def submit_tool_approval(
     return {"status": "ok", "approval_id": approval_id, "approved": request.approved}
 
 
+@router.post("/sessions/{session_id}/interrupt", response_model=AgentTerminalInterruptResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="interrupt_agent_session",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/sessions/{session_id}/interrupt")
 async def interrupt_agent_session(
     session_id: str,
     current_user: dict = Depends(get_current_user),
-    request: InterruptRequest = None,
+    request: TerminalInterruptRequest = None,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """
@@ -687,12 +617,12 @@ async def interrupt_agent_session(
     return result
 
 
+@router.post("/sessions/{session_id}/resume", response_model=AgentTerminalResumeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resume_agent_session",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/sessions/{session_id}/resume")
 async def resume_agent_session(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -709,12 +639,12 @@ async def resume_agent_session(
     return result
 
 
+@router.get("/commands/{command_id}", response_model=AgentTerminalCommandStateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_command_state",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.get("/commands/{command_id}")
 async def get_command_state(
     command_id: str,
     current_user: dict = Depends(get_current_user),
@@ -782,12 +712,12 @@ async def get_command_state(
     }
 
 
+@router.get("/", response_model=AgentTerminalInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="agent_terminal_info",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.get("/")
 async def agent_terminal_info(
     current_user: dict = Depends(get_current_user),
 ):
@@ -851,15 +781,15 @@ from datetime import datetime, timezone
 _pending_host_selections: Dict[str, Dict] = {}
 
 
+@router.post("/host-selection/request", response_model=AgentTerminalHostSelectionRequestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="request_host_selection",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/host-selection/request")
 async def request_host_selection(
     current_user: dict = Depends(get_current_user),
-    request: HostSelectionRequest = None,
+    request: TerminalHostSelectionRequest = None,
 ):
     """
     Agent requests host selection for SSH action.
@@ -905,12 +835,12 @@ async def request_host_selection(
     }
 
 
+@router.get("/host-selection/{request_id}", response_model=AgentTerminalHostSelectionGetResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_host_selection",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.get("/host-selection/{request_id}")
 async def get_host_selection(
     request_id: str,
     current_user: dict = Depends(get_current_user),
@@ -944,12 +874,12 @@ async def get_host_selection(
     }
 
 
+@router.post("/host-selection/{request_id}/select", response_model=AgentTerminalHostSelectionSubmitResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="submit_host_selection",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/host-selection/{request_id}/select")
 async def submit_host_selection(
     request_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1014,12 +944,12 @@ async def submit_host_selection(
     }
 
 
+@router.post("/host-selection/{request_id}/cancel", response_model=AgentTerminalHostSelectionCancelResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cancel_host_selection",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/host-selection/{request_id}/cancel")
 async def cancel_host_selection(
     request_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1056,12 +986,12 @@ async def cancel_host_selection(
     }
 
 
+@router.get("/host-selection", response_model=AgentTerminalPendingSelectionsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_pending_host_selections",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.get("/host-selection")
 async def list_pending_host_selections(
     current_user: dict = Depends(get_current_user),
 ):

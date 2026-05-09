@@ -22,20 +22,19 @@
 
 set -uo pipefail
 
-# Colors (matching existing hooks pattern)
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m'
+# Source shared library (#7185 — colors + get_staged_files)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/_common.sh
+source "$SCRIPT_DIR/lib/_common.sh"
 
 VIOLATIONS=0
 
-# Get staged Python files (production code only)
+# Get Python files to scan (production code only).
+# Uses get_staged_files (#7185) for the staged-files lookup with positional-args
+# override (#6785: same hook runs as local pre-commit AND CI gate). The
+# multi-stage allowlist below is hook-specific and must remain.
 get_staged_python_files() {
-    git diff --cached --name-only --diff-filter=ACM 2>/dev/null | \
-        grep -E '\.py$' | \
+    get_staged_files '\.py$' "$@" | \
         grep -v -E '(__pycache__|node_modules|\.venv|venv|archive|temp)' | \
         grep -v -E '(_test\.py$|\.e2e_test\.py$|\.integration_test\.py$|\.performance_test\.py$)' | \
         grep -v -E '(conftest\.py$|test_.*\.py$)' | \
@@ -44,10 +43,10 @@ get_staged_python_files() {
         grep -v -E '(ansible/)' || true  # code_analysis: CLI output; ansible: deployed copies with doctest examples
 }
 
-# Get staged TypeScript/Vue files (production code only)
+# Get TypeScript/Vue files to scan (production code only).
+# Same #7185 + #6785 pattern as get_staged_python_files.
 get_staged_ts_files() {
-    git diff --cached --name-only --diff-filter=ACM 2>/dev/null | \
-        grep -E '\.(ts|vue|js)$' | \
+    get_staged_files '\.(ts|vue|js)$' "$@" | \
         grep -v -E '(node_modules|\.venv|venv|archive|temp|dist)' | \
         grep -v -E '(\.spec\.(ts|js)$|\.test\.(ts|js)$|\.e2e\.(ts|js)$|-test\.(ts|js)$)' | \
         grep -v -E '(debugUtils\.ts$|RumConsoleHelper\.ts$)' | \
@@ -119,8 +118,8 @@ main() {
     echo ""
 
     local py_files ts_files
-    py_files=$(get_staged_python_files)
-    ts_files=$(get_staged_ts_files)
+    py_files=$(get_staged_python_files "$@")
+    ts_files=$(get_staged_ts_files "$@")
 
     if [[ -z "$py_files" ]] && [[ -z "$ts_files" ]]; then
         echo -e "${GREEN}No production files staged for commit.${NC}"

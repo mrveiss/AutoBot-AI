@@ -9,9 +9,11 @@
  * Author: mrveiss
  */
 
-import { ref, type Ref } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import config from '@/config/ssot-config'
+import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
+import { useUserStore } from '@/stores/useUserStore'
 
 export type LiveEventConnectionState =
   | 'disconnected'
@@ -63,9 +65,21 @@ class LiveEventService {
   readonly isConnected: Ref<boolean> = ref(false)
   readonly connectionState: Ref<LiveEventConnectionState> = ref('disconnected')
 
-  private getUrl(token?: string): string {
+  // #6692/#6700: token resolved via shared helper unless caller supplies one
+  // explicitly (e.g., test override). Returns null when no token is available
+  // so connect() can defer instead of producing a guaranteed-403 handshake.
+  //
+  // Path is `/live` not `/ws/live` — `config.websocketUrl` already ends in
+  // `/api/ws` (see ssot-config.ts websocketUrl getter, baked in by #6271).
+  // Backend WS handler is `/api/ws/live`. Prepending `/ws/` here would build
+  // `wss://host/api/ws/ws/live` and 404 every connection.
+  private getUrl(token?: string): string | null {
     const base = `${config.websocketUrl}/live`
-    return token ? `${base}?token=${encodeURIComponent(token)}` : base
+    if (token) {
+      const sep = base.includes('?') ? '&' : '?'
+      return `${base}${sep}token=${encodeURIComponent(token)}`
+    }
+    return buildAuthenticatedWsUrl(base)
   }
 
   async connect(token?: string): Promise<void> {
@@ -76,9 +90,15 @@ class LiveEventService {
     ) {
       return
     }
+    const url = this.getUrl(token)
+    if (url === null) {
+      // #6692: no token yet — defer until login (auto-connect watcher retries)
+      logger.debug('LiveEventService: no token, deferring connect until login')
+      this.connectionState.value = 'disconnected'
+      return
+    }
     this.connectionState.value = 'connecting'
     this._cleanup()
-    const url = this.getUrl(token)
     logger.debug('Connecting LiveEventService', { attempt: this.reconnectAttempts + 1 })
     return new Promise<void>((resolve, reject) => {
       try {
@@ -314,8 +334,10 @@ class LiveEventService {
 
 const liveEventService = new LiveEventService()
 
-// Auto-connect with delay to allow app initialization.
-// Only connect if this is the first import and not already connected.
+// Auto-connect after app initialization. #6692: connect only when a JWT is
+// available, and reactively reconnect/disconnect as the user logs in or out.
+// Pinia is only set up after main.ts mounts the app, so we defer the userStore
+// lookup into the setTimeout callback rather than reading it at module top.
 if (typeof window !== 'undefined') {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- one-time init flag on window with no type definition
   const win = window as any
@@ -323,27 +345,40 @@ if (typeof window !== 'undefined') {
   if (!win._autobotLiveEventInitialized) {
     win._autobotLiveEventInitialized = true
 
-    setTimeout(() => {
+    // Subscribe to the global channel up-front. Subscriptions queue until the
+    // socket opens, so this is safe before any connect() call.
+    liveEventService.subscribe('global', (event) => {
+      logger.debug('Global live event received:', {
+        event_type: event.event_type,
+        event_id: event.event_id,
+      })
+    })
+
+    const tryConnect = () => {
       if (
         !liveEventService.isConnected.value &&
         liveEventService.connectionState.value !== 'connecting'
       ) {
-        liveEventService
-          .connect()
-          .then(() => {
-            // Subscribe to the global channel by default so
-            // rag_retrieval and other broadcast events are received.
-            liveEventService.subscribe('global', (event) => {
-              logger.debug('Global live event received:', {
-                event_type: event.event_type,
-                event_id: event.event_id,
-              })
-            })
-          })
-          .catch((error: unknown) => {
-            logger.error('Initial LiveEventService connection failed:', error)
-          })
+        liveEventService.connect().catch((error: unknown) => {
+          logger.error('LiveEventService connection failed:', error)
+        })
       }
+    }
+
+    setTimeout(() => {
+      const userStore = useUserStore()
+      tryConnect()
+      // React to login (token appears) and logout (token cleared).
+      watch(
+        () => userStore.authState.token,
+        (token, previous) => {
+          if (token && !previous) {
+            tryConnect()
+          } else if (!token && previous) {
+            liveEventService.disconnect()
+          }
+        },
+      )
     }, 1000)
   }
 }

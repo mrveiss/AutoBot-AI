@@ -14,11 +14,16 @@ import logging
 import os
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel
 
+from api.schemas_knowledge import (
+    KnowledgeCognitionSeedResponse,
+    KnowledgeCognitionStatusResponse,
+    SeedRequest,
+)
 from auth_middleware import check_admin_permission
 from constants.path_constants import PATH
 from services.knowledge.cognition_seeder import get_cognition_seeder
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +33,12 @@ router = APIRouter(tags=["knowledge-cognition"])
 _DEFAULT_MANIFEST = "cognition_seed.yaml"
 
 
-class SeedRequest(BaseModel):
-    """Optional body for the seed endpoint."""
-
-    manifest_path: str = _DEFAULT_MANIFEST
-
-
-@router.get("/cognition-store/status")
+@router.get("/cognition-store/status", response_model=KnowledgeCognitionStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cognition_store_status",
+    error_code_prefix="KNOWLEDGE_COGNITION",
+)
 async def get_cognition_store_status():
     """Return seed status for all ChromaDB collections that contain seeded docs.
 
@@ -67,7 +71,12 @@ async def _run_seed(manifest_path: str) -> None:
         logger.error("Background seed failed: manifest=%s error=%s", manifest_path, exc)
 
 
-@router.post("/cognition-store/seed")
+@router.post("/cognition-store/seed", response_model=KnowledgeCognitionSeedResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="trigger_cognition_seed",
+    error_code_prefix="KNOWLEDGE_COGNITION",
+)
 async def trigger_cognition_seed(
     request: SeedRequest,
     background_tasks: BackgroundTasks,

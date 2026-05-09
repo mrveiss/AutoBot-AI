@@ -23,11 +23,21 @@
   command: bash /tmp/nodesource_setup.sh
   when: node_check.rc != 0
 
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: agent_config nodejs | Refresh apt cache after NodeSource add (best-effort, bounded; #6719)
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+
 - name: Install Node.js
   package:
     name: nodejs
     state: present
-    update_cache: yes
 
 - name: Verify Node.js installation
   command: node --version

@@ -11,13 +11,13 @@ code duplication and improve maintainability.
 Functions:
 - ID Generation: generate_request_id, generate_chat_session_id, generate_message_id
 - ID Validation: validate_chat_session_id
-- Response Formatting: create_success_response, create_error_response
+- Response Formatting: create_chat_response, create_error_response
 - Dependency Injection: get_chat_history_manager (FastAPI)
 
 Usage:
     from utils.chat_utils import (
         generate_request_id,
-        create_success_response,
+        create_chat_response,
         get_chat_history_manager
     )
 
@@ -181,14 +181,18 @@ def validate_message_content(content: str) -> bool:
 # Note: _canonical_create_error_response imported at top of file (Issue #292)
 
 
-def create_success_response(
+def create_chat_response(
     data: Any,
     message: str = "Success",
     request_id: Optional[str] = None,
     status_code: int = 200,
 ) -> JSONResponse:
     """
-    Create a standardized success response.
+    Create a standardized chat success response (returns JSONResponse with request_id).
+
+    Note: This is distinct from response_helpers.create_success_response which returns
+    DataResponse[T]. This function is specific to the chat subsystem and returns a
+    plain JSONResponse.
 
     Args:
         data: Response data (any JSON-serializable type)
@@ -200,7 +204,7 @@ def create_success_response(
         JSONResponse: Formatted success response
 
     Example:
-        >>> response = create_success_response(
+        >>> response = create_chat_response(
         ...     data={"chat_id": "123"},
         ...     message="Chat created",
         ...     request_id="abc-123"
@@ -379,7 +383,7 @@ __all__ = [
     "validate_chat_session_id",
     "validate_message_content",
     # Response Formatting
-    "create_success_response",
+    "create_chat_response",
     "create_error_response",
     # Dependency Injection
     "get_chat_history_manager",

@@ -33,7 +33,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.threshold_constants import StringParsingConstants
 from type_defs.common import Metadata
 
@@ -48,7 +48,7 @@ class EnforcementMode(str, Enum):
     ENFORCED = "enforced"  # Full enforcement, block violations
 
 
-class FeatureFlags:
+class FeatureFlags(AsyncRedisClientMixin):
     """
     Redis-backed feature flags for access control rollout
 
@@ -56,20 +56,14 @@ class FeatureFlags:
     Supports real-time updates across distributed VMs
     """
 
+    _redis_database = "cache"
+
     def __init__(self):
         """Initialize feature flags service"""
-        self.redis = None
         self._cache = {}
         self._cache_ttl = 5  # seconds
         self._last_refresh = {}
         self._enforcement_default_logged = False
-
-    async def _get_redis(self):
-        """Get Redis connection for feature flags (uses cache DB)"""
-        if not self.redis:
-            # Get async Redis client for cache database (returns coroutine, must await)
-            self.redis = await get_async_redis_client(database="cache")
-        return self.redis
 
     async def get_enforcement_mode(self) -> EnforcementMode:
         """

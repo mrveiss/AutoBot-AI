@@ -332,7 +332,7 @@ onMounted(() => {
 }
 
 .header-info h3 {
-  margin: 0 0 4px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-1);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
@@ -345,7 +345,7 @@ onMounted(() => {
 }
 
 .btn-refresh {
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
@@ -446,7 +446,7 @@ onMounted(() => {
 }
 
 .confidence-badge {
-  padding: 4px 10px;
+  padding: var(--spacing-1) var(--spacing-2-5);
   border-radius: var(--radius-xl);
   font-size: var(--text-xs);
   font-weight: 500;
@@ -482,7 +482,7 @@ onMounted(() => {
 .btn-execute,
 .btn-details {
   flex: 1;
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   border-radius: var(--radius-md);
   font-size: var(--text-xs);
   font-weight: 500;
@@ -563,7 +563,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   cursor: pointer;
   transition: background var(--duration-200);
 }
@@ -587,7 +587,7 @@ onMounted(() => {
 }
 
 .reference-content {
-  padding: 0 20px 20px;
+  padding: var(--spacing-0) var(--spacing-5) var(--spacing-5);
 }
 
 .types-grid {
@@ -600,7 +600,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 10px 12px;
+  padding: var(--spacing-2-5) var(--spacing-3);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
 }
@@ -644,7 +644,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2-5);
-  padding: 10px 12px;
+  padding: var(--spacing-2-5) var(--spacing-3);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
 }
@@ -684,7 +684,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
 }
 
@@ -735,7 +735,7 @@ onMounted(() => {
 .modal-actions {
   display: flex;
   gap: var(--spacing-3);
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   border-top: 1px solid var(--border-default);
 }
 
@@ -760,7 +760,7 @@ onMounted(() => {
 }
 
 .btn-secondary {
-  padding: 12px 20px;
+  padding: var(--spacing-3) var(--spacing-5);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);

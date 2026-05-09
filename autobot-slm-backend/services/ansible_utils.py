@@ -10,7 +10,7 @@ def _extract_failure_summary(output: str) -> str:
     """Parse Ansible stdout and return a human-readable failure summary.
 
     Extracts failed hosts, the task that failed, and the error message so
-    users see e.g. '172.16.168.26 failed at "Common | Update apt cache":
+    users see e.g. '<host-ip> failed at "Common | Update apt cache":
     Failed to update apt cache: unknown reason' instead of 'exit code 2'.
     """
     lines = output.splitlines()
@@ -35,7 +35,7 @@ def _extract_failure_summary(output: str) -> str:
             for j in range(i + 1, min(i + 10, len(lines))):
                 msg_match = re.search(r'"?msg"?\s*[:=]\s*["\']?(.+?)["\']?\s*$', lines[j].strip())
                 if msg_match:
-                    msg = msg_match.group(1).strip().strip('\'"')
+                    msg = msg_match.group(1).strip().strip("'\"")
                     break
 
             task_part = f' at "{current_task}"' if current_task else ""

@@ -8,9 +8,7 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
-
-from auth_middleware import auth_middleware, get_current_user
+from auth_middleware import get_auth_middleware, get_current_user
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -18,13 +16,35 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from security.session_ownership import validate_session_ownership
 from type_defs.common import Metadata
 
+from api.schemas_common import DataResponse
+from api.schemas_chat import (
+    ActivityAddData,
+    ActivityBatchCreate,
+    ActivityBatchData,
+    ActivityCreate,
+    ChatResetData,
+    ChatResetRequest,
+    SessionActivitiesData,
+    SessionCheckpointClearData,
+    SessionCreate,
+    SessionCreateData,
+    SessionDeleteData,
+    SessionListData,
+    SessionMessagesData,
+    SessionShareData,
+    SessionSharePreviewData,
+    SessionShareRequest,
+    SessionUpdate,
+    SessionUpdateData,
+)
+
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
 from utils.chat_exceptions import get_exceptions_lazy
 
 # Import reusable chat utilities
 from utils.chat_utils import (
+    create_chat_response,
     create_error_response,
-    create_success_response,
     generate_chat_session_id,
     generate_request_id,
     get_chat_history_manager,
@@ -34,6 +54,9 @@ from utils.chat_utils import (
 
 # Import session lifecycle hooks (Issue #4260)
 from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
+
+# Issue #6559: Wire audit_record into session create/delete/export endpoints
+from services.audit import AuditAction, audit_record
 
 # ====================================================================
 # Router Configuration
@@ -88,8 +111,7 @@ async def _handle_session_file_action(
             copy=False,
         )
         logger.info(
-            f"Transferred {transfer_result.get('total_transferred', 0)} files "
-            f"to KB for session {session_id}"
+            f"Transferred {transfer_result.get('total_transferred', 0)} files " f"to KB for session {session_id}"
         )
         return {
             "files_handled": True,
@@ -119,75 +141,7 @@ async def _handle_session_file_action(
 
 def log_request_context(request, endpoint, request_id):
     """Log request context for debugging"""
-    logger.info(
-        "[%s] %s - %s %s", request_id, endpoint, request.method, request.url.path
-    )
-
-
-# ====================================================================
-# Request/Response Models
-# ====================================================================
-
-
-class SessionCreate(BaseModel):
-    """Session creation model"""
-
-    title: Optional[str] = Field(None, max_length=200, description="Session title")
-    team_id: Optional[str] = Field(
-        None, description="Team ID for team-scoped sessions (#684)"
-    )
-    metadata: Optional[Metadata] = Field(
-        default_factory=dict, description="Session metadata"
-    )
-
-
-class SessionUpdate(BaseModel):
-    """Session update model"""
-
-    title: Optional[str] = Field(None, max_length=200, description="New session title")
-    metadata: Optional[Metadata] = Field(None, description="Updated metadata")
-
-
-# Issue #608: Activity tracking models
-class ActivityCreate(BaseModel):
-    """Single activity creation model"""
-
-    activity_id: str = Field(..., description="Frontend-generated activity ID")
-    type: str = Field(
-        ..., description="Activity type: terminal, file, browser, desktop"
-    )
-    user_id: str = Field(..., description="User who performed the activity")
-    content: str = Field(
-        ..., max_length=10000, description="Activity content/description"
-    )
-    secrets_used: list[str] = Field(default_factory=list, description="Secret IDs used")
-    metadata: Optional[Metadata] = Field(
-        default_factory=dict, description="Activity metadata"
-    )
-    timestamp: str = Field(..., description="ISO format timestamp from frontend")
-
-
-class ActivityBatchCreate(BaseModel):
-    """Batch activity creation model"""
-
-    activities: list[ActivityCreate] = Field(
-        ..., description="List of activities to create"
-    )
-
-
-# Issue #689: Session sharing model
-class SessionShareRequest(BaseModel):
-    """Request to share a session with users"""
-
-    share_with: list[str] = Field(
-        ..., min_length=1, description="User IDs to share with"
-    )
-    include_knowledge: bool = Field(
-        False, description="Include KB facts from this session"
-    )
-    knowledge_facts: Optional[list[str]] = Field(
-        None, description="Specific fact IDs to share (all if omitted)"
-    )
+    logger.info("[%s] %s - %s %s", request_id, endpoint, request.method, request.url.path)
 
 
 # ====================================================================
@@ -249,9 +203,7 @@ def _validate_pagination_params(page: int, per_page: int) -> None:
         raise ValidationError("Invalid pagination parameters")
 
 
-async def _fetch_session_messages_or_raise(
-    chat_history_manager, session_id: str, limit: int
-) -> List:
+async def _fetch_session_messages_or_raise(chat_history_manager, session_id: str, limit: int) -> List:
     """
     Fetch session messages and raise ResourceNotFoundError if session not found.
 
@@ -280,9 +232,7 @@ async def _fetch_session_messages_or_raise(
     ) = get_exceptions_lazy()
 
     try:
-        messages = await chat_history_manager.get_session_messages(
-            session_id, limit=limit
-        )
+        messages = await chat_history_manager.get_session_messages(session_id, limit=limit)
     except FileNotFoundError:
         logger.warning("Session file not found for session %s", session_id)
         raise ResourceNotFoundError(f"Session {session_id} not found")
@@ -322,9 +272,7 @@ def _validate_export_format_or_raise(export_format: str) -> None:
         raise ValidationError("Invalid export format. Supported: json, txt, csv")
 
 
-async def _export_session_data_or_raise(
-    chat_history_manager, session_id: str, export_format: str
-) -> str:
+async def _export_session_data_or_raise(chat_history_manager, session_id: str, export_format: str) -> str:
     """
     Export session data and raise ResourceNotFoundError if session not found.
 
@@ -369,18 +317,16 @@ _EXPORT_CONTENT_TYPES = {
 # ====================================================================
 
 
+@router.get("/chat/sessions/{session_id}", response_model=DataResponse[SessionMessagesData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_messages",
-    error_code_prefix="CHAT",
+    error_code_prefix="CHAT_SESSIONS",
 )
-@router.get("/chat/sessions/{session_id}")
 async def get_session_messages(
     session_id: str,
     request: Request,
-    ownership: Dict = Depends(
-        validate_session_ownership
-    ),  # SECURITY: Validate ownership
+    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership
     page: int = 1,
     per_page: int = 50,
 ):
@@ -398,12 +344,10 @@ async def get_session_messages(
 
     chat_history_manager = get_chat_history_manager(request)
 
-    messages = await _fetch_session_messages_or_raise(
-        chat_history_manager, session_id, per_page
-    )
+    messages = await _fetch_session_messages_or_raise(chat_history_manager, session_id, per_page)
     total_count = await chat_history_manager.get_session_message_count(session_id)
 
-    return create_success_response(
+    return create_chat_response(
         data={
             "messages": messages,
             "session_id": session_id,
@@ -416,12 +360,12 @@ async def get_session_messages(
     )
 
 
+@router.get("/chat/sessions", response_model=DataResponse[SessionListData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_sessions",
-    error_code_prefix="CHAT",
+    error_code_prefix="CHAT_SESSIONS",
 )
-@router.get("/chat/sessions")
 async def list_sessions(
     request: Request,
     current_user: dict = Depends(get_current_user),
@@ -458,9 +402,7 @@ async def list_sessions(
 
     # Issue #684: Scoped session listing
     if scope in ("org", "team"):
-        return await _list_scoped_sessions(
-            request, request_id, chat_history_manager, scope, team_id
-        )
+        return await _list_scoped_sessions(request, request_id, chat_history_manager, scope, team_id)
 
     # Default: list all sessions (fast mode, no decryption)
     sessions = await chat_history_manager.list_sessions_fast()
@@ -477,7 +419,7 @@ async def list_sessions(
     if len(sessions) == 0:
         response_data["intentional_empty"] = True
 
-    return create_success_response(
+    return create_chat_response(
         data=response_data,
         message="Sessions retrieved successfully",
         request_id=request_id,
@@ -526,7 +468,7 @@ async def _list_scoped_sessions(
 
     Helper for list_sessions (#684).
     """
-    user_data = auth_middleware.get_user_from_request(request)
+    user_data = get_auth_middleware().get_user_from_request(request)
     if not user_data:
         (
             AutoBotError,
@@ -543,9 +485,7 @@ async def _list_scoped_sessions(
     validator = _build_ownership_validator(redis)
 
     if scope == "org":
-        return await _list_org_sessions(
-            user_data, validator, chat_history_manager, request_id
-        )
+        return await _list_org_sessions(user_data, validator, chat_history_manager, request_id)
 
     # scope == "team"
     if not team_id:
@@ -558,9 +498,7 @@ async def _list_scoped_sessions(
         ) = get_exceptions_lazy()
         raise ValidationError("team_id required for team scope")
 
-    return await _list_team_sessions(
-        team_id, validator, chat_history_manager, request_id
-    )
+    return await _list_team_sessions(team_id, validator, chat_history_manager, request_id)
 
 
 async def _list_org_sessions(
@@ -578,7 +516,7 @@ async def _list_org_sessions(
     org_id = user_data.get("org_id")
     user_role = user_data.get("role", "")
     if not org_id:
-        return create_success_response(
+        return create_chat_response(
             data={"sessions": [], "count": 0, "scope": "org"},
             message="User has no organization",
             request_id=request_id,
@@ -598,7 +536,7 @@ async def _list_org_sessions(
     filtered = [s for s in all_sessions if s.get("id") in session_ids]
     filtered.sort(key=lambda x: x.get("lastModified", ""), reverse=True)
 
-    return create_success_response(
+    return create_chat_response(
         data={
             "sessions": filtered,
             "count": len(filtered),
@@ -625,7 +563,7 @@ async def _list_team_sessions(
     filtered = [s for s in all_sessions if s.get("id") in session_ids]
     filtered.sort(key=lambda x: x.get("lastModified", ""), reverse=True)
 
-    return create_success_response(
+    return create_chat_response(
         data={
             "sessions": filtered,
             "count": len(filtered),
@@ -646,9 +584,9 @@ async def _list_shared_sessions(
 
     Helper for list_sessions.
     """
-    user_data = auth_middleware.get_user_from_request(request)
+    user_data = get_auth_middleware().get_user_from_request(request)
     if not user_data:
-        return create_success_response(
+        return create_chat_response(
             data={"sessions": [], "count": 0, "scope": "shared"},
             message="Authentication required",
             request_id=request_id,
@@ -664,7 +602,7 @@ async def _list_shared_sessions(
     session_ids = set(await validator.get_shared_sessions(user_id))
 
     if not session_ids:
-        return create_success_response(
+        return create_chat_response(
             data={"sessions": [], "count": 0, "scope": "shared"},
             message="No shared sessions",
             request_id=request_id,
@@ -674,7 +612,7 @@ async def _list_shared_sessions(
     filtered = [s for s in all_sessions if s.get("id") in session_ids]
     filtered.sort(key=lambda x: x.get("lastModified", ""), reverse=True)
 
-    return create_success_response(
+    return create_chat_response(
         data={
             "sessions": filtered,
             "count": len(filtered),
@@ -731,9 +669,7 @@ async def _track_session_in_memory_graph(
         user_data: Authenticated user data
         request_id: Request tracking ID
     """
-    memory_graph: Optional[AutoBotMemoryGraph] = getattr(
-        request.app.state, "memory_graph", None
-    )
+    memory_graph: Optional[AutoBotMemoryGraph] = getattr(request.app.state, "memory_graph", None)
     if not memory_graph or not user_data:
         return
 
@@ -772,12 +708,12 @@ async def _track_session_in_memory_graph(
         )
 
 
+@router.post("/chat/sessions", response_model=DataResponse[SessionCreateData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_session",
-    error_code_prefix="CHAT",
+    error_code_prefix="CHAT_SESSIONS",
 )
-@router.post("/chat/sessions")
 async def create_session(session_data: SessionCreate, request: Request):
     """
     Create a new chat session.
@@ -788,11 +724,18 @@ async def create_session(session_data: SessionCreate, request: Request):
     log_request_context(request, "create_session", request_id)
 
     chat_history_manager = get_chat_history_manager(request)
-    session_id = generate_chat_session_id()
+    # #6746: accept client-supplied session_id when provided and well-formed,
+    # so the frontend's locally-minted UUID survives the round-trip and
+    # frontend/backend stay aligned. Falls back to server-mint when absent
+    # (legacy callers, CLI, tests).
+    if session_data.id and validate_chat_session_id(session_data.id):
+        session_id = session_data.id
+    else:
+        session_id = generate_chat_session_id()
     session_title = session_data.title or DEFAULT_SESSION_TITLE
 
     # SECURITY: Extract authenticated user and add to metadata as owner
-    user_data = auth_middleware.get_user_from_request(request)
+    user_data = get_auth_middleware().get_user_from_request(request)
     metadata = session_data.metadata or {}
     if user_data and user_data.get("username"):
         metadata["owner"] = user_data["username"]
@@ -827,14 +770,29 @@ async def create_session(session_data: SessionCreate, request: Request):
     await _register_session_ownership(user_data, session_id, session_data.team_id)
 
     # Issue #665: Use helper for memory graph tracking
-    await _track_session_in_memory_graph(
-        request, session_id, session_title, user_data, request_id
-    )
+    await _track_session_in_memory_graph(request, session_id, session_title, user_data, request_id)
 
     # Issue #4260: Wire SESSION_CREATE hook for extensions
     context = getattr(request.app.state, "context", {})
     await _emit_session_create(session_id, context)
-    return create_success_response(
+
+    # Issue #6559: Audit session creation
+    audit_record(
+        user_id=str((user_data or {}).get("user_id", "unknown")),
+        action=AuditAction.SESSION_CREATE,
+        resource_type="chat_session",
+        resource_id=session_id,
+        ip_address=request.client.host if request.client else "unknown",
+        session_id=session_id,
+        metadata={
+            "title": session_title,
+            "team_id": session_data.team_id,
+            "request_id": request_id,
+        },
+        outcome="success",
+    )
+
+    return create_chat_response(
         data=session,
         message="Session created successfully",
         request_id=request_id,
@@ -842,19 +800,17 @@ async def create_session(session_data: SessionCreate, request: Request):
     )
 
 
+@router.put("/chat/sessions/{session_id}", response_model=DataResponse[SessionUpdateData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_session",
-    error_code_prefix="CHAT",
+    error_code_prefix="CHAT_SESSIONS",
 )
-@router.put("/chat/sessions/{session_id}")
 async def update_session(
     session_id: str,
     session_data: SessionUpdate,
     request: Request,
-    ownership: Dict = Depends(
-        validate_session_ownership
-    ),  # SECURITY: Validate ownership
+    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership
 ):
     """Update a chat session"""
     request_id = generate_request_id()
@@ -897,7 +853,7 @@ async def update_session(
         {"title": session_data.title, "request_id": request_id},
     )
 
-    return create_success_response(
+    return create_chat_response(
         data=updated_session,
         message="Session updated successfully",
         request_id=request_id,
@@ -909,9 +865,7 @@ async def update_session(
 # =============================================================================
 
 
-def _validate_delete_session_params(
-    session_id: str, file_action: str, file_options: Optional[str]
-) -> dict:
+def _validate_delete_session_params(session_id: str, file_action: str, file_options: Optional[str]) -> dict:
     """Validate and parse delete_session parameters.
 
     Issue #281: Extracted from delete_session for better organization.
@@ -947,9 +901,7 @@ def _validate_delete_session_params(
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise ValidationError(
-            f"Invalid file_action. Must be one of: {sorted(_VALID_FILE_ACTIONS)}"
-        )
+        raise ValidationError(f"Invalid file_action. Must be one of: {sorted(_VALID_FILE_ACTIONS)}")
 
     # Parse file_options if provided
     parsed_file_options = {}
@@ -986,9 +938,7 @@ async def _handle_conversation_files(
         Dict with file handling results including success status and counts
     """
     file_deletion_result = {"files_handled": False, "action_taken": file_action}
-    conversation_file_manager = getattr(
-        request.app.state, "conversation_file_manager", None
-    )
+    conversation_file_manager = getattr(request.app.state, "conversation_file_manager", None)
 
     if conversation_file_manager:
         try:
@@ -996,19 +946,14 @@ async def _handle_conversation_files(
                 conversation_file_manager, session_id, file_action, parsed_file_options
             )
         except Exception as file_error:
-            logger.error(
-                "Error handling files for session %s: %s", session_id, file_error
-            )
+            logger.error("Error handling files for session %s: %s", session_id, file_error)
             file_deletion_result = {
                 "files_handled": False,
                 "action_taken": file_action,
                 "error": str(file_error),
             }
     else:
-        logger.warning(
-            f"ConversationFileManager not available, "
-            f"skipping file handling for session {session_id}"
-        )
+        logger.warning(f"ConversationFileManager not available, " f"skipping file handling for session {session_id}")
 
     return file_deletion_result
 
@@ -1033,15 +978,12 @@ async def _cleanup_terminal_sessions(request: Request, session_id: str) -> dict:
     agent_terminal_service = getattr(request.app.state, "agent_terminal_service", None)
     if not agent_terminal_service:
         logger.warning(
-            f"AgentTerminalService not available, "
-            f"skipping terminal session cleanup for session {session_id}"
+            f"AgentTerminalService not available, " f"skipping terminal session cleanup for session {session_id}"
         )
         return terminal_cleanup_result
 
     try:
-        terminal_sessions = await agent_terminal_service.list_sessions(
-            conversation_id=session_id
-        )
+        terminal_sessions = await agent_terminal_service.list_sessions(conversation_id=session_id)
 
         for terminal_session in terminal_sessions:
             if terminal_session.pending_approval is not None:
@@ -1064,8 +1006,7 @@ async def _cleanup_terminal_sessions(request: Request, session_id: str) -> dict:
             )
     except Exception as terminal_cleanup_error:
         logger.error(
-            f"Failed to cleanup terminal sessions for chat {session_id}: "
-            f"{terminal_cleanup_error}",
+            f"Failed to cleanup terminal sessions for chat {session_id}: " f"{terminal_cleanup_error}",
             exc_info=True,
         )
         terminal_cleanup_result["error"] = str(terminal_cleanup_error)
@@ -1109,14 +1050,10 @@ def _process_kb_deletion_result(result: dict, kb_cleanup_result: dict) -> None:
     kb_cleanup_result["facts_preserved"] = result.get("preserved_count", 0)
 
     if result.get("errors"):
-        kb_cleanup_result["cleanup_error"] = (
-            f"{len(result['errors'])} errors during cleanup"
-        )
+        kb_cleanup_result["cleanup_error"] = f"{len(result['errors'])} errors during cleanup"
 
 
-def _log_kb_cleanup_result(
-    session_id: str, kb_cleanup_result: dict, errors: Optional[List] = None
-) -> None:
+def _log_kb_cleanup_result(session_id: str, kb_cleanup_result: dict, errors: Optional[List] = None) -> None:
     """
     Log KB cleanup results appropriately based on outcome.
 
@@ -1134,10 +1071,7 @@ def _log_kb_cleanup_result(
             errors,
         )
 
-    if (
-        kb_cleanup_result["facts_deleted"] > 0
-        or kb_cleanup_result["facts_preserved"] > 0
-    ):
+    if kb_cleanup_result["facts_deleted"] > 0 or kb_cleanup_result["facts_preserved"] > 0:
         logger.info(
             "KB cleanup for session %s: deleted=%d, preserved=%d",
             session_id,
@@ -1259,9 +1193,7 @@ async def _perform_all_session_cleanup(
         Tuple of (file_result, terminal_result, kb_result, transcript_result)
     """
     # Handle conversation files
-    file_deletion_result = await _handle_conversation_files(
-        request, session_id, file_action, parsed_file_options
-    )
+    file_deletion_result = await _handle_conversation_files(request, session_id, file_action, parsed_file_options)
 
     # Clean up terminal sessions
     terminal_cleanup_result = await _cleanup_terminal_sessions(request, session_id)
@@ -1329,7 +1261,7 @@ def _build_delete_session_response(
     Returns:
         Success response with deletion details
     """
-    return create_success_response(
+    return create_chat_response(
         data={
             "session_id": session_id,
             "deleted": True,
@@ -1343,18 +1275,16 @@ def _build_delete_session_response(
     )
 
 
+@router.delete("/chat/sessions/{session_id}", response_model=DataResponse[SessionDeleteData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_session",
-    error_code_prefix="CHAT",
+    error_code_prefix="CHAT_SESSIONS",
 )
-@router.delete("/chat/sessions/{session_id}")
 async def delete_session(
     session_id: str,
     request: Request,
-    ownership: Dict = Depends(
-        validate_session_ownership
-    ),  # SECURITY: Validate ownership
+    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership
     file_action: str = "delete",
     file_options: Optional[str] = None,
 ):
@@ -1366,9 +1296,7 @@ async def delete_session(
     request_id = generate_request_id()
     log_request_context(request, "delete_session", request_id)
 
-    parsed_file_options = _validate_delete_session_params(
-        session_id, file_action, file_options
-    )
+    parsed_file_options = _validate_delete_session_params(session_id, file_action, file_options)
 
     chat_history_manager = get_chat_history_manager(request)
 
@@ -1380,9 +1308,7 @@ async def delete_session(
         terminal_result,
         kb_result,
         transcript_result,
-    ) = await _perform_all_session_cleanup(
-        request, session_id, file_action, parsed_file_options
-    )
+    ) = await _perform_all_session_cleanup(request, session_id, file_action, parsed_file_options)
 
     await _delete_session_and_verify(chat_history_manager, session_id)
 
@@ -1395,6 +1321,24 @@ async def delete_session(
     # Issue #4260: Wire SESSION_DESTROY hook for extensions
     context = getattr(request.app.state, "context", {})
     await _emit_session_destroy(session_id, message_count, context)
+
+    # Issue #6559: Audit session deletion
+    user_data = get_auth_middleware().get_user_from_request(request)
+    audit_record(
+        user_id=str((user_data or {}).get("user_id", "unknown")),
+        action=AuditAction.SESSION_DELETE,
+        resource_type="chat_session",
+        resource_id=session_id,
+        ip_address=request.client.host if request.client else "unknown",
+        session_id=session_id,
+        metadata={
+            "file_action": file_action,
+            "message_count": message_count,
+            "request_id": request_id,
+        },
+        outcome="success",
+    )
+
     return _build_delete_session_response(
         session_id,
         request_id,
@@ -1405,12 +1349,12 @@ async def delete_session(
     )
 
 
+@router.get("/chat/sessions/{session_id}/export", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_session",
-    error_code_prefix="CHAT",
+    error_code_prefix="CHAT_SESSIONS",
 )
-@router.get("/chat/sessions/{session_id}/export")
 async def export_session(session_id: str, request: Request, format: str = "json"):
     """
     Export a chat session in various formats.
@@ -1426,38 +1370,36 @@ async def export_session(session_id: str, request: Request, format: str = "json"
 
     chat_history_manager = get_chat_history_manager(request)
 
-    session_data = await _export_session_data_or_raise(
-        chat_history_manager, session_id, format
-    )
+    session_data = await _export_session_data_or_raise(chat_history_manager, session_id, format)
 
-    log_chat_event(
-        "session_exported", session_id, {"format": format, "request_id": request_id}
+    log_chat_event("session_exported", session_id, {"format": format, "request_id": request_id})
+
+    # Issue #6559: Audit session export
+    user_data = get_auth_middleware().get_user_from_request(request)
+    audit_record(
+        user_id=str((user_data or {}).get("user_id", "unknown")),
+        action=AuditAction.SESSION_EXPORT,
+        resource_type="chat_session",
+        resource_id=session_id,
+        ip_address=request.client.host if request.client else "unknown",
+        session_id=session_id,
+        metadata={
+            "format": format,
+            "request_id": request_id,
+        },
+        outcome="success",
     )
 
     return Response(
         content=session_data,
         media_type=_EXPORT_CONTENT_TYPES[format],
-        headers={
-            "Content-Disposition": (
-                f"attachment; filename=chat_session_{session_id}.{format}"
-            )
-        },
+        headers={"Content-Disposition": (f"attachment; filename=chat_session_{session_id}.{format}")},
     )
 
 
 # =============================================================================
 # Issue #549: Chat Reset Endpoint
 # =============================================================================
-
-
-class ChatResetRequest(BaseModel):
-    """Request model for chat reset"""
-
-    session_id: Optional[str] = Field(
-        None, description="Session ID to reset (optional)"
-    )
-    clear_context: bool = Field(True, description="Clear conversation context")
-    keep_system_prompt: bool = Field(True, description="Keep system prompt after reset")
 
 
 def _preserve_system_messages(chat_manager, session_id: str) -> List[Dict]:
@@ -1475,30 +1417,57 @@ def _preserve_system_messages(chat_manager, session_id: str) -> List[Dict]:
     return []
 
 
-def _clear_and_restore_session(
-    chat_manager, session_id: str, messages_to_restore: List[Dict]
-) -> int:
+def _to_persisted_system_message(msg: Dict) -> Dict:
+    """Translate api-shape (role/content) to disk-shape (sender/content/type).
+
+    #7025: ``_preserve_system_messages`` returns messages with ``role`` keys
+    (filtered by ``role == "system"``). The disk schema (used by
+    ``add_messages_batch`` and the JSON files in ``data/chats/``) expects
+    ``sender``/``content``/``type``/``metadata``/``sources`` instead. Mirrors
+    ``api/chat.py:_to_persisted_message`` for the system-message subset.
+    """
+    return {
+        "id": msg.get("id", ""),
+        "sender": msg.get("role") or msg.get("sender") or "system",
+        "content": msg.get("content", ""),
+        "timestamp": msg.get("timestamp"),
+        "type": msg.get("type", "message"),
+        "metadata": msg.get("metadata") or {},
+        "sources": msg.get("sources", []),
+    }
+
+
+async def _clear_and_restore_session(chat_manager, session_id: str, messages_to_restore: List[Dict]) -> int:
     """
     Clear session and restore specified messages.
 
     Issue #665: Extracted helper for session clearing with message restoration.
+    Issue #7025: previously called ``add_message(session_id, dict)`` — the
+    same wrong-signature pattern that #6744 fixed in api/chat.py. Python
+    silently accepted UUID as ``sender`` and dict as ``text``, leaving
+    ``session_id=None`` so messages landed in the default in-memory
+    bucket — restored messages were never written to disk. Now uses
+    ``add_messages_batch(session_id, [...])`` (correct signature) with
+    disk-shape conversion.
+
     Returns number of messages restored.
     """
     chat_manager.clear_session(session_id)
-    for msg in messages_to_restore:
-        chat_manager.add_message(session_id, msg)
+    if not messages_to_restore:
+        return 0
+    if hasattr(chat_manager, "add_messages_batch"):
+        persisted = [_to_persisted_system_message(m) for m in messages_to_restore]
+        await chat_manager.add_messages_batch(session_id, persisted)
     return len(messages_to_restore)
 
 
+@router.post("/chat/reset", response_model=DataResponse[ChatResetData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reset_chat",
-    error_code_prefix="CHAT",
+    error_code_prefix="CHAT_SESSIONS",
 )
-@router.post("/chat/reset")
-async def reset_chat(
-    request: Request, reset_request: Optional[ChatResetRequest] = None
-):
+async def reset_chat(request: Request, reset_request: Optional[ChatResetRequest] = None):
     """
     Reset the current chat session.
 
@@ -1522,17 +1491,9 @@ async def reset_chat(
         _validate_session_id_or_raise(session_id)
 
         if clear_context:
-            messages_to_keep = (
-                _preserve_system_messages(chat_history_manager, session_id)
-                if keep_system_prompt
-                else []
-            )
-            restored = _clear_and_restore_session(
-                chat_history_manager, session_id, messages_to_keep
-            )
-            logger.info(
-                "Reset chat session: %s, kept %d system messages", session_id, restored
-            )
+            messages_to_keep = _preserve_system_messages(chat_history_manager, session_id) if keep_system_prompt else []
+            restored = await _clear_and_restore_session(chat_history_manager, session_id, messages_to_keep)
+            logger.info("Reset chat session: %s, kept %d system messages", session_id, restored)
 
     log_chat_event(
         "session_reset",
@@ -1544,7 +1505,7 @@ async def reset_chat(
         },
     )
 
-    return create_success_response(
+    return create_chat_response(
         data={
             "session_id": session_id,
             "reset": True,
@@ -1579,12 +1540,12 @@ def _create_activity_unavailable_response(
     Issue #665: Extracted helper for unavailable response.
     """
     if is_batch:
-        return create_success_response(
+        return create_chat_response(
             data={"total": activity_count, "stored": 0, "failed": activity_count},
             message="Activities received but memory graph unavailable",
             request_id=request_id,
         )
-    return create_success_response(
+    return create_chat_response(
         data={"activity_id": None, "stored": False},
         message="Activity received but memory graph unavailable",
         request_id=request_id,
@@ -1663,12 +1624,12 @@ async def _process_activity_batch(
     }
 
 
+@router.post("/chat/sessions/{session_id}/activities", response_model=DataResponse[ActivityAddData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_session_activity",
-    error_code_prefix="CHAT",
+    error_code_prefix="CHAT_SESSIONS",
 )
-@router.post("/chat/sessions/{session_id}/activities")
 async def add_session_activity(
     session_id: str,
     activity_data: ActivityCreate,
@@ -1692,9 +1653,7 @@ async def add_session_activity(
         return _create_activity_unavailable_response(1, request_id, is_batch=False)
 
     try:
-        activity_entity = await _store_single_activity(
-            memory_graph, session_id, activity_data
-        )
+        activity_entity = await _store_single_activity(memory_graph, session_id, activity_data)
 
         log_chat_event(
             "activity_created",
@@ -1707,7 +1666,7 @@ async def add_session_activity(
             },
         )
 
-        return create_success_response(
+        return create_chat_response(
             data={
                 "activity_id": activity_data.activity_id,
                 "entity_id": activity_entity.get("entity_id"),
@@ -1720,19 +1679,19 @@ async def add_session_activity(
 
     except Exception as graph_error:
         logger.warning("[%s] Failed to store activity: %s", request_id, graph_error)
-        return create_success_response(
+        return create_chat_response(
             data={"activity_id": activity_data.activity_id, "stored": False},
             message="Activity received but storage failed",
             request_id=request_id,
         )
 
 
+@router.post("/chat/sessions/{session_id}/activities/batch", response_model=DataResponse[ActivityBatchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_session_activities_batch",
-    error_code_prefix="CHAT",
+    error_code_prefix="CHAT_SESSIONS",
 )
-@router.post("/chat/sessions/{session_id}/activities/batch")
 async def add_session_activities_batch(
     session_id: str,
     batch_data: ActivityBatchCreate,
@@ -1759,14 +1718,10 @@ async def add_session_activities_batch(
             request_id,
             total_activities,
         )
-        return _create_activity_unavailable_response(
-            total_activities, request_id, is_batch=True
-        )
+        return _create_activity_unavailable_response(total_activities, request_id, is_batch=True)
 
     # Process batch using extracted helper (Issue #620)
-    result = await _process_activity_batch(
-        memory_graph, session_id, batch_data.activities, request_id
-    )
+    result = await _process_activity_batch(memory_graph, session_id, batch_data.activities, request_id)
 
     log_chat_event(
         "activities_batch_created",
@@ -1779,7 +1734,7 @@ async def add_session_activities_batch(
         },
     )
 
-    return create_success_response(
+    return create_chat_response(
         data={
             "total": total_activities,
             "stored": result["stored_count"],
@@ -1808,7 +1763,7 @@ async def _fetch_activities_from_graph(
             user_id=user_id,
             limit=limit,
         )
-        return create_success_response(
+        return create_chat_response(
             data={
                 "activities": activities,
                 "total": len(activities),
@@ -1823,19 +1778,19 @@ async def _fetch_activities_from_graph(
             request_id,
             graph_error,
         )
-        return create_success_response(
+        return create_chat_response(
             data={"activities": [], "total": 0},
             message="Failed to retrieve activities",
             request_id=request_id,
         )
 
 
+@router.get("/chat/sessions/{session_id}/activities", response_model=DataResponse[SessionActivitiesData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_activities",
-    error_code_prefix="CHAT",
+    error_code_prefix="CHAT_SESSIONS",
 )
-@router.get("/chat/sessions/{session_id}/activities")
 async def get_session_activities(
     session_id: str,
     request: Request,
@@ -1865,20 +1820,16 @@ async def get_session_activities(
         raise ValidationError("Invalid session ID format")
 
     # Get memory graph from app state
-    memory_graph: Optional[AutoBotMemoryGraph] = getattr(
-        request.app.state, "memory_graph", None
-    )
+    memory_graph: Optional[AutoBotMemoryGraph] = getattr(request.app.state, "memory_graph", None)
 
     if not memory_graph:
-        return create_success_response(
+        return create_chat_response(
             data={"activities": [], "total": 0},
             message="Memory graph unavailable",
             request_id=request_id,
         )
 
-    return await _fetch_activities_from_graph(
-        memory_graph, session_id, activity_type, user_id, limit, request_id
-    )
+    return await _fetch_activities_from_graph(memory_graph, session_id, activity_type, user_id, limit, request_id)
 
 
 # ====================================================================
@@ -1912,12 +1863,12 @@ async def _share_session_facts(
     return await kb_manager.share_facts(fact_ids, share_with, shared_by)
 
 
+@router.post("/chat/sessions/{session_id}/share", response_model=DataResponse[SessionShareData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="share_session",
-    error_code_prefix="CHAT",
+    error_code_prefix="CHAT_SESSIONS",
 )
-@router.post("/chat/sessions/{session_id}/share")
 async def share_session(
     session_id: str,
     share_data: SessionShareRequest,
@@ -1952,7 +1903,7 @@ async def share_session(
             share_data.knowledge_facts,
         )
 
-    return create_success_response(
+    return create_chat_response(
         data={
             "session_id": session_id,
             "shared_with": share_data.share_with,
@@ -1964,12 +1915,12 @@ async def share_session(
     )
 
 
+@router.get("/chat/sessions/{session_id}/share/preview", response_model=DataResponse[SessionSharePreviewData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_session_share_preview",
-    error_code_prefix="CHAT",
+    operation="get_share_preview",
+    error_code_prefix="CHAT_SESSIONS",
 )
-@router.get("/chat/sessions/{session_id}/share/preview")
 async def get_share_preview(
     session_id: str,
     request: Request,
@@ -1995,7 +1946,7 @@ async def get_share_preview(
                     }
                 )
 
-    return create_success_response(
+    return create_chat_response(
         data={
             "session_id": session_id,
             "fact_count": len(facts),
@@ -2006,7 +1957,12 @@ async def get_share_preview(
     )
 
 
-@router.delete("/sessions/{session_id}/checkpoints")
+@router.delete("/sessions/{session_id}/checkpoints", response_model=DataResponse[SessionCheckpointClearData])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_session_checkpoints",
+    error_code_prefix="CHAT_SESSIONS",
+)
 async def clear_session_checkpoints(
     session_id: str,
     current_user: Dict = Depends(get_current_user),
@@ -2032,7 +1988,7 @@ async def clear_session_checkpoints(
 
         await delete_thread_checkpoints(session_id)
         logger.info("Cleared checkpoints for session %s (#1482)", session_id)
-        return create_success_response(
+        return create_chat_response(
             data={"session_id": session_id},
             message=f"Checkpoints cleared for session {session_id}",
         )

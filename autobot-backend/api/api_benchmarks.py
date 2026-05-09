@@ -21,7 +21,21 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from constants.api_constants import PATH_API_HEALTH
 from constants.network_constants import NetworkConstants
-from tests.benchmarks.benchmark_base import BenchmarkRunner, assert_performance
+
+try:
+    # benchmark_base lives in tests/benchmarks/ — only present when the test
+    # suite is on PYTHONPATH (#6666). This module functions both as a pytest
+    # benchmark suite and as an API router import target.
+    from tests.benchmarks.benchmark_base import BenchmarkRunner, assert_performance
+except ImportError as _benchmark_import_error:
+    from autobot_shared.missing_dep import MissingDep as _MissingDep
+
+    BenchmarkRunner = _MissingDep(  # type: ignore[assignment, misc]
+        "BenchmarkRunner", _benchmark_import_error
+    )
+    assert_performance = _MissingDep(  # type: ignore[assignment, misc]
+        "assert_performance", _benchmark_import_error
+    )
 
 logger = logging.getLogger(__name__)
 

@@ -6,6 +6,7 @@ import type { ChatSession } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage, extractApiErrorMessage } from '@/utils/errorExtract'
 import type { ChatMessageDisplayType } from '@/types/api'
+import { requestQueue } from '@/composables/useRequestQueue'
 
 const logger = createLogger('ChatController')
 
@@ -87,7 +88,10 @@ export class ChatController {
   // Enhanced message operations with comprehensive error handling
   async sendMessage(content: string, options?: Record<string, unknown>): Promise<string> {
     try {
-      this.getAppStore()?.setLoading(true, 'Sending message...')
+      // #6693: don't toggle the global appStore.isLoading flag here. App.vue
+      // wraps the entire <router-view> in a UnifiedLoadingView bound to it,
+      // so flipping it on a per-message send blanks the chat history for the
+      // duration of the request. chatStore.setTyping is the per-message UX.
       this.chatStore.setTyping(true)
 
       // Validate message content
@@ -96,16 +100,20 @@ export class ChatController {
         throw new Error(validation.error)
       }
 
-      // Add user message to store with sending status
+      // #6746: ensure session exists BEFORE addMessage. addMessage no longer
+      // creates a session as a side effect (that was a major churn source —
+      // see #6745). Order: session-first, then attach message.
+      if (!this.chatStore.currentSessionId) {
+        await this.createNewSession()
+      }
+
       const userMessageId = this.chatStore.addMessage({
         content,
         sender: 'user',
         status: 'sending'
       })
-
-      // Ensure we have a current session
-      if (!this.chatStore.currentSessionId) {
-        await this.createNewSession()
+      if (!userMessageId) {
+        throw new Error('Failed to add user message — no current session')
       }
 
       let lastError: Error | null = null
@@ -114,11 +122,17 @@ export class ChatController {
       for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
         try {
           // Send to backend with timeout and retry logic
-          const response = await this.sendMessageWithRetry({
-            message: content,
-            chatId: this.chatStore.currentSessionId!,
-            options: options || {}
-          }, attempt)
+          // Issue #6313: Route through requestQueue for concurrency backpressure
+          const chatId = this.chatStore.currentSessionId!
+          const response = await requestQueue.enqueue({
+            fn: () => this.sendMessageWithRetry({
+              message: content,
+              chatId,
+              options: options || {}
+            }, attempt),
+            priority: 'high',
+            dedupeKey: `chat-send-${chatId}-${attempt}`,
+          })
 
           // Update user message status to sent
           this.chatStore.updateMessage(userMessageId, { status: 'sent' })
@@ -171,7 +185,6 @@ export class ChatController {
       throw error
     } finally {
       this.chatStore.setTyping(false)
-      this.getAppStore()?.setLoading(false)
     }
   }
 
@@ -596,33 +609,26 @@ export class ChatController {
   // Enhanced session operations with error handling
   async createNewSession(title?: string): Promise<string> {
     try {
-      this.getAppStore()?.setLoading(true, 'Creating new chat...')
-
-      // Create session in store first for immediate UI feedback
+      // #6746: single-path create — local UUID is registered with the backend
+      // in one round-trip. No two-phase create with diverging IDs.
       const sessionId = this.chatStore.createNewSession(title)
-
-      // Sync with backend with retry logic
       try {
-        await chatRepository.createNewChat(title)
+        await chatRepository.createNewChat(title, undefined, sessionId)
         logger.debug('New chat session synced with backend:', sessionId)
       } catch (error) {
+        // Backend create failed but local session is usable — autosave / send-
+        // message paths will retry. Surface the warning and continue.
         logger.warn('Failed to sync new chat with backend, continuing with local session:', error)
-        // Don't throw error here, allow local session to work
       }
-
       return sessionId
-
     } catch (error: unknown) {
       this.getAppStore()?.setGlobalError(`Failed to create chat: ${extractErrorMessage(error, 'Unknown error')}`)
       throw error
-    } finally {
-      this.getAppStore()?.setLoading(false)
     }
   }
 
   async loadChatSessions(): Promise<void> {
     try {
-      this.getAppStore()?.setLoading(true, 'Loading chat sessions...')
 
       const sessions = await chatRepository.getChatList()
 
@@ -644,7 +650,6 @@ export class ChatController {
       // Don't throw error, allow app to continue with local sessions
       this.getAppStore()?.setGlobalError(`Failed to load chat sessions: ${extractErrorMessage(error, 'Unknown error')}`)
     } finally {
-      this.getAppStore()?.setLoading(false)
     }
   }
 
@@ -663,7 +668,6 @@ export class ChatController {
       }
 
       logger.debug(`Loading messages for session: ${sessionId}`)
-      this.getAppStore()?.setLoading(true, 'Loading messages...')
 
       const messages = await chatRepository.getChatMessages(sessionId)
       logger.debug(`Received ${messages.length} messages from repository`)
@@ -707,7 +711,6 @@ export class ChatController {
       logger.error('Failed to load messages:', error)
       this.getAppStore()?.setGlobalError(`Failed to load messages: ${extractErrorMessage(error, 'Unknown error')}`)
     } finally {
-      this.getAppStore()?.setLoading(false)
     }
   }
 
@@ -770,7 +773,6 @@ export class ChatController {
     fileOptions?: Record<string, unknown>
   ): Promise<void> {
     try {
-      this.getAppStore()?.setLoading(true, 'Deleting chat...')
 
       // CRITICAL FIX: Enhanced deletion with proper error handling and persistence
       let backendDeleteSucceeded = false
@@ -857,7 +859,6 @@ export class ChatController {
       this.getAppStore()?.setGlobalError(`Failed to delete chat: ${extractErrorMessage(error, 'Unknown error')}`)
       throw error // Re-throw to let caller handle
     } finally {
-      this.getAppStore()?.setLoading(false)
     }
   }
 
@@ -922,7 +923,6 @@ export class ChatController {
   // Cleanup operations with confirmation
   async clearAllChats(): Promise<void> {
     try {
-      this.getAppStore()?.setLoading(true, 'Clearing all chats...')
 
       // Note: cleanupAllChatData doesn't exist in repository, clearing from store only
       this.chatStore.clearAllSessions()
@@ -933,7 +933,6 @@ export class ChatController {
       this.getAppStore()?.setGlobalError(`Failed to clear chats: ${extractErrorMessage(error, 'Unknown error')}`)
       throw error
     } finally {
-      this.getAppStore()?.setLoading(false)
     }
   }
 
@@ -1017,7 +1016,6 @@ export class ChatController {
   // Connection test method
   async testConnection(): Promise<boolean> {
     try {
-      this.getAppStore()?.setLoading(true, 'Testing connection...')
 
       // Try to create a minimal chat session
       const testResponse = await chatRepository.createNewChat('Connection Test')
@@ -1038,7 +1036,6 @@ export class ChatController {
       logger.error('Connection test failed:', error)
       return false
     } finally {
-      this.getAppStore()?.setLoading(false)
     }
   }
 

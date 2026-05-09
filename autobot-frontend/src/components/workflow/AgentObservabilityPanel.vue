@@ -230,7 +230,7 @@ function formatDuration(seconds: number): string {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 24px;
+  padding: var(--spacing-10) var(--spacing-6);
   color: var(--text-tertiary);
   text-align: center;
 }
@@ -242,7 +242,7 @@ function formatDuration(seconds: number): string {
 }
 
 .empty-state h4 {
-  margin: 0 0 4px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-1);
   color: var(--text-primary);
   font-size: var(--text-sm);
 }
@@ -370,7 +370,7 @@ function formatDuration(seconds: number): string {
   flex-direction: column;
   align-items: center;
   flex: 1;
-  padding: 8px 0;
+  padding: var(--spacing-2) var(--spacing-0);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
 }
@@ -394,7 +394,7 @@ function formatDuration(seconds: number): string {
 
 /* Reliability Bar */
 .reliability-bar-container {
-  padding: 0 2px;
+  padding: var(--spacing-0) var(--spacing-0-5);
 }
 
 .reliability-bar {
@@ -422,7 +422,7 @@ function formatDuration(seconds: number): string {
 }
 
 .capability-tag {
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--bg-tertiary);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
@@ -430,7 +430,7 @@ function formatDuration(seconds: number): string {
 }
 
 .capability-overflow {
-  padding: 2px 6px;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   font-size: var(--text-xs);
   color: var(--text-muted);
 }

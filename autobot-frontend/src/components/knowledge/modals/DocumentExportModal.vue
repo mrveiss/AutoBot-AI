@@ -291,7 +291,7 @@ watch(() => props.modelValue, (isOpen) => {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   border-radius: var(--radius-md);
   margin-bottom: var(--spacing-4);
   font-size: var(--text-sm);
@@ -345,7 +345,7 @@ watch(() => props.modelValue, (isOpen) => {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 0.875rem 1rem;
+  padding: var(--spacing-3-5) var(--spacing-4);
   border: 2px solid var(--border-default);
   border-radius: var(--radius-lg);
   cursor: pointer;

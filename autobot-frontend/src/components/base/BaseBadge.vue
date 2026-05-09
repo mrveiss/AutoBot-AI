@@ -85,28 +85,28 @@ const handleRemove = (event: MouseEvent) => {
 /* Size Variants */
 .badge-xs {
   height: 16px;
-  padding: 0 6px;
+  padding: var(--spacing-0) var(--spacing-1-5);
   font-size: var(--text-xs);
   border-radius: var(--radius-lg);
 }
 
 .badge-sm {
   height: 20px;
-  padding: 0 8px;
+  padding: var(--spacing-0) var(--spacing-2);
   font-size: var(--text-xs);
   border-radius: var(--radius-xl);
 }
 
 .badge-md {
   height: 24px;
-  padding: 0 10px;
+  padding: var(--spacing-0) var(--spacing-2-5);
   font-size: var(--text-xs);
   border-radius: var(--radius-xl);
 }
 
 .badge-lg {
   height: 28px;
-  padding: 0 12px;
+  padding: var(--spacing-0) var(--spacing-3);
   font-size: var(--text-sm);
   border-radius: var(--radius-2xl);
 }

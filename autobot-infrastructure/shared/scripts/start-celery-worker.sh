@@ -31,7 +31,7 @@ source venv/bin/activate
 if ! python -c "import celery" 2>/dev/null; then
     echo "ERROR: Celery not found in virtual environment"
     echo "Installing Celery and dependencies..."
-    pip install -r config/requirements.txt
+    pip install -r "${SCRIPT_DIR}/../config/requirements.txt"
 fi
 
 # Load environment variables

@@ -74,186 +74,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-// @ts-ignore - JS module without type declarations
-import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
-import { createLogger } from '@/utils/debugUtils'
+import { useCaptchaStatus } from '@/composables/research/useCaptchaStatus'
 
 const { t } = useI18n()
-const logger = createLogger('CaptchaNotification')
 
-// ============================================================================
-// Types
-// ============================================================================
-
-interface CaptchaEvent {
-  captcha_id: string
-  url: string
-  captcha_type: string
-  screenshot?: string
-  vnc_url: string
-  timeout_seconds: number
-  timestamp: string
-  message: string
-}
-
-// ============================================================================
-// State
-// ============================================================================
-
-const activeCaptcha = ref<CaptchaEvent | null>(null)
-const timeRemaining = ref(0)
-const isSubmitting = ref(false)
-let timerInterval: ReturnType<typeof setInterval> | null = null
-
-// ============================================================================
-// WebSocket
-// ============================================================================
-
-const { on } = useGlobalWebSocket()
-
-function handleCaptchaDetected(data: CaptchaEvent | { payload: CaptchaEvent }) {
-  // Handle both direct event and wrapped payload format
-  const eventData = 'payload' in data ? data.payload : data
-  activeCaptcha.value = eventData
-  timeRemaining.value = eventData.timeout_seconds
-  startTimer()
-}
-
-function handleCaptchaTimeout(data: { captcha_id: string } | { payload: { captcha_id: string } }) {
-  const eventData = 'payload' in data ? data.payload : data
-  if (activeCaptcha.value?.captcha_id === eventData.captcha_id) {
-    activeCaptcha.value = null
-    stopTimer()
-  }
-}
-
-function handleCaptchaResolved(data: { captcha_id: string } | { payload: { captcha_id: string } }) {
-  const eventData = 'payload' in data ? data.payload : data
-  if (activeCaptcha.value?.captcha_id === eventData.captcha_id) {
-    activeCaptcha.value = null
-    stopTimer()
-  }
-}
-
-// Subscribe to WebSocket events (unsubscribe is handled by the composable on unmount)
-// Casts are safe: the data IS the correct type at runtime, matching the server event schema
-on('captcha_detected', handleCaptchaDetected as (data: unknown) => void)
-on('captcha_timeout', handleCaptchaTimeout as (data: unknown) => void)
-on('captcha_resolved', handleCaptchaResolved as (data: unknown) => void)
-
-// ============================================================================
-// Computed
-// ============================================================================
-
-const captchaTypeLabel = computed(() => {
-  const types: Record<string, string> = {
-    recaptcha: 'reCAPTCHA',
-    hcaptcha: 'hCaptcha',
-    cloudflare: 'Cloudflare Challenge',
-    unknown: 'Unknown CAPTCHA'
-  }
-  return types[activeCaptcha.value?.captcha_type || 'unknown'] || 'CAPTCHA'
-})
-
-const truncatedUrl = computed(() => {
-  const url = activeCaptcha.value?.url || ''
-  if (url.length > 60) {
-    return url.substring(0, 57) + '...'
-  }
-  return url
-})
-
-const progressPercentage = computed(() => {
-  if (!activeCaptcha.value) return 0
-  return (timeRemaining.value / activeCaptcha.value.timeout_seconds) * 100
-})
-
-// ============================================================================
-// Methods
-// ============================================================================
-
-function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${mins}:${secs.toString().padStart(2, '0')}`
-}
-
-function startTimer() {
-  stopTimer()
-  timerInterval = setInterval(() => {
-    if (timeRemaining.value > 0) {
-      timeRemaining.value--
-    } else {
-      activeCaptcha.value = null
-      stopTimer()
-    }
-  }, 1000)
-}
-
-function stopTimer() {
-  if (timerInterval) {
-    clearInterval(timerInterval)
-    timerInterval = null
-  }
-}
-
-function openVnc() {
-  // Use VNC URL from captcha response or fallback to environment variable
-  const defaultVncUrl = `http://${import.meta.env.VITE_LOCALHOST || 'localhost'}:${import.meta.env.VITE_VNC_PORT || '6080'}/vnc.html`
-  const vncUrl = activeCaptcha.value?.vnc_url || defaultVncUrl
-  window.open(vncUrl, '_blank', 'noopener,noreferrer')
-}
-
-async function markSolved() {
-  if (!activeCaptcha.value || isSubmitting.value) return
-
-  isSubmitting.value = true
-  try {
-    await apiClient.post(`${getApiBase()}/captcha/${activeCaptcha.value.captcha_id}/resolve`)
-    activeCaptcha.value = null
-    stopTimer()
-  } catch (error) {
-    logger.error('Failed to mark CAPTCHA as solved:', error)
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
-async function skipCaptcha() {
-  if (!activeCaptcha.value || isSubmitting.value) return
-
-  isSubmitting.value = true
-  try {
-    await apiClient.post(`${getApiBase()}/captcha/${activeCaptcha.value.captcha_id}/skip`)
-    activeCaptcha.value = null
-    stopTimer()
-  } catch (error) {
-    logger.error('Failed to skip CAPTCHA:', error)
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
-// ============================================================================
-// Lifecycle
-// ============================================================================
-
-// WebSocket subscriptions are set up above and auto-cleaned by useGlobalWebSocket
-// We just need to clean up the timer on unmount
-onUnmounted(() => {
-  stopTimer()
-})
-
-// Cleanup when captcha changes
-watch(activeCaptcha, (newVal) => {
-  if (!newVal) {
-    stopTimer()
-  }
-})
+const {
+  activeCaptcha,
+  timeRemaining,
+  isSubmitting,
+  captchaTypeLabel,
+  truncatedUrl,
+  progressPercentage,
+  formatTime,
+  openVnc,
+  markSolved,
+  skipCaptcha,
+} = useCaptchaStatus()
 </script>
 
 <style scoped>
@@ -305,7 +142,7 @@ watch(activeCaptcha, (newVal) => {
 }
 
 .captcha-type {
-  margin: 0.125rem 0 0;
+  margin: var(--spacing-0-5) var(--spacing-0) var(--spacing-0);
   font-size: var(--text-xs);
   opacity: 0.9;
 }

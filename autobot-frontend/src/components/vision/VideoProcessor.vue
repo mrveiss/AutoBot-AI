@@ -658,7 +658,7 @@ onUnmounted(() => {
 
 .option-group select,
 .option-group input {
-  padding: 10px 12px;
+  padding: var(--spacing-2-5) var(--spacing-3);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
@@ -673,7 +673,7 @@ onUnmounted(() => {
 }
 
 .btn-process {
-  padding: 14px 32px;
+  padding: var(--spacing-3-5) var(--spacing-8);
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
@@ -736,7 +736,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   background: var(--color-success-bg);
   border-bottom: 1px solid var(--border-default);
 }
@@ -801,7 +801,7 @@ onUnmounted(() => {
 }
 
 .selected-frame h5 {
-  margin: 0 0 12px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3);
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
@@ -832,7 +832,7 @@ onUnmounted(() => {
 }
 
 .btn-toggle {
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: none;
   border: none;
   color: var(--text-tertiary);
@@ -857,12 +857,12 @@ onUnmounted(() => {
 .results-actions {
   display: flex;
   gap: var(--spacing-3);
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   border-top: 1px solid var(--border-default);
 }
 
 .btn-secondary {
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
@@ -884,7 +884,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   background: var(--color-error-bg);
   border: 1px solid var(--color-error);
   border-radius: var(--radius-lg);
@@ -898,7 +898,7 @@ onUnmounted(() => {
 }
 
 .btn-dismiss {
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
   background: none;
   border: none;
   color: var(--color-error);

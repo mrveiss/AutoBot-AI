@@ -343,7 +343,7 @@ function canResumeOperation(operation: Operation): boolean {
 }
 
 .list-footer {
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   border-top: 1px solid var(--border-default);
   background-color: var(--bg-secondary);
 }

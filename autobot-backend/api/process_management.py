@@ -10,16 +10,22 @@ streaming logs, sending signals, and listing processes per agent.
 
 import logging
 import os
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel, Field
 
+from api.schemas_system import (
+    SignalRequest,
+    SpawnRequest,
+    SpawnResponse,
+)
 from auth_middleware import get_current_user
 from autobot_shared.error_utils import safe_http_detail
 from constants.threshold_constants import TimingConstants
 from services.process_adapter_service import ProcessAdapterService
+from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -43,37 +49,15 @@ def _get_service() -> ProcessAdapterService:
     return _process_svc
 
 
-# -- Request / Response schemas --------------------------------------------
-
-
-class SpawnRequest(BaseModel):
-    """Body for POST /processes/spawn (#1406)."""
-
-    agent_id: str = Field(..., description="Agent that owns the process")
-    command: str = Field(..., description="Executable path or name")
-    args: List[str] = Field(default_factory=list, description="Command arguments")
-    timeout_seconds: int = Field(default=300, ge=1, le=86400)
-    task_id: Optional[str] = Field(default=None, description="Optional parent task ID")
-
-
-class SignalRequest(BaseModel):
-    """Body for POST /processes/{process_id}/signal (#1406)."""
-
-    signal: str = Field(..., description="Signal name: SIGTERM or SIGKILL")
-
-
-class SpawnResponse(BaseModel):
-    """Response for a successful spawn (#1406)."""
-
-    process_id: str
-    status: str
-    message: str
-
-
 # -- Endpoints -------------------------------------------------------------
 
 
 @router.post("/processes/spawn", response_model=SpawnResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="spawn_process",
+    error_code_prefix="PROCESS_MANAGEMENT",
+)
 async def spawn_process(
     body: SpawnRequest,
     current_user: dict = Depends(get_current_user),
@@ -95,7 +79,12 @@ async def spawn_process(
     )
 
 
-@router.get("/processes/{process_id}")
+@router.get("/processes/{process_id}", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_process_status",
+    error_code_prefix="PROCESS_MANAGEMENT",
+)
 async def get_process_status(
     process_id: str,
     current_user: dict = Depends(get_current_user),
@@ -108,7 +97,12 @@ async def get_process_status(
     return JSONResponse(status_code=200, content=data)
 
 
-@router.get("/processes/{process_id}/logs")
+@router.get("/processes/{process_id}/logs", response_model=None)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_process_logs",
+    error_code_prefix="PROCESS_MANAGEMENT",
+)
 async def get_process_logs(
     process_id: str,
     current_user: dict = Depends(get_current_user),
@@ -124,7 +118,12 @@ async def get_process_logs(
     return PlainTextResponse(content=_read_log_file(log_path), status_code=200)
 
 
-@router.post("/processes/{process_id}/signal")
+@router.post("/processes/{process_id}/signal", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="signal_process",
+    error_code_prefix="PROCESS_MANAGEMENT",
+)
 async def signal_process(
     process_id: str,
     body: SignalRequest,
@@ -147,7 +146,12 @@ async def signal_process(
     )
 
 
-@router.get("/agents/{agent_id}/processes")
+@router.get("/agents/{agent_id}/processes", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_agent_processes",
+    error_code_prefix="PROCESS_MANAGEMENT",
+)
 async def list_agent_processes(
     agent_id: str,
     status: Optional[str] = Query(default=None, description="Filter by status"),
@@ -166,6 +170,11 @@ async def list_agent_processes(
 
 
 @router.websocket("/processes/{process_id}/stream")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stream_process_logs",
+    error_code_prefix="PROCESS_MANAGEMENT",
+)
 async def stream_process_logs(
     websocket: WebSocket,
     process_id: str,

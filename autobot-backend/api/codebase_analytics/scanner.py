@@ -422,6 +422,19 @@ async def do_indexing_with_progress(
 
         await _verify_chromadb_storage(task_id, analysis_results)
 
+        # #6747: Run cross-file rules (LSP + consolidation) over the scanned
+        # root and persist findings to ChromaDB so they surface in
+        # /codebase/problems alongside the per-file results.  Imported lazily
+        # so a missing dep doesn't break the existing per-file pipeline.
+        try:
+            from api.codebase_analytics.cross_file_analysis import (
+                run_cross_file_analysis,
+            )
+
+            await run_cross_file_analysis(root_path, source_id=source_id)
+        except Exception as exc:
+            logger.warning("[Task %s] Cross-file analysis skipped: %s", task_id, exc)
+
         _mark_task_completed_bound(
             task_id, analysis_results, hardcodes_stored, "chromadb"
         )

@@ -17,7 +17,7 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from constants.threshold_constants import LLMDefaults
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 from prompt_manager import get_language_instruction, resolve_language
 
 from .base_agent import AgentRequest
@@ -35,7 +35,7 @@ class ChatAgent(StandardizedAgent):
     def __init__(self):
         """Initialize the Chat Agent with explicit LLM configuration (no fallbacks)."""
         super().__init__("chat")
-        self.llm_interface = LLMInterface()
+        self.llm_interface = get_llm_service()
 
         # Use explicit SSOT config - raises AgentConfigurationError if not set
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
@@ -87,11 +87,16 @@ class ChatAgent(StandardizedAgent):
         """Return list of capabilities this agent supports."""
         return self.capabilities.copy()
 
-    def _build_success_response(
+    def _build_chat_payload(
         self, response_text: str, response: Any
     ) -> Dict[str, Any]:
         """
-        Build success response dictionary for chat message processing.
+        Build the chat-specific payload dict.
+
+        Returned as the ``result`` field of the AgentResponse the base class
+        ``StandardizedAgent._build_success_response`` constructs (#6648). The
+        prior name shadowed the base method with an incompatible signature,
+        crashing every AI Stack chat request with a TypeError.
 
         Issue #620.
         Issue #4501: response is an LLMResponse object — use attribute access.
@@ -174,7 +179,7 @@ class ChatAgent(StandardizedAgent):
             messages.append({"role": "user", "content": message})
 
             # Generate response using optimized settings for chat
-            response = await self.llm_interface.chat_completion(
+            response = await self.llm_interface.chat(
                 messages=messages,
                 llm_type="chat",  # This will use the chat-specific model
                 temperature=LLMDefaults.DEFAULT_TEMPERATURE,
@@ -184,7 +189,7 @@ class ChatAgent(StandardizedAgent):
 
             # Extract response content and build response
             response_text = self._extract_response_content(response)
-            return self._build_success_response(response_text, response)
+            return self._build_chat_payload(response_text, response)
 
         except Exception as e:
             logger.error("Chat Agent error processing message: %s", e)

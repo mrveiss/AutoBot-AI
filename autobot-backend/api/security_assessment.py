@@ -10,11 +10,20 @@ Issue: #260
 """
 
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from api.schemas_system import (
+    AddFindingRequest,
+    AddHostRequest,
+    AddPortRequest,
+    AddVulnerabilityRequest,
+    AdvancePhaseRequest,
+    CreateAssessmentRequest,
+    ParseToolOutputRequest,
+    RecoverErrorRequest,
+)
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -30,87 +39,11 @@ from services.security_workflow_manager import (
 
 # Issue #756: Consolidated from src/utils/request_utils.py
 from utils.request_utils import generate_request_id
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/security", tags=["security"])
-
-
-# Pydantic models for request/response validation
-class CreateAssessmentRequest(BaseModel):
-    """Request to create a new security assessment."""
-
-    name: str = Field(..., min_length=1, max_length=200)
-    target: str = Field(..., min_length=1, description="Target IP, CIDR, or hostname")
-    scope: Optional[list[str]] = Field(None, description="In-scope targets")
-    training_mode: bool = Field(False, description="Enable exploitation phase")
-    metadata: Optional[dict[str, Any]] = None
-
-
-class AdvancePhaseRequest(BaseModel):
-    """Request to advance to the next phase."""
-
-    reason: str = Field("", description="Reason for phase transition")
-    target_phase: Optional[str] = Field(
-        None, description="Specific phase to transition to"
-    )
-
-
-class AddHostRequest(BaseModel):
-    """Request to add a host to the assessment."""
-
-    ip: str = Field(..., description="Host IP address")
-    hostname: Optional[str] = None
-    status: str = Field("up", description="Host status (up/down/unknown)")
-    metadata: Optional[dict[str, Any]] = None
-
-
-class AddPortRequest(BaseModel):
-    """Request to add a port to a host."""
-
-    host_ip: str = Field(..., description="Host IP address")
-    port: int = Field(..., ge=1, le=65535)
-    protocol: str = Field("tcp", description="Protocol (tcp/udp)")
-    state: str = Field("open", description="Port state")
-    service: Optional[str] = None
-    version: Optional[str] = None
-
-
-class AddVulnerabilityRequest(BaseModel):
-    """Request to add a vulnerability."""
-
-    host_ip: str = Field(..., description="Affected host IP")
-    cve_id: Optional[str] = None
-    title: str = Field("", description="Vulnerability title")
-    severity: str = Field("unknown", description="Severity level")
-    description: str = ""
-    affected_service: Optional[str] = None
-    affected_port: Optional[int] = None
-    metadata: Optional[dict[str, Any]] = None
-
-
-class AddFindingRequest(BaseModel):
-    """Request to add a general finding."""
-
-    finding_type: str = Field(..., description="Type of finding")
-    description: str = ""
-    data: Optional[dict[str, Any]] = None
-
-
-class ParseToolOutputRequest(BaseModel):
-    """Request to parse tool output."""
-
-    output: str = Field(..., min_length=1, description="Raw tool output")
-    tool: Optional[str] = Field(
-        None, description="Tool name (auto-detect if not provided)"
-    )
-
-
-class RecoverErrorRequest(BaseModel):
-    """Request to recover from error state."""
-
-    target_phase: str = Field(..., description="Phase to recover to")
-    reason: str = Field("Manual recovery", description="Recovery reason")
 
 
 # Dependency injection
@@ -122,7 +55,7 @@ async def get_workflow_manager() -> SecurityWorkflowManager:
 # API Endpoints
 
 
-@router.post("/assessments")
+@router.post("/assessments", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_assessment",
@@ -171,7 +104,7 @@ async def create_assessment(
     )
 
 
-@router.get("/assessments")
+@router.get("/assessments", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_assessments",
@@ -216,7 +149,7 @@ async def list_assessments(
     )
 
 
-@router.get("/assessments/{assessment_id}")
+@router.get("/assessments/{assessment_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="get_assessment",
@@ -256,7 +189,7 @@ async def get_assessment(
     )
 
 
-@router.get("/assessments/{assessment_id}/summary")
+@router.get("/assessments/{assessment_id}/summary", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="get_assessment_summary",
@@ -296,7 +229,7 @@ async def get_assessment_summary(
     )
 
 
-@router.delete("/assessments/{assessment_id}")
+@router.delete("/assessments/{assessment_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="delete_assessment",
@@ -336,7 +269,7 @@ async def delete_assessment(
     )
 
 
-@router.get("/assessments/{assessment_id}/phase")
+@router.get("/assessments/{assessment_id}/phase", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="get_phase",
@@ -386,7 +319,7 @@ async def get_current_phase(
     )
 
 
-@router.post("/assessments/{assessment_id}/phase")
+@router.post("/assessments/{assessment_id}/phase", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.VALIDATION,
     operation="advance_phase",
@@ -436,7 +369,7 @@ async def advance_phase(
     )
 
 
-@router.post("/assessments/{assessment_id}/hosts")
+@router.post("/assessments/{assessment_id}/hosts", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="add_host",
@@ -485,7 +418,7 @@ async def add_host(
     )
 
 
-@router.post("/assessments/{assessment_id}/ports")
+@router.post("/assessments/{assessment_id}/ports", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="add_port",
@@ -536,7 +469,7 @@ async def add_port(
     )
 
 
-@router.post("/assessments/{assessment_id}/vulnerabilities")
+@router.post("/assessments/{assessment_id}/vulnerabilities", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="add_vulnerability",
@@ -589,7 +522,7 @@ async def add_vulnerability(
     )
 
 
-@router.post("/assessments/{assessment_id}/findings")
+@router.post("/assessments/{assessment_id}/findings", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="add_finding",
@@ -641,7 +574,7 @@ async def add_finding(
     )
 
 
-@router.get("/assessments/{assessment_id}/findings")
+@router.get("/assessments/{assessment_id}/findings", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="get_findings",
@@ -789,7 +722,7 @@ async def _store_parsed_vulnerabilities(manager, assessment_id: str, parsed) -> 
     return vulns_added
 
 
-@router.post("/assessments/{assessment_id}/parse")
+@router.post("/assessments/{assessment_id}/parse", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.VALIDATION,
     operation="parse_tool_output",
@@ -857,7 +790,7 @@ async def parse_and_store_tool_output(
     )
 
 
-@router.post("/assessments/{assessment_id}/error")
+@router.post("/assessments/{assessment_id}/error", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="set_error",
@@ -899,7 +832,7 @@ async def set_error_state(
     )
 
 
-@router.post("/assessments/{assessment_id}/recover")
+@router.post("/assessments/{assessment_id}/recover", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.VALIDATION,
     operation="recover_from_error",
@@ -949,7 +882,12 @@ async def recover_from_error(
     )
 
 
-@router.get("/phases")
+@router.get("/phases", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_phase_definitions",
+    error_code_prefix="SECURITY_ASSESSMENT",
+)
 async def get_phase_definitions(
     admin_check: bool = Depends(check_admin_permission),
 ) -> JSONResponse:

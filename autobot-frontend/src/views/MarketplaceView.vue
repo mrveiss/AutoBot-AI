@@ -52,6 +52,13 @@
           />
         </div>
 
+        <!-- Issue #6481: Marketplace source selector -->
+        <select v-model="selectedSourceId" class="filter-select" @change="onSourceChange">
+          <option v-for="src in sources" :key="src.id" :value="src.id">
+            {{ src.name }}
+          </option>
+        </select>
+
         <select v-model="selectedCategory" class="filter-select" @change="onFilter">
           <option value="all">{{ $t('views.marketplace.allCategories') }}</option>
           <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
@@ -70,6 +77,11 @@
         >
           {{ $t('views.marketplace.installedOnly') }}
           <span class="count-badge">{{ installedNames.size }}</span>
+        </button>
+
+        <!-- Issue #6481: Manage marketplace sources -->
+        <button class="btn-manage-sources" @click="manageSourcesOpen = true">
+          {{ $t('views.marketplace.manageSources') }}
         </button>
       </div>
 
@@ -185,16 +197,25 @@
         </div>
       </div>
     </div>
+
+    <!-- Issue #6481: Manage marketplace sources modal -->
+    <MarketplaceSourcesModal
+      :open="manageSourcesOpen"
+      @close="manageSourcesOpen = false"
+      @updated="onSourcesUpdated"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 // Issue #1803 - Plugin and agent marketplace
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { useMarketplaceSources } from '@/composables/useMarketplaceSources'
+import MarketplaceSourcesModal from '@/components/plugins/MarketplaceSourcesModal.vue'
 
 const { t } = useI18n()
 const logger = createLogger('MarketplaceView')
@@ -227,6 +248,20 @@ const selectedCategory = ref('all')
 const sortBy = ref('downloads')
 const showInstalledOnly = ref(false)
 
+// Issue #6481: marketplace sources
+const { sources, listSources } = useMarketplaceSources()
+const selectedSourceId = ref<string>('builtin')
+const manageSourcesOpen = ref(false)
+
+// If the currently selected source is removed, fall back to built-in and
+// refetch so the grid reflects the new selection (#6528).
+watch(sources, async (next) => {
+  if (selectedSourceId.value !== 'builtin' && !next.some(s => s.id === selectedSourceId.value)) {
+    selectedSourceId.value = 'builtin'
+    await fetchCatalog()
+  }
+}, { deep: true })
+
 const visibleEntries = computed<MarketplaceEntry[]>(() => {
   if (!showInstalledOnly.value) return entries.value
   return entries.value.filter((e: MarketplaceEntry) => installedNames.value.has(e.name))
@@ -254,6 +289,8 @@ async function fetchCatalog(): Promise<void> {
   const params = new URLSearchParams({ sort_by: sortBy.value })
   if (selectedCategory.value !== 'all') params.set('category', selectedCategory.value)
   if (searchQuery.value.trim()) params.set('search', searchQuery.value.trim())
+  // Issue #6481: include selected source so the backend fetches the right catalog
+  if (selectedSourceId.value) params.set('source_id', selectedSourceId.value)
   const data = await ApiClient.get<Record<string, unknown>>(`${getApiBase()}/marketplace/catalog?${params.toString()}`)
   entries.value = data.entries as MarketplaceEntry[] ?? []
 }
@@ -262,7 +299,8 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    await Promise.all([fetchCatalog(), fetchInstalled(), fetchCategories()])
+    await Promise.all([listSources(), fetchInstalled(), fetchCategories()])
+    await fetchCatalog()
   } catch (err) {
     logger.error('Marketplace load failed', err)
     error.value = err instanceof Error ? err.message : t('views.marketplace.loadError')
@@ -286,6 +324,14 @@ async function onSearch(): Promise<void> {
 
 async function onFilter(): Promise<void> {
   await onSearch()
+}
+
+async function onSourceChange(): Promise<void> {
+  await onSearch()
+}
+
+async function onSourcesUpdated(): Promise<void> {
+  await listSources()
 }
 
 async function handleInstall(name: string): Promise<void> {
@@ -437,7 +483,7 @@ onMounted(async () => {
 
 .search-input {
   width: 100%;
-  padding: 6px 12px 6px 32px;
+  padding: var(--spacing-1-5) var(--spacing-3) var(--spacing-1-5) var(--spacing-8);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -456,7 +502,7 @@ onMounted(async () => {
 }
 
 .filter-select {
-  padding: 6px 10px;
+  padding: var(--spacing-1-5) var(--spacing-2-5);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -478,7 +524,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
-  padding: 6px 12px;
+  padding: var(--spacing-1-5) var(--spacing-3);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -499,9 +545,29 @@ onMounted(async () => {
   color: var(--text-primary);
 }
 
+/* Issue #6481: manage marketplace sources button */
+.btn-manage-sources {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-1-5) var(--spacing-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background var(--duration-150) var(--ease-in-out), color var(--duration-150) var(--ease-in-out);
+}
+
+.btn-manage-sources:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
 .count-badge {
   font-size: var(--text-xs);
-  padding: 1px 6px;
+  padding: var(--spacing-px) var(--spacing-1-5);
   border-radius: var(--radius-xl);
   min-width: 20px;
   text-align: center;
@@ -613,7 +679,7 @@ onMounted(async () => {
 .status-badge {
   font-size: var(--text-xs);
   font-weight: 600;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-xl);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -687,7 +753,7 @@ onMounted(async () => {
 .category-tag {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  padding: 1px 6px;
+  padding: var(--spacing-px) var(--spacing-1-5);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
   color: var(--text-secondary);
@@ -704,7 +770,7 @@ onMounted(async () => {
   font-size: var(--text-xs);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
-  padding: 1px 6px;
+  padding: var(--spacing-px) var(--spacing-1-5);
   border-radius: var(--radius-default);
   border: 1px solid var(--border-default);
 }
@@ -724,7 +790,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1);
-  padding: 4px 12px;
+  padding: var(--spacing-1) var(--spacing-3);
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   font-weight: 500;

@@ -25,11 +25,30 @@
   when: _py312_check.rc != 0
   tags: ['deps', 'python312']
 
-- name: "python312 | Add deadsnakes PPA"
-  ansible.builtin.apt_repository:
-    repo: ppa:deadsnakes/ppa
-    state: present
+# #7218: idempotent repo-add — preserve device-shipped PPA if present
+- name: "python312 | Add deadsnakes PPA (idempotent, #7218)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
+  vars:
+    apt_repo_match: "deadsnakes/ppa"
+    apt_repo_spec: "ppa:deadsnakes/ppa"
+    apt_repo_filename: "deadsnakes"
+    apt_repo_label: "deadsnakes (Python 3.12)"
+  when: _py312_check.rc != 0
+  tags: ['deps', 'python312']
+
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+# Only fires when Python 3.12 is missing, but when it does it must tolerate
+# flaky PPAs (the deadsnakes PPA was just added; if it's unreachable, the
+# next deploy retry will still need to install Python 3.12).
+- name: "python312 | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
   become: true
+  changed_when: false
+  failed_when: false
   when: _py312_check.rc != 0
   tags: ['deps', 'python312']
 
@@ -37,7 +56,6 @@
   ansible.builtin.apt:
     name: "{{ python312_packages }}"
     state: present
-    update_cache: true
   become: true
   when: _py312_check.rc != 0
   tags: ['deps', 'python312']

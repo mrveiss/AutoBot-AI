@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 from .extractors import PythonPatternExtractor, TypeScriptPatternExtractor
 from .models import (
     APIContractMismatch,
@@ -83,7 +84,7 @@ EMBEDDING_BATCH_CONCURRENCY = 10  # Max concurrent embedding requests
 EMBEDDING_BATCH_SIZE = 50  # Process embeddings in batches of this size
 
 
-class CrossLanguagePatternDetector:
+class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
     """
     Detects patterns across multiple programming languages.
 
@@ -93,6 +94,8 @@ class CrossLanguagePatternDetector:
     - DTO/type inconsistencies
     - Validation rule duplication
     """
+
+    _redis_database = "analytics"
 
     def __init__(
         self,
@@ -122,12 +125,12 @@ class CrossLanguagePatternDetector:
         # Lazy-loaded resources
         self._chromadb_client = None
         self._chromadb_collection = None
-        self._redis_client = None
         self._llm_interface = None
         self._embedding_cache = None
 
         # Thread-safe initialization locks
         self._cache_lock = asyncio.Lock()
+        self._chromadb_lock = asyncio.Lock()
 
         # Statistics
         self._cache_hits = 0
@@ -137,45 +140,34 @@ class CrossLanguagePatternDetector:
     async def _get_chromadb_collection(self):
         """Get or create ChromaDB collection for patterns."""
         if self._chromadb_collection is None:
-            try:
-                from knowledge.backends import get_async_default_client
+            async with self._chromadb_lock:
+                if self._chromadb_collection is None:
+                    try:
+                        from knowledge.backends import get_async_default_client
 
-                chromadb_path = self.project_root / "data" / "chromadb"
-                self._chromadb_client = await get_async_default_client(
-                    db_path=str(chromadb_path)
-                )
-                self._chromadb_collection = (
-                    await self._chromadb_client.get_or_create_collection(
-                        name=PATTERNS_COLLECTION,
-                        metadata={
-                            "description": "Cross-language code pattern semantics",
-                            "hnsw:space": "cosine",
-                            "hnsw:construction_ef": 200,
-                            "hnsw:search_ef": 100,
-                            "hnsw:M": 24,
-                        },
-                    )
-                )
-                logger.info("ChromaDB collection '%s' initialized", PATTERNS_COLLECTION)
-            except Exception as e:
-                logger.error("Failed to initialize ChromaDB: %s", e)
-                self._chromadb_collection = None
+                        chromadb_path = self.project_root / "data" / "chromadb"
+                        self._chromadb_client = await get_async_default_client(
+                            db_path=str(chromadb_path)
+                        )
+                        self._chromadb_collection = (
+                            await self._chromadb_client.get_or_create_collection(
+                                name=PATTERNS_COLLECTION,
+                                metadata={
+                                    "description": "Cross-language code pattern semantics",
+                                    "hnsw:space": "cosine",
+                                    "hnsw:construction_ef": 200,
+                                    "hnsw:search_ef": 100,
+                                    "hnsw:M": 24,
+                                },
+                            )
+                        )
+                        logger.info(
+                            "ChromaDB collection '%s' initialized", PATTERNS_COLLECTION
+                        )
+                    except Exception as e:
+                        logger.error("Failed to initialize ChromaDB: %s", e)
+                        self._chromadb_collection = None
         return self._chromadb_collection
-
-    async def _get_redis_client(self):
-        """Get Redis client for caching."""
-        if self._redis_client is None and self.use_cache:
-            try:
-                from autobot_shared.redis_client import get_redis_client
-
-                self._redis_client = get_redis_client(
-                    async_client=True, database="analytics"
-                )
-                logger.info("Redis client initialized for analytics")
-            except Exception as e:
-                logger.warning("Redis not available for caching: %s", e)
-                self._redis_client = None
-        return self._redis_client
 
     async def _get_embedding_cache(self):
         """Get embedding cache with thread-safe lazy initialization."""
@@ -1124,7 +1116,9 @@ class CrossLanguagePatternDetector:
 
     async def _cache_results(self, analysis: CrossLanguageAnalysis) -> None:
         """Cache analysis results in Redis."""
-        redis = await self._get_redis_client()
+        if not self.use_cache:
+            return
+        redis = await self._get_redis()
         if not redis:
             return
 

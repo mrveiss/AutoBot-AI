@@ -5,6 +5,13 @@
 Orchestration Types and Data Classes
 
 Issue #381: Extracted from enhanced_orchestrator.py god class refactoring.
+Issue #6951 Phase 3: ``WorkflowStep`` and ``WorkflowPlan`` are now aliases
+to the canonical ``autobot_shared.workflow`` shapes — completing the
+consolidation that #381 should have produced. Both shapes had zero
+production callers (only re-exports through ``__init__.py``); the alias
+preserves the import path so any future caller of ``orchestration.types``
+gets the canonical type, per the wire-in-not-delete rule.
+
 Contains enums and dataclasses for agent orchestration.
 """
 
@@ -13,7 +20,16 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Set
 
+from autobot_shared.workflow import WorkflowPlan as _SharedWorkflowPlan
+from autobot_shared.workflow import WorkflowTask as _WorkflowTask
 from constants.status_enums import TaskStatus
+
+# Transitional aliases — Phase 3 of #6951 consolidates the two #381-derivative
+# shapes here onto canonical types. ``orchestration.types`` had zero importers
+# of these names by the time this landed (verified on Dev_new_gui), so the
+# alias is risk-free and preserves the import path for any future caller.
+WorkflowStep = _WorkflowTask
+WorkflowPlan = _SharedWorkflowPlan
 
 
 class AgentCapability(Enum):
@@ -27,6 +43,12 @@ class AgentCapability(Enum):
     DATA_PROCESSING = "data_processing"
     KNOWLEDGE_MANAGEMENT = "knowledge_management"
     WORKFLOW_COORDINATION = "workflow_coordination"
+    EXECUTION = "execution"
+    MONITORING = "monitoring"
+    SYNTHESIS = "synthesis"
+    VALIDATION = "validation"
+    OPTIMIZATION = "optimization"
+    SECURITY = "security"
 
 
 class DocumentationType(Enum):
@@ -87,31 +109,5 @@ class AgentInteraction:
     outcome: str = TaskStatus.PENDING.value
 
 
-@dataclass
-class WorkflowStep:
-    """Represents a single step in a workflow plan."""
-
-    step_id: str
-    action: str
-    description: str
-    agent_id: str
-    required_capabilities: Set[AgentCapability]
-    estimated_duration: float
-    dependencies: List[str] = field(default_factory=list)
-    status: str = TaskStatus.PENDING.value
-    result: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class WorkflowPlan:
-    """Complete workflow execution plan."""
-
-    workflow_id: str
-    title: str
-    description: str
-    steps: List[WorkflowStep]
-    created_at: datetime
-    estimated_total_duration: float
-    status: str = TaskStatus.PENDING.value
-    approval_required: bool = True
-    approved: bool = False
+# NOTE: ``WorkflowStep`` and ``WorkflowPlan`` aliases are declared at module
+# top alongside the imports they depend on. See the docstring for context.

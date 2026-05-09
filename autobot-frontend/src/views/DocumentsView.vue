@@ -13,17 +13,17 @@
           title="Refresh document list"
           @click="composable.fetchDocuments()"
         >
-          <i class="fas fa-sync-alt" aria-hidden="true"></i>
+          <Icon name="sync-alt" aria-hidden="true" />
         </BaseButton>
       </div>
 
       <div v-if="composable.isLoading.value && !composable.hasDocuments.value" class="loading-state">
-        <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+        <Icon name="sync-alt" :spin="true" aria-hidden="true" />
         <span>Loading documents…</span>
       </div>
 
       <div v-else-if="!composable.hasDocuments.value" class="empty-state">
-        <i class="fas fa-file-alt empty-icon" aria-hidden="true"></i>
+        <Icon name="file-alt" class="empty-icon" aria-hidden="true" />
         <p>No AI documents yet.</p>
         <p class="empty-hint">
           Save an AI response from the
@@ -54,7 +54,7 @@
             :aria-label="`Delete ${doc.title}`"
             @click.stop="confirmDelete(doc.id, doc.title)"
           >
-            <i class="fas fa-trash" aria-hidden="true"></i>
+            <Icon name="trash" aria-hidden="true" />
           </BaseButton>
         </li>
       </ul>
@@ -85,7 +85,7 @@
 
     <div class="documents-main">
       <div v-if="!selectedDocId" class="no-selection">
-        <i class="fas fa-file-alt no-selection-icon" aria-hidden="true"></i>
+        <Icon name="file-alt" class="no-selection-icon" aria-hidden="true" />
         <p>Select a document from the list to view and edit it.</p>
       </div>
 
@@ -144,6 +144,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import AIDocumentEditor from '@/components/documents/AIDocumentEditor.vue'
+import Icon from '@/components/ui/Icon.vue'
 import { useAIDocument, type AIDocument } from '@/composables/useAIDocument'
 import { createLogger } from '@/utils/debugUtils'
 import { useFocusTrap } from '@/composables/useFocusTrap'
@@ -295,7 +296,7 @@ function showError(msg: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
+  padding: var(--spacing-3-5) var(--spacing-4);
   border-bottom: 1px solid var(--color-border, #333);
   flex-shrink: 0;
 }
@@ -353,7 +354,7 @@ function showError(msg: string) {
 .document-item {
   display: flex;
   flex-direction: column;
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   cursor: pointer;
   border-bottom: 1px solid var(--color-border, #2a2a2a);
   gap: var(--spacing-0-5);
@@ -403,7 +404,7 @@ function showError(msg: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   border-top: 1px solid var(--color-border, #333);
   font-size: 0.8rem;
   flex-shrink: 0;
@@ -463,13 +464,13 @@ function showError(msg: string) {
 }
 
 .modal-title {
-  margin: 0 0 12px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3);
   font-size: var(--text-base);
   font-weight: 600;
 }
 
 .modal-body {
-  margin: 0 0 20px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-5);
   font-size: 0.9rem;
   color: var(--color-text-muted, #bbb);
   line-height: 1.5;
@@ -491,7 +492,7 @@ function showError(msg: string) {
   color: var(--color-error, #f87171);
   border: 1px solid var(--color-error, #f87171);
   border-radius: var(--radius-md);
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   font-size: var(--text-sm);
   z-index: var(--z-popover);
   max-width: 90vw;

@@ -19,8 +19,9 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
+import { useLoadingState } from '@/composables/useLoadingState'
+import { fetchDocCategories, fetchCategoryDocs, fetchDocContent } from '@/composables/knowledge/useKnowledgeSystemDocs'
+import type { SystemDoc, DocCategory } from '@/composables/knowledge/useKnowledgeSystemDocs'
 import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -30,40 +31,12 @@ const logger = createLogger('KnowledgeSystemDocs')
 const { t } = useI18n()
 
 // =============================================================================
-// Type Definitions
-// =============================================================================
-
-interface SystemDoc {
-  id: string
-  title: string
-  path: string
-  content: string
-  type: string
-  category: string
-  metadata?: {
-    wordCount?: number
-    lastModified?: string
-    author?: string
-  }
-}
-
-interface DocCategory {
-  id: string
-  name: string
-  path: string
-  icon: string
-  children: DocCategory[]
-  docs: SystemDoc[]
-  docCount: number
-}
-
-// =============================================================================
 // State
 // =============================================================================
 
 const route = useRoute()
 
-const isLoading = ref(false)
+const { isLoading, wrap } = useLoadingState()
 const error = ref<string | null>(null)
 const searchQuery = ref('')
 const categories = ref<DocCategory[]>([])
@@ -103,45 +76,37 @@ const docWordCount = computed(() => {
 // =============================================================================
 
 async function loadDocCategories(): Promise<void> {
-  isLoading.value = true
   error.value = null
-
-  try {
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/system-docs/categories`)
-
-    if (data?.categories) {
-      categories.value = data.categories
-      // Auto-select first category if exists
-      if (categories.value.length > 0 && !selectedCategory.value) {
-        selectCategory(categories.value[0])
+  await wrap(async () => {
+    try {
+      const data = await fetchDocCategories()
+      if (data?.categories) {
+        categories.value = data.categories
+        // Auto-select first category if exists
+        if (categories.value.length > 0 && !selectedCategory.value) {
+          selectCategory(categories.value[0])
+        }
       }
+    } catch (err) {
+      logger.error('Failed to load doc categories:', err)
+      error.value = t('knowledge.systemDocs.errorLoadCategories')
     }
-  } catch (err) {
-    logger.error('Failed to load doc categories:', err)
-    error.value = t('knowledge.systemDocs.errorLoadCategories')
-  } finally {
-    isLoading.value = false
-  }
+  })
 }
 
 async function loadCategoryDocs(category: DocCategory): Promise<void> {
-  isLoading.value = true
   error.value = null
-
-  try {
-    const data = await apiClient.get<Record<string, any>>(
-      `${getApiBase()}/knowledge_base/system-docs/category/${encodeURIComponent(category.path)}`
-    )
-
-    if (data?.docs) {
-      category.docs = data.docs
+  await wrap(async () => {
+    try {
+      const data = await fetchCategoryDocs(category.path)
+      if (data?.docs) {
+        category.docs = data.docs
+      }
+    } catch (err) {
+      logger.error('Failed to load category docs:', err)
+      error.value = t('knowledge.systemDocs.errorLoadDocs')
     }
-  } catch (err) {
-    logger.error('Failed to load category docs:', err)
-    error.value = t('knowledge.systemDocs.errorLoadDocs')
-  } finally {
-    isLoading.value = false
-  }
+  })
 }
 
 async function loadDocContent(doc: SystemDoc): Promise<void> {
@@ -150,24 +115,19 @@ async function loadDocContent(doc: SystemDoc): Promise<void> {
     return
   }
 
-  isLoading.value = true
   error.value = null
-
-  try {
-    const data = await apiClient.get<Record<string, any>>(
-      `${getApiBase()}/knowledge_base/system-docs/${encodeURIComponent(doc.id)}`
-    )
-
-    if (data?.doc) {
-      doc.content = data.doc.content
-      selectedDoc.value = doc
+  await wrap(async () => {
+    try {
+      const data = await fetchDocContent(doc.id)
+      if (data?.doc) {
+        doc.content = data.doc.content
+        selectedDoc.value = doc
+      }
+    } catch (err) {
+      logger.error('Failed to load doc content:', err)
+      error.value = t('knowledge.systemDocs.errorLoadContent')
     }
-  } catch (err) {
-    logger.error('Failed to load doc content:', err)
-    error.value = t('knowledge.systemDocs.errorLoadContent')
-  } finally {
-    isLoading.value = false
-  }
+  })
 }
 
 function selectCategory(category: DocCategory): void {
@@ -556,7 +516,7 @@ onMounted(() => {
 
 .search-input {
   width: 100%;
-  padding: 0.5rem 0.875rem 0.5rem 2.5rem;
+  padding: var(--spacing-2) var(--spacing-3-5) var(--spacing-2) var(--spacing-10);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -601,7 +561,7 @@ onMounted(() => {
   align-items: center;
   gap: var(--spacing-2);
   width: 100%;
-  padding: 0.625rem 1rem;
+  padding: var(--spacing-2-5) var(--spacing-4);
   border: none;
   background: none;
   color: var(--text-primary);
@@ -619,7 +579,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   background: var(--color-error-bg);
   color: var(--color-error-dark);
   border-bottom: 1px solid var(--color-error-border);
@@ -646,11 +606,11 @@ onMounted(() => {
 .docs-sidebar {
   border-right: 1px solid var(--border-default);
   overflow-y: auto;
-  padding: 1rem 0;
+  padding: var(--spacing-4) var(--spacing-0);
 }
 
 .category-tree {
-  padding: 0 0.5rem;
+  padding: var(--spacing-0) var(--spacing-2);
 }
 
 .category-item {
@@ -661,7 +621,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: background var(--duration-150);
@@ -709,7 +669,7 @@ onMounted(() => {
   font-size: var(--text-xs);
   color: var(--text-muted);
   background: var(--bg-secondary);
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-2xl);
 }
 
@@ -817,7 +777,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
+  padding: var(--spacing-4) var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-card);
 }
@@ -840,7 +800,7 @@ onMounted(() => {
 .preview-meta {
   display: flex;
   gap: var(--spacing-6);
-  padding: 0.75rem 1.5rem;
+  padding: var(--spacing-3) var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-card);
 }

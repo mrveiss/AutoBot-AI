@@ -605,7 +605,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 }
 
 .bug-prediction-section .risk-badge {
-  padding: 4px 10px;
+  padding: var(--spacing-1) var(--spacing-2-5);
   border-radius: var(--radius-default);
   font-weight: 600;
   font-size: 0.85em;
@@ -642,7 +642,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 }
 
 .bug-prediction-section .risk-level-badge {
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-default);
   font-size: 0.75em;
   text-transform: uppercase;
@@ -686,7 +686,7 @@ function formatTimestamp(timestamp: string | undefined): string {
   display: flex;
   align-items: flex-start;
   gap: var(--spacing-2);
-  padding: 10px 12px;
+  padding: var(--spacing-2-5) var(--spacing-3);
   background: rgba(59, 130, 246, 0.1);
   border-radius: var(--radius-md);
   border: 1px solid rgba(59, 130, 246, 0.2);
@@ -716,7 +716,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 /* Enhanced Bug Prediction Styles */
 .summary-card.clickable { cursor: pointer; transition: transform 0.2s; }
 .summary-card.clickable:hover { transform: translateY(-2px); }
-.top-risk-factors-summary { margin: 20px 0; padding: var(--spacing-4); background: rgba(17, 24, 39, 0.6); border-radius: var(--radius-xl); border: 1px solid rgba(239, 68, 68, 0.2); }
+.top-risk-factors-summary { margin: var(--spacing-5) var(--spacing-0); padding: var(--spacing-4); background: rgba(17, 24, 39, 0.6); border-radius: var(--radius-xl); border: 1px solid rgba(239, 68, 68, 0.2); }
 .top-risk-factors-summary h4 { color: var(--color-error-light); font-size: 1em; margin-bottom: var(--spacing-4); display: flex; align-items: center; gap: var(--spacing-2); }
 .top-risk-factors-summary h4 i { color: var(--color-error); }
 .risk-factors-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--spacing-3); }
@@ -732,8 +732,8 @@ function formatTimestamp(timestamp: string | undefined): string {
 .risk-factor-card .factor-name { color: var(--text-primary); font-weight: 600; font-size: 0.95em; margin-bottom: var(--spacing-1); }
 .risk-factor-card .factor-count { color: var(--color-warning-light); font-size: 0.85em; font-weight: 500; margin-bottom: var(--spacing-1); }
 .risk-factor-card .factor-description { color: var(--text-muted); font-size: 0.8em; line-height: 1.4; }
-.risk-filter-tabs { display: flex; gap: var(--spacing-2); margin: 20px 0 16px; flex-wrap: wrap; }
-.risk-filter-tabs button { padding: 8px 16px; border: 1px solid rgba(71, 85, 105, 0.5); background: rgba(30, 41, 59, 0.5); color: var(--text-muted); border-radius: var(--radius-md); font-size: 0.85em; cursor: pointer; transition: all 0.2s; }
+.risk-filter-tabs { display: flex; gap: var(--spacing-2); margin: var(--spacing-5) var(--spacing-0) var(--spacing-4); flex-wrap: wrap; }
+.risk-filter-tabs button { padding: var(--spacing-2) var(--spacing-4); border: 1px solid rgba(71, 85, 105, 0.5); background: rgba(30, 41, 59, 0.5); color: var(--text-muted); border-radius: var(--radius-md); font-size: 0.85em; cursor: pointer; transition: all 0.2s; }
 .risk-filter-tabs button:hover:not(:disabled) { background: rgba(71, 85, 105, 0.5); color: var(--text-secondary); }
 .risk-filter-tabs button.active { background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.5); color: var(--color-info-light); }
 .risk-filter-tabs button:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -746,21 +746,21 @@ function formatTimestamp(timestamp: string | undefined): string {
 .risk-file-item.item-info { border-left-color: var(--chart-blue); }
 .risk-file-item.item-success { border-left-color: var(--chart-green); }
 .risk-file-item.expanded { background: rgba(17, 24, 39, 0.8); }
-.risk-file-item .file-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; cursor: pointer; transition: background 0.2s; }
+.risk-file-item .file-header { display: flex; align-items: center; justify-content: space-between; padding: var(--spacing-3) var(--spacing-4); cursor: pointer; transition: background 0.2s; }
 .risk-file-item .file-header:hover { background: rgba(71, 85, 105, 0.2); }
 .risk-file-item .file-info { display: flex; align-items: center; gap: var(--spacing-2-5); flex: 1; flex-wrap: wrap; }
-.risk-file-item .risk-score-badge { padding: 4px 10px; border-radius: var(--radius-default); font-weight: 700; font-size: 0.85em; min-width: 40px; text-align: center; }
+.risk-file-item .risk-score-badge { padding: var(--spacing-1) var(--spacing-2-5); border-radius: var(--radius-default); font-weight: 700; font-size: 0.85em; min-width: 40px; text-align: center; }
 .risk-file-item .risk-score-badge.item-critical { background: rgba(239, 68, 68, 0.3); color: var(--color-error-light); }
 .risk-file-item .risk-score-badge.item-warning { background: rgba(245, 158, 11, 0.3); color: var(--color-warning-light); }
 .risk-file-item .risk-score-badge.item-info { background: rgba(59, 130, 246, 0.3); color: var(--color-info-light); }
 .risk-file-item .risk-score-badge.item-success { background: rgba(34, 197, 94, 0.3); color: var(--color-success-light); }
 .risk-file-item .file-path { color: var(--text-secondary); font-family: monospace; font-size: 0.85em; flex: 1; word-break: break-all; }
-.risk-file-item .risk-level-tag { padding: 2px 8px; border-radius: var(--radius-default); font-size: 0.7em; text-transform: uppercase; font-weight: 600; }
+.risk-file-item .risk-level-tag { padding: var(--spacing-0-5) var(--spacing-2); border-radius: var(--radius-default); font-size: 0.7em; text-transform: uppercase; font-weight: 600; }
 .risk-file-item .risk-level-tag.high, .risk-file-item .risk-level-tag.critical { background: rgba(239, 68, 68, 0.2); color: var(--color-error-light); }
 .risk-file-item .risk-level-tag.medium { background: rgba(245, 158, 11, 0.2); color: var(--color-warning-light); }
 .risk-file-item .risk-level-tag.low, .risk-file-item .risk-level-tag.minimal { background: rgba(34, 197, 94, 0.2); color: var(--color-success-light); }
-.risk-file-item .expand-icon { color: var(--text-tertiary); padding: 4px 8px; }
-.quick-risk-indicators { display: flex; flex-wrap: wrap; gap: var(--spacing-1-5); padding: 0 16px 12px; }
+.risk-file-item .expand-icon { color: var(--text-tertiary); padding: var(--spacing-1) var(--spacing-2); }
+.quick-risk-indicators { display: flex; flex-wrap: wrap; gap: var(--spacing-1-5); padding: var(--spacing-0) var(--spacing-4) var(--spacing-3); }
 .quick-risk-indicators .indicator { display: flex; align-items: center; gap: var(--spacing-1); padding: 3px 8px; border-radius: var(--radius-default); font-size: 0.75em; font-weight: 500; }
 .quick-risk-indicators .indicator.critical { background: rgba(239, 68, 68, 0.2); color: var(--color-error-light); }
 .quick-risk-indicators .indicator.high { background: rgba(249, 115, 22, 0.2); color: var(--chart-orange-light); }
@@ -788,13 +788,13 @@ function formatTimestamp(timestamp: string | undefined): string {
 .factor-row.high-value .factor-value { color: var(--color-error-light); }
 .factor-row.medium-value .factor-value { color: var(--color-warning-light); }
 .tips-list, .tests-list { list-style: none; padding: var(--spacing-0); margin: var(--spacing-0); }
-.tips-list li, .tests-list li { display: flex; align-items: flex-start; gap: var(--spacing-2-5); padding: 10px 12px; background: rgba(30, 41, 59, 0.5); border-radius: var(--radius-md); margin-bottom: var(--spacing-1-5); font-size: 0.85em; line-height: 1.4; }
+.tips-list li, .tests-list li { display: flex; align-items: flex-start; gap: var(--spacing-2-5); padding: var(--spacing-2-5) var(--spacing-3); background: rgba(30, 41, 59, 0.5); border-radius: var(--radius-md); margin-bottom: var(--spacing-1-5); font-size: 0.85em; line-height: 1.4; }
 .tips-list li i { color: var(--color-warning-light); margin-top: var(--spacing-0-5); }
 .tips-list li { color: var(--text-secondary); border-left: 3px solid var(--color-warning-light); }
 .tests-list li i { color: var(--chart-purple-light); margin-top: var(--spacing-0-5); }
 .tests-list li { color: var(--chart-purple-light); border-left: 3px solid var(--chart-purple-light); }
 .show-more-container { text-align: center; margin-top: var(--spacing-4); }
-.show-more-btn { padding: 10px 24px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: var(--color-info-light); border-radius: var(--radius-md); cursor: pointer; font-size: 0.9em; display: inline-flex; align-items: center; gap: var(--spacing-2); transition: all 0.2s; }
+.show-more-btn { padding: var(--spacing-2-5) var(--spacing-6); background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: var(--color-info-light); border-radius: var(--radius-md); cursor: pointer; font-size: 0.9em; display: inline-flex; align-items: center; gap: var(--spacing-2); transition: all 0.2s; }
 .show-more-btn:hover { background: rgba(59, 130, 246, 0.3); }
 
 /* Issue #538: Code Intelligence Scores Section */

@@ -14,11 +14,18 @@ This eliminates the need for a separate AutoBotMemoryGraph system.
 """
 
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
 
+from api.schemas_knowledge import (
+    CreateRelationRequest,
+    DeleteRelationRequest,
+    HybridSearchRequest,
+    KnowledgeRelationResultResponse,
+    KnowledgeRelationTypesResponse,
+    TraverseRequest,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from knowledge_factory import get_or_create_knowledge_base
@@ -39,63 +46,12 @@ router = APIRouter(
 # ============================================================================
 
 
-class CreateRelationRequest(BaseModel):
-    """Request model for creating a fact relation."""
-
-    source_fact_id: str = Field(..., description="ID of the source fact")
-    target_fact_id: str = Field(..., description="ID of the target fact")
-    relation_type: str = Field(
-        ...,
-        description="Type of relation (e.g., relates_to, depends_on, implements)",
-    )
-    metadata: Optional[dict] = Field(
-        None, description="Optional metadata for the relation"
-    )
-
-
-class DeleteRelationRequest(BaseModel):
-    """Request model for deleting a fact relation."""
-
-    source_fact_id: str = Field(..., description="ID of the source fact")
-    target_fact_id: str = Field(..., description="ID of the target fact")
-    relation_type: Optional[str] = Field(
-        None, description="Specific relation type to delete (None = all relations)"
-    )
-
-
-class TraverseRequest(BaseModel):
-    """Request model for graph traversal."""
-
-    start_fact_id: str = Field(..., description="Starting fact ID for traversal")
-    max_depth: int = Field(2, ge=1, le=5, description="Maximum traversal depth")
-    relation_types: Optional[List[str]] = Field(
-        None, description="Optional list of relation types to follow"
-    )
-    include_fact_details: bool = Field(
-        False, description="Include full fact content in results"
-    )
-
-
-class HybridSearchRequest(BaseModel):
-    """Request model for hybrid (vector + graph) search."""
-
-    query: str = Field(..., description="Search query text")
-    top_k: int = Field(10, ge=1, le=100, description="Number of vector matches")
-    expand_relations: bool = Field(
-        True, description="Expand results with graph relations"
-    )
-    relation_depth: int = Field(1, ge=1, le=3, description="Relation traversal depth")
-    relation_types: Optional[List[str]] = Field(
-        None, description="Filter by relation types"
-    )
-
-
 # ============================================================================
 # API Endpoints
 # ============================================================================
 
 
-@router.post("/create")
+@router.post("/create", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_fact_relation",
@@ -142,7 +98,7 @@ async def create_fact_relation(req: Request, body: CreateRelationRequest):
     return result
 
 
-@router.delete("/delete")
+@router.delete("/delete", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_fact_relation",
@@ -174,7 +130,7 @@ async def delete_fact_relation(req: Request, body: DeleteRelationRequest):
     return result
 
 
-@router.get("/fact/{fact_id}")
+@router.get("/fact/{fact_id}", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_fact_relations",
@@ -223,7 +179,7 @@ async def get_fact_relations(
     return result
 
 
-@router.post("/traverse")
+@router.post("/traverse", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="traverse_relations",
@@ -257,7 +213,7 @@ async def traverse_relations(req: Request, body: TraverseRequest):
     return result
 
 
-@router.post("/hybrid-search")
+@router.post("/hybrid-search", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="hybrid_search",
@@ -295,7 +251,7 @@ async def hybrid_search(req: Request, body: HybridSearchRequest):
     return result
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_relation_stats",
@@ -323,7 +279,7 @@ async def get_relation_stats(req: Request):
     return result
 
 
-@router.get("/types")
+@router.get("/types", response_model=KnowledgeRelationTypesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_available_relation_types",

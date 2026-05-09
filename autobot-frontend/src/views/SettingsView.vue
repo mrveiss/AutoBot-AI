@@ -14,7 +14,7 @@ Issue #753: User preference management interface
       <div class="page-header">
         <div class="header-content">
           <h1 class="page-title">
-            <i class="fas fa-cog"></i>
+            <Icon name="cog" />
             Settings
           </h1>
           <p class="page-description">
@@ -29,49 +29,49 @@ Issue #753: User preference management interface
           @click="activeTab = 'appearance'"
           :class="['settings-tab', { active: activeTab === 'appearance' }]"
         >
-          <i class="fas fa-paint-brush"></i>
+          <Icon name="paint-brush" />
           Appearance
         </button>
         <button
           @click="activeTab = 'language'"
           :class="['settings-tab', { active: activeTab === 'language' }]"
         >
-          <i class="fas fa-globe"></i>
+          <Icon name="globe" />
           {{ $t('settings.language') }}
         </button>
         <button
           @click="activeTab = 'voice'"
           :class="['settings-tab', { active: activeTab === 'voice' }]"
         >
-          <i class="fas fa-microphone"></i>
+          <Icon name="microphone" />
           Voice
         </button>
         <button
           @click="activeTab = 'webresearch'"
           :class="['settings-tab', { active: activeTab === 'webresearch' }]"
         >
-          <i class="fas fa-search"></i>
+          <Icon name="search" />
           {{ $t('settings.webResearch.title') }}
         </button>
         <button
           @click="activeTab = 'apikeys'"
           :class="['settings-tab', { active: activeTab === 'apikeys' }]"
         >
-          <i class="fas fa-key"></i>
+          <Icon name="key" />
           {{ $t('settings.apiKeys.stepKeys') }}
         </button>
         <button
           @click="activeTab = 'connection'"
           :class="['settings-tab', { active: activeTab === 'connection' }]"
         >
-          <i class="fas fa-plug"></i>
+          <Icon name="plug" />
           {{ $t('settings.connection.title') }}
         </button>
         <button
           @click="activeTab = 'featureflags'"
           :class="['settings-tab', { active: activeTab === 'featureflags' }]"
         >
-          <i class="fas fa-shield-alt"></i>
+          <Icon name="shield-alt" />
           Feature Flags
         </button>
       </div>
@@ -81,7 +81,7 @@ Issue #753: User preference management interface
         <section v-if="activeTab === 'appearance'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
-              <i class="fas fa-paint-brush"></i>
+              <Icon name="paint-brush" />
               Appearance
             </h2>
             <p class="section-description">{{ $t('settings.appearanceDesc') }}</p>
@@ -94,7 +94,7 @@ Issue #753: User preference management interface
         <section v-if="activeTab === 'language'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
-              <i class="fas fa-globe"></i>
+              <Icon name="globe" />
               {{ $t('settings.language') }}
             </h2>
             <p class="section-description">{{ $t('settings.languageDesc') }}</p>
@@ -107,7 +107,7 @@ Issue #753: User preference management interface
         <section v-if="activeTab === 'voice'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
-              <i class="fas fa-microphone"></i>
+              <Icon name="microphone" />
               Voice
             </h2>
             <p class="section-description">{{ $t('settings.voiceDesc') }}</p>
@@ -120,7 +120,7 @@ Issue #753: User preference management interface
         <section v-if="activeTab === 'webresearch'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
-              <i class="fas fa-search"></i>
+              <Icon name="search" />
               {{ $t('settings.webResearch.title') }}
             </h2>
             <p class="section-description">{{ $t('settings.webResearch.desc') }}</p>
@@ -133,14 +133,14 @@ Issue #753: User preference management interface
         <section v-if="activeTab === 'apikeys'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
-              <i class="fas fa-key"></i>
+              <Icon name="key" />
               {{ $t('settings.apiKeys.stepKeys') }}
             </h2>
             <p class="section-description">{{ $t('settings.apiKeys.configureKeysDescription') }}</p>
           </div>
           <div class="section-content">
             <button class="open-wizard-btn" @click="showApiKeyWizard = true">
-              <i class="fas fa-magic"></i>
+              <Icon name="magic" />
               {{ $t('settings.apiKeys.wizardTitle') }}
             </button>
           </div>
@@ -149,12 +149,62 @@ Issue #753: User preference management interface
         <section v-if="activeTab === 'connection'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
-              <i class="fas fa-plug"></i>
+              <Icon name="plug" />
               {{ $t('settings.connection.title') }}
             </h2>
             <p class="section-description">{{ $t('settings.connection.desc') }}</p>
           </div>
           <div class="section-content">
+            <!-- Backend reachability check (#6964 wire-in for apiClient.validateConnection, resolves #6845) -->
+            <div class="backend-check-panel">
+              <div class="backend-check-header">
+                <h3 class="backend-check-title">
+                  {{ $t('settings.connection.backendCheck.title') }}
+                </h3>
+                <p class="backend-check-description">
+                  {{ $t('settings.connection.backendCheck.description') }}
+                </p>
+              </div>
+              <div class="backend-check-actions">
+                <button
+                  type="button"
+                  class="backend-check-button"
+                  :disabled="isChecking"
+                  @click="testBackendConnection"
+                  data-testid="test-backend-connection"
+                >
+                  <Icon :name="isChecking ? 'sync-alt' : 'plug'" :spin="isChecking" />
+                  <span>
+                    {{
+                      isChecking
+                        ? $t('settings.connection.backendCheck.checking')
+                        : $t('settings.connection.backendCheck.button')
+                    }}
+                  </span>
+                </button>
+                <div
+                  v-if="lastResult !== null"
+                  :class="['backend-check-status', lastResult ? 'status-ok' : 'status-fail']"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <Icon :name="lastResult ? 'check-circle' : 'times-circle'" />
+                  <span class="status-label">
+                    {{
+                      lastResult
+                        ? $t('settings.connection.backendCheck.reachable')
+                        : $t('settings.connection.backendCheck.unreachable')
+                    }}
+                  </span>
+                  <span v-if="lastLatencyMs !== null" class="status-latency">
+                    · {{ $t('settings.connection.backendCheck.latency') }}: {{ lastLatencyMs }}ms
+                  </span>
+                </div>
+                <p v-if="lastTestedAt" class="backend-check-meta">
+                  {{ $t('settings.connection.backendCheck.lastTested') }}: {{ lastTestedAt }}
+                </p>
+              </div>
+            </div>
             <ConnectionSettingsPanel />
           </div>
         </section>
@@ -162,7 +212,7 @@ Issue #753: User preference management interface
         <section v-if="activeTab === 'featureflags'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
-              <i class="fas fa-shield-alt"></i>
+              <Icon name="shield-alt" />
               Feature Flags
             </h2>
             <p class="section-description">Manage feature flags, enforcement modes, and access control</p>
@@ -186,16 +236,55 @@ import WebResearchSettingsPanel from '@/components/settings/WebResearchSettingsP
 import ApiKeySetupWizard from '@/components/settings/ApiKeySetupWizard.vue'
 import ConnectionSettingsPanel from '@/components/desktop/ConnectionSettingsPanel.vue'
 import FeatureFlagsSettingsPanel from '@/components/settings/FeatureFlagsSettingsPanel.vue'
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
+import { useToast } from '@/composables/useToast'
+import apiClient from '@/utils/ApiClient'
 
 const logger = createLogger('SettingsView')
+const { t } = useI18n()
+const { showToast } = useToast()
 
 logger.debug('Settings view initialized')
 
 type PreferenceTab = 'appearance' | 'language' | 'voice' | 'webresearch' | 'apikeys' | 'connection' | 'featureflags'
 const activeTab = ref<PreferenceTab>('appearance')
 const showApiKeyWizard = ref(false)
+
+// Backend reachability check (#6964 wire-in for apiClient.validateConnection, resolves #6845)
+const isChecking = ref(false)
+const lastResult = ref<boolean | null>(null)
+const lastLatencyMs = ref<number | null>(null)
+const lastTestedAt = ref<string | null>(null)
+
+async function testBackendConnection(): Promise<void> {
+  if (isChecking.value) return
+  isChecking.value = true
+  const t0 = performance.now()
+  try {
+    const reachable = await apiClient.validateConnection()
+    lastLatencyMs.value = Math.round(performance.now() - t0)
+    lastResult.value = reachable
+    lastTestedAt.value = new Date().toLocaleTimeString()
+    showToast(
+      reachable
+        ? `${t('settings.connection.backendCheck.reachable')} (${lastLatencyMs.value}ms)`
+        : t('settings.connection.backendCheck.unreachable'),
+      reachable ? 'success' : 'error'
+    )
+    logger.info('Backend reachability test', { reachable, latencyMs: lastLatencyMs.value })
+  } catch (error) {
+    lastLatencyMs.value = Math.round(performance.now() - t0)
+    lastResult.value = false
+    lastTestedAt.value = new Date().toLocaleTimeString()
+    showToast(t('settings.connection.backendCheck.unreachable'), 'error')
+    logger.error('Backend reachability test failed', error)
+  } finally {
+    isChecking.value = false
+  }
+}
 
 function onApiKeysSaved(): void {
   logger.info('API keys saved successfully')
@@ -240,8 +329,9 @@ function onApiKeysSaved(): void {
   margin: var(--spacing-0);
 }
 
-.page-title i {
-  font-size: var(--text-2xl);
+.page-title svg {
+  width: var(--text-2xl);
+  height: var(--text-2xl);
   color: var(--color-primary);
 }
 
@@ -283,8 +373,9 @@ function onApiKeysSaved(): void {
   margin: 0 0 var(--spacing-xs) 0;
 }
 
-.section-title i {
-  font-size: var(--text-lg);
+.section-title svg {
+  width: var(--text-lg);
+  height: var(--text-lg);
   color: var(--color-primary);
 }
 
@@ -361,8 +452,9 @@ function onApiKeysSaved(): void {
     font-size: var(--text-2xl);
   }
 
-  .page-title i {
-    font-size: var(--text-xl);
+  .page-title svg {
+    width: var(--text-xl);
+    height: var(--text-xl);
   }
 
   .section-header {
@@ -378,7 +470,7 @@ function onApiKeysSaved(): void {
     overflow-x: auto;
     flex-wrap: nowrap;
     -webkit-overflow-scrolling: touch;
-    gap: 0;
+    gap: var(--spacing-0);
   }
 
   .settings-tab {
@@ -405,5 +497,97 @@ function onApiKeysSaved(): void {
 
 .open-wizard-btn:hover {
   opacity: 0.9;
+}
+
+/* ============================================
+ * BACKEND REACHABILITY CHECK (#6964)
+ * ============================================ */
+
+.backend-check-panel {
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  background: var(--surface-secondary, var(--bg-secondary));
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md, 8px);
+}
+
+.backend-check-header {
+  margin-bottom: var(--spacing-md);
+}
+
+.backend-check-title {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.backend-check-description {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.backend-check-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.backend-check-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  align-self: flex-start;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: opacity var(--duration-150);
+}
+
+.backend-check-button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.backend-check-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.backend-check-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm, 4px);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  align-self: flex-start;
+}
+
+.backend-check-status.status-ok {
+  color: var(--color-success, #16a34a);
+  background: var(--color-success-bg, rgba(22, 163, 74, 0.1));
+}
+
+.backend-check-status.status-fail {
+  color: var(--color-danger, #dc2626);
+  background: var(--color-danger-bg, rgba(220, 38, 38, 0.1));
+}
+
+.status-latency {
+  font-weight: var(--font-normal);
+  opacity: 0.85;
+}
+
+.backend-check-meta {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin: 0;
 }
 </style>

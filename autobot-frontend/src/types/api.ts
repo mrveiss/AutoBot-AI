@@ -41,6 +41,18 @@ export type ChatMessageDisplayType =
   | 'terminal_output'
   | 'terminal_command';
 
+/** A single RAG retrieval source attached to an assistant message (Issue #4448). */
+export interface RagSource {
+  /** Human-readable title or file name of the source document. */
+  title: string;
+  /** Relative file path of the source document. */
+  path: string;
+  /** Retrieval relevance score (0–1). */
+  score: number;
+  /** Knowledge-base chunk identifier. */
+  chunk_id: string;
+}
+
 export interface ChatMessage {
   id: string;
   /** Message text content — canonical field name, matches backend `content`. */
@@ -65,6 +77,12 @@ export interface ChatMessage {
     duration?: number;
     [key: string]: string | number | boolean | undefined;
   };
+  /**
+   * RAG retrieval sources persisted alongside the message (Issue #4448).
+   * Present on assistant messages when the knowledge base was queried.
+   * Empty array when RAG was not used or message has no citations.
+   */
+  sources?: RagSource[];
 }
 
 export interface ChatSession {

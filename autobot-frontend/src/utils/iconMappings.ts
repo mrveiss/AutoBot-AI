@@ -5,35 +5,42 @@
  * reducing duplication and ensuring UI consistency.
  */
 
+import { createLogger } from '@/utils/debugUtils'
+import type { IconName } from '@/components/ui/Icon.vue'
+
 // ============================================================================
 // STATUS ICONS
 // ============================================================================
 
-export const statusIcons = {
+export const statusIcons: Record<string, IconName> = {
   // Health/Status States
-  healthy: 'fas fa-check-circle',
-  success: 'fas fa-check-circle',
-  online: 'fas fa-check-circle',
-  active: 'fas fa-circle',
+  healthy: 'check-circle',
+  success: 'check-circle',
+  online: 'check-circle',
+  active: 'circle',
 
-  warning: 'fas fa-exclamation-triangle',
-  degraded: 'fas fa-exclamation-triangle',
-  pending: 'fas fa-clock',
+  warning: 'exclamation-triangle',
+  degraded: 'exclamation-triangle',
+  pending: 'clock',
 
-  error: 'fas fa-times-circle',
-  unhealthy: 'fas fa-times-circle',
-  failed: 'fas fa-times-circle',
-  offline: 'fas fa-times-circle',
-  disconnected: 'fas fa-plug',
+  error: 'times-circle',
+  unhealthy: 'times-circle',
+  failed: 'times-circle',
+  offline: 'times-circle',
+  disconnected: 'plug',
 
-  unknown: 'fas fa-question-circle',
-  loading: 'fas fa-spinner fa-spin'
-} as const
+  unknown: 'question-circle',
+  // Note: loading spin is handled at the call site via :spin="true" on <Icon>
+  loading: 'sync-alt',
+}
 
 // ============================================================================
 // FILE TYPE ICONS
 // ============================================================================
 
+// Note: file-type icons use Font Awesome class strings because many icons
+// (file-pdf, file-word, fab fa-*, etc.) have no SVG equivalent in Icon.vue.
+// Callers use <i :class="getFileIcon(...)"> and are outside the SVG migration scope.
 export const fileTypeIcons = {
   // Documents
   pdf: 'fas fa-file-pdf',
@@ -101,6 +108,7 @@ export const fileTypeIcons = {
 // DOCUMENT TYPE ICONS (for knowledge base entries)
 // ============================================================================
 
+// Note: these use Font Awesome class strings — callers use <i :class="...">
 export const documentTypeIcons = {
   document: 'fas fa-file-alt',
   webpage: 'fas fa-globe',
@@ -113,6 +121,7 @@ export const documentTypeIcons = {
 // PLATFORM ICONS
 // ============================================================================
 
+// Note: brand icons (fab fa-*) have no SVG equivalent in Icon.vue
 export const platformIcons = {
   linux: 'fab fa-linux',
   windows: 'fab fa-windows',
@@ -125,11 +134,35 @@ export const platformIcons = {
 // HELPER FUNCTIONS
 // ============================================================================
 
+// #6796: telemetry — log (with stack trace) the first time getFileIcon
+// receives a non-string `filename`, so the upstream serialization bug can
+// be found from a real session. We only warn once per page load to avoid
+// drowning the logger.
+const _logger = createLogger('iconMappings')
+let _nonStringFilenameWarned = false
+function _warnNonStringFilenameOnce(value: unknown): void {
+  if (_nonStringFilenameWarned) return
+  _nonStringFilenameWarned = true
+  _logger.warn(
+    '[#6796] getFileIcon received non-string filename — ' +
+      'upstream payload (likely TreeNode.name) is not a string. ' +
+      `typeof=${typeof value} value=${String(value).slice(0, 80)}`,
+    new Error('iconMappings non-string trace'),
+  )
+}
+
 /**
  * Get icon for file based on extension
  */
 export function getFileIcon(filename: string, isFolder: boolean = false): string {
   if (isFolder) return fileTypeIcons.folder
+  // #6645: defensive type check — TS types don't survive the JSON network
+  // boundary, and TreeNode.name occasionally arrives as null/number/undefined,
+  // which crashed KnowledgeBrowser with "t.split is not a function".
+  if (typeof filename !== 'string' || filename.length === 0) {
+    if (typeof filename !== 'string') _warnNonStringFilenameOnce(filename)
+    return fileTypeIcons.file
+  }
 
   const ext = filename.split('.').pop()?.toLowerCase()
   if (!ext) return fileTypeIcons.file
@@ -138,11 +171,11 @@ export function getFileIcon(filename: string, isFolder: boolean = false): string
 }
 
 /**
- * Get icon for status
+ * Get icon for status — returns an IconName for use with <Icon :name="...">
  */
-export function getStatusIcon(status: string): string {
+export function getStatusIcon(status: string): IconName {
   const normalizedStatus = status.toLowerCase()
-  return statusIcons[normalizedStatus as keyof typeof statusIcons] || statusIcons.unknown
+  return statusIcons[normalizedStatus] || statusIcons['unknown']
 }
 
 /**
@@ -166,6 +199,11 @@ export function getDocumentTypeIcon(type: string): string {
  * Useful for uploaded files where MIME type is available
  */
 export function getFileIconByMimeType(mimeType: string): string {
+  // #6645: same defensive check as getFileIcon — non-string inputs from the
+  // network boundary should not crash the page.
+  if (typeof mimeType !== 'string' || mimeType.length === 0) {
+    return 'fas fa-file'
+  }
   const type = mimeType.toLowerCase()
 
   // Images
@@ -218,7 +256,8 @@ export function getStatusColorClass(status: string): string {
 }
 
 /**
- * Get status icon with color class (combined for backward compatibility)
+ * Get status icon name with color class (combined for backward compatibility)
+ * Returns "<iconName> <colorClass>" — note: icon is now an IconName, not an FA class string.
  * @deprecated Use getStatusIcon() + getStatusColorClass() separately for better flexibility
  */
 export function getStatusIconWithColor(status: string): string {

@@ -80,7 +80,9 @@
     "deselectAll": "Deselect All",
     "hasMore": "Load more",
     "page": "Page",
-    "previous": "Previous"
+    "previous": "Previous",
+    "optional": "optional",
+    "remove": "Remove"
   },
   "chat": {
     "sendMessage": "Send a message...",
@@ -662,7 +664,18 @@
     },
     "connection": {
       "title": "Connection",
-      "desc": "Configure backend connection settings"
+      "desc": "Configure backend connection settings",
+      "backendCheck": {
+        "title": "Backend reachability",
+        "description": "Run a one-shot ping to verify that the AutoBot backend is reachable from this browser. No periodic polling — manual only.",
+        "button": "Test backend connection",
+        "checking": "Checking…",
+        "reachable": "Reachable",
+        "unreachable": "Unreachable",
+        "latency": "Latency",
+        "lastTested": "Last tested",
+        "neverTested": "Not yet tested"
+      }
     }
   },
   "voice": {
@@ -1241,7 +1254,11 @@
         "evolution": "Evolution",
         "evolutionAria": "Evolution analytics",
         "audit": "Audit",
-        "auditAria": "Audit logs"
+        "auditAria": "Audit logs",
+        "usage": "Usage",
+        "usageAria": "Usage & Costs",
+        "operations": "Operations",
+        "operationsAria": "Long-running operations"
       }
     },
     "header": {
@@ -1609,7 +1626,8 @@
       "file": "File",
       "score": "Score",
       "topIssue": "Top Issue",
-      "close": "Close"
+      "close": "Close",
+      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard."
     },
     "bugPrediction": {
       "title": "Bug Prediction Dashboard",
@@ -2831,7 +2849,9 @@
         "sourcesCount": "{count} sources"
       },
       "noEntities3D": "No entities to display",
-      "loading3dVisualization": "Loading3d visualization"
+      "loading3dVisualization": "Loading3d visualization",
+      "loadingVisualization": "Loading visualization library...",
+      "retry": "Retry"
     },
     "connectors": {
       "title": "Source Connectors",
@@ -4026,6 +4046,12 @@
     "config": "Agent Configuration",
     "orchestrator": "Orchestrator",
     "translate": "Translate",
+    "nav": {
+      "label": "Agents navigation",
+      "registry": "Registry",
+      "activity": "Activity",
+      "heartbeat": "Heartbeat"
+    },
     "registry": {
       "title": "Agent Registry",
       "subtitle": "Browse and monitor all registered agents",
@@ -4478,7 +4504,9 @@
         "showingOf": "Showing {showing} of {total} functions (scroll for more)",
         "noMatch": "No orphaned functions match your filter",
         "allConnected": "No orphaned functions detected - all functions are connected!"
-      }
+      },
+      "loadingVisualization": "Loading visualization library...",
+      "retry": "Retry"
     },
     "importTree": {
       "title": "File Import Tree",
@@ -5166,6 +5194,12 @@
     "progressBar": {
       "timeRemaining": "{time} remaining"
     },
+    "offlineBanner": {
+      "backendLost": "Backend connection lost — retrying. Cached data still available.",
+      "queuedForRetry": "{count} action queued for retry. | {count} actions queued for retry.",
+      "checking": "Checking…",
+      "retry": "Retry"
+    },
     "systemStatus": {
       "dismissNotification": "Dismiss notification",
       "close": "Close",
@@ -5536,7 +5570,20 @@
       "noNewPluginsHint": "All discovered plugins are already installed, or no plugin directories are configured.",
       "available": "available",
       "requires": "Requires",
-      "install": "Install",
+      "install": {
+        "button": "Install",
+        "title": "Install Plugin",
+        "zipTab": "Upload ZIP",
+        "gitTab": "From Git",
+        "zipHint": "Upload a .zip archive containing plugin.json and plugin code.",
+        "zipPickFile": "Click to choose a .zip file or drop it here",
+        "gitHint": "Enter the URL of a Git repository containing a plugin.json at its root.",
+        "gitUrlLabel": "Repository URL",
+        "gitRefLabel": "Branch or tag",
+        "install": "Install",
+        "installing": "Installing…",
+        "failed": "Install failed — check inputs and try again."
+      },
       "pluginDetails": "Plugin details",
       "close": "Close",
       "name": "Name",
@@ -5552,7 +5599,8 @@
       "cancel": "Cancel",
       "noConfig": "No configuration stored for this plugin.",
       "invalidJson": "Invalid JSON — please fix before saving.",
-      "saveFailed": "Failed to save configuration."
+      "saveFailed": "Failed to save configuration.",
+      "marketplace": "Marketplace"
     },
     "marketplace": {
       "title": "Plugin Marketplace",
@@ -5576,7 +5624,22 @@
       "source": "Source",
       "loadError": "Failed to load marketplace catalog.",
       "installError": "Failed to install plugin.",
-      "uninstallError": "Failed to uninstall plugin."
+      "uninstallError": "Failed to uninstall plugin.",
+      "sources": {
+        "title": "Manage Marketplace Sources",
+        "hint": "Add custom marketplace URLs that return a JSON catalog of plugins.",
+        "addTitle": "Add custom marketplace",
+        "add": "Add source",
+        "adding": "Adding…",
+        "addFailed": "Failed to add marketplace — check the URL returns a valid catalog.",
+        "removeFailed": "Failed to remove marketplace.",
+        "nameLabel": "Display name",
+        "namePlaceholder": "Acme Plugins",
+        "urlLabel": "Catalog URL",
+        "descLabel": "Description",
+        "builtin": "built-in"
+      },
+      "manageSources": "Manage Sources"
     }
   },
   "auth": {
@@ -6309,6 +6372,7 @@
       "last24Hours": "Last 24 Hours",
       "last7Days": "Last 7 Days",
       "loadingData": "Loading heatmap data...",
+      "noData": "No metrics available yet",
       "retry": "Retry",
       "legendLow": "Low",
       "legendHigh": "High",
@@ -6815,6 +6879,12 @@
       "refresh": "Refresh"
     }
   },
+  "slm": {
+    "novnc": {
+      "selectHost": "Select a host to connect",
+      "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    }
+  },
   "desktop": {
     "connectionSettings": {
       "title": "Connection Quality",
@@ -6893,7 +6963,8 @@
       "errorInitFailed": "Failed to initialize desktop connection.",
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
-      "screenshotAlt": "Desktop Screenshot"
+      "screenshotAlt": "Desktop Screenshot",
+      "openInNewWindow": "Open in new window"
     },
     "popoutBrowser": {
       "title": "Research Browser",
@@ -6994,6 +7065,7 @@
     "desktop": "Desktop",
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
+    "agentActivity": "Agent Activity",
     "experiments": "Experiments",
     "slmAdmin": "SLM Admin",
     "slmAdminTitle": "Open SLM Admin Panel",
@@ -7008,6 +7080,7 @@
     "marketplace": "Marketplace",
     "usage": "Usage & Costs",
     "operations": "Operations",
+    "remoteDesktop": "Remote Desktop",
     "applicationError": "Application Error",
     "unexpectedError": "An unexpected error occurred",
     "loadingTimeout": "Loading Timed Out",

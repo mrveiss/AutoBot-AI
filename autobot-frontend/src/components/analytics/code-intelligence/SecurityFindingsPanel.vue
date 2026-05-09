@@ -53,7 +53,7 @@ defineProps<{
 
 .count-badge {
   background: var(--bg-tertiary);
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-full);
   font-size: var(--text-xs);
   color: var(--text-secondary);

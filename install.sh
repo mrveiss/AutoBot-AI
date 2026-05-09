@@ -38,6 +38,7 @@ REINSTALL=false
 UNINSTALL=false
 VALIDATE=false
 CONFIRM_YES=false
+ROTATE_SECRETS=false  # #7075: --rotate-secrets opts in to replacing existing SLM_ADMIN_PASSWORD
 GIT_BRANCH="${DEFAULT_BRANCH}"
 ADMIN_PASSWORD=""
 OVERRIDE_IP=""  # --ip= override for multi-interface hosts (#2832)
@@ -99,6 +100,46 @@ run_ok() {
     fi
 }
 
+# add_ppa_if_missing: prefer device-shipped PPA; only add if not already configured (#7144)
+#   $1 = ppa spec for apt-add-repository, e.g. "ppa:ansible/ansible"
+#   $2 = match string to grep across /etc/apt/sources.list.d/ — typically
+#        "<owner>/<name>" (matches both ppa.launchpadcontent.net and the
+#        deb822 URIs field). E.g. "ansible/ansible".
+#   $3 = friendly description for log lines, e.g. "Ansible".
+#
+# DGX Spark and similar AI workstation images ship with several PPAs already
+# configured (deb822 .sources format with inline GPG key). Re-adding via
+# apt-add-repository creates a legacy .list duplicate with mismatched
+# Signed-By → apt-get update aborts with E:Conflicting values set for option
+# Signed-By. This helper preserves the device-shipped repo and removes any
+# stale legacy duplicate left from prior install attempts.
+add_ppa_if_missing() {
+    local ppa="$1"
+    local match="$2"
+    local desc="$3"
+
+    if grep -rqsE "${match}" /etc/apt/sources.list.d/ 2>/dev/null; then
+        success "  ${desc} PPA already configured (preserving device-shipped repo)"
+        # Sweep stale legacy .list duplicates left by prior apt-add-repository runs
+        local owner_repo="${ppa#ppa:}"             # ansible/ansible
+        local owner="${owner_repo%/*}"             # ansible
+        local repo="${owner_repo#*/}"              # ansible
+        local stale_list="/etc/apt/sources.list.d/ppa_${owner}_${repo}_*.list"
+        # shellcheck disable=SC2086
+        for f in ${stale_list}; do
+            if [[ -f "${f}" ]] && [[ -f "${f%.list}.sources" ]] || \
+               compgen -G "/etc/apt/sources.list.d/${owner}-*-${repo}-*.sources" >/dev/null; then
+                rm -f "${f}"
+                log "  Removed stale duplicate ${f}"
+            fi
+        done
+        return 0
+    fi
+
+    run_ok "Adding ${desc} PPA" \
+        apt-add-repository -y "${ppa}"
+}
+
 # =============================================================================
 # Network Interface Detection (#2832)
 # =============================================================================
@@ -142,6 +183,19 @@ detect_local_ip() {
         fatal "No network interfaces with IPv4 addresses found"
     elif [[ ${#ips[@]} -eq 1 ]]; then
         detected_ip="${ips[0]}"
+    elif [[ -n "${AUTOBOT_INSTALL_INTERFACE:-}" ]]; then
+        # #7057: env-var override picks the interface by name (e.g. eth2)
+        # so the script runs without an interactive prompt
+        for i in "${!ifaces[@]}"; do
+            if [[ "${ifaces[$i]}" == "${AUTOBOT_INSTALL_INTERFACE}" ]]; then
+                detected_ip="${ips[$i]}"
+                success "Using ${ifaces[$i]}: ${detected_ip} (AUTOBOT_INSTALL_INTERFACE)" >&2
+                break
+            fi
+        done
+        if [[ -z "${detected_ip}" ]]; then
+            fatal "AUTOBOT_INSTALL_INTERFACE='${AUTOBOT_INSTALL_INTERFACE}' not found among detected interfaces: ${ifaces[*]}"
+        fi
     else
         # Multiple interfaces — ask user to select
         echo -e "\n${YELLOW}  Multiple network interfaces detected:${NC}" >&2
@@ -211,7 +265,17 @@ Options:
   --branch=BRANCH       Git branch to install (default: ${DEFAULT_BRANCH})
   --admin-pass=PASS     SLM admin password (auto-generated if not set)
   --ip=IP               Override auto-detected IP address (#2832)
+  --rotate-secrets      Replace existing SLM_ADMIN_PASSWORD on reinstall (#7075).
+                        By default reinstall PRESERVES the wizard-set password
+                        and ignores --admin-pass= / AUTOBOT_SLM_ADMIN_PASSWORD.
   --help                Show this help message
+
+Environment overrides (skip the corresponding interactive prompt; #7057):
+  AUTOBOT_INSTALL_BRANCH=<branch>     same as --branch=
+  AUTOBOT_SLM_ADMIN_PASSWORD=<pass>   same as --admin-pass=
+  AUTOBOT_INSTALL_INTERFACE=<iface>   pick an interface by name (eth2, eth0, ...)
+                                      instead of the menu prompt
+  OVERRIDE_IP=<ip>                    skip detection entirely and use this IP
 
 Examples:
   sudo $0                                    # Interactive install
@@ -220,6 +284,10 @@ Examples:
   sudo $0 --reinstall                        # Reinstall over existing
   sudo $0 --uninstall                        # Full uninstall (with confirmation)
   sudo $0 --uninstall --yes                  # Full uninstall (no prompt)
+  sudo AUTOBOT_INSTALL_INTERFACE=eth2 \\
+       AUTOBOT_INSTALL_BRANCH=Dev_new_gui \\
+       AUTOBOT_SLM_ADMIN_PASSWORD=secret \\
+       $0 --reinstall                        # Fully scripted reinstall (#7057)
 
 Post-Install:
   1. Open https://<server-ip> in a browser
@@ -321,8 +389,7 @@ system_setup() {
 
     # Issue #2705: Python 3.12 required by autobot_shared
     if ! command -v python3.12 &>/dev/null; then
-        run_ok "Adding deadsnakes PPA for Python 3.12" \
-            apt-add-repository -y ppa:deadsnakes/ppa
+        add_ppa_if_missing "ppa:deadsnakes/ppa" "deadsnakes/ppa" "deadsnakes (Python 3.12)"
         run_ok "Updating package lists (Python 3.12)" \
             apt-get update -qq
         run_ok "Installing Python 3.12" \
@@ -333,8 +400,7 @@ system_setup() {
     fi
 
     if ! command -v ansible-playbook &>/dev/null; then
-        run_ok "Adding Ansible PPA" \
-            apt-add-repository -y ppa:ansible/ansible
+        add_ppa_if_missing "ppa:ansible/ansible" "ansible/ansible" "Ansible"
         run_ok "Updating package lists (Ansible)" \
             apt-get update -qq
         run_ok "Installing Ansible" \
@@ -451,9 +517,20 @@ ansible_deployment() {
     local inventory="${ansible_dir}/inventory/localhost.yml"
 
     info "Generating localhost inventory..."
+    # Single-host install: SLM Manager host also runs autobot-backend so the
+    # /api/auth/login flow works out of the box (#6600). The plural node_roles
+    # is the variable consulted by provision-fleet-roles.yml's role gates;
+    # node_role (singular) is preserved for backward compat.
     cat > "${inventory}" << 'INVENTORY'
-# AutoBot localhost inventory for self-deploy (Issue #1294)
+# AutoBot localhost inventory for self-deploy (Issue #1294, #6600, #7162)
 all:
+  vars:
+    # #7162: network_subnet/network_gateway/slm_host MUST be defined here so
+    # firewall rules in group_vars/slm.yml resolve. Match slm-nodes.yml's
+    # lookup-with-fallback pattern: env first, then secrets file, then default.
+    slm_host: "{{ lookup('env', 'SLM_HOST') | default(lookup('pipe', 'grep -oP \"SLM_HOST=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || echo 127.0.0.1'), true) }}"
+    network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0/0' }}"
+    network_gateway: "{{ lookup('env', 'NETWORK_GATEWAY') or lookup('pipe', 'grep -oP \"NETWORK_GATEWAY=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0' }}"
   hosts:
     00-SLM-Manager:
       ansible_connection: local
@@ -461,8 +538,17 @@ all:
       ansible_python_interpreter: /usr/bin/python3
       slm_node_id: "00-SLM-Manager"
       node_role: "slm-manager"
+      node_roles:
+        - autobot-backend
+        - vnc
   children:
     slm_server:
+      hosts:
+        00-SLM-Manager:
+    main:
+      hosts:
+        00-SLM-Manager:
+    backend:
       hosts:
         00-SLM-Manager:
 INVENTORY
@@ -543,7 +629,10 @@ EOF
     chown autobot:autobot /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp /tmp/ansible_local_tmp
 
     info "Running Ansible deployment (this may take several minutes)..."
-    log "  Playbook: deploy-slm-manager.yml --skip-tags seed,provision"
+    # #6600: keep `provision` so backend role applies to 00-SLM-Manager in
+    # single-host mode. Skip only `seed` — fleet seeding requires SLM DB
+    # rows that don't exist yet on a fresh install.
+    log "  Playbook: deploy-slm-manager.yml --skip-tags seed"
     info "  Live progress below — full output also in ${LOG_FILE}"
     echo
 
@@ -552,7 +641,7 @@ EOF
     ansible-playbook \
         -i "${inventory}" \
         playbooks/deploy-slm-manager.yml \
-        --skip-tags "seed,provision" \
+        --skip-tags "seed" \
         -e "slm_admin_password=${ADMIN_PASSWORD}" \
         -e "target_host=localhost" \
         2>&1 | tee -a "${LOG_FILE}" | \
@@ -792,7 +881,40 @@ EOF
 # =============================================================================
 
 prompt_config() {
+    # #7057: env-var overrides skip the corresponding interactive prompt
+    # so the script can run from CI / cron / runbooks without a TTY.
+    #   AUTOBOT_INSTALL_BRANCH=<branch>     skips the branch prompt
+    #   AUTOBOT_SLM_ADMIN_PASSWORD=<pass>   skips the password prompt
+    #   (interface override is in detect_local_ip via AUTOBOT_INSTALL_INTERFACE)
+    if [[ -n "${AUTOBOT_INSTALL_BRANCH:-}" ]]; then
+        GIT_BRANCH="${AUTOBOT_INSTALL_BRANCH}"
+    fi
+    if [[ -n "${AUTOBOT_SLM_ADMIN_PASSWORD:-}" ]]; then
+        ADMIN_PASSWORD="${AUTOBOT_SLM_ADMIN_PASSWORD}"
+    fi
+
+    # #7075: preserve existing admin password on reinstall.
+    # The install wizard is the source of truth for SLM_ADMIN_PASSWORD;
+    # silently rotating it on every reinstall is a footgun (operator
+    # discovers locked-out admins after the fact). Only rotate if:
+    #   - secrets file does not exist yet (truly first install), OR
+    #   - --rotate-secrets flag explicitly passed by user
+    local secrets_file="/etc/autobot/slm-secrets.env"
+    if [[ -f "${secrets_file}" ]] && [[ "${ROTATE_SECRETS:-false}" != true ]]; then
+        local existing_pass
+        existing_pass=$(grep -E '^SLM_ADMIN_PASSWORD=' "${secrets_file}" 2>/dev/null | cut -d'=' -f2- || true)
+        if [[ -n "${existing_pass}" ]]; then
+            if [[ -n "${ADMIN_PASSWORD}" && "${ADMIN_PASSWORD}" != "${existing_pass}" ]]; then
+                warn "AUTOBOT_SLM_ADMIN_PASSWORD env-var ignored — existing wizard-set password preserved."
+                warn "  To rotate: rerun with --rotate-secrets (warns + replaces) or edit ${secrets_file} manually."
+            fi
+            ADMIN_PASSWORD="${existing_pass}"
+            info "Preserving existing SLM_ADMIN_PASSWORD from ${secrets_file}"
+        fi
+    fi
+
     if ${UNATTENDED}; then
+        GIT_BRANCH="${GIT_BRANCH:-${DEFAULT_BRANCH}}"
         if [[ -z "${ADMIN_PASSWORD}" ]]; then
             ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20)
         fi
@@ -802,19 +924,23 @@ prompt_config() {
     echo -e "${YELLOW}Configuration:${NC}"
     echo
 
-    echo -e "  ${CYAN}[1/2]${NC} Git branch to install:"
-    read -rp "  [${DEFAULT_BRANCH}] > " input
-    GIT_BRANCH="${input:-${DEFAULT_BRANCH}}"
+    if [[ -z "${GIT_BRANCH}" ]]; then
+        echo -e "  ${CYAN}[1/2]${NC} Git branch to install:"
+        read -rp "  [${DEFAULT_BRANCH}] > " input
+        GIT_BRANCH="${input:-${DEFAULT_BRANCH}}"
+    fi
 
-    echo
-    echo -e "  ${CYAN}[2/2]${NC} SLM admin password:"
-    read -rsp "  (leave blank to auto-generate) > " input
-    echo
-    if [[ -n "${input}" ]]; then
-        ADMIN_PASSWORD="${input}"
-    else
-        ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20)
-        info "  Password will be auto-generated"
+    if [[ -z "${ADMIN_PASSWORD}" ]]; then
+        echo
+        echo -e "  ${CYAN}[2/2]${NC} SLM admin password:"
+        read -rsp "  (leave blank to auto-generate) > " input
+        echo
+        if [[ -n "${input}" ]]; then
+            ADMIN_PASSWORD="${input}"
+        else
+            ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20)
+            info "  Password will be auto-generated"
+        fi
     fi
     echo
 }
@@ -858,6 +984,7 @@ parse_args() {
             --branch=*)       GIT_BRANCH="${1#*=}";    shift ;;
             --admin-pass=*)   ADMIN_PASSWORD="${1#*=}"; shift ;;
             --ip=*)           OVERRIDE_IP="${1#*=}";    shift ;;
+            --rotate-secrets) ROTATE_SECRETS=true;     shift ;;
             --help|-h)        print_usage; exit 0 ;;
             *)                fatal "Unknown option: $1 (use --help for usage)" ;;
         esac

@@ -209,12 +209,12 @@
 import { ref, onMounted, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { getCssVar } from '@/composables/useCssVars'
+import { useThreatIntelligence, type CheckUrlResult } from '@/composables/security/useThreatIntelligence'
 
 const { t } = useI18n()
 const logger = createLogger('ThreatIntelligenceDashboard')
+const { fetchThreatIntelStatus, fetchDomainSecurityStats, checkUrl: checkUrlApi } = useThreatIntelligence()
 
 // State
 const loading = ref(false)
@@ -236,47 +236,28 @@ const domainStats = reactive({
   threat_intelligence: null as Record<string, unknown> | null
 })
 
-interface CheckResult {
-  success: boolean
-  url: string
-  overall_score: number
-  threat_level: string
-  virustotal_score: number | null
-  urlvoid_score: number | null
-  sources_checked: number
-  cached: boolean
-  message?: string
-}
-
-const checkResult = ref<CheckResult | null>(null)
-const checkHistory = ref<CheckResult[]>([])
+const checkResult = ref<CheckUrlResult | null>(null)
+const checkHistory = ref<CheckUrlResult[]>([])
 
 // Methods
 async function refreshStatus() {
   loading.value = true
   try {
-    const [statusResponse, statsResponse] = await Promise.all([
-      apiClient.get(`${getApiBase()}/security/threat-intel/status`),
-      apiClient.get(`${getApiBase()}/security/domain-security/stats`)
+    const [threatStatus, stats] = await Promise.all([
+      fetchThreatIntelStatus(),
+      fetchDomainSecurityStats()
     ])
 
-    const statusData = (statusResponse as { data?: Record<string, unknown> }).data
-    if (statusData) {
-      status.any_service_configured = statusData.any_service_configured as boolean
-      status.virustotal = statusData.virustotal as Record<string, unknown> | null
-      status.urlvoid = statusData.urlvoid as Record<string, unknown> | null
-      status.cache_stats = statusData.cache_stats as Record<string, unknown> | null
-    }
+    status.any_service_configured = threatStatus.any_service_configured
+    status.virustotal = threatStatus.virustotal
+    status.urlvoid = threatStatus.urlvoid
+    status.cache_stats = threatStatus.cache_stats
 
-    const statsData = (statsResponse as { data?: Record<string, unknown> }).data
-    if (statsData?.success) {
-      const stats = (statsData.stats as Record<string, unknown>) || {}
-      domainStats.whitelist_count = (stats.whitelist_count as number) || 0
-      domainStats.blacklist_count = (stats.blacklist_count as number) || 0
-      domainStats.suspicious_tlds_count = (stats.suspicious_tlds_count as number) || 0
-      domainStats.settings = (stats.settings as Record<string, unknown>) || null
-      domainStats.threat_intelligence = (stats.threat_intelligence as Record<string, unknown>) || null
-    }
+    domainStats.whitelist_count = stats.whitelist_count
+    domainStats.blacklist_count = stats.blacklist_count
+    domainStats.suspicious_tlds_count = stats.suspicious_tlds_count
+    domainStats.settings = stats.settings
+    domainStats.threat_intelligence = stats.threat_intelligence
   } catch (error) {
     logger.error('Failed to fetch threat intel status', error)
   } finally {
@@ -291,18 +272,12 @@ async function checkUrl() {
   checkResult.value = null
 
   try {
-    const response = await apiClient.post(`${getApiBase()}/security/threat-intel/check-url`, {
-      url: urlToCheck.value
-    })
-
-    const responseData = (response as { data?: CheckResult }).data
-    if (responseData) {
-      checkResult.value = responseData
-      // Add to history (keep last 10)
-      checkHistory.value.unshift(responseData)
-      if (checkHistory.value.length > 10) {
-        checkHistory.value.pop()
-      }
+    const result = await checkUrlApi(urlToCheck.value)
+    checkResult.value = result
+    // Add to history (keep last 10)
+    checkHistory.value.unshift(result)
+    if (checkHistory.value.length > 10) {
+      checkHistory.value.pop()
     }
   } catch (error) {
     logger.error('Failed to check URL', error)

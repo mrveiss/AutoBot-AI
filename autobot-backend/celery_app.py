@@ -116,6 +116,11 @@ celery_app.conf.update(
         # Issue #544: System update tasks
         "tasks.run_system_update": {"queue": "deployments"},
         "tasks.check_available_updates": {"queue": "deployments"},
+        # Issue #5073: Memory write-path tasks (off chat hot path)
+        "memory.write_verbatim": {"queue": "memory"},
+        "memory.extract_facts": {"queue": "memory"},
+        "memory.update_graph": {"queue": "memory"},
+        "memory.compact_snapshot": {"queue": "memory"},
     },
     # Worker configuration for long-running Ansible playbooks
     # Uses centralized config from unified_config_manager
@@ -187,5 +192,12 @@ celery_app.conf.beat_schedule = {
             ssot_config.knowledge_generated_files_cleanup_schedule
         ),
         "kwargs": {"dry_run": False},
+    },
+    # Issue #5081: prune expired entries from the doc_sync:queue:done zset
+    "knowledge-sync-queue-prune": {
+        "task": "tasks.prune_sync_queue_done",
+        "schedule": _crontab_from_string(
+            ssot_config.knowledge_sync_queue_prune_schedule
+        ),
     },
 }

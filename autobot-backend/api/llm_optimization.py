@@ -10,14 +10,33 @@ import logging
 import time
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
+from api.system_health import register_singleton_probe
+
+from api.schemas_agent import (
+    InferenceOptimizationSettings,
+    LLMAvailableModelsResponse,
+    LLMBenchmarkResponse,
+    LLMInferenceMetricsResponse,
+    LLMInferenceSettingsResponse,
+    LLMModelPerformanceHistoryResponse,
+    LLMModelsComparisonResponse,
+    LLMOptimizationConfigResponse,
+    LLMOptimizationHealthResponse,
+    LLMOptimizationRequest,
+    LLMOptimizationSuggestionsResponse,
+    LLMProviderOptimizationSummaryResponse,
+    LLMSelectModelResponse,
+    LLMSystemResourcesResponse,
+    LLMTrackPerformanceResponse,
+    ModelPerformanceData,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from config.manager import get_config_manager
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 from utils.model_optimizer import TaskRequest, get_model_optimizer
 
 router = APIRouter()
@@ -26,67 +45,15 @@ logger = logging.getLogger(__name__)
 config = get_config_manager()
 
 
-class OptimizationRequest(BaseModel):
-    """Model for optimization requests"""
-
-    query: str
-    task_type: str = "chat"
-    max_response_time: Optional[float] = None
-    min_quality: Optional[float] = None
-    context_length: int = 0
-    user_preference: Optional[str] = None
+register_singleton_probe("llm_optimization", get_model_optimizer)
 
 
-class ModelPerformanceData(BaseModel):
-    """Model for tracking performance data"""
-
-    model_name: str
-    response_time: float
-    response_tokens: int
-    success: bool
-    user_rating: Optional[float] = None
-
-
-class InferenceOptimizationSettings(BaseModel):
-    """Settings for inference optimization (Issue #717)."""
-
-    # Prompt compression
-    prompt_compression_enabled: bool = True
-    prompt_compression_ratio: float = 0.7
-    prompt_compression_min_length: int = 100
-    prompt_compression_preserve_code: bool = True
-    prompt_compression_aggressive: bool = False
-
-    # Response caching
-    cache_enabled: bool = True
-    cache_l1_size: int = 100
-    cache_l2_ttl: int = 300
-
-    # Cloud optimizations
-    cloud_connection_pool_size: int = 100
-    cloud_batch_window_ms: int = 50
-    cloud_max_batch_size: int = 10
-    cloud_retry_max_attempts: int = 3
-    cloud_retry_base_delay: float = 1.0
-    cloud_retry_max_delay: float = 60.0
-
-    # Local optimizations (vLLM/Ollama)
-    local_speculation_enabled: bool = False
-    local_speculation_draft_model: str = ""
-    local_speculation_num_tokens: int = 5
-    local_speculation_use_ngram: bool = False
-    local_quantization_type: str = "none"
-    local_vllm_multi_step: int = 8
-    local_vllm_prefix_caching: bool = True
-    local_vllm_async_output: bool = True
-
-
+@router.get("/health", response_model=LLMOptimizationHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_optimization_health",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/health")
 async def get_optimization_health(admin_check: bool = Depends(check_admin_permission)):
     """Get model optimization system health status
 
@@ -115,12 +82,12 @@ async def get_optimization_health(admin_check: bool = Depends(check_admin_permis
         )
 
 
+@router.get("/models/available", response_model=LLMAvailableModelsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_available_models",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/models/available")
 async def get_available_models(admin_check: bool = Depends(check_admin_permission)):
     """Get all available models with performance data
 
@@ -146,14 +113,14 @@ async def get_available_models(admin_check: bool = Depends(check_admin_permissio
         raise HTTPException(status_code=500, detail="Failed to get available models")
 
 
+@router.post("/models/select", response_model=LLMSelectModelResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="select_optimal_model",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.post("/models/select")
 async def select_optimal_model(
-    request: OptimizationRequest, admin_check: bool = Depends(check_admin_permission)
+    request: LLMOptimizationRequest, admin_check: bool = Depends(check_admin_permission)
 ):
     """Select the optimal model for a given task
 
@@ -209,12 +176,12 @@ async def select_optimal_model(
         raise HTTPException(status_code=500, detail="Failed to select optimal model")
 
 
+@router.post("/models/performance/track", response_model=LLMTrackPerformanceResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="track_model_performance",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.post("/models/performance/track")
 async def track_model_performance(
     performance_data: ModelPerformanceData,
     admin_check: bool = Depends(check_admin_permission),
@@ -248,12 +215,12 @@ async def track_model_performance(
         raise HTTPException(status_code=500, detail="Failed to track performance")
 
 
+@router.get("/models/performance/history/{model_name}", response_model=LLMModelPerformanceHistoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_model_performance_history",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/models/performance/history/{model_name}")
 async def get_model_performance_history(
     model_name: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -283,12 +250,12 @@ async def get_model_performance_history(
         raise HTTPException(status_code=500, detail="Failed to get performance history")
 
 
+@router.get("/optimization/suggestions", response_model=LLMOptimizationSuggestionsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_optimization_suggestions",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/optimization/suggestions")
 async def get_optimization_suggestions(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -312,12 +279,12 @@ async def get_optimization_suggestions(
         )
 
 
+@router.get("/models/comparison", response_model=LLMModelsComparisonResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="compare_models",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/models/comparison")
 async def compare_models(admin_check: bool = Depends(check_admin_permission)):
     """Compare all available models by performance metrics
 
@@ -369,12 +336,12 @@ async def compare_models(admin_check: bool = Depends(check_admin_permission)):
         raise HTTPException(status_code=500, detail="Failed to compare models")
 
 
+@router.post("/models/benchmark/{model_name}", response_model=LLMBenchmarkResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="benchmark_model",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.post("/models/benchmark/{model_name}")
 async def benchmark_model(
     model_name: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -434,12 +401,12 @@ async def benchmark_model(
         raise HTTPException(status_code=500, detail="Failed to benchmark model")
 
 
+@router.get("/system/resources", response_model=LLMSystemResourcesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_resources",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/system/resources")
 async def get_system_resources(admin_check: bool = Depends(check_admin_permission)):
     """Get current system resources for model optimization
 
@@ -494,12 +461,12 @@ async def get_system_resources(admin_check: bool = Depends(check_admin_permissio
         raise HTTPException(status_code=500, detail="Failed to get system resources")
 
 
+@router.get("/config", response_model=LLMOptimizationConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_optimization_config",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/config")
 async def get_optimization_config(admin_check: bool = Depends(check_admin_permission)):
     """Get current optimization configuration
 
@@ -604,12 +571,12 @@ def _get_local_settings(opt_config: dict) -> dict:
     }
 
 
+@router.get("/inference/settings", response_model=LLMInferenceSettingsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_inference_optimization_settings",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/inference/settings")
 async def get_inference_optimization_settings(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -649,12 +616,12 @@ async def get_inference_optimization_settings(
         )
 
 
+@router.post("/inference/settings", response_model=LLMInferenceSettingsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_inference_optimization_settings",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.post("/inference/settings")
 async def update_inference_optimization_settings(
     settings: InferenceOptimizationSettings,
     admin_check: bool = Depends(check_admin_permission),
@@ -721,12 +688,12 @@ async def update_inference_optimization_settings(
         )
 
 
+@router.get("/inference/metrics", response_model=LLMInferenceMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_inference_metrics",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/inference/metrics")
 async def get_inference_metrics(admin_check: bool = Depends(check_admin_permission)):
     """
     Get inference optimization metrics (Issue #717).
@@ -735,7 +702,7 @@ async def get_inference_metrics(admin_check: bool = Depends(check_admin_permissi
     Issue #744: Requires admin authentication.
     """
     try:
-        llm_interface = LLMInterface()
+        llm_interface = get_llm_service()
         metrics = llm_interface.get_metrics()
 
         return {
@@ -756,12 +723,12 @@ async def get_inference_metrics(admin_check: bool = Depends(check_admin_permissi
         )
 
 
+@router.get("/inference/provider/{provider_type}/optimizations", response_model=LLMProviderOptimizationSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_provider_optimization_summary",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/inference/provider/{provider_type}/optimizations")
 async def get_provider_optimization_summary(
     provider_type: str, admin_check: bool = Depends(check_admin_permission)
 ):

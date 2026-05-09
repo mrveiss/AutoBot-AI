@@ -15,7 +15,7 @@ import logging
 from typing import Any, Callable, Dict, List
 
 from enhanced_memory_manager_async import TaskPriority
-from task_execution_tracker import task_tracker
+from task_execution_tracker import get_task_tracker
 
 from .models import Decision, DecisionContext
 from .time_provider import TimeProvider
@@ -52,7 +52,7 @@ class DecisionEngine:
     async def make_decision(self, decision_context: DecisionContext) -> Decision:
         """Make a decision based on provided context."""
 
-        async with task_tracker.track_task(
+        async with get_task_tracker().track_task(
             "Decision Making",
             f"Making {decision_context.decision_type.value} decision",
             agent_type="decision_engine",

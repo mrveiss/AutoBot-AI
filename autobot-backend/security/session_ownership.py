@@ -19,7 +19,7 @@ from typing import Dict, Optional
 
 from fastapi import HTTPException, Request
 
-from auth_middleware import auth_middleware
+from auth_middleware import get_auth_middleware
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +175,7 @@ class SessionOwnershipValidator:
         Raises:
             HTTPException: 401 if not authenticated
         """
-        user_data = auth_middleware.get_user_from_request(request)
+        user_data = get_auth_middleware().get_user_from_request(request)
 
         if not user_data:
             logger.warning(
@@ -228,7 +228,7 @@ class SessionOwnershipValidator:
             enforcement_mode: Current enforcement mode
         """
         try:
-            auth_middleware.security_layer.audit_log(
+            get_auth_middleware().security_layer.audit_log(
                 action="unauthorized_conversation_access",
                 user=username,
                 outcome="log_only" if enforcement_mode == "log_only" else "denied",
@@ -293,7 +293,7 @@ class SessionOwnershipValidator:
             enforcement_mode: Current enforcement mode
         """
         try:
-            auth_middleware.security_layer.audit_log(
+            get_auth_middleware().security_layer.audit_log(
                 action="conversation_accessed",
                 user=username,
                 outcome="success",
@@ -443,7 +443,7 @@ class SessionOwnershipValidator:
         Returns the result dict when a fast path applies, or None to signal
         that the caller should proceed to the full ownership check.
         """
-        if user_data.get("auth_disabled") or not auth_middleware.enable_auth:
+        if user_data.get("auth_disabled") or not get_auth_middleware().enable_auth:
             logger.debug(
                 f"Auth disabled - allowing access to session {session_id[:8]}..."
             )

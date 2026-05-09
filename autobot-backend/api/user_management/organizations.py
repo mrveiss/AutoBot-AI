@@ -10,10 +10,18 @@ Used in multi_company and provider deployment modes.
 
 import logging
 import uuid
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from api.schemas_agent import (
+    OrganizationCreate,
+    OrganizationCreatedResponse,
+    OrganizationDeletedResponse,
+    OrganizationListResponse,
+    OrganizationResponse,
+    OrganizationStatsResponse,
+    OrganizationUpdate,
+)
 
 from api.user_management.dependencies import (
     get_organization_service,
@@ -29,95 +37,6 @@ from user_management.services.organization_service import (
 
 router = APIRouter(prefix="/organizations", tags=["Organizations"])
 logger = logging.getLogger(__name__)
-
-
-# -------------------------------------------------------------------------
-# Request/Response Models
-# -------------------------------------------------------------------------
-
-
-class OrganizationCreate(BaseModel):
-    """Request model for creating an organization."""
-
-    name: str = Field(
-        ..., min_length=1, max_length=255, description="Organization name"
-    )
-    slug: Optional[str] = Field(
-        None,
-        max_length=100,
-        description="URL-safe slug (auto-generated if not provided)",
-    )
-    description: Optional[str] = Field(None, max_length=500, description="Description")
-    settings: Optional[dict] = Field(
-        default_factory=dict, description="Organization settings"
-    )
-    subscription_tier: str = Field("free", description="Subscription tier")
-    max_users: int = Field(-1, description="Maximum users (-1 for unlimited)")
-
-
-class OrganizationUpdate(BaseModel):
-    """Request model for updating an organization."""
-
-    name: Optional[str] = Field(None, min_length=1, max_length=255, description="Name")
-    description: Optional[str] = Field(None, max_length=500, description="Description")
-    settings: Optional[dict] = Field(None, description="Settings")
-    subscription_tier: Optional[str] = Field(None, description="Subscription tier")
-    max_users: Optional[int] = Field(None, description="Maximum users")
-
-
-class OrganizationResponse(BaseModel):
-    """Response model for an organization."""
-
-    id: uuid.UUID
-    name: str
-    slug: str
-    description: Optional[str]
-    settings: dict
-    subscription_tier: str
-    max_users: int
-    is_active: bool
-    created_at: str
-    updated_at: str
-
-    class Config:
-        from_attributes = True
-
-
-class OrganizationListResponse(BaseModel):
-    """Response model for paginated organization list."""
-
-    organizations: List[OrganizationResponse]
-    total: int
-    limit: int
-    offset: int
-
-
-class OrganizationCreatedResponse(BaseModel):
-    """Response for organization creation."""
-
-    success: bool = True
-    message: str
-    organization: OrganizationResponse
-
-
-class OrganizationDeletedResponse(BaseModel):
-    """Response for organization deletion."""
-
-    success: bool = True
-    message: str
-
-
-class OrganizationStatsResponse(BaseModel):
-    """Response for organization statistics."""
-
-    organization_id: str
-    name: str
-    slug: str
-    subscription_tier: str
-    users: dict
-    teams: dict
-    is_active: bool
-    created_at: Optional[str]
 
 
 # -------------------------------------------------------------------------

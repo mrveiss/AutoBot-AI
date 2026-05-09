@@ -29,7 +29,7 @@
 
   vars:
     backup_dir: /opt/autobot/backups
-    backup_timestamp: "{{ ansible_date_time.epoch }}"
+    backup_timestamp: "{{ ansible_facts['date_time'].epoch }}"
     decommission_backup_path: "{{ backup_dir }}/decommission-{{ backup_timestamp }}"
     default_data_dirs:
       - /var/lib/redis
@@ -122,9 +122,9 @@
           ansible.builtin.copy:
             dest: "{{ decommission_backup_path }}/manifest.yml"
             content: |
-              hostname: {{ ansible_hostname }}
-              ip_address: {{ ansible_default_ipv4.address }}
-              timestamp: {{ ansible_date_time.iso8601 }}
+              hostname: {{ ansible_facts['hostname'] }}
+              ip_address: {{ ansible_facts['default_ipv4'].address }}
+              timestamp: {{ ansible_facts['date_time'].iso8601 }}
               directories: {{ _existing_dirs | to_json }}
             mode: '0640'
           when: _existing_dirs | length > 0
@@ -402,9 +402,9 @@
       ansible.builtin.debug:
         msg: |
           ========================================
-          Node decommission COMPLETE: {{ ansible_hostname }}
+          Node decommission COMPLETE: {{ ansible_facts['hostname'] }}
           ========================================
-          - IP: {{ ansible_default_ipv4.address }}
+          - IP: {{ ansible_facts['default_ipv4'].address }}
           - Services: stopped and removed
           - Systemd units: removed
           - Application code: /opt/autobot removed

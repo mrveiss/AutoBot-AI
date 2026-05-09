@@ -40,6 +40,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable, Optional
 
+from autobot_shared.redis_client import get_async_redis_client
 from events.types import AgentEvent, EventType, ObservationContent, TaskArtifact
 
 logger = logging.getLogger(__name__)
@@ -127,17 +128,13 @@ class RedisEventStreamManager(EventStreamManager):
         self.config = config or EventStreamConfig()
         self._redis: Any = None
         self._pubsub: Any = None
-        self._initialized = False
         self._listeners: dict[str, list[Callable]] = {}
 
     async def _get_redis(self) -> Any:
         """Get async Redis client with lazy initialization"""
         if self._redis is None:
             try:
-                from autobot_shared.redis_client import get_async_redis_client
-
                 self._redis = await get_async_redis_client(database="main")
-                self._initialized = True
                 logger.debug("Event stream Redis connection established")
             except Exception as e:
                 logger.error("Failed to connect to Redis for event stream: %s", e)
@@ -547,7 +544,6 @@ class RedisEventStreamManager(EventStreamManager):
             await self._redis.close()
             self._redis = None
 
-        self._initialized = False
         logger.debug("Event stream connections closed")
 
 

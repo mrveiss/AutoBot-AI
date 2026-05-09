@@ -42,7 +42,7 @@ from api.knowledge_grounding_models import (
     ReviewTicketStatus,
     SourceType,
 )
-from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)
@@ -69,37 +69,16 @@ _DECAY_AGING = 0.6  # 30-90 days: 60% of base
 _DECAY_STALE = 0.4  # > 90 days: 40% of base (stale)
 
 
-class ConflictResolver:
+class ConflictResolver(AsyncRedisClientMixin):
     """Service for resolving conflicts between KB facts and agent claims.
 
     Compares confidence scores of competing information sources,
     applies age-based decay to older facts, and determines which
     source represents ground truth. Escalates uncertain cases to
     human review.
-
-    Attributes:
-        _redis_client: Async Redis client for persistence
     """
 
-    def __init__(self):
-        """Initialize ConflictResolver.
-
-        Sets up Redis connection for storing review tickets and
-        conflict history (lazy initialization on first use).
-        """
-        self._redis_client = None
-
-    async def _get_redis_client(self):
-        """Get or initialize Redis client (lazy loading).
-
-        Returns:
-            Redis async client connected to analytics database
-        """
-        if self._redis_client is None:
-            self._redis_client = await get_async_redis_client(
-                database=_REDIS_DATABASE
-            )
-        return self._redis_client
+    _redis_database = _REDIS_DATABASE
 
     def _calculate_age_decay(self, fact: KBFact) -> float:
         """Apply age decay to knowledge base fact.
@@ -357,7 +336,7 @@ class ConflictResolver:
         )
 
         try:
-            redis = await self._get_redis_client()
+            redis = await self._get_redis()
 
             # Store update record for audit trail
             update_record = {
@@ -433,7 +412,7 @@ class ConflictResolver:
         logger.debug(f"Created review ticket: {ticket.ticket_id} (priority={priority})")
 
         try:
-            redis = await self._get_redis_client()
+            redis = await self._get_redis()
 
             # Store ticket for human review team
             ticket_key = f"review_ticket:{ticket.ticket_id}"
@@ -502,7 +481,7 @@ class ConflictResolver:
         )
 
         try:
-            redis = await self._get_redis_client()
+            redis = await self._get_redis()
             ticket_key = f"review_ticket:{ticket_id}"
 
             # Retrieve ticket data
@@ -555,7 +534,7 @@ class ConflictResolver:
         )
 
         try:
-            redis = await self._get_redis_client()
+            redis = await self._get_redis()
             ticket_key = f"review_ticket:{ticket_id}"
 
             # Retrieve and update

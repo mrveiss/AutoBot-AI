@@ -11,6 +11,7 @@ import { ref, computed } from 'vue'
 import { useApiWithState } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { useLoadingState } from '@/composables/useLoadingState'
 import type {
   Operation,
   OperationsListResponse,
@@ -22,6 +23,7 @@ import type {
 } from '@/types/operations'
 import { isTerminalStatus } from '@/types/operations'
 import { getApiBase } from '@/config/ssot-config'
+import { useProbeBackedHealth } from '@/composables/useProbeBackedHealth'
 
 const logger = createLogger('useOperationsApi')
 
@@ -108,28 +110,33 @@ export function useOperationsApi() {
     },
 
     /**
-     * Get operations service health status
+     * Get operations service health status.
+     *
+     * Issue #6902: migrated off the legacy /api/long-running/health (sunset
+     * 2026-09-02) onto the canonical aggregator at /api/system/health. The
+     * `long_running` probe populates `data` with the four diagnostic fields
+     * the UI consumes.
      */
-    async getHealth(): Promise<OperationsHealthResponse | null> {
-      return withErrorHandling(
-        async () => {
-          const response = await api.get(`${getApiBase()}/long-running/health`)
-          return await response.json()
-        },
-        {
-          errorMessage: 'Failed to check operations health',
-          fallbackValue: {
-            status: 'unavailable',
-            active_operations: 0,
-            total_operations: 0,
-            redis_connected: false,
-            background_processor_running: false,
-            message: 'Service unavailable'
-          },
-          silent: true
-        }
-      )
-    }
+    getHealth: useProbeBackedHealth<OperationsHealthResponse>({
+      probeName: 'long_running',
+      buildHealthy: (probe, data) => ({
+        status: 'healthy',
+        active_operations: Number(data.active_operations ?? 0),
+        total_operations: Number(data.total_operations ?? 0),
+        redis_connected: Boolean(data.redis_connected),
+        background_processor_running: Boolean(data.background_processor_running),
+        message: probe.detail,
+      }),
+      buildUnavailable: (message) => ({
+        status: 'unavailable',
+        active_operations: 0,
+        total_operations: 0,
+        redis_connected: false,
+        background_processor_running: false,
+        message,
+      }),
+      errorMessage: 'Failed to check operations health',
+    }),
   }
 }
 
@@ -145,7 +152,7 @@ export function useOperationsState() {
   const activeCount = ref(0)
   const completedCount = ref(0)
   const failedCount = ref(0)
-  const loading = ref(false)
+  const { isLoading: loading, wrap } = useLoadingState()
   const errors = ref<string[]>([])
   const error = computed<string | null>(() =>
     errors.value.length > 0 ? errors.value.join('; ') : null,
@@ -187,25 +194,23 @@ export function useOperationsState() {
    * Load operations list
    */
   async function loadOperations() {
-    loading.value = true
     errors.value = []
-
-    try {
-      const result = await operationsApi.listOperations(filter.value)
-      if (result) {
-        operations.value = result.operations
-        totalCount.value = result.total_count
-        activeCount.value = result.active_count
-        completedCount.value = result.completed_count
-        failedCount.value = result.failed_count
+    await wrap(async () => {
+      try {
+        const result = await operationsApi.listOperations(filter.value)
+        if (result) {
+          operations.value = result.operations
+          totalCount.value = result.total_count
+          activeCount.value = result.active_count
+          completedCount.value = result.completed_count
+          failedCount.value = result.failed_count
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Unknown error'
+        errors.value = [...errors.value, msg]
+        logger.error('Failed to load operations:', e)
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Unknown error'
-      errors.value = [...errors.value, msg]
-      logger.error('Failed to load operations:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**

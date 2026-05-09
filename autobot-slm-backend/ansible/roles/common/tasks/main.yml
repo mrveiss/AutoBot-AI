@@ -2,15 +2,19 @@
 # Common role - Base system configuration for all AutoBot hosts
 # Applied to all VMs before service-specific roles
 
-- name: "Common | Update apt cache"
-  apt:
-    update_cache: yes
-    cache_valid_time: 3600
-  become: yes
-  retries: 3
-  delay: 5
-  register: _apt_update
-  until: _apt_update is success
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml for
+# rationale. Ansible's apt module aborts on any partial-fetch warning even
+# with retries:3 + cache_valid_time, because every retry sees the same
+# unreachable PPA and hits the same hard failure.
+- name: "Common | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
   tags: ['common', 'packages']
 
 - name: "Common | Install base packages"
@@ -186,12 +190,12 @@
 - name: "Common | Update /etc/hosts"
   lineinfile:
     path: /etc/hosts
-    line: "{{ ansible_default_ipv4.address }} {{ inventory_hostname }} {{ inventory_hostname_short }}"
-    regexp: "^{{ ansible_default_ipv4.address }}"
+    line: "{{ ansible_facts['default_ipv4'].address }} {{ inventory_hostname }} {{ inventory_hostname_short }}"
+    regexp: "^{{ ansible_facts['default_ipv4'].address }}"
     state: present
   become: yes
   when:
-    - ansible_default_ipv4.address is defined
+    - ansible_facts['default_ipv4'].address is defined
     - inventory_hostname != '00-SLM-Manager'
   tags: ['common', 'hostname']
 
@@ -245,7 +249,7 @@
     msg:
       - "=== Common Role Configuration Complete ==="
       - "Hostname: {{ inventory_hostname }}"
-      - "IP Address: {{ ansible_default_ipv4.address | default('N/A') }}"
+      - "IP Address: {{ ansible_facts['default_ipv4'].address | default('N/A') }}"
       - "AutoBot User: autobot"
       - "Base Packages: Installed"
       - "Firewall: Enabled (SSH allowed)"

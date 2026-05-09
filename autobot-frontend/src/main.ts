@@ -24,6 +24,13 @@ import './assets/styles/view.css'
 // Import CSS Design System (Issue #704/#901) - SSOT - must come AFTER legacy to override
 import './assets/css/index.css'
 
+// Global reset (* { margin:0; padding:0; box-sizing:border-box }, body { margin:0;
+// min-height:100vh }) — must load AFTER vue-notus and component packages so their
+// leaked unscoped body{padding...} rules can't push the layout off-viewport.
+// Without this, the page does not fill the viewport and views without
+// .view-container don't scroll properly.
+import './assets/base.css'
+
 // Initialize theme early to prevent flash of unstyled content
 import { initializeTheme } from '@/composables/useTheme'
 initializeTheme()
@@ -150,8 +157,19 @@ if ('serviceWorker' in navigator) {
         }
       })
     } catch (error) {
-      logger.warn('Service Worker registration failed:', error)
-      // Service Worker is optional - app works fine without it
+      // Service Worker is optional — app works fine without it.
+      // #6790: SecurityError on self-signed cert deploys is expected and not
+      // actionable for users; surface it at debug only. Other failures
+      // (network, syntax, scope) are still real → warn.
+      const isCertError =
+        error instanceof Error &&
+        error.name === 'SecurityError' &&
+        /SSL certificate/i.test(error.message)
+      if (isCertError) {
+        logger.debug('Service Worker registration skipped (untrusted cert)')
+      } else {
+        logger.warn('Service Worker registration failed:', error)
+      }
     }
   })
 }

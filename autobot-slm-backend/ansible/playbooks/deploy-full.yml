@@ -21,8 +21,8 @@
   hosts: localhost
   gather_facts: false
   vars:
-    deployment_start_time: "{{ ansible_date_time.epoch }}"
-    deployment_id: "autobot-{{ ansible_date_time.date }}-{{ ansible_date_time.time | replace(':', '') }}"
+    deployment_start_time: "{{ ansible_facts['date_time'].epoch }}"
+    deployment_id: "autobot-{{ ansible_facts['date_time'].date }}-{{ ansible_facts['date_time'].time | replace(':', '') }}"
 
   tasks:
     - name: Display deployment information
@@ -30,7 +30,7 @@
         msg:
           - "🤖 AutoBot Hyper-V Deployment Starting"
           - "Deployment ID: {{ deployment_id }}"
-          - "Timestamp: {{ ansible_date_time.iso8601 }}"
+          - "Timestamp: {{ ansible_facts['date_time'].iso8601 }}"
           - "Target Infrastructure: 5 Hyper-V VMs"
           - "Migration: Docker Containers → Virtual Machines"
 
@@ -45,7 +45,7 @@
       copy:
         content: |
           Deployment ID: {{ deployment_id }}
-          Start Time: {{ ansible_date_time.iso8601 }}
+          Start Time: {{ ansible_facts['date_time'].iso8601 }}
           Infrastructure: 5 Hyper-V VMs
           Migration: Docker → VM
         dest: "/var/log/autobot/deployment/{{ deployment_id }}.log"
@@ -227,7 +227,7 @@
   hosts: localhost
   gather_facts: false
   vars:
-    deployment_end_time: "{{ ansible_date_time.epoch }}"
+    deployment_end_time: "{{ ansible_facts['date_time'].epoch }}"
     # Short aliases for inventory-derived IPs (no hardcoded addresses)
     _frontend_ip: "{{ frontend_host }}"
     _backend_ip: "{{ backend_host }}"
@@ -256,7 +256,7 @@
           - ""
           - "⏱️  Deployment Duration: {{ deployment_duration }} seconds ({{ (deployment_duration | int / 60) | round(1) }} minutes)"
           - "🆔 Deployment ID: {{ deployment_id }}"
-          - "📅 Completed: {{ ansible_date_time.iso8601 }}"
+          - "📅 Completed: {{ ansible_facts['date_time'].iso8601 }}"
           - ""
           - "🌐 Service Endpoints:"
           - "   Frontend:     http://{{ _frontend_ip }}"

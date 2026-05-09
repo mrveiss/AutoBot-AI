@@ -2,24 +2,32 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 import logging
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
+from api.system_health import register_redis_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_async_redis_client
 from services.config_service import ConfigService
 from utils.connection_utils import ConnectionTester
+from api.schemas_system import (
+    RedisConfigResponse,
+    RedisConnectionStatusResponse,
+    RedisHealthResponse,
+)
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
 
+@router.get("/config", response_model=RedisConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_config",
     error_code_prefix="REDIS",
 )
-@router.get("/config")
 async def get_redis_config():
     """Get current Redis configuration"""
     try:
@@ -29,12 +37,12 @@ async def get_redis_config():
         raise HTTPException(status_code=500, detail="Error getting Redis config")
 
 
+@router.post("/config", response_model=RedisConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_redis_config",
     error_code_prefix="REDIS",
 )
-@router.post("/config")
 async def update_redis_config(config_data: dict):
     """Update Redis configuration"""
     try:
@@ -45,12 +53,12 @@ async def update_redis_config(config_data: dict):
         raise HTTPException(status_code=500, detail="Error updating Redis config")
 
 
+@router.get("/status", response_model=RedisConnectionStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_status",
     error_code_prefix="REDIS",
 )
-@router.get("/status")
 async def get_redis_status():
     """Get Redis connection status"""
     try:
@@ -64,12 +72,12 @@ async def get_redis_status():
         }
 
 
+@router.post("/test_connection", response_model=RedisConnectionStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_redis_connection",
     error_code_prefix="REDIS",
 )
-@router.post("/test_connection")
 async def test_redis_connection():
     """Test Redis connection with current configuration"""
     try:
@@ -83,12 +91,15 @@ async def test_redis_connection():
         }
 
 
+register_redis_probe("redis", database="main")
+
+
+@router.get("/health", response_model=RedisHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_health",
     error_code_prefix="REDIS",
 )
-@router.get("/health")
 async def get_redis_health():
     """Get Redis health status for frontend health checks"""
     try:

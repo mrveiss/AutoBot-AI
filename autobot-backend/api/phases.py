@@ -19,9 +19,14 @@ from typing import List
 
 from autobot_shared.time_utils import utc_timestamp
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
 from project_state_manager import get_project_state_manager
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.schemas_system import (
+    PhaseEntry,
+    PhasesStatusResponse,
+    ValidationRunResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,33 +38,17 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-class PhaseEntry(BaseModel):
-    id: str
-    name: str
-    completion: float
-    is_active: bool
-    is_completed: bool
-
-
-class PhasesStatusResponse(BaseModel):
-    status: str
-    service: str
-    phases: List[PhaseEntry]
-    timestamp: str
-
-
-class ValidationRunResponse(BaseModel):
-    status: str
-    message: str
-    timestamp: str
-
-
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
 
 @router.get("/status", response_model=PhasesStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_phases_status",
+    error_code_prefix="PHASES",
+)
 async def get_phases_status() -> PhasesStatusResponse:
     """Return phase completion status for all development phases."""
     try:
@@ -90,6 +79,11 @@ async def get_phases_status() -> PhasesStatusResponse:
 
 
 @router.post("/validation/run", response_model=ValidationRunResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_phases_validation",
+    error_code_prefix="PHASES",
+)
 async def run_phases_validation() -> ValidationRunResponse:
     """Queue a phase validation run.
 

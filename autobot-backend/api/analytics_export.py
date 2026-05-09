@@ -29,6 +29,8 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.agent_analytics import get_agent_analytics
 from services.llm_cost_tracker import get_cost_tracker
+from api.schemas_common import DataResponse
+from api.schemas_analytics import ExportFormatsResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/export", tags=["analytics", "export"])
@@ -39,12 +41,12 @@ router = APIRouter(prefix="/export", tags=["analytics", "export"])
 # ============================================================================
 
 
+@router.get("/csv/costs", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_cost_csv",
-    error_code_prefix="EXPORT",
+    error_code_prefix="ANALYTICS_EXPORT",
 )
-@router.get("/csv/costs")
 async def export_cost_csv(
     days: int = Query(default=30, ge=1, le=365, description="Number of days to export"),
     admin_check: bool = Depends(check_admin_permission),
@@ -85,12 +87,12 @@ async def export_cost_csv(
     )
 
 
+@router.get("/csv/agents", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_agent_csv",
-    error_code_prefix="EXPORT",
+    error_code_prefix="ANALYTICS_EXPORT",
 )
-@router.get("/csv/agents")
 async def export_agent_csv(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -138,12 +140,12 @@ async def export_agent_csv(
     )
 
 
+@router.get("/csv/usage", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_usage_csv",
-    error_code_prefix="EXPORT",
+    error_code_prefix="ANALYTICS_EXPORT",
 )
-@router.get("/csv/usage")
 async def export_usage_csv(
     limit: int = Query(default=1000, ge=1, le=10000, description="Max records"),
     admin_check: bool = Depends(check_admin_permission),
@@ -209,12 +211,12 @@ async def export_usage_csv(
 # ============================================================================
 
 
+@router.get("/json/full", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_full_json",
-    error_code_prefix="EXPORT",
+    error_code_prefix="ANALYTICS_EXPORT",
 )
-@router.get("/json/full")
 async def export_full_json(
     days: int = Query(default=30, ge=1, le=365, description="Number of days"),
     admin_check: bool = Depends(check_admin_permission),
@@ -367,12 +369,12 @@ def _build_agent_metrics_lines(agent_metrics: list) -> list[str]:
     return lines
 
 
+@router.get("/prometheus", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_prometheus",
-    error_code_prefix="EXPORT",
+    error_code_prefix="ANALYTICS_EXPORT",
 )
-@router.get("/prometheus")
 async def export_prometheus(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -543,12 +545,12 @@ def _get_grafana_panels() -> list:
     return panels
 
 
+@router.get("/grafana-dashboard", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_grafana_dashboard",
-    error_code_prefix="EXPORT",
+    error_code_prefix="ANALYTICS_EXPORT",
 )
-@router.get("/grafana-dashboard")
 async def export_grafana_dashboard(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -599,12 +601,12 @@ async def export_grafana_dashboard(
 # ============================================================================
 
 
+@router.get("/formats", response_model=ExportFormatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_export_formats",
-    error_code_prefix="EXPORT",
+    error_code_prefix="ANALYTICS_EXPORT",
 )
-@router.get("/formats")
 async def get_export_formats(
     admin_check: bool = Depends(check_admin_permission),
 ):

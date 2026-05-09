@@ -4,6 +4,7 @@
 import asyncio
 import importlib
 import logging
+import os
 import sys
 from datetime import datetime, timezone
 
@@ -17,6 +18,22 @@ from constants.model_constants import ModelConstants as ModelConsts
 
 # Add caching support from unified cache manager (P4 Cache Consolidation)
 from utils.advanced_cache_manager import cache_manager, cache_response
+from api.schemas_system import (
+    SystemAdminCheckResponse,
+    SystemBackupStatusResponse,
+    SystemCacheActivityResponse,
+    SystemCacheClearResponse,
+    SystemCacheCoordinatorStatsResponse,
+    SystemCacheEvictResponse,
+    SystemCacheStatsResponse,
+    SystemDynamicImportResponse,
+    SystemFrontendConfigResponse,
+    SystemHealthResponse,
+    SystemInfoResponse,
+    SystemMetricsResponse,
+    SystemPromptReloadResponse,
+    SystemReloadConfigResponse,
+)
 
 config = get_config_manager()
 
@@ -27,10 +44,68 @@ logger = logging.getLogger(__name__)
 # Issue #380: Module-level tuple for allowed dynamic import modules
 _ALLOWED_IMPORT_MODULES = (
     "src.config",
-    "src.llm_interface",
     "services",
     "utils",
 )
+
+
+# Issue #6908: surface feature-router partial-boot through the canonical
+# /api/system/health aggregator so oncall scrapers see the partial state
+# without scraping the dedicated /api/health/feature-routers endpoint.
+# Registers at import time alongside the rest of the system module.
+from api.system_health import (  # noqa: E402 — registration must happen at import
+    ComponentHealth,
+    register_health_probe,
+)
+
+
+@register_health_probe("feature_routers")
+async def _probe_feature_routers(request=None) -> ComponentHealth:
+    """Reflect ``_LOAD_RESULTS`` from #6797 into the canonical aggregator.
+
+    Per #6808, ``_LOAD_RESULTS`` is per-uvicorn-worker — each worker reports
+    its own snapshot. Cross-worker aggregation is tracked separately; this
+    probe is the per-worker view, which is sufficient for the canonical
+    surface to flag any partial boot.
+    """
+    try:
+        from initialization.router_registry.feature_routers import (
+            get_feature_router_load_results,
+        )
+
+        results = get_feature_router_load_results()
+        total = len(results)
+        if total == 0:
+            return ComponentHealth(
+                name="feature_routers",
+                status="degraded",
+                detail="load results empty — feature routers may not have been loaded yet",
+            )
+        loaded = [r for r in results if r.get("loaded")]
+        failed = [r for r in results if not r.get("loaded")]
+        if not failed:
+            return ComponentHealth(
+                name="feature_routers",
+                status="ok",
+                detail=f"{len(loaded)}/{total} routers loaded",
+                data={"loaded": len(loaded), "total": total},
+            )
+        return ComponentHealth(
+            name="feature_routers",
+            status="degraded",
+            detail=f"only {len(loaded)}/{total} routers loaded",
+            data={
+                "loaded": len(loaded),
+                "total": total,
+                "failed": [r.get("name") for r in failed],
+            },
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="feature_routers",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 async def _check_conversation_files_db(request: Request, health_status: dict) -> None:
@@ -104,8 +179,13 @@ def _build_frontend_services_config(ollama_url: str, redis_config: dict) -> dict
         "lmstudio": {
             "url": config.get(
                 "backend.llm.local.providers.lmstudio.endpoint",
-                f"http://localhost:1234",
+                ssot_config.llm.lmstudio_host,
             ),
+        },
+        # Issue #6232: Expose canonical WebSocket base URL so the frontend
+        # can validate/override the build-time ssot-config value at runtime.
+        "websocket": {
+            "url": ssot_config.websocket_url,
         },
     }
 
@@ -141,13 +221,13 @@ def _build_frontend_meta_config() -> dict:
     }
 
 
+@router.get("/frontend-config", response_model=SystemFrontendConfigResponse)
+@cache_response(cache_key="frontend_config", ttl=60)  # Cache for 1 minute
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_frontend_config",
     error_code_prefix="SYSTEM",
 )
-@router.get("/frontend-config")
-@cache_response(cache_key="frontend_config", ttl=60)  # Cache for 1 minute
 async def get_frontend_config(admin_check: bool = Depends(check_admin_permission)):
     """Get configuration values needed by the frontend.
 
@@ -175,27 +255,37 @@ async def get_frontend_config(admin_check: bool = Depends(check_admin_permission
     }
 
 
+@router.get("/health", response_model=SystemHealthResponse)
+@router.get("/system/health", response_model=SystemHealthResponse)  # Frontend compatibility alias
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_health",
     error_code_prefix="SYSTEM",
 )
-@router.get("/health")
-@router.get("/system/health")  # Frontend compatibility alias
-@cache_response(cache_key="system_health", ttl=30)  # Cache for 30 seconds
 async def get_system_health(
     request: Request = None,
 ):
-    """Get system health status.
+    """Get aggregated system health status.
 
     Public endpoint — no auth required. Frontend health monitors check this
     before login. Issue #916: removed admin_check to allow unauthenticated access.
+
+    Issue #3333: This is the canonical aggregator. Components registered via
+    ``api.system_health.register_health_probe`` are run concurrently and their
+    string-valued statuses are merged into ``components`` to preserve the
+    frontend ``HealthCheckResponse`` shape. Per-component diagnostic detail
+    (latency, error reason, structured data) lives under ``probes``.
+
+    Issue #6906: ``@cache_response`` was removed because the embedded probe
+    results flip status second-by-second; a 30s TTL hid real failures.
+    Probe execution is bounded at ~2s by the registry's per-probe timeout,
+    so the uncached aggregator is acceptable on its own.
     """
     try:
         # Import app_state to get initialization status
+        from api.system_health import collect_system_health
         from initialization.lifespan import app_state
 
-        # Check various system components
         health_status = {
             "status": "healthy",
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
@@ -224,6 +314,35 @@ async def get_system_health(
         if request:
             await _check_conversation_files_db(request, health_status)
 
+        # Issue #3333: merge registered probe results into components dict.
+        # ``components`` stays Record<string,string> for frontend compat;
+        # rich per-probe data (latency, detail, structured payload) is exposed
+        # under ``probes`` for callers that want it.
+        aggregated = await collect_system_health(request)
+        # Map probe vocabulary to the legacy frontend vocabulary
+        # (``HealthCheckResponse`` documented as Record<string,"healthy"|"unhealthy"|...>).
+        _PROBE_TO_LEGACY = {
+            "ok": "healthy",
+            "degraded": "degraded",
+            "down": "unhealthy",
+        }
+        for component in aggregated.components:
+            health_status["components"][component.name] = _PROBE_TO_LEGACY.get(
+                component.status, component.status
+            )
+        # Preserve the worst-of severity from the aggregator so a probe reporting
+        # "down" surfaces as "unhealthy" at the top level rather than being
+        # silently downgraded to "degraded".
+        if (
+            aggregated.status != "ok"
+            and health_status["status"] == "healthy"
+        ):
+            health_status["status"] = _PROBE_TO_LEGACY[aggregated.status]
+        health_status["probes"] = [
+            component.model_dump(exclude_none=True)
+            for component in aggregated.components
+        ]
+
         return health_status
 
     except Exception:
@@ -235,13 +354,36 @@ async def get_system_health(
         }
 
 
+@router.get("/system/health/probes", response_model=list[str])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_health_probes",
+    error_code_prefix="SYSTEM",
+)
+async def get_system_health_probes() -> list[str]:
+    """List names of every currently-registered health probe (#6917).
+
+    Returns the canonical set of probe names so frontend callers can
+    validate at startup that an expected probe exists before reading
+    ``probes[name=…]`` from ``GET /api/system/health``. A typo on either
+    side surfaces here as a missing-name mismatch instead of silently
+    returning ``undefined``/'unavailable' to the user.
+
+    Public endpoint — no auth required (matches /api/system/health).
+    Cheap call: returns sorted list of strings, no probe execution.
+    """
+    from api.system_health import list_registered_probes
+
+    return list_registered_probes()
+
+
+@router.get("/info", response_model=SystemInfoResponse)
+@cache_response(cache_key="system_info", ttl=300)  # Cache for 5 minutes
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_info",
     error_code_prefix="SYSTEM",
 )
-@router.get("/info")
-@cache_response(cache_key="system_info", ttl=300)  # Cache for 5 minutes
 async def get_system_info(admin_check: bool = Depends(check_admin_permission)):
     """Get system information
 
@@ -268,12 +410,12 @@ async def get_system_info(admin_check: bool = Depends(check_admin_permission)):
     return system_info
 
 
+@router.post("/reload_config", response_model=SystemReloadConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reload_system_config",
     error_code_prefix="SYSTEM",
 )
-@router.post("/reload_config")
 async def reload_system_config(admin_check: bool = Depends(check_admin_permission)):
     """Reload system configuration and clear caches
 
@@ -302,12 +444,12 @@ async def reload_system_config(admin_check: bool = Depends(check_admin_permissio
     }
 
 
+@router.get("/prompt_reload", response_model=SystemPromptReloadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reload_prompts",
     error_code_prefix="SYSTEM",
 )
-@router.get("/prompt_reload")
 async def reload_prompts(admin_check: bool = Depends(check_admin_permission)):
     """Reload prompt templates
 
@@ -334,12 +476,12 @@ async def reload_prompts(admin_check: bool = Depends(check_admin_permission)):
     }
 
 
+@router.get("/admin_check", response_model=SystemAdminCheckResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="admin_check",
     error_code_prefix="SYSTEM",
 )
-@router.get("/admin_check")
 async def admin_check(admin_check: bool = Depends(check_admin_permission)):
     """Check admin status and permissions
 
@@ -356,12 +498,12 @@ async def admin_check(admin_check: bool = Depends(check_admin_permission)):
     return admin_status
 
 
+@router.post("/dynamic_import", response_model=SystemDynamicImportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="dynamic_import",
     error_code_prefix="SYSTEM",
 )
-@router.post("/dynamic_import")
 async def dynamic_import(
     request: Request,
     module_name: str = Form(...),
@@ -398,13 +540,13 @@ async def dynamic_import(
     }
 
 
+@router.get("/health/detailed", response_model=SystemHealthResponse)
+@cache_response(cache_key="system_health_detailed", ttl=30)  # Cache for 30 seconds
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_detailed_health",
     error_code_prefix="SYSTEM",
 )
-@router.get("/health/detailed")
-@cache_response(cache_key="system_health_detailed", ttl=30)  # Cache for 30 seconds
 async def get_detailed_health(
     request: Request, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -536,13 +678,13 @@ def _determine_overall_health_status(health_status: dict) -> None:
         health_status["errors"] = error_components
 
 
+@router.get("/cache/stats", response_model=SystemCacheStatsResponse)
+@cache_response(cache_key="cache_stats", ttl=15)  # Cache for 15 seconds
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cache_stats",
     error_code_prefix="SYSTEM",
 )
-@router.get("/cache/stats")
-@cache_response(cache_key="cache_stats", ttl=15)  # Cache for 15 seconds
 async def get_cache_stats(admin_check: bool = Depends(check_admin_permission)):
     """Get cache statistics and performance metrics
 
@@ -644,13 +786,13 @@ def _analyze_key_patterns(cache_keys: list, cache_prefix: str) -> dict:
     return key_patterns
 
 
+@router.get("/cache/activity", response_model=SystemCacheActivityResponse)
+@cache_response(cache_key="cache_activity", ttl=10)  # Cache for 10 seconds
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cache_activity",
     error_code_prefix="SYSTEM",
 )
-@router.get("/cache/activity")
-@cache_response(cache_key="cache_activity", ttl=10)  # Cache for 10 seconds
 async def get_cache_activity(admin_check: bool = Depends(check_admin_permission)):
     """Get recent cache activity and key information.
 
@@ -706,13 +848,13 @@ async def get_cache_activity(admin_check: bool = Depends(check_admin_permission)
         }
 
 
+@router.get("/metrics", response_model=SystemMetricsResponse)
+@cache_response(cache_key="system_metrics", ttl=15)  # Cache for 15 seconds
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_metrics",
     error_code_prefix="SYSTEM",
 )
-@router.get("/metrics")
-@cache_response(cache_key="system_metrics", ttl=15)  # Cache for 15 seconds
 async def get_system_metrics(admin_check: bool = Depends(check_admin_permission)):
     """Get system performance metrics
 
@@ -775,12 +917,12 @@ async def get_system_metrics(admin_check: bool = Depends(check_admin_permission)
 
 
 # Issue #743: Cache coordinator endpoints for memory optimization (Phase 3.2)
+@router.get("/api/cache/stats", response_model=SystemCacheCoordinatorStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cache_coordinator_stats",
     error_code_prefix="SYSTEM",
 )
-@router.get("/api/cache/stats")
 async def get_cache_coordinator_stats(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -807,12 +949,12 @@ async def get_cache_coordinator_stats(
         )
 
 
+@router.post("/api/cache/evict", response_model=SystemCacheEvictResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="trigger_cache_eviction",
     error_code_prefix="SYSTEM",
 )
-@router.post("/api/cache/evict")
 async def trigger_cache_eviction(admin_check: bool = Depends(check_admin_permission)):
     """
     Manually trigger coordinated cache eviction.
@@ -837,12 +979,12 @@ async def trigger_cache_eviction(admin_check: bool = Depends(check_admin_permiss
         raise HTTPException(status_code=500, detail="Error triggering cache eviction")
 
 
+@router.post("/api/cache/clear/{cache_name}", response_model=SystemCacheClearResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_cache",
     error_code_prefix="SYSTEM",
 )
-@router.post("/api/cache/clear/{cache_name}")
 async def clear_cache(
     cache_name: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -874,7 +1016,12 @@ async def clear_cache(
         raise HTTPException(status_code=500, detail="Error clearing cache")
 
 
-@router.get("/system/backup/status")
+@router.get("/system/backup/status", response_model=SystemBackupStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_backup_status",
+    error_code_prefix="SYSTEM",
+)
 async def get_backup_status(
     request: Request,
     _: None = Depends(check_admin_permission),

@@ -36,13 +36,7 @@ class GoalCategory(Enum):
     UNKNOWN = "unknown"
 
 
-class RiskLevel(Enum):
-    """Risk levels for different operations."""
-
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+from autobot_shared.status_enums import RiskLevel  # noqa: E402  # #6689 consolidation
 
 
 @dataclass

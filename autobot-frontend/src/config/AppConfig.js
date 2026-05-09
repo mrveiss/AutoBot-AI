@@ -40,6 +40,7 @@ export class AppConfigService {
           port: import.meta.env.VITE_REDIS_PORT || '6379',
           protocol: 'redis'
         },
+        // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
         vnc: {
           desktop: {
             host: import.meta.env.VITE_DESKTOP_VNC_HOST,
@@ -166,7 +167,7 @@ export class AppConfigService {
         enableDebug: import.meta.env.VITE_ENABLE_DEBUG === 'true',
         enableRum: import.meta.env.VITE_ENABLE_RUM !== 'false',
         enableWebSockets: import.meta.env.VITE_ENABLE_WEBSOCKETS !== 'false',
-        enableVncDesktop: import.meta.env.VITE_ENABLE_VNC_DESKTOP !== 'false',
+        enableVncDesktop: import.meta.env.VITE_ENABLE_VNC_DESKTOP !== 'false', // DORMANT: VNC replaced by screenshot panel (#1130); see #5136
         enableNpuWorker: import.meta.env.VITE_ENABLE_NPU_WORKER !== 'false'
       },
 
@@ -188,7 +189,8 @@ export class AppConfigService {
   }
 
   /**
-   * Get VNC URL with auto-connection parameters
+   * Get VNC URL with auto-connection parameters.
+   * DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
    */
   async getVncUrl(type = 'desktop', options = {}) {
     const vncConfig = this.config.services.vnc[type];

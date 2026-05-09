@@ -13,7 +13,7 @@ import logging
 
 import aiofiles
 
-from task_execution_tracker import task_tracker
+from task_execution_tracker import get_task_tracker
 from voice_processing.models import SpeechSynthesisRequest
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ class TextToSpeechEngine:
     async def synthesize_speech(self, request: SpeechSynthesisRequest) -> bytes:
         """Convert text to speech audio"""
 
-        async with task_tracker.track_task(
+        async with get_task_tracker().track_task(
             "Speech Synthesis",
             f"Converting text to speech: {request.text[:50]}...",
             agent_type="voice_processing",

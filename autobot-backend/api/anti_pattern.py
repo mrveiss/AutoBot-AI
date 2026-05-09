@@ -16,9 +16,14 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.schemas_code import (
+    AnalysisResponse,
+    AntiPatternAnalysisRequest,
+    AntiPatternSummary,
+    SeveritySummary,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -106,6 +111,7 @@ ANTI_PATTERN_TYPE_DEFINITIONS = (
 
 # Lazy initialization for detector (thread-safe)
 import asyncio
+from api.schemas_common import DataResponse
 
 _detector_instance = None
 _detector_lock = asyncio.Lock()
@@ -152,68 +158,16 @@ def _get_health_grade(score: float) -> tuple:
     return "F", "Critical"
 
 
-# ============ Request/Response Models ============
-
-
-class AnalysisRequest(BaseModel):
-    """Request model for anti-pattern analysis"""
-
-    root_path: str = Field(default=".", description="Root path to analyze")
-    patterns: List[str] = Field(
-        default=["**/*.py"], description="Glob patterns for files to include"
-    )
-    exclude_patterns: List[str] = Field(
-        default=[
-            "__pycache__",
-            ".git",
-            "node_modules",
-            ".venv",
-            "venv",
-            "test_",
-            "_test.py",
-        ],
-        description="Patterns to exclude from analysis",
-    )
-
-
-class SeveritySummary(BaseModel):
-    """Summary of issues by severity"""
-
-    critical: int = 0
-    high: int = 0
-    medium: int = 0
-    low: int = 0
-
-
-class AntiPatternSummary(BaseModel):
-    """Summary information about detected anti-patterns"""
-
-    total_issues: int
-    severity_counts: SeveritySummary
-    health_score: float
-    summary_by_type: dict
-    analysis_time_seconds: float
-
-
-class AnalysisResponse(BaseModel):
-    """Response model for anti-pattern analysis"""
-
-    success: bool
-    summary: AntiPatternSummary
-    anti_patterns: List[dict]
-    recommendations: List[str]
-
-
 # ============ API Endpoints ============
 
 
+@router.post("/analyze", response_model=AnalysisResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_anti_patterns",
     error_code_prefix="ANTI_PATTERN",
 )
-@router.post("/analyze", response_model=AnalysisResponse)
-async def analyze_anti_patterns(request: AnalysisRequest):
+async def analyze_anti_patterns(request: AntiPatternAnalysisRequest):
     """
     Analyze codebase for anti-patterns.
 
@@ -264,12 +218,12 @@ async def analyze_anti_patterns(request: AnalysisRequest):
         raise HTTPException(status_code=500, detail="Analysis failed")
 
 
+@router.get("/cached", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cached_analysis",
     error_code_prefix="ANTI_PATTERN",
 )
-@router.get("/cached")
 async def get_cached_analysis():
     """
     Get the most recent cached analysis results.
@@ -298,13 +252,13 @@ async def get_cached_analysis():
         raise HTTPException(status_code=500, detail="Failed to retrieve cache")
 
 
+@router.post("/god-classes", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_god_classes",
+    operation="detect_god_classes",
     error_code_prefix="ANTI_PATTERN",
 )
-@router.post("/god-classes")
-async def detect_god_classes(request: AnalysisRequest):
+async def detect_god_classes(request: AntiPatternAnalysisRequest):
     """
     Detect only God Class anti-patterns.
 
@@ -348,13 +302,13 @@ async def detect_god_classes(request: AnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/circular-dependencies", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_circular_dependencies",
+    operation="detect_circular_dependencies",
     error_code_prefix="ANTI_PATTERN",
 )
-@router.post("/circular-dependencies")
-async def detect_circular_dependencies(request: AnalysisRequest):
+async def detect_circular_dependencies(request: AntiPatternAnalysisRequest):
     """
     Detect circular dependencies in the codebase.
 
@@ -393,13 +347,13 @@ async def detect_circular_dependencies(request: AnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/feature-envy", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_feature_envy",
+    operation="detect_feature_envy",
     error_code_prefix="ANTI_PATTERN",
 )
-@router.post("/feature-envy")
-async def detect_feature_envy(request: AnalysisRequest):
+async def detect_feature_envy(request: AntiPatternAnalysisRequest):
     """
     Detect Feature Envy anti-pattern.
 
@@ -439,13 +393,13 @@ async def detect_feature_envy(request: AnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/code-smells", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_code_smells",
+    operation="detect_code_smells",
     error_code_prefix="ANTI_PATTERN",
 )
-@router.post("/code-smells")
-async def detect_code_smells(request: AnalysisRequest):
+async def detect_code_smells(request: AntiPatternAnalysisRequest):
     """
     Detect general code smells.
 
@@ -496,13 +450,13 @@ async def detect_code_smells(request: AnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/dead-code", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_dead_code",
+    operation="detect_dead_code",
     error_code_prefix="ANTI_PATTERN",
 )
-@router.post("/dead-code")
-async def detect_dead_code(request: AnalysisRequest):
+async def detect_dead_code(request: AntiPatternAnalysisRequest):
     """
     Detect potentially dead (unreferenced) code.
 
@@ -541,13 +495,13 @@ async def detect_dead_code(request: AnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/health-score", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_health_score",
     error_code_prefix="ANTI_PATTERN",
 )
-@router.post("/health-score")
-async def get_health_score(request: AnalysisRequest):
+async def get_health_score(request: AntiPatternAnalysisRequest):
     """
     Get codebase health score based on anti-pattern analysis.
 
@@ -593,7 +547,12 @@ async def get_health_score(request: AnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/types")
+@router.get("/types", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_anti_pattern_types",
+    error_code_prefix="ANTI_PATTERN",
+)
 async def list_anti_pattern_types():
     """
     List all anti-pattern types that can be detected.

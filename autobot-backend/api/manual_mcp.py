@@ -17,12 +17,17 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 from services.man_page_parser import ManPageContent, get_man_page_content
+from api.schemas_common import DataResponse
+from api.schemas_code import (
+    ManPageRequest,
+    ManPageSearchRequest,
+    ManualMCPToolItem,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["manual_mcp", "mcp"])
@@ -40,37 +45,6 @@ _DOC_INDEX_CACHE_TTL = 3_600  # 1 hour
 # ---------------------------------------------------------------------------
 # Request / response models
 # ---------------------------------------------------------------------------
-
-
-class ManPageRequest(BaseModel):
-    """Request model for man page lookup."""
-
-    command: str = Field(..., description="Command name to look up (e.g. 'ls')")
-    section: Optional[str] = Field(
-        None,
-        description="Manual section (1-8). Defaults to section 1.",
-    )
-
-
-class ManPageSearchRequest(BaseModel):
-    """Request model for documentation index query."""
-
-    query: str = Field(..., description="Search query against the doc index")
-    max_results: int = Field(10, ge=1, le=50, description="Maximum results to return")
-
-
-class ManPageResult(BaseModel):
-    """Structured man page result."""
-
-    command: str
-    section: str
-    title: str
-    synopsis: str
-    description: str
-    options: str
-    examples: str
-    see_also: str
-    cached: bool
 
 
 # ---------------------------------------------------------------------------
@@ -317,12 +291,12 @@ def _doc_index_tool_schema() -> dict:
 # ---------------------------------------------------------------------------
 
 
+@router.get("/mcp/tools", response_model=List[ManualMCPToolItem])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="manual_mcp_tools",
+    operation="get_manual_mcp_tools",
     error_code_prefix="MANUAL_MCP",
 )
-@router.get("/mcp/tools")
 async def get_manual_mcp_tools(
     current_user: dict = Depends(get_current_user),
 ) -> List[dict]:
@@ -337,12 +311,12 @@ async def get_manual_mcp_tools(
     ]
 
 
+@router.post("/mcp/lookup_man_page", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="manual_mcp_lookup",
+    operation="mcp_lookup_man_page",
     error_code_prefix="MANUAL_MCP",
 )
-@router.post("/mcp/lookup_man_page")
 async def mcp_lookup_man_page(
     request: ManPageRequest,
     current_user: dict = Depends(get_current_user),
@@ -377,12 +351,12 @@ async def mcp_lookup_man_page(
         }
 
 
+@router.post("/mcp/search_man_pages", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="manual_mcp_search",
+    operation="mcp_search_man_pages",
     error_code_prefix="MANUAL_MCP",
 )
-@router.post("/mcp/search_man_pages")
 async def mcp_search_man_pages(
     request: ManPageSearchRequest,
     current_user: dict = Depends(get_current_user),
@@ -413,12 +387,12 @@ async def mcp_search_man_pages(
         }
 
 
+@router.post("/mcp/get_doc_index", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="manual_mcp_doc_index",
+    operation="mcp_get_doc_index",
     error_code_prefix="MANUAL_MCP",
 )
-@router.post("/mcp/get_doc_index")
 async def mcp_get_doc_index(
     request: ManPageSearchRequest,
     current_user: dict = Depends(get_current_user),

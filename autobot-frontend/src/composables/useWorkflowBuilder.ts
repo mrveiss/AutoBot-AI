@@ -15,11 +15,12 @@
 import { ref, computed, reactive } from 'vue';
 import { getBackendUrl, getBackendWsUrl, getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
-import { getAuthToken } from '@/utils/fetchWithAuth';
+import httpClient from '@/utils/ApiClient';
 import type { ApiResponse } from '@/types/api';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import type { WorkflowTemplateDetail } from '@/types/workflowTemplates';
 import { useWebSocket } from '@/composables/useWebSocket';
+import { useLoadingState } from '@/composables/useLoadingState';
 
 const logger = createLogger('useWorkflowBuilder');
 
@@ -27,16 +28,16 @@ const logger = createLogger('useWorkflowBuilder');
 // TYPE DEFINITIONS
 // ==================================================================================
 
-/** Workflow step status */
-export type WorkflowStepStatus =
-  | 'pending'
-  | 'waiting_approval'
-  | 'approved'
-  | 'executing'
-  | 'completed'
-  | 'skipped'
-  | 'failed'
-  | 'paused';
+// #7123: WorkflowStepStatus, RiskLevel, and the runtime step shape are
+// now defined canonically in @/types/workflowTemplates. Imported here for
+// in-file use AND re-exported so existing import paths
+// (`useWorkflowBuilder.WorkflowStepStatus`, etc.) keep working.
+import type {
+  WorkflowStepStatus,
+  RiskLevel,
+  AutomationWorkflowStep,
+} from '@/types/workflowTemplates'
+export type { WorkflowStepStatus, RiskLevel, AutomationWorkflowStep }
 
 /** Automation execution modes */
 export type AutomationMode = 'manual' | 'semi_automatic' | 'automatic';
@@ -62,24 +63,18 @@ export type ExecutionStrategy =
   | 'collaborative'
   | 'adaptive';
 
-/** Risk level */
-export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
-
-/** Workflow step definition */
-export interface WorkflowStep {
-  step_id: string;
-  command: string;
-  description: string;
-  explanation?: string;
-  requires_confirmation: boolean;
-  risk_level: RiskLevel;
-  estimated_duration: number;
-  dependencies?: string[];
-  status: WorkflowStepStatus;
-  execution_result?: Record<string, unknown>;
-  started_at?: string;
-  completed_at?: string;
-}
+/**
+ * Workflow step definition (#7123).
+ *
+ * Alias to the canonical `AutomationWorkflowStep` from
+ * `@/types/workflowTemplates`. The 6+ consumers (`WorkflowRunner.vue`,
+ * `WorkflowLiveDashboard.vue`, `OrchestrationVisualizer.vue`,
+ * `WorkflowCanvas.vue`, `WorkflowBuilderView.vue`, this composable's
+ * helpers) keep their `import { WorkflowStep }` path but now resolve to
+ * a single source of truth that mirrors backend
+ * `services/workflow_automation/WorkflowStep.to_status_dict()`.
+ */
+export type WorkflowStep = AutomationWorkflowStep;
 
 /** Workflow phase from state machine (#1380) */
 export type WorkflowPhase =
@@ -209,8 +204,26 @@ export interface WorkflowExecutionResult {
   details: Record<string, unknown>;
 }
 
-/** Workflow plan */
-export interface WorkflowPlan {
+/**
+ * Orchestrator workflow plan — preview returned from `/api/orchestrator/*`
+ * for the multi-agent planning surface.
+ *
+ * #7228: renamed from `WorkflowPlan` to disambiguate from the canonical
+ * runtime `WorkflowPlan` in `@/types/workflowTemplates` (which mirrors
+ * backend `autobot_shared.workflow.WorkflowPlan`). The two shapes serve
+ * different concerns:
+ *   - `OrchestratorWorkflowPlan` (this) — UI preview from the
+ *     orchestrator endpoint; partial fields, inline task shape, no
+ *     runtime state.
+ *   - `WorkflowPlan` (canonical, in `@/types/workflowTemplates`) —
+ *     full runtime execution plan with fallback_plans,
+ *     approval_required, dependencies_graph, and the richer task
+ *     field set inherited from `WorkflowTask`.
+ *
+ * Both exist legitimately; the rename prevents future contributors from
+ * accidentally treating them as interchangeable.
+ */
+export interface OrchestratorWorkflowPlan {
   plan_id: string;
   goal: string;
   strategy: ExecutionStrategy;
@@ -254,35 +267,17 @@ class WorkflowBuilderApiClient {
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
     try {
-      const token = getAuthToken();
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...options.headers,
-        },
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch((err) => { logger.warn('Failed to parse error response: %s', err); return {} });
-        return {
-          success: false,
-          error: errorData.detail || `HTTP ${response.status}: ${response.statusText}`,
-        };
+      const method = ((options.method as string) || 'GET').toUpperCase();
+      let data: T;
+      if (method === 'POST') {
+        const body = options.body ? JSON.parse(options.body as string) as unknown : undefined;
+        data = await httpClient.post<T>(url, body, { timeout: this.timeout });
+      } else {
+        data = await httpClient.get<T>(url, { timeout: this.timeout });
       }
-
-      const data = await response.json();
       return { success: true, data };
     } catch (error) {
-      clearTimeout(timeoutId);
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('API request failed:', { endpoint, error: message });
       return { success: false, error: message };
@@ -315,7 +310,7 @@ class WorkflowBuilderApiClient {
   async createWorkflowPlan(
     goal: string,
     context?: Record<string, unknown>
-  ): Promise<ApiResponse<{ status: string; plan: WorkflowPlan; task_count: number }>> {
+  ): Promise<ApiResponse<{ status: string; plan: OrchestratorWorkflowPlan; task_count: number }>> {
     return this.request(`${getApiBase()}/orchestrator/workflow/plan`, {
       method: 'POST',
       body: JSON.stringify({ goal, context }),
@@ -576,12 +571,12 @@ export function useWorkflowBuilder() {
   // STATE
   // ==================================================================================
 
-  // Loading states
-  const loading = ref(false);
-  const executingWorkflow = ref(false);
-  const loadingStrategies = ref(false);
-  const loadingCapabilities = ref(false);
-  const loadingExamples = ref(false);
+  // Loading states — each managed by its own useLoadingState instance
+  const { isLoading: loading, wrap: wrapLoading } = useLoadingState();
+  const { isLoading: executingWorkflow, wrap: wrapExecuting } = useLoadingState();
+  const { isLoading: loadingStrategies, wrap: wrapStrategies } = useLoadingState();
+  const { isLoading: loadingCapabilities, wrap: wrapCapabilities } = useLoadingState();
+  const { isLoading: loadingExamples, wrap: wrapExamples } = useLoadingState();
 
   // Error state — accumulated to prevent race conditions (#2626)
   const errors = ref<string[]>([]);
@@ -593,7 +588,7 @@ export function useWorkflowBuilder() {
   const activeWorkflows = ref<ActiveWorkflow[]>([]);
   const completedWorkflows = ref<ActiveWorkflow[]>([]);
   const currentWorkflow = ref<ActiveWorkflow | null>(null);
-  const workflowPlan = ref<WorkflowPlan | null>(null);
+  const workflowPlan = ref<OrchestratorWorkflowPlan | null>(null);
   const pendingApproval = ref<PlanApprovalRequest | null>(null);
 
   // Orchestration data
@@ -669,7 +664,7 @@ export function useWorkflowBuilder() {
       description: 'Update and upgrade system packages',
       category: 'System',
       icon: 'fas fa-sync-alt',
-      steps: [{ command: 'sudo apt update && sudo apt upgrade -y', description: 'Update system', risk_level: 'medium', requires_confirmation: true, estimated_duration: 120 }],
+      steps: [{ command: 'sudo apt update && sudo apt upgrade -y', description: 'Update system', risk_level: 'medium', requires_confirmation: true, estimated_duration: 120, started_at: null, completed_at: null }],
     },
     {
       id: 'security_scan',
@@ -677,7 +672,7 @@ export function useWorkflowBuilder() {
       description: 'Run security scanning workflow',
       category: 'Security',
       icon: 'fas fa-shield-alt',
-      steps: [{ command: 'sudo lynis audit system', description: 'System security audit', risk_level: 'low', requires_confirmation: false, estimated_duration: 300 }],
+      steps: [{ command: 'sudo lynis audit system', description: 'System security audit', risk_level: 'low', requires_confirmation: false, estimated_duration: 300, started_at: null, completed_at: null }],
     },
   ];
 
@@ -693,11 +688,14 @@ export function useWorkflowBuilder() {
         icon: apiTemplate.icon || getDefaultIconForCategory(apiTemplate.category),
         steps: 'steps' in apiTemplate
           ? (apiTemplate as WorkflowTemplateDetail).steps.map(step => ({
-              command: step.command,
+              // #6951 Phase 2F + #7044: TemplateStep is the canonical static-template
+              // shape; the runtime workflow_automation fields below need synthesis.
+              command: step.command ?? step.action ?? '',
               description: step.description,
-              risk_level: step.risk_level,
-              requires_confirmation: step.requires_confirmation,
-              estimated_duration: step.estimated_duration_seconds
+              risk_level: 'low' as RiskLevel,             // templates carry no risk classification
+              requires_confirmation: step.requires_approval,
+              estimated_duration: step.estimated_duration_seconds,
+              dependencies: step.dependencies,
             }))
           : []
       }));
@@ -733,48 +731,42 @@ export function useWorkflowBuilder() {
 
   /** Load orchestration system status */
   async function loadOrchestrationStatus(): Promise<void> {
-    loading.value = true;
-
-    const response = await apiClient.getOrchestrationStatus();
-    if (response.success && response.data) {
-      orchestrationStatus.value = response.data;
-      logger.debug('Orchestration status loaded:', response.data);
-    } else {
-      // Non-blocking: status badge shows "Services Offline" when null
-      logger.warn('Orchestration status unavailable:', response.error);
-    }
-
-    loading.value = false;
+    await wrapLoading(async () => {
+      const response = await apiClient.getOrchestrationStatus();
+      if (response.success && response.data) {
+        orchestrationStatus.value = response.data;
+        logger.debug('Orchestration status loaded:', response.data);
+      } else {
+        // Non-blocking: status badge shows "Services Offline" when null
+        logger.warn('Orchestration status unavailable:', response.error);
+      }
+    });
   }
 
   /** Load execution strategies */
   async function loadExecutionStrategies(): Promise<void> {
-    loadingStrategies.value = true;
-
-    const response = await apiClient.getExecutionStrategies();
-    if (response.success && response.data) {
-      executionStrategies.value = response.data.strategies;
-      logger.debug('Strategies loaded:', response.data);
-    } else {
-      logger.error('Failed to load strategies:', response.error);
-    }
-
-    loadingStrategies.value = false;
+    await wrapStrategies(async () => {
+      const response = await apiClient.getExecutionStrategies();
+      if (response.success && response.data) {
+        executionStrategies.value = response.data.strategies;
+        logger.debug('Strategies loaded:', response.data);
+      } else {
+        logger.error('Failed to load strategies:', response.error);
+      }
+    });
   }
 
   /** Load agent capabilities */
   async function loadAgentCapabilities(): Promise<void> {
-    loadingCapabilities.value = true;
-
-    const response = await apiClient.getAgentCapabilities();
-    if (response.success && response.data) {
-      agentCapabilities.value = response.data.agents;
-      logger.debug('Agent capabilities loaded:', response.data);
-    } else {
-      logger.error('Failed to load agent capabilities:', response.error);
-    }
-
-    loadingCapabilities.value = false;
+    await wrapCapabilities(async () => {
+      const response = await apiClient.getAgentCapabilities();
+      if (response.success && response.data) {
+        agentCapabilities.value = response.data.agents;
+        logger.debug('Agent capabilities loaded:', response.data);
+      } else {
+        logger.error('Failed to load agent capabilities:', response.error);
+      }
+    });
   }
 
   /** Load agent performance metrics */
@@ -790,17 +782,15 @@ export function useWorkflowBuilder() {
 
   /** Load example workflows */
   async function loadExampleWorkflows(): Promise<void> {
-    loadingExamples.value = true;
-
-    const response = await apiClient.getExampleWorkflows();
-    if (response.success && response.data) {
-      exampleWorkflows.value = response.data.examples;
-      logger.debug('Example workflows loaded:', response.data);
-    } else {
-      logger.error('Failed to load example workflows:', response.error);
-    }
-
-    loadingExamples.value = false;
+    await wrapExamples(async () => {
+      const response = await apiClient.getExampleWorkflows();
+      if (response.success && response.data) {
+        exampleWorkflows.value = response.data.examples;
+        logger.debug('Example workflows loaded:', response.data);
+      } else {
+        logger.error('Failed to load example workflows:', response.error);
+      }
+    });
   }
 
   /** Execute workflow with orchestration */
@@ -809,42 +799,38 @@ export function useWorkflowBuilder() {
     strategy?: ExecutionStrategy,
     context?: Record<string, unknown>
   ): Promise<WorkflowExecutionResult | null> {
-    executingWorkflow.value = true;
     errors.value = [];
-
-    const response = await apiClient.executeWorkflow(goal, strategy, context);
-    executingWorkflow.value = false;
-
-    if (response.success && response.data) {
-      logger.info('Workflow executed:', response.data);
-      return response.data;
-    } else {
-      errors.value = [...errors.value, response.error || 'Failed to execute workflow'];
-      logger.error('Workflow execution failed:', response.error);
-      return null;
-    }
+    return wrapExecuting(async () => {
+      const response = await apiClient.executeWorkflow(goal, strategy, context);
+      if (response.success && response.data) {
+        logger.info('Workflow executed:', response.data);
+        return response.data;
+      } else {
+        errors.value = [...errors.value, response.error || 'Failed to execute workflow'];
+        logger.error('Workflow execution failed:', response.error);
+        return null;
+      }
+    });
   }
 
   /** Create workflow plan without executing */
   async function createPlan(
     goal: string,
     context?: Record<string, unknown>
-  ): Promise<WorkflowPlan | null> {
-    loading.value = true;
+  ): Promise<OrchestratorWorkflowPlan | null> {
     errors.value = [];
-
-    const response = await apiClient.createWorkflowPlan(goal, context);
-    loading.value = false;
-
-    if (response.success && response.data) {
-      workflowPlan.value = response.data.plan;
-      logger.info('Workflow plan created:', response.data);
-      return response.data.plan;
-    } else {
-      errors.value = [...errors.value, response.error || 'Failed to create workflow plan'];
-      logger.error('Plan creation failed:', response.error);
-      return null;
-    }
+    return wrapLoading(async () => {
+      const response = await apiClient.createWorkflowPlan(goal, context);
+      if (response.success && response.data) {
+        workflowPlan.value = response.data.plan;
+        logger.info('Workflow plan created:', response.data);
+        return response.data.plan;
+      } else {
+        errors.value = [...errors.value, response.error || 'Failed to create workflow plan'];
+        logger.error('Plan creation failed:', response.error);
+        return null;
+      }
+    });
   }
 
   // ==================================================================================
@@ -853,18 +839,16 @@ export function useWorkflowBuilder() {
 
   /** Load active workflows */
   async function loadActiveWorkflows(): Promise<void> {
-    loading.value = true;
-
-    const response = await apiClient.getActiveWorkflows();
-    if (response.success && response.data) {
-      activeWorkflows.value = response.data.workflows;
-      logger.debug('Active workflows loaded:', response.data);
-    } else {
-      // Non-blocking: empty list is a valid state; log but don't block the UI
-      logger.warn('Active workflows unavailable:', response.error);
-    }
-
-    loading.value = false;
+    await wrapLoading(async () => {
+      const response = await apiClient.getActiveWorkflows();
+      if (response.success && response.data) {
+        activeWorkflows.value = response.data.workflows;
+        logger.debug('Active workflows loaded:', response.data);
+      } else {
+        // Non-blocking: empty list is a valid state; log but don't block the UI
+        logger.warn('Active workflows unavailable:', response.error);
+      }
+    });
   }
 
   /** Load completed workflow history (#1367) */
@@ -893,28 +877,25 @@ export function useWorkflowBuilder() {
     sessionId: string,
     automationMode: AutomationMode = 'semi_automatic'
   ): Promise<string | null> {
-    loading.value = true;
     errors.value = [];
-
-    const response = await apiClient.createWorkflow(
-      template.name,
-      template.description,
-      template.steps,
-      sessionId,
-      automationMode
-    );
-
-    loading.value = false;
-
-    if (response.success && response.data) {
-      logger.info('Workflow created from template:', response.data);
-      await loadActiveWorkflows();
-      return response.data.workflow_id;
-    } else {
-      errors.value = [...errors.value, response.error || 'Failed to create workflow'];
-      logger.error('Workflow creation failed:', response.error);
-      return null;
-    }
+    return wrapLoading(async () => {
+      const response = await apiClient.createWorkflow(
+        template.name,
+        template.description,
+        template.steps,
+        sessionId,
+        automationMode
+      );
+      if (response.success && response.data) {
+        logger.info('Workflow created from template:', response.data);
+        await loadActiveWorkflows();
+        return response.data.workflow_id;
+      } else {
+        errors.value = [...errors.value, response.error || 'Failed to create workflow'];
+        logger.error('Workflow creation failed:', response.error);
+        return null;
+      }
+    });
   }
 
   /** Create workflow from natural language */
@@ -923,48 +904,43 @@ export function useWorkflowBuilder() {
     sessionId: string,
     requireApproval: boolean = true
   ): Promise<string | null> {
-    loading.value = true;
     errors.value = [];
-
-    const response = await apiClient.createWorkflowFromChat(
-      request,
-      sessionId,
-      !requireApproval,
-      requireApproval
-    );
-
-    loading.value = false;
-
-    if (response.success && response.data?.workflow_id) {
-      if (response.data.plan) {
-        pendingApproval.value = response.data.plan;
+    return wrapLoading(async () => {
+      const response = await apiClient.createWorkflowFromChat(
+        request,
+        sessionId,
+        !requireApproval,
+        requireApproval
+      );
+      if (response.success && response.data?.workflow_id) {
+        if (response.data.plan) {
+          pendingApproval.value = response.data.plan;
+        }
+        await loadActiveWorkflows();
+        return response.data.workflow_id;
+      } else {
+        errors.value = [...errors.value, response.error || response.data?.message || 'Failed to create workflow'];
+        logger.error('Workflow creation from chat failed:', response.error);
+        return null;
       }
-      await loadActiveWorkflows();
-      return response.data.workflow_id;
-    } else {
-      errors.value = [...errors.value, response.error || response.data?.message || 'Failed to create workflow'];
-      logger.error('Workflow creation from chat failed:', response.error);
-      return null;
-    }
+    });
   }
 
   /** Start workflow execution */
   async function startWorkflow(workflowId: string): Promise<boolean> {
-    executingWorkflow.value = true;
     errors.value = [];
-
-    const response = await apiClient.startWorkflow(workflowId);
-    executingWorkflow.value = false;
-
-    if (response.success) {
-      logger.info('Workflow started:', workflowId);
-      await getWorkflowStatus(workflowId);
-      return true;
-    } else {
-      errors.value = [...errors.value, response.error || 'Failed to start workflow'];
-      logger.error('Workflow start failed:', response.error);
-      return false;
-    }
+    return wrapExecuting(async () => {
+      const response = await apiClient.startWorkflow(workflowId);
+      if (response.success) {
+        logger.info('Workflow started:', workflowId);
+        await getWorkflowStatus(workflowId);
+        return true;
+      } else {
+        errors.value = [...errors.value, response.error || 'Failed to start workflow'];
+        logger.error('Workflow start failed:', response.error);
+        return false;
+      }
+    });
   }
 
   /** Pause workflow */

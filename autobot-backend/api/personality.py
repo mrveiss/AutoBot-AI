@@ -14,112 +14,20 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, field_validator
-
 from auth_middleware import check_admin_permission
 from services.personality_service import SUPPORTED_LANGUAGES, get_personality_manager
+from api.schemas_agent import (
+    PersonalityProfileCreate,
+    PersonalityProfileDetail,
+    PersonalityProfileSummary,
+    PersonalityProfileUpdate,
+    PersonalityStatusResponse,
+    PersonalityToggleRequest,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["personality"])
-
-_VALID_TONES = {"direct", "professional", "casual", "technical"}
-
-
-# ---------------------------------------------------------------------------
-# Schemas
-# ---------------------------------------------------------------------------
-
-
-class ProfileSummary(BaseModel):
-    id: str
-    name: str
-    is_system: bool
-    active: bool
-
-
-class ProfileDetail(BaseModel):
-    id: str
-    name: str
-    tagline: str
-    tone: str
-    character_traits: List[str]
-    operating_style: List[str]
-    off_limits: List[str]
-    custom_notes: str
-    is_system: bool
-    created_by: str
-    created_at: str
-    updated_at: str
-    voice_id: str = ""
-    voice_ids: Dict[str, str] = {}
-    language_code: str = "en"
-
-
-class ProfileCreate(BaseModel):
-    name: str
-    tagline: str = ""
-    tone: str = "direct"
-    character_traits: List[str] = []
-    operating_style: List[str] = []
-    off_limits: List[str] = []
-    custom_notes: str = ""
-    voice_id: str = ""
-    voice_ids: Dict[str, str] = {}
-    language_code: str = "en"
-
-    @field_validator("tone")
-    @classmethod
-    def tone_must_be_valid(cls, v: str) -> str:
-        if v not in _VALID_TONES:
-            raise ValueError(f"tone must be one of {sorted(_VALID_TONES)}")
-        return v
-
-    @field_validator("language_code")
-    @classmethod
-    def language_code_must_be_valid(cls, v: str) -> str:
-        if v not in SUPPORTED_LANGUAGES:
-            raise ValueError(
-                f"language_code must be one of {sorted(SUPPORTED_LANGUAGES)}"
-            )
-        return v
-
-
-class ProfileUpdate(BaseModel):
-    name: Optional[str] = None
-    tagline: Optional[str] = None
-    tone: Optional[str] = None
-    character_traits: Optional[List[str]] = None
-    operating_style: Optional[List[str]] = None
-    off_limits: Optional[List[str]] = None
-    custom_notes: Optional[str] = None
-    voice_id: Optional[str] = None
-    voice_ids: Optional[Dict[str, str]] = None
-    language_code: Optional[str] = None
-
-    @field_validator("tone")
-    @classmethod
-    def tone_must_be_valid(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in _VALID_TONES:
-            raise ValueError(f"tone must be one of {sorted(_VALID_TONES)}")
-        return v
-
-    @field_validator("language_code")
-    @classmethod
-    def language_code_must_be_valid(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in SUPPORTED_LANGUAGES:
-            raise ValueError(
-                f"language_code must be one of {sorted(SUPPORTED_LANGUAGES)}"
-            )
-        return v
-
-
-class ToggleRequest(BaseModel):
-    enabled: bool
-
-
-class StatusResponse(BaseModel):
-    enabled: bool
-    active_id: Optional[str]
 
 
 # ---------------------------------------------------------------------------
@@ -127,8 +35,8 @@ class StatusResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _profile_to_detail(p) -> ProfileDetail:
-    return ProfileDetail(
+def _profile_to_detail(p) -> PersonalityProfileDetail:
+    return PersonalityProfileDetail(
         id=p.id,
         name=p.name,
         tagline=p.tagline,
@@ -159,14 +67,24 @@ def _not_found(pid: str) -> HTTPException:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/profiles", response_model=List[ProfileSummary])
+@router.get("/profiles", response_model=List[PersonalityProfileSummary])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_profiles",
+    error_code_prefix="PERSONALITY",
+)
 async def list_profiles() -> List[Dict[str, Any]]:
     """List all personality profiles."""
     return get_personality_manager().list_profiles()
 
 
-@router.get("/active", response_model=Optional[ProfileDetail])
-async def get_active() -> Optional[ProfileDetail]:
+@router.get("/active", response_model=Optional[PersonalityProfileDetail])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_active",
+    error_code_prefix="PERSONALITY",
+)
+async def get_active() -> Optional[PersonalityProfileDetail]:
     """Return the active profile, or null if personality is disabled."""
     mgr = get_personality_manager()
     profile = mgr.get_active_profile()
@@ -175,25 +93,40 @@ async def get_active() -> Optional[ProfileDetail]:
     return _profile_to_detail(profile)
 
 
-@router.get("/status", response_model=StatusResponse)
-async def get_status() -> StatusResponse:
+@router.get("/status", response_model=PersonalityStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_status",
+    error_code_prefix="PERSONALITY",
+)
+async def get_status() -> PersonalityStatusResponse:
     """Return enabled flag and active profile id."""
     mgr = get_personality_manager()
     index = mgr._read_index()
-    return StatusResponse(
+    return PersonalityStatusResponse(
         enabled=index.get("enabled", True),
         active_id=index.get("active_id"),
     )
 
 
-@router.get("/languages")
+@router.get("/languages", response_model=None)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_languages",
+    error_code_prefix="PERSONALITY",
+)
 async def list_languages() -> Dict[str, str]:
     """Return the supported language codes and their display names."""
     return SUPPORTED_LANGUAGES
 
 
-@router.get("/profiles/{pid}", response_model=ProfileDetail)
-async def get_profile(pid: str) -> ProfileDetail:
+@router.get("/profiles/{pid}", response_model=PersonalityProfileDetail)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_profile",
+    error_code_prefix="PERSONALITY",
+)
+async def get_profile(pid: str) -> PersonalityProfileDetail:
     """Fetch a single profile by id."""
     profile = get_personality_manager().get_profile(pid)
     if profile is None:
@@ -208,11 +141,16 @@ async def get_profile(pid: str) -> ProfileDetail:
 
 @router.post(
     "/profiles",
-    response_model=ProfileDetail,
+    response_model=PersonalityProfileDetail,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(check_admin_permission)],
 )
-async def create_profile(body: ProfileCreate) -> ProfileDetail:
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_profile",
+    error_code_prefix="PERSONALITY",
+)
+async def create_profile(body: PersonalityProfileCreate) -> PersonalityProfileDetail:
     """Create a new user personality profile."""
     profile = get_personality_manager().create_profile(**body.model_dump())
     return _profile_to_detail(profile)
@@ -220,10 +158,15 @@ async def create_profile(body: ProfileCreate) -> ProfileDetail:
 
 @router.put(
     "/profiles/{pid}",
-    response_model=ProfileDetail,
+    response_model=PersonalityProfileDetail,
     dependencies=[Depends(check_admin_permission)],
 )
-async def update_profile(pid: str, body: ProfileUpdate) -> ProfileDetail:
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_profile",
+    error_code_prefix="PERSONALITY",
+)
+async def update_profile(pid: str, body: PersonalityProfileUpdate) -> PersonalityProfileDetail:
     """Update fields on an existing profile."""
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     try:
@@ -237,6 +180,12 @@ async def update_profile(pid: str, body: ProfileUpdate) -> ProfileDetail:
     "/profiles/{pid}",
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(check_admin_permission)],
+    response_model=None,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_profile",
+    error_code_prefix="PERSONALITY",
 )
 async def delete_profile(pid: str) -> None:
     """Delete a user-created profile. System profiles cannot be deleted."""
@@ -255,6 +204,12 @@ async def delete_profile(pid: str) -> None:
     "/profiles/{pid}/activate",
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(check_admin_permission)],
+    response_model=None,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="activate_profile",
+    error_code_prefix="PERSONALITY",
 )
 async def activate_profile(pid: str) -> None:
     """Set a profile as the active personality."""
@@ -266,10 +221,15 @@ async def activate_profile(pid: str) -> None:
 
 @router.post(
     "/profiles/{pid}/reset",
-    response_model=ProfileDetail,
+    response_model=PersonalityProfileDetail,
     dependencies=[Depends(check_admin_permission)],
 )
-async def reset_profile(pid: str) -> ProfileDetail:
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reset_profile",
+    error_code_prefix="PERSONALITY",
+)
+async def reset_profile(pid: str) -> PersonalityProfileDetail:
     """Reset a profile's content to match the default profile."""
     try:
         profile = get_personality_manager().reset_profile(pid)
@@ -280,15 +240,20 @@ async def reset_profile(pid: str) -> ProfileDetail:
 
 @router.post(
     "/toggle",
-    response_model=StatusResponse,
+    response_model=PersonalityStatusResponse,
     dependencies=[Depends(check_admin_permission)],
 )
-async def toggle_personality(body: ToggleRequest) -> StatusResponse:
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="toggle_personality",
+    error_code_prefix="PERSONALITY",
+)
+async def toggle_personality(body: PersonalityToggleRequest) -> PersonalityStatusResponse:
     """Enable or disable the personality system globally."""
     mgr = get_personality_manager()
     mgr.set_enabled(body.enabled)
     index = mgr._read_index()
-    return StatusResponse(
+    return PersonalityStatusResponse(
         enabled=body.enabled,
         active_id=index.get("active_id"),
     )

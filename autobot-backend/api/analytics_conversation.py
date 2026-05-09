@@ -16,12 +16,23 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import parse_utc_iso
 from constants.path_constants import PATH
+from api.schemas_analytics import (
+    ConversationAnalysisResult,
+    ConversationBottlenecksResponse,
+    ConversationDetectIntentResponse,
+    ConversationDistributionResponse,
+    ConversationFlow,
+    ConversationFlowsResponse,
+    ConversationIntentsResponse,
+    ConversationMetrics,
+    FlowBottleneck,
+    IntentPattern,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,64 +75,6 @@ def _is_session_in_range(session: Dict[str, Any], cutoff: datetime) -> bool:
 # ============================================================================
 # Pydantic Models
 # ============================================================================
-
-
-class IntentPattern(BaseModel):
-    """Represents a detected user intent pattern"""
-
-    intent_id: str
-    intent_name: str
-    pattern_regex: str
-    occurrences: int
-    success_rate: float
-    avg_turns_to_resolve: float
-    sample_queries: List[str] = Field(default_factory=list, max_length=5)
-
-
-class ConversationFlow(BaseModel):
-    """Represents a conversation flow path"""
-
-    flow_id: str
-    path: List[str]  # Sequence of intents
-    frequency: int
-    avg_duration_seconds: float
-    completion_rate: float
-    drop_off_point: Optional[str] = None
-
-
-class ConversationMetrics(BaseModel):
-    """Aggregated conversation metrics"""
-
-    total_conversations: int
-    total_messages: int
-    avg_messages_per_conversation: float
-    avg_conversation_duration_seconds: float
-    user_satisfaction_estimate: float
-    resolution_rate: float
-    escalation_rate: float
-
-
-class FlowBottleneck(BaseModel):
-    """Represents a bottleneck in conversation flows"""
-
-    bottleneck_id: str
-    location: str
-    description: str
-    impact_score: float  # 0-100
-    affected_conversations: int
-    suggested_improvements: List[str]
-
-
-class ConversationAnalysisResult(BaseModel):
-    """Full conversation analysis result"""
-
-    metrics: ConversationMetrics
-    intent_patterns: List[IntentPattern]
-    common_flows: List[ConversationFlow]
-    bottlenecks: List[FlowBottleneck]
-    hourly_distribution: Dict[str, int]
-    analysis_period: str
-    conversations_analyzed: int
 
 
 # ============================================================================
@@ -781,12 +734,12 @@ async def load_chat_sessions(hours: int = 24) -> List[Dict[str, Any]]:
 # ============================================================================
 
 
+@router.get("/analyze", response_model=ConversationAnalysisResult)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_conversations",
-    error_code_prefix="CONVFLOW",
+    error_code_prefix="ANALYTICS_CONVERSATION",
 )
-@router.get("/analyze", response_model=ConversationAnalysisResult)
 async def analyze_conversations(
     hours: int = Query(
         24, ge=1, le=168, description="Hours of conversations to analyze"
@@ -836,12 +789,12 @@ async def analyze_conversations(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/intents", response_model=ConversationIntentsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_intent_stats",
-    error_code_prefix="CONVFLOW",
+    error_code_prefix="ANALYTICS_CONVERSATION",
 )
-@router.get("/intents")
 async def get_intent_stats(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -899,12 +852,12 @@ async def get_intent_stats(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/flows", response_model=ConversationFlowsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_flow_paths",
-    error_code_prefix="CONVFLOW",
+    error_code_prefix="ANALYTICS_CONVERSATION",
 )
-@router.get("/flows")
 async def get_flow_paths(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     min_frequency: int = Query(2, ge=1, description="Minimum flow frequency"),
@@ -967,12 +920,12 @@ async def get_flow_paths(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/bottlenecks", response_model=ConversationBottlenecksResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_bottlenecks",
-    error_code_prefix="CONVFLOW",
+    error_code_prefix="ANALYTICS_CONVERSATION",
 )
-@router.get("/bottlenecks")
 async def get_bottlenecks(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1006,12 +959,12 @@ async def get_bottlenecks(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/distribution", response_model=ConversationDistributionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_hourly_distribution",
-    error_code_prefix="CONVFLOW",
+    error_code_prefix="ANALYTICS_CONVERSATION",
 )
-@router.get("/distribution")
 async def get_hourly_distribution(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1050,12 +1003,12 @@ async def get_hourly_distribution(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/detect-intent", response_model=ConversationDetectIntentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_intent",
-    error_code_prefix="CONVFLOW",
+    error_code_prefix="ANALYTICS_CONVERSATION",
 )
-@router.post("/detect-intent")
 async def detect_intent(
     message: str = Query(..., description="Message to analyze"),
     admin_check: bool = Depends(check_admin_permission),

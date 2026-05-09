@@ -55,7 +55,7 @@
 
     - name: "[PRE-FLIGHT] Get code_source commit before sync"
       ansible.builtin.command:
-        cmd: git -C {{ git_repo_root }} log -1 --format='%h %s'
+        cmd: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} log -1 --format='%h %s'
       register: pre_sync_commit
       changed_when: false
       tags: [always]
@@ -123,7 +123,7 @@
 
     - name: "[PRE-FLIGHT] Show code_source age when sync skipped"
       ansible.builtin.command:
-        cmd: "git -C {{ git_repo_root }} log -1 --format='Last commit: %h %s (%cr)'"
+        cmd: "git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} log -1 --format='Last commit: %h %s (%cr)'"
       register: code_source_age
       changed_when: false
       when: github_sync is failed
@@ -137,14 +137,14 @@
 
     - name: "[PRE-FLIGHT] Get current deploy commit"
       ansible.builtin.command:
-        cmd: git -C {{ git_repo_root }} log -1 --format='%h %s'
+        cmd: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} log -1 --format='%h %s'
       register: deploy_info
       changed_when: false
       tags: [always]
 
     - name: "[PRE-FLIGHT] Count commits advanced during sync"
       ansible.builtin.command:
-        cmd: git -C {{ git_repo_root }} rev-list --count {{ pre_sync_commit.stdout.split()[0] }}..HEAD
+        cmd: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} rev-list --count {{ pre_sync_commit.stdout.split()[0] }}..HEAD
       register: sync_commit_count
       changed_when: false
       when: github_sync is not failed
@@ -184,6 +184,12 @@
   hosts: all
   become: true
   gather_facts: true
+
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
 
   tasks:
     - name: "Deps | Install nginx"
@@ -277,14 +283,18 @@
   become: true
   gather_facts: true
 
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
   tasks:
     - name: "Data | Deploy Redis role"
       ansible.builtin.import_role:
         name: redis
-      when: >-
-        'redis' in (node_roles | default([])) or
-        inventory_hostname in groups.get('redis', []) or
-        inventory_hostname in groups.get('database', [])
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_redis_active | bool
       tags: ['redis', 'provision']
 
 # -------------------------------------------------------------------
@@ -295,17 +305,20 @@
   become: true
   gather_facts: true
 
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
   tasks:
     - name: "App | Deploy backend role"
       ansible.builtin.include_role:
         name: backend
         apply:
           tags: ['backend', 'provision']
-      when: >-
-        'backend' in (node_roles | default([])) or
-        'autobot-backend' in (node_roles | default([])) or
-        inventory_hostname in groups.get('main', []) or
-        inventory_hostname in groups.get('backend', [])
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_backend_active | bool
       tags: ['backend', 'provision']
 
     - name: "App | Deploy VNC role"
@@ -313,11 +326,8 @@
         name: vnc
         apply:
           tags: ['vnc', 'provision']
-      when: >-
-        'vnc' in (node_roles | default([])) or
-        inventory_hostname in groups.get('main', []) or
-        inventory_hostname in groups.get('backend', []) or
-        inventory_hostname in groups.get('vnc_nodes', [])
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_vnc_active | bool
       tags: ['vnc', 'provision']
 
 # -------------------------------------------------------------------
@@ -328,16 +338,20 @@
   become: true
   gather_facts: true
 
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
   tasks:
     - name: "App | Deploy frontend role"
       ansible.builtin.include_role:
         name: frontend
         apply:
           tags: ['frontend', 'provision']
-      when: >-
-        'frontend' in (node_roles | default([])) or
-        'autobot-frontend' in (node_roles | default([])) or
-        inventory_hostname in groups.get('frontend', [])
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_frontend_active | bool
       tags: ['frontend', 'provision']
 
 # -------------------------------------------------------------------
@@ -467,17 +481,20 @@
   become: true
   gather_facts: true
 
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
   tasks:
     - name: "AI | Deploy AI stack role"
       ansible.builtin.include_role:
         name: ai-stack
         apply:
           tags: ['ai-stack', 'provision']
-      when: >-
-        'ai-stack' in (node_roles | default([])) or
-        'autobot-ai-stack' in (node_roles | default([])) or
-        inventory_hostname in groups.get('ai_stack', []) or
-        inventory_hostname in groups.get('aiml', [])
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_ai_stack_active | bool
       tags: ['ai-stack', 'provision']
 
     - name: "AI | Deploy LLM role"
@@ -485,10 +502,8 @@
         name: llm
         apply:
           tags: ['llm', 'provision']
-      when: >-
-        'llm' in (node_roles | default([])) or
-        inventory_hostname in groups.get('ai_stack', []) or
-        inventory_hostname in groups.get('llm_nodes', [])
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_llm_active | bool
       tags: ['llm', 'provision']
 
 # -------------------------------------------------------------------
@@ -499,17 +514,20 @@
   become: true
   gather_facts: true
 
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
   tasks:
     - name: "AI | Deploy NPU worker role"
       ansible.builtin.include_role:
         name: npu-worker
         apply:
           tags: ['npu-worker', 'provision']
-      when: >-
-        'npu-worker' in (node_roles | default([])) or
-        'autobot-npu-worker' in (node_roles | default([])) or
-        inventory_hostname in groups.get('npu_worker', []) or
-        inventory_hostname in groups.get('npu', [])
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_npu_worker_active | bool
       tags: ['npu-worker', 'provision']
 
 # -------------------------------------------------------------------
@@ -520,15 +538,20 @@
   become: true
   gather_facts: true
 
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
   tasks:
     - name: "AI | Deploy TTS worker role"
       ansible.builtin.include_role:
         name: tts-worker
         apply:
           tags: ['tts-worker', 'provision']
-      when: >-
-        'tts-worker' in (node_roles | default([])) or
-        'autobot-tts-worker' in (node_roles | default([]))
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_tts_worker_active | bool
       tags: ['tts-worker', 'provision']
 
 # -------------------------------------------------------------------
@@ -538,6 +561,12 @@
   hosts: all
   become: true
   gather_facts: true
+
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
 
   tasks:
     - name: "LLM | Deploy LLM role (GPU auto-detected)"
@@ -557,19 +586,91 @@
   become: true
   gather_facts: true
 
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
   tasks:
     - name: "Auto | Deploy browser role"
       ansible.builtin.include_role:
         name: browser
         apply:
           tags: ['browser', 'provision']
-      when: >-
-        'browser' in (node_roles | default([])) or
-        'autobot-browser-worker' in (node_roles | default([])) or
-        'browser-service' in (node_roles | default([])) or
-        inventory_hostname in groups.get('browser_worker', []) or
-        inventory_hostname in groups.get('browser', [])
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_browser_active | bool
       tags: ['browser', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 6.5: Mark each provisioned node as synced (#7103)
+# -------------------------------------------------------------------
+# Without this, wizard-provisioned nodes stay code_status=unknown forever
+# (the heartbeat handler intentionally ignores heartbeat.code_version per
+# #889; node.code_version is only set by /mark-synced). The SLM Code Sync
+# UI then misleadingly shows "All nodes are up to date" instead of real
+# drift. Mirrors the pattern used by update-all-nodes.yml lines 365-379.
+- name: "Provision Phase 6.5: Mark provisioned nodes as synced"
+  hosts: all
+  gather_facts: false
+
+  tasks:
+    - name: "Mark-synced | Get deployed commit (once on controller)"
+      ansible.builtin.command:
+        cmd: git rev-parse HEAD
+        chdir: "{{ playbook_dir }}/../../.."
+      register: _provision_commit
+      changed_when: false
+      failed_when: false
+      run_once: true
+      delegate_to: localhost
+      become: false
+      tags: ['mark-synced']
+
+    - name: "Mark-synced | Login to SLM API"
+      ansible.builtin.uri:
+        url: "https://{{ hostvars['00-SLM-Manager']['ansible_host'] | default('127.0.0.1') }}/api/auth/login"
+        method: POST
+        body_format: json
+        body:
+          username: "admin"
+          password: "{{ slm_admin_password | default(lookup('env', 'SLM_ADMIN_PASSWORD')) | default('admin', true) }}"
+        validate_certs: false
+        status_code: [200, 401, 403]
+        timeout: 10
+      register: _slm_login
+      no_log: true
+      failed_when: false
+      run_once: true
+      delegate_to: localhost
+      tags: ['mark-synced']
+
+    - name: "Mark-synced | Warn if login failed (skip mark-synced gracefully)"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: SLM login returned status {{ _slm_login.status }} —
+          mark-synced skipped. Code Sync UI will show this node as 'unknown'
+          until next 'Update' run. (#7103)
+      when: _slm_login.status != 200
+      run_once: true
+      tags: ['mark-synced']
+
+    - name: "Mark-synced | POST to /api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
+      ansible.builtin.uri:
+        url: "https://{{ hostvars['00-SLM-Manager']['ansible_host'] | default('127.0.0.1') }}/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ _slm_login.json.access_token | default('') }}"
+          Content-Type: "application/json"
+        body: "{}"
+        body_format: json
+        validate_certs: false
+        status_code: [200, 404]
+        timeout: 10
+      delegate_to: localhost
+      ignore_errors: true
+      when: _slm_login.status == 200
+      tags: ['mark-synced']
 
 # -------------------------------------------------------------------
 # Phase 7: Summary

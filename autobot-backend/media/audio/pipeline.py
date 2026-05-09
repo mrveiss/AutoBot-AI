@@ -54,12 +54,8 @@ def _get_whisper_pipeline() -> Optional[Any]:
 class AudioPipeline(BasePipeline):
     """Pipeline for processing audio content (voice, music, sound)."""
 
-    def __init__(self):
-        """Initialize audio processing pipeline."""
-        super().__init__(
-            pipeline_name="audio",
-            supported_types=[MediaType.AUDIO],
-        )
+    PIPELINE_NAME = "audio"
+    SUPPORTED_TYPES = [MediaType.AUDIO]
 
     async def _process_impl(self, media_input: MediaInput) -> ProcessingResult:
         """Process audio content."""

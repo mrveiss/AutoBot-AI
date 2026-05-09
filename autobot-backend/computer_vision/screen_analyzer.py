@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from desktop_streaming_manager import desktop_streaming
+from desktop_streaming_manager import get_desktop_streaming
 from memory import TaskPriority
 from multimodal_processor import (
     ModalityType,
@@ -27,7 +27,7 @@ from multimodal_processor import (
     ProcessingIntent,
     unified_processor,
 )
-from task_execution_tracker import task_tracker
+from task_execution_tracker import get_task_tracker
 
 from .classifiers import ContextAnalyzer, ElementClassifier, TemplateMatchingEngine
 from .collections import ProcessingResultExtractor, UIElementCollection
@@ -149,7 +149,7 @@ class ScreenAnalyzer:
         Issue #281: Refactored from 141 lines to use extracted helper methods.
         Issue #620: Further refactored to reduce function length.
         """
-        async with task_tracker.track_task(
+        async with get_task_tracker().track_task(
             "Screen Analysis",
             "Comprehensive analysis of current screen state",
             agent_type="computer_vision",
@@ -303,10 +303,10 @@ class ScreenAnalyzer:
         cv2 = _get_cv2()
         PILImage = _get_pil_image()
 
-        session_info = desktop_streaming.vnc_manager.get_session_info(session_id)
+        session_info = get_desktop_streaming().vnc_manager.get_session_info(session_id)
         if not session_info:
             return None
-        screenshot_base64 = await desktop_streaming._get_session_screenshot(session_id)
+        screenshot_base64 = await get_desktop_streaming()._get_session_screenshot(session_id)
         if not screenshot_base64:
             return None
         screenshot_bytes = base64.b64decode(screenshot_base64)

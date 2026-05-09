@@ -193,9 +193,7 @@ def _get_connection_manager() -> RedisConnectionManager:
 # =============================================================================
 
 
-def get_redis_client(
-    async_client: bool = False, database: str = "main"
-) -> Union[redis.Redis, async_redis.Redis, None]:
+def get_redis_client(async_client: bool = False, database: str = "main") -> Union[redis.Redis, async_redis.Redis, None]:
     """
     Get a Redis client instance with circuit breaker and health monitoring.
 
@@ -408,9 +406,7 @@ def test_redis_connection(database: str = "main") -> bool:
         client = get_redis_client(async_client=False, database=database)
         if client:
             response = client.ping()
-            logger.info(
-                f"Redis connection test successful for '{database}': {response}"
-            )
+            logger.info(f"Redis connection test successful for '{database}': {response}")
             return True
         else:
             logger.warning(f"No Redis client available for database '{database}'")
@@ -457,9 +453,7 @@ async def redis_get(key: str, database: str = "main") -> Optional[Any]:
     return None
 
 
-async def redis_set(
-    key: str, value: Any, expire: Optional[int] = None, database: str = "main"
-) -> bool:
+async def redis_set(key: str, value: Any, expire: Optional[int] = None, database: str = "main") -> bool:
     """
     Async Redis SET operation with optional expiration.
 
@@ -564,22 +558,14 @@ class RedisDatabaseManager:
             "Use get_redis_client() from autobot_shared.redis_client instead."
         )
 
-    def get_connection(
-        self, database: Union[RedisDatabase, str]
-    ) -> Optional[redis.Redis]:
+    def get_connection(self, database: Union[RedisDatabase, str]) -> Optional[redis.Redis]:
         """Get synchronous Redis connection (DEPRECATED)."""
-        db_name = (
-            database.name.lower() if isinstance(database, RedisDatabase) else database
-        )
+        db_name = database.name.lower() if isinstance(database, RedisDatabase) else database
         return get_redis_client(async_client=False, database=db_name)
 
-    async def get_async_connection(
-        self, database: Union[RedisDatabase, str]
-    ) -> Optional[async_redis.Redis]:
+    async def get_async_connection(self, database: Union[RedisDatabase, str]) -> Optional[async_redis.Redis]:
         """Get asynchronous Redis connection (DEPRECATED)."""
-        db_name = (
-            database.name.lower() if isinstance(database, RedisDatabase) else database
-        )
+        db_name = database.name.lower() if isinstance(database, RedisDatabase) else database
         return await get_redis_client(async_client=True, database=db_name)
 
 

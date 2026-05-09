@@ -19,7 +19,7 @@ from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.fact import AtomicFact
 from knowledge.pipeline.registry import TaskRegistry
-from llm_interface_pkg import LLMInterface
+from services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +111,7 @@ class FactExtractor(BaseCognifier):
         self.mode = mode
         self.nlp_threshold = nlp_threshold
         self.use_patterns = use_patterns
-        self.llm = LLMInterface()
+        self.llm = get_llm_service()
 
     def _select_mode(self, chunks: List[ProcessedChunk]) -> str:
         """
@@ -237,8 +237,8 @@ class FactExtractor(BaseCognifier):
         """Extract facts from a single chunk using LLM."""
         try:
             prompt = FACT_EXTRACTION_PROMPT.format(text=chunk.content[:2000])
-            response = await self.llm.chat_completion(
-                messages=[{"role": "user", "content": prompt}]
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}]
             )
             parsed = parse_llm_json_response(response.content)
             raw_facts = parsed if isinstance(parsed, list) else []

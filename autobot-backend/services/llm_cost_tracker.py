@@ -22,7 +22,8 @@ from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
+from autobot_shared.redis_client import RedisDatabase
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.model_constants import (
     ANTHROPIC_CLAUDE_HAIKU4_5,
@@ -195,7 +196,7 @@ class BudgetAlert:
     enabled: bool = True
 
 
-class LLMCostTracker:
+class LLMCostTracker(AsyncRedisClientMixin):
     """
     Tracks LLM API usage costs across all providers.
 
@@ -206,6 +207,8 @@ class LLMCostTracker:
     - Budget alerting
     - Cost trend analysis
     """
+
+    _redis_database = RedisDatabase.ANALYTICS
 
     REDIS_KEY_PREFIX = "llm_cost:"
     USAGE_LIST_KEY = f"{REDIS_KEY_PREFIX}usage"
@@ -218,16 +221,13 @@ class LLMCostTracker:
     BUDGET_ALERTS_KEY = f"{REDIS_KEY_PREFIX}budget_alerts"
 
     def __init__(self):
-        """Initialize cost tracker with lazy Redis client and empty alerts."""
-        self._redis_client = None
+        """Initialize cost tracker with empty alerts."""
         self._budget_alerts: List[BudgetAlert] = []
         self._current_period_costs: Dict[str, float] = {}
 
     async def get_redis(self):
         """Get async Redis client"""
-        if self._redis_client is None:
-            self._redis_client = await get_async_redis_client(database=RedisDatabase.ANALYTICS)
-        return self._redis_client
+        return await self._get_redis()
 
     # Pattern-based pricing fallbacks for unknown models (#1961).
     # Ordered from most specific to least specific.
@@ -1046,6 +1046,39 @@ class LLMCostTracker:
         except Exception as e:
             logger.error("Failed to get user cost: %s", e)
             return {"user_id": user_id, "error": "Failed to retrieve user cost"}
+
+    async def set_budget_alert(self, name: str, alert_data: dict) -> None:
+        """Persist a budget alert configuration to Redis (#5731)."""
+        try:
+            redis = await self._get_redis()
+            if redis is None:
+                logger.warning("Redis unavailable — budget alert '%s' not persisted", name)
+                return
+            await redis.hset(self.BUDGET_ALERTS_KEY, name, json.dumps(alert_data))
+        except Exception as e:
+            logger.error("Failed to persist budget alert '%s': %s", name, e)
+
+    async def get_all_budget_alerts(self) -> dict:
+        """Return all budget alert configurations from Redis (#5731).
+
+        Returns:
+            Dict mapping alert name (str) to decoded alert dict.
+        """
+        try:
+            redis = await self._get_redis()
+            if redis is None:
+                logger.warning("Redis unavailable — returning empty budget alerts")
+                return {}
+            raw = await redis.hgetall(self.BUDGET_ALERTS_KEY)
+            result = {}
+            for k, v in raw.items():
+                k_str = k if isinstance(k, str) else k.decode("utf-8")
+                v_str = v if isinstance(v, str) else v.decode("utf-8")
+                result[k_str] = json.loads(v_str)
+            return result
+        except Exception as e:
+            logger.error("Failed to retrieve budget alerts: %s", e)
+            return {}
 
     async def get_all_user_costs(self) -> list[dict[str, Any]]:
         """Get cost breakdown for all users (#1807)."""

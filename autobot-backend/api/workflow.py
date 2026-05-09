@@ -14,13 +14,22 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from pydantic import BaseModel
-
+from api.schemas_workflows import (
+    WorkflowApprovalResponse,
+    WorkflowApproveResponse,
+    WorkflowCancelResponse,
+    WorkflowDetailResponse,
+    WorkflowExecutionRequest,
+    WorkflowExecutionResponse,
+    WorkflowListResponse,
+    WorkflowPendingApprovalsResponse,
+    WorkflowStatusResponse,
+)
 from api.workflow_state import get_workflow_state_machine
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
-from event_manager import event_manager
+from event_manager import get_event_manager as _get_event_manager
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics
 from models.task_context import WorkflowStepContext
@@ -356,130 +365,6 @@ def _convert_preview_to_steps(workflow_preview: list) -> list:
     return steps
 
 
-# Workflow models
-class WorkflowApprovalRequest(BaseModel):
-    workflow_id: str
-    step_id: str
-    step_description: str
-    required_action: str
-    context: Metadata
-    timeout_seconds: int = 300
-
-
-class WorkflowApprovalResponse(BaseModel):
-    workflow_id: str
-    step_id: str
-    approved: bool
-    user_input: Optional[Metadata] = None
-    timestamp: float
-
-
-class WorkflowStatusUpdate(BaseModel):
-    workflow_id: str
-    step_id: str
-    status: str  # "pending", "in_progress", "completed", "failed", "waiting_approval"
-    progress: float  # 0.0 to 1.0
-    message: str
-    timestamp: float
-
-
-class WorkflowExecutionRequest(BaseModel):
-    user_message: str
-    workflow_id: Optional[str] = None
-    auto_approve: bool = False
-
-
-# ---------------------------------------------------------------------------
-# Response models for response_model= annotations (#5317 — first batch)
-# ---------------------------------------------------------------------------
-
-
-class WorkflowSummary(BaseModel):
-    """Summary of a single workflow as returned by list/detail endpoints."""
-
-    workflow_id: str
-    user_message: str
-    classification: str
-    status: str
-    total_steps: int
-    current_step: int
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-
-
-class WorkflowListResponse(BaseModel):
-    """Response shape for GET /workflows."""
-
-    success: bool
-    active_workflows: int
-    workflows: list[WorkflowSummary]
-
-
-class WorkflowDetailResponse(BaseModel):
-    """Response shape for GET /workflow/{workflow_id}."""
-
-    success: bool
-    workflow: Metadata
-
-
-class WorkflowStatusResponse(BaseModel):
-    """Response shape for GET /workflow/{workflow_id}/status."""
-
-    success: bool
-    workflow_id: str
-    status: str
-    current_step: int
-    total_steps: int
-    progress: float
-    current_step_info: Optional[Metadata] = None
-    estimated_remaining: Optional[str] = None
-
-
-class WorkflowApproveResponse(BaseModel):
-    """Response shape for POST /workflow/{workflow_id}/approve."""
-
-    success: bool
-    message: str
-    next_action: str
-
-
-class WorkflowCancelResponse(BaseModel):
-    """Response shape for DELETE /workflow/{workflow_id}."""
-
-    success: bool
-    message: str
-
-
-class PendingApprovalStep(BaseModel):
-    """A single step awaiting user approval."""
-
-    step_id: str
-    description: str
-    agent_type: str
-    action: str
-    context: Metadata
-
-
-class WorkflowPendingApprovalsResponse(BaseModel):
-    """Response shape for GET /workflow/{workflow_id}/pending_approvals."""
-
-    success: bool
-    workflow_id: str
-    pending_approvals: list[PendingApprovalStep]
-
-
-class WorkflowExecutionResponse(BaseModel):
-    """Response shape for POST /execute (covers both simple and complex paths)."""
-
-    success: bool
-    type: str
-    result: Optional[str] = None
-    routing_method: Optional[str] = None
-    workflow_id: Optional[str] = None
-    execution_started: Optional[bool] = None
-    status_endpoint: Optional[str] = None
-
-
 # In-memory workflow storage (in production, use Redis or database)
 active_workflows: Dict[str, Metadata] = {}
 pending_approvals: Dict[str, asyncio.Future] = {}
@@ -521,12 +406,12 @@ def _legacy_workflow_to_summary(workflow_id: str, workflow_data: Dict) -> Dict:
     }
 
 
+@router.get("/workflows", response_model=WorkflowListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_active_workflows",
     error_code_prefix="WORKFLOW",
 )
-@router.get("/workflows", response_model=WorkflowListResponse)
 async def list_active_workflows(admin_check: bool = Depends(check_admin_permission)):
     """List all active workflows with their current status.
 
@@ -561,12 +446,12 @@ async def list_active_workflows(admin_check: bool = Depends(check_admin_permissi
     }
 
 
+@router.get("/workflow/{workflow_id}", response_model=WorkflowDetailResponse)
 @with_error_handling(
-    category=ErrorCategory.NOT_FOUND,
+    category=ErrorCategory.SERVER_ERROR,
     operation="get_workflow_details",
     error_code_prefix="WORKFLOW",
 )
-@router.get("/workflow/{workflow_id}", response_model=WorkflowDetailResponse)
 async def get_workflow_details(
     workflow_id: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -583,12 +468,12 @@ async def get_workflow_details(
     return {"success": True, "workflow": workflow}
 
 
+@router.get("/workflow/{workflow_id}/status", response_model=WorkflowStatusResponse)
 @with_error_handling(
-    category=ErrorCategory.NOT_FOUND,
+    category=ErrorCategory.SERVER_ERROR,
     operation="get_workflow_status",
     error_code_prefix="WORKFLOW",
 )
-@router.get("/workflow/{workflow_id}/status", response_model=WorkflowStatusResponse)
 async def get_workflow_status(
     workflow_id: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -670,12 +555,12 @@ async def _update_step_status_and_metrics(
     )
 
 
+@router.post("/workflow/{workflow_id}/approve", response_model=WorkflowApproveResponse)
 @with_error_handling(
-    category=ErrorCategory.NOT_FOUND,
+    category=ErrorCategory.SERVER_ERROR,
     operation="approve_workflow_step",
     error_code_prefix="WORKFLOW",
 )
-@router.post("/workflow/{workflow_id}/approve", response_model=WorkflowApproveResponse)
 async def approve_workflow_step(
     workflow_id: str,
     approval: WorkflowApprovalResponse,
@@ -697,7 +582,7 @@ async def approve_workflow_step(
     await _update_step_status_and_metrics(workflow_id, approval)
 
     # Publish approval event
-    await event_manager.publish(
+    await _get_event_manager().publish(
         "workflow_approval",
         {
             "workflow_id": workflow_id,
@@ -716,12 +601,12 @@ async def approve_workflow_step(
     }
 
 
+@router.post("/execute", response_model=WorkflowExecutionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_workflow",
     error_code_prefix="WORKFLOW",
 )
-@router.post("/execute", response_model=WorkflowExecutionResponse)
 async def execute_workflow(
     workflow_request: WorkflowExecutionRequest,
     background_tasks: BackgroundTasks,
@@ -795,7 +680,7 @@ async def _wait_for_step_approval(
         pending_approvals[approval_key] = approval_future
 
     # Publish approval request event
-    await event_manager.publish(
+    await _get_event_manager().publish(
         "workflow_approval_required",
         {
             "workflow_id": workflow_id,
@@ -835,7 +720,7 @@ async def _publish_step_started(
         step_index: Current step index
         total_steps: Total number of steps
     """
-    await event_manager.publish(
+    await _get_event_manager().publish(
         "workflow_step_started",
         {
             "workflow_id": workflow_id,
@@ -857,7 +742,7 @@ async def _publish_step_completed(workflow_id: str, step: Metadata) -> None:
         workflow_id: Workflow identifier
         step: Step data with result
     """
-    await event_manager.publish(
+    await _get_event_manager().publish(
         "workflow_step_completed",
         {
             "workflow_id": workflow_id,
@@ -997,7 +882,7 @@ async def _finalize_workflow_completed(
     # Record metrics (Issue #281: uses helper)
     _record_workflow_metrics(workflow_type, workflow_start_time, "success")
 
-    await event_manager.publish(
+    await _get_event_manager().publish(
         "workflow_completed",
         {
             "workflow_id": workflow_id,
@@ -1025,7 +910,7 @@ async def _finalize_workflow_failed(
     # Record metrics (Issue #281: uses helper)
     _record_workflow_metrics(workflow_type, workflow_start_time, "failed")
 
-    await event_manager.publish(
+    await _get_event_manager().publish(
         "workflow_failed",
         {
             "workflow_id": workflow_id,
@@ -1130,12 +1015,12 @@ async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
             )
 
 
+@router.delete("/workflow/{workflow_id}", response_model=WorkflowCancelResponse)
 @with_error_handling(
-    category=ErrorCategory.NOT_FOUND,
+    category=ErrorCategory.SERVER_ERROR,
     operation="cancel_workflow",
     error_code_prefix="WORKFLOW",
 )
-@router.delete("/workflow/{workflow_id}", response_model=WorkflowCancelResponse)
 async def cancel_workflow(
     workflow_id: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -1159,7 +1044,7 @@ async def cancel_workflow(
                 if not future.done():
                     future.cancel()
 
-    await event_manager.publish(
+    await _get_event_manager().publish(
         "workflow_cancelled",
         {"workflow_id": workflow_id, "user_message": user_message},
     )
@@ -1167,14 +1052,14 @@ async def cancel_workflow(
     return {"success": True, "message": "Workflow cancelled successfully"}
 
 
-@with_error_handling(
-    category=ErrorCategory.NOT_FOUND,
-    operation="get_pending_approvals",
-    error_code_prefix="WORKFLOW",
-)
 @router.get(
     "/workflow/{workflow_id}/pending_approvals",
     response_model=WorkflowPendingApprovalsResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pending_approvals",
+    error_code_prefix="WORKFLOW",
 )
 async def get_pending_approvals(
     workflow_id: str, admin_check: bool = Depends(check_admin_permission)

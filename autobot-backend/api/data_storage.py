@@ -18,12 +18,24 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path
 from utils.catalog_http_exceptions import raise_server_error
+from api.schemas_system import (
+    CleanupResult,
+    StorageCategory,
+    StorageCleanupRequest,
+    StorageStats,
+)
+from api.schemas_workflows import (
+    DataStorageCategoryDetailResponse,
+    DataStorageConversationsSummaryResponse,
+    DataStorageDatabasesResponse,
+    DataStorageDeleteConversationResponse,
+    DataStorageOldBackupsResponse,
+)
 
 router = APIRouter(prefix="/data-storage", tags=["Data Storage"])
 logger = logging.getLogger(__name__)
@@ -43,47 +55,6 @@ def _safe_data_path(user_segment: str) -> Path:
         raise HTTPException(status_code=400, detail="Invalid path")
 
 
-class StorageCategory(BaseModel):
-    """Storage category with size info."""
-
-    name: str
-    path: str
-    size_bytes: int
-    size_human: str
-    file_count: int
-    description: str
-    can_cleanup: bool = True
-    cleanup_type: str = "manual"
-
-
-class StorageStats(BaseModel):
-    """Overall storage statistics."""
-
-    total_size_bytes: int
-    total_size_human: str
-    total_files: int
-    total_directories: int
-    categories: list[StorageCategory]
-    last_cleanup: Optional[str] = None
-
-
-class CleanupRequest(BaseModel):
-    """Cleanup request model."""
-
-    category: str
-    older_than_days: int = 0
-    dry_run: bool = True
-
-
-class CleanupResult(BaseModel):
-    """Cleanup operation result."""
-
-    category: str
-    files_removed: int
-    bytes_freed: int
-    bytes_freed_human: str
-    dry_run: bool
-    errors: list[str] = []
 
 
 def format_size(size_bytes: int) -> str:
@@ -285,12 +256,12 @@ def get_database_files() -> list[dict]:
     return sorted(db_files, key=lambda x: x["size_bytes"], reverse=True)
 
 
+@router.get("/stats", response_model=StorageStats)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_storage_stats",
-    error_code_prefix="STORAGE",
+    error_code_prefix="DATA_STORAGE",
 )
-@router.get("/stats", response_model=StorageStats)
 async def get_storage_stats():
     """Get comprehensive storage statistics."""
     try:
@@ -321,12 +292,12 @@ async def get_storage_stats():
         raise_server_error("STORAGE_0001", "Error getting storage stats")
 
 
+@router.get("/databases", response_model=DataStorageDatabasesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_database_files",
-    error_code_prefix="STORAGE",
+    operation="get_database_files_endpoint",
+    error_code_prefix="DATA_STORAGE",
 )
-@router.get("/databases")
 async def get_database_files_endpoint():
     """Get information about database files in the data directory."""
     try:
@@ -345,12 +316,12 @@ async def get_database_files_endpoint():
         raise_server_error("STORAGE_0002", "Error getting database files")
 
 
+@router.get("/category/{category_path}", response_model=DataStorageCategoryDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_category_details",
-    error_code_prefix="STORAGE",
+    error_code_prefix="DATA_STORAGE",
 )
-@router.get("/category/{category_path}")
 async def get_category_details(
     category_path: str,
     limit: int = Query(default=100, le=1000),
@@ -430,14 +401,14 @@ def _scan_and_remove_files(
     return files_removed, bytes_freed, errors
 
 
+@router.post("/cleanup", response_model=CleanupResult)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_category",
-    error_code_prefix="STORAGE",
+    error_code_prefix="DATA_STORAGE",
 )
-@router.post("/cleanup", response_model=CleanupResult)
 async def cleanup_category(
-    request: CleanupRequest,
+    request: StorageCleanupRequest,
     _: None = Depends(check_admin_permission),
 ):
     """Clean up files in a storage category. Requires admin permission."""
@@ -492,12 +463,12 @@ async def cleanup_category(
         raise_server_error("STORAGE_0004", "Error during cleanup")
 
 
+@router.post("/cleanup/old-backups", response_model=DataStorageOldBackupsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_old_backups",
-    error_code_prefix="STORAGE",
+    error_code_prefix="DATA_STORAGE",
 )
-@router.post("/cleanup/old-backups")
 async def cleanup_old_backups(
     dry_run: bool = Query(default=True),
     _: None = Depends(check_admin_permission),
@@ -543,12 +514,12 @@ async def cleanup_old_backups(
         raise_server_error("STORAGE_0005", "Error cleaning up old backups")
 
 
+@router.delete("/conversations/{conversation_id}", response_model=DataStorageDeleteConversationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_conversation",
-    error_code_prefix="STORAGE",
+    error_code_prefix="DATA_STORAGE",
 )
-@router.delete("/conversations/{conversation_id}")
 async def delete_conversation(
     conversation_id: str,
     _: None = Depends(check_admin_permission),
@@ -602,12 +573,12 @@ async def delete_conversation(
         raise_server_error("STORAGE_0006", "Error deleting conversation")
 
 
+@router.get("/conversations/summary", response_model=DataStorageConversationsSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_conversations_summary",
-    error_code_prefix="STORAGE",
+    error_code_prefix="DATA_STORAGE",
 )
-@router.get("/conversations/summary")
 async def get_conversations_summary():
     """Get summary of stored conversations."""
     try:

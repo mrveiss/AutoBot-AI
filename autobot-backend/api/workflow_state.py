@@ -20,12 +20,9 @@ Usage::
 """
 
 import logging
-from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
-
-from autobot_shared.models.service_message import ServiceMessage
+from api.schemas_workflows import WorkflowState
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_7_DAYS
@@ -48,32 +45,6 @@ STEP_EXECUTING = "executing"
 STEP_VALIDATING = "validating"
 STEP_COMPLETE = "complete"
 STEP_FAILED = "failed"
-
-
-# ------------------------------------------------------------------ #
-# Pydantic model
-# ------------------------------------------------------------------ #
-
-
-class WorkflowState(BaseModel):
-    """Persistent workflow state with explicit routing."""
-
-    workflow_id: str
-    goal: str
-    current_step: str = STEP_PLANNING
-    active_service: str = "main-backend"
-    steps_completed: List[str] = Field(default_factory=list)
-    steps_remaining: List[Dict] = Field(default_factory=list)
-    mailbox: List[ServiceMessage] = Field(default_factory=list)
-    done: bool = False
-    errors: List[str] = Field(default_factory=list)
-    created_at: str = Field(
-        default_factory=lambda: now_utc().isoformat()
-    )
-    updated_at: str = Field(
-        default_factory=lambda: now_utc().isoformat()
-    )
-    metadata: Dict = Field(default_factory=dict)
 
 
 # ------------------------------------------------------------------ #

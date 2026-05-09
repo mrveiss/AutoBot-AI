@@ -72,6 +72,22 @@ Bulk: `scripts/cleanup-worktrees.sh --dry-run` then `scripts/cleanup-worktrees.s
 - "commit" = YOUR changes only; "commit all" = everything in grouped chunks
 - Prefer incremental `Edit` over full file `Write` for files >50 lines
 
+**schemas_common.py serialization constraint (response_model= batches):**
+`autobot-backend/api/schemas_common.py` is an append-only file — every `response_model=` audit batch appends new Pydantic schema classes to its end. When two such batches branch from the same `Dev_new_gui` head and both append to this file, git always produces a `CONFLICT (content)`. This is not a real code conflict; it is a git limitation with concurrent appends to the same file.
+
+Rules:
+- **Do not run two `response_model=` audit batches in parallel.** Serialize them — wait for the first batch's PR to merge before starting the next.
+- This constraint applies until issue #5799 (per-domain schema split) is resolved.
+- If a conflict occurs anyway, the resolution is always deterministic:
+
+```bash
+# Step 1: take origin/Dev_new_gui as the authoritative base
+git show origin/Dev_new_gui:autobot-backend/api/schemas_common.py > autobot-backend/api/schemas_common.py
+
+# Step 2: append the new schema classes from our branch at the end
+# (extract them from git diff or the conflicting branch's version)
+```
+
 ---
 
 ## Agent Delegation
@@ -159,3 +175,75 @@ Subagents cannot autonomously acquire Bash permission. Run batch file-manipulati
 **Self-Improvement:** After corrections, update `tasks/lessons.md`.
 
 **Elegance Gate:** For non-trivial changes, pause and ask "Is there a more elegant way?" — but elegance means the simplest correct solution.
+
+---
+
+## Pre-Merge Validation
+
+Run these gates before creating a PR or merging any branch. Gates are ordered by cost — cheapest first.
+
+### Gate 0: Squash-Duplicate Detection
+
+Before running any other validation, check whether the branch contains commits that are already squash-merged to `Dev_new_gui`. A squash merge collapses N commits into one, so the individual commit SHAs differ even though the diff is identical. `git log --cherry-pick` detects this by comparing patch IDs rather than SHAs.
+
+```bash
+# Gate 0: Squash-Duplicate Detection
+DUPES=$(git log --cherry-pick --right-only origin/Dev_new_gui...$BRANCH --oneline 2>/dev/null | wc -l)
+TOTAL=$(git log origin/Dev_new_gui...$BRANCH --oneline 2>/dev/null | wc -l)
+NEW=$((TOTAL - DUPES))
+if [ "$DUPES" -gt 0 ]; then
+  echo "WARNING: $DUPES of $TOTAL commit(s) already squash-merged to Dev_new_gui — $NEW truly new"
+  git log --cherry-pick --right-only origin/Dev_new_gui...$BRANCH --format="  %H %s"
+fi
+```
+
+**If DUPES == TOTAL:** The entire branch is already in `Dev_new_gui`. Close the issue without creating a PR — the work is done.
+
+**If DUPES > 0 but < TOTAL:** Some commits are new. Rebase the branch onto `origin/Dev_new_gui` to drop the duplicate patches before opening a PR. This prevents merge conflicts and duplicate hunks in the diff.
+
+**If DUPES == 0:** No duplicates — proceed to Gate 1.
+
+### Gate 1: Syntax and Imports
+
+```bash
+# Backend
+python -m py_compile <changed_files>
+python -c 'import <module>' for each modified file
+
+# Frontend
+npx tsc --noEmit -p autobot-vue/tsconfig.app.json
+```
+
+### Gate 2: Call-Site Impact
+
+For every function removed or renamed, grep all callers and verify none are broken:
+
+```bash
+grep -r "old_function_name" --include="*.py" src/
+grep -r "oldFunctionName" --include="*.ts" --include="*.vue" autobot-vue/src/
+```
+
+### Gate 3: Targeted Tests
+
+Run tests only for changed files to keep validation fast:
+
+```bash
+python -m pytest tests/$(dirname <changed_file>) -x -q
+```
+
+### Gate 4: Linting
+
+```bash
+# Use the project wrapper — it pins target-version=py312 + line-length=120
+# so a host running Python 3.10 doesn't produce spurious diffs (#7249).
+make format-check
+# Or, equivalently, for the whole tree:
+scripts/format.sh --check
+# For a specific file:
+scripts/format.sh path/to/file.py
+npm run lint --prefix autobot-vue 2>&1 | grep "error"
+```
+
+Direct invocations like `python -m black <file>` from a Python<3.12 host
+will silently downgrade to py3.10 syntax (Black emits a warning, not an
+error) and produce 100+-line spurious diffs — always use the wrapper.

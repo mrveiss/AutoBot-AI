@@ -16,11 +16,29 @@ import tempfile
 import time
 import uuid
 from dataclasses import dataclass
+from services.tool_output_filter import _dedup_consecutive, _strip_ansi
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import docker
-from docker.errors import DockerException, ImageNotFound
+try:
+    # docker SDK is an optional runtime dep; required for the sandbox
+    # executor itself but the api/sandbox.py router and other importers
+    # need this module to load cleanly (#6667). When docker is missing,
+    # SecureSandboxExecutor raises an informative error on first use via
+    # the docker_client check at runtime.
+    import docker
+    from docker.errors import DockerException, ImageNotFound
+
+    DOCKER_SDK_AVAILABLE = True
+except ImportError as _docker_import_error:
+    DOCKER_SDK_AVAILABLE = False
+    docker = None  # type: ignore[assignment]
+
+    class DockerException(Exception):  # type: ignore[no-redef]
+        """Stub raised when docker SDK is not installed."""
+
+    class ImageNotFound(DockerException):  # type: ignore[no-redef]
+        """Stub raised when docker SDK is not installed."""
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_optional_singleton
@@ -92,11 +110,17 @@ class SecureSandboxExecutor:
     - File system restrictions
     """
 
-    def __init__(self, docker_client: Optional[docker.DockerClient] = None):
+    def __init__(self, docker_client: "Optional[docker.DockerClient]" = None):
         """Initialize secure sandbox executor with Docker client and Redis monitoring."""
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-        # Docker client
+        # Docker client — fail informatively if SDK is missing (#6667)
+        if not DOCKER_SDK_AVAILABLE:
+            raise DockerException(
+                "docker SDK not installed; install with `pip install docker` to enable "
+                "the secure sandbox executor."
+            )
+
         try:
             self.docker_client = docker_client or docker.from_env()
             self.logger.info("Docker client initialized")
@@ -569,6 +593,7 @@ class SecureSandboxExecutor:
         # In production, would parse the stream headers properly
         try:
             log_text = logs.decode("utf-8", errors="replace")
+            log_text = _strip_ansi(_dedup_consecutive(log_text))
             return log_text, ""
         except Exception:
             return "", "Failed to parse logs"

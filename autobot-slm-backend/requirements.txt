@@ -10,13 +10,13 @@
 prometheus-client>=0.24.1
 
 # Web framework
-fastapi>=0.135.2                # SECURITY UPDATE - requires starlette >=0.52.1
-uvicorn[standard]>=0.42.0
+fastapi>=0.136.1                # SECURITY UPDATE - requires starlette >=0.52.1
+uvicorn[standard]>=0.46.0
 
 # Database - PostgreSQL (Issue #786)
 sqlalchemy>=2.0.48
 asyncpg>=0.31.0  # Async PostgreSQL driver for SQLAlchemy
-psycopg2-binary>=2.9.11  # Sync PostgreSQL driver for migrations
+psycopg2-binary>=2.9.12  # Sync PostgreSQL driver for migrations
 
 # Data validation
 pydantic[email]>=2.12.5
@@ -26,7 +26,7 @@ typing_extensions>=4.15.0  # For Python 3.8 compatibility
 # Authentication
 PyJWT[crypto]>=2.12.1
 bcrypt>=5.0.0  # Direct bcrypt API — passlib removed (#2669)
-python-multipart>=0.0.22          # SECURITY UPDATE - arbitrary file write fix
+python-multipart>=0.0.27          # SECURITY UPDATE - arbitrary file write fix
 
 # Async utilities
 aiofiles>=25.1.0
@@ -48,7 +48,7 @@ paramiko>=4.0.0
 croniter>=6.2.2
 
 # SSO Integration (Issue #576 Phase 4)
-authlib>=1.6.9  # OAuth2/OIDC client
+authlib>=1.7.0  # OAuth2/OIDC client
 ldap3>=2.9.1  # LDAP/Active Directory
 pysaml2>=7.5.4  # SAML 2.0 Service Provider
 
@@ -56,6 +56,6 @@ pysaml2>=7.5.4  # SAML 2.0 Service Provider
 pyotp>=2.9.0  # TOTP generation and verification
 
 # Security: explicit pins to override vulnerable transitive versions
-cryptography>=46.0.6  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
+cryptography>=47.0.0  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
 # Note: pyopenssl version resolved by pysaml2's dependencies (constraints conflict with >=26.0.0)
-# cryptography>=46.0.6 provides primary security coverage
+# cryptography>=47.0.0 provides primary security coverage

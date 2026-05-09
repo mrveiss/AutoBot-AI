@@ -34,27 +34,27 @@ You are explaining AutoBot's distributed VM architecture and technical design. F
 
 **VM Breakdown:**
 
-1. **Main Machine (172.16.168.20)** - Control Center
+1. **Main Machine ({{ vm_main }})** - Control Center
    - WSL2 Ubuntu environment
    - Backend FastAPI application (port 8001)
    - Development workspace
    - VNC desktop access (port 6080)
    - Git repository and code management
 
-2. **Frontend VM (172.16.168.21)** - User Interface
+2. **Frontend VM ({{ vm_frontend }})** - User Interface
    - Vue.js 3 + TypeScript
    - Vite development server (port 5173)
    - **Critical**: ONLY frontend server permitted
    - Real User Monitoring (RUM)
    - WebSocket connections to backend
 
-3. **NPU Worker VM (172.16.168.22)** - Hardware Acceleration
+3. **NPU Worker VM ({{ vm_npu }})** - Hardware Acceleration
    - Orange Pi 5 Plus with NPU
    - RKNN toolkit for model optimization
    - Hardware-accelerated AI inference
    - Reduces load on main AI stack
 
-4. **Redis VM (172.16.168.23)** - Data Infrastructure
+4. **Redis VM ({{ vm_redis }})** - Data Infrastructure
    - Redis Stack with RediSearch
    - Multiple databases:
      - DB 0: Default/general storage
@@ -67,14 +67,14 @@ You are explaining AutoBot's distributed VM architecture and technical design. F
    - Persistent storage with AOF
    - Connection pooling
 
-5. **AI Stack VM (172.16.168.24)** - AI Processing
+5. **AI Stack VM ({{ vm_aistack }})** - AI Processing
    - Ollama for LLM management
    - Multiple model support
    - Background vectorization
    - LlamaIndex for RAG
    - Streaming response handling
 
-6. **Browser VM (172.16.168.25)** - Web Automation
+6. **Browser VM ({{ vm_browser }})** - Web Automation
    - Playwright browser automation
    - Headless Chrome/Firefox
    - Web scraping capabilities
@@ -85,7 +85,7 @@ You are explaining AutoBot's distributed VM architecture and technical design. F
 **Backend → Frontend:**
 - REST API: HTTP/HTTPS
 - WebSocket: Real-time chat streaming
-- CORS configured for 172.16.168.21
+- CORS configured for {{ vm_frontend }}
 
 **Backend → Redis:**
 - Redis protocol

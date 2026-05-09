@@ -185,16 +185,16 @@ function formatDate(date?: string): string {
 .workflow-history { height: 100%; display: flex; flex-direction: column; }
 
 .history-filters { display: flex; justify-content: space-between; align-items: center; gap: var(--spacing-4); margin-bottom: var(--spacing-5); flex-wrap: wrap; }
-.search-box { display: flex; align-items: center; gap: var(--spacing-2-5); padding: 10px 14px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-lg); flex: 1; min-width: 200px; }
+.search-box { display: flex; align-items: center; gap: var(--spacing-2-5); padding: var(--spacing-2-5) var(--spacing-3-5); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-lg); flex: 1; min-width: 200px; }
 .search-box i { color: var(--text-muted); }
 .search-box input { flex: 1; background: none; border: none; color: var(--text-primary); font-size: var(--text-sm); outline: none; }
 .search-box input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .filter-group { display: flex; gap: var(--spacing-2); }
-.filter-group select { padding: 10px 12px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-lg); color: var(--text-primary); font-size: var(--text-sm); cursor: pointer; }
+.filter-group select { padding: var(--spacing-2-5) var(--spacing-3); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-lg); color: var(--text-primary); font-size: var(--text-sm); cursor: pointer; }
 
 .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-tertiary); padding: var(--spacing-10); }
 .empty-state i { font-size: var(--text-5xl); margin-bottom: var(--spacing-4); }
-.empty-state h3 { margin: 0 0 8px; color: var(--text-primary); }
+.empty-state h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-2); color: var(--text-primary); }
 
 .history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--spacing-3); }
 .history-item { display: flex; align-items: center; gap: var(--spacing-4); padding: var(--spacing-4); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-xl); cursor: pointer; transition: all 0.2s; }
@@ -212,7 +212,7 @@ function formatDate(date?: string): string {
 .item-meta span { display: flex; align-items: center; gap: var(--spacing-1); }
 
 .item-stats { display: flex; gap: var(--spacing-3); }
-.item-stats .stat { font-size: var(--text-xs); padding: 4px 10px; border-radius: var(--radius-xl); }
+.item-stats .stat { font-size: var(--text-xs); padding: var(--spacing-1) var(--spacing-2-5); border-radius: var(--radius-xl); }
 .item-stats .stat span { font-weight: 600; }
 .item-stats .success { background: var(--color-success-bg); color: var(--color-success); }
 .item-stats .failed { background: var(--color-error-bg); color: var(--color-error); }
@@ -222,8 +222,8 @@ function formatDate(date?: string): string {
 .btn-icon { width: 32px; height: 32px; background: var(--bg-tertiary); border: none; border-radius: var(--radius-md); color: var(--text-secondary); cursor: pointer; transition: all 0.15s; }
 .btn-icon:hover { background: var(--bg-hover); color: var(--text-primary); }
 
-.pagination { display: flex; justify-content: center; align-items: center; gap: var(--spacing-4); padding: 16px 0; margin-top: auto; }
-.pagination button { padding: 8px 12px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); color: var(--text-secondary); cursor: pointer; }
+.pagination { display: flex; justify-content: center; align-items: center; gap: var(--spacing-4); padding: var(--spacing-4) var(--spacing-0); margin-top: auto; }
+.pagination button { padding: var(--spacing-2) var(--spacing-3); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); color: var(--text-secondary); cursor: pointer; }
 .pagination button:hover:not(:disabled) { background: var(--bg-hover); }
 .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
 .pagination span { font-size: var(--text-sm); color: var(--text-tertiary); }

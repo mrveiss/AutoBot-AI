@@ -23,11 +23,27 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Query, Request
+
+from api.schemas_agent import (
+    LLMPatternsAnalyzeResponse,
+    LLMPatternsCacheOpportunitiesResponse,
+    LLMPatternsCategoryDistributionResponse,
+    LLMPatternsCostBreakdownResponse,
+    LLMPatternsHealthResponse,
+    LLMPatternsModelComparisonResponse,
+    LLMPatternsRecommendationsResponse,
+    LLMPatternsRecordResponse,
+    LLMPatternsStatsResponse,
+)
+from api.schemas_analytics import (
+    OptimizationType,
+    PromptAnalysisRequest,
+    PromptCategory,
+    UsageRecordRequest,
+)
 from redis.exceptions import RedisError
 
 from autobot_shared.redis_client import RedisDatabase
@@ -51,39 +67,6 @@ logger = logging.getLogger(__name__)
 
 # O(1) lookup optimization constant (Issue #326)
 EXPENSIVE_MODELS = {EXPENSIVE_MODEL_MARKER_OPUS, EXPENSIVE_MODEL_MARKER_GPT4}
-
-
-class PromptCategory(str, Enum):
-    """Categories of LLM prompts"""
-
-    CODE_GENERATION = "code_generation"
-    CODE_REVIEW = "code_review"
-    DOCUMENTATION = "documentation"
-    ANALYSIS = "analysis"
-    CHAT = "chat"
-    TASK_PLANNING = "task_planning"
-    TRANSLATION = "translation"
-    SUMMARIZATION = "summarization"
-    UNKNOWN = "unknown"
-
-
-class OptimizationType(str, Enum):
-    """Types of optimization opportunities"""
-
-    CACHE_PROMPT = "cache_prompt"
-    USE_SMALLER_MODEL = "use_smaller_model"
-    REDUCE_CONTEXT = "reduce_context"
-    BATCH_REQUESTS = "batch_requests"
-    TEMPLATE_REUSE = "template_reuse"
-
-
-class CostLevel(str, Enum):
-    """Cost level classification"""
-
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
 
 
 # Simple prompt categories that don't require expensive models (O(1) lookup)
@@ -213,56 +196,6 @@ class ModelUsageStats:
 # =============================================================================
 # Pydantic Models
 # =============================================================================
-
-
-class PromptAnalysisRequest(BaseModel):
-    """Request for prompt analysis"""
-
-    prompt: str = Field(..., description="The prompt to analyze")
-    model: Optional[str] = Field(None, description="Model used or planned")
-
-
-class UsageRecordRequest(BaseModel):
-    """Request to record LLM usage"""
-
-    prompt: str = Field(..., description="The prompt sent")
-    model: str = Field(..., description="Model used")
-    input_tokens: int = Field(..., description="Input token count")
-    output_tokens: int = Field(..., description="Output token count")
-    response_time: float = Field(..., description="Response time in seconds")
-    success: bool = Field(default=True)
-    session_id: Optional[str] = Field(None)
-
-    # === Issue #372: Feature Envy Reduction Methods ===
-
-    def to_record_dict(
-        self,
-        prompt_hash: str,
-        prompt_preview: str,
-        category_value: str,
-        cost: float,
-    ) -> Dict[str, Any]:
-        """Convert to record dictionary for storage (Issue #372 - reduces feature envy)."""
-        return {
-            "prompt_hash": prompt_hash,
-            "prompt_preview": prompt_preview,
-            "category": category_value,
-            "model": self.model,
-            "input_tokens": self.input_tokens,
-            "output_tokens": self.output_tokens,
-            "cost": cost,
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            "response_time": self.response_time,
-            "success": self.success,
-            "session_id": self.session_id,
-        }
-
-
-class DateRangeParams(BaseModel):
-    """Date range parameters"""
-
-    start_date: Optional[str] = Field(None, description="Start date (YYYY-MM-DD)")
-    end_date: Optional[str] = Field(None, description="End date (YYYY-MM-DD)")
 
 
 # =============================================================================
@@ -984,6 +917,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
 # =============================================================================
 
 import threading
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 _analyzer: Optional[LLMPatternAnalyzer] = None
 _analyzer_lock = threading.Lock()
@@ -1005,7 +939,14 @@ def get_pattern_analyzer() -> LLMPatternAnalyzer:
 # =============================================================================
 
 
-@router.get("/health")
+
+
+@router.get("/health", response_model=LLMPatternsHealthResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_health",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 async def get_health():
     """Get LLM pattern analyzer health status.
 
@@ -1033,7 +974,12 @@ async def get_health():
     }
 
 
-@router.post("/analyze")
+@router.post("/analyze", response_model=LLMPatternsAnalyzeResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_prompt",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 async def analyze_prompt(request: PromptAnalysisRequest):
     """
     Analyze a prompt for optimization opportunities.
@@ -1044,7 +990,12 @@ async def analyze_prompt(request: PromptAnalysisRequest):
     return await analyzer.analyze_prompt(request.prompt, request.model)
 
 
-@router.post("/record")
+@router.post("/record", response_model=LLMPatternsRecordResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="record_usage",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 async def record_usage(request: UsageRecordRequest):
     """
     Record an LLM usage event.
@@ -1055,7 +1006,12 @@ async def record_usage(request: UsageRecordRequest):
     return await analyzer.record_usage(request)
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=LLMPatternsStatsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_usage_stats",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 async def get_usage_stats(days: int = Query(default=7, ge=1, le=30)):
     """
     Get usage statistics for the specified period.
@@ -1066,7 +1022,12 @@ async def get_usage_stats(days: int = Query(default=7, ge=1, le=30)):
     return await analyzer.get_usage_stats(days)
 
 
-@router.get("/cache-opportunities")
+@router.get("/cache-opportunities", response_model=LLMPatternsCacheOpportunitiesResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cache_opportunities",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 async def get_cache_opportunities(
     min_occurrences: int = Query(default=3, ge=2, le=100)
 ):
@@ -1085,7 +1046,12 @@ async def get_cache_opportunities(
     }
 
 
-@router.get("/recommendations")
+@router.get("/recommendations", response_model=LLMPatternsRecommendationsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_recommendations",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 async def get_recommendations():
     """
     Get optimization recommendations based on usage patterns.
@@ -1096,7 +1062,12 @@ async def get_recommendations():
     return {"recommendations": await analyzer.get_optimization_recommendations()}
 
 
-@router.get("/model-comparison")
+@router.get("/model-comparison", response_model=LLMPatternsModelComparisonResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_model_comparison",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 async def get_model_comparison():
     """
     Compare costs and usage across different models.
@@ -1107,7 +1078,12 @@ async def get_model_comparison():
     return {"models": await analyzer.get_model_comparison(), "period_days": 7}
 
 
-@router.get("/category-distribution")
+@router.get("/category-distribution", response_model=LLMPatternsCategoryDistributionResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_category_distribution",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 async def get_category_distribution():
     """
     Get distribution of prompt categories.
@@ -1118,7 +1094,12 @@ async def get_category_distribution():
     return await analyzer.get_category_distribution()
 
 
-@router.get("/cost-breakdown")
+@router.get("/cost-breakdown", response_model=LLMPatternsCostBreakdownResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cost_breakdown",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 async def get_cost_breakdown(days: int = Query(default=7, ge=1, le=30)):
     """
     Get detailed cost breakdown.

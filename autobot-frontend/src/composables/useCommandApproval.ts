@@ -18,6 +18,7 @@
 import { ref } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import apiClient from '@/utils/ApiClient'
 import { useToast } from '@/composables/useToast'
 import { createLogger } from '@/utils/debugUtils'
 import { useChatStore } from '@/stores/useChatStore'
@@ -43,6 +44,12 @@ export interface CommandResult {
   stderr?: string
   return_code?: number
   command?: string
+  error?: string
+}
+
+export interface ApprovalResponse {
+  status: 'approved' | 'denied' | 'error' | string
+  comment?: string
   error?: string
 }
 
@@ -121,7 +128,7 @@ export function useCommandApproval() {
         const backendUrl = await appConfig.getApiUrl(
           `${getApiBase()}/agent-terminal/commands/${command_id}`
         )
-        const response = await fetchWithAuth(backendUrl, { signal })
+        const response = await fetchWithAuth(backendUrl, { signal }) // fetchWithAuth retained: AbortController signal for polling abort — exempt (#6256)
 
         if (!response.ok) {
           logger.error('Failed to get command state:', response.status)
@@ -218,27 +225,17 @@ export function useCommandApproval() {
     }
 
     try {
-      // Get backend URL from appConfig
-      const backendUrl = await appConfig.getApiUrl(
-        `${getApiBase()}/agent-terminal/sessions/${terminal_session_id}/approve`
-      )
-
-      const response = await fetchWithAuth(backendUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
+      const result = await apiClient.post<ApprovalResponse>(
+        `${getApiBase()}/agent-terminal/sessions/${terminal_session_id}/approve`,
+        {
           approved,
           user_id: currentUserId.value,
           comment: comment || null,
           auto_approve_future: autoApproveFuture.value, // Send auto-approve preference
           remember_for_project: rememberForProject.value, // Permission v2
-          project_path: currentProjectPath.value // Permission v2
-        })
-      })
-
-      const result = await response.json()
+          project_path: currentProjectPath.value, // Permission v2
+        }
+      )
       logger.debug('Approval response:', result)
 
       if (result.status === 'approved' || result.status === 'denied') {
@@ -389,6 +386,36 @@ export function useCommandApproval() {
     return riskClasses[riskLevel] || 'text-gray-600'
   }
 
+  /**
+   * Simple approve/deny for CommandPermissionDialog (#6088).
+   * Posts to agent-terminal approve endpoint and returns the raw response data.
+   */
+  const approveCommandForDialog = async (
+    terminalSessionId: string,
+    approved: boolean,
+    userId = 'web_user'
+  ): Promise<ApprovalResponse> => {
+    const result = await apiClient.post<ApprovalResponse>(
+      `${getApiBase()}/agent-terminal/sessions/${terminalSessionId}/approve`,
+      { approved, user_id: userId }
+    )
+    return result
+  }
+
+  /**
+   * Submit a chat comment via /chat/direct (#6088).
+   */
+  const submitChatComment = async (
+    chatId: string | null | undefined,
+    message: string
+  ): Promise<unknown> => {
+    const response = await apiClient.post(`${getApiBase()}/chat/direct`, {
+      message,
+      chat_id: chatId
+    }) as { data?: unknown }
+    return response
+  }
+
   return {
     // State
     processingApproval,
@@ -412,6 +439,10 @@ export function useCommandApproval() {
     getRiskClass,
 
     // Permission v2: Project context methods
-    setProjectContext
+    setProjectContext,
+
+    // CommandPermissionDialog helpers (#6088)
+    approveCommandForDialog,
+    submitChatComment
   }
 }

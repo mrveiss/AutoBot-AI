@@ -11,6 +11,7 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 
+from api.schemas_knowledge import KnowledgeDebugRedisResponse, KnowledgeFreshStatsResponse, KnowledgeRebuildIndexResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_management.types import DATABASE_MAPPING
@@ -22,12 +23,12 @@ router = APIRouter(
 logger = logging.getLogger(__name__)
 
 
+@router.get("/fresh_stats", response_model=KnowledgeFreshStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_fresh_knowledge_stats",
-    error_code_prefix="KNOWLEDGE_FRESH",
+    error_code_prefix="KNOWLEDGE_DEBUG",
 )
-@router.get("/fresh_stats")
 async def get_fresh_knowledge_stats(request: Request = None):
     """Get knowledge base stats using a completely fresh instance (bypasses all cache)"""
     try:
@@ -93,12 +94,12 @@ async def get_fresh_knowledge_stats(request: Request = None):
         }
 
 
+@router.get("/debug_redis", response_model=KnowledgeDebugRedisResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="debug_redis_connection",
-    error_code_prefix="KNOWLEDGE_FRESH",
+    error_code_prefix="KNOWLEDGE_DEBUG",
 )
-@router.get("/debug_redis")
 async def debug_redis_connection():
     """Debug Redis connection and vector counts using canonical utility.
 
@@ -164,12 +165,12 @@ async def debug_redis_connection():
         return {"redis_connection": "failed", "error": "Internal server error"}
 
 
+@router.post("/rebuild_index", response_model=KnowledgeRebuildIndexResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rebuild_search_index",
-    error_code_prefix="KNOWLEDGE_FRESH",
+    error_code_prefix="KNOWLEDGE_DEBUG",
 )
-@router.post("/rebuild_index")
 async def rebuild_search_index():
     """Rebuild the search index to sync vectors with search index"""
     try:

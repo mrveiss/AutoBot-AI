@@ -195,8 +195,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { formatFileSize, formatTimeAgo } from '@/utils/formatHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import DeduplicationManager from '@/components/knowledge/DeduplicationManager.vue'
@@ -204,29 +202,11 @@ import SessionOrphanManager from '@/components/knowledge/SessionOrphanManager.vu
 import CleanupStatistics from '@/components/knowledge/CleanupStatistics.vue'
 import BackupManager from '@/components/knowledge/BackupManager.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useKnowledgeMaintenance } from '@/composables/knowledge/useKnowledgeMaintenance'
 
 const logger = createLogger('KnowledgeMaintenance')
 
 // Types
-interface HealthDashboard {
-  status: 'healthy' | 'warning' | 'degraded' | 'error'
-  last_updated: string
-  stats: {
-    total_facts: number
-    total_vectors: number
-    db_size: number
-    categories: number
-    embedding_cache: Record<string, any>
-  }
-  quality: {
-    overall_score: number
-    dimensions: Record<string, number>
-    critical_issues: number
-    warnings: number
-  }
-  top_recommendations: string[]
-}
-
 interface MaintenanceHistoryEntry {
   type: 'cleanup' | 'dedup' | 'backup' | 'restore' | 'orphan'
   action: string
@@ -234,31 +214,15 @@ interface MaintenanceHistoryEntry {
   timestamp: Date
 }
 
+// Composable — health dashboard fetch
+const { healthDashboard, isLoadingHealth, loadHealthDashboard } = useKnowledgeMaintenance()
+
 // State
 const isRefreshing = ref(false)
-const isLoadingHealth = ref(false)
-const healthDashboard = ref<HealthDashboard | null>(null)
 const maintenanceHistory = ref<MaintenanceHistoryEntry[]>([])
 const cleanupStatsRef = ref<InstanceType<typeof CleanupStatistics> | null>(null)
 
 // Methods
-const loadHealthDashboard = async () => {
-  isLoadingHealth.value = true
-
-  try {
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/health/dashboard`)
-
-    if (data) {
-      healthDashboard.value = data
-      logger.info('Health dashboard loaded:', data.status)
-    }
-  } catch (error) {
-    logger.error('Failed to load health dashboard:', error)
-  } finally {
-    isLoadingHealth.value = false
-  }
-}
-
 const refreshAll = async () => {
   isRefreshing.value = true
 
@@ -339,7 +303,7 @@ onMounted(() => {
   font-size: 1.75rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 0.5rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2) var(--spacing-0);
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
@@ -382,7 +346,7 @@ onMounted(() => {
 }
 
 .health-status-badge {
-  padding: 0.375rem 0.75rem;
+  padding: var(--spacing-1-5) var(--spacing-3);
   border-radius: var(--radius-full);
   font-size: var(--text-xs);
   font-weight: 600;
@@ -508,7 +472,7 @@ onMounted(() => {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
-  margin: 0 0 1rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-4) var(--spacing-0);
 }
 
 .dimension-bars {
@@ -575,7 +539,7 @@ onMounted(() => {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
-  margin: 0 0 0.75rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3) var(--spacing-0);
 }
 
 .issues-counts {
@@ -612,7 +576,7 @@ onMounted(() => {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-info-dark);
-  margin: 0 0 0.75rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3) var(--spacing-0);
 }
 
 .recommendation-list {
@@ -690,7 +654,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-4);
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
   border-left: 3px solid var(--border-light);

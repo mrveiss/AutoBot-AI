@@ -28,7 +28,7 @@ Usage:
     await manager.add_message("user", "Hello!")
 """
 
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from chat_history.analysis import AnalysisMixin
 from chat_history.base import ChatHistoryBase
@@ -124,6 +124,29 @@ class ChatHistoryManager(
             redis_host=redis_host,
             redis_port=redis_port,
         )
+
+    async def get_statistics(self) -> Dict[str, Any]:
+        """Aggregate basic counts for GET /chat/stats (#6490).
+
+        Sums message counts per session via the SessionListing + Messages
+        mixins. Cheap enough for an admin endpoint; not a hot path.
+        """
+        sessions = await self.list_sessions_fast()
+        session_count = len(sessions)
+        total_messages = 0
+        for session in sessions:
+            session_id = session.get("id") or session.get("session_id")
+            if not session_id:
+                continue
+            try:
+                total_messages += await self.get_session_message_count(session_id)
+            except Exception:
+                continue
+        return {
+            "session_count": session_count,
+            "message_count": total_messages,
+            "sessions": sessions[:10],
+        }
 
 
 # Convenience exports

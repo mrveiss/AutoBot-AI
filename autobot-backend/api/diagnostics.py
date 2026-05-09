@@ -20,13 +20,16 @@ Used for:
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Query, Request
 
-from services.causal_inference_engine import (
-    CausalAnalysisReport,
-    CausalInferenceEngine,
+from api.system_health import register_singleton_probe
+from api.schemas_system import (
+    FailureAnalysisRequest,
+    FailureAnalysisResponse,
+    HealthCheckResponse,
 )
+from services.causal_inference_engine import CausalInferenceEngine
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -46,36 +49,16 @@ def get_engine() -> CausalInferenceEngine:
 
 
 # =============================================================================
-# Request/Response Models
-# =============================================================================
-
-
-class FailureAnalysisRequest(BaseModel):
-    """Request to analyze a task failure."""
-
-    task_id: str
-    error_description: Optional[str] = None
-
-
-class FailureAnalysisResponse(BaseModel):
-    """Response from failure analysis."""
-
-    data: dict  # CausalAnalysisReport serialized
-
-
-class HealthCheckResponse(BaseModel):
-    """Health check response."""
-
-    status: str
-    engine_ready: bool
-
-
-# =============================================================================
 # Endpoints
 # =============================================================================
 
 
 @router.post("/analyze-failure", response_model=FailureAnalysisResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_failure",
+    error_code_prefix="DIAGNOSTICS",
+)
 async def analyze_failure(request: FailureAnalysisRequest):
     """
     Analyze a task failure and return root-cause report with recommendations.
@@ -121,7 +104,15 @@ async def analyze_failure(request: FailureAnalysisRequest):
         raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
 
 
+register_singleton_probe("diagnostics", get_engine)
+
+
 @router.get("/health", response_model=HealthCheckResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="DIAGNOSTICS",
+)
 async def health_check():
     """
     Check diagnostics service health.
@@ -138,7 +129,12 @@ async def health_check():
         return HealthCheckResponse(status="error", engine_ready=False)
 
 
-@router.get("/analyze-failure")
+@router.get("/analyze-failure", response_model=FailureAnalysisResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_failure_get",
+    error_code_prefix="DIAGNOSTICS",
+)
 async def analyze_failure_get(
     task_id: str = Query(..., description="Task ID to analyze"),
     error_description: Optional[str] = Query(

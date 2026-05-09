@@ -35,8 +35,8 @@ async def test_check_rate_limit_allows_under_threshold(mock_redis):
     mock_redis.get = AsyncMock(return_value="2")  # 2 attempts
 
     with patch(
-        "src.user_management.middleware.rate_limit.get_redis_client",
-        return_value=mock_redis,
+        "user_management.middleware.rate_limit.get_async_redis_client",
+        new=AsyncMock(return_value=mock_redis),
     ):
         limiter = PasswordChangeRateLimiter()
         is_allowed, remaining = await limiter.check_rate_limit(user_id)
@@ -58,8 +58,8 @@ async def test_check_rate_limit_blocks_exceeded(mock_redis):
     mock_redis.ttl = AsyncMock(return_value=1620)  # 27 minutes
 
     with patch(
-        "src.user_management.middleware.rate_limit.get_redis_client",
-        return_value=mock_redis,
+        "user_management.middleware.rate_limit.get_async_redis_client",
+        new=AsyncMock(return_value=mock_redis),
     ):
         limiter = PasswordChangeRateLimiter()
 
@@ -79,8 +79,8 @@ async def test_record_attempt_increments_on_failure(mock_redis):
     mock_redis.expire = AsyncMock()
 
     with patch(
-        "src.user_management.middleware.rate_limit.get_redis_client",
-        return_value=mock_redis,
+        "user_management.middleware.rate_limit.get_async_redis_client",
+        new=AsyncMock(return_value=mock_redis),
     ):
         limiter = PasswordChangeRateLimiter()
         await limiter.record_attempt(user_id, success=False)
@@ -99,8 +99,8 @@ async def test_record_attempt_clears_on_success(mock_redis):
     mock_redis.delete = AsyncMock(return_value=1)
 
     with patch(
-        "src.user_management.middleware.rate_limit.get_redis_client",
-        return_value=mock_redis,
+        "user_management.middleware.rate_limit.get_async_redis_client",
+        new=AsyncMock(return_value=mock_redis),
     ):
         limiter = PasswordChangeRateLimiter()
         await limiter.record_attempt(user_id, success=True)

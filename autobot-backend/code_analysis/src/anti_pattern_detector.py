@@ -91,6 +91,12 @@ class AntiPatternType(Enum):
     PRIMITIVE_OBSESSION = "primitive_obsession"
     LAZY_CLASS = "lazy_class"
     REFUSED_BEQUEST = "refused_bequest"
+    # Issue #6661: Liskov Substitution Principle violations
+    LSP_SIGNATURE_INCOMPATIBLE = "lsp_signature_incompatible"
+    LSP_EXCEPTION_CONTRACT_CHANGED = "lsp_exception_contract_changed"
+    # Issue #6684: consolidation opportunities (missing-inheritance siblings to LSP)
+    DUPLICATE_ENUM = "duplicate_enum"
+    DUPLICATE_CLASS_SHAPE = "duplicate_class_shape"
 
 
 @dataclass
@@ -132,7 +138,7 @@ class ClassInfo:
     name: str
     file_path: str
     line_number: int
-    methods: List[ast.FunctionDef]
+    methods: List[ast.AST]  # ast.FunctionDef | ast.AsyncFunctionDef (#6661)
     attributes: Set[str]
     base_classes: List[str]
     method_calls: Dict[str, List[str]]  # method -> list of called methods/attrs
@@ -267,7 +273,9 @@ class AntiPatternDetector:
 
     def __init__(self, redis_client=None):
         self.redis_client = redis_client
-        self.config = config
+        # #6733: removed `self.config = config` — referenced an undefined name
+        # and was never read elsewhere in the module. Direct AntiPatternDetector()
+        # instantiation now works in any context.
 
         # Cache keys
         self.CACHE_KEY = "anti_pattern_analysis"
@@ -299,9 +307,14 @@ class AntiPatternDetector:
         """
         start_time = time.time()
 
-        patterns = patterns or ["**/*.py"]
-        # Issue #1183: Use module-level constant
-        exclude_patterns = exclude_patterns or _DEFAULT_EXCLUDE_PATTERNS
+        # #6734: use `is None` sentinel instead of `or` idiom — explicit
+        # `exclude_patterns=[]` should disable exclusion, not silently
+        # apply the defaults (the `or` form treated empty list as falsy).
+        if patterns is None:
+            patterns = ["**/*.py"]
+        if exclude_patterns is None:
+            # Issue #1183: Use module-level constant
+            exclude_patterns = _DEFAULT_EXCLUDE_PATTERNS
 
         logger.info(f"Starting anti-pattern analysis in {root_path}")
 
@@ -321,6 +334,11 @@ class AntiPatternDetector:
         anti_patterns.extend(await self._detect_lazy_classes())
         anti_patterns.extend(await self._detect_dead_code())
         anti_patterns.extend(await self._detect_data_clumps())
+        # Issue #6661: Liskov Substitution Principle violations
+        anti_patterns.extend(await self._detect_lsp_violations())
+        # Issue #6684: consolidation opportunities (missing-inheritance siblings to LSP)
+        anti_patterns.extend(await self._detect_duplicate_enums())
+        anti_patterns.extend(await self._detect_duplicate_class_shapes())
 
         # Phase 3: Generate report
         analysis_time = time.time() - start_time
@@ -334,8 +352,41 @@ class AntiPatternDetector:
             f"Anti-pattern analysis complete: {report.total_issues} issues found "
             f"in {analysis_time:.2f}s (health score: {report.health_score:.1f}/100)"
         )
-
         return report
+
+    async def analyze_cross_file_only(
+        self,
+        root_path: str = ".",
+        patterns: List[str] = None,
+        exclude_patterns: List[str] = None,
+    ) -> List[AntiPatternInstance]:
+        """Run only the cross-file rules (#6747).
+
+        The four rules added by #6661 (LSP) and #6684 (consolidation) need
+        a whole-codebase class index, but the production per-file
+        ``AntiPatternDetector.analyze_file()`` in
+        ``code_intelligence/anti_pattern_detector.py`` doesn't build one.
+        This method does the parse pass once and runs ONLY the cross-file
+        rules — letting the scanner finalize step surface them through
+        ``/codebase/problems`` without re-running the per-file rules
+        already covered by the production analyzer.
+
+        Returns:
+            List of AntiPatternInstance for ChromaDB persistence.
+        """
+        # Default-arg handling: same `is None` discipline as analyze() (#6734)
+        if patterns is None:
+            patterns = ["**/*.py"]
+        if exclude_patterns is None:
+            exclude_patterns = _DEFAULT_EXCLUDE_PATTERNS
+
+        await self._parse_codebase(root_path, patterns, exclude_patterns)
+
+        results: List[AntiPatternInstance] = []
+        results.extend(await self._detect_lsp_violations())
+        results.extend(await self._detect_duplicate_enums())
+        results.extend(await self._detect_duplicate_class_shapes())
+        return results
 
     async def _parse_codebase(
         self, root_path: str, patterns: List[str], exclude_patterns: List[str]
@@ -437,7 +488,7 @@ class AntiPatternDetector:
 
     @staticmethod
     def _extract_method_call_data(
-        methods: List[ast.FunctionDef],
+        methods: List[ast.AST]  # ast.FunctionDef | ast.AsyncFunctionDef (#6661),
     ) -> Tuple[Dict[str, List[str]], Dict[str, int]]:
         """Extract method calls and external references from a list of AST methods.
 
@@ -466,8 +517,15 @@ class AntiPatternDetector:
     ) -> Optional[ClassInfo]:
         """Analyze a class definition"""
         try:
-            # Extract methods
-            methods = [n for n in node.body if isinstance(n, ast.FunctionDef)]
+            # Extract methods (#6661: include AsyncFunctionDef so the LSP
+            # detector can catch sync/async signature mismatches between
+            # parent and child overrides — previously async methods were
+            # silently skipped by every existing detector too).
+            methods = [
+                n
+                for n in node.body
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ]
 
             # Extract attributes (from __init__ and class body)
             attributes = set()
@@ -1021,6 +1079,546 @@ class AntiPatternDetector:
                         ),
                         refactoring_effort="low",
                         related_entities=list(methods[:5]),
+                    )
+                )
+
+        return issues
+
+    # ========== Liskov Substitution Principle Detection (Issue #6661) ==========
+
+    # Names that look like ABC/Protocol stubs in the parent — children adding
+    # behavior on top of these is the *purpose*, not an LSP violation.
+    _ABSTRACT_PARENT_NAMES = frozenset(
+        {"ABC", "ABCMeta", "Protocol", "RuntimeProtocol"}
+    )
+    _MIXIN_SUFFIXES = ("Mixin", "Protocol", "ABC")
+
+    def _is_async_method(self, method: ast.AST) -> bool:
+        """True when the method is declared `async def`."""
+        return isinstance(method, ast.AsyncFunctionDef)
+
+    def _required_positional_count(self, method: ast.AST) -> int:
+        """Count positional args without defaults (excluding ``self``/``cls``)."""
+        if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return 0
+        args = method.args.args
+        # Strip the bound argument (self/cls) if present
+        if args and args[0].arg in ("self", "cls"):
+            args = args[1:]
+        defaults = method.args.defaults or []
+        return max(0, len(args) - len(defaults))
+
+    def _total_positional_count(self, method: ast.AST) -> int:
+        """Count total positional slots — required + with-default — excluding
+        ``self``/``cls``. A child can WIDEN preconditions by adding defaults,
+        which is correct LSP; the comparison that matters is whether the child
+        accepts as many positional slots as the parent requires (#6755)."""
+        if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return 0
+        args = method.args.args
+        if args and args[0].arg in ("self", "cls"):
+            args = args[1:]
+        return len(args)
+
+    @staticmethod
+    def _is_docstring_stmt(stmt: ast.stmt) -> bool:
+        """True when the statement is a bare string literal (function docstring)."""
+        return (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Constant)
+            and isinstance(stmt.value.value, str)
+        )
+
+    @staticmethod
+    def _is_stub_statement(stmt: ast.stmt) -> bool:
+        """True when the statement is a stub form: ``pass`` / ``...`` /
+        ``raise NotImplementedError``."""
+        if isinstance(stmt, ast.Pass):
+            return True
+        if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant):
+            if stmt.value.value is Ellipsis or stmt.value.value is None:
+                return True
+        if isinstance(stmt, ast.Raise):
+            exc = stmt.exc
+            if isinstance(exc, ast.Name) and exc.id == "NotImplementedError":
+                return True
+            if isinstance(exc, ast.Call) and isinstance(exc.func, ast.Name):
+                if exc.func.id == "NotImplementedError":
+                    return True
+        return False
+
+    def _is_abstract_or_stub(self, method: ast.AST) -> bool:
+        """Parent overrides should be skipped if the parent body is an
+        abstract / Protocol stub — children must add behavior.
+
+        Recognized stub bodies (a leading docstring is allowed and ignored):
+          * ``pass``
+          * ``...``  (Ellipsis as expression statement)
+          * ``raise NotImplementedError`` / ``raise NotImplementedError(...)``
+          * docstring-only body
+          * docstring + any of the above
+        """
+        if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return True
+        # @abstractmethod / @abc.abstractmethod
+        for dec in method.decorator_list:
+            name = ""
+            if isinstance(dec, ast.Name):
+                name = dec.id
+            elif isinstance(dec, ast.Attribute):
+                name = dec.attr
+            if "abstract" in name.lower():
+                return True
+        body = method.body
+        if not body:
+            return True
+
+        # Strip an optional leading docstring; the remaining body must be
+        # either empty (docstring-only) or a single stub statement.
+        non_doc_body = (
+            body[1:] if self._is_docstring_stmt(body[0]) else list(body)
+        )
+        if not non_doc_body:
+            return True  # docstring-only stub
+        if len(non_doc_body) == 1 and self._is_stub_statement(non_doc_body[0]):
+            return True
+        return False
+
+    def _is_skippable_class(self, cls_info: ClassInfo) -> bool:
+        """Mixins / Protocols / pure ABCs are not subject to LSP overrides."""
+        if any(cls_info.name.endswith(suf) for suf in self._MIXIN_SUFFIXES):
+            return True
+        if cls_info.has_base_class(*self._ABSTRACT_PARENT_NAMES):
+            return True
+        return False
+
+    def _exception_types_raised(self, method: ast.AST) -> Set[str]:
+        """Static set of exception type names ``raise``d directly in body."""
+        names: Set[str] = set()
+        if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return names
+        for node in ast.walk(method):
+            if isinstance(node, ast.Raise) and node.exc is not None:
+                exc = node.exc
+                if isinstance(exc, ast.Name):
+                    names.add(exc.id)
+                elif isinstance(exc, ast.Call) and isinstance(exc.func, ast.Name):
+                    names.add(exc.func.id)
+                elif isinstance(exc, ast.Call) and isinstance(exc.func, ast.Attribute):
+                    names.add(exc.func.attr)
+        return names
+
+    def _docstring_mentions_raises(self, method: ast.AST, exc_name: str) -> bool:
+        """Best-effort: parent's docstring documents the exception type."""
+        if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return False
+        doc = ast.get_docstring(method) or ""
+        return exc_name in doc
+
+    def _find_parent_method(
+        self, parent: ClassInfo, name: str
+    ) -> Optional[ast.AST]:
+        for m in parent.methods:
+            if (
+                isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and m.name == name
+            ):
+                return m
+        return None
+
+    def _resolve_parent(self, child: ClassInfo) -> Optional[ClassInfo]:
+        """Look up the FIRST in-codebase parent class. Returns None when
+        the parent is external (stdlib/library) — those are out of scope."""
+        for base_name in child.base_classes:
+            for full_name, info in self.classes.items():
+                if info.name == base_name:
+                    return info
+        return None
+
+    async def _detect_lsp_violations(self) -> List[AntiPatternInstance]:
+        """Detect Liskov Substitution Principle violations across class
+        hierarchies. Two high-confidence rules (Issue #6661):
+
+        * ``LSP_SIGNATURE_INCOMPATIBLE`` — sync/async mismatch between an
+          override and its parent, or required-param removal.
+        * ``LSP_EXCEPTION_CONTRACT_CHANGED`` — the override raises an
+          exception type that the parent neither raises nor mentions in
+          its docstring's Raises clause.
+
+        Excludes ABC/Protocol stubs, ``@abstractmethod`` parents, and
+        Mixin/Protocol classes — adding behavior to those is the *point*
+        of inheritance, not a contract break.
+        """
+        issues: List[AntiPatternInstance] = []
+
+        for full_name, child in self.classes.items():
+            if self._is_skippable_class(child):
+                continue
+            parent = self._resolve_parent(child)
+            if parent is None or self._is_skippable_class(parent):
+                continue
+
+            for child_method in child.methods:
+                if not isinstance(
+                    child_method, (ast.FunctionDef, ast.AsyncFunctionDef)
+                ):
+                    continue
+                parent_method = self._find_parent_method(parent, child_method.name)
+                if parent_method is None:
+                    continue
+                if self._is_abstract_or_stub(parent_method):
+                    continue
+
+                # --- Signature: sync/async mismatch ---
+                if self._is_async_method(child_method) != self._is_async_method(
+                    parent_method
+                ):
+                    issues.append(
+                        AntiPatternInstance(
+                            pattern_type=AntiPatternType.LSP_SIGNATURE_INCOMPATIBLE,
+                            severity=Severity.HIGH,
+                            file_path=child.file_path,
+                            line_number=child_method.lineno,
+                            entity_name=f"{child.name}.{child_method.name}",
+                            description=(
+                                f"Override of {parent.name}.{child_method.name} changes "
+                                f"sync/async: parent is "
+                                f"{'async' if self._is_async_method(parent_method) else 'sync'}, "
+                                f"child is "
+                                f"{'async' if self._is_async_method(child_method) else 'sync'}. "
+                                "Polymorphic callers will silently get an unawaited coroutine "
+                                "(or fail to await) depending on which subclass they hold."
+                            ),
+                            metrics={
+                                "parent_class": parent.name,
+                                "parent_file": parent.file_path,
+                                "parent_async": self._is_async_method(parent_method),
+                                "child_async": self._is_async_method(child_method),
+                            },
+                            suggestion=(
+                                "Unify the signature: if any subclass needs I/O, promote "
+                                "the parent contract to ``async def``; the in-process "
+                                "implementations can simply ``return value`` inside the "
+                                "coroutine. See #6659 for a worked example."
+                            ),
+                            refactoring_effort="low",
+                            related_entities=[parent.name, parent.file_path],
+                        )
+                    )
+
+                # --- Signature: child rejects positional args parent accepts ---
+                # LSP correctness: a child override can WIDEN preconditions
+                # (accept more inputs via defaults) but must NOT NARROW them.
+                # The original bug class (#6660) was a child with `def __init__(self):`
+                # under a parent with `def __init__(self, agent_type, ...):` —
+                # `cls(agent_type)` crashes on the child because it has no slot
+                # for that positional. The check is: count the child's TOTAL
+                # positional slots (required + optional with defaults), and
+                # compare against the parent's REQUIRED count. If the child
+                # has fewer slots than the parent requires, factory calls
+                # against the parent's required-positional surface will fail.
+                child_total_positional = self._total_positional_count(child_method)
+                parent_required = self._required_positional_count(parent_method)
+                if child_total_positional < parent_required:
+                    issues.append(
+                        AntiPatternInstance(
+                            pattern_type=AntiPatternType.LSP_SIGNATURE_INCOMPATIBLE,
+                            severity=Severity.HIGH,
+                            file_path=child.file_path,
+                            line_number=child_method.lineno,
+                            entity_name=f"{child.name}.{child_method.name}",
+                            description=(
+                                f"Override of {parent.name}.{child_method.name} accepts "
+                                f"{child_total_positional} positional args but the parent "
+                                f"requires {parent_required}. A factory call like "
+                                "``cls(arg1, arg2)`` against the parent contract will "
+                                "crash with TypeError on this subclass."
+                            ),
+                            metrics={
+                                "parent_class": parent.name,
+                                "parent_file": parent.file_path,
+                                "parent_required_args": parent_required,
+                                "child_total_positional_args": child_total_positional,
+                            },
+                            suggestion=(
+                                "Restore the parent's positional params with sensible "
+                                "defaults so factory callers keep working. See #6660 for "
+                                "a worked example with __init__."
+                            ),
+                            refactoring_effort="low",
+                            related_entities=[parent.name, parent.file_path],
+                        )
+                    )
+
+                # --- Exception contract: child raises type parent doesn't ---
+                child_excs = self._exception_types_raised(child_method)
+                parent_excs = self._exception_types_raised(parent_method)
+                new_excs = child_excs - parent_excs
+                # Filter out exceptions the parent's docstring documents
+                undocumented = {
+                    e
+                    for e in new_excs
+                    if not self._docstring_mentions_raises(parent_method, e)
+                }
+                if undocumented:
+                    issues.append(
+                        AntiPatternInstance(
+                            pattern_type=AntiPatternType.LSP_EXCEPTION_CONTRACT_CHANGED,
+                            severity=Severity.HIGH,
+                            file_path=child.file_path,
+                            line_number=child_method.lineno,
+                            entity_name=f"{child.name}.{child_method.name}",
+                            description=(
+                                f"Override of {parent.name}.{child_method.name} raises "
+                                f"{sorted(undocumented)} which the parent neither raises "
+                                "nor documents in its Raises clause. Polymorphic callers "
+                                "against the parent contract have no reason to catch these."
+                            ),
+                            metrics={
+                                "parent_class": parent.name,
+                                "parent_file": parent.file_path,
+                                "new_exceptions": sorted(undocumented),
+                            },
+                            suggestion=(
+                                "Either return an error value matching the parent's return "
+                                "contract, or promote the new exception into the parent's "
+                                "documented Raises clause and propagate it through every "
+                                "sibling subclass. See #6658 for a worked example."
+                            ),
+                            refactoring_effort="medium",
+                            related_entities=[parent.name, parent.file_path],
+                        )
+                    )
+
+        return issues
+
+    # ========== Consolidation Opportunity Detection (Issue #6684) ==========
+
+    _ENUM_BASE_NAMES = frozenset(
+        {"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum"}
+    )
+    # Class-shape rule: skip patterns where shared method names is by design
+    _SHAPE_SKIP_BASE_NAMES = frozenset(
+        {
+            "BaseModel",      # Pydantic — sharing field names is fine
+            "Enum",
+            "IntEnum",
+            "StrEnum",
+            "Exception",
+            "BaseException",
+            "TypedDict",
+            "NamedTuple",
+        }
+    )
+    _SHAPE_MIN_METHODS = 5
+    _SHAPE_JACCARD_THRESHOLD = 0.7
+    _ENUM_JACCARD_THRESHOLD = 0.7
+    _ENUM_MIN_VALUES = 3
+
+    def _is_enum_class(self, cls_info: ClassInfo) -> bool:
+        """True when the class inherits from an Enum-family base."""
+        return any(b in self._ENUM_BASE_NAMES for b in cls_info.base_classes)
+
+    def _enum_value_set(self, cls_info: ClassInfo) -> Set[str]:
+        """Extract the set of enum *value* string literals from a class body.
+
+        Re-parses the source file (cheap; cached at the file level by the
+        OS/page cache).  Falls back to attribute names when values are not
+        string literals — that still gives a useful overlap signal.
+        """
+        try:
+            with open(cls_info.file_path, "r", encoding="utf-8") as f:
+                tree = ast.parse(f.read(), filename=cls_info.file_path)
+        except Exception:
+            return set()
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef) or node.name != cls_info.name:
+                continue
+            values: Set[str] = set()
+            for stmt in node.body:
+                target_name: Optional[str] = None
+                value_node: Optional[ast.AST] = None
+                if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
+                    tgt = stmt.targets[0]
+                    if isinstance(tgt, ast.Name):
+                        target_name = tgt.id
+                    value_node = stmt.value
+                elif isinstance(stmt, ast.AnnAssign) and isinstance(
+                    stmt.target, ast.Name
+                ):
+                    target_name = stmt.target.id
+                    value_node = stmt.value
+                if target_name is None or target_name.startswith("_"):
+                    continue
+                if (
+                    isinstance(value_node, ast.Constant)
+                    and isinstance(value_node.value, str)
+                ):
+                    values.add(value_node.value.lower())
+                else:
+                    # Fall back to the attribute name (lowered) — gives a
+                    # useful signal for `auto()` enums and ints alike.
+                    values.add(target_name.lower())
+            return values
+        return set()
+
+    @staticmethod
+    def _jaccard(a: Set[str], b: Set[str]) -> float:
+        union = a | b
+        if not union:
+            return 0.0
+        return len(a & b) / len(union)
+
+    def _shares_base_class(self, a: ClassInfo, b: ClassInfo) -> bool:
+        """True when a and b share at least one base class (already related)."""
+        if not a.base_classes or not b.base_classes:
+            return False
+        return bool(set(a.base_classes) & set(b.base_classes))
+
+    async def _detect_duplicate_enums(self) -> List[AntiPatternInstance]:
+        """Cluster enum classes whose value sets overlap above threshold.
+
+        Issue #6684: AutoBot's ``constants/status_enums.py`` is the canonical
+        home for status values, but many modules redeclare overlapping enums
+        (StepStatus, TaskStatus, PhasePromotionStatus, ...).  This detector
+        flags any pair of enum classes whose value sets have Jaccard
+        similarity >= 0.7 with at least 3 shared values.
+        """
+        issues: List[AntiPatternInstance] = []
+
+        enum_data: List[Tuple[str, ClassInfo, Set[str]]] = []
+        for full_name, cls_info in self.classes.items():
+            if not self._is_enum_class(cls_info):
+                continue
+            values = self._enum_value_set(cls_info)
+            if len(values) >= self._ENUM_MIN_VALUES:
+                enum_data.append((full_name, cls_info, values))
+
+        # O(n^2) over enums only — n is small in practice (~50 in this repo).
+        seen_pairs: Set[Tuple[str, str]] = set()
+        for i, (full_a, cls_a, vals_a) in enumerate(enum_data):
+            for full_b, cls_b, vals_b in enum_data[i + 1 :]:
+                # Skip if one inherits from the other (already canonical-vs-extension)
+                if cls_a.name in cls_b.base_classes or cls_b.name in cls_a.base_classes:
+                    continue
+                similarity = self._jaccard(vals_a, vals_b)
+                if similarity < self._ENUM_JACCARD_THRESHOLD:
+                    continue
+                shared = sorted(vals_a & vals_b)
+                pair_key = tuple(sorted([full_a, full_b]))
+                if pair_key in seen_pairs:
+                    continue
+                seen_pairs.add(pair_key)
+
+                issues.append(
+                    AntiPatternInstance(
+                        pattern_type=AntiPatternType.DUPLICATE_ENUM,
+                        severity=Severity.MEDIUM,
+                        file_path=cls_a.file_path,
+                        line_number=cls_a.line_number,
+                        entity_name=cls_a.name,
+                        description=(
+                            f"Enum '{cls_a.name}' overlaps {len(vals_a & vals_b)}/"
+                            f"{len(vals_a | vals_b)} values with '{cls_b.name}' in "
+                            f"{cls_b.file_path} (Jaccard={similarity:.2f}). "
+                            f"Shared values: {shared[:5]}"
+                            f"{' (truncated)' if len(shared) > 5 else ''}."
+                        ),
+                        metrics={
+                            "other_enum": cls_b.name,
+                            "other_file": cls_b.file_path,
+                            "jaccard_similarity": round(similarity, 3),
+                            "shared_value_count": len(vals_a & vals_b),
+                            "union_size": len(vals_a | vals_b),
+                            "shared_values": shared,
+                        },
+                        suggestion=(
+                            "Consolidate into a single canonical enum (see "
+                            "constants/status_enums.py for the existing pattern). "
+                            "Importing the canonical enum eliminates value drift "
+                            "and makes cross-module status comparisons type-safe."
+                        ),
+                        refactoring_effort="medium",
+                        related_entities=[cls_b.name, cls_b.file_path],
+                    )
+                )
+
+        return issues
+
+    async def _detect_duplicate_class_shapes(self) -> List[AntiPatternInstance]:
+        """Flag class pairs that share method-name sets above threshold but
+        DO NOT share a base class.  Indicates a missing extracted base /
+        Mixin / Protocol that should formalise the shared contract.
+
+        Excludes Pydantic models, exceptions, NamedTuples, TypedDicts —
+        these all naturally share method names by design.
+        """
+        issues: List[AntiPatternInstance] = []
+
+        candidates: List[Tuple[str, ClassInfo, Set[str]]] = []
+        for full_name, cls_info in self.classes.items():
+            # Skip enums and exception trees — different rules apply
+            if self._is_enum_class(cls_info):
+                continue
+            if cls_info.has_base_class(*self._SHAPE_SKIP_BASE_NAMES):
+                continue
+            method_names = {
+                m.name
+                for m in cls_info.methods
+                if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and not m.name.startswith("_")
+            }
+            if len(method_names) < self._SHAPE_MIN_METHODS:
+                continue
+            candidates.append((full_name, cls_info, method_names))
+
+        seen_pairs: Set[Tuple[str, str]] = set()
+        for i, (full_a, cls_a, names_a) in enumerate(candidates):
+            for full_b, cls_b, names_b in candidates[i + 1 :]:
+                if self._shares_base_class(cls_a, cls_b):
+                    continue
+                similarity = self._jaccard(names_a, names_b)
+                if similarity < self._SHAPE_JACCARD_THRESHOLD:
+                    continue
+                shared = sorted(names_a & names_b)
+                pair_key = tuple(sorted([full_a, full_b]))
+                if pair_key in seen_pairs:
+                    continue
+                seen_pairs.add(pair_key)
+
+                issues.append(
+                    AntiPatternInstance(
+                        pattern_type=AntiPatternType.DUPLICATE_CLASS_SHAPE,
+                        severity=Severity.LOW,
+                        file_path=cls_a.file_path,
+                        line_number=cls_a.line_number,
+                        entity_name=cls_a.name,
+                        description=(
+                            f"Class '{cls_a.name}' shares {len(names_a & names_b)}/"
+                            f"{len(names_a | names_b)} public method names with "
+                            f"'{cls_b.name}' in {cls_b.file_path} "
+                            f"(Jaccard={similarity:.2f}) but they do NOT share a "
+                            f"base class.  Suggests a missing extracted base / "
+                            f"Mixin / Protocol.  Shared methods: {shared[:5]}"
+                            f"{' (truncated)' if len(shared) > 5 else ''}."
+                        ),
+                        metrics={
+                            "other_class": cls_b.name,
+                            "other_file": cls_b.file_path,
+                            "jaccard_similarity": round(similarity, 3),
+                            "shared_method_count": len(names_a & names_b),
+                            "union_size": len(names_a | names_b),
+                            "shared_methods": shared,
+                        },
+                        suggestion=(
+                            "Extract a shared base class (Template Method) or a "
+                            "Protocol describing the common interface.  See "
+                            "BaseIntegration → SlackIntegration / JiraIntegration "
+                            "for the canonical pattern in this repo."
+                        ),
+                        refactoring_effort="medium",
+                        related_entities=[cls_b.name, cls_b.file_path],
                     )
                 )
 

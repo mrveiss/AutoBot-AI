@@ -56,12 +56,8 @@ def _get_vision_processor() -> Optional[Any]:
 class ImagePipeline(BasePipeline):
     """Pipeline for processing image content."""
 
-    def __init__(self):
-        """Initialize image processing pipeline."""
-        super().__init__(
-            pipeline_name="image",
-            supported_types=[MediaType.IMAGE],
-        )
+    PIPELINE_NAME = "image"
+    SUPPORTED_TYPES = [MediaType.IMAGE]
 
     async def _process_impl(self, media_input: MediaInput) -> ProcessingResult:
         """Process image content."""

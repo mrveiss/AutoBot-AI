@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import aiofiles
 
 from constants.network_constants import NetworkConstants
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
@@ -36,11 +36,13 @@ try:
     _bug_predictor: Optional[BugPredictor] = None
     _analyzers_available = True
 except ImportError as e:
+    from autobot_shared.missing_dep import MissingDep as _MissingDep
+
     logger.warning("Code intelligence analyzers not available: %s", e)
     _analyzers_available = False
-    _anti_pattern_detector = None
-    _performance_analyzer = None
-    _bug_predictor = None
+    _anti_pattern_detector = _MissingDep("AntiPatternDetector", e)  # type: ignore[assignment]
+    _performance_analyzer = _MissingDep("PerformanceAnalyzer", e)  # type: ignore[assignment]
+    _bug_predictor = _MissingDep("BugPredictor", e)  # type: ignore[assignment]
 
 
 # =============================================================================
@@ -937,6 +939,8 @@ def _detect_technical_debt_in_line(line_num: int, line: str, file_path: str) -> 
 
 def _run_anti_pattern_analysis(file_path: str) -> List[Dict]:
     """Run anti-pattern detection (Issue #398: extracted, Issue #662: thread-safe)."""
+    if not _analyzers_available:
+        return []
     global _anti_pattern_detector
 
     problems = []
@@ -964,6 +968,8 @@ def _run_anti_pattern_analysis(file_path: str) -> List[Dict]:
 
 def _run_performance_analysis(file_path: str) -> List[Dict]:
     """Run performance analysis (Issue #398: extracted, Issue #662: thread-safe)."""
+    if not _analyzers_available:
+        return []
     global _performance_analyzer
 
     problems = []
@@ -991,6 +997,8 @@ def _run_performance_analysis(file_path: str) -> List[Dict]:
 
 def _run_bug_prediction(file_path: str) -> List[Dict]:
     """Run bug prediction analysis (Issue #398: extracted, Issue #662: thread-safe)."""
+    if not _analyzers_available:
+        return []
     global _bug_predictor
 
     problems = []
@@ -1334,12 +1342,12 @@ async def detect_hardcodes_and_debt_with_llm(
     """
     empty_result: Dict[str, List[Metadata]] = {"hardcodes": [], "technical_debt": []}
     try:
-        llm = LLMInterface()
+        llm = get_llm_service()
         prompt = _LLM_HARDCODE_DEBT_PROMPT.format(
             language=language, file_path=file_path, code_snippet=code_snippet[:800]
         )
         messages = [{"role": "user", "content": prompt}]
-        response = await llm.chat_completion(messages, llm_type="task")
+        response = await llm.chat(messages, llm_type="task")
         result = _parse_llm_json_response(response.content.strip())
         return result if result else empty_result
     except Exception as e:

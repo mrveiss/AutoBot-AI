@@ -59,19 +59,19 @@
         depth: 1
 
     - name: "[PRE-FLIGHT] Get current git branch"
-      command: git -C {{ git_repo_root }} branch --show-current
+      command: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} branch --show-current
       register: git_branch
       changed_when: false
 
     - name: "[PRE-FLIGHT] Resolve deploy ref to commit"
       command: >-
-        git -C {{ git_repo_root }}
+        git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }}
         log -1 --format='%h %s' {{ deploy_ref }}
       register: deploy_info
       changed_when: false
 
     - name: "[PRE-FLIGHT] Check for uncommitted changes"
-      command: git -C {{ git_repo_root }} status --porcelain
+      command: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} status --porcelain
       register: git_dirty
       changed_when: false
 
@@ -106,7 +106,7 @@
 
     - name: "[PRE-FLIGHT] Create component archives"
       shell: >-
-        git -C {{ git_repo_root }} archive {{ deploy_ref }}
+        git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} archive {{ deploy_ref }}
         -- {{ item.path }} | gzip > {{ deploy_tmp }}/{{ item.name }}.tar.gz
       loop:
         - { name: slm-backend, path: autobot-slm-backend/ }
@@ -127,23 +127,23 @@
     # --- Dependency change detection (#1603) ---
     - name: "[PRE-FLIGHT] Get previous commit (before pull)"
       command: >-
-        git -C {{ git_repo_root }} rev-parse HEAD~1
+        git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} rev-parse HEAD~1
       register: prev_commit
       changed_when: false
       failed_when: false
 
     - name: "[PRE-FLIGHT] Check if Python deps changed"
       shell: >-
-        git -C {{ git_repo_root }} diff --name-only
+        git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} diff --name-only
         {{ prev_commit.stdout | default('HEAD') }} HEAD
-        -- '*/requirements.txt' 'autobot_shared/setup.py' 'autobot_shared/pyproject.toml'
+        -- '*/requirements.txt' 'autobot_shared/pyproject.toml'
       register: python_deps_diff
       changed_when: false
       failed_when: false
 
     - name: "[PRE-FLIGHT] Check if Node.js deps changed"
       shell: >-
-        git -C {{ git_repo_root }} diff --name-only
+        git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} diff --name-only
         {{ prev_commit.stdout | default('HEAD') }} HEAD
         -- '*/package.json' '*/package-lock.json'
       register: node_deps_diff
@@ -163,12 +163,12 @@
           - "  Changed files: {{ (python_deps_diff.stdout_lines | default([])) + (node_deps_diff.stdout_lines | default([])) }}"
 
     - name: "[PRE-FLIGHT] Get full commit hash"
-      command: git -C {{ git_repo_root }} log -1 --format='%H'
+      command: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} log -1 --format='%H'
       register: deploy_commit_full
       changed_when: false
 
     - name: "[PRE-FLIGHT] Get commit subject"
-      command: git -C {{ git_repo_root }} log -1 --format='%s'
+      command: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} log -1 --format='%s'
       register: deploy_commit_subject
       changed_when: false
 

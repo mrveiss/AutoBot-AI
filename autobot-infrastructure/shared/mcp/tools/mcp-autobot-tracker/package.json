@@ -21,7 +21,6 @@
     "@types/natural": "^5.0.0",
     "@types/node": "^20.0.0",
     "@types/tail": "^2.2.3",
-    "@types/uuid": "^10.0.0",
     "tail": "^2.2.6",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0"

@@ -5,141 +5,67 @@
 Enhanced Orchestration Types Module
 
 Issue #381: Extracted from enhanced_multi_agent_orchestrator.py god class refactoring.
-Contains enums and dataclasses for the enhanced orchestration system.
+Issue #6951 Phase 2B: ``AgentTask`` and ``WorkflowPlan`` are now thin subclasses
+of the canonical ``autobot_shared.workflow.WorkflowTask`` / ``WorkflowPlan``.
+The local definitions only add behaviour the canonical shapes intentionally
+omit (task lifecycle methods + structured success criteria), keeping fields
+in one place.
 """
 
 import time
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, FrozenSet, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, List
 
 if TYPE_CHECKING:
     from .success_criteria import SuccessCriteria
 
-from constants.status_enums import TaskStatus
-from constants.threshold_constants import RetryConfig, TimingConstants
+from autobot_shared.workflow import ExecutionStrategy as ExecutionStrategy
+from autobot_shared.workflow import WorkflowPlan as _SharedWorkflowPlan
+from autobot_shared.workflow import WorkflowTask
+from orchestration.types import AgentCapability  # single canonical definition (#6192)
 
 # Module-level frozenset for fallback tier checks
 FALLBACK_TIERS: FrozenSet[str] = frozenset({"basic", "emergency"})
 
 
-class AgentCapability(Enum):
-    """Core agent capabilities"""
-
-    RESEARCH = "research"
-    ANALYSIS = "analysis"
-    EXECUTION = "execution"
-    MONITORING = "monitoring"
-    SYNTHESIS = "synthesis"
-    VALIDATION = "validation"
-    OPTIMIZATION = "optimization"
-    SECURITY = "security"
-
-
-class ExecutionStrategy(Enum):
-    """Task execution strategies"""
-
-    SEQUENTIAL = "sequential"  # One after another
-    PARALLEL = "parallel"  # All at once
-    PIPELINE = "pipeline"  # Output feeds next input
-    COLLABORATIVE = "collaborative"  # Agents work together
-    ADAPTIVE = "adaptive"  # Strategy changes based on progress
+# #7121: lifecycle methods (start_execution, complete_execution,
+# fail_execution, get_execution_time, can_retry, increment_retry,
+# get_enhanced_inputs, to_completed_result, to_failed_result) moved
+# to canonical WorkflowTask in autobot_shared/workflow/types.py.
+# AgentTask is now a pure alias preserving the historical name —
+# every consumer of `enhanced_orchestration.types.AgentTask` gets the
+# canonical type with all 9 lifecycle methods inherited automatically.
+# Original extraction: Issue #372 (feature-envy reduction).
+AgentTask = WorkflowTask
 
 
 @dataclass
-class AgentTask:
-    """Enhanced task definition for agents"""
+class WorkflowPlan(_SharedWorkflowPlan):
+    """Enhanced workflow plan with structured success criteria.
 
-    task_id: str
-    agent_type: str
-    action: str
-    inputs: Dict[str, Any]
-    dependencies: List[str] = field(default_factory=list)
-    priority: int = 5  # 1-10, higher is more important
-    timeout: float = float(TimingConstants.STANDARD_TIMEOUT)
-    retry_count: int = 0
-    max_retries: int = RetryConfig.DEFAULT_RETRIES
-    capabilities_required: Set[AgentCapability] = field(default_factory=set)
-    outputs: Optional[Dict[str, Any]] = None
-    status: str = TaskStatus.PENDING.value  # Issue #670: Use centralized enum
-    error: Optional[str] = None
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    Inherits every field from ``autobot_shared.workflow.WorkflowPlan`` (#6951
+    Phase 1b). ``structured_criteria`` (#3293) lives here, not on the canonical
+    shape, because it depends on backend-only ``SuccessCriteria`` semantics for
+    partial/full/failed evaluation.
+    """
 
-    def start_execution(self) -> None:
-        """Mark task as started (Issue #372 - reduces feature envy)."""
-        self.start_time = time.time()
-        self.status = TaskStatus.RUNNING.value
-
-    def complete_execution(self, result: Dict[str, Any]) -> None:
-        """Mark task as completed with result (Issue #372 - reduces feature envy)."""
-        self.end_time = time.time()
-        self.status = TaskStatus.COMPLETED.value
-        self.outputs = result
-
-    def fail_execution(self, error_msg: str) -> None:
-        """Mark task as failed with error (Issue #372 - reduces feature envy)."""
-        self.status = TaskStatus.FAILED.value
-        self.error = error_msg
-
-    def get_execution_time(self) -> float:
-        """Get execution time in seconds (Issue #372 - reduces feature envy)."""
-        if self.start_time and self.end_time:
-            return self.end_time - self.start_time
-        return 0.0
-
-    def can_retry(self) -> bool:
-        """Check if task can be retried (Issue #372 - reduces feature envy)."""
-        return self.retry_count < self.max_retries
-
-    def increment_retry(self) -> None:
-        """Increment retry counter (Issue #372 - reduces feature envy)."""
-        self.retry_count += 1
-
-    def get_enhanced_inputs(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Get inputs enhanced with context (Issue #372 - reduces feature envy)."""
-        return {
-            **self.inputs,
-            "context": context,
-            "task_id": self.task_id,
-            "workflow_metadata": self.metadata,
-        }
-
-    def to_completed_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Build completed result dict (Issue #372 - reduces feature envy)."""
-        return {
-            "status": "completed",
-            "output": result,
-            "execution_time": self.get_execution_time(),
-            "agent": self.agent_type,
-        }
-
-    def to_failed_result(self, error_msg: str) -> Dict[str, Any]:
-        """Build failed result dict (Issue #372 - reduces feature envy)."""
-        return {
-            "status": "failed",
-            "error": error_msg,
-            "agent": self.agent_type,
-        }
-
-
-@dataclass
-class WorkflowPlan:
-    """Enhanced workflow execution plan"""
-
-    plan_id: str
-    goal: str
-    strategy: ExecutionStrategy
-    tasks: List[AgentTask]
-    dependencies_graph: Dict[str, List[str]]  # task_id -> [dependency_ids]
-    estimated_duration: float
-    resource_requirements: Dict[str, Any]
-    success_criteria: List[str]
-    # Issue #3293: structured success criteria for partial/full/failed evaluation
     structured_criteria: List["SuccessCriteria"] = field(default_factory=list)
-    fallback_plans: List["WorkflowPlan"] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class WorkflowDependencies:
+    """Groups the callable dependencies injected into ExecutionStrategyHandler (#6422).
+
+    Replaces 6 positional Callable params with a single named container, making
+    the constructor testable and the dependency surface explicit.
+    """
+
+    execute_single_task: Callable
+    topological_sort_tasks: Callable
+    dependencies_met: Callable
+    group_pipeline_stages: Callable
+    enhance_task_for_collaboration: Callable
+    coordinate_collaboration: Callable
 
 
 @dataclass

@@ -1,4 +1,5 @@
-// Issue #156 Fix: TypeScript declaration for DesktopInterface.vue
-import { DefineComponent } from 'vue'
-declare const component: DefineComponent<{}, {}, any>
-export default component
+import type { DefineComponent } from 'vue'
+
+declare const DesktopInterface: DefineComponent<{}, {}, unknown>
+
+export default DesktopInterface

@@ -10,11 +10,15 @@ workflows and providing configurable overflow handling (reject/queue/drop-oldest
 
 import asyncio
 import logging
+import os
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Awaitable, Callable, Deque, Dict, Optional
+
+_ACQUIRE_TIMEOUT_SECONDS = float(os.environ.get("AUTOBOT_CONCURRENT_LIMITER_TIMEOUT", "300"))
+_EVICTION_POLL_SECONDS = 5.0  # max time to wait for oldest entry to vacate before dropping it
 
 from constants.threshold_constants import TimingConstants
 
@@ -203,7 +207,11 @@ class ConcurrentWorkflowLimiter:
         raise ConcurrencyLimitError(workflow_id, self._max_concurrent)
 
     async def _enqueue(self, workflow_id: str) -> None:
-        """Block until a slot opens, then claim it. Timeout after 300s."""
+        """Block until a slot opens, then claim it.
+
+        Timeout controlled by AUTOBOT_CONCURRENT_LIMITER_TIMEOUT env var
+        (default 300 s).
+        """
         entry = _QueuedEntry(workflow_id=workflow_id)
         self._queue.append(entry)
         logger.info(
@@ -212,7 +220,7 @@ class ConcurrentWorkflowLimiter:
             len(self._queue),
         )
         try:
-            await asyncio.wait_for(entry.ready_event.wait(), timeout=300.0)
+            await asyncio.wait_for(entry.ready_event.wait(), timeout=_ACQUIRE_TIMEOUT_SECONDS)
         except asyncio.TimeoutError:
             self._queue.remove(entry)
             raise ConcurrencyLimitError(workflow_id, self._max_concurrent)
@@ -248,7 +256,7 @@ class ConcurrentWorkflowLimiter:
 
         # The callback must ultimately call release(), which removes oldest_id
         # from _running.  Poll briefly (up to 5 s) to confirm the slot opened.
-        deadline = time.monotonic() + 5.0
+        deadline = time.monotonic() + _EVICTION_POLL_SECONDS
         while oldest_id in self._running and time.monotonic() < deadline:
             await asyncio.sleep(TimingConstants.STREAMING_CHUNK_DELAY)
 

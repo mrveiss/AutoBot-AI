@@ -28,6 +28,7 @@ from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -113,6 +114,11 @@ def _parse_client_message(raw: str) -> Optional[Dict[str, Any]]:
 
 
 @router.websocket("/ws/knowledge/research")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="knowledge_research_ws",
+    error_code_prefix="KNOWLEDGE_RESEARCH_WS",
+)
 async def knowledge_research_ws(websocket: WebSocket) -> None:
     """WebSocket endpoint that streams live research progress.
 

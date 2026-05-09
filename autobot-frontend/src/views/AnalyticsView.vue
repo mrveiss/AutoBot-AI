@@ -79,8 +79,32 @@
             :aria-selected="isDevToolsActive"
             aria-label="Dev Tools"
           >
-            <i class="fas fa-bolt tab-icon-fa" aria-hidden="true"></i>
+            <Icon name="bolt" class="tab-icon-svg" aria-hidden="true" />
             <span>Dev Tools</span>
+          </router-link>
+          <!-- Issue #4465: Usage & Costs moved from standalone nav into analytics tab -->
+          <router-link
+            to="/analytics/usage"
+            class="nav-tab"
+            :class="{ 'nav-tab-active': isUsageActive }"
+            role="tab"
+            :aria-selected="isUsageActive"
+            :aria-label="$t('analytics.views.tabs.usageAria')"
+          >
+            <Icon name="chart-bar" class="tab-icon-svg" aria-hidden="true" />
+            <span>{{ $t('analytics.views.tabs.usage') }}</span>
+          </router-link>
+          <!-- Issue #4270: Operations moved from standalone nav into analytics tab -->
+          <router-link
+            to="/analytics/operations"
+            class="nav-tab"
+            :class="{ 'nav-tab-active': isOperationsActive }"
+            role="tab"
+            :aria-selected="isOperationsActive"
+            :aria-label="$t('analytics.views.tabs.operationsAria')"
+          >
+            <Icon name="list-alt" class="tab-icon-svg" aria-hidden="true" />
+            <span>{{ $t('analytics.views.tabs.operations') }}</span>
           </router-link>
         </nav>
       </div>
@@ -96,6 +120,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import Icon from '@/components/ui/Icon.vue'
 
 const route = useRoute()
 
@@ -121,14 +146,24 @@ const isAuditActive = computed(() => {
 const isDevToolsActive = computed(() => {
   return route.path === '/analytics/dev-tools' || route.path.startsWith('/analytics/dev-tools/')
 })
+
+const isUsageActive = computed(() => {
+  return route.path === '/analytics/usage' || route.path.startsWith('/analytics/usage/')
+})
+
+const isOperationsActive = computed(() => {
+  return route.path === '/analytics/operations' || route.path.startsWith('/analytics/operations/')
+})
 </script>
 
 <style scoped>
 /* Issue #901: Technical Precision Analytics View Design */
 
-.tab-icon-fa {
+.tab-icon-svg {
   font-size: var(--text-base);
   flex-shrink: 0;
+  width: 18px;
+  height: 18px;
 }
 
 .analytics-view {
@@ -146,7 +181,7 @@ const isDevToolsActive = computed(() => {
 
 /* Header Section */
 .analytics-header {
-  padding: 24px 32px 20px;
+  padding: var(--spacing-6) var(--spacing-8) var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
   background-color: var(--bg-primary);
 }
@@ -166,7 +201,7 @@ const isDevToolsActive = computed(() => {
 }
 
 .page-subtitle {
-  margin: 6px 0 0 0;
+  margin: var(--spacing-1-5) var(--spacing-0) var(--spacing-0) var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.5;
@@ -184,7 +219,7 @@ const isDevToolsActive = computed(() => {
 .nav-tabs {
   display: flex;
   gap: var(--spacing-0-5);
-  padding: 0 32px;
+  padding: var(--spacing-0) var(--spacing-8);
   max-width: 1400px;
   margin: 0 auto;
   overflow-x: auto;
@@ -194,7 +229,7 @@ const isDevToolsActive = computed(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
@@ -232,13 +267,13 @@ const isDevToolsActive = computed(() => {
 .analytics-router-view {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 32px;
+  padding: var(--spacing-6) var(--spacing-8);
 }
 
 /* Responsive Adjustments */
 @media (max-width: 768px) {
   .analytics-header {
-    padding: 20px 16px 16px;
+    padding: var(--spacing-5) var(--spacing-4) var(--spacing-4);
   }
 
   .page-title {
@@ -250,12 +285,12 @@ const isDevToolsActive = computed(() => {
   }
 
   .nav-tabs {
-    padding: 0 16px;
+    padding: var(--spacing-0) var(--spacing-4);
     gap: var(--spacing-0);
   }
 
   .nav-tab {
-    padding: 10px 12px;
+    padding: var(--spacing-2-5) var(--spacing-3);
     font-size: var(--text-sm);
     gap: var(--spacing-1-5);
   }

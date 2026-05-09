@@ -9,19 +9,29 @@ Provides service status, health checks, and system information endpoints.
 import logging
 import time
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.schemas_system import (
+    ServiceStatus,
+    ServicesHealthAggregateResponse,
+    ServicesHealthDeprecatedResponse,
+    ServicesResponse,
+    ServicesVMsStatusResponse,
+    SystemInfo,
+    VMStatus,
+)
 
 # Import existing monitoring functionality
 try:
     from api.monitoring import get_services_health as monitoring_services_health
-except ImportError:
-    monitoring_services_health = None
+except ImportError as _e:
+    from autobot_shared.missing_dep import MissingDep as _MissingDep
+
+    monitoring_services_health = _MissingDep("monitoring_services_health", _e)  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Services"])
@@ -137,53 +147,12 @@ def _build_default_services(redis_status_obj) -> list:
     ]
 
 
-class ServiceStatus(BaseModel):
-    """Service status model"""
-
-    name: str
-    status: str = Field(..., description="Service status: healthy, warning, error")
-    message: str = Field(..., description="Status description")
-    last_check: Optional[datetime] = None
-    response_time_ms: Optional[float] = None
-
-
-class SystemInfo(BaseModel):
-    """System information model"""
-
-    version: str
-    build: str
-    environment: str
-    uptime: float
-    services_count: int
-
-
-class VMStatus(BaseModel):
-    """VM status model"""
-
-    name: str
-    ip: str
-    status: str = Field(..., description="VM status: online, offline, unknown")
-    services: List[str] = Field(default_factory=list)
-    last_check: Optional[datetime] = None
-
-
-class ServicesResponse(BaseModel):
-    """Services list response"""
-
-    services: List[ServiceStatus]
-    total_count: int
-    healthy_count: int
-    error_count: int
-    warning_count: int
-    last_updated: datetime
-
-
+@router.get("/services", response_model=ServicesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_services",
     error_code_prefix="SERVICES",
 )
-@router.get("/services", response_model=ServicesResponse)
 async def get_services(admin_check: bool = Depends(check_admin_permission)):
     """Get list of all available services with their status.
 
@@ -220,12 +189,14 @@ async def get_services(admin_check: bool = Depends(check_admin_permission)):
         raise HTTPException(status_code=500, detail="Failed to get services")
 
 
+
+
+@router.get("/health", response_model=ServicesHealthDeprecatedResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_health",
     error_code_prefix="SERVICES",
 )
-@router.get("/health")
 async def get_health(admin_check: bool = Depends(check_admin_permission)):
     """Simple health check endpoint.
 
@@ -246,12 +217,12 @@ async def get_health(admin_check: bool = Depends(check_admin_permission)):
     }
 
 
+@router.get("/services/health", response_model=ServicesHealthAggregateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_services_health",
     error_code_prefix="SERVICES",
 )
-@router.get("/services/health")
 async def get_services_health(admin_check: bool = Depends(check_admin_permission)):
     """Get service health status - alias to monitoring endpoint
 
@@ -342,12 +313,12 @@ def _build_vm_status_list(vm_definitions: list) -> list:
     ]
 
 
+@router.get("/vms/status", response_model=ServicesVMsStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_vms_status",
     error_code_prefix="SERVICES",
 )
-@router.get("/vms/status")
 async def get_vms_status(admin_check: bool = Depends(check_admin_permission)):
     """
     Get VM status for distributed infrastructure.
@@ -376,12 +347,12 @@ async def get_vms_status(admin_check: bool = Depends(check_admin_permission)):
         raise HTTPException(status_code=500, detail="Failed to get VM status")
 
 
+@router.get("/version", response_model=SystemInfo)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_version",
     error_code_prefix="SERVICES",
 )
-@router.get("/version", response_model=SystemInfo)
 async def get_version(admin_check: bool = Depends(check_admin_permission)):
     """Get application version and system information
 

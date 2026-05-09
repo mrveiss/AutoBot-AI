@@ -20,6 +20,7 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from dependencies import get_config
+from services.tool_output_filter import get_tool_output_filter
 
 from .types import CommandBreakdownPart, CommandExplanation, OutputExplanation
 
@@ -81,9 +82,8 @@ class CommandExplanationService:
 
     def _get_output_cache_key(self, command: str, output: str) -> str:
         """Generate cache key for command+output combination."""
-        # Truncate output for caching (only first 2000 chars matter for explanation)
-        truncated_output = output[:2000] if len(output) > 2000 else output
-        combined = f"{command}::{truncated_output}"
+        filtered_output = get_tool_output_filter().filter(command, output)
+        combined = f"{command}::{filtered_output}"
         return hashlib.md5(combined.encode()).hexdigest()
 
     async def explain_command(self, command: str) -> CommandExplanation:
@@ -200,12 +200,10 @@ Rules:
         self, command: str, output: str, return_code: int
     ) -> str:
         """Build prompt for output explanation."""
-        # Truncate very long outputs
-        max_output_len = 4000
-        truncated = output[:max_output_len] if len(output) > max_output_len else output
+        truncated = get_tool_output_filter().filter(command, output, exit_code=return_code)
         truncation_note = (
-            f"\n[Output truncated, showing first {max_output_len} chars of {len(output)} total]"
-            if len(output) > max_output_len
+            f"\n[Output filtered from {len(output)} chars to {len(truncated)} chars]"
+            if len(truncated) < len(output)
             else ""
         )
 

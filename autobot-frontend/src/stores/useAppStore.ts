@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
+import type { Router } from 'vue-router'
 import { defineStore } from 'pinia'
-import { generateChatId } from '@/utils/ChatIdGenerator.js'
 
 // Issue #156 Fix: Changed 'desktop' to 'infrastructure' to match router routes
 // Issue #545: Added 'analytics' for consolidated analytics section
@@ -104,38 +104,8 @@ export const useAppStore = defineStore('app', () => {
   const isLoading = ref(false)
   const loadingMessage = ref('')
 
-  // Chat State
-  const sessions = ref<{
-    id: string
-    title: string
-    messages: {
-      id: string
-      content: string
-      sender: 'user' | 'assistant' | 'system'
-      timestamp: Date
-      status?: 'sending' | 'sent' | 'error'
-      type?: 'message' | 'command' | 'response' | 'error' | 'system' | 'file' | 'image' | 'code'
-      attachments?: {
-        name: string
-        size: number
-        type: string
-        url?: string
-        data?: string
-      }[]
-      metadata?: {
-        model?: string
-        tokens?: number
-        processingTime?: number
-        reasoning?: string
-      }
-    }[]
-    status: 'active' | 'archived'
-    lastActivity: Date
-    summary?: string
-    tags?: string[]
-  }[]>([])
-
-  const currentSessionId = ref<string | null>(null)
+  // Chat session state moved to useChatStore (#6781). useAppStore is no longer
+  // a session SSOT — consumers use useChatStore.{sessions,currentSessionId,...}.
 
   // System status for status indicator
   const systemStatusIndicator = computed(() => {
@@ -164,29 +134,13 @@ export const useAppStore = defineStore('app', () => {
     return { status: 'warning', text: backendStatus.value.text, pulse: true }
   })
 
-  // Getters
-  const currentSession = computed(() => {
-    if (!currentSessionId.value) return null
-    return sessions.value.find(s => s.id === currentSessionId.value) || null
-  })
-
-  const activeSessions = computed(() => {
-    return sessions.value.filter(s => s.status === 'active')
-  })
-
-  const recentSessions = computed(() => {
-    return [...sessions.value]
-      .sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime())
-      .slice(0, 10)
-  })
-
   // Actions
   const setActiveTab = (tab: TabType) => {
     activeTab.value = tab
   }
 
   // Router integration - updates active tab from navigation and handles route changes
-  const updateRoute = (tab: TabType, router?: any) => {
+  const updateRoute = (tab: TabType, router?: Router) => {
     // Update the active tab state
     setActiveTab(tab)
 
@@ -230,94 +184,6 @@ export const useAppStore = defineStore('app', () => {
   const setLoading = (loading: boolean, message: string = '') => {
     isLoading.value = loading
     loadingMessage.value = message
-  }
-
-  // Chat Session Management
-  const createNewSession = (title?: string) => {
-    const sessionId = generateChatId()
-    const newSession = {
-      id: sessionId,
-      title: title || `Chat ${sessions.value.length + 1}`,
-      messages: [],
-      status: 'active' as const,
-      lastActivity: new Date(),
-      tags: []
-    }
-
-    sessions.value.push(newSession)
-    currentSessionId.value = sessionId
-    return sessionId
-  }
-
-  const switchToSession = (sessionId: string) => {
-    const session = sessions.value.find(s => s.id === sessionId)
-    if (session) {
-      currentSessionId.value = sessionId
-      session.lastActivity = new Date()
-    }
-  }
-
-  const updateSessionTitle = (sessionId: string, title: string) => {
-    const session = sessions.value.find(s => s.id === sessionId)
-    if (session) {
-      session.title = title
-    }
-  }
-
-  const archiveSession = (sessionId: string) => {
-    const session = sessions.value.find(s => s.id === sessionId)
-    if (session) {
-      session.status = 'archived'
-      if (currentSessionId.value === sessionId) {
-        // Switch to most recent active session or create new one
-        const activeSession = activeSessions.value[0]
-        if (activeSession) {
-          currentSessionId.value = activeSession.id
-        } else {
-          createNewSession()
-        }
-      }
-    }
-  }
-
-  const deleteSession = (sessionId: string) => {
-    const index = sessions.value.findIndex(s => s.id === sessionId)
-    if (index !== -1) {
-      sessions.value.splice(index, 1)
-      if (currentSessionId.value === sessionId) {
-        // Switch to most recent session or create new one
-        const remainingSession = sessions.value.find(s => s.status === 'active')
-        if (remainingSession) {
-          currentSessionId.value = remainingSession.id
-        } else {
-          createNewSession()
-        }
-      }
-    }
-  }
-
-  const addMessageToSession = (sessionId: string, message: any) => {
-    const session = sessions.value.find(s => s.id === sessionId)
-    if (session) {
-      session.messages.push({
-        ...message,
-        timestamp: message.timestamp || new Date()
-      })
-      session.lastActivity = new Date()
-    }
-  }
-
-  const updateMessageInSession = (sessionId: string, messageId: string, updates: any) => {
-    const session = sessions.value.find(s => s.id === sessionId)
-    if (session) {
-      const messageIndex = session.messages.findIndex(m => m.id === messageId)
-      if (messageIndex !== -1) {
-        session.messages[messageIndex] = {
-          ...session.messages[messageIndex],
-          ...updates
-        }
-      }
-    }
   }
 
   // System Notifications
@@ -414,11 +280,6 @@ export const useAppStore = defineStore('app', () => {
     })
   }
 
-  // Initialize with a default session if none exists
-  if (sessions.value.length === 0) {
-    createNewSession('Welcome Chat')
-  }
-
   return {
     // State
     activeTab,
@@ -433,15 +294,8 @@ export const useAppStore = defineStore('app', () => {
     isLoading,
     loadingMessage,
 
-    // Chat State
-    sessions,
-    currentSessionId,
-
     // Computed
     systemStatusIndicator,
-    currentSession,
-    activeSessions,
-    recentSessions,
 
     // Actions
     setActiveTab,
@@ -451,15 +305,6 @@ export const useAppStore = defineStore('app', () => {
     setConnectedUsers,
     setLoading,
     setGlobalError,
-
-    // Chat Actions
-    createNewSession,
-    switchToSession,
-    updateSessionTitle,
-    archiveSession,
-    deleteSession,
-    addMessageToSession,
-    updateMessageInSession,
 
     // Notification Actions
     addSystemNotification,
@@ -474,8 +319,6 @@ export const useAppStore = defineStore('app', () => {
     key: 'autobot-app',
     storage: localStorage,
     pick: [
-      'sessions',
-      'currentSessionId',
       'notificationSettings',
       'activeTab'
     ]

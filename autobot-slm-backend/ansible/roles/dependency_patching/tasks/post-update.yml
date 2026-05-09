@@ -99,4 +99,4 @@
       success: true
       service_running: "{{ service_restart.changed | default(false) }}"
       health_check_passed: "{{ not (health_check.failed | default(false)) }}"
-      timestamp: "{{ ansible_date_time.iso8601 }}"
+      timestamp: "{{ ansible_facts['date_time'].iso8601 }}"

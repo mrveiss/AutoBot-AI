@@ -23,37 +23,37 @@ def _get_network_scan_discovery_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="kb_search",
+            task_id="kb_search",
             agent_type="librarian",
             action="Search Knowledge Base for network scanning tools and techniques",
             description="Librarian: Search Knowledge Base",
-            expected_duration_ms=3000,
+            estimated_duration_seconds=3.0,
         ),
         WorkflowStep(
-            id="research_tools",
+            task_id="research_tools",
             agent_type="research",
             action="Research latest network security scanning tools and methodologies",
             description="Research: Research Tools",
             dependencies=["kb_search"],
-            expected_duration_ms=30000,
+            estimated_duration_seconds=30.0,
         ),
         WorkflowStep(
-            id="present_options",
+            task_id="present_options",
             agent_type="orchestrator",
             action="Present scanning tool options and scan types",
             description="Orchestrator: Present Tool Options (requires your approval)",
             requires_approval=True,
             dependencies=["research_tools"],
-            expected_duration_ms=2000,
+            estimated_duration_seconds=2.0,
         ),
         WorkflowStep(
-            id="network_discovery",
+            task_id="network_discovery",
             agent_type="network_discovery",
             action="Perform network discovery and host enumeration",
             description="Network_Discovery: Host Discovery",
             dependencies=["present_options"],
             inputs={"task_type": "network_scan"},
-            expected_duration_ms=20000,
+            estimated_duration_seconds=20.0,
         ),
     ]
 
@@ -66,39 +66,39 @@ def _get_network_scan_assessment_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="security_scan",
+            task_id="security_scan",
             agent_type="security_scanner",
             action="Execute comprehensive security scan on discovered hosts",
             description="Security_Scanner: Port and Service Scan",
             dependencies=["network_discovery"],
             inputs={"scan_type": "comprehensive"},
-            expected_duration_ms=45000,
+            estimated_duration_seconds=45.0,
         ),
         WorkflowStep(
-            id="vulnerability_check",
+            task_id="vulnerability_check",
             agent_type="security_scanner",
             action="Perform vulnerability assessment on identified services",
             description="Security_Scanner: Vulnerability Assessment",
             dependencies=["security_scan"],
             inputs={"scan_type": "vulnerability_scan"},
-            expected_duration_ms=30000,
+            estimated_duration_seconds=30.0,
         ),
         WorkflowStep(
-            id="generate_report",
+            task_id="generate_report",
             agent_type="orchestrator",
             action="Generate comprehensive security assessment report",
             description="Orchestrator: Generate Security Report (requires your approval)",
             requires_approval=True,
             dependencies=["vulnerability_check"],
-            expected_duration_ms=10000,
+            estimated_duration_seconds=10.0,
         ),
         WorkflowStep(
-            id="store_results",
+            task_id="store_results",
             agent_type="knowledge_manager",
             action="Store security scan results and recommendations in knowledge base",
             description="Knowledge_Manager: Store Results",
             dependencies=["generate_report"],
-            expected_duration_ms=5000,
+            estimated_duration_seconds=5.0,
         ),
     ]
 
@@ -145,20 +145,20 @@ def _create_vuln_scan_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="research_vulnerabilities",
+            task_id="research_vulnerabilities",
             agent_type="research",
             action="Research current vulnerability databases and threat intelligence",
             description="Research: CVE and Threat Research",
-            expected_duration_ms=25000,
+            estimated_duration_seconds=25.0,
         ),
         WorkflowStep(
-            id="vulnerability_scan",
+            task_id="vulnerability_scan",
             agent_type="security_scanner",
             action="Execute comprehensive vulnerability scan",
             description="Security_Scanner: Vulnerability Scan",
             dependencies=["research_vulnerabilities"],
             inputs={"scan_type": "vulnerability_scan"},
-            expected_duration_ms=60000,
+            estimated_duration_seconds=60.0,
         ),
     ]
 
@@ -172,29 +172,29 @@ def _create_vuln_analysis_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="analyze_results",
+            task_id="analyze_results",
             agent_type="security_scanner",
             action="Analyze vulnerability scan results and prioritize findings",
             description="Security_Scanner: Results Analysis",
             dependencies=["vulnerability_scan"],
-            expected_duration_ms=15000,
+            estimated_duration_seconds=15.0,
         ),
         WorkflowStep(
-            id="remediation_plan",
+            task_id="remediation_plan",
             agent_type="orchestrator",
             action="Create remediation plan with prioritized recommendations",
             description="Orchestrator: Create Remediation Plan (requires your approval)",
             requires_approval=True,
             dependencies=["analyze_results"],
-            expected_duration_ms=10000,
+            estimated_duration_seconds=10.0,
         ),
         WorkflowStep(
-            id="store_assessment",
+            task_id="store_assessment",
             agent_type="knowledge_manager",
             action="Store vulnerability assessment and remediation plan",
             description="Knowledge_Manager: Store Assessment",
             dependencies=["remediation_plan"],
-            expected_duration_ms=5000,
+            estimated_duration_seconds=5.0,
         ),
     ]
 
@@ -236,29 +236,29 @@ def _create_audit_planning_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="audit_planning",
+            task_id="audit_planning",
             agent_type="orchestrator",
             action="Plan security audit scope and methodology",
             description="Orchestrator: Audit Planning (requires your approval)",
             requires_approval=True,
-            expected_duration_ms=10000,
+            estimated_duration_seconds=10.0,
         ),
         WorkflowStep(
-            id="compliance_research",
+            task_id="compliance_research",
             agent_type="research",
             action="Research compliance requirements and security standards",
             description="Research: Compliance Standards",
             dependencies=["audit_planning"],
-            expected_duration_ms=30000,
+            estimated_duration_seconds=30.0,
         ),
         WorkflowStep(
-            id="asset_discovery",
+            task_id="asset_discovery",
             agent_type="network_discovery",
             action="Discover and inventory all network assets",
             description="Network_Discovery: Asset Inventory",
             dependencies=["audit_planning"],
             inputs={"task_type": "asset_inventory"},
-            expected_duration_ms=25000,
+            estimated_duration_seconds=25.0,
         ),
     ]
 
@@ -271,38 +271,38 @@ def _create_audit_execution_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="security_scanning",
+            task_id="security_scanning",
             agent_type="security_scanner",
             action="Perform comprehensive security scanning of all assets",
             description="Security_Scanner: Comprehensive Scan",
             dependencies=["asset_discovery"],
             inputs={"scan_type": "comprehensive"},
-            expected_duration_ms=90000,
+            estimated_duration_seconds=90.0,
         ),
         WorkflowStep(
-            id="compliance_check",
+            task_id="compliance_check",
             agent_type="security_scanner",
             action="Verify compliance with security standards",
             description="Security_Scanner: Compliance Verification",
             dependencies=["compliance_research", "security_scanning"],
-            expected_duration_ms=30000,
+            estimated_duration_seconds=30.0,
         ),
         WorkflowStep(
-            id="audit_report",
+            task_id="audit_report",
             agent_type="orchestrator",
             action="Generate comprehensive security audit report",
             description="Orchestrator: Generate Audit Report (requires your approval)",
             requires_approval=True,
             dependencies=["compliance_check"],
-            expected_duration_ms=15000,
+            estimated_duration_seconds=15.0,
         ),
         WorkflowStep(
-            id="store_audit",
+            task_id="store_audit",
             agent_type="knowledge_manager",
             action="Store audit findings and recommendations",
             description="Knowledge_Manager: Store Audit Results",
             dependencies=["audit_report"],
-            expected_duration_ms=5000,
+            estimated_duration_seconds=5.0,
         ),
     ]
 

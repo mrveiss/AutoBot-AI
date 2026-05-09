@@ -20,25 +20,33 @@ import logging
 import os
 import re
 import threading
-import uuid
 from collections import defaultdict
 from copy import deepcopy
 from datetime import datetime, timezone
 from autobot_shared.time_utils import parse_utc_iso
-from enum import Enum
 from time import time
 from typing import Dict, List, Optional
 
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, field_validator
 
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_memory_graph import AutoBotMemoryGraph
+from services.audit.audit_log import AuditAction, audit_record
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from middleware.proxy_utils import get_client_ip
 from type_defs.common import Metadata
+from api.schemas_common import DataResponse
+from api.schemas_system import (
+    SecretCreateRequest,
+    SecretModel,
+    SecretScope,
+    SecretTransferRequest,
+    SecretType,
+    SecretUpdateRequest,
+    SecretsStatusResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -98,139 +106,6 @@ def validate_secret_name(name: str) -> str:
             "underscores, hyphens, and dots"
         )
     return name
-
-
-class SecretScope(str, Enum):
-    """Secret scope enumeration (Issue #685: aligned with database model)"""
-
-    CHAT = "chat"
-    GENERAL = "general"
-    USER = "user"  # Private to user
-    SESSION = "session"  # Session-scoped
-    SHARED = "shared"  # Explicitly shared
-    GROUP = "group"  # Team members
-    ORGANIZATION = "organization"  # All org members
-
-
-class SecretType(str, Enum):
-    """Secret type enumeration"""
-
-    SSH_KEY = "ssh_key"
-    PASSWORD = "password"  # nosec B105 - enum value, not actual password
-    API_KEY = "api_key"
-    TOKEN = "token"  # nosec B105 - enum value, not actual token
-    CERTIFICATE = "certificate"
-    DATABASE_URL = "database_url"
-    INFRASTRUCTURE_HOST = "infrastructure_host"  # SSH/VNC host credentials
-    OTHER = "other"
-
-
-class SecretModel(BaseModel):
-    """Secret data model"""
-
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    type: SecretType
-    scope: SecretScope
-    chat_id: Optional[str] = None
-    description: Optional[str] = ""
-    tags: List[str] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
-    expires_at: Optional[datetime] = None
-    metadata: Metadata = Field(default_factory=dict)
-
-
-class SecretCreateRequest(BaseModel):
-    """Request model for creating secrets (Issue #685: hierarchical access)"""
-
-    name: str = Field(..., min_length=1, max_length=256)
-    type: SecretType
-    scope: SecretScope
-    value: str = Field(..., min_length=1, max_length=65536)  # 64KB max
-    chat_id: Optional[str] = Field(None, max_length=128)
-    description: Optional[str] = Field("", max_length=1024)
-    tags: List[str] = Field(default_factory=list)
-    expires_at: Optional[datetime] = None
-    metadata: Metadata = Field(default_factory=dict)
-    # Issue #685: Hierarchical access fields
-    owner_id: Optional[str] = Field(None, max_length=128, description="Owner user ID")
-    org_id: Optional[str] = Field(
-        None, max_length=128, description="Organization ID for org-level secrets"
-    )
-    team_ids: List[str] = Field(
-        default_factory=list, description="Team IDs for group-level secrets"
-    )
-    shared_with: List[str] = Field(
-        default_factory=list, description="User IDs to share with"
-    )
-
-    @field_validator("name")
-    @classmethod
-    def validate_name(cls, v: str) -> str:
-        """Validate secret name contains only safe characters"""
-        return validate_secret_name(v)
-
-    # === Issue #372: Feature Envy Reduction Methods ===
-
-    def to_secret_model(self, secret_id: Optional[str] = None) -> "SecretModel":
-        """Convert request to SecretModel (Issue #372 - reduces feature envy).
-
-        Args:
-            secret_id: Optional ID for the secret, generates UUID if not provided
-
-        Returns:
-            SecretModel instance with request data
-        """
-        return SecretModel(
-            id=secret_id or str(uuid.uuid4()),
-            name=self.name,
-            type=self.type,
-            scope=self.scope,
-            chat_id=self.chat_id if self.scope == SecretScope.CHAT else None,
-            description=self.description,
-            tags=self.tags,
-            expires_at=self.expires_at,
-            metadata=self.metadata,
-        )
-
-    def is_chat_scoped(self) -> bool:
-        """Check if secret is chat-scoped (Issue #372 - reduces feature envy)."""
-        return self.scope == SecretScope.CHAT
-
-    def requires_chat_id(self) -> bool:
-        """Check if chat_id is required but missing (Issue #372)."""
-        return self.is_chat_scoped() and not self.chat_id
-
-    def get_log_summary(self) -> str:
-        """Get formatted log summary (Issue #372 - reduces feature envy)."""
-        return f"{self.scope.value} secret '{self.name}'"
-
-
-class SecretUpdateRequest(BaseModel):
-    """Request model for updating secrets"""
-
-    name: Optional[str] = Field(None, min_length=1, max_length=256)
-    description: Optional[str] = Field(None, max_length=1024)
-    tags: Optional[List[str]] = None
-    expires_at: Optional[datetime] = None
-    metadata: Optional[Metadata] = None
-
-    @field_validator("name")
-    @classmethod
-    def validate_name(cls, v: Optional[str]) -> Optional[str]:
-        """Validate secret name contains only safe characters"""
-        if v is not None:
-            return validate_secret_name(v)
-        return v
-
-
-class SecretTransferRequest(BaseModel):
-    """Request model for transferring secrets between scopes"""
-
-    secret_ids: List[str]
-    target_scope: SecretScope
-    target_chat_id: Optional[str] = None
 
 
 class SecretsManager:
@@ -685,12 +560,12 @@ def audit_log(
 # API Endpoints
 
 
+@router.post("/", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_secret",
     error_code_prefix="SECRETS",
 )
-@router.post("/")
 async def create_secret(
     request: SecretCreateRequest,
     http_request: Request,
@@ -711,6 +586,16 @@ async def create_secret(
             secret_data["expires_at"] = secret_data["expires_at"].isoformat()
 
         audit_log("CREATE", secret.id, http_request, details=f"name={request.name}")
+        _user = get_auth_middleware().get_user_from_request(http_request)
+        audit_record(
+            user_id=str((_user or {}).get("user_id", "unknown")),
+            action=AuditAction.API_KEY_CREATE,
+            resource_type="secret",
+            resource_id=secret.id,
+            ip_address=http_request.client.host if http_request.client else "unknown",
+            session_id=None,
+            outcome="success",
+        )
         return JSONResponse(
             status_code=201,
             content={
@@ -730,12 +615,12 @@ async def create_secret(
         raise HTTPException(status_code=500, detail="Failed to create secret")
 
 
+@router.get("/", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_secrets",
     error_code_prefix="SECRETS",
 )
-@router.get("/")
 async def list_secrets(
     http_request: Request,
     chat_id: Optional[str] = Query(None),
@@ -763,12 +648,12 @@ async def list_secrets(
         raise HTTPException(status_code=500, detail="Failed to list secrets")
 
 
+@router.get("/types", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_secret_types",
     error_code_prefix="SECRETS",
 )
-@router.get("/types")
 async def get_secret_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -787,12 +672,12 @@ async def get_secret_types(
     )
 
 
+@router.get("/status", response_model=SecretsStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_secrets_status",
     error_code_prefix="SECRETS",
 )
-@router.get("/status")
 async def get_secrets_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -819,12 +704,12 @@ async def get_secrets_status(
         }
 
 
+@router.get("/stats", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_secrets_stats",
     error_code_prefix="SECRETS",
 )
-@router.get("/stats")
 async def get_secrets_stats(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -868,12 +753,12 @@ async def get_secrets_stats(
         raise HTTPException(status_code=500, detail="Failed to get stats")
 
 
+@router.get("/{secret_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_secret",
     error_code_prefix="SECRETS",
 )
-@router.get("/{secret_id}")
 async def get_secret(
     secret_id: str,
     http_request: Request,
@@ -943,12 +828,12 @@ async def get_secret(
         raise HTTPException(status_code=500, detail="Failed to get secret")
 
 
+@router.put("/{secret_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_secret",
     error_code_prefix="SECRETS",
 )
-@router.put("/{secret_id}")
 async def update_secret(
     secret_id: str,
     request: SecretUpdateRequest,
@@ -1006,12 +891,12 @@ async def update_secret(
         raise HTTPException(status_code=500, detail="Failed to update secret")
 
 
+@router.delete("/{secret_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_secret",
     error_code_prefix="SECRETS",
 )
-@router.delete("/{secret_id}")
 async def delete_secret(
     secret_id: str,
     http_request: Request,
@@ -1032,6 +917,16 @@ async def delete_secret(
             raise HTTPException(status_code=404, detail="Secret not found")
 
         audit_log("DELETE", secret_id, http_request)
+        _user = get_auth_middleware().get_user_from_request(http_request)
+        audit_record(
+            user_id=str((_user or {}).get("user_id", "unknown")),
+            action=AuditAction.API_KEY_REVOKE,
+            resource_type="secret",
+            resource_id=secret_id,
+            ip_address=http_request.client.host if http_request.client else "unknown",
+            session_id=None,
+            outcome="success",
+        )
         return JSONResponse(
             status_code=200,
             content={"status": "success", "message": "Secret deleted successfully"},
@@ -1055,12 +950,12 @@ async def delete_secret(
         raise HTTPException(status_code=500, detail="Failed to delete secret")
 
 
+@router.post("/transfer", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="transfer_secrets",
     error_code_prefix="SECRETS",
 )
-@router.post("/transfer")
 async def transfer_secrets(
     request: SecretTransferRequest,
     http_request: Request,
@@ -1097,12 +992,12 @@ async def transfer_secrets(
         raise HTTPException(status_code=500, detail="Failed to transfer secrets")
 
 
+@router.get("/chat/{chat_id}/cleanup", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_chat_cleanup_info",
     error_code_prefix="SECRETS",
 )
-@router.get("/chat/{chat_id}/cleanup")
 async def get_chat_cleanup_info(
     chat_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -1117,12 +1012,12 @@ async def get_chat_cleanup_info(
         raise HTTPException(status_code=500, detail="Failed to get cleanup info")
 
 
+@router.delete("/chat/{chat_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_chat_secrets",
     error_code_prefix="SECRETS",
 )
-@router.delete("/chat/{chat_id}")
 async def delete_chat_secrets(
     chat_id: str,
     http_request: Request,

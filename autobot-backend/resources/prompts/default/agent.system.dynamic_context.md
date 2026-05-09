@@ -10,11 +10,17 @@
 - Role: {{ user_role | default("Standard User") }}
 
 **Available Tools:**
-{% if available_tools %}
+{%- if available_tools %}
+{%- if tool_descriptions %}
+{%- for tool in available_tools %}
+- {{ tool }}: {{ tool_descriptions.get(tool, tool) }}
+{%- endfor %}
+{%- else %}
 {{ available_tools | join(", ") }}
-{% else %}
+{%- endif %}
+{%- else %}
 All standard AutoBot tools
-{% endif %}
+{%- endif %}
 
 **Recent Context:**
 {% if recent_context %}

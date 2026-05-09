@@ -10,6 +10,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PathConstants
 from services.config_service import ConfigService
+from api.schemas_common import DataResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -143,7 +144,7 @@ def _build_fallback_config() -> Dict[str, Any]:
             "timeouts": _build_timeouts_config(api_config.get("timeouts", {})),
         },
         "websocket": {
-            "url": f"ws://{backend_config.get('host')}:{backend_config.get('port')}/ws",
+            "url": f"ws://{backend_config.get('host')}:{backend_config.get('port')}/api/ws",
             "reconnect_attempts": websocket_config.get("reconnect_attempts", 5),
             "reconnect_delay": websocket_config.get("reconnect_delay", 1000),
         },
@@ -155,12 +156,12 @@ def _build_fallback_config() -> Dict[str, Any]:
     }
 
 
+@router.get("/frontend-config", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_frontend_config",
     error_code_prefix="FRONTEND_CONFIG",
 )
-@router.get("/frontend-config")
 async def get_frontend_config():
     """
     Get frontend-specific configuration.

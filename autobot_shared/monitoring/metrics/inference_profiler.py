@@ -104,16 +104,10 @@ class InferenceProfilerMetricsRecorder(BaseMetricsRecorder):
     # Stage Timing Methods
     # =========================================================================
 
-    def record_stage_duration(
-        self, model_name: str, stage: str, duration_seconds: float
-    ) -> None:
+    def record_stage_duration(self, model_name: str, stage: str, duration_seconds: float) -> None:
         """Record a single stage duration measurement."""
-        self.stage_duration.labels(model_name=model_name, stage=stage).observe(
-            duration_seconds
-        )
-        self.stage_total_time.labels(model_name=model_name, stage=stage).inc(
-            duration_seconds
-        )
+        self.stage_duration.labels(model_name=model_name, stage=stage).observe(duration_seconds)
+        self.stage_total_time.labels(model_name=model_name, stage=stage).inc(duration_seconds)
         self.stage_call_count.labels(model_name=model_name, stage=stage).inc()
 
     # =========================================================================
@@ -136,14 +130,10 @@ class InferenceProfilerMetricsRecorder(BaseMetricsRecorder):
     # Session Methods
     # =========================================================================
 
-    def record_session_complete(
-        self, model_name: str, total_duration_seconds: float
-    ) -> None:
+    def record_session_complete(self, model_name: str, total_duration_seconds: float) -> None:
         """Record a completed profiling session."""
         self.profiling_sessions.labels(model_name=model_name).inc()
-        self.total_inference_duration.labels(model_name=model_name).observe(
-            total_duration_seconds
-        )
+        self.total_inference_duration.labels(model_name=model_name).observe(total_duration_seconds)
 
 
 __all__ = ["InferenceProfilerMetricsRecorder"]

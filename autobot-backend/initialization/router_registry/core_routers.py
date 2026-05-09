@@ -11,6 +11,7 @@ and are imported at module level to fail fast if missing.
 
 # Core router imports - these are required for basic functionality
 from api.adapters import router as adapters_router  # Issue #1403
+from api.admin_event_logs import router as admin_event_logs_router  # Issue #4461
 from api.agent import router as agent_router
 from api.agent_config import router as agent_config_router
 from api.agent_org import router as agent_org_router  # #1405
@@ -59,7 +60,9 @@ from api.knowledge_search_aggregator import (
 from api.knowledge_sync_queue import router as knowledge_sync_queue_router  # Issue #4453
 from api.knowledge_vectorization import router as knowledge_vectorization_router
 from api.llm import router as llm_router
+from api.live_events import router as live_events_router  # Issue #6229
 from api.llm_providers import router as llm_providers_router
+from api.websockets import router as websockets_router  # Issue #6229
 from api.manual_mcp import router as manual_mcp_router
 from api.mcp_registry import router as mcp_registry_router
 from api.memory import router as memory_router
@@ -90,8 +93,9 @@ from services.knowledge_sync_service import router as knowledge_sync_router
 
 
 def _get_system_routers() -> list:
-    """Get system and settings routers (Issue #560: extracted, #1281: audit)."""
+    """Get system and settings routers (Issue #560: extracted, #1281: audit, #4461: event-logs)."""
     return [
+        (admin_event_logs_router, "", ["admin", "compliance"], "admin_event_logs"),  # Issue #4461
         (audit_router, "", ["audit"], "audit"),
         (auth_router, "/auth", ["auth"], "auth"),
         (service_messages_router, "", ["service-messages"], "service_messages"),
@@ -303,6 +307,8 @@ def _get_service_routers() -> list:
         (voice_router, "/voice", ["voice"], "voice"),
         (voice_stream_router, "/voice", ["voice", "websocket"], "voice_stream"),
         (wake_word_router, "/wake_word", ["wake_word", "voice"], "wake_word"),
+        (websockets_router, "", ["websockets"], "websockets"),  # Issue #6229
+        (live_events_router, "", ["live-events"], "live_events"),  # Issue #6229
         (vnc_router, "/vnc", ["vnc"], "vnc"),
         (vnc_proxy_router, "/vnc-proxy", ["vnc-proxy"], "vnc_proxy"),
         # Issue #729: infrastructure_hosts removed - now served by slm-server

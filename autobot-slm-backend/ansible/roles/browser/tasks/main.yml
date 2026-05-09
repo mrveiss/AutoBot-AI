@@ -102,22 +102,27 @@
 # ============================================================
 - name: "Browser | Install Playwright system dependencies"
   apt:
-    name:
-      - python3
-      - python3-pip
-      - python3-venv
-      - libnss3
-      - libatk1.0-0
-      - libatk-bridge2.0-0
-      - libcups2
-      - libdrm2
-      - libxkbcommon0
-      - libxcomposite1
-      - libxdamage1
-      - libxfixes3
-      - libxrandr2
-      - libgbm1
-      - libasound2
+    # Ubuntu 24.04 (noble) renamed several libs with `t64` suffix as part of
+    # the time_t 64-bit transition. The transitional virtual packages are
+    # missing on arm64 noble (DGX Spark + ARM64 servers).
+    #
+    # Audit (#7220):
+    #   libasound2 — confirmed broken on arm64 noble (#7207)
+    #   libatk1.0-0 — packages.ubuntu.com returns HTTP 500 on arm64 noble
+    #     (suspect; defensive rename applied)
+    #   libcups2, libatk-bridge2.0-0 — both forms exist on noble (transitional
+    #     packages still present); no rename needed yet
+    #   Other libs (libnss3, libdrm2, libxkbcommon0, libxcomposite1,
+    #     libxdamage1, libxfixes3, libxrandr2, libgbm1) kept original names
+    name: >-
+      {{ ['python3', 'python3-pip', 'python3-venv',
+          'libnss3', 'libatk-bridge2.0-0',
+          'libcups2', 'libdrm2', 'libxkbcommon0',
+          'libxcomposite1', 'libxdamage1', 'libxfixes3',
+          'libxrandr2', 'libgbm1']
+          + (['libasound2t64', 'libatk1.0-0t64']
+             if ansible_facts['distribution_release'] == 'noble'
+             else ['libasound2', 'libatk1.0-0']) }}
     state: present
   become: yes
   tags: ['browser', 'packages']
@@ -192,14 +197,42 @@
     - _chromium_binary.matched == 0
   tags: ['browser', 'packages']
 
-- name: "Browser | Ensure Playwright browsers are world-readable (#4662)"
+- name: "Browser | Find Playwright browser directories for permission fix (#5085)"
+  ansible.builtin.find:
+    paths: /var/lib/autobot/playwright-browsers
+    file_type: directory
+    recurse: yes
+  register: _pb_dirs
+  become: yes
+  when: _browser_worker_dir.stat.exists | default(false)
+  tags: ['browser', 'packages']
+
+- name: "Browser | Set Playwright browser directories world-executable (#5085)"
   ansible.builtin.file:
-    path: /var/lib/autobot/playwright-browsers
+    path: "{{ item.path }}"
     state: directory
-    owner: root
-    group: root
     mode: "0755"
-    recurse: true
+  loop: "{{ _pb_dirs.files | default([]) }}"
+  become: yes
+  when: _browser_worker_dir.stat.exists | default(false)
+  tags: ['browser', 'packages']
+
+- name: "Browser | Find Playwright browser data files for permission fix (#5085)"
+  ansible.builtin.find:
+    paths: /var/lib/autobot/playwright-browsers
+    file_type: file
+    recurse: yes
+  register: _pb_files
+  become: yes
+  when: _browser_worker_dir.stat.exists | default(false)
+  tags: ['browser', 'packages']
+
+- name: "Browser | Set Playwright browser data files world-readable (#5085)"
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: file
+    mode: "0644"
+  loop: "{{ _pb_files.files | default([]) }}"
   become: yes
   when: _browser_worker_dir.stat.exists | default(false)
   tags: ['browser', 'packages']

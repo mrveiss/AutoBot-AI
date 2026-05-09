@@ -17,15 +17,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 
-class TaskStatus(str, Enum):
-    """Status of a subagent task."""
-
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    TIMEOUT = "timeout"
+from autobot_shared.status_enums import TaskStatus  # #6973 consolidation
 
 
 class TaskPriority(str, Enum):

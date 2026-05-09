@@ -6,7 +6,7 @@
   hosts: all
   become: true
   gather_facts: true
-  serial: "{{ ansible_serial | default(5) }}"  # Process all VMs in parallel
+  serial: "{{ ansible_facts['serial'] | default(5) }}"  # Process all VMs in parallel
 
   vars:
     # System configuration
@@ -18,8 +18,8 @@
       debug:
         msg:
           - "Configuring VM: {{ inventory_hostname }}"
-          - "IP Address: {{ ansible_default_ipv4.address }}"
-          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "IP Address: {{ ansible_facts['default_ipv4'].address }}"
+          - "OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
           - "Role: {{ group_names | join(', ') }}"
           - "Resources: {{ hostvars[inventory_hostname]['vm_resources'] | default('Default') }}"
 

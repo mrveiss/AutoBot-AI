@@ -15,33 +15,24 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
+
 from .config import AutoResearchConfig
 from .models import Experiment, ExperimentState, ExperimentStats
 
 logger = logging.getLogger(__name__)
 
 
-class ExperimentStore:
+class ExperimentStore(AsyncRedisClientMixin):
     """Persist and query experiments across Redis and ChromaDB."""
 
     def __init__(self, config: Optional[AutoResearchConfig] = None):
         self.config = config or AutoResearchConfig()
-        self._redis = None
+        self._redis_database = self.config.redis_database
         self._chromadb_collection = None
 
     def _redis_key(self, *parts: str) -> str:
         return ":".join([self.config.redis_prefix, *parts])
-
-    async def _get_redis(self):
-        """Lazy-init async Redis client."""
-        if self._redis is None:
-            from autobot_shared.redis_client import get_redis_client
-
-            self._redis = get_redis_client(
-                async_client=True,
-                database=self.config.redis_database,
-            )
-        return self._redis
 
     async def _get_chromadb(self):
         """Lazy-init ChromaDB collection."""

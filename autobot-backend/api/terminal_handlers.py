@@ -31,11 +31,13 @@ from typing import Awaitable, Callable, Dict, Optional
 from fastapi import WebSocket
 
 # Import models from dedicated module (Issue #185)
-from api.terminal_models import (
-    MODERATE_RISK_PATTERNS,
-    RISKY_COMMAND_PATTERNS,
+from api.schemas_terminal import (
     CommandRiskLevel,
     SecurityLevel,
+)
+from constants.terminal_constants import (
+    MODERATE_RISK_PATTERNS,
+    RISKY_COMMAND_PATTERNS,
 )
 from chat_history import ChatHistoryManager
 from constants.path_constants import PATH

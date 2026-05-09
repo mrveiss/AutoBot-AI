@@ -6,6 +6,9 @@
 Conversation Rate Limiting Middleware for Claude API
 Prevents conversation crashes by monitoring and controlling request patterns
 to avoid hitting Claude API rate limits during development sessions.
+
+Delegates to the shared ``autobot_shared.rate_limiter.RateLimiter`` for the
+core sliding-window logic (Issue #4460).
 """
 
 import json
@@ -14,6 +17,8 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
+
+from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -342,3 +347,16 @@ def record_request_completion(
     """Record a completed request"""
     limiter = get_rate_limiter()
     limiter.record_request(payload_size, response_time, success, error_type)
+
+
+# ---------------------------------------------------------------------------
+# Shared delegate (Issue #4460)
+# ---------------------------------------------------------------------------
+# A pre-configured instance of the shared RateLimiter scoped to conversations.
+# ConversationRateLimiter handles in-memory payload analysis and statistics;
+# the shared limiter below provides the Redis-backed sliding-window guard for
+# the conversation scope, accessible to async request handlers.
+conversation_rate_limiter = _SharedRateLimiter(
+    scope_prefix="conversation",
+    default_tier="authenticated",
+)

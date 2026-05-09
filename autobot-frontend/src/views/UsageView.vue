@@ -15,20 +15,20 @@
           <option :value="90">Last 90 days</option>
         </select>
         <button class="btn-action-secondary" :disabled="loading" @click="load">
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+          <Icon name="sync-alt" :spin="loading" />
           Refresh
         </button>
         <button v-if="isAdmin" class="btn-action-secondary" :disabled="csvLoading" @click="downloadCsv">
-          <i class="fas fa-download" :class="{ 'fa-spin': csvLoading }"></i>
+          <Icon name="download" :spin="csvLoading" />
           Export CSV
         </button>
       </div>
     </div>
 
     <div v-if="error" class="error-banner">
-      <i class="fas fa-exclamation-circle"></i>
+      <Icon name="exclamation-circle" />
       <span>{{ error }}</span>
-      <button class="btn-dismiss" @click="error = null"><i class="fas fa-times"></i></button>
+      <button class="btn-dismiss" @click="error = null"><Icon name="times" /></button>
     </div>
 
     <!-- Tabs -->
@@ -53,7 +53,7 @@
     <!-- Personal Tab -->
     <template v-if="activeTab === 'personal'">
       <div v-if="loading" class="loading-row">
-        <i class="fas fa-spinner fa-spin"></i> Loading...
+        <Icon name="sync-alt" :spin="true" /> Loading...
       </div>
       <template v-else-if="personal">
         <div class="summary-grid">
@@ -113,7 +113,7 @@
     <!-- Admin Tab -->
     <template v-if="activeTab === 'admin' && isAdmin">
       <div v-if="loading" class="loading-row">
-        <i class="fas fa-spinner fa-spin"></i> Loading...
+        <Icon name="sync-alt" :spin="true" /> Loading...
       </div>
       <template v-else>
         <!-- Summary Cards -->
@@ -174,6 +174,8 @@ import { getApiBase } from '@/config/ssot-config'
 import { useApi } from '@/composables/useApi'
 import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('UsageView')
 const api = useApi()
@@ -250,10 +252,7 @@ async function load() {
 async function downloadCsv() {
   csvLoading.value = true
   try {
-    const token = localStorage.getItem('authToken') || ''
-    const res = await fetch(`${getApiBase()}/usage/export/csv?days=${days.value}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const res = await fetchWithAuth(`${getApiBase()}/usage/export/csv?days=${days.value}`)
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     const blob = await res.blob()
     const url = URL.createObjectURL(blob)

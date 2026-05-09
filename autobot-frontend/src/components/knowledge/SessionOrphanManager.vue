@@ -118,43 +118,25 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useKnowledgeOrphans } from '@/composables/knowledge/useKnowledgeOrphans'
 
 const { t } = useI18n()
 
 const logger = createLogger('SessionOrphanManager')
 
 // Types
-interface OrphanedFact {
-  fact_id: string
-  session_id: string
-  category: string
-  content_preview: string
-  important: boolean
-}
-
-interface OrphanScanResult {
-  total_facts_checked: number
-  facts_with_session_tracking: number
-  orphaned_count: number
-  orphaned_sessions: number
-  session_breakdown: Record<string, number>
-  orphaned_facts: OrphanedFact[]
-}
-
 interface StatusMessage {
   type: 'success' | 'error' | 'warning' | 'info'
   text: string
   icon: string
 }
 
+// Composable
+const { orphanScanResult, isScanning, isCleaningOrphans, scanSessionOrphans: doScan, cleanupSessionOrphans: doCleanup } = useKnowledgeOrphans()
+
 // State
-const orphanScanResult = ref<OrphanScanResult | null>(null)
-const isScanning = ref(false)
-const isCleaningOrphans = ref(false)
 const statusMessage = ref<StatusMessage | null>(null)
 
 // Methods
@@ -179,40 +161,21 @@ const showStatus = (type: StatusMessage['type'], text: string) => {
 
 const scanSessionOrphans = async () => {
   if (isScanning.value || isCleaningOrphans.value) return
+  statusMessage.value = null
 
   try {
-    isScanning.value = true
-    orphanScanResult.value = null
-    statusMessage.value = null
+    const data = await doScan()
 
-    // Issue #552: Fixed path to match backend /api/knowledge-maintenance/session-orphans
-    const response = await apiClient.get<Response>(`${getApiBase()}/knowledge-maintenance/session-orphans`)
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(errorText || `Server error: ${response.status}`)
-    }
-
-    const data = await response.json()
-
-    if (data.status === 'success') {
-      orphanScanResult.value = data.data as OrphanScanResult
-
-      if (data.data.orphaned_count > 0) {
-        showStatus('warning',
-          t('knowledge.sessionOrphan.foundOrphans', { count: data.data.orphaned_count, sessions: data.data.orphaned_sessions }))
-      } else {
-        showStatus('success',
-          t('knowledge.sessionOrphan.allActive', { count: data.data.total_facts_checked }))
-      }
+    if (data.orphaned_count > 0) {
+      showStatus('warning',
+        t('knowledge.sessionOrphan.foundOrphans', { count: data.orphaned_count, sessions: data.orphaned_sessions }))
     } else {
-      throw new Error(data.message || 'Failed to scan for orphans')
+      showStatus('success',
+        t('knowledge.sessionOrphan.allActive', { count: data.total_facts_checked }))
     }
   } catch (error: any) {
     logger.error('Failed to scan for session orphans:', error)
     showStatus('error', error.message || t('knowledge.sessionOrphan.scanError'))
-  } finally {
-    isScanning.value = false
   }
 }
 
@@ -228,34 +191,15 @@ const cleanupSessionOrphans = async () => {
   if (!confirmed) return
 
   try {
-    isCleaningOrphans.value = true
+    const data = await doCleanup()
 
-    // Issue #552: Fixed path to match backend /api/knowledge-maintenance/session-orphans
-    const response = await apiClient.delete<Response>(`${getApiBase()}/knowledge-maintenance/session-orphans?dry_run=false&preserve_important=true`)
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(errorText || `Server error: ${response.status}`)
-    }
-
-    const data = await response.json()
-
-    if (data.status === 'success') {
-      const preserved = data.data.facts_preserved > 0
-        ? t('knowledge.sessionOrphan.preservedSuffix', { count: data.data.facts_preserved })
-        : ''
-      showStatus('success', t('knowledge.sessionOrphan.deleteSuccess', { count: data.data.facts_removed, preserved }))
-
-      // Clear the scan result after cleanup
-      orphanScanResult.value = null
-    } else {
-      throw new Error(data.message || 'Failed to cleanup orphans')
-    }
+    const preserved = data.facts_preserved > 0
+      ? t('knowledge.sessionOrphan.preservedSuffix', { count: data.facts_preserved })
+      : ''
+    showStatus('success', t('knowledge.sessionOrphan.deleteSuccess', { count: data.facts_removed, preserved }))
   } catch (error: any) {
     logger.error('Failed to cleanup session orphans:', error)
     showStatus('error', error.message || t('knowledge.sessionOrphan.cleanupError'))
-  } finally {
-    isCleaningOrphans.value = false
   }
 }
 </script>
@@ -279,7 +223,7 @@ const cleanupSessionOrphans = async () => {
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0 0 0.25rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-1) var(--spacing-0);
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
@@ -348,7 +292,7 @@ const cleanupSessionOrphans = async () => {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-warning-darker);
-  margin: 0 0 0.75rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3) var(--spacing-0);
 }
 
 .orphan-list {
@@ -374,7 +318,7 @@ const cleanupSessionOrphans = async () => {
 
 .orphan-category {
   font-size: var(--text-xs);
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--color-primary-bg);
   color: var(--color-primary-dark);
   border-radius: var(--radius-full);
@@ -382,7 +326,7 @@ const cleanupSessionOrphans = async () => {
 
 .orphan-important {
   font-size: var(--text-xs);
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--color-warning-bg);
   color: var(--color-warning-dark);
   border-radius: var(--radius-full);
@@ -391,7 +335,7 @@ const cleanupSessionOrphans = async () => {
 .orphan-content-text {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0 0 0.25rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-1) var(--spacing-0);
   line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -407,7 +351,7 @@ const cleanupSessionOrphans = async () => {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
   font-style: italic;
-  margin: 0.75rem 0 0 0;
+  margin: var(--spacing-3) var(--spacing-0) var(--spacing-0) var(--spacing-0);
   text-align: center;
 }
 
@@ -471,12 +415,12 @@ const cleanupSessionOrphans = async () => {
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0 0 0.5rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2) var(--spacing-0);
 }
 
 .action-card p {
   color: var(--text-tertiary);
-  margin: 0 0 1rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-4) var(--spacing-0);
   line-height: 1.5;
 }
 

@@ -20,34 +20,27 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, HTTPException, Path, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
+from api.system_health import register_singleton_probe
+
+from api.schemas_workflows import CaptchaResolutionRequest, CaptchaResolutionResponse
 from autobot_shared.time_utils import utc_timestamp
 from services.captcha_human_loop import CaptchaResolutionStatus, get_captcha_human_loop
+from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter(prefix="/captcha", tags=["captcha"])
 logger = logging.getLogger(__name__)
 
 
-class CaptchaResolutionRequest(BaseModel):
-    """Request model for CAPTCHA resolution"""
-
-    notes: Optional[str] = None
-
-
-class CaptchaResolutionResponse(BaseModel):
-    """Response model for CAPTCHA resolution"""
-
-    success: bool
-    captcha_id: str
-    status: str
-    message: str
-    timestamp: Optional[str] = None
-
-
 @router.post("/{captcha_id}/resolve", response_model=CaptchaResolutionResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="resolve_captcha",
+    error_code_prefix="CAPTCHA",
+)
 async def resolve_captcha(
     captcha_id: str = Path(..., description="CAPTCHA ID to mark as solved"),
     request: Optional[CaptchaResolutionRequest] = None,
@@ -103,6 +96,11 @@ async def resolve_captcha(
 
 
 @router.post("/{captcha_id}/skip", response_model=CaptchaResolutionResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="skip_captcha",
+    error_code_prefix="CAPTCHA",
+)
 async def skip_captcha(
     captcha_id: str = Path(..., description="CAPTCHA ID to skip"),
     request: Optional[CaptchaResolutionRequest] = None,
@@ -156,7 +154,12 @@ async def skip_captcha(
         )
 
 
-@router.get("/pending")
+@router.get("/pending", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pending_captchas",
+    error_code_prefix="CAPTCHA",
+)
 async def get_pending_captchas() -> JSONResponse:
     """
     Get list of CAPTCHAs currently awaiting human resolution.
@@ -186,7 +189,15 @@ async def get_pending_captchas() -> JSONResponse:
         )
 
 
-@router.get("/health")
+register_singleton_probe("captcha", get_captcha_human_loop)
+
+
+@router.get("/health", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="captcha_health",
+    error_code_prefix="CAPTCHA",
+)
 async def captcha_health() -> JSONResponse:
     """
     Health check for CAPTCHA service.

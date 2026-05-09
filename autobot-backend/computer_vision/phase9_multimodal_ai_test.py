@@ -23,7 +23,7 @@ from context_aware_decision_system import (  # noqa: E402
     DecisionType,
     context_aware_decision_system,
 )
-from modern_ai_integration import AIProvider, modern_ai_integration  # noqa: E402
+from modern_ai_integration import AIProvider, get_modern_ai_integration  # noqa: E402
 from multimodal_processor import (  # noqa: E402
     ModalInput,
     ModalityType,
@@ -338,7 +338,7 @@ async def test_modern_ai_integration():
     # Test 1: Provider Status
     print("\n1. Testing AI Provider Status...")  # noqa: print
     try:
-        status = modern_ai_integration.get_provider_status()
+        status = get_modern_ai_integration().get_provider_status()
         print("✅ AI providers status:")  # noqa: print
         for provider, info in status.items():
             availability = "✅" if info.get("available") else "❌"
@@ -354,7 +354,7 @@ async def test_modern_ai_integration():
     # Test 2: Local Model Processing (safe fallback)
     print("\n2. Testing Local Model Processing...")  # noqa: print
     try:
-        response = await modern_ai_integration.process_with_ai(
+        response = await get_modern_ai_integration().process_with_ai(
             provider=AIProvider.LOCAL_MODEL,
             prompt="Describe the capabilities of AutoBot Phase 9",
             task_type="description_generation",
@@ -368,7 +368,7 @@ async def test_modern_ai_integration():
     # Test 3: Natural Language Processing
     print("\n3. Testing Natural Language to Actions...")  # noqa: print
     try:
-        actions = await modern_ai_integration.natural_language_to_actions(
+        actions = await get_modern_ai_integration().natural_language_to_actions(
             user_command=(
                 "Click the submit button and then navigate to the " "settings page"
             ),
@@ -389,7 +389,7 @@ async def test_modern_ai_integration():
     # Test 4: Usage Statistics
     print("\n4. Testing Usage Statistics...")  # noqa: print
     try:
-        stats = modern_ai_integration.get_usage_statistics()
+        stats = get_modern_ai_integration().get_usage_statistics()
         print("✅ AI usage statistics:")  # noqa: print
         print(f"   Total requests: {stats.get('total_requests', 0)}")  # noqa: print
         print(f"   Success rate: {stats.get('success_rate', 0):.2f}")  # noqa: print
@@ -449,7 +449,7 @@ async def test_integration():
         )
 
         # Use AI to elaborate on the decision
-        ai_response = await modern_ai_integration.process_with_ai(
+        ai_response = await get_modern_ai_integration().process_with_ai(
             provider=AIProvider.LOCAL_MODEL,
             prompt=(
                 f"Elaborate on this automation decision: "
@@ -483,7 +483,7 @@ async def test_integration():
         )
 
         print("   → Processing with AI integration...")  # noqa: print
-        ai_insight = await modern_ai_integration.process_with_ai(
+        ai_insight = await get_modern_ai_integration().process_with_ai(
             provider=AIProvider.LOCAL_MODEL,
             prompt="Provide insights on workflow optimization opportunities",
             task_type="workflow_analysis",

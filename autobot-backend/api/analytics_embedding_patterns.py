@@ -25,10 +25,11 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
+from api.schemas_analytics import EmbeddingStatsResponse, EmbeddingUsageRequest
+from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
@@ -129,71 +130,6 @@ class BatchOptimizationRecommendation:
 # =============================================================================
 # Pydantic Models
 # =============================================================================
-
-
-class EmbeddingUsageRequest(BaseModel):
-    """Request to record embedding usage"""
-
-    operation_type: str = Field(
-        default="document_vectorization", description="Type of embedding operation"
-    )
-    model: str = Field(..., description="Embedding model used")
-    provider: str = Field(default="ollama", description="Embedding provider")
-    token_count: int = Field(..., description="Total tokens processed")
-    document_count: int = Field(default=1, description="Number of documents processed")
-    batch_size: int = Field(default=1, description="Batch size used")
-    processing_time: float = Field(..., description="Processing time in seconds")
-    success: bool = Field(default=True, description="Whether operation succeeded")
-    source: Optional[str] = Field(None, description="Source of the operation")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
-
-    # === Issue #372: Feature Envy Reduction Methods ===
-
-    def to_usage_record(self, operation_id: str, cost: float) -> Dict[str, Any]:
-        """Convert to usage record dict for storage (Issue #372)."""
-        return {
-            "operation_id": operation_id,
-            "operation_type": self.operation_type,
-            "model": self.model,
-            "provider": self.provider,
-            "token_count": self.token_count,
-            "document_count": self.document_count,
-            "batch_size": self.batch_size,
-            "processing_time": self.processing_time,
-            "success": self.success,
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            "cost": cost,
-            "source": self.source or "unknown",
-            "metadata": self.metadata or {},
-        }
-
-    def get_tokens_per_second(self) -> float:
-        """Calculate tokens per second (Issue #372)."""
-        if self.processing_time > 0:
-            return self.token_count / self.processing_time
-        return 0
-
-    def get_log_summary(self) -> str:
-        """Get formatted log summary (Issue #372)."""
-        return (
-            f"{self.document_count} docs, {self.token_count} tokens, "
-            f"{self.processing_time:.3f}s"
-        )
-
-
-class EmbeddingStatsResponse(BaseModel):
-    """Response model for embedding statistics"""
-
-    total_operations: int
-    total_tokens: int
-    total_documents: int
-    total_cost: float
-    avg_processing_time: float
-    success_rate: float
-    avg_batch_size: float
-    tokens_per_second: float
-    period: str
-    timestamp: str
 
 
 # =============================================================================
@@ -516,6 +452,8 @@ class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
 # =============================================================================
 
 import threading
+from api.schemas_common import DataResponse, SuccessResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 _embedding_analyzer: Optional[EmbeddingPatternAnalyzer] = None
 _embedding_analyzer_lock = threading.Lock()
@@ -536,7 +474,12 @@ def get_embedding_analyzer() -> EmbeddingPatternAnalyzer:
 # =============================================================================
 
 
-@router.post("/record")
+@router.post("/record", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="record_embedding_usage",
+    error_code_prefix="ANALYTICS_EMBEDDING_PATTERNS",
+)
 async def record_embedding_usage(
     request: EmbeddingUsageRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -557,7 +500,12 @@ async def record_embedding_usage(
     )
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=EmbeddingStatsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_embedding_stats",
+    error_code_prefix="ANALYTICS_EMBEDDING_PATTERNS",
+)
 async def get_embedding_stats(
     days: int = Query(default=7, ge=1, le=90, description="Number of days to analyze"),
     model: Optional[str] = Query(None, description="Filter by model"),
@@ -579,7 +527,12 @@ async def get_embedding_stats(
     )
 
 
-@router.get("/model-comparison")
+@router.get("/model-comparison", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_model_comparison",
+    error_code_prefix="ANALYTICS_EMBEDDING_PATTERNS",
+)
 async def get_model_comparison(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -599,7 +552,12 @@ async def get_model_comparison(
     )
 
 
-@router.get("/optimization-recommendations")
+@router.get("/optimization-recommendations", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_optimization_recommendations",
+    error_code_prefix="ANALYTICS_EMBEDDING_PATTERNS",
+)
 async def get_optimization_recommendations(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -619,7 +577,38 @@ async def get_optimization_recommendations(
     )
 
 
-@router.get("/health")
+@register_health_probe("analytics_embedding_patterns")
+async def probe_analytics_embedding_patterns(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the embedding-patterns analytics module.
+
+    Reuses the redis-ping check from the existing /health route.
+    """
+    try:
+        analyzer = get_embedding_analyzer()
+        redis = await analyzer._get_redis()
+        await redis.ping()
+        return ComponentHealth(
+            name="analytics_embedding_patterns",
+            status="ok",
+            detail="redis ping ok",
+            data={"redis_connected": True},
+        )
+    except Exception as exc:  # noqa: BLE001 - defensive, never re-raise
+        return ComponentHealth(
+            name="analytics_embedding_patterns",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
+@router.get("/health", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="embedding_analytics_health",
+    error_code_prefix="ANALYTICS_EMBEDDING_PATTERNS",
+)
 async def embedding_analytics_health(
     admin_check: bool = Depends(check_admin_permission),
 ):

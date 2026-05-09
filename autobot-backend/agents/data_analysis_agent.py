@@ -20,9 +20,9 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from constants.threshold_constants import LLMDefaults
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 
-from .base_agent import AgentRequest
+from .base_agent import AgentRequest, DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = logging.getLogger(__name__)
@@ -33,10 +33,20 @@ class DataAnalysisAgent(StandardizedAgent):
 
     AGENT_ID = "data_analysis"
 
-    def __init__(self):
-        """Initialize the Data Analysis Agent with LLM configuration."""
-        super().__init__("data_analysis")
-        self.llm_interface = LLMInterface()
+    def __init__(
+        self,
+        agent_type: Optional[str] = None,
+        deployment_mode: DeploymentMode = DeploymentMode.LOCAL,
+    ):
+        """Initialize the Data Analysis Agent with LLM configuration.
+
+        Issue #6660: Accepts the parent's full constructor signature so factory
+        callers (`cls(agent_type, deployment_mode)`) keep working. Defaults
+        match the historical no-arg call site so existing instantiations are
+        unaffected.
+        """
+        super().__init__(agent_type or self.AGENT_ID, deployment_mode)
+        self.llm_interface = get_llm_service()
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
         self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
         self.model_name = get_agent_model_explicit(self.AGENT_ID)
@@ -97,7 +107,7 @@ class DataAnalysisAgent(StandardizedAgent):
         try:
             logger.info("Data Analysis Agent processing: %s...", request_text[:50])
             session_id = (context or {}).get("session_id") or str(uuid.uuid4())
-            response = await self.llm_interface.chat_completion_optimized(
+            response = await self.llm_interface.chat_optimized(
                 agent_type=self.AGENT_ID,
                 user_message=request_text,
                 session_id=session_id,

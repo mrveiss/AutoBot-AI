@@ -1,5 +1,4 @@
 # Security Scanning workflow
-# Uses self-hosted runner to avoid GitHub Actions quota limits
 #
 # Security checks are blocking — failures prevent merge (Issue #2874).
 
@@ -27,34 +26,50 @@ permissions:
   security-events: write
 
 jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      deps: ${{ steps.filter.outputs.deps }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590  # v3
+        id: filter
+        with:
+          filters: |
+            python:
+              - 'autobot-backend/**/*.py'
+              - 'autobot-slm-backend/**/*.py'
+              - 'autobot_shared/**/*.py'
+              - '.github/workflows/security.yml'
+            deps:
+              - '**/requirements*.txt'
+              - 'requirements-ci/**'
+              - 'pyproject.toml'
+              - 'autobot_shared/pyproject.toml'
+              - 'autobot-frontend/package*.json'
+              - '.github/workflows/security.yml'
+
   dependency-security:
     name: Dependency Security Scan
-    runs-on: self-hosted
+    needs: changes
+    # Always run on schedule (daily security scan); gate on `deps` for push/PR.
+    if: github.event_name == 'schedule' || needs.changes.outputs.deps == 'true'
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v6
 
-    - name: Install Python 3.12 via deadsnakes PPA
-      run: |
-        if ! command -v python3.12 &> /dev/null; then
-          sudo add-apt-repository -y ppa:deadsnakes/ppa
-          sudo apt-get update -y
-          sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
-        fi
-
-    - name: Set up Python virtual environment
-      run: |
-        pip cache purge 2>/dev/null || true
-        rm -rf .venv 2>/dev/null || true
-        python3.12 -m venv .venv
-        source .venv/bin/activate
-        echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
-        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
 
     - name: Install Python dependencies
       run: |
-        source .venv/bin/activate
         python -m pip install --upgrade pip setuptools wheel
         python -m pip install pip-audit bandit safety
         # Use CI-safe requirements (excludes vllm and other GPU-dependent packages)
@@ -65,20 +80,18 @@ jobs:
 
     - name: Python Dependency Audit
       run: |
-        source .venv/bin/activate
         echo "## Python Dependency Security Report" >> $GITHUB_STEP_SUMMARY
         pip-audit --format=json --output=python-audit.json || true
         pip-audit --format=markdown >> $GITHUB_STEP_SUMMARY || true
 
     - name: Safety Check (Alternative Python Security)
       run: |
-        source .venv/bin/activate
         echo "## Safety Security Report" >> $GITHUB_STEP_SUMMARY
         safety check --json --output safety-report.json || true
         safety check || true
 
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: '20'
 
@@ -112,60 +125,49 @@ jobs:
 
   static-analysis:
     name: Static Application Security Testing (SAST)
-    runs-on: self-hosted
+    needs: changes
+    # Always run on schedule (daily SAST scan); gate on `python` for push/PR.
+    if: github.event_name == 'schedule' || needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v6
 
-    - name: Install Python 3.12 via deadsnakes PPA
-      run: |
-        if ! command -v python3.12 &> /dev/null; then
-          sudo add-apt-repository -y ppa:deadsnakes/ppa
-          sudo apt-get update -y
-          sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
-        fi
-
-    - name: Set up Python virtual environment
-      run: |
-        pip cache purge 2>/dev/null || true
-        rm -rf .venv 2>/dev/null || true
-        python3.12 -m venv .venv
-        source .venv/bin/activate
-        echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
-        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
 
     - name: Install SAST tools
       run: |
-        source .venv/bin/activate
         python -m pip install --upgrade pip
         python -m pip install bandit semgrep flake8 pylint
 
     - name: Bandit Security Linter
       run: |
-        source .venv/bin/activate
         echo "## Bandit Security Analysis" >> $GITHUB_STEP_SUMMARY
         python3 -m bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ -f json -o bandit-report.json || true
         python3 -m bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ -f txt || true
 
     - name: Semgrep SAST Scan
       run: |
-        source .venv/bin/activate
         echo "## Semgrep Security Analysis" >> $GITHUB_STEP_SUMMARY
         python3 -m semgrep --config=auto --json --output=semgrep-report.json autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
         python3 -m semgrep --config=auto autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
 
     - name: Python Code Quality Check
       run: |
-        source .venv/bin/activate
         echo "## Code Quality Analysis" >> $GITHUB_STEP_SUMMARY
         python3 -m flake8 autobot-backend/ autobot-slm-backend/ autobot_shared/ --max-line-length=88 --extend-ignore=E203,W503 \
           --output-file=flake8-report.txt || true
         cat flake8-report.txt || true
 
     - name: Secret Detection
+      shell: bash
       run: |
-        source .venv/bin/activate
+        set -euo pipefail
         echo "## Secret Detection" >> $GITHUB_STEP_SUMMARY
         # Check for common secret patterns (without Docker)
         echo "Scanning for potential secrets..."
@@ -217,7 +219,7 @@ jobs:
 
   compliance-check:
     name: Security Compliance Check
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
@@ -248,7 +250,9 @@ jobs:
         fi
 
     - name: Security Best Practices Check
+      shell: bash
       run: |
+        set -euo pipefail
         echo "## Security Best Practices" >> $GITHUB_STEP_SUMMARY
 
         # Check for security-related imports
@@ -265,8 +269,8 @@ jobs:
 
   security-summary:
     name: Security Summary Report
-    runs-on: self-hosted
-    needs: [dependency-security, static-analysis, compliance-check]
+    runs-on: ubuntu-latest
+    needs: [changes, dependency-security, static-analysis, compliance-check]
     if: always()
 
     steps:

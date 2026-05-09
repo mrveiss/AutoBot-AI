@@ -112,8 +112,7 @@ class AWSIntegration(BaseIntegration):
 
         handler = action_map.get(action)
         if not handler:
-            raise ValueError(f"Unknown action: {action}")
-
+            return {"error": f"Unknown action: {action}"}
         return await handler(params)
 
     async def _list_ec2_instances(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -395,8 +394,7 @@ class AzureIntegration(BaseIntegration):
 
         handler = action_map.get(action)
         if not handler:
-            raise ValueError(f"Unknown action: {action}")
-
+            return {"error": f"Unknown action: {action}"}
         return await handler(params)
 
     async def _list_vms(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -580,8 +578,7 @@ class GCPIntegration(BaseIntegration):
 
         handler = action_map.get(action)
         if not handler:
-            raise ValueError(f"Unknown action: {action}")
-
+            return {"error": f"Unknown action: {action}"}
         return await handler(params)
 
     async def _list_instances(self, params: Dict[str, Any]) -> Dict[str, Any]:

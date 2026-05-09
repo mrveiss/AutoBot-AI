@@ -10,19 +10,21 @@ Provides REST and WebSocket endpoints for the intelligent agent system.
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING, Dict, List
+from typing import TYPE_CHECKING, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
+
+from api.system_health import ComponentHealth, register_health_probe
 
 from auth_middleware import check_admin_permission, get_current_user
-from type_defs.common import Metadata
 
 if TYPE_CHECKING:
     from intelligence.intelligent_agent import IntelligentAgent
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from monitoring.prometheus_metrics import get_metrics_manager
+from api.schemas_agent import AgentReloadResponse, AgentSystemCapabilitiesResponse, GoalRequest, GoalResponse, HealthResponse
+from api.schemas_common import DataResponse
 
 # CRITICAL FIX: Use lazy loading to prevent startup deadlock
 logger = logging.getLogger(__name__)
@@ -42,14 +44,14 @@ def get_lazy_dependencies():
     try:
         from intelligence.intelligent_agent import IntelligentAgent
         from knowledge_base import KnowledgeBase
-        from llm_interface import LLMInterface
+        from services.llm_service import get_llm_service
         from utils.command_validator import CommandValidator
         from worker_node import WorkerNode
 
         return (
             IntelligentAgent,
             KnowledgeBase,
-            LLMInterface,
+            get_llm_service,
             CommandValidator,
             WorkerNode,
         )
@@ -80,7 +82,7 @@ async def get_agent() -> "IntelligentAgent":
             (
                 IntelligentAgent,
                 KnowledgeBase,
-                LLMInterface,
+                get_llm_service,
                 CommandValidator,
                 WorkerNode,
             ) = get_lazy_dependencies()
@@ -89,7 +91,7 @@ async def get_agent() -> "IntelligentAgent":
                 "Initializing intelligent agent with lazy-loaded dependencies..."
             ),
             _agent_instance = IntelligentAgent(
-                LLMInterface(), KnowledgeBase(), WorkerNode(), CommandValidator()
+                get_llm_service(), KnowledgeBase(), WorkerNode(), CommandValidator()
             )
             await _agent_instance.initialize()
             logger.info(
@@ -105,51 +107,16 @@ async def get_agent() -> "IntelligentAgent":
             )
 
 
-# Pydantic models for API
-class GoalRequest(BaseModel):
-    """Request model for natural language goals."""
-
-    goal: str
-    context: Metadata = {}
-
-
-class GoalResponse(BaseModel):
-    """Response model for processed goals."""
-
-    success: bool
-    result: str
-    execution_time: float
-    metadata: Metadata = {}
-
-
-class SystemInfoResponse(BaseModel):
-    """Response model for system information."""
-
-    os_type: str
-    distro: str = ""
-    user: str
-    capabilities: List[str]
-    available_tools: List[str]
-
-
-class HealthResponse(BaseModel):
-    """Response model for health check."""
-
-    status: str
-    components: Dict[str, str]
-    uptime: float
-
-
 # Router - no prefix needed as it's added when mounting
 router = APIRouter(tags=["intelligent-agent"])
 
 
+@router.post("/process", response_model=GoalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="process_natural_language_goal",
     error_code_prefix="INTELLIGENT_AGENT",
 )
-@router.post("/process", response_model=GoalResponse)
 async def process_natural_language_goal(
     request: GoalRequest,
     current_user: dict = Depends(get_current_user),
@@ -202,12 +169,12 @@ async def process_natural_language_goal(
     )
 
 
+@router.get("/system-info", response_model=AgentSystemCapabilitiesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_info",
     error_code_prefix="INTELLIGENT_AGENT",
 )
-@router.get("/system-info", response_model=SystemInfoResponse)
 async def get_system_info(
     current_user: dict = Depends(get_current_user),
 ):
@@ -221,7 +188,7 @@ async def get_system_info(
 
     # Handle both initialized and uninitialized states
     if system_info.get("status") == "not_initialized":
-        return SystemInfoResponse(
+        return AgentSystemCapabilitiesResponse(
             os_type="unknown",
             distro="",
             user="",
@@ -233,7 +200,7 @@ async def get_system_info(
     os_info = system_info.get("os_info", {})
     capabilities_info = system_info.get("capabilities", {})
 
-    return SystemInfoResponse(
+    return AgentSystemCapabilitiesResponse(
         os_type=os_info.get("os_type", "unknown"),
         distro=os_info.get("distro", ""),
         user=os_info.get("user", ""),
@@ -242,12 +209,38 @@ async def get_system_info(
     )
 
 
+@register_health_probe("intelligent_agent")
+async def probe_intelligent_agent(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for intelligent_agent module.
+
+    Lightweight check: inspect the module-level lazy singleton without forcing
+    initialization. ``ok`` if already initialized; ``degraded`` if not yet
+    initialized (legitimate cold-start state).
+    """
+    try:
+        if _agent_instance is None:
+            return ComponentHealth(
+                name="intelligent_agent",
+                status="degraded",
+                detail="agent not yet initialized",
+            )
+        return ComponentHealth(name="intelligent_agent", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="intelligent_agent",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
+@router.get("/health", response_model=HealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
     error_code_prefix="INTELLIGENT_AGENT",
 )
-@router.get("/health", response_model=HealthResponse)
 async def health_check(
     current_user: dict = Depends(get_current_user),
 ):
@@ -281,12 +274,12 @@ async def health_check(
         )
 
 
+@router.post("/reload", response_model=AgentReloadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reload_agent",
     error_code_prefix="INTELLIGENT_AGENT",
 )
-@router.post("/reload")
 async def reload_agent(
     admin_check: bool = Depends(check_admin_permission),
 ):

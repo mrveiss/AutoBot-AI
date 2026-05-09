@@ -108,6 +108,7 @@ export interface TimeoutConfig {
 
 /**
  * VNC configuration for desktop streaming.
+ * DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
  */
 export interface VNCConfig {
   desktop: {
@@ -389,6 +390,7 @@ function buildConfig(): AutoBotConfig {
     websocket: getEnvNumber('VITE_WEBSOCKET_TIMEOUT', 30000),
   };
 
+  // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
   // VNC configuration
   const vnc: VNCConfig = {
     desktop: {
@@ -421,6 +423,19 @@ function buildConfig(): AutoBotConfig {
   const debug = getEnvBoolean('VITE_DEBUG', false);
   const httpProtocol = getEnv('VITE_HTTP_PROTOCOL', 'http');
 
+  // #6795: derive protocol at runtime from window.location to avoid the
+  // mixed-content trap that previously hit websocketUrl (#6642). The
+  // build-time VITE_HTTP_PROTOCOL stays as fallback for SSR / non-browser
+  // contexts where window is undefined. All browser-facing URL builders
+  // below use this helper so behaviour is consistent regardless of how the
+  // env var is set at build time.
+  const runtimeHttpProto = (): string => {
+    if (typeof window !== 'undefined' && window.location?.protocol) {
+      return window.location.protocol === 'https:' ? 'https' : 'http';
+    }
+    return httpProtocol;
+  };
+
   // Build the config object with computed URL getters
   const configObj: AutoBotConfig = {
     vm,
@@ -434,13 +449,16 @@ function buildConfig(): AutoBotConfig {
     debug,
     httpProtocol,
 
-    // Computed URLs as getters
+    // #6795: detect protocol at runtime from window.location instead of
+    // build-time VITE_HTTP_PROTOCOL (which defaults to 'http' and produces
+    // mixed-content blocks on HTTPS deploys). Sister fix to #6642 (websocketUrl);
+    // applied uniformly to every browser-facing URL builder.
     get backendUrl(): string {
-      return `${httpProtocol}://${vm.main}:${port.backend}`;
+      return `${runtimeHttpProto()}://${vm.main}:${port.backend}`;
     },
 
     get frontendUrl(): string {
-      return `${httpProtocol}://${vm.frontend}:${port.frontend}`;
+      return `${runtimeHttpProto()}://${vm.frontend}:${port.frontend}`;
     },
 
     get redisUrl(): string {
@@ -448,35 +466,50 @@ function buildConfig(): AutoBotConfig {
     },
 
     get ollamaUrl(): string {
-      return `${httpProtocol}://${vm.ollama}:${port.ollama}`;
+      return `${runtimeHttpProto()}://${vm.ollama}:${port.ollama}`;
     },
 
     get websocketUrl(): string {
-      const wsProtocol = httpProtocol === 'https' ? 'wss' : 'ws';
-      return `${wsProtocol}://${vm.main}:${port.backend}/ws`;
+      // #6642: detect protocol from window.location at runtime, not from
+      // build-time VITE_HTTP_PROTOCOL. The env var defaults to 'http' and
+      // produced ws:// URLs that browsers blocked as mixed-content when the
+      // page itself was served over HTTPS. Mirror the runtime detection that
+      // getBackendWsUrl() already uses so behaviour stays correct regardless
+      // of the build-time env.
+      const isHttps =
+        typeof window !== 'undefined'
+          ? window.location.protocol === 'https:'
+          : httpProtocol === 'https';
+      if (isHttps) {
+        const host =
+          typeof window !== 'undefined' ? window.location.host : vm.main;
+        return `wss://${host}/api/ws`;
+      }
+      return `ws://${vm.main}:${port.backend}/api/ws`;
     },
 
     get aistackUrl(): string {
-      return `${httpProtocol}://${vm.aistack}:${port.aistack}`;
+      return `${runtimeHttpProto()}://${vm.aistack}:${port.aistack}`;
     },
 
     get npuWorkerUrl(): string {
-      return `${httpProtocol}://${vm.npu}:${port.npu}`;
+      return `${runtimeHttpProto()}://${vm.npu}:${port.npu}`;
     },
 
     get browserServiceUrl(): string {
-      return `${httpProtocol}://${vm.browser}:${port.browser}`;
+      return `${runtimeHttpProto()}://${vm.browser}:${port.browser}`;
     },
 
+    // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
     get vncUrl(): string {
-      return `${httpProtocol}://${vm.main}:${port.vnc}/vnc.html`;
+      return `${runtimeHttpProto()}://${vm.main}:${port.vnc}/vnc.html`;
     },
 
     get slmUrl(): string {
       // Issue #1875: When vm.slm is empty, use relative /slm path
       // for Docker/nginx deployments where SLM is proxied
       if (!vm.slm) return '/slm';
-      return `${httpProtocol}://${vm.slm}:${port.slm}`;
+      return `${runtimeHttpProto()}://${vm.slm}:${port.slm}`;
     },
 
     get slmAdminUrl(): string {

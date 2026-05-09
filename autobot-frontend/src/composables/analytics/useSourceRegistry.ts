@@ -15,6 +15,8 @@ import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { useSourcesListEndpoint } from '@/composables/analytics/useSourcesListEndpoint'
+import apiClient from '@/utils/ApiClient'
+import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
 import type { ToastType } from '@/composables/useToast'
 
@@ -23,6 +25,77 @@ const logger = createLogger('useSourceRegistry')
 // Issue #1133 / #2238: CodeSource type extracted to shared types
 import type { CodeSource } from '@/types/analytics'
 export type { CodeSource }
+
+/** Secret credential entry returned by GET /api/secrets */
+export interface RegistrySecret {
+  id: string
+  name: string
+  type: string
+  scope: string
+}
+
+/** Payload shape for POST/PUT /api/analytics/codebase/sources */
+export interface SourceSavePayload {
+  name: string
+  source_type: 'github' | 'local'
+  repo: string
+  branch: string
+  access: 'private' | 'shared' | 'public'
+  credential_id: string | null
+}
+
+async function _getBackendUrl(): Promise<string> {
+  return appConfig.getServiceUrl('backend')
+}
+
+/**
+ * Load credentials available for source authentication.
+ * Extracted from AddSourceModal.vue (#6069).
+ */
+export async function fetchSourceSecrets(): Promise<RegistrySecret[]> {
+  const backendUrl = await _getBackendUrl()
+  const data = await apiClient.get<{ secrets?: RegistrySecret[] }>(`${backendUrl}/api/secrets`)
+  return data.secrets ?? []
+}
+
+/** Payload shape for POST /api/analytics/codebase/sources/:id/share */
+export interface SourceSharePayload {
+  access: 'private' | 'shared' | 'public'
+  user_ids: string[]
+}
+
+/**
+ * Update access control for a code source.
+ * Extracted from ShareSourceModal.vue (#6070).
+ */
+export async function shareCodeSource(
+  sourceId: string,
+  payload: SourceSharePayload,
+): Promise<CodeSource> {
+  const backendUrl = await _getBackendUrl()
+  return await apiClient.post<CodeSource>(
+    `${backendUrl}/api/analytics/codebase/sources/${sourceId}/share`,
+    payload,
+  )
+}
+
+/**
+ * Create or update a code source entry in the registry.
+ * Uses POST for new entries, PUT for existing ones (when `id` is provided).
+ * Extracted from AddSourceModal.vue (#6069).
+ */
+export async function saveCodeSource(
+  payload: SourceSavePayload,
+  id?: string,
+): Promise<CodeSource> {
+  const backendUrl = await _getBackendUrl()
+  const url = id
+    ? `${backendUrl}/api/analytics/codebase/sources/${id}`
+    : `${backendUrl}/api/analytics/codebase/sources`
+  return id
+    ? await apiClient.put<CodeSource>(url, payload)
+    : await apiClient.post<CodeSource>(url, payload)
+}
 
 export interface UseSourceRegistryDeps {
   t: (key: string, params?: Record<string, unknown>) => string
@@ -124,6 +197,34 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
     showShareSourceModal.value = true
   }
 
+  // Issue #6068: Load a single source by ID and populate selectedSource +
+  // rootPath. Returns true on success, false on failure (caller handles
+  // navigation).
+  async function loadSourceById(sourceId: string): Promise<boolean> {
+    try {
+      const endpoint = useFetchEndpoint<CodeSource, CodeSource>({
+        path: `/api/analytics/codebase/sources/${encodeURIComponent(sourceId)}`,
+        pickData: (raw) => raw,
+        label: 'Load source by ID',
+      })
+      await endpoint.load()
+      if (endpoint.error.value || !endpoint.data.value) {
+        notify(t('analytics.codebase.notify.sourceNotFound'), 'error')
+        return false
+      }
+      const source = endpoint.data.value
+      selectedSource.value = source
+      rootPath.value = source.clone_path || ''
+      localStorage.setItem(STORAGE_KEY_PATH, rootPath.value)
+      return true
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.error('Failed to load source metadata:', msg)
+      notify(t('analytics.codebase.notify.sourceNotFound'), 'error')
+      return false
+    }
+  }
+
   // #5153 B: migrated to useFetchEndpoint with POST body factory.
   // onError surfaces the user-visible toast; onSuccess hides the opt-in
   // banner and emits the success toast.
@@ -178,6 +279,7 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
     // Functions
     withSourceId,
     loadSources,
+    loadSourceById,
     handleSelectSource,
     handleClearSource,
     handleSourceSaved,

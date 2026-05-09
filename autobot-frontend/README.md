@@ -29,6 +29,23 @@ npm run dev
 npm run build
 ```
 
+### Type-Check Only (vue-tsc)
+
+```bash
+# From autobot-frontend/
+npx vue-tsc --noEmit -p tsconfig.app.json
+# Expected: 248 errors (real type-debt, baseline tracked in
+# .github/workflows/frontend-typecheck-regression.yml; PRs may not
+# exceed this count — see #7227 for the cleanup plan).
+```
+
+> **Worktree gotcha (#7227):** when working in a fresh `git worktree
+> add ...` checkout, run `npm install` *inside* the worktree's
+> `autobot-frontend/` before `vue-tsc`. Without it, `node_modules` is
+> empty and ~1850 spurious "Cannot find module 'vue'" errors appear on
+> top of the real 248. Don't be misled by the inflated count from a
+> worktree without `npm install`.
+
 ### Run Unit Tests with [Vitest](https://vitest.dev/)
 
 ```bash

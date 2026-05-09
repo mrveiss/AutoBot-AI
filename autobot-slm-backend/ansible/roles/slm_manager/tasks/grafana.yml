@@ -16,11 +16,28 @@
   when: grafana_install | bool
   tags: ['grafana', 'packages']
 
-- name: "Grafana | Add Grafana APT repository"
-  ansible.builtin.apt_repository:
-    repo: deb https://apt.grafana.com stable main
-    state: present
-    filename: grafana
+# #7218: idempotent repo-add — preserve device-shipped Grafana repo if present.
+# Refresh handled by the bounded-shell task below (#6719).
+- name: "Grafana | Add Grafana APT repository (idempotent, #7218)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
+  vars:
+    apt_repo_match: "apt.grafana.com"
+    apt_repo_spec: "deb https://apt.grafana.com stable main"
+    apt_repo_filename: "grafana"
+    apt_repo_label: "Grafana"
+  when: grafana_install | bool
+  tags: ['grafana', 'packages']
+
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: "Grafana | Refresh apt cache after PPA add (best-effort; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
   when: grafana_install | bool
   tags: ['grafana', 'packages']
 
@@ -28,7 +45,6 @@
   ansible.builtin.apt:
     name: grafana
     state: "{{ 'latest' if grafana_version == 'latest' else 'present' }}"
-    update_cache: true
   when: grafana_install | bool
   tags: ['grafana', 'packages']
 

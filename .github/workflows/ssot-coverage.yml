@@ -29,7 +29,7 @@ permissions:
 jobs:
   ssot-coverage:
     name: SSOT Configuration Compliance
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
@@ -37,7 +37,9 @@ jobs:
 
     - name: Run SSOT-aware hardcoded value detection
       id: ssot_check
+      shell: bash
       run: |
+        set -euo pipefail
         chmod +x ./pipeline-scripts/detect-hardcoded-values.sh
         # Run with JSON output for parsing
         set +e  # Don't exit on error

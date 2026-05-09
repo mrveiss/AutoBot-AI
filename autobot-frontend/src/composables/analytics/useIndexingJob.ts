@@ -307,11 +307,16 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
   /**
    * Send an index request with retry on 502/503.
    *
-   * #5257: intentionally NOT migrated to useFetchEndpoint. The composable
-   * has no retry hook today (adding one for a single consumer would be
-   * speculative surface area), and the 502/503 handling here is
-   * domain-specific (backend-warmup vs real error). Keeping this one
-   * hand-rolled; the other 4 fetchers in this file migrated cleanly.
+   * #5257: intentionally NOT migrated to useFetchEndpoint — the composable
+   * has no retry hook, and the 502/503 handling is domain-specific
+   * (backend-warmup vs real error).
+   *
+   * #6024: assessed for useBackgroundTask migration — not applicable.
+   * useBackgroundTask hard-codes POST {baseUrl}/analyze + GET {baseUrl}/status/{id};
+   * this endpoint is POST /index (no /analyze suffix). The indexing API also
+   * exposes domain-specific statuses (syncing, already_running, queued),
+   * intermediate result polling, cancellation, and resume-on-mount that
+   * useBackgroundTask does not support. See discovery #6126 for full analysis.
    */
   const _sendIndexRequest = async (
     endpoint: string,
@@ -320,7 +325,7 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     const maxRetries = 2
     let response: Response | null = null
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      response = await fetchWithAuth(endpoint, {
+      response = await fetchWithAuth(endpoint, { // fetchWithAuth retained: raw Response needed for 502/503 retry status inspection — exempt (#6256)
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body,

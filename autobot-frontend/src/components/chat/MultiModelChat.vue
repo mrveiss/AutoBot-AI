@@ -307,7 +307,7 @@ defineExpose({ reset })
 }
 
 .multi-model-chat__response-text {
-  margin: 0;
+  margin: var(--spacing-0);
   font-family: ui-monospace, monospace;
   font-size: 0.8125rem;
   color: var(--color-text-primary, #e5e7eb);
@@ -319,7 +319,7 @@ defineExpose({ reset })
 .multi-model-chat__error-msg {
   font-size: 0.8125rem;
   color: var(--color-error, #ef4444);
-  margin: 0;
+  margin: var(--spacing-0);
 }
 
 .multi-model-chat__cursor {

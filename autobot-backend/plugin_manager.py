@@ -14,13 +14,14 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from autobot_shared.ssot_config import config
+from plugin_install import install_from_git, install_from_zip
 from plugin_sdk.base import PluginRegistry
 from plugin_sdk.loader import PluginLoader
 
@@ -60,6 +61,83 @@ class PluginListResponse(BaseModel):
 
     plugins: List[Dict] = Field(..., description="Plugin information list")
     total: int = Field(..., description="Total plugin count")
+
+
+class PluginInstallGitRequest(BaseModel):
+    """Install a plugin from a Git URL."""
+
+    url: str = Field(..., description="HTTP(S) Git repository URL")
+    ref: Optional[str] = Field(default=None, description="Branch or tag to clone (default: HEAD)")
+
+
+class PluginInstallResponse(BaseModel):
+    """Result of a plugin install operation."""
+
+    name: str = Field(..., description="Installed plugin name")
+    version: str = Field(..., description="Plugin version from manifest")
+    path: str = Field(..., description="Filesystem path where the plugin was installed")
+    source: str = Field(..., description="Install source: 'zip' or 'git'")
+    message: str = Field(..., description="Human-readable status message")
+
+
+class PluginEnvStatusEntry(BaseModel):
+    """Per-env-var status (never contains the actual value)."""
+
+    configured: bool
+    secret: bool
+    required: bool
+    description: str
+    docs_url: Optional[str] = None
+    obtain_steps: List[str] = []
+
+
+class PluginEnvStatusResponse(BaseModel):
+    """Response for GET /plugins/{plugin_name}/env-status."""
+
+    plugin_name: str
+    env_vars: Dict[str, PluginEnvStatusEntry]
+
+
+@router.post(
+    "/plugins/install/upload",
+    status_code=status.HTTP_201_CREATED,
+    response_model=PluginInstallResponse,
+)
+@with_error_handling(error_code_prefix="PLUGIN_INSTALL_UPLOAD")
+async def install_plugin_zip(
+    file: UploadFile = File(..., description="Plugin ZIP archive"),
+    admin_check: bool = Depends(check_admin_permission),
+) -> PluginInstallResponse:
+    """Issue #6464: Install a 3rd-party plugin from a ZIP upload."""
+    result = await install_from_zip(file)
+    return PluginInstallResponse(
+        name=result.name,
+        version=result.version,
+        path=result.path,
+        source=result.source,
+        message=f"Plugin '{result.name}' v{result.version} installed. Use Discover → Load to activate.",
+    )
+
+
+@router.post(
+    "/plugins/install/git",
+    status_code=status.HTTP_201_CREATED,
+    response_model=PluginInstallResponse,
+)
+@with_error_handling(error_code_prefix="PLUGIN_INSTALL_GIT")
+async def install_plugin_git(
+    request: PluginInstallGitRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> PluginInstallResponse:
+    """Issue #6464: Install a 3rd-party plugin by cloning a Git repository."""
+    result = await install_from_git(request.url, request.ref)
+    return PluginInstallResponse(
+        name=result.name,
+        version=result.version,
+        path=result.path,
+        source=result.source,
+        message=f"Plugin '{result.name}' v{result.version} cloned from {request.url}.",
+    )
 
 
 @router.get("/plugins")
@@ -365,6 +443,34 @@ async def update_plugin_config(
         "status": "success",
         "message": f"Configuration updated for plugin: {plugin_name}",
     }
+
+
+@router.get("/plugins/{plugin_name}/env-status")
+@with_error_handling(error_code_prefix="PLUGIN_ENV_STATUS")
+async def get_plugin_env_status(
+    plugin_name: str,
+    admin_check: bool = Depends(check_admin_permission),
+) -> PluginEnvStatusResponse:
+    """
+    Return per-env-var configuration status for a loaded plugin.
+
+    The response never contains env-var values, only the configured/missing
+    state and manifest metadata. Designed for host UIs to surface install
+    requirements without leaking secrets.
+
+    Issue #6971.
+    """
+    loader = get_plugin_loader()
+    status_data = loader.get_env_status(plugin_name)
+    if status_data is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Plugin not found: {plugin_name}",
+        )
+    return PluginEnvStatusResponse(
+        plugin_name=plugin_name,
+        env_vars={k: PluginEnvStatusEntry(**v) for k, v in status_data.items()},
+    )
 
 
 async def _save_plugin_config(plugin_name: str, config: Dict) -> None:

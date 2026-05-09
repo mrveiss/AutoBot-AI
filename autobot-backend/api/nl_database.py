@@ -18,10 +18,17 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from services.nl_database_service import get_nl_database_service
+from api.schemas_agent import NLDatabaseSchemaResponse
+from api.schemas_knowledge import (
+    NLQueryRequest,
+    NLQueryResponse,
+    TrainRequest,
+    TrainResponse,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -31,70 +38,6 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 # Request / Response models
 # ---------------------------------------------------------------------------
-
-
-class NLQueryRequest(BaseModel):
-    """Request body for a natural language database query."""
-
-    question: str = Field(
-        ...,
-        min_length=1,
-        max_length=2048,
-        description="Natural language question to translate into SQL",
-    )
-    db_id: str = Field(
-        default="local",
-        max_length=128,
-        description="Database identifier. Use 'local' for autobot_data.db",
-    )
-    db_secret_id: Optional[str] = Field(
-        default=None,
-        max_length=128,
-        description="Secret ID (from secrets manager) containing the database_url",
-    )
-
-
-class TrainRequest(BaseModel):
-    """Request body for training the NL service on an external database."""
-
-    db_id: str = Field(
-        ...,
-        min_length=1,
-        max_length=128,
-        description="Unique identifier for this database connection",
-    )
-    db_secret_id: str = Field(
-        ...,
-        max_length=128,
-        description="Secret ID containing the database_url in the secrets manager",
-    )
-    db_type: str = Field(
-        default="postgresql",
-        description="Database type: postgresql, mysql, or sqlite",
-    )
-
-
-class NLQueryResponse(BaseModel):
-    """Response for a natural language query execution."""
-
-    question: str
-    sql: Optional[str]
-    results: List[Dict[str, Any]]
-    columns: List[str]
-    row_count: int
-    db_id: str
-    elapsed_ms: int
-    error: Optional[str] = None
-
-
-class TrainResponse(BaseModel):
-    """Response for a database schema training operation."""
-
-    success: bool
-    db_id: str
-    schema_length: Optional[int] = None
-    table_count: Optional[int] = None
-    error: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +125,11 @@ def _extract_user_id(request: Request) -> Optional[str]:
     ),
     tags=["nl-database"],
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="nl_query",
+    error_code_prefix="NL_DATABASE",
+)
 async def nl_query(
     body: NLQueryRequest,
     request: Request,
@@ -214,6 +162,12 @@ async def nl_query(
     summary="Get trained database schema information",
     description="Returns metadata about databases the NL service has been trained on.",
     tags=["nl-database"],
+    response_model=NLDatabaseSchemaResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_schema",
+    error_code_prefix="NL_DATABASE",
 )
 async def get_schema(
     _auth=Depends(get_current_user),
@@ -232,6 +186,11 @@ async def get_schema(
         "and trains the NL service for improved SQL generation."
     ),
     tags=["nl-database"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="train_on_db",
+    error_code_prefix="NL_DATABASE",
 )
 async def train_on_db(
     body: TrainRequest,
@@ -261,6 +220,12 @@ async def train_on_db(
     summary="Get query history",
     description="Retrieve the history of natural language queries executed by the current user.",
     tags=["nl-database"],
+    response_model=List[Dict[str, Any]],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_history",
+    error_code_prefix="NL_DATABASE",
 )
 async def get_history(
     request: Request,

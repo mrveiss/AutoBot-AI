@@ -21,7 +21,7 @@
 
 import { ref, computed, watch, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, type Ref } from 'vue'
 
-export interface UseVirtualScrollOptions<T = any> {
+export interface UseVirtualScrollOptions<T = unknown> {
   /**
    * Array of items to virtualize
    */
@@ -81,7 +81,7 @@ export interface UseVirtualScrollOptions<T = any> {
 const DEFAULT_OPTIONS = {
   estimatedItemHeight: 50,
   buffer: 3,
-  getKey: (_item: any, index: number) => index,
+  getKey: (_item: unknown, index: number) => index,
   scrollBehavior: 'smooth' as ScrollBehavior,
   horizontal: false
 }
@@ -89,7 +89,7 @@ const DEFAULT_OPTIONS = {
 /**
  * Create a virtualized list with automatic viewport-based rendering
  */
-export function useVirtualScroll<T = any>(options: UseVirtualScrollOptions<T>) {
+export function useVirtualScroll<T = unknown>(options: UseVirtualScrollOptions<T>) {
   const opts = { ...DEFAULT_OPTIONS, ...options }
 
   // Refs
@@ -323,7 +323,7 @@ export function useVirtualScroll<T = any>(options: UseVirtualScrollOptions<T>) {
  * )
  * ```
  */
-export function useVirtualScrollSimple<T = any>(
+export function useVirtualScrollSimple<T = unknown>(
   items: Ref<T[]> | T[],
   itemHeight: number,
   options: Partial<UseVirtualScrollOptions<T>> = {}

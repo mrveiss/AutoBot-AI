@@ -72,7 +72,7 @@ const typeIcon = (type: string): string => {
 .completion-item {
   display: flex;
   align-items: center;
-  padding: 4px 12px;
+  padding: var(--spacing-1) var(--spacing-3);
   cursor: pointer;
   gap: var(--spacing-2);
   transition: background-color var(--duration-100);
@@ -111,7 +111,7 @@ const typeIcon = (type: string): string => {
 }
 
 .completion-hint {
-  padding: 2px 12px;
+  padding: var(--spacing-0-5) var(--spacing-3);
   font-size: var(--text-xs);
   color: #555;
   border-top: 1px solid #333;

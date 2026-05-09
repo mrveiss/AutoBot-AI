@@ -25,16 +25,22 @@ Each document is serialised as a JSON blob under the ``main`` Redis database:
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_365_DAYS
 from models.document import AIDocument
+from api.schemas_knowledge import (
+    AIDocumentListResponse,
+    AIDocumentResponse,
+    CreateDocumentRequest,
+    RefineDocumentRequest,
+    UpdateDocumentRequest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,42 +53,6 @@ _USER_INDEX_KEY = "autobot:ai_documents:by_user:{user_id}"
 # ============================================================================
 # Request / response schemas
 # ============================================================================
-
-
-class CreateDocumentRequest(BaseModel):
-    """Payload for creating a new AI document."""
-
-    title: str = Field(..., min_length=1, max_length=500)
-    content: str = Field(default="")
-    source_facts: List[str] = Field(default_factory=list)
-    source_session_id: Optional[str] = None
-    source_message_id: Optional[str] = None
-    tags: List[str] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class UpdateDocumentRequest(BaseModel):
-    """Partial-update payload — only supplied fields are applied."""
-
-    title: Optional[str] = Field(default=None, min_length=1, max_length=500)
-    content: Optional[str] = None
-    tags: Optional[List[str]] = None
-    metadata: Optional[Dict[str, Any]] = None
-
-
-class RefineDocumentRequest(BaseModel):
-    """Ask the AI to refine a specific section of the document."""
-
-    instruction: str = Field(
-        ...,
-        min_length=1,
-        max_length=2000,
-        description="Refinement instruction, e.g. 'make the introduction shorter'",
-    )
-    section: Optional[str] = Field(
-        default=None,
-        description="Optional section heading to scope the refinement",
-    )
 
 
 # ============================================================================
@@ -132,7 +102,7 @@ async def _assert_ownership(doc: AIDocument, user_id: str) -> None:
 # ============================================================================
 
 
-@router.post("/documents", status_code=201)
+@router.post("/documents", status_code=201, response_model=AIDocumentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_ai_document",
@@ -163,7 +133,7 @@ async def create_document(
     return doc.model_dump()
 
 
-@router.get("/documents")
+@router.get("/documents", response_model=AIDocumentListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_ai_documents",
@@ -204,7 +174,7 @@ async def list_documents(
     return {"documents": [d.model_dump() for d in page], "total": total}
 
 
-@router.get("/documents/{doc_id}")
+@router.get("/documents/{doc_id}", response_model=AIDocumentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_ai_document",
@@ -224,7 +194,7 @@ async def get_document(
     return doc.model_dump()
 
 
-@router.put("/documents/{doc_id}")
+@router.put("/documents/{doc_id}", response_model=AIDocumentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_ai_document",
@@ -260,7 +230,7 @@ async def update_document(
     return doc.model_dump()
 
 
-@router.delete("/documents/{doc_id}", status_code=204)
+@router.delete("/documents/{doc_id}", status_code=204, response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_ai_document",
@@ -285,7 +255,7 @@ async def delete_document(
     logger.info("Deleted AI document %s for user %s", doc_id, uid)
 
 
-@router.post("/documents/{doc_id}/refine")
+@router.post("/documents/{doc_id}/refine", response_model=AIDocumentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refine_ai_document",

@@ -9,6 +9,7 @@ import { extractApiErrorMessage } from '@/utils/errorExtract'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { getApiBase } from '@/config/ssot-config'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('useAutoResearch')
 
@@ -96,7 +97,7 @@ export function useAutoResearch() {
 
   const experiments: Ref<Experiment[]> = ref([])
   const stats: Ref<ExperimentStats | null> = ref(null)
-  const loading = ref(false)
+  const { isLoading: loading, wrap } = useLoadingState()
   const error: Ref<string | null> = ref(null)
 
   const optimizerStatus: Ref<OptimizationSession | null> = ref(null)
@@ -113,23 +114,22 @@ export function useAutoResearch() {
     offset?: number
     state?: string
   }): Promise<void> {
-    loading.value = true
     error.value = null
-    try {
-      const query = new URLSearchParams()
-      if (params?.limit != null) query.set('limit', String(params.limit))
-      if (params?.offset != null) query.set('offset', String(params.offset))
-      if (params?.state) query.set('state', params.state)
-      const response = await api.get(`${getApiBase()}/autoresearch/experiments?${query}`)
-      experiments.value = response.experiments ?? []
-    } catch (err) {
-      const msg = extractApiErrorMessage(err, 'Failed to fetch experiments')
-      logger.error('fetchExperiments failed:', err)
-      error.value = msg
-      showSubtleErrorNotification('AutoResearch', msg, 'warning')
-    } finally {
-      loading.value = false
-    }
+    await wrap(async () => {
+      try {
+        const query = new URLSearchParams()
+        if (params?.limit != null) query.set('limit', String(params.limit))
+        if (params?.offset != null) query.set('offset', String(params.offset))
+        if (params?.state) query.set('state', params.state)
+        const response = await api.get(`${getApiBase()}/autoresearch/experiments?${query}`)
+        experiments.value = response.experiments ?? []
+      } catch (err) {
+        const msg = extractApiErrorMessage(err, 'Failed to fetch experiments')
+        logger.error('fetchExperiments failed:', err)
+        error.value = msg
+        showSubtleErrorNotification('AutoResearch', msg, 'warning')
+      }
+    })
   }
 
   async function fetchStats(): Promise<void> {

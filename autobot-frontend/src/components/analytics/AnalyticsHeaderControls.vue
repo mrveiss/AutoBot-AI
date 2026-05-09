@@ -121,7 +121,7 @@ const emit = defineEmits<{
 }
 
 .header-content h2 {
-  margin: 0 0 16px 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-4) var(--spacing-0);
   color: var(--text-on-primary);
   font-size: 1.5em;
   font-weight: var(--font-semibold);
@@ -135,7 +135,7 @@ const emit = defineEmits<{
 }
 
 .btn-primary, .btn-secondary, .btn-debug {
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   border: none;
   border-radius: var(--radius-lg);
   font-weight: var(--font-semibold);
@@ -176,7 +176,7 @@ const emit = defineEmits<{
 .btn-cancel {
   background: var(--color-error-hover);
   color: var(--text-on-error);
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   border: none;
   border-radius: var(--radius-lg);
   font-weight: var(--font-semibold);

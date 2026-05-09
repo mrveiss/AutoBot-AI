@@ -16,11 +16,10 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
 
+from api.schemas_knowledge import RagFeedbackRequest
 from auth_middleware import get_current_user
 from knowledge.schemas.mcp import RagFeedbackResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -34,16 +33,6 @@ router = APIRouter(tags=["knowledge-rag-feedback"])
 
 # Redis stream TTL mirrors _store_feedback_in_stream (Issue #2102).
 _STREAM_TTL_SECONDS = TTL_30_DAYS
-
-
-class RagFeedbackRequest(BaseModel):
-    """Annotation feedback submitted from the source card accept/reject UI."""
-
-    source_url: str
-    title: str = ""
-    query: str
-    decision: Literal["accepted", "rejected"]
-    user_id: Optional[str] = None
 
 
 @router.post("/rag-feedback", response_model=RagFeedbackResponse)

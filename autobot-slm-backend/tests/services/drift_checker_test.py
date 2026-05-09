@@ -66,8 +66,7 @@ class TestComputeDriftExclusions:
 
     def test_expected_drift_files_excluded_from_report(self):
         """Files matching expected-drift patterns must not appear in drifted list."""
-        with tempfile.TemporaryDirectory() as src_root, \
-                tempfile.TemporaryDirectory() as dep_root:
+        with tempfile.TemporaryDirectory() as src_root, tempfile.TemporaryDirectory() as dep_root:
             src = Path(src_root)
             dep = Path(dep_root)
 
@@ -94,8 +93,7 @@ class TestComputeDriftExclusions:
 
     def test_real_drift_is_still_reported(self):
         """Files outside exclusion patterns must still appear when they differ."""
-        with tempfile.TemporaryDirectory() as src_root, \
-                tempfile.TemporaryDirectory() as dep_root:
+        with tempfile.TemporaryDirectory() as src_root, tempfile.TemporaryDirectory() as dep_root:
             src = Path(src_root)
             dep = Path(dep_root)
 
@@ -107,8 +105,7 @@ class TestComputeDriftExclusions:
 
     def test_total_compared_excludes_expected_drift_paths(self):
         """total_compared must count only non-excluded paths (Issue #4631)."""
-        with tempfile.TemporaryDirectory() as src_root, \
-                tempfile.TemporaryDirectory() as dep_root:
+        with tempfile.TemporaryDirectory() as src_root, tempfile.TemporaryDirectory() as dep_root:
             src = Path(src_root)
             dep = Path(dep_root)
 
@@ -125,14 +122,11 @@ class TestComputeDriftExclusions:
 
             # Only main.py and config.py are evaluated; autobot_shared/foo.py
             # is excluded by _is_expected_drift() before counting.
-            assert total == 2, (
-                f"expected total_compared=2 (excluding autobot_shared/foo.py), got {total}"
-            )
+            assert total == 2, f"expected total_compared=2 (excluding autobot_shared/foo.py), got {total}"
 
     def test_build_drift_report_excludes_expected_files(self):
         """build_drift_report() should not flag expected-drift paths."""
-        with tempfile.TemporaryDirectory() as src_root, \
-                tempfile.TemporaryDirectory() as dep_root:
+        with tempfile.TemporaryDirectory() as src_root, tempfile.TemporaryDirectory() as dep_root:
             src = Path(src_root)
             dep = Path(dep_root)
 

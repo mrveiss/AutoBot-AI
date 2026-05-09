@@ -10,17 +10,29 @@ import datetime
 import logging
 from collections import defaultdict
 from time import time
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import jwt as pyjwt
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, validator
+from api.schemas_agent import (
+    ChangePasswordRequest,
+    ChangePasswordResponse,
+    LoginRequest,
+    LoginResponse,
+    LogoutRequest,
+    SignupRequest,
+    SignupResponse,
+)
 
-from auth_middleware import auth_middleware
+from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.event_log import EventType, emit as _emit_event  # Issue #4461
+from autobot_shared.ssot_config import config as ssot_config
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
 from user_management.database import db_session_context
 from user_management.services.user_service import UserService
+from api.schemas_agent import AuthCheckResponse, AuthPermissionResponse, AuthUserInfoResponse
+from api.schemas_common import DataResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -92,131 +104,6 @@ class PasswordChangeRateLimiter:
 password_change_limiter = PasswordChangeRateLimiter()
 
 
-class LoginRequest(BaseModel):
-    """Login request model"""
-
-    username: str
-    password: str
-
-    @validator("username")
-    def validate_username(cls, v):
-        """Validate and sanitize username format."""
-        if not v or len(v.strip()) == 0:
-            raise ValueError("Username cannot be empty")
-        if len(v) > 50:
-            raise ValueError("Username too long")
-        # Basic sanitization
-        v = v.strip().lower()
-        if not v.replace("_", "").replace("-", "").replace(".", "").isalnum():
-            raise ValueError("Username contains invalid characters")
-        return v
-
-    @validator("password")
-    def validate_password(cls, v):
-        """Validate password length constraints."""
-        if not v or len(v) < 1:
-            raise ValueError("Password cannot be empty")
-        if len(v) > 128:
-            raise ValueError("Password too long")
-        return v
-
-
-class LoginResponse(BaseModel):
-    """Login response model"""
-
-    success: bool
-    message: str
-    user: Optional[dict] = None
-    token: Optional[str] = None
-    session_id: Optional[str] = None
-
-
-class LogoutRequest(BaseModel):
-    """Logout request model"""
-
-    session_id: Optional[str] = None
-
-
-class ChangePasswordRequest(BaseModel):
-    """Change password request model"""
-
-    current_password: str
-    new_password: str
-
-    @validator("new_password")
-    def validate_new_password(cls, v):
-        """Validate password strength requirements."""
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters long")
-        if len(v) > 128:
-            raise ValueError("Password too long")
-        if not any(c.isupper() for c in v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not any(c.islower() for c in v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one digit")
-        return v
-
-
-class ChangePasswordResponse(BaseModel):
-    """Change password response model"""
-
-    success: bool
-    message: str
-
-
-class SignupRequest(BaseModel):
-    """Self-registration request model (#1801)."""
-
-    username: str
-    email: str
-    password: str
-    display_name: str | None = None
-
-    @validator("username")
-    def validate_username(cls, v):
-        """Validate username format."""
-        v = v.strip().lower()
-        if not v or len(v) < 3:
-            raise ValueError("Username must be at least 3 characters")
-        if len(v) > 50:
-            raise ValueError("Username too long")
-        if not v.replace("_", "").replace("-", "").isalnum():
-            raise ValueError("Username contains invalid characters")
-        return v
-
-    @validator("email")
-    def validate_email(cls, v):
-        """Minimal email sanity check."""
-        if "@" not in v or len(v) > 255:
-            raise ValueError("Invalid email address")
-        return v.strip().lower()
-
-    @validator("password")
-    def validate_password(cls, v):
-        """Password strength requirements."""
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters")
-        if len(v) > 128:
-            raise ValueError("Password too long")
-        if not any(c.isupper() for c in v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not any(c.islower() for c in v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one digit")
-        return v
-
-
-class SignupResponse(BaseModel):
-    """Self-registration response model (#1801)."""
-
-    success: bool
-    message: str
-    username: str | None = None
-
-
 async def _authenticate_and_build_user_data(
     username: str, password: str, ip_address: str
 ) -> Dict:
@@ -251,12 +138,12 @@ async def _authenticate_and_build_user_data(
     return user_data
 
 
+@router.post("/login", response_model=LoginResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="login",
     error_code_prefix="AUTH",
 )
-@router.post("/login", response_model=LoginResponse)
 async def login(request: Request, login_data: LoginRequest):
     """
     Authenticate user and create session/token
@@ -276,15 +163,16 @@ async def login(request: Request, login_data: LoginRequest):
                 "username": "admin",
                 "user_id": "admin",
                 "role": "admin",
-                "email": "admin@autobot.local",
+                "email": f"admin@{ssot_config.auth.domain}",
                 "last_login": None,
             }
-            jwt_token = auth_middleware.create_jwt_token(
-                {"username": "admin", "role": "admin", "email": "admin@autobot.local"}
+            jwt_token = get_auth_middleware().create_jwt_token(
+                {"username": "admin", "role": "admin", "email": f"admin@{ssot_config.auth.domain}"}
             )
-            session_id = auth_middleware.create_session(
+            session_id = get_auth_middleware().create_session(
                 {"username": "admin", "role": "admin"}, request
             )
+            _emit_event(EventType.USER_LOGIN, user_id="admin", ip_address=ip_address)
             return LoginResponse(
                 success=True,
                 message="Login successful",
@@ -298,8 +186,8 @@ async def login(request: Request, login_data: LoginRequest):
             login_data.username, login_data.password, ip_address
         )
 
-        jwt_token = auth_middleware.create_jwt_token(user_data)
-        session_id = auth_middleware.create_session(user_data, request)
+        jwt_token = get_auth_middleware().create_jwt_token(user_data)
+        session_id = get_auth_middleware().create_session(user_data, request)
 
         safe_user_data = {
             "username": user_data["username"],
@@ -309,6 +197,11 @@ async def login(request: Request, login_data: LoginRequest):
             "last_login": user_data.get("last_login"),
         }
 
+        _emit_event(
+            EventType.USER_LOGIN,
+            user_id=safe_user_data["user_id"],
+            ip_address=ip_address,
+        )
         return LoginResponse(
             success=True,
             message="Login successful",
@@ -326,22 +219,28 @@ async def login(request: Request, login_data: LoginRequest):
         )
 
 
+@router.post("/logout", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="logout",
     error_code_prefix="AUTH",
 )
-@router.post("/logout")
 async def logout(request: Request, logout_data: LogoutRequest):
     """
     Logout user and invalidate session
     """
     try:
+        ip_address = request.client.host if request.client else "unknown"
+
         # Get session ID from request body or header
         session_id = logout_data.session_id or request.headers.get("X-Session-ID")
 
         if session_id:
-            auth_middleware.invalidate_session(session_id)
+            get_auth_middleware().invalidate_session(session_id)
+
+        user_data = get_auth_middleware().get_user_from_request(request)
+        user_id = user_data.get("user_id", user_data.get("username", "unknown")) if user_data else "unknown"
+        _emit_event(EventType.USER_LOGOUT, user_id=user_id, ip_address=ip_address)
 
         return {"success": True, "message": "Logged out successfully"}
 
@@ -351,12 +250,12 @@ async def logout(request: Request, logout_data: LogoutRequest):
         return {"success": True, "message": "Logged out successfully"}
 
 
+@router.get("/me", response_model=AuthUserInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_current_user_info",
     error_code_prefix="AUTH",
 )
-@router.get("/me")
 async def get_current_user_info(request: Request):
     """
     Get current authenticated user information.
@@ -372,13 +271,13 @@ async def get_current_user_info(request: Request):
             return {
                 "username": "admin",
                 "role": "admin",
-                "email": "admin@autobot.local",
+                "email": f"admin@{ssot_config.auth.domain}",
                 "auth_method": "single_user",
                 "authenticated": True,
                 "deployment_mode": "single_user",
             }
 
-        user_data = auth_middleware.get_user_from_request(request)
+        user_data = get_auth_middleware().get_user_from_request(request)
 
         if not user_data:
             raise HTTPException(status_code=401, detail="Not authenticated")
@@ -400,12 +299,12 @@ async def get_current_user_info(request: Request):
         raise HTTPException(status_code=500, detail="Error retrieving user information")
 
 
+@router.get("/check", response_model=AuthCheckResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_authentication",
     error_code_prefix="AUTH",
 )
-@router.get("/check")
 async def check_authentication(request: Request):
     """
     Quick authentication check endpoint.
@@ -425,12 +324,12 @@ async def check_authentication(request: Request):
                 "deployment_mode": "single_user",
             }
 
-        user_data = auth_middleware.get_user_from_request(request)
+        user_data = get_auth_middleware().get_user_from_request(request)
 
         return {
             "authenticated": user_data is not None,
             "role": user_data["role"] if user_data else None,
-            "auth_enabled": auth_middleware.enable_auth,
+            "auth_enabled": get_auth_middleware().enable_auth,
             "deployment_mode": config.mode.value,
         }
 
@@ -439,23 +338,23 @@ async def check_authentication(request: Request):
         return {
             "authenticated": False,
             "role": None,
-            "auth_enabled": auth_middleware.enable_auth,
+            "auth_enabled": get_auth_middleware().enable_auth,
             "error": "Authentication check failed",
         }
 
 
+@router.get("/permissions/{operation}", response_model=AuthPermissionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_permission",
     error_code_prefix="AUTH",
 )
-@router.get("/permissions/{operation}")
 async def check_permission(request: Request, operation: str):
     """
     Check if current user has permission for specific operation
     """
     try:
-        has_permission, user_data = auth_middleware.check_file_permissions(
+        has_permission, user_data = get_auth_middleware().check_file_permissions(
             request, operation
         )
 
@@ -480,7 +379,7 @@ def _check_password_change_rate_limit(username: str, ip_address: str) -> None:
     client_id = f"{username}:{ip_address}"
     if not password_change_limiter.is_allowed(client_id):
         remaining_time = PASSWORD_CHANGE_RATE_WINDOW // 60
-        auth_middleware.security_layer.audit_log(
+        get_auth_middleware().security_layer.audit_log(
             action="password_change_rate_limited",
             user=username,
             outcome="denied",
@@ -496,15 +395,15 @@ def _verify_current_password(
     username: str, current_password: str, ip_address: str
 ) -> str:
     """Verify current password and return the hash. Raises HTTPException on failure."""
-    allowed_users = auth_middleware.security_config.get("allowed_users", {})
+    allowed_users = get_auth_middleware().security_config.get("allowed_users", {})
     if username not in allowed_users:
         raise HTTPException(status_code=404, detail="User not found in system")
 
     user_config = allowed_users[username]
     current_password_hash = user_config.get("password_hash", "")
 
-    if not auth_middleware.verify_password(current_password, current_password_hash):
-        auth_middleware.security_layer.audit_log(
+    if not get_auth_middleware().verify_password(current_password, current_password_hash):
+        get_auth_middleware().security_layer.audit_log(
             action="password_change_failed",
             user=username,
             outcome="denied",
@@ -520,7 +419,7 @@ def _persist_password_change(username: str, new_password_hash: str) -> None:
     from config.manager import get_config_manager
 
     # Update in-memory config
-    allowed_users = auth_middleware.security_config.get("allowed_users", {})
+    allowed_users = get_auth_middleware().security_config.get("allowed_users", {})
     allowed_users[username]["password_hash"] = new_password_hash
 
     # Persist to disk
@@ -532,12 +431,12 @@ def _persist_password_change(username: str, new_password_hash: str) -> None:
     config_manager.save_settings()
 
 
+@router.post("/change-password", response_model=ChangePasswordResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="change_password",
     error_code_prefix="AUTH",
 )
-@router.post("/change-password", response_model=ChangePasswordResponse)
 async def change_password(request: Request, password_data: ChangePasswordRequest):
     """
     Change the current user's password.
@@ -556,7 +455,7 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
                 detail="Password change is not available in single-user mode",
             )
 
-        user_data = auth_middleware.get_user_from_request(request)
+        user_data = get_auth_middleware().get_user_from_request(request)
         if not user_data or user_data.get("auth_method") == "guest":
             raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -569,10 +468,10 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
         _check_password_change_rate_limit(username, ip_address)
         _verify_current_password(username, password_data.current_password, ip_address)
 
-        new_password_hash = auth_middleware.hash_password(password_data.new_password)
+        new_password_hash = get_auth_middleware().hash_password(password_data.new_password)
         _persist_password_change(username, new_password_hash)
 
-        auth_middleware.security_layer.audit_log(
+        get_auth_middleware().security_layer.audit_log(
             action="password_changed",
             user=username,
             outcome="success",
@@ -593,12 +492,12 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
         )
 
 
+@router.post("/signup", response_model=SignupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="signup",
     error_code_prefix="AUTH",
 )
-@router.post("/signup", response_model=SignupResponse)
 async def signup(request: Request, signup_data: SignupRequest):
     """
     Self-registration endpoint for new users (#1801).
@@ -650,8 +549,8 @@ def _decode_refresh_token(token: str) -> Dict:
     try:
         payload = pyjwt.decode(
             token,
-            auth_middleware.jwt_secret,
-            algorithms=[auth_middleware.jwt_algorithm],
+            get_auth_middleware().jwt_secret,
+            algorithms=[get_auth_middleware().jwt_algorithm],
             options={"verify_exp": False},
         )
     except pyjwt.InvalidTokenError as exc:
@@ -669,12 +568,12 @@ def _decode_refresh_token(token: str) -> Dict:
     return payload
 
 
+@router.post("/refresh", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refresh_token",
     error_code_prefix="AUTH",
 )
-@router.post("/refresh")
 async def refresh_token(request: Request):
     """Refresh an existing JWT token before or shortly after expiry.
 
@@ -708,8 +607,8 @@ async def refresh_token(request: Request):
         user_data["user_id"] = payload["user_id"]
     if payload.get("org_id"):
         user_data["org_id"] = payload["org_id"]
-    new_token = auth_middleware.create_jwt_token(user_data)
-    expiry_seconds = auth_middleware.jwt_expiry_hours * 3600
+    new_token = get_auth_middleware().create_jwt_token(user_data)
+    expiry_seconds = get_auth_middleware().jwt_expiry_hours * 3600
 
     return {
         "success": True,

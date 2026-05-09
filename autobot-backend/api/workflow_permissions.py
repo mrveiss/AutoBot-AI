@@ -14,14 +14,19 @@ Routes:
 """
 
 import logging
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.schemas_workflows import (
+    GrantPermissionRequest,
+    WorkflowAuditLogEntry,
+    WorkflowPermissionResponse,
+)
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.workflow_permission_service import (
     ROLE_HIERARCHY,
     WorkflowPermissionService,
@@ -34,40 +39,6 @@ router = APIRouter(tags=["workflow-permissions"])
 
 
 # ---------------------------------------------------------------------------
-# Request / Response schemas
-# ---------------------------------------------------------------------------
-
-
-class GrantPermissionRequest(BaseModel):
-    """Request body for granting or updating a workflow role."""
-
-    user_id: str = Field(..., description="User receiving the role")
-    role: str = Field(..., description="owner | editor | runner | viewer")
-
-
-class PermissionResponse(BaseModel):
-    """Serialised workflow permission entry."""
-
-    workflow_id: str
-    user_id: str
-    role: str
-    granted_by: Optional[str]
-    created_at: str
-    updated_at: str
-
-
-class AuditLogEntry(BaseModel):
-    """Serialised workflow audit log entry."""
-
-    id: str
-    timestamp: str
-    user_id: str
-    workflow_id: str
-    action: str
-    details: Optional[dict]
-
-
-# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -77,9 +48,9 @@ def _current_user_id(current_user: dict) -> str:
     return current_user.get("username") or current_user.get("user_id", "unknown")
 
 
-def _permission_to_response(perm) -> PermissionResponse:
+def _permission_to_response(perm) -> WorkflowPermissionResponse:
     """Convert a WorkflowPermission ORM row to its response schema."""
-    return PermissionResponse(
+    return WorkflowPermissionResponse(
         workflow_id=perm.workflow_id,
         user_id=perm.user_id,
         role=perm.role,
@@ -89,9 +60,9 @@ def _permission_to_response(perm) -> PermissionResponse:
     )
 
 
-def _audit_to_response(entry) -> AuditLogEntry:
+def _audit_to_response(entry) -> WorkflowAuditLogEntry:
     """Convert a WorkflowAuditLog ORM row to its response schema."""
-    return AuditLogEntry(
+    return WorkflowAuditLogEntry(
         id=str(entry.id),
         timestamp=entry.timestamp.isoformat() if entry.timestamp else "",
         user_id=entry.user_id,
@@ -108,15 +79,20 @@ def _audit_to_response(entry) -> AuditLogEntry:
 
 @router.get(
     "/workflows/{workflow_id}/permissions",
-    response_model=List[PermissionResponse],
+    response_model=List[WorkflowPermissionResponse],
     summary="List workflow permissions",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_workflow_permissions",
+    error_code_prefix="WORKFLOW_PERMISSIONS",
 )
 async def list_workflow_permissions(
     workflow_id: str,
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
     _: bool = Depends(require_workflow_permission("view")),
-) -> List[PermissionResponse]:
+) -> List[WorkflowPermissionResponse]:
     """Return all permission entries for the specified workflow (#2152)."""
     svc = WorkflowPermissionService(session)
     rows = await svc.get_permissions(workflow_id)
@@ -131,8 +107,13 @@ async def list_workflow_permissions(
 
 @router.put(
     "/workflows/{workflow_id}/permissions",
-    response_model=PermissionResponse,
+    response_model=WorkflowPermissionResponse,
     summary="Grant or update a workflow permission",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="grant_workflow_permission",
+    error_code_prefix="WORKFLOW_PERMISSIONS",
 )
 async def grant_workflow_permission(
     workflow_id: str,
@@ -140,7 +121,7 @@ async def grant_workflow_permission(
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
     _: bool = Depends(require_workflow_permission("grant")),
-) -> PermissionResponse:
+) -> WorkflowPermissionResponse:
     """
     Grant (or update) a role for *body.user_id* on the workflow (#2152).
 
@@ -173,6 +154,12 @@ async def grant_workflow_permission(
     "/workflows/{workflow_id}/permissions/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Revoke a workflow permission",
+    response_model=None,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="revoke_workflow_permission",
+    error_code_prefix="WORKFLOW_PERMISSIONS",
 )
 async def revoke_workflow_permission(
     workflow_id: str,
@@ -208,8 +195,13 @@ async def revoke_workflow_permission(
 
 @router.get(
     "/workflows/{workflow_id}/audit",
-    response_model=List[AuditLogEntry],
+    response_model=List[WorkflowAuditLogEntry],
     summary="Get workflow audit log",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_workflow_audit_log",
+    error_code_prefix="WORKFLOW_PERMISSIONS",
 )
 async def get_workflow_audit_log(
     workflow_id: str,
@@ -218,7 +210,7 @@ async def get_workflow_audit_log(
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
     _: bool = Depends(require_workflow_permission("view")),
-) -> List[AuditLogEntry]:
+) -> List[WorkflowAuditLogEntry]:
     """Return the audit trail for the specified workflow, newest first (#2152)."""
     svc = WorkflowPermissionService(session)
     entries = await svc.get_audit_log(workflow_id, limit=limit, offset=offset)

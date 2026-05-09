@@ -10,19 +10,19 @@
 
       <div class="overview-cards">
         <div class="overview-card">
-          <i class="fas fa-dollar-sign"></i>
+          <Icon name="dollar-sign" class="overview-icon" />
           <div class="card-content">
             <div class="card-value">${{ (dashboard.cost?.total_usd || 0).toFixed(2) }}</div>
             <div class="card-label">{{ $t('analytics.bi.totalCost30d') }}</div>
             <div class="card-trend" :class="getTrendClass(dashboard.cost?.trend)">
-              <i :class="getTrendIcon(dashboard.cost?.trend)"></i>
+              <Icon :name="getTrendIcon(dashboard.cost?.trend)" />
               {{ (dashboard.cost?.growth_rate || 0).toFixed(1) }}%
             </div>
           </div>
         </div>
 
         <div class="overview-card">
-          <i class="fas fa-robot"></i>
+          <Icon name="robot" class="overview-icon" />
           <div class="card-content">
             <div class="card-value">{{ dashboard.agents?.total_agents || 0 }}</div>
             <div class="card-label">{{ $t('analytics.bi.activeAgents') }}</div>
@@ -31,7 +31,7 @@
         </div>
 
         <div class="overview-card">
-          <i class="fas fa-check-circle"></i>
+          <Icon name="check-circle" class="overview-icon" />
           <div class="card-content">
             <div class="card-value">{{ (dashboard.agents?.avg_success_rate || 0).toFixed(1) }}%</div>
             <div class="card-label">{{ $t('analytics.bi.avgSuccessRate') }}</div>
@@ -39,7 +39,7 @@
         </div>
 
         <div class="overview-card">
-          <i class="fas fa-users"></i>
+          <Icon name="users" class="overview-icon" />
           <div class="card-content">
             <div class="card-value">{{ formatNumber(dashboard.engagement?.total_sessions || 0) }}</div>
             <div class="card-label">{{ $t('analytics.bi.totalSessions') }}</div>
@@ -52,7 +52,7 @@
     <!-- Refresh Button -->
     <div class="actions-bar">
       <BaseButton variant="secondary" size="sm" @click="refreshAll" :loading="loading">
-        <i class="fas fa-sync"></i> {{ $t('analytics.bi.refreshAll') }}
+        <Icon name="sync-alt" /> {{ $t('analytics.bi.refreshAll') }}
       </BaseButton>
     </div>
 
@@ -65,7 +65,7 @@
           :class="['tab-btn', { active: activeTab === tab.id }]"
           @click="activeTab = tab.id"
         >
-          <i :class="tab.icon"></i>
+          <Icon :name="(tab.icon as any)" />
           {{ tab.label }}
           <span v-if="tab.badge" class="tab-badge" :class="tab.badgeClass">{{ tab.badge }}</span>
         </button>
@@ -80,9 +80,9 @@
       <div v-if="activeTab === 'maintenance'" class="tab-panel">
         <div class="maintenance-section">
           <div class="section-header">
-            <h3><i class="fas fa-tools"></i> {{ $t('analytics.bi.predictiveMaintenance') }}</h3>
+            <h3><Icon name="tools" class="section-icon" /> {{ $t('analytics.bi.predictiveMaintenance') }}</h3>
             <BaseButton variant="outline-solid" size="sm" @click="fetchMaintenance">
-              <i class="fas fa-refresh"></i> {{ $t('analytics.bi.refresh') }}
+              <Icon name="refresh" /> {{ $t('analytics.bi.refresh') }}
             </BaseButton>
           </div>
 
@@ -120,20 +120,20 @@
               <p class="description">{{ rec.description }}</p>
               <div class="rec-details">
                 <div class="detail">
-                  <i class="fas fa-cog"></i>
+                  <Icon name="cog" class="detail-icon" />
                   <span>{{ rec.affected_component }}</span>
                 </div>
                 <div class="detail">
-                  <i class="fas fa-exclamation-triangle"></i>
+                  <Icon name="exclamation-triangle" class="detail-icon" />
                   <span>{{ rec.predicted_issue }}</span>
                 </div>
                 <div class="detail confidence">
-                  <i class="fas fa-chart-pie"></i>
+                  <Icon name="chart-pie" class="detail-icon" />
                   <span>{{ (rec.confidence * 100).toFixed(0) }}% {{ $t('analytics.bi.confidence') }}</span>
                 </div>
               </div>
               <div class="rec-action">
-                <i class="fas fa-lightbulb"></i>
+                <Icon name="lightbulb" class="action-icon" />
                 <span>{{ rec.recommended_action }}</span>
               </div>
             </div>
@@ -150,22 +150,22 @@
       <div v-if="activeTab === 'optimization'" class="tab-panel">
         <div class="optimization-section">
           <div class="section-header">
-            <h3><i class="fas fa-rocket"></i> {{ $t('analytics.bi.resourceOptimization') }}</h3>
+            <h3><Icon name="rocket" class="section-icon" /> {{ $t('analytics.bi.resourceOptimization') }}</h3>
             <BaseButton variant="outline-solid" size="sm" @click="fetchOptimization">
-              <i class="fas fa-refresh"></i> {{ $t('analytics.bi.refresh') }}
+              <Icon name="refresh" /> {{ $t('analytics.bi.refresh') }}
             </BaseButton>
           </div>
 
           <div class="savings-summary" v-if="optimization">
             <div class="savings-card">
-              <i class="fas fa-dollar-sign"></i>
+              <Icon name="dollar-sign" class="savings-icon" />
               <div class="savings-content">
                 <div class="savings-value">${{ (optimization.potential_savings?.cost_usd || 0).toFixed(2) }}</div>
                 <div class="savings-label">{{ $t('analytics.bi.potentialCostSavings') }}</div>
               </div>
             </div>
             <div class="savings-card">
-              <i class="fas fa-tachometer-alt"></i>
+              <Icon name="tachometer-alt" class="savings-icon" />
               <div class="savings-content">
                 <div class="savings-value">{{ (optimization.potential_savings?.performance_improvement_percent || 0).toFixed(1) }}%</div>
                 <div class="savings-label">{{ $t('analytics.bi.performanceImprovement') }}</div>
@@ -187,16 +187,16 @@
               <p class="details">{{ opt.details }}</p>
               <div class="opt-metrics">
                 <div class="metric" v-if="opt.expected_savings?.cost_usd">
-                  <i class="fas fa-piggy-bank"></i>
+                  <Icon name="piggy-bank" class="metric-icon" />
                   <span>Save ${{ opt.expected_savings.cost_usd.toFixed(2) }}</span>
                 </div>
                 <div class="metric" v-if="opt.expected_savings?.performance_percent">
-                  <i class="fas fa-bolt"></i>
+                  <Icon name="bolt" class="metric-icon" />
                   <span>{{ opt.expected_savings.performance_percent }}% faster</span>
                 </div>
               </div>
               <div class="opt-action">
-                <i class="fas fa-arrow-right"></i>
+                <Icon name="arrow-right" class="action-icon" />
                 <span>{{ opt.recommended_change }}</span>
               </div>
             </div>
@@ -213,9 +213,9 @@
       <div v-if="activeTab === 'insights'" class="tab-panel">
         <div class="insights-section">
           <div class="section-header">
-            <h3><i class="fas fa-lightbulb"></i> {{ $t('analytics.bi.actionableInsights') }}</h3>
+            <h3><Icon name="lightbulb" class="section-icon" /> {{ $t('analytics.bi.actionableInsights') }}</h3>
             <BaseButton variant="outline-solid" size="sm" @click="fetchInsights">
-              <i class="fas fa-refresh"></i> {{ $t('analytics.bi.refresh') }}
+              <Icon name="refresh" /> {{ $t('analytics.bi.refresh') }}
             </BaseButton>
           </div>
 
@@ -232,11 +232,11 @@
               </div>
               <h4>{{ insight.title }}</h4>
               <div class="insight-action">
-                <i class="fas fa-play"></i>
+                <Icon name="play" class="action-icon" />
                 <span>{{ insight.action }}</span>
               </div>
               <div class="insight-impact">
-                <i class="fas fa-chart-line"></i>
+                <Icon name="chart-line" class="impact-icon" />
                 <span>{{ insight.impact }}</span>
               </div>
             </div>
@@ -253,27 +253,27 @@
       <div v-if="activeTab === 'reports'" class="tab-panel">
         <div class="reports-section">
           <div class="section-header">
-            <h3><i class="fas fa-file-alt"></i> {{ $t('analytics.bi.customReports') }}</h3>
+            <h3><Icon name="file-alt" class="section-icon" /> {{ $t('analytics.bi.customReports') }}</h3>
           </div>
 
           <div class="report-options">
             <div class="report-card" @click="generateReport('executive')">
-              <i class="fas fa-briefcase"></i>
+              <Icon name="briefcase" class="report-icon" />
               <h4>{{ $t('analytics.bi.reports.executiveSummary') }}</h4>
               <p>{{ $t('analytics.bi.reports.executiveDesc') }}</p>
             </div>
             <div class="report-card" @click="generateReport('technical')">
-              <i class="fas fa-cogs"></i>
+              <Icon name="cogs" class="report-icon" />
               <h4>{{ $t('analytics.bi.reports.technicalReport') }}</h4>
               <p>{{ $t('analytics.bi.reports.technicalDesc') }}</p>
             </div>
             <div class="report-card" @click="generateReport('cost')">
-              <i class="fas fa-dollar-sign"></i>
+              <Icon name="dollar-sign" class="report-icon" />
               <h4>{{ $t('analytics.bi.reports.costReport') }}</h4>
               <p>{{ $t('analytics.bi.reports.costDesc') }}</p>
             </div>
             <div class="report-card" @click="generateReport('performance')">
-              <i class="fas fa-tachometer-alt"></i>
+              <Icon name="tachometer-alt" class="report-icon" />
               <h4>{{ $t('analytics.bi.reports.performanceReport') }}</h4>
               <p>{{ $t('analytics.bi.reports.performanceDesc') }}</p>
             </div>
@@ -286,7 +286,7 @@
             </div>
             <pre class="report-content">{{ JSON.stringify(generatedReport, null, 2) }}</pre>
             <BaseButton variant="primary" size="sm" @click="downloadReport">
-              <i class="fas fa-download"></i> {{ $t('analytics.bi.downloadJson') }}
+              <Icon name="download" /> {{ $t('analytics.bi.downloadJson') }}
             </BaseButton>
           </div>
         </div>
@@ -299,7 +299,7 @@
 
     <!-- Loading Overlay -->
     <div v-if="loading" class="loading-overlay">
-      <i class="fas fa-spinner fa-spin fa-2x"></i>
+      <Icon name="sync-alt" :spin="true" size="xl" />
       <span>{{ $t('analytics.bi.loadingData') }}</span>
     </div>
   </div>
@@ -312,10 +312,12 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { IconName } from '@/components/ui/Icon.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import AdvancedAnalytics from '@/components/analytics/AdvancedAnalytics.vue'
 import AgentCostPanel from '@/components/analytics/AgentCostPanel.vue'
+import Icon from '@/components/ui/Icon.vue'
 import api from '@/services/api'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
@@ -334,24 +336,24 @@ const generatedReport = ref<any>(null)
 
 // Tab configuration with badges
 const tabs = computed(() => [
-  { id: 'analytics', label: t('analytics.bi.tabs.analytics'), icon: 'fas fa-chart-pie' },
+  { id: 'analytics', label: t('analytics.bi.tabs.analytics'), icon: 'chart-pie' as IconName },
   {
     id: 'maintenance',
     label: t('analytics.bi.tabs.maintenance'),
-    icon: 'fas fa-tools',
+    icon: 'tools' as IconName,
     badge: maintenance.value?.by_priority?.critical || 0,
     badgeClass: maintenance.value?.by_priority?.critical > 0 ? 'critical' : ''
   },
   {
     id: 'optimization',
     label: t('analytics.bi.tabs.optimization'),
-    icon: 'fas fa-rocket',
+    icon: 'rocket' as IconName,
     badge: optimization.value?.total_recommendations || 0,
     badgeClass: ''
   },
-  { id: 'insights', label: t('analytics.bi.tabs.insights'), icon: 'fas fa-lightbulb' },
-  { id: 'reports', label: t('analytics.bi.tabs.reports'), icon: 'fas fa-file-alt' },
-  { id: 'agent-costs', label: t('analytics.bi.tabs.agentCosts'), icon: 'fas fa-robot' }
+  { id: 'insights', label: t('analytics.bi.tabs.insights'), icon: 'lightbulb' as IconName },
+  { id: 'reports', label: t('analytics.bi.tabs.reports'), icon: 'file-alt' as IconName },
+  { id: 'agent-costs', label: t('analytics.bi.tabs.agentCosts'), icon: 'robot' as IconName }
 ])
 
 // Methods
@@ -370,10 +372,10 @@ const getTrendClass = (trend: string): string => {
   return 'trend-stable'
 }
 
-const getTrendIcon = (trend: string): string => {
-  if (trend === 'increasing') return 'fas fa-arrow-up'
-  if (trend === 'decreasing') return 'fas fa-arrow-down'
-  return 'fas fa-minus'
+const getTrendIcon = (trend: string): IconName => {
+  if (trend === 'increasing') return 'arrow-up'
+  if (trend === 'decreasing') return 'arrow-down'
+  return 'minus'
 }
 
 const fetchDashboard = async () => {
@@ -536,10 +538,10 @@ onMounted(() => {
   gap: var(--spacing-4);
 }
 
-.overview-card > i {
-  font-size: var(--text-xl);
+.overview-icon {
   color: var(--color-primary);
   opacity: 0.8;
+  flex-shrink: 0;
 }
 
 .card-value {
@@ -556,6 +558,9 @@ onMounted(() => {
 .card-trend {
   font-size: var(--text-xs);
   margin-top: var(--spacing-1);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
 }
 
 .card-trend.trend-up { color: var(--color-error); }
@@ -602,10 +607,12 @@ onMounted(() => {
   color: var(--text-primary);
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
 }
 
-.section-header h3 i {
-  margin-right: var(--spacing-2);
+.section-icon {
   color: var(--color-primary);
 }
 
@@ -728,7 +735,7 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-.detail i { color: var(--color-primary); }
+.detail-icon { color: var(--color-primary); }
 .detail.confidence { color: var(--color-success); }
 
 .rec-action,
@@ -743,9 +750,7 @@ onMounted(() => {
   font-size: var(--text-sm);
 }
 
-.rec-action i,
-.opt-action i,
-.insight-action i {
+.action-icon {
   color: var(--color-success);
 }
 
@@ -767,9 +772,9 @@ onMounted(() => {
   color: white;
 }
 
-.savings-card > i {
-  font-size: var(--text-3xl);
+.savings-icon {
   opacity: 0.8;
+  flex-shrink: 0;
 }
 
 .savings-value {
@@ -796,6 +801,8 @@ onMounted(() => {
   font-size: var(--text-sm);
 }
 
+.metric-icon { flex-shrink: 0; }
+
 .resource-type.llm_tokens { background: var(--color-primary); color: white; }
 .resource-type.agent_tasks { background: var(--color-info); color: white; }
 .resource-type.cache { background: var(--color-success); color: white; }
@@ -817,7 +824,7 @@ onMounted(() => {
   font-size: var(--text-sm);
 }
 
-.insight-impact i { color: var(--color-info); }
+.impact-icon { color: var(--color-info); }
 
 /* Reports */
 .report-options {
@@ -842,8 +849,7 @@ onMounted(() => {
   transform: translateY(-2px);
 }
 
-.report-card > i {
-  font-size: var(--text-3xl);
+.report-icon {
   color: var(--color-primary);
   margin-bottom: var(--spacing-3);
   display: block;

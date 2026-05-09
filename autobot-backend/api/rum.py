@@ -14,8 +14,28 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-
+from api.schemas_analytics import (
+    RumApiCallMetric,
+    RumConfig,
+    RumCriticalIssueMetric,
+    RumEvent,
+    RumJsErrorMetric,
+    RumMetrics,
+    RumPageMetrics,
+    RumResourceMetric,
+    RumSessionMetric,
+    RumUserActionMetric,
+    RumWebSocketMetric,
+)
+from api.schemas_workflows import (
+    RUMClearResponse,
+    RUMConfigResponse,
+    RUMDisableResponse,
+    RUMEventResponse,
+    RUMExportResponse,
+    RUMMetricsResponse,
+    RUMStatusResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import parse_utc_iso
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -129,117 +149,6 @@ def _log_rum_event_by_type(
     rum_logger.info(log_message)
 
 
-class RumEvent(BaseModel):
-    type: str
-    timestamp: str
-    sessionId: str
-    url: str
-    userAgent: str
-    data: Metadata = {}
-
-
-class RumConfig(BaseModel):
-    enabled: bool = False
-    error_tracking: bool = True
-    performance_monitoring: bool = True
-    interaction_tracking: bool = False
-    session_recording: bool = False
-    sample_rate: int = 100
-    max_events_per_session: int = 1000
-    debug_mode: bool = False
-    log_to_backend: bool = True
-    log_level: str = "info"
-
-
-# Issue #476: RUM Metrics models for Prometheus integration
-class PageMetrics(BaseModel):
-    """Page performance metrics from frontend."""
-
-    page: str
-    load_time_seconds: Optional[float] = None
-    fcp_seconds: Optional[float] = None  # First Contentful Paint
-    lcp_seconds: Optional[float] = None  # Largest Contentful Paint
-    tti_seconds: Optional[float] = None  # Time to Interactive
-    dom_loaded_seconds: Optional[float] = None
-
-
-class ApiCallMetric(BaseModel):
-    """Frontend API call metric."""
-
-    endpoint: str
-    method: str
-    status: str  # success, error, timeout
-    latency_seconds: float
-    is_slow: bool = False
-    is_timeout: bool = False
-    error_type: Optional[str] = None  # network, http, timeout
-
-
-class JsErrorMetric(BaseModel):
-    """JavaScript error metric."""
-
-    error_type: str  # syntax, reference, type, etc.
-    page: str
-    is_rejection: bool = False  # True for unhandled Promise rejections
-    component: Optional[str] = None  # Vue component name if applicable
-
-
-class UserActionMetric(BaseModel):
-    """User action/interaction metric."""
-
-    action_type: str  # click, submit, navigation, etc.
-    page: str
-    form_name: Optional[str] = None
-    form_status: Optional[str] = None  # success, validation_error, server_error
-
-
-class SessionMetric(BaseModel):
-    """Session metric."""
-
-    event: str  # start, end
-    duration_seconds: Optional[float] = None
-
-
-class WebSocketMetric(BaseModel):
-    """WebSocket event metric from frontend."""
-
-    event: str  # connect, disconnect, error, reconnect
-    direction: Optional[str] = None  # sent, received
-    event_type: Optional[str] = None  # message type
-
-
-class ResourceMetric(BaseModel):
-    """Resource load metric."""
-
-    resource_type: str  # script, stylesheet, image, font
-    load_time_seconds: float
-    is_slow: bool = False
-
-
-class CriticalIssueMetric(BaseModel):
-    """Critical issue from frontend."""
-
-    issue_type: str  # api_timeout, error, crash
-
-
-class RumMetrics(BaseModel):
-    """
-    Batch of RUM metrics from frontend.
-    Issue #476: Used for Prometheus metrics export.
-    """
-
-    session_id: str
-    timestamp: str
-    page_metrics: Optional[PageMetrics] = None
-    api_calls: Optional[List[ApiCallMetric]] = None
-    js_errors: Optional[List[JsErrorMetric]] = None
-    user_actions: Optional[List[UserActionMetric]] = None
-    session: Optional[SessionMetric] = None
-    websocket_events: Optional[List[WebSocketMetric]] = None
-    resources: Optional[List[ResourceMetric]] = None
-    critical_issues: Optional[List[CriticalIssueMetric]] = None
-
-
 def setup_rum_logger():
     """Set up dedicated RUM logger using centralized path configuration"""
     rum_logger = logging.getLogger("rum")
@@ -270,12 +179,12 @@ def setup_rum_logger():
 rum_logger = setup_rum_logger()
 
 
+@router.post("/config", response_model=RUMConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="configure_rum",
     error_code_prefix="RUM",
 )
-@router.post("/config")
 async def configure_rum(config: RumConfig):
     """Configure RUM monitoring settings"""
     try:
@@ -307,12 +216,12 @@ async def configure_rum(config: RumConfig):
         raise HTTPException(status_code=500, detail="Error configuring RUM")
 
 
+@router.post("/event", response_model=RUMEventResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="log_rum_event",
     error_code_prefix="RUM",
 )
-@router.post("/event")
 async def log_rum_event(event: RumEvent):
     """Log a RUM event from the frontend"""
     try:
@@ -366,12 +275,12 @@ async def log_rum_event(event: RumEvent):
         return {"status": "error", "message": "Failed to log RUM event"}
 
 
+@router.post("/disable", response_model=RUMDisableResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="disable_rum",
     error_code_prefix="RUM",
 )
-@router.post("/disable")
 async def disable_rum():
     """Disable RUM monitoring"""
     try:
@@ -388,12 +297,12 @@ async def disable_rum():
         raise HTTPException(status_code=500, detail="Error disabling RUM")
 
 
+@router.post("/clear", response_model=RUMClearResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_rum_data",
     error_code_prefix="RUM",
 )
-@router.post("/clear")
 async def clear_rum_data():
     """Clear all RUM data"""
     try:
@@ -421,12 +330,12 @@ async def clear_rum_data():
         raise HTTPException(status_code=500, detail="Error clearing RUM data")
 
 
+@router.get("/export", response_model=RUMExportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_rum_data",
     error_code_prefix="RUM",
 )
-@router.get("/export")
 async def export_rum_data():
     """Export RUM data for analysis"""
 
@@ -466,12 +375,12 @@ async def export_rum_data():
         raise HTTPException(status_code=500, detail="Error exporting RUM data")
 
 
+@router.get("/status", response_model=RUMStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_rum_status",
     error_code_prefix="RUM",
 )
-@router.get("/status")
 async def get_rum_status():
     """Get current RUM status and statistics"""
 
@@ -534,7 +443,7 @@ def format_rum_log_message(event_data: Metadata) -> str:
 # =============================================================================
 
 
-def _process_page_metrics(metrics_manager, page_metrics: PageMetrics) -> None:
+def _process_page_metrics(metrics_manager, page_metrics: RumPageMetrics) -> None:
     """Process page performance metrics."""
     if page_metrics.load_time_seconds is not None:
         metrics_manager.record_frontend_page_load(
@@ -552,7 +461,7 @@ def _process_page_metrics(metrics_manager, page_metrics: PageMetrics) -> None:
         )
 
 
-def _process_api_calls(metrics_manager, api_calls: List[ApiCallMetric]) -> None:
+def _process_api_calls(metrics_manager, api_calls: List[RumApiCallMetric]) -> None:
     """Process API call metrics."""
     for call in api_calls:
         metrics_manager.record_frontend_api_request(
@@ -569,7 +478,7 @@ def _process_api_calls(metrics_manager, api_calls: List[ApiCallMetric]) -> None:
             )
 
 
-def _process_js_errors(metrics_manager, js_errors: List[JsErrorMetric]) -> None:
+def _process_js_errors(metrics_manager, js_errors: List[RumJsErrorMetric]) -> None:
     """Process JavaScript error metrics."""
     for error in js_errors:
         if error.is_rejection:
@@ -583,7 +492,7 @@ def _process_js_errors(metrics_manager, js_errors: List[JsErrorMetric]) -> None:
 
 
 def _process_user_actions(
-    metrics_manager, user_actions: List[UserActionMetric]
+    metrics_manager, user_actions: List[RumUserActionMetric]
 ) -> None:
     """Process user action metrics."""
     for action in user_actions:
@@ -594,7 +503,7 @@ def _process_user_actions(
             )
 
 
-def _process_session_metric(metrics_manager, session: SessionMetric) -> None:
+def _process_session_metric(metrics_manager, session: RumSessionMetric) -> None:
     """Process session metrics."""
     if session.event == "start":
         metrics_manager.record_frontend_session_start()
@@ -603,7 +512,7 @@ def _process_session_metric(metrics_manager, session: SessionMetric) -> None:
 
 
 def _process_websocket_events(
-    metrics_manager, websocket_events: List[WebSocketMetric]
+    metrics_manager, websocket_events: List[RumWebSocketMetric]
 ) -> None:
     """Process WebSocket event metrics."""
     for ws_event in websocket_events:
@@ -614,7 +523,7 @@ def _process_websocket_events(
             )
 
 
-def _process_resources(metrics_manager, resources: List[ResourceMetric]) -> None:
+def _process_resources(metrics_manager, resources: List[RumResourceMetric]) -> None:
     """Process resource load metrics."""
     for resource in resources:
         metrics_manager.record_frontend_resource_load(
@@ -625,7 +534,7 @@ def _process_resources(metrics_manager, resources: List[ResourceMetric]) -> None
 
 
 def _process_critical_issues(
-    metrics_manager, critical_issues: List[CriticalIssueMetric]
+    metrics_manager, critical_issues: List[RumCriticalIssueMetric]
 ) -> None:
     """Process critical issue metrics."""
     for issue in critical_issues:
@@ -671,12 +580,12 @@ def _dispatch_and_tally_rum_metrics(metrics_manager, metrics: RumMetrics) -> int
     return recorded_count
 
 
+@router.post("/metrics", response_model=RUMMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="receive_rum_metrics",
     error_code_prefix="RUM",
 )
-@router.post("/metrics")
 async def receive_rum_metrics(metrics: RumMetrics):
     """
     Receive RUM metrics from frontend and record them to Prometheus.

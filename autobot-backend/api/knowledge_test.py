@@ -13,17 +13,18 @@ from fastapi import APIRouter
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import TimingConstants
+from api.schemas_common import DataResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@router.get("/test/fresh_stats", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_fresh_kb_stats",
     error_code_prefix="KNOWLEDGE_TEST",
 )
-@router.get("/test/fresh_stats")
 async def get_fresh_kb_stats():
     """Get knowledge base stats using a fresh instance (bypasses cache)"""
     try:
@@ -54,12 +55,12 @@ async def get_fresh_kb_stats():
         }
 
 
+@router.post("/test/rebuild_index", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_rebuild_search_index",
     error_code_prefix="KNOWLEDGE_TEST",
 )
-@router.post("/test/rebuild_index")
 async def test_rebuild_search_index():
     """Test rebuilding the search index"""
     try:

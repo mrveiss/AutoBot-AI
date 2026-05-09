@@ -11,11 +11,22 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict
+from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from api.system_health import ComponentHealth, register_health_probe
+from api.schemas_common import SuccessResponse
+from api.schemas_workflows import (
+    ElevationAuthorization,
+    ElevationAuthorizeResponse,
+    ElevationExecuteResponse,
+    ElevationHealthResponse,
+    ElevationPendingResponse,
+    ElevationRequest,
+    ElevationRequestResponse,
+    ElevationStatusResponse,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -40,25 +51,12 @@ _elevation_sessions_lock = asyncio.Lock()
 _pending_requests_lock = asyncio.Lock()
 
 
-class ElevationRequest(BaseModel):
-    operation: str
-    command: str
-    reason: str
-    risk_level: str = "MEDIUM"
-
-
-class ElevationAuthorization(BaseModel):
-    request_id: str
-    password: str
-    remember_session: bool = False
-
-
+@router.post("/request", response_model=ElevationRequestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="request_elevation",
     error_code_prefix="ELEVATION",
 )
-@router.post("/request")
 async def request_elevation(request: ElevationRequest):
     """Request elevation for a privileged operation"""
     request_id = str(uuid.uuid4())
@@ -83,12 +81,12 @@ async def request_elevation(request: ElevationRequest):
     }
 
 
+@router.post("/authorize", response_model=ElevationAuthorizeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="authorize_elevation",
     error_code_prefix="ELEVATION",
 )
-@router.post("/authorize")
 async def authorize_elevation(auth: ElevationAuthorization):
     """Authorize an elevation request with password"""
     request_id = auth.request_id
@@ -148,12 +146,12 @@ async def authorize_elevation(auth: ElevationAuthorization):
         raise HTTPException(status_code=500, detail="Authorization failed")
 
 
+@router.get("/status/{request_id}", response_model=ElevationStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_elevation_status",
     error_code_prefix="ELEVATION",
 )
-@router.get("/status/{request_id}")
 async def get_elevation_status(request_id: str):
     """Check the status of an elevation request"""
     async with _pending_requests_lock:
@@ -171,12 +169,12 @@ async def get_elevation_status(request_id: str):
         }
 
 
+@router.post("/execute/{session_token}", response_model=ElevationExecuteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_elevated_command",
     error_code_prefix="ELEVATION",
 )
-@router.post("/execute/{session_token}")
 async def execute_elevated_command(session_token: str, command: str):
     """Execute a command with elevated privileges using session token"""
     async with _elevation_sessions_lock:
@@ -217,12 +215,12 @@ async def execute_elevated_command(session_token: str, command: str):
         raise HTTPException(status_code=500, detail="Command execution failed")
 
 
+@router.get("/pending", response_model=ElevationPendingResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_pending_requests",
+    operation="get_pending_requests_endpoint",
     error_code_prefix="ELEVATION",
 )
-@router.get("/pending")
 async def get_pending_requests_endpoint():
     """Get all pending elevation requests"""
     async with _pending_requests_lock:
@@ -308,12 +306,12 @@ async def run_elevated_command(command: str) -> dict:
         return {"stdout": "", "stderr": "An internal error occurred", "return_code": 1}
 
 
+@router.delete("/session/{session_token}", response_model=SuccessResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="revoke_elevation_session",
     error_code_prefix="ELEVATION",
 )
-@router.delete("/session/{session_token}")
 async def revoke_elevation_session(session_token: str):
     """Revoke an elevation session"""
     if session_token in elevation_sessions:
@@ -323,12 +321,36 @@ async def revoke_elevation_session(session_token: str):
     return {"success": True, "message": "Session revoked"}
 
 
+@register_health_probe("elevation")
+async def probe_elevation(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for elevation module."""
+    try:
+        active = len(elevation_sessions)
+        pending = len(
+            [r for r in pending_requests.values() if r["status"] == "pending"]
+        )
+        return ComponentHealth(
+            name="elevation",
+            status="ok",
+            detail=f"{active} active sessions, {pending} pending",
+            data={"active_sessions": active, "pending_requests": pending},
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="elevation",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
+@router.get("/health", response_model=ElevationHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="elevation_health_check",
     error_code_prefix="ELEVATION",
 )
-@router.get("/health")
 async def elevation_health_check():
     """Health check for elevation system"""
     return {

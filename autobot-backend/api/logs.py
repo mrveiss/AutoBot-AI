@@ -15,12 +15,22 @@ import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import StreamingResponse
 
+from api.schemas_agent import LogFileMetadata
+from api.schemas_common import AgentMessageResponse
+from api.schemas_code import (
+    LogContainerResponse,
+    LogReadResponse,
+    LogRecentResponse,
+    LogSearchResponse,
+    LogSourcesResponse,
+    LogUnifiedResponse,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path
@@ -394,13 +404,12 @@ async def _get_container_log_sources() -> List[Metadata]:
     return container_logs
 
 
+@router.get("/sources", response_model=LogSourcesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_log_sources",
     error_code_prefix="LOGS",
 )
-# Issue #552: Fixed duplicate /logs prefix - router already mounted at /api/logs
-@router.get("/sources")
 async def get_log_sources(admin_check: bool = Depends(check_admin_permission)):
     """Get all available log sources (files + Docker containers) (Issue #315 - refactored).
 
@@ -462,12 +471,12 @@ async def _read_recent_log_lines(log_path: str, limit: int) -> List[str]:
         return []
 
 
+@router.get("/recent", response_model=LogRecentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_recent_logs",
     error_code_prefix="LOGS",
 )
-@router.get("/recent")
 async def get_recent_logs(
     limit: int = 100,
     admin_check: bool = Depends(check_admin_permission),
@@ -501,12 +510,12 @@ async def get_recent_logs(
         }
 
 
+@router.get("/list", response_model=List[LogFileMetadata])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_logs",
     error_code_prefix="LOGS",
 )
-@router.get("/list")
 async def list_logs(
     admin_check: bool = Depends(check_admin_permission),
 ) -> List[Metadata]:
@@ -522,12 +531,12 @@ async def list_logs(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/read/{filename}", response_model=LogReadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="read_log",
     error_code_prefix="LOGS",
 )
-@router.get("/read/{filename}")
 async def read_log(
     filename: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -643,12 +652,12 @@ def _parse_and_limit_container_output(
     return log_lines
 
 
+@router.get("/container/{service}", response_model=LogContainerResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="read_container_logs",
     error_code_prefix="LOGS",
 )
-@router.get("/container/{service}")
 async def read_container_logs(
     service: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -748,12 +757,12 @@ def parse_docker_log_line(line: str, service: str) -> Metadata:
     return parsed
 
 
+@router.get("/unified", response_model=LogUnifiedResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_unified_logs",
     error_code_prefix="LOGS",
 )
-@router.get("/unified")
 async def get_unified_logs(
     admin_check: bool = Depends(check_admin_permission),
     lines: int = Query(
@@ -829,12 +838,12 @@ def parse_file_log_line(line: str, source: str) -> Metadata:
     return parsed
 
 
+@router.get("/stream/{filename}", response_model=None)  # StreamingResponse — no Pydantic schema
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stream_log",
     error_code_prefix="LOGS",
 )
-@router.get("/stream/{filename}")
 async def stream_log(
     filename: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -870,12 +879,12 @@ async def stream_log(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.websocket("/tail/{filename}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="tail_log",
     error_code_prefix="LOGS",
 )
-@router.websocket("/tail/{filename}")
 async def tail_log(websocket: WebSocket, filename: str):
     """WebSocket endpoint to tail log file in real-time"""
     await websocket.accept()
@@ -957,12 +966,12 @@ async def _search_single_log_file(
     return results
 
 
+@router.get("/search", response_model=LogSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_logs",
     error_code_prefix="LOGS",
 )
-@router.get("/search")
 async def search_logs(
     admin_check: bool = Depends(check_admin_permission),
     query: str = Query(..., description="Search query"),
@@ -1014,12 +1023,12 @@ async def search_logs(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.delete("/clear/{filename}", response_model=AgentMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_log",
     error_code_prefix="LOGS",
 )
-@router.delete("/clear/{filename}")
 async def clear_log(
     filename: str,
     admin_check: bool = Depends(check_admin_permission),

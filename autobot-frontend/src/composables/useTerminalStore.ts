@@ -5,6 +5,8 @@ import type { BackendConfig } from '@/types/app-config'
 // FIXED: Import NetworkConstants for default host IPs
 import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
+import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 
 // Create scoped logger for TerminalStore
 const logger = createLogger('TerminalStore')
@@ -328,6 +330,36 @@ export const useTerminalStore = defineStore('terminal', () => {
     activeSessionId.value = null
   }
 
+  /**
+   * Fetch existing agent-terminal sessions for a given conversation ID.
+   * Extracted from Terminal.vue (issue #6080) — previously inline fetchWithAuth GET.
+   * Returns the sessions array from the backend response.
+   */
+  const fetchAgentTerminalSessions = async (conversationId: string): Promise<Record<string, unknown>[]> => {
+    const sessionsUrl = await appConfig.getApiUrl(
+      `${getApiBase()}/agent-terminal/sessions?conversation_id=${conversationId}`
+    )
+    const data = await apiClient.get<{ sessions?: Record<string, unknown>[] }>(sessionsUrl)
+    return data.sessions ?? []
+  }
+
+  /**
+   * Create a new agent-terminal session for a chat conversation.
+   * Extracted from Terminal.vue (issue #6080) — previously inline fetchWithAuth POST.
+   * Returns the newly-created session_id string.
+   */
+  const createAgentTerminalSession = async (params: {
+    agent_id: string
+    agent_role: string
+    conversation_id: string
+    host: string
+    metadata: Record<string, unknown>
+  }): Promise<string> => {
+    const createUrl = await appConfig.getApiUrl(`${getApiBase()}/agent-terminal/sessions`)
+    const data = await apiClient.post<{ session_id: string }>(createUrl, params)
+    return data.session_id
+  }
+
   return {
     // State
     sessions,
@@ -363,7 +395,9 @@ export const useTerminalStore = defineStore('terminal', () => {
     disableAgentControl,
     requestUserTakeover,
     requestAgentControl,
-    cleanup
+    cleanup,
+    fetchAgentTerminalSessions,
+    createAgentTerminalSession
   }
 }, {
   persist: {

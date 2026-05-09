@@ -23,13 +23,15 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
+from api.schemas_analytics import DebtCalculationRequest
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
+from autobot_shared.status_enums import Severity as DebtSeverity  # #6689 consolidation
 from constants.ttl_constants import TTL_30_DAYS
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -76,15 +78,6 @@ class DebtCategory(str, Enum):
     DEAD_CODE = "dead_code"
 
 
-class DebtSeverity(str, Enum):
-    """Severity levels for debt items"""
-
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-
-
 @dataclass
 class DebtItem:
     """Individual technical debt item"""
@@ -114,29 +107,6 @@ class DebtItem:
             "recommendation": self.recommendation,
             "tags": self.tags,
         }
-
-
-class DebtCalculationRequest(BaseModel):
-    """Request for debt calculation"""
-
-    target_path: str = Field(default=".", description="Path to analyze")
-    hourly_rate: float = Field(default=75.0, description="Developer hourly rate in USD")
-    include_categories: List[str] = Field(
-        default=[], description="Categories to include (empty = all)"
-    )
-
-
-class DebtSummary(BaseModel):
-    """Summary of technical debt"""
-
-    total_items: int
-    total_hours: float
-    total_cost_usd: float
-    by_category: Dict[str, int]
-    by_severity: Dict[str, int]
-    top_files: List[Dict[str, Any]]
-    roi_ranking: List[Dict[str, Any]]
-    timestamp: str
 
 
 # Debt calculation weights
@@ -515,12 +485,12 @@ def _get_latest_debt_data() -> Optional[Dict[str, Any]]:
         return None
 
 
+@router.post("/calculate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="calculate_debt",
-    error_code_prefix="DEBT",
+    operation="calculate_technical_debt",
+    error_code_prefix="ANALYTICS_DEBT",
 )
-@router.post("/calculate")
 async def calculate_technical_debt(
     request: DebtCalculationRequest, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -564,12 +534,12 @@ async def calculate_technical_debt(
         )
 
 
+@router.get("/summary", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_debt_summary",
-    error_code_prefix="DEBT",
+    error_code_prefix="ANALYTICS_DEBT",
 )
-@router.get("/summary")
 async def get_debt_summary(admin_check: bool = Depends(check_admin_permission)):
     """
     Get summary of current technical debt (Issue #543 - refactored).
@@ -596,12 +566,12 @@ async def get_debt_summary(admin_check: bool = Depends(check_admin_permission)):
     )
 
 
+@router.get("/by-category/{category}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_debt_by_category",
-    error_code_prefix="DEBT",
+    error_code_prefix="ANALYTICS_DEBT",
 )
-@router.get("/by-category/{category}")
 async def get_debt_by_category(
     category: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -696,12 +666,12 @@ def _calculate_trend_change(trend_data: List[Dict[str, Any]]) -> tuple:
     return change, direction
 
 
+@router.get("/trends", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_debt_trends",
-    error_code_prefix="DEBT",
+    error_code_prefix="ANALYTICS_DEBT",
 )
-@router.get("/trends")
 async def get_debt_trends(
     days: int = Query(default=30, ge=1, le=365),
     admin_check: bool = Depends(check_admin_permission),
@@ -728,12 +698,12 @@ async def get_debt_trends(
     )
 
 
+@router.get("/roi-priorities", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_roi_priorities",
-    error_code_prefix="DEBT",
+    error_code_prefix="ANALYTICS_DEBT",
 )
-@router.get("/roi-priorities")
 async def get_roi_priorities(
     limit: int = Query(default=20, ge=1, le=100),
     admin_check: bool = Depends(check_admin_permission),
@@ -854,12 +824,12 @@ def _generate_markdown_report(debt_data: dict) -> str:
     )
 
 
+@router.get("/report", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_debt_report",
-    error_code_prefix="DEBT",
+    error_code_prefix="ANALYTICS_DEBT",
 )
-@router.get("/report")
 async def get_debt_report(
     format: str = Query(default="json", description="json or markdown"),
     admin_check: bool = Depends(check_admin_permission),

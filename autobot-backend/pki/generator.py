@@ -382,6 +382,59 @@ class CertificateGenerator:
         logger.info(f"Certificate generated for {vm_info.name}: {cert_path}")
         return True
 
+    def _renew_service_cert(self, vm_info: VMCertificateInfo) -> bool:
+        """
+        Renew a service certificate while preserving the existing private key.
+
+        Reuses the existing key at ``vm_info.key_path``, regenerates only the
+        CSR and the signed certificate.  The certificate at ``vm_info.cert_path``
+        is replaced in-place so callers that already hold the path do not need
+        updating.
+
+        Args:
+            vm_info: VM certificate information (name, paths, SANs).
+
+        Returns:
+            True if renewal succeeded.
+        """
+        cert_path = vm_info.cert_path
+        key_path = vm_info.key_path
+
+        if not key_path.exists():
+            logger.error(
+                f"Cannot renew certificate for {vm_info.name}: "
+                f"existing key not found at {key_path}"
+            )
+            return False
+
+        logger.info(
+            f"Renewing certificate for {vm_info.name} (preserving existing key)"
+        )
+
+        conf_path = cert_path.parent / "server.conf"
+        _write_openssl_config(conf_path, self.config, vm_info)
+
+        csr_path = cert_path.parent / "server.csr"
+        if not _generate_csr(key_path, csr_path, conf_path, vm_info.name):
+            return False
+
+        if not _sign_certificate(
+            csr_path,
+            cert_path,
+            self.config.ca_cert_path,
+            self.config.ca_key_path,
+            conf_path,
+            self.config.cert_validity_days,
+            vm_info.name,
+        ):
+            return False
+
+        csr_path.unlink()
+        logger.info(
+            f"Certificate renewed for {vm_info.name} (key preserved): {cert_path}"
+        )
+        return True
+
     def _parse_certificate_output(
         self, output: str
     ) -> Tuple[Optional[str], Optional[str], Optional[str]]:

@@ -319,7 +319,7 @@ onUnmounted(() => {
 }
 
 .header-info h3 {
-  margin: 0 0 4px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-1);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
@@ -338,7 +338,7 @@ onUnmounted(() => {
 }
 
 .filter-group select {
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
@@ -347,7 +347,7 @@ onUnmounted(() => {
 }
 
 .btn-clear-all {
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   background: var(--color-error-bg);
   color: var(--color-error);
   border: 1px solid var(--color-error);
@@ -451,7 +451,7 @@ onUnmounted(() => {
 .item-actions {
   display: flex;
   gap: var(--spacing-1);
-  padding: 0 12px 12px;
+  padding: var(--spacing-0) var(--spacing-3) var(--spacing-3);
 }
 
 .btn-action {
@@ -482,7 +482,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: var(--spacing-4);
-  padding: 80px 20px;
+  padding: var(--spacing-20) var(--spacing-5);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
@@ -543,7 +543,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
 }
 
@@ -628,7 +628,7 @@ onUnmounted(() => {
 }
 
 .analysis-section h5 {
-  margin: 0 0 12px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3);
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
@@ -645,7 +645,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
 }
@@ -662,7 +662,7 @@ onUnmounted(() => {
 }
 
 .btn-toggle {
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: none;
   border: none;
   color: var(--text-tertiary);
@@ -691,13 +691,13 @@ onUnmounted(() => {
 .modal-actions {
   display: flex;
   gap: var(--spacing-3);
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   border-top: 1px solid var(--border-default);
 }
 
 .btn-primary {
   flex: 1;
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
@@ -716,7 +716,7 @@ onUnmounted(() => {
 }
 
 .btn-secondary {
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
@@ -734,7 +734,7 @@ onUnmounted(() => {
 }
 
 .btn-danger {
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   background: var(--color-error-bg);
   color: var(--color-error);
   border: 1px solid var(--color-error);
@@ -790,14 +790,14 @@ onUnmounted(() => {
 }
 
 .confirm-modal h4 {
-  margin: 0 0 8px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .confirm-modal p {
-  margin: 0 0 20px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-5);
   font-size: var(--text-sm);
   color: var(--text-secondary);
 }
@@ -809,7 +809,7 @@ onUnmounted(() => {
 
 .btn-cancel {
   flex: 1;
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
@@ -825,7 +825,7 @@ onUnmounted(() => {
 
 .btn-confirm {
   flex: 1;
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   background: var(--color-error);
   color: white;
   border: none;

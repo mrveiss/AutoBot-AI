@@ -1,14 +1,14 @@
 <template>
   <div id="app" class="h-screen bg-autobot-bg-primary flex flex-col overflow-hidden">
     <!-- Skip Navigation Links -->
-    <div v-if="!isLoginPage" class="skip-links">
+    <div v-if="showAuthChrome" class="skip-links">
       <a href="#main-content" class="skip-link sr-only-focusable">{{ $t('nav.skipToContent') }}</a>
       <a href="#navigation" class="skip-link sr-only-focusable">{{ $t('nav.skipToNavigation') }}</a>
     </div>
 
     <!-- Header - Issue #901: Professional solid color (no gradients) -->
     <!-- Hide navigation bar on login page -->
-    <header v-if="!isLoginPage" class="bg-autobot-bg-secondary border-b border-autobot-border relative z-30" style="min-height: 56px; height: auto;">
+    <header v-if="showAuthChrome" class="bg-autobot-bg-secondary border-b border-autobot-border relative z-30" style="min-height: 56px; height: auto;">
       <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between" style="min-height: 56px; height: auto;">
           <!-- Logo/Brand with System Status -->
@@ -384,10 +384,10 @@
     <main id="main-content" class="flex-1 min-h-0 overflow-hidden" role="main">
       <!-- Unified Loading System -->
       <UnifiedLoadingView
-        loading-key="app-main"
+        :is-loading="isLoading"
         :has-content="!isLoading && !hasErrors"
         :on-retry="clearAllCaches"
-        :auto-timeout-ms="15000"
+        :timeout-ms="15000"
         @loading-complete="handleLoadingComplete"
         @loading-error="handleLoadingError"
         @loading-timeout="handleLoadingTimeout"
@@ -399,15 +399,25 @@
         </ErrorBoundary>
       </UnifiedLoadingView>
     </main>
+
+    <!-- Footer: About link (hidden on public routes and routes with hideFooter meta) -->
+    <footer v-if="showAuthChrome && !hideFooter" class="flex-shrink-0 flex justify-center py-1 border-t border-autobot-border/30">
+      <router-link to="/about" class="text-xs text-autobot-text-muted hover:text-autobot-text-secondary transition-colors">
+        {{ $t('nav.about') }}
+      </router-link>
+    </footer>
   </div>
 
   <!-- Issue #729: RUM Dashboard moved to slm-admin -->
   <!-- ElevationDialog removed: feature not yet implemented (#920) -->
+
+  <!-- Global confirm dialog (#6092) -->
+  <ConfirmDialog />
 </template>
 
 <script lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
@@ -424,10 +434,12 @@ import { initializeNotificationBridge } from '@/utils/notificationBridge';
 import { smartMonitoringController, getAdaptiveInterval } from '@/config/OptimizedPerformance.js';
 import { clearAllSystemNotifications, resetHealthMonitor } from '@/utils/ClearNotifications.js';
 import { getSLMAdminUrl } from '@/config/ssot-config';
+import { navItems } from '@/config/navItems';
 import SystemStatusNotification from '@/components/ui/SystemStatusNotification.vue';
 import CaptchaNotification from '@/components/research/CaptchaNotification.vue';
 import ToastContainer from '@/components/ui/ToastContainer.vue';
 import HostSelectionDialog from '@/components/ui/HostSelectionDialog.vue';
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue';
 import ProfileModal from '@/components/profile/ProfileModal.vue';
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
@@ -444,6 +456,7 @@ export default {
     CaptchaNotification,
     ToastContainer,
     HostSelectionDialog,
+    ConfirmDialog,
     UnifiedLoadingView,
     ProfileModal,
     ErrorBoundary,
@@ -461,6 +474,7 @@ export default {
     const chatStore = useChatStore();
     const knowledgeStore = useKnowledgeStore();
     const router = useRouter();
+    const route = useRoute();
 
     // Initialize user preferences system (Issue #753)
     import('@/composables/usePreferences').then(({ usePreferences }) => {
@@ -529,9 +543,9 @@ export default {
     // Computed properties
     const isLoading = computed(() => appStore?.isLoading || false);
     const hasErrors = computed(() => false); // No errors property in store
-    const isLoginPage = computed(() =>
-      router.currentRoute.value.path === '/login' || !userStore.isAuthenticated
-    );
+    const isPublicRoute = computed(() => !!route.meta.isPublic);
+    const showAuthChrome = computed(() => userStore.isAuthenticated && !isPublicRoute.value);
+    const hideFooter = computed(() => !!route.meta.hideFooter);
 
     // Methods
     const toggleMobileNav = () => {
@@ -786,41 +800,10 @@ export default {
     // SLM Admin URL from SSOT config (Issue #729)
     const slmAdminUrl = computed(() => getSLMAdminUrl());
 
-    // Data-driven navigation items: single source of truth for desktop + mobile nav
-    // iconRule is typed as a literal union to satisfy SVG fill-rule / clip-rule prop types (#4699)
-    type SvgFillRule = 'evenodd' | 'nonzero' | 'inherit';
-    const navItems: Array<{
-      to: string;
-      labelKey: string;
-      icon?: string;
-      iconPaths?: string[];
-      iconRule?: SvgFillRule;
-      iconStroke?: boolean;
-      adminOnly?: boolean;
-    }> = [
-      { to: '/home', labelKey: 'nav.home', icon: 'M10.707 2.293a1 1 0 00-1.414 0l-7 7v11a1 1 0 001 1h2a1 1 0 001-1v-5a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 001 1h2a1 1 0 001-1v-7l7-7a1 1 0 000-1.414z', iconRule: 'evenodd' },
-      { to: '/about', labelKey: 'nav.about', icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', iconStroke: true },
-      { to: '/chat', labelKey: 'nav.chat', icon: 'M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z', iconRule: 'evenodd' },
-      { to: '/knowledge', labelKey: 'nav.knowledge', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
-      { to: '/automation', labelKey: 'nav.automation', icon: 'M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z', iconRule: 'evenodd' },
-      { to: '/analytics', labelKey: 'nav.analytics', iconPaths: ['M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z', 'M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z'] },
-      { to: '/operations', labelKey: 'nav.operations', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', iconStroke: true },
-      { to: '/secrets', labelKey: 'nav.secrets', icon: 'M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z', iconRule: 'evenodd' },
-      { to: '/plugins', labelKey: 'nav.plugins', icon: 'M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z', iconStroke: true },
-      // Issue #1803: Plugin and agent marketplace
-      { to: '/marketplace', labelKey: 'nav.marketplace', icon: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z', iconStroke: true },
-      // Issue #4703: Agent Registry — backend + specialized agent dashboard
-      { to: '/agents/registry', labelKey: 'nav.agentRegistry', icon: 'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18', iconStroke: true },
-      // Code Intelligence removed from main nav — merged into /analytics/codebase
-      // Desktop nav removed — noVNC lives in the Chat tab. /desktop redirects to /chat.
-      // Issue #902: Dev Tools moved into /analytics/dev-tools tab
-      // Issue #4492: Custom Dashboard renamed to /home (removed separate nav entry)
-      { to: '/preferences', labelKey: 'nav.preferences', icon: 'M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z', iconRule: 'evenodd' },
-      // Issue #4465: Usage & Costs dashboard (admin-only)
-      { to: '/usage', labelKey: 'nav.usage', adminOnly: true, icon: 'M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z' },
-      // Issue #1440: AutoResearch experiment dashboard (admin-only)
-      { to: '/experiments', labelKey: 'nav.experiments', adminOnly: true, icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z' },
-    ];
+    // Data-driven navigation items: single source of truth for desktop + mobile nav.
+    // Lives in `@/config/navItems.ts` (#6499) so it can be unit-tested for
+    // coverage against the router. Adding a top-level `requiresAuth` route
+    // without a navItems entry will fail `nav-items-coverage.test.ts`.
 
     // Nav overflow: ref for container, filtered/visible/overflow computed slices
     const navContainerRef = ref<HTMLElement | null>(null)
@@ -862,7 +845,9 @@ export default {
       // Computed
       isLoading,
       hasErrors,
-      isLoginPage,
+      isPublicRoute,
+      showAuthChrome,
+      hideFooter,
       navItems,
       slmAdminUrl,
       displayUsername,
@@ -915,7 +900,7 @@ export default {
   left: 0;
   background: #000;
   color: #fff;
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   text-decoration: none;
   border-radius: 0 0 var(--radius-default) 0;
   font-size: var(--text-sm);

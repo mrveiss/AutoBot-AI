@@ -140,7 +140,7 @@ onMounted(async () => {
 
     <!-- Tabs -->
     <div class="border-b border-default">
-      <nav class="-mb-px flex space-x-8">
+      <nav class="-mb-px flex gap-8">
         <button
           @click="activeTab = 'backend'"
           :class="[
@@ -431,7 +431,7 @@ onMounted(async () => {
   .p-6 > .flex.items-center.justify-between:first-child {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.75rem;
+    gap: var(--spacing-3);
   }
 
   /* Scrollable tab nav instead of wrapping */
@@ -455,7 +455,7 @@ onMounted(async () => {
 
   /* Category filter buttons: allow wrap on mobile */
   .mb-4.flex.flex-wrap {
-    gap: 0.5rem;
+    gap: var(--spacing-2);
   }
 }
 </style>

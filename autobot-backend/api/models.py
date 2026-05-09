@@ -16,18 +16,19 @@ from fastapi.responses import JSONResponse
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
+@router.get("/available", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_available_models",
     error_code_prefix="MODELS",
 )
-@router.get("/available")
 async def get_available_models(
     current_user: dict = Depends(get_current_user),
 ):

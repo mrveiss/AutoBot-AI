@@ -44,7 +44,7 @@ try:
     from transformers import CLIPModel, CLIPProcessor, Wav2Vec2Model, Wav2Vec2Processor
 
     MULTIMODAL_MODELS_AVAILABLE = True
-except ImportError:
+except (ImportError, RuntimeError):
     MULTIMODAL_MODELS_AVAILABLE = False
 
 logger = get_llm_logger("ai_hardware_accelerator")

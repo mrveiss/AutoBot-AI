@@ -620,7 +620,7 @@ async function copyContent(): Promise<void> {
   background-color: #fef08a;
   color: #713f12;
   border-radius: var(--radius-xs);
-  padding: 0 1px;
+  padding: var(--spacing-0) var(--spacing-px);
   font-weight: 600;
 }
 </style>

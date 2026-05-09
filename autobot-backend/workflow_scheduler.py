@@ -22,6 +22,7 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
 from uuid import uuid4
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import parse_utc_iso
 from autobot_types import TaskComplexity
 from constants.threshold_constants import RetryConfig, WorkflowConfig
@@ -37,16 +38,7 @@ class WorkflowPriority(Enum):
     CRITICAL = 5
 
 
-class WorkflowStatus(Enum):
-    """Workflow execution status"""
-
-    SCHEDULED = "scheduled"
-    QUEUED = "queued"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    PAUSED = "paused"
+from autobot_shared.status_enums import WorkflowStatus  # #6973 consolidation
 
 
 @dataclass
@@ -950,8 +942,7 @@ async def _default_template_executor(
     return result
 
 
-# Global scheduler instance
-workflow_scheduler = WorkflowScheduler()
+get_workflow_scheduler = lazy_singleton(WorkflowScheduler)
 
 
 # ---------------------------------------------------------------------------

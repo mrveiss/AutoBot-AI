@@ -11,11 +11,8 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
-from enum import Enum
-from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -24,31 +21,13 @@ router = APIRouter(tags=["startup", "status"])
 
 # Thread lock for synchronous access to startup_state
 import threading
+from api.schemas_common import DataResponse
+from api.schemas_system import StartupMessage, StartupPhase, StartupStatusResponse
 
 _startup_lock = threading.Lock()
 
 # Async lock for WebSocket client access
 _ws_lock = asyncio.Lock()
-
-
-class StartupPhase(Enum):
-    INITIALIZING = "initializing"
-    STARTING_SERVICES = "starting_services"
-    CONNECTING_BACKEND = "connecting_backend"
-    LOADING_KNOWLEDGE = "loading_knowledge"
-    READY = "ready"
-    ERROR = "error"
-
-
-class StartupMessage(BaseModel):
-    """Startup status message"""
-
-    phase: StartupPhase
-    message: str
-    progress: int  # 0-100
-    timestamp: str
-    icon: str
-    details: Optional[str] = None
 
 
 # Global startup state
@@ -120,12 +99,12 @@ async def broadcast_startup_message(message: StartupMessage):
             startup_state["websocket_clients"].discard(ws)
 
 
+@router.get("/status", response_model=StartupStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_startup_status",
     error_code_prefix="STARTUP",
 )
-@router.get("/status")
 async def get_startup_status():
     """Get current startup status"""
     with _startup_lock:
@@ -143,12 +122,12 @@ async def get_startup_status():
     }
 
 
+@router.websocket("/ws")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="startup_websocket",
     error_code_prefix="STARTUP",
 )
-@router.websocket("/ws")
 async def startup_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time startup messages"""
     await websocket.accept()
@@ -184,12 +163,12 @@ async def startup_websocket(websocket: WebSocket):
             startup_state["websocket_clients"].discard(websocket)
 
 
+@router.post("/phase", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_startup_phase",
     error_code_prefix="STARTUP",
 )
-@router.post("/phase")
 async def update_startup_phase(
     phase: str, message: str, progress: int, icon: str = "🚀", details: str = None
 ):

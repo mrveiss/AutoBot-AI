@@ -7,70 +7,40 @@ Issue #54 - Advanced Wake Word Detection Optimization
 """
 
 import logging
-from typing import List
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.wake_word_service import WakeWordDetector, get_wake_word_detector
 from type_defs.common import Metadata
+from api.schemas_system import (
+    AddWakeWordRequest,
+    WakeWordCheckRequest,
+    WakeWordCheckResponse,
+    WakeWordConfigRequest,
+    WakeWordConfigUpdateResponse,
+    WakeWordFeedbackResponse,
+    WakeWordGetConfigResponse,
+    WakeWordGetWordsResponse,
+    WakeWordListeningStatusResponse,
+    WakeWordListeningToggleResponse,
+    WakeWordMutateResponse,
+    WakeWordReportFeedbackRequest,
+    WakeWordStatsResetResponse,
+    WakeWordStatsResponse,
+    WakeWordToggleResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["wake_word", "voice"])
 
 
-class WakeWordCheckRequest(BaseModel):
-    """Request to check text for wake word"""
-
-    text: str = Field(..., description="Text to check for wake word")
-    confidence: float = Field(
-        default=1.0, ge=0.0, le=1.0, description="Recognition confidence"
-    )
-
-
-class WakeWordCheckResponse(BaseModel):
-    """Response for wake word check"""
-
-    detected: bool
-    wake_word: str = ""
-    confidence: float = 0.0
-    timestamp: float = 0.0
-    metadata: Metadata = {}
-
-
-class WakeWordConfigRequest(BaseModel):
-    """Request to update wake word configuration"""
-
-    enabled: bool = None
-    wake_words: List[str] = None
-    confidence_threshold: float = None
-    cooldown_seconds: float = None
-    adaptive_threshold: bool = None
-    max_false_positive_rate: float = None
-    max_cpu_percent: float = None  # Issue #927: CPU cap for always-on detection
-
-
-class AddWakeWordRequest(BaseModel):
-    """Request to add a new wake word"""
-
-    wake_word: str = Field(..., min_length=2, max_length=50)
-
-
-class ReportFeedbackRequest(BaseModel):
-    """Request to report detection feedback"""
-
-    is_correct: bool = Field(
-        ..., description="True if detection was correct, False if false positive"
-    )
-
-
+@router.post("/check", response_model=WakeWordCheckResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_wake_word",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/check", response_model=WakeWordCheckResponse)
 async def check_wake_word(request: WakeWordCheckRequest) -> WakeWordCheckResponse:
     """
     Check if text contains a wake word.
@@ -93,12 +63,12 @@ async def check_wake_word(request: WakeWordCheckRequest) -> WakeWordCheckRespons
     return WakeWordCheckResponse(detected=False)
 
 
+@router.get("/words", response_model=WakeWordGetWordsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_wake_words",
     error_code_prefix="WAKE_WORD",
 )
-@router.get("/words")
 async def get_wake_words() -> Metadata:
     """Get list of configured wake words"""
     detector = get_wake_word_detector()
@@ -108,12 +78,12 @@ async def get_wake_words() -> Metadata:
     }
 
 
+@router.post("/words", response_model=WakeWordMutateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_wake_word",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/words")
 async def add_wake_word(request: AddWakeWordRequest) -> Metadata:
     """Add a new wake word to the detection list"""
     detector = get_wake_word_detector()
@@ -133,12 +103,12 @@ async def add_wake_word(request: AddWakeWordRequest) -> Metadata:
     }
 
 
+@router.delete("/words/{wake_word}", response_model=WakeWordMutateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="remove_wake_word",
     error_code_prefix="WAKE_WORD",
 )
-@router.delete("/words/{wake_word}")
 async def remove_wake_word(wake_word: str) -> Metadata:
     """Remove a wake word from the detection list"""
     detector = get_wake_word_detector()
@@ -162,24 +132,24 @@ async def remove_wake_word(wake_word: str) -> Metadata:
     raise HTTPException(status_code=404, detail=f"Wake word '{wake_word}' not found")
 
 
+@router.get("/config", response_model=WakeWordGetConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_wake_word_config",
     error_code_prefix="WAKE_WORD",
 )
-@router.get("/config")
 async def get_wake_word_config() -> Metadata:
     """Get current wake word detection configuration"""
     detector = get_wake_word_detector()
     return detector.get_config()
 
 
+@router.put("/config", response_model=WakeWordConfigUpdateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_wake_word_config",
     error_code_prefix="WAKE_WORD",
 )
-@router.put("/config")
 async def update_wake_word_config(request: WakeWordConfigRequest) -> Metadata:
     """Update wake word detection configuration"""
     detector = get_wake_word_detector()
@@ -210,24 +180,24 @@ async def update_wake_word_config(request: WakeWordConfigRequest) -> Metadata:
     }
 
 
+@router.get("/stats", response_model=WakeWordStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_wake_word_stats",
     error_code_prefix="WAKE_WORD",
 )
-@router.get("/stats")
 async def get_wake_word_stats() -> Metadata:
     """Get wake word detection statistics"""
     detector = get_wake_word_detector()
     return detector.get_stats()
 
 
+@router.post("/stats/reset", response_model=WakeWordStatsResetResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reset_wake_word_stats",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/stats/reset")
 async def reset_wake_word_stats() -> Metadata:
     """Reset wake word detection statistics"""
     detector = get_wake_word_detector()
@@ -239,13 +209,13 @@ async def reset_wake_word_stats() -> Metadata:
     }
 
 
+@router.post("/feedback", response_model=WakeWordFeedbackResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="report_detection_feedback",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/feedback")
-async def report_detection_feedback(request: ReportFeedbackRequest) -> Metadata:
+async def report_detection_feedback(request: WakeWordReportFeedbackRequest) -> Metadata:
     """
     Report feedback on the last wake word detection.
 
@@ -265,12 +235,12 @@ async def report_detection_feedback(request: ReportFeedbackRequest) -> Metadata:
     return {"success": True, "message": message, "stats": detector.get_stats()}
 
 
+@router.post("/enable", response_model=WakeWordToggleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enable_wake_word",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/enable")
 async def enable_wake_word() -> Metadata:
     """Enable wake word detection"""
     detector = get_wake_word_detector()
@@ -282,12 +252,12 @@ async def enable_wake_word() -> Metadata:
     }
 
 
+@router.post("/disable", response_model=WakeWordToggleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="disable_wake_word",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/disable")
 async def disable_wake_word() -> Metadata:
     """Disable wake word detection"""
     detector = get_wake_word_detector()
@@ -304,12 +274,12 @@ async def disable_wake_word() -> Metadata:
 # -------------------------------------------------------------------------
 
 
+@router.post("/listening/start", response_model=WakeWordListeningToggleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_listening",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/listening/start")
 async def start_listening() -> Metadata:
     """
     Start the always-on background listening loop.
@@ -326,12 +296,12 @@ async def start_listening() -> Metadata:
     }
 
 
+@router.post("/listening/stop", response_model=WakeWordListeningToggleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_listening",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/listening/stop")
 async def stop_listening() -> Metadata:
     """Stop the always-on background listening loop."""
     detector: WakeWordDetector = get_wake_word_detector()
@@ -343,12 +313,12 @@ async def stop_listening() -> Metadata:
     }
 
 
+@router.get("/listening/status", response_model=WakeWordListeningStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_listening_status",
     error_code_prefix="WAKE_WORD",
 )
-@router.get("/listening/status")
 async def get_listening_status() -> Metadata:
     """
     Get background listening status including real-time CPU metrics.

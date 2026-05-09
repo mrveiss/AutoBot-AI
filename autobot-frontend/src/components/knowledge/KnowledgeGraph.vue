@@ -391,8 +391,8 @@ import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick, def
 import type cytoscape from 'cytoscape'
 import type { Core, NodeSingular } from 'cytoscape'
 import { useCytoscapeLibrary } from '@/composables/charts/useCytoscapeLibrary'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
+import { useKnowledgeGraph } from '@/composables/knowledge/useKnowledgeGraph'
+import type { GraphEntity as Entity, GraphRelation as Relation } from '@/composables/knowledge/useKnowledgeGraph'
 import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
 import { useDebouncedFn } from '@/composables/useDebounce'
@@ -426,22 +426,7 @@ const emit = defineEmits<{
 // Types
 // ============================================================================
 
-interface Entity {
-  id: string
-  name: string
-  type: string
-  created_at?: number
-  updated_at?: number
-  observations: string[]
-  metadata?: Record<string, unknown>
-}
-
-interface Relation {
-  from: string
-  to: string
-  type: string
-  strength?: number
-}
+// Entity and Relation types are imported from useKnowledgeGraph composable.
 
 interface NewEntity {
   name: string
@@ -453,11 +438,16 @@ interface NewEntity {
 // State
 // ============================================================================
 
-const isLoading = ref(false)
+const {
+  entities,
+  relations,
+  isLoading,
+  errorMessage,
+  fetchGraphData,
+  createGraphEntity,
+} = useKnowledgeGraph()
+
 const isCreating = ref(false)
-const errorMessage = ref('')
-const entities = ref<Entity[]>([])
-const relations = ref<Relation[]>([])
 const selectedEntity = ref<Entity | null>(null)
 const searchQuery = ref('')
 const selectedType = ref('')
@@ -882,121 +872,35 @@ function handleCleanupComplete(): void {
 }
 
 /**
- * Refreshes the knowledge graph by fetching entities and relations from the API
- * Emits 'graph-refreshed' event on successful load with entity/relation counts
+ * Refreshes the knowledge graph by delegating to useKnowledgeGraph.fetchGraphData().
+ * Emits 'graph-refreshed' event on successful load with entity/relation counts.
  */
 async function refreshGraph(): Promise<void> {
-  isLoading.value = true
-  errorMessage.value = ''
+  await fetchGraphData()
 
-  try {
-    // Fetch from unified knowledge graph endpoint (includes categories + facts)
-    const unifiedData = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/unified/graph?max_facts=100&include_categories=true`)
+  // Wait for DOM to render the graph container (it's conditionally rendered)
+  await nextTick()
 
-    // Also fetch memory entities for backward compatibility
-    const memoryData = await apiClient.get<Record<string, any>>(`${getApiBase()}/memory/entities/all`)
-
-    // Merge entities from both sources
-    const unifiedEntities = unifiedData?.data?.entities || []
-    const memoryEntities = memoryData?.data?.entities || memoryData?.entities || []
-
-    // Combine entities, avoiding duplicates by ID
-    const entityMap = new Map<string, Entity>()
-    for (const entity of [...unifiedEntities, ...memoryEntities]) {
-      if (entity.id && !entityMap.has(entity.id)) {
-        entityMap.set(entity.id, entity)
-      }
-    }
-    entities.value = Array.from(entityMap.values())
-
-    // Get relations from unified endpoint
-    const unifiedRelations = unifiedData?.data?.relations || []
-    relations.value = unifiedRelations
-
-    // Also fetch memory relations if we have memory entities
-    if (memoryEntities.length > 0) {
-      await fetchMemoryRelations(memoryEntities)
-    }
-
-    // Wait for DOM to render the graph container (it's conditionally rendered)
-    await nextTick()
-
-    // Initialize Cytoscape if not already done (2D mode only, container now exists).
-    // #5234: delegates to useCytoscapeLibrary so the library is lazy-loaded
-    // and the onReady callback runs init + updateCytoscapeElements. If the
-    // container isn't mounted yet (3D mode), ensureReady is a no-op init.
-    if (viewMode.value === '2d' && !cy.value && cytoscapeContainer.value) {
-      await ensureCytoscapeReady()
-    } else {
-      updateCytoscapeElements()
-    }
-
-    // Emit refresh event with statistics
-    emit('graph-refreshed', {
-      entities: entities.value.length,
-      relations: relations.value.length
-    })
-
-    logger.info(`Loaded unified graph: ${entities.value.length} entities, ${relations.value.length} relations`)
-
-  } catch (error) {
-    logger.error('Failed to fetch graph data:', error)
-    errorMessage.value = error instanceof Error ? error.message : 'Failed to load graph'
-  } finally {
-    isLoading.value = false
-  }
-}
-
-/**
- * Fetches relations for memory entities using parallel requests
- * Uses Promise.allSettled to handle partial failures gracefully
- * Deduplicates relations to avoid duplicate edges in the graph
- */
-async function fetchMemoryRelations(memoryEntities: Entity[]): Promise<void> {
-  const allRelations: Relation[] = [...relations.value] // Keep existing relations
-
-  const relationResults = await Promise.allSettled(
-    memoryEntities.map(async (entity) => {
-      const parsedResponse = await apiClient.get<Record<string, any>>(`${getApiBase()}/memory/entities/${entity.id}/relations`)
-      return { entity, parsedResponse }
-    })
-  )
-
-  for (const result of relationResults) {
-    if (result.status === 'rejected') {
-      continue
-    }
-
-    const { entity, parsedResponse } = result.value
-    const responseData = parsedResponse?.data || parsedResponse
-
-    if (responseData?.related_entities) {
-      for (const relatedEntity of responseData.related_entities) {
-        allRelations.push({
-          from: entity.id,
-          to: relatedEntity.entity?.id || relatedEntity.id,
-          type: relatedEntity.relation_type || relatedEntity.type || 'relates_to',
-          strength: relatedEntity.strength || 1.0
-        })
-      }
-    } else if (responseData?.relations) {
-      allRelations.push(...responseData.relations)
-    }
+  // Initialize Cytoscape if not already done (2D mode only, container now exists).
+  // #5234: delegates to useCytoscapeLibrary so the library is lazy-loaded
+  // and the onReady callback runs init + updateCytoscapeElements. If the
+  // container isn't mounted yet (3D mode), ensureReady is a no-op init.
+  if (viewMode.value === '2d' && !cy.value && cytoscapeContainer.value) {
+    await ensureCytoscapeReady()
+  } else {
+    updateCytoscapeElements()
   }
 
-  // Deduplicate relations using Set for O(1) lookups
-  const relationSet = new Set<string>()
-  relations.value = allRelations.filter(r => {
-    const key = `${r.from}-${r.to}-${r.type}`
-    if (relationSet.has(key)) return false
-    relationSet.add(key)
-    return true
+  // Emit refresh event with statistics
+  emit('graph-refreshed', {
+    entities: entities.value.length,
+    relations: relations.value.length
   })
 }
 
 /**
- * Creates a new entity via the API
- * Validates required fields and emits 'entity-created' event on success
+ * Creates a new entity via the composable, updates the graph, and emits events.
+ * Validates required fields before delegating to useKnowledgeGraph.createGraphEntity().
  */
 async function createEntity(): Promise<void> {
   if (!newEntity.value.name || !newEntity.value.type || !newEntity.value.observations) {
@@ -1008,33 +912,12 @@ async function createEntity(): Promise<void> {
   errorMessage.value = ''
 
   try {
-    const observations = newEntity.value.observations
-      .split('\n')
-      .map(o => o.trim())
-      .filter(o => o.length > 0)
-
-    const parsedResponse = await apiClient.post<Record<string, any>>(`${getApiBase()}/memory/entities`, {
-      name: newEntity.value.name,
-      entity_type: newEntity.value.type,
-      observations
-    })
-
-    const responseData = parsedResponse?.data || parsedResponse
-
-    let createdEntity: Entity | null = null
-    if (responseData?.id && responseData?.name) {
-      createdEntity = responseData as Entity
-      entities.value.push(createdEntity)
-    } else if (responseData?.entity) {
-      createdEntity = responseData.entity as Entity
-      entities.value.push(createdEntity)
-    }
+    const created = await createGraphEntity(newEntity.value)
 
     updateCytoscapeElements()
 
-    // Emit entity created event
-    if (createdEntity) {
-      emit('entity-created', createdEntity)
+    if (created) {
+      emit('entity-created', created)
     }
 
     showCreateModal.value = false
@@ -1671,7 +1554,7 @@ watch(layoutMode, () => {
   cursor: pointer;
   text-decoration: underline;
   font-size: var(--text-sm);
-  padding: 0;
+  padding: var(--spacing-0);
 }
 
 /* Zoom Controls */
@@ -2112,7 +1995,7 @@ watch(layoutMode, () => {
 .control-separator {
   color: var(--border-default);
   font-size: var(--text-sm);
-  margin: 0 4px;
+  margin: var(--spacing-0) var(--spacing-1);
 }
 
 /* 3D Graph Loading Skeleton */

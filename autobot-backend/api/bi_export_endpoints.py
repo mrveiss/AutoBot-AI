@@ -17,23 +17,16 @@ Remaining endpoints:
   POST   /bi/reports/saved/{report_id}/run — execute a saved report
 """
 
-from typing import List
-
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.saved_reports_service import get_saved_reports_service
+from api.schemas_common import DataResponse
+from api.schemas_agent import SavedReportRequest, SavedReportResponse, SavedReportsListResponse
 
 router = APIRouter(tags=["bi-reports"])
-
-
-class SavedReportRequest(BaseModel):
-    name: str
-    report_type: str = "executive"
-    sections: List[str] = ["cost", "agents"]
 
 
 # =========================================================================
@@ -41,7 +34,7 @@ class SavedReportRequest(BaseModel):
 # =========================================================================
 
 
-@router.post("/reports/save")
+@router.post("/reports/save", response_model=SavedReportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="save_report",
@@ -66,7 +59,7 @@ async def save_report(
 # =========================================================================
 
 
-@router.get("/reports/saved")
+@router.get("/reports/saved", response_model=SavedReportsListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_saved_reports",
@@ -86,7 +79,7 @@ async def list_saved_reports(
 # =========================================================================
 
 
-@router.get("/reports/saved/{report_id}")
+@router.get("/reports/saved/{report_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_saved_report",
@@ -112,7 +105,7 @@ async def get_saved_report(
 # =========================================================================
 
 
-@router.put("/reports/saved/{report_id}")
+@router.put("/reports/saved/{report_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_saved_report",
@@ -144,7 +137,7 @@ async def update_saved_report(
 # =========================================================================
 
 
-@router.delete("/reports/saved/{report_id}")
+@router.delete("/reports/saved/{report_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_saved_report",
@@ -170,7 +163,7 @@ async def delete_saved_report(
 # =========================================================================
 
 
-@router.post("/reports/saved/{report_id}/run")
+@router.post("/reports/saved/{report_id}/run", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_saved_report",

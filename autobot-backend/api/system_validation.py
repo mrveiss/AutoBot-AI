@@ -7,15 +7,24 @@ System Validation API endpoints for AutoBot optimization suite
 """
 
 import logging
-from typing import Dict, List
+from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
+from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from type_defs.common import Metadata
 from utils.catalog_http_exceptions import raise_catalog_error_simple, raise_server_error
 from utils.system_validator import get_system_validator
+from api.schemas_workflows import (
+    SystemValidationBenchmarkResponse,
+    SystemValidationComponentResponse,
+    SystemValidationHealthResponse,
+    SystemValidationQuickResponse,
+    SystemValidationRecommendationsResponse,
+    SystemValidationRequestModel,
+    SystemValidationResultModel,
+    SystemValidationStatusResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,34 +32,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-class ValidationRequest(BaseModel):
-    """Request model for system validation"""
-
-    validation_type: str = "comprehensive"
-    include_performance_tests: bool = True
-    include_stress_tests: bool = False
-    timeout_seconds: int = 300
+register_singleton_probe("system_validation", get_system_validator)
 
 
-class ValidationResult(BaseModel):
-    """Response model for validation results"""
-
-    validation_id: str
-    status: str
-    overall_score: float
-    component_scores: Dict[str, float]
-    recommendations: List[str]
-    test_results: Metadata
-    execution_time: float
-    timestamp: str
-
-
+@router.get("/health", response_model=SystemValidationHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="validation_health",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/health")
 async def validation_health():
     """Health check for validation system"""
     try:
@@ -66,14 +56,14 @@ async def validation_health():
         raise_server_error("API_0003", "Health check failed")
 
 
+@router.post("/validate/comprehensive", response_model=SystemValidationResultModel)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_comprehensive_validation",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.post("/validate/comprehensive", response_model=ValidationResult)
 async def run_comprehensive_validation(
-    request: ValidationRequest, background_tasks: BackgroundTasks
+    request: SystemValidationRequestModel, background_tasks: BackgroundTasks
 ):
     """Run comprehensive system validation"""
     try:
@@ -86,7 +76,7 @@ async def run_comprehensive_validation(
             raise_server_error("API_0003", "Validation failed")
 
         # Format response
-        validation_result = ValidationResult(
+        validation_result = SystemValidationResultModel(
             validation_id=result["validation_id"],
             status="completed",
             overall_score=result["overall_score"],
@@ -104,12 +94,12 @@ async def run_comprehensive_validation(
         raise_server_error("API_0003", "Validation error")
 
 
+@router.get("/validate/quick", response_model=SystemValidationQuickResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_quick_validation",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/validate/quick")
 async def run_quick_validation():
     """Run quick system validation check"""
     try:
@@ -171,12 +161,12 @@ async def run_quick_validation():
         raise_server_error("API_0003", "Quick validation error")
 
 
+@router.get("/validate/component/{component_name}", response_model=SystemValidationComponentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="validate_component",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/validate/component/{component_name}")
 async def validate_component(component_name: str):
     """Validate specific component"""
     try:
@@ -219,12 +209,12 @@ async def validate_component(component_name: str):
         raise_server_error("API_0003", "Component validation error")
 
 
+@router.get("/validate/recommendations", response_model=SystemValidationRecommendationsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_optimization_recommendations",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/validate/recommendations")
 async def get_optimization_recommendations():
     """Get system optimization recommendations"""
     try:
@@ -284,12 +274,12 @@ async def get_optimization_recommendations():
         raise_server_error("API_0003", "Recommendations error")
 
 
+@router.get("/validate/status", response_model=SystemValidationStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_validation_status",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/validate/status")
 async def get_validation_status():
     """Get current validation system status"""
     try:
@@ -316,12 +306,12 @@ async def get_validation_status():
         raise_server_error("API_0003", "Status error")
 
 
+@router.post("/validate/benchmark", response_model=SystemValidationBenchmarkResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_performance_benchmark",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.post("/validate/benchmark")
 async def run_performance_benchmark():
     """Run performance benchmarking tests"""
     try:

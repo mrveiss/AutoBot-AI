@@ -3,9 +3,12 @@
 {# Author: mrveiss #}
 {# Issue #741: Version tracking for SLM agents #}
 {
-  "commit": "{{ slm_agent_version | default(git_commit) }}",
-  "built_at": "{{ ansible_date_time.iso8601 }}",
-  "deployed_at": "{{ ansible_date_time.iso8601 }}",
+  {# default(value, true) falls back when value is "" too — slm_agent_version
+     is defined as "" in defaults/main.yml so plain default(...) returned
+     empty string and broke code-drift detection in the GUI. #}
+  "commit": "{{ slm_agent_version | default(git_commit, true) | default('unknown', true) }}",
+  "built_at": "{{ ansible_facts['date_time'].iso8601 }}",
+  "deployed_at": "{{ ansible_facts['date_time'].iso8601 }}",
   "deployed_by": "ansible",
   "node_id": "{{ inventory_hostname }}"
 }

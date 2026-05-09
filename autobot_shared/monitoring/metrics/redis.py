@@ -274,23 +274,15 @@ class RedisMetricsRecorder(BaseMetricsRecorder):
     ) -> None:
         """Record a Redis operation."""
         status = "success" if success else "error"
-        self.operations_total.labels(
-            database=database, operation=operation, status=status
-        ).inc()
+        self.operations_total.labels(database=database, operation=operation, status=status).inc()
         if success:
-            self.operation_latency.labels(
-                database=database, operation=operation
-            ).observe(latency_seconds)
+            self.operation_latency.labels(database=database, operation=operation).observe(latency_seconds)
 
-    def record_pipeline(
-        self, database: str, command_count: int, latency_seconds: float
-    ) -> None:
+    def record_pipeline(self, database: str, command_count: int, latency_seconds: float) -> None:
         """Record a Redis pipeline execution."""
         self.pipeline_operations.labels(database=database).inc()
         self.pipeline_size.labels(database=database).observe(command_count)
-        self.operation_latency.labels(database=database, operation="pipeline").observe(
-            latency_seconds
-        )
+        self.operation_latency.labels(database=database, operation="pipeline").observe(latency_seconds)
 
     # =========================================================================
     # Connection Pool Methods
@@ -330,9 +322,7 @@ class RedisMetricsRecorder(BaseMetricsRecorder):
         """Update memory statistics."""
         self.memory_used_bytes.labels(database=database).set(used_bytes)
         self.memory_peak_bytes.labels(database=database).set(peak_bytes)
-        self.memory_fragmentation_ratio.labels(database=database).set(
-            fragmentation_ratio
-        )
+        self.memory_fragmentation_ratio.labels(database=database).set(fragmentation_ratio)
 
     # =========================================================================
     # Key Space Methods
@@ -391,17 +381,11 @@ class RedisMetricsRecorder(BaseMetricsRecorder):
     ) -> None:
         """Update stream statistics."""
         self.stream_entries.labels(database=database, stream=stream).set(entries)
-        self.stream_consumer_groups.labels(database=database, stream=stream).set(
-            consumer_groups
-        )
+        self.stream_consumer_groups.labels(database=database, stream=stream).set(consumer_groups)
 
-    def set_stream_pending(
-        self, database: str, stream: str, group: str, pending: int
-    ) -> None:
+    def set_stream_pending(self, database: str, stream: str, group: str, pending: int) -> None:
         """Set pending entry count for a consumer group."""
-        self.stream_pending_entries.labels(
-            database=database, stream=stream, group=group
-        ).set(pending)
+        self.stream_pending_entries.labels(database=database, stream=stream, group=group).set(pending)
 
     # =========================================================================
     # Health Methods

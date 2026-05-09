@@ -8,7 +8,7 @@
   become: yes
 
   vars:
-    deploy_timestamp: "{{ ansible_date_time.iso8601 }}"
+    deploy_timestamp: "{{ ansible_facts['date_time'].iso8601 }}"
     deploy_role: "{{ role_name | default('common') }}"
 
   pre_tasks:
@@ -26,7 +26,7 @@
           - "========================================"
           - "Target Host: {{ inventory_hostname }}"
           - "Role: {{ deploy_role }}"
-          - "IP Address: {{ ansible_default_ipv4.address | default('N/A') }}"
+          - "IP Address: {{ ansible_facts['default_ipv4'].address | default('N/A') }}"
           - "Timestamp: {{ deploy_timestamp }}"
       tags: ['always']
 

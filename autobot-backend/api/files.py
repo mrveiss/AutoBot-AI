@@ -16,15 +16,14 @@ import mimetypes
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer
-from pydantic import BaseModel, field_validator
 
-from auth_middleware import auth_middleware
+from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path
 from constants.error_constants import (
@@ -37,6 +36,20 @@ from security_layer import SecurityLayer
 from utils.io_executor import run_in_file_executor
 from utils.path_validation import is_invalid_name
 from utils.paths_manager import ensure_data_directory, get_data_path
+from api.schemas_system import (
+    AdminFileListResponse,
+    AdminFileReadResponse,
+    DirectoryCreateResponse,
+    DirectoryListing,
+    DirectoryTreeResponse,
+    FileDeleteResponse,
+    FileInfo,
+    FilePreviewResponse,
+    FileRenameResponse,
+    FileStatsResponse,
+    FileViewResponse,
+    FilesAPIUploadResponse,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -166,53 +179,6 @@ _DANGEROUS_EXTENSIONS = frozenset(
 )
 
 
-class FileInfo(BaseModel):
-    """File information model"""
-
-    name: str
-    path: str
-    is_directory: bool
-    size: Optional[int] = None
-    mime_type: Optional[str] = None
-    last_modified: datetime
-    permissions: str
-    extension: Optional[str] = None
-
-
-class DirectoryListing(BaseModel):
-    """Directory listing response model"""
-
-    current_path: str
-    parent_path: Optional[str] = None
-    files: List[FileInfo]
-    total_files: int
-    total_directories: int
-    total_size: int
-
-
-class FileUploadResponse(BaseModel):
-    """File upload response model"""
-
-    success: bool
-    message: str
-    file_info: Optional[FileInfo] = None
-    upload_id: Optional[str] = None
-
-
-class FileOperation(BaseModel):
-    """File operation request model"""
-
-    path: str
-
-    @field_validator("path")
-    @classmethod
-    def validate_path(cls, v):
-        """Validate path to prevent directory traversal attacks."""
-        if not v or ".." in v or v.startswith("/"):
-            raise ValueError("Invalid path")
-        return v
-
-
 def get_security_layer(request: Request) -> SecurityLayer:
     """Get security layer from app state"""
     return request.app.state.security_layer
@@ -234,7 +200,7 @@ def _check_file_permission(request: Request, permission: str) -> dict:
 
     Issue #620.
     """
-    has_permission, user_data = auth_middleware.check_file_permissions(
+    has_permission, user_data = get_auth_middleware().check_file_permissions(
         request, permission
     )
     if not has_permission:
@@ -401,12 +367,12 @@ def _list_directory_contents(target_path: Path) -> tuple:
     return files, total_size, total_files, total_directories
 
 
+@router.get("/list", response_model=DirectoryListing)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_files",
     error_code_prefix="FILES",
 )
-@router.get("/list", response_model=DirectoryListing)
 async def list_files(request: Request, path: str = ""):
     """
     List files in the specified directory within the sandbox.
@@ -668,12 +634,12 @@ async def _delete_directory_item(
     return {"message": f"Directory '{target_path.name}' deleted successfully"}
 
 
+@router.post("/upload", response_model=FilesAPIUploadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="upload_file",
     error_code_prefix="FILES",
 )
-@router.post("/upload", response_model=FileUploadResponse)
 async def upload_file(
     request: Request,
     file: UploadFile = File(...),
@@ -691,7 +657,7 @@ async def upload_file(
         overwrite: Whether to overwrite existing files
     """
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = auth_middleware.check_file_permissions(
+    has_permission, user_data = get_auth_middleware().check_file_permissions(
         request, "upload"
     )
     if not has_permission:
@@ -726,7 +692,7 @@ async def upload_file(
     # Audit logging (Issue #281: uses helper)
     _log_upload_audit(request, user_data, file, relative_path, len(content), overwrite)
 
-    return FileUploadResponse(
+    return FilesAPIUploadResponse(
         success=True,
         message=f"File '{file.filename}' uploaded successfully",
         file_info=file_info,
@@ -734,12 +700,12 @@ async def upload_file(
     )
 
 
+@router.get("/download/{path:path}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="download_file",
     error_code_prefix="FILES",
 )
-@router.get("/download/{path:path}")
 async def download_file(request: Request, path: str):
     """
     Download a file from the sandbox.
@@ -748,7 +714,7 @@ async def download_file(request: Request, path: str):
         path: File path within the sandbox
     """
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = auth_middleware.check_file_permissions(
+    has_permission, user_data = get_auth_middleware().check_file_permissions(
         request, "download"
     )
     if not has_permission:
@@ -793,12 +759,12 @@ async def download_file(request: Request, path: str):
     )
 
 
+@router.get("/view/{path:path}", response_model=FileViewResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="view_file",
     error_code_prefix="FILES",
 )
-@router.get("/view/{path:path}")
 async def view_file(request: Request, path: str):
     """
     View file content (for text files) or get file info.
@@ -807,7 +773,7 @@ async def view_file(request: Request, path: str):
         path: File path within the sandbox
     """
     # SECURITY FIX: Use modern auth_middleware instead of deprecated function
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(
             status_code=403, detail="Insufficient permissions for file viewing"
@@ -917,12 +883,12 @@ async def _validate_rename_paths(source_path: Path, new_name: str) -> Path:
     return target_path
 
 
+@router.post("/rename", response_model=FileRenameResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rename_file_or_directory",
     error_code_prefix="FILES",
 )
-@router.post("/rename")
 async def rename_file_or_directory(
     request: Request, path: str = Form(...), new_name: str = Form(...)
 ):
@@ -1007,12 +973,12 @@ async def _read_text_content(target_file: Path) -> tuple:
         return None, "binary"
 
 
+@router.get("/preview", response_model=FilePreviewResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="preview_file",
     error_code_prefix="FILES",
 )
-@router.get("/preview")
 async def preview_file(request: Request, path: str):
     """
     Get file preview with content and download URL.
@@ -1055,12 +1021,12 @@ async def preview_file(request: Request, path: str):
     }
 
 
+@router.delete("/delete", response_model=FileDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_file",
     error_code_prefix="FILES",
 )
-@router.delete("/delete")
 async def delete_file(request: Request, path: str):
     """
     Delete a file or directory within the sandbox.
@@ -1070,7 +1036,7 @@ async def delete_file(request: Request, path: str):
     Args:
         path: Path to the file/directory to delete (query parameter)
     """
-    has_permission, user_data = auth_middleware.check_file_permissions(
+    has_permission, user_data = get_auth_middleware().check_file_permissions(
         request, "delete"
     )
     if not has_permission:
@@ -1130,12 +1096,12 @@ def _log_directory_create_audit(
     )
 
 
+@router.post("/create_directory", response_model=DirectoryCreateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_directory",
     error_code_prefix="FILES",
 )
-@router.post("/create_directory")
 async def create_directory(
     request: Request, path: str = Form(...), name: str = Form(...)
 ):
@@ -1174,16 +1140,16 @@ async def create_directory(
     }
 
 
+@router.get("/tree", response_model=DirectoryTreeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_directory_tree",
     error_code_prefix="FILES",
 )
-@router.get("/tree")
 async def get_directory_tree(request: Request, path: str = ""):
     """Get directory tree structure for file browser"""
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(
             status_code=403,
@@ -1242,16 +1208,16 @@ async def get_directory_tree(request: Request, path: str = ""):
     return {"path": path, "tree": tree_data}
 
 
+@router.get("/stats", response_model=FileStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_file_stats",
     error_code_prefix="FILES",
 )
-@router.get("/stats")
 async def get_file_stats(request: Request):
     """Get file system statistics for the sandbox"""
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(
             status_code=403, detail="Insufficient permissions for file statistics"
@@ -1343,7 +1309,12 @@ def _entry_to_file_item(entry: Path) -> dict:
         }
 
 
-@router.get("", summary="List directory for SLM admin file browser")
+@router.get("", summary="List directory for SLM admin file browser", response_model=AdminFileListResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="admin_list_directory",
+    error_code_prefix="FILES",
+)
 async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ssot-path
     """List directory contents at an absolute path.
 
@@ -1364,7 +1335,12 @@ async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ss
         raise HTTPException(status_code=403, detail="Permission denied")
 
 
-@router.get("/read", summary="Read file content for SLM admin file browser")
+@router.get("/read", summary="Read file content for SLM admin file browser", response_model=AdminFileReadResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="admin_read_file",
+    error_code_prefix="FILES",
+)
 async def admin_read_file(path: str) -> dict:
     """Return text content of a file at an absolute path.
 

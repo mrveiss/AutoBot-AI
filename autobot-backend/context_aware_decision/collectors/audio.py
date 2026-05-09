@@ -29,9 +29,9 @@ class AudioContextCollector:
     async def collect(self) -> List[ContextElement]:
         """Collect audio/voice context."""
         try:
-            from voice_processing_system import voice_processing_system
+            from voice_processing_system import get_voice_processing_system
 
-            voice_status = voice_processing_system.get_system_status()
+            voice_status = get_voice_processing_system().get_system_status()
             audio_elements = []
 
             # Recent voice commands context
@@ -41,7 +41,7 @@ class AudioContextCollector:
                 )
 
             # Command history context
-            command_history = voice_processing_system.get_command_history(limit=5)
+            command_history = get_voice_processing_system().get_command_history(limit=5)
             if command_history:
                 audio_elements.append(
                     self._create_command_history_context(command_history)

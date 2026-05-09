@@ -17,7 +17,6 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from pydantic import BaseModel, Field, field_validator
 
 from auth_middleware import get_current_user
 from services.trigger_service import (
@@ -26,6 +25,13 @@ from services.trigger_service import (
     TriggerService,
     TriggerType,
 )
+from api.schemas_agent import WebhookAcceptedResponse
+from api.schemas_workflows import (
+    TriggerCreateRequest,
+    TriggerCreateResponse,
+    TriggerListResponse,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -51,44 +57,6 @@ def get_trigger_service() -> TriggerService:
 # ---------------------------------------------------------------------------
 
 
-class TriggerCreateRequest(BaseModel):
-    """Request body for POST /api/triggers."""
-
-    trigger_type: TriggerType
-    workflow_id: str = Field(..., min_length=1)
-    config: Dict[str, Any] = Field(default_factory=dict)
-    conditions: List[Dict[str, Any]] = Field(default_factory=list)
-    enabled: bool = True
-
-    @field_validator("workflow_id")
-    @classmethod
-    def workflow_id_not_empty(cls, v: str) -> str:
-        """Ensure workflow_id is not blank after stripping whitespace."""
-        if not v.strip():
-            raise ValueError("workflow_id must not be empty or whitespace")
-        return v
-
-
-class TriggerCreateResponse(BaseModel):
-    """Response body for POST /api/triggers."""
-
-    trigger_id: str
-    webhook_url: Optional[str] = None
-
-
-class TriggerListResponse(BaseModel):
-    """Response body for GET /api/triggers."""
-
-    triggers: List[Dict[str, Any]]
-    total: int
-
-
-class FireTriggerRequest(BaseModel):
-    """Optional request body for manually firing a trigger (internal/testing)."""
-
-    payload: Dict[str, Any] = Field(default_factory=dict)
-
-
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -99,6 +67,11 @@ class FireTriggerRequest(BaseModel):
     response_model=TriggerCreateResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Register a new event-driven trigger",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_trigger",
+    error_code_prefix="TRIGGERS",
 )
 async def create_trigger(
     request: TriggerCreateRequest,
@@ -144,6 +117,11 @@ async def create_trigger(
     response_model=TriggerListResponse,
     summary="List all registered triggers",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_triggers",
+    error_code_prefix="TRIGGERS",
+)
 async def list_triggers(
     workflow_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
@@ -165,6 +143,12 @@ async def list_triggers(
     "/triggers/{trigger_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Unregister a trigger",
+    response_model=None,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_trigger",
+    error_code_prefix="TRIGGERS",
 )
 async def delete_trigger(
     trigger_id: str,
@@ -196,6 +180,12 @@ async def delete_trigger(
     "/triggers/webhook/{trigger_id}",
     status_code=status.HTTP_200_OK,
     summary="Receive an external webhook event",
+    response_model=WebhookAcceptedResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="receive_webhook",
+    error_code_prefix="TRIGGERS",
 )
 async def receive_webhook(
     trigger_id: str,

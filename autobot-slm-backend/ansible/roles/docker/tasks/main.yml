@@ -10,13 +10,26 @@
 # ============================================================
 - name: "Docker | Detect OS family"
   ansible.builtin.set_fact:
-    _docker_is_debian: "{{ ansible_os_family == 'Debian' }}"
-    _docker_is_redhat: "{{ ansible_os_family == 'RedHat' }}"
+    _docker_is_debian: "{{ ansible_facts['os_family'] == 'Debian' }}"
+    _docker_is_redhat: "{{ ansible_facts['os_family'] == 'RedHat' }}"
   tags: ['docker', 'packages']
 
 # ============================================================
 # Phase 2: Install Docker Engine (Debian/Ubuntu)
 # ============================================================
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: "Docker | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  when: _docker_is_debian | bool
+  tags: ['docker', 'packages']
+
 - name: "Docker | Install prerequisite packages (Debian)"
   ansible.builtin.apt:
     name:
@@ -24,7 +37,6 @@
       - curl
       - gnupg
     state: present
-    update_cache: true
   when: _docker_is_debian | bool
   tags: ['docker', 'packages']
 
@@ -57,15 +69,30 @@
     - not _docker_gpg_stat.stat.exists
   tags: ['docker', 'packages']
 
-- name: "Docker | Add Docker APT repository (Debian)"
-  ansible.builtin.apt_repository:
-    repo: >-
+# #7218: idempotent repo-add — preserve device-shipped Docker repo if present.
+# Refresh handled by the bounded-shell task below (#6719).
+- name: "Docker | Add Docker APT repository (Debian, idempotent, #7218)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
+  vars:
+    apt_repo_match: "download.docker.com"
+    apt_repo_spec: >-
       deb [arch={{ docker_apt_repo_arch }} signed-by={{ docker_apt_gpg_key_path }}]
-      https://download.docker.com/linux/{{ ansible_distribution | lower }}
-      {{ ansible_distribution_release }} {{ docker_apt_repo_channel }}
-    state: present
-    filename: docker
-    update_cache: true
+      https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }}
+      {{ ansible_facts['distribution_release'] }} {{ docker_apt_repo_channel }}
+    apt_repo_filename: "docker"
+    apt_repo_label: "Docker"
+  when: _docker_is_debian | bool
+  tags: ['docker', 'packages']
+
+- name: "Docker | Refresh apt cache after Docker repo add (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
   when: _docker_is_debian | bool
   tags: ['docker', 'packages']
 

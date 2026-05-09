@@ -19,7 +19,7 @@ from autobot_shared.ssot_config import (
 )
 from constants.threshold_constants import LLMDefaults
 from knowledge_base import KnowledgeBase
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 
 from .base_agent import DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
@@ -58,7 +58,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
     def __init__(self):
         """Initialize the Knowledge Retrieval Agent (#3387: migrated to StandardizedAgent)."""
         super().__init__("knowledge_retrieval", DeploymentMode.LOCAL)
-        self.llm_interface = LLMInterface()
+        self.llm_interface = get_llm_service()
 
         # Use explicit SSOT config - raises AgentConfigurationError if not set
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
@@ -160,7 +160,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
             "agent_type": "knowledge_retrieval",
         }
 
-    def _build_success_response(
+    def _build_query_payload(
         self,
         query: str,
         processed_results: Dict[str, Any],
@@ -169,7 +169,13 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
         similarity_threshold: float,
     ) -> Dict[str, Any]:
         """
-        Build successful query response.
+        Build the knowledge-retrieval-specific payload dict.
+
+        Returned as the ``result`` field of the AgentResponse the base class
+        ``StandardizedAgent._build_success_response`` constructs (#6650). The
+        prior name shadowed the base method with an incompatible signature,
+        so any AI Stack ``/agents/knowledge_retrieval/process`` request would
+        crash with a TypeError.
 
         (Issue #398: extracted helper)
         """
@@ -249,7 +255,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
                     query, processed_results["documents"][:3]
                 )
 
-            return self._build_success_response(
+            return self._build_query_payload(
                 query, processed_results, summary, processing_time, similarity_threshold
             )
 
@@ -456,7 +462,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
             messages = self._build_summary_messages(query, context_text)
 
             # Use knowledge retrieval model for quick response
-            response = await self.llm_interface.chat_completion(
+            response = await self.llm_interface.chat(
                 messages=messages,
                 llm_type="knowledge_retrieval",
                 temperature=0.3,  # Low temperature for factual responses
@@ -506,7 +512,7 @@ If the information is not in the provided text, respond with "Information not fo
                 },
             ]
 
-            response = await self.llm_interface.chat_completion(
+            response = await self.llm_interface.chat(
                 messages=messages,
                 llm_type="knowledge_retrieval",
                 temperature=0.2,

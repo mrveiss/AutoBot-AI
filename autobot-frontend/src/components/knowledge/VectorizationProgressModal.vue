@@ -477,7 +477,7 @@ const allCompleted = computed(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 0.625rem 1.25rem;
+  padding: var(--spacing-2-5) var(--spacing-5);
   border-radius: var(--radius-lg);
   font-weight: 500;
   cursor: pointer;

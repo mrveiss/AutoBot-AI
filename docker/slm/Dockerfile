@@ -1,51 +1,40 @@
 # AutoBot SLM Backend - Service Lifecycle Manager (#1809, #1836)
-# Ubuntu 22.04 + Python 3.12 (deadsnakes PPA)
+# python:3.12-slim-bookworm base — eliminates deadsnakes PPA cold build overhead (#6213)
 #
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
 # ---- Dependencies stage ----
-FROM ubuntu:22.04 AS deps
+FROM python:3.12-slim-bookworm AS deps
 
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
-# Install Python 3.12 from deadsnakes PPA + build deps
+# Install build deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    software-properties-common gpg-agent \
-    && add-apt-repository -y ppa:deadsnakes/ppa \
-    && apt-get update && apt-get install -y --no-install-recommends \
-    python3.12 python3.12-venv python3.12-dev \
     build-essential curl \
     && rm -rf /var/lib/apt/lists/* \
-    && python3.12 -m ensurepip --upgrade \
-    && python3.12 -m pip install --no-cache-dir --upgrade pip setuptools wheel
+    && python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Install shared module
-COPY autobot_shared/requirements.txt /app/autobot_shared/requirements.txt
-COPY autobot_shared/setup.py /app/autobot_shared/setup.py
+COPY autobot_shared/pyproject.toml /app/autobot_shared/pyproject.toml
 COPY autobot_shared/ /app/autobot_shared/
-RUN python3.12 -m pip install --no-cache-dir -r /app/autobot_shared/requirements.txt \
-    && python3.12 -m pip install --no-cache-dir /app/autobot_shared
+RUN python3 -m pip install --no-cache-dir /app/autobot_shared
 
 # Install SLM dependencies
 COPY autobot-slm-backend/requirements.txt /tmp/requirements.txt
 RUN grep -v -E "(autobot_shared|^-r )" /tmp/requirements.txt > /app/requirements-filtered.txt || true \
-    && python3.12 -m pip install --no-cache-dir -r /app/requirements-filtered.txt
+    && python3 -m pip install --no-cache-dir -r /app/requirements-filtered.txt
 
 
 # ---- Production stage ----
-FROM ubuntu:22.04 AS production
+FROM python:3.12-slim-bookworm AS production
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install Python 3.12 + runtime deps (ansible for node provisioning)
+# Install runtime deps (ansible for node provisioning)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    software-properties-common gpg-agent \
-    && add-apt-repository -y ppa:deadsnakes/ppa \
-    && apt-get update && apt-get install -y --no-install-recommends \
-    python3.12 python3.12-venv \
     curl git openssh-client sshpass rsync ansible \
     && rm -rf /var/lib/apt/lists/*
 
@@ -54,8 +43,7 @@ RUN groupadd -r autobot && useradd -r -g autobot -d /app autobot
 WORKDIR /app
 
 # Copy Python packages from deps stage
-COPY --from=deps /usr/local/lib/python3.12/dist-packages/ /usr/local/lib/python3.12/dist-packages/
-COPY --from=deps /usr/lib/python3/dist-packages/ /usr/lib/python3/dist-packages/
+COPY --from=deps /usr/local/lib/python3.12/ /usr/local/lib/python3.12/
 COPY --from=deps /usr/local/bin/ /usr/local/bin/
 
 # Copy shared module
@@ -86,6 +74,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
     CMD curl -f http://localhost:8000/api/health || exit 1
 
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["python3.12", "-m", "uvicorn", "main:app", \
+CMD ["python3", "-m", "uvicorn", "main:app", \
      "--host", "0.0.0.0", "--port", "8000", \
      "--workers", "1", "--app-dir", "/app/autobot-slm-backend"]

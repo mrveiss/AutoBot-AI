@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, desc, func
 from sqlalchemy.orm import sessionmaker
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from models.code_pattern import CodePattern
 from services.context_analyzer import ContextAnalyzer
@@ -24,8 +25,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["code-completion"])
 
-# Initialize context analyzer
-context_analyzer = ContextAnalyzer()
+get_context_analyzer = lazy_singleton(ContextAnalyzer)
 
 # Database setup — deferred to avoid crash when config.database is unavailable
 _engine = None
@@ -180,7 +180,7 @@ async def list_patterns(
     category: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    sort_by: str = Query("frequency", regex="^(frequency|acceptance_rate|created_at)$"),
+    sort_by: str = Query("frequency", pattern="^(frequency|acceptance_rate|created_at)$"),
 ):
     """
     List extracted patterns with filtering and pagination.
@@ -385,7 +385,7 @@ async def analyze_context(request: ContextAnalysisRequest):
     start_time = time.time()
 
     try:
-        context = context_analyzer.analyze(
+        context = get_context_analyzer().analyze(
             file_content=request.file_content,
             cursor_line=request.cursor_line,
             cursor_position=request.cursor_position,
@@ -412,7 +412,7 @@ async def get_context(context_id: str):
     - **context_id**: Context identifier from previous analysis
     """
     try:
-        cached = context_analyzer._get_cached_context(context_id)
+        cached = get_context_analyzer()._get_cached_context(context_id)
 
         if not cached:
             raise HTTPException(

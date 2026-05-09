@@ -38,7 +38,7 @@
           - "=============================================="
           - "Target timezone: {{ time_sync.timezone }}"
           - "Main machine: Europe/Riga (EEST, +0300)"
-          - "Target hosts: {{ ansible_play_hosts | join(', ') }}"
+          - "Target hosts: {{ ansible_facts['play_hosts'] | join(', ') }}"
           - "NTP service: {{ 'chrony' if time_sync.ntp.use_chrony else 'systemd-timesyncd' }}"
           - "Primary NTP servers: {{ time_sync.ntp.servers[:3] | join(', ') }}"
           - "Monitoring: {{ 'enabled' if time_sync.logging.enable_detailed_logs else 'disabled' }}"
@@ -74,11 +74,11 @@
           AutoBot Time Synchronization Deployment Summary
           ===============================================
 
-          Deployment Date: {{ ansible_date_time.iso8601 }}
+          Deployment Date: {{ ansible_facts['date_time'].iso8601 }}
           Target Timezone: {{ time_sync.timezone }}
 
           Deployed to Hosts:
-          {% for host in ansible_play_hosts %}
+          {% for host in ansible_facts['play_hosts'] %}
           - {{ host }}
           {% endfor %}
 
@@ -106,7 +106,7 @@
           3. Monitor synchronization logs: tail -f {{ time_sync.logging.log_file }}
           4. Test time drift monitoring (runs every 15 minutes automatically)
 
-        dest: "/tmp/autobot-time-sync-deployment-{{ ansible_date_time.epoch }}.txt"
+        dest: "/tmp/autobot-time-sync-deployment-{{ ansible_facts['date_time'].epoch }}.txt"
       run_once: true
       tags: ['time_sync', 'documentation']
 

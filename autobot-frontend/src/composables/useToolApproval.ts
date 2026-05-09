@@ -19,8 +19,7 @@
 import { ref, type Ref, onUnmounted, getCurrentInstance } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import liveEventService from '@/services/LiveEventService'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import appConfig from '@/config/AppConfig.js'
+import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useToolApproval')
@@ -38,6 +37,8 @@ export interface PendingToolApproval {
   risk_level: string
   /** How many seconds until the loop times out waiting */
   timeout_seconds: number
+  /** Unix epoch seconds when approval expires — used for drift-free countdown (Issue #5024) */
+  deadline_ts?: number
   /** Optional task_id carried from the agent context */
   task_id?: string | null
 }
@@ -92,26 +93,14 @@ export function useToolApproval(): UseToolApprovalReturn {
     }
     submittingApproval.value = true
     try {
-      const url = await appConfig.getApiUrl(
-        `${getApiBase()}/agent-terminal/tools/approve/${encodeURIComponent(approval.approval_id)}`
+      await apiClient.post(
+        `${getApiBase()}/agent-terminal/tools/approve/${encodeURIComponent(approval.approval_id)}`,
+        { approved, comment: comment ?? null, task_id: approval.task_id ?? null }
       )
-      const body: Record<string, unknown> = {
-        approved,
-        comment: comment ?? null,
-        task_id: approval.task_id ?? null,
-      }
-      const response = await fetchWithAuth(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!response.ok) {
-        const text = await response.text().catch(() => '')
-        throw new Error(`Tool approval POST returned ${response.status}: ${text}`)
-      }
       logger.debug('Tool approval submitted', { approval_id: approval.approval_id, approved })
       pendingToolApproval.value = null
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       logger.error('Failed to submit tool approval:', err)
       throw err
     } finally {
@@ -126,7 +115,9 @@ export function useToolApproval(): UseToolApprovalReturn {
   // Auto-cleanup on component unmount
   const instance = getCurrentInstance()
   if (instance) {
-    onUnmounted(() => unsub())
+    onUnmounted(() => {
+      unsub()
+    })
   } else {
     logger.warn('useToolApproval: not inside a Vue component, cleanup must be manual')
   }

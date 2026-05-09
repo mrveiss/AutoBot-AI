@@ -15,17 +15,17 @@
       </div>
       <div class="header-actions">
         <button class="btn-action-secondary" :disabled="loading" @click="loadOperations()">
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+          <Icon name="sync-alt" :spin="loading" />
           {{ $t('operations.view.refresh') }}
         </button>
       </div>
     </div>
 
     <div v-if="error" class="error-banner">
-      <i class="fas fa-exclamation-circle"></i>
+      <Icon name="exclamation-circle" />
       <span>{{ error }}</span>
       <button class="btn-dismiss" @click="error = null">
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
       </button>
     </div>
 
@@ -49,6 +49,7 @@ import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { useOperationsApi } from '@/composables/useOperationsApi'
 import OperationsPanel from '@/components/operations/OperationsPanel.vue'
+import Icon from '@/components/ui/Icon.vue'
 import type { Operation, OperationsFilter } from '@/types/operations'
 
 const { t } = useI18n()
@@ -184,10 +185,6 @@ onMounted(() => {
   border-radius: var(--radius-md);
   color: var(--color-error);
   font-size: var(--text-sm);
-}
-
-.error-banner i:first-child {
-  flex-shrink: 0;
 }
 
 .error-banner span {

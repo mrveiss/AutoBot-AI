@@ -1,0 +1,95 @@
+# Weekly audit: find production modules whose docstring cites a CLOSED tracker
+# but have zero production callers. Each finding represents a feature whose
+# tracker was closed prematurely (#6836 pattern).
+#
+# Runs Monday 06:00 UTC. Files up to 10 wire-in discovery issues per run,
+# deduped against existing open audit issues. Manually triggerable via the
+# Actions tab.
+
+name: Unwired Tracker Audit
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      file_issues:
+        description: "File discovery issues (false = dry-run / report only)"
+        required: true
+        type: boolean
+        default: true
+      max_issues:
+        description: "Maximum issues to file in this run"
+        required: true
+        type: number
+        default: 10
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: unwired-tracker-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run audit (dry-run, JSON output)
+        id: scan
+        run: |
+          python3 pipeline-scripts/audit-unwired-trackers.py --json > findings.json || true
+          count=$(jq 'length' findings.json)
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+          jq -r '"\(.file)\t#\(.tracker)"' findings.json | head -50
+
+      - name: Upload findings artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unwired-tracker-findings
+          path: findings.json
+          retention-days: 30
+
+      - name: File discovery issues (capped)
+        if: |
+          (github.event_name == 'schedule' || github.event.inputs.file_issues == 'true')
+          && steps.scan.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAX_ISSUES: ${{ github.event.inputs.max_issues || '10' }}
+        run: |
+          python3 pipeline-scripts/audit-unwired-trackers.py \
+            --file-issues --max-issues "$MAX_ISSUES"
+
+      - name: Summary
+        if: always()
+        env:
+          FINDING_COUNT: ${{ steps.scan.outputs.count }}
+        run: |
+          {
+            echo "### Unwired Tracker Audit"
+            echo ""
+            echo "Findings: ${FINDING_COUNT}"
+            echo ""
+            if [ "${FINDING_COUNT}" != "0" ] && [ -f findings.json ]; then
+              echo '```'
+              jq -r '"\(.file)  tracker=#\(.tracker)  callers=\(.production_callers)"' findings.json | head -50
+              echo '```'
+            fi
+            echo ""
+            echo "See [#6836](https://github.com/mrveiss/AutoBot-AI/issues/6836) for the systemic premature-closure pattern this guard prevents."
+          } >> "$GITHUB_STEP_SUMMARY"

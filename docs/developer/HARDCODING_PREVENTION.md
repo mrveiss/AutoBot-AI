@@ -28,27 +28,92 @@ The following values must NEVER be hardcoded in source files:
 
 ### Pre-Commit Hook
 
-The pre-commit hook automatically scans staged files before every commit:
+The pre-commit hook (`autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values`) scans staged files before every commit and runs again on every PR via the `code-quality` GitHub Actions workflow. The local hook and the CI step share the same script and allowlist, so a violation that's blocked locally can't be bypassed by skipping pre-commit (`--no-verify`).
 
 ```bash
-# Runs automatically on git commit
-# Located at: .git/hooks/pre-commit-hardcode-check
-./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
+# Local: runs automatically on git commit (configured in .pre-commit-config.yaml)
+git commit ...
+
+# CI: runs as the "Block hardcoded value regressions" step
+# in .github/workflows/code-quality.yml — uses pipeline-scripts/check-hardcoded-values-pr.sh
+# which calls the same hook in argv mode against changed files.
 ```
 
-**What it checks**:
+**Run the same check locally** before pushing:
 
-- IP address patterns (IPv4/IPv6)
-- Port numbers (common service ports)
-- LLM model names (Ollama/OpenAI patterns)
-- Hardcoded URLs
-- Potential secrets (API keys, tokens)
+```bash
+GITHUB_BASE_REF=Dev_new_gui bash pipeline-scripts/check-hardcoded-values-pr.sh
+```
+
+**What it blocks** (by category, see hook source for full patterns):
+
+- Hardcoded VM IPs (`172.16.168.19-25`)
+- Hardcoded infrastructure ports in URL context
+- Magic numbers that should use constants from `threshold_constants.py`
+- Hardcoded role / category strings
+- Hardcoded AutoBot file paths
+- Hardcoded LLM model name literals
+- Hardcoded database DSNs
+- Hardcoded timeouts
+
+**What it allows** (intentional, see `pre-commit-hardcoded-values_test.py` for the locked-in rules):
+
+- `ssot_config.py` / `ssot-config.ts` (these IS the SSOT — IPs ARE the source of truth there)
+- `network_constants.py`, `path_constants.py`, `security_constants.py`, `threshold_constants.py`
+- Anything under `constants/`, `config.py`, or `.env*`
+- Test files (`test_*.py`, `*_test.py`, `*.test.ts`, `*.spec.ts`) — fixtures legitimately use literal IPs
+- Lines containing `config.`, `getenv`, `CONFIG[`, or `AUTOBOT_` (already routed through SSOT)
+- Comments (any line starting with `#` / `//` / ` *`)
+- File types other than `.py` / `.ts` / `.vue` (Markdown, YAML, JSON, etc. are not scanned at all — Ansible inventories and docs are explicitly out of scope)
+- `192.168.x.x` and `127.0.0.x` literals (RFC 1918 example space and loopback — used in SSRF guards, network-tooling examples, test fixtures, i18n placeholders)
+
+**Known limitation (tracked in #6725 follow-up):** the hook's line filter currently skips any line containing the substring `getenv`, so a literal IP fallback inside `os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")` is *not* flagged. This is the false-negative an AST-aware Python rewrite would close. The locked-in test `test_allows_code_using_ssot_config` documents this behavior so any future tightening has a clear regression target.
 
 **When violations are found**:
 
-- Commit is blocked
-- Violation report is displayed
-- You must fix violations before committing
+- Commit (or PR) is blocked
+- Violation report shows file, line number, value, and the SSOT alternative
+- Fix the violation, re-stage, re-commit (or push the fix)
+
+### Frontend ESLint rule (Issue #6784)
+
+`autobot-frontend/eslint.config.ts` includes a `no-restricted-syntax` rule that blocks hardcoded VM IPs in `.ts` / `.mts` / `.tsx` / `.vue` files. Two selectors:
+
+- `Literal[value=/^(https?:\/\/)?172\.16\.168\.\d+/]` — bare IP literals or HTTP(S) URLs containing them
+- `TemplateElement[value.cooked=/172\.16\.168\.\d+/]` — IP inside a template literal
+
+Catches:
+- `const x = '172.16.168.20'`
+- `const x = 'http://172.16.168.21:5173'`
+- `const x = vmHost ?? 'http://172.16.168.20:8001'` (the original `||`/`??` fallback anti-pattern)
+- `` const x = `ws://172.16.168.21:5173/ws` ``
+
+Doesn't trigger on:
+- `127.0.0.1` (loopback — single-host install default)
+- `192.168.x.x` (RFC 1918 example space — used in tests, SSRF guards, i18n placeholders)
+- IPs in `.json` locale files, `.md` docs, generated types (not in lint scope)
+
+Test fixtures live in `autobot-frontend/eslint-tests/` (excluded from production lint by design — see `eslint-tests/README.md`).
+
+### Generic CI wrapper for any pre-commit hook (Issue #6785)
+
+`pipeline-scripts/check-pre-commit-hook-pr.sh <hook-name>` runs any pre-commit hook in argv mode against the PR's changed files. Hooks that support argv mode today:
+
+- `pre-commit-hardcoded-values` (#6725) — wrapped by `check-hardcoded-values-pr.sh`
+- `pre-commit-no-direct-redis` (#1086, argv mode added in #6785)
+- `pre-commit-no-print-console` (#1082, argv mode added in #6785)
+
+To add a new hook to CI:
+
+1. Add argv mode to the hook (positional args = files to scan, no args = `git diff --cached`).
+2. Add a step in `.github/workflows/code-quality.yml`:
+
+   ```yaml
+   - name: Block <thing> regressions (#issue)
+     run: bash pipeline-scripts/check-pre-commit-hook-pr.sh <hook-name>
+   ```
+
+3. Optionally add a test class in `pipeline-scripts/check-pre-commit-hook-pr_test.py` for end-to-end coverage.
 
 ### Manual Scan
 

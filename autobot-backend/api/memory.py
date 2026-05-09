@@ -28,20 +28,36 @@ Performance:
 """
 
 import logging
-from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, validator
 
 from auth_middleware import check_admin_permission
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.time_utils import now_utc
-from type_defs.common import Metadata
 from utils.request_utils import generate_request_id
+from api.schemas_common import DataResponse
+from api.schemas_knowledge import (
+    EntityCreateRequest,
+    InvalidateEntityRequest,
+    InvalidateRelationRequest,
+    MemoryDeleteEntityResponse,
+    MemoryDeleteRelationResponse,
+    MemoryEntityDetailResponse,
+    MemoryEntityInvalidateResponse,
+    MemoryEntityListResponse,
+    MemoryOrphanCleanupResponse,
+    MemoryOrphanScanResponse,
+    MemoryRelatedEntitiesResponse,
+    MemoryRelationInvalidateResponse,
+    MemorySearchResponse,
+    ObservationAddRequest,
+    RelationCreateRequest,
+)
 
 # ====================================================================
 # Router Configuration
@@ -49,151 +65,6 @@ from utils.request_utils import generate_request_id
 
 router = APIRouter(tags=["memory"])
 logger = logging.getLogger(__name__)
-
-# ====================================================================
-# Request/Response Models
-# ====================================================================
-
-
-class EntityCreateRequest(BaseModel):
-    """Request model for creating a new entity"""
-
-    entity_type: str = Field(
-        ..., description="Type of entity (conversation, bug_fix, feature, etc.)"
-    )
-    name: str = Field(
-        ..., min_length=1, max_length=200, description="Human-readable entity name"
-    )
-    observations: List[str] = Field(
-        ..., min_items=1, description="List of observation strings"
-    )
-    metadata: Optional[Metadata] = Field(
-        default_factory=dict, description="Additional metadata"
-    )
-    tags: Optional[List[str]] = Field(
-        default_factory=list, description="Classification tags"
-    )
-
-    @validator("entity_type")
-    def validate_entity_type(cls, v):
-        """Validate entity type against allowed values."""
-        valid_types = {
-            "conversation",
-            "bug_fix",
-            "feature",
-            "decision",
-            "task",
-            "user_preference",
-            "context",
-            "learning",
-            "research",
-            "implementation",
-        }
-        if v not in valid_types:
-            raise ValueError(f"entity_type must be one of: {valid_types}")
-        return v
-
-
-class ObservationAddRequest(BaseModel):
-    """Request model for adding observations to an entity"""
-
-    observations: List[str] = Field(
-        ..., min_items=1, description="New observations to add"
-    )
-
-
-class RelationCreateRequest(BaseModel):
-    """Request model for creating a relationship between entities"""
-
-    from_entity: str = Field(..., description="Source entity name")
-    to_entity: str = Field(..., description="Target entity name")
-    relation_type: str = Field(..., description="Type of relationship")
-    bidirectional: bool = Field(
-        default=False, description="Create reverse relation as well"
-    )
-    strength: float = Field(
-        default=1.0, ge=0.0, le=1.0, description="Relationship strength (0.0-1.0)"
-    )
-    metadata: Optional[Metadata] = Field(
-        default_factory=dict, description="Additional metadata"
-    )
-
-    @validator("relation_type")
-    def validate_relation_type(cls, v):
-        """Validate relation type against allowed values."""
-        valid_types = {
-            "relates_to",
-            "depends_on",
-            "implements",
-            "fixes",
-            "informs",
-            "guides",
-            "follows",
-            "contains",
-            "blocks",
-        }
-        if v not in valid_types:
-            raise ValueError(f"relation_type must be one of: {valid_types}")
-        return v
-
-
-class InvalidateEntityRequest(BaseModel):
-    """Request model for invalidating an entity (setting valid_to). Issue #3810."""
-
-    ended_at: Optional[str] = Field(
-        default=None,
-        description="ISO-8601 timestamp for valid_to. Defaults to now.",
-    )
-
-
-class InvalidateRelationRequest(BaseModel):
-    """Request model for invalidating a relation (setting valid_to). Issue #3810."""
-
-    from_id: str = Field(..., description="Source entity UUID")
-    relation_type: str = Field(..., description="Type of the relation")
-    to_id: str = Field(..., description="Target entity UUID")
-    ended_at: Optional[str] = Field(
-        default=None,
-        description="ISO-8601 timestamp for valid_to. Defaults to now.",
-    )
-
-
-class EntityResponse(BaseModel):
-    """Response model for entity data"""
-
-    id: str
-    type: str
-    name: str
-    created_at: int
-    updated_at: int
-    observations: List[str]
-    metadata: Metadata
-
-
-class RelationResponse(BaseModel):
-    """Response model for relation data"""
-
-    to: str
-    type: str
-    created_at: int
-    metadata: Metadata
-
-
-class GraphNodeResponse(BaseModel):
-    """Response model for graph node with relations"""
-
-    entity: EntityResponse
-    relations: Dict[str, List[RelationResponse]]
-
-
-class SearchResponse(BaseModel):
-    """Response model for search results"""
-
-    entities: List[EntityResponse]
-    total_count: int
-    query: str
-    filters: Metadata
-
 
 # ====================================================================
 # Dependency Injection
@@ -472,12 +343,12 @@ def _build_list_entities_response(
 # ====================================================================
 
 
+@router.post("/entities", status_code=201, response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_entity",
     error_code_prefix="MEMORY",
 )
-@router.post("/entities", status_code=201)
 async def create_entity(
     admin_check: bool = Depends(check_admin_permission),
     entity_data: EntityCreateRequest = Body(...),
@@ -536,12 +407,12 @@ async def create_entity(
         raise HTTPException(status_code=500, detail="Failed to create entity")
 
 
+@router.get("/entities/all", response_model=MemoryEntityListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_all_entities",
     error_code_prefix="MEMORY",
 )
-@router.get("/entities/all")
 async def list_all_entities(
     admin_check: bool = Depends(check_admin_permission),
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
@@ -581,12 +452,12 @@ async def list_all_entities(
 # ====================================================================
 
 
+@router.get("/entities/orphans", response_model=MemoryOrphanScanResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="find_orphaned_conversation_entities",
     error_code_prefix="MEMORY",
 )
-@router.get("/entities/orphans")
 async def find_orphaned_conversation_entities(
     admin_check: bool = Depends(check_admin_permission),
     request: Request = None,
@@ -898,12 +769,12 @@ async def _detect_orphaned_entities(
     return _find_orphaned_entities(all_entities, existing_session_ids)
 
 
+@router.delete("/entities/orphans", response_model=MemoryOrphanCleanupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_orphaned_conversation_entities",
     error_code_prefix="MEMORY",
 )
-@router.delete("/entities/orphans")
 async def cleanup_orphaned_conversation_entities(
     admin_check: bool = Depends(check_admin_permission),
     request: Request = None,
@@ -948,12 +819,12 @@ async def cleanup_orphaned_conversation_entities(
         )
 
 
+@router.get("/entities/{entity_id}", response_model=MemoryEntityDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_entity_by_id",
     error_code_prefix="MEMORY",
 )
-@router.get("/entities/{entity_id}")
 async def get_entity_by_id(
     entity_id: str = Path(..., description="Entity UUID"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1006,12 +877,12 @@ async def get_entity_by_id(
         raise HTTPException(status_code=500, detail="Failed to retrieve entity")
 
 
+@router.get("/entities", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_entity_by_name",
     error_code_prefix="MEMORY",
 )
-@router.get("/entities")
 async def get_entity_by_name(
     admin_check: bool = Depends(check_admin_permission),
     name: str = Query(..., description="Entity name to search for"),
@@ -1062,12 +933,12 @@ async def get_entity_by_name(
         raise HTTPException(status_code=500, detail="Failed to search entity")
 
 
+@router.patch("/entities/{entity_id}/observations", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_observations",
     error_code_prefix="MEMORY",
 )
-@router.patch("/entities/{entity_id}/observations")
 async def add_observations(
     entity_id: str = Path(..., description="Entity UUID"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1125,12 +996,12 @@ async def add_observations(
         raise HTTPException(status_code=500, detail="Failed to add observations")
 
 
+@router.delete("/entities/{entity_id}", response_model=MemoryDeleteEntityResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_entity",
     error_code_prefix="MEMORY",
 )
-@router.delete("/entities/{entity_id}")
 async def delete_entity(
     entity_id: str = Path(..., description="Entity UUID"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1188,12 +1059,12 @@ async def delete_entity(
 # ====================================================================
 
 
+@router.post("/relations", status_code=201, response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_relation",
     error_code_prefix="MEMORY",
 )
-@router.post("/relations", status_code=201)
 async def create_relation(
     admin_check: bool = Depends(check_admin_permission),
     relation_data: RelationCreateRequest = Body(...),
@@ -1257,12 +1128,12 @@ async def create_relation(
         raise HTTPException(status_code=500, detail="Failed to create relation")
 
 
+@router.get("/entities/{entity_id}/relations", response_model=MemoryRelatedEntitiesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_related_entities",
     error_code_prefix="MEMORY",
 )
-@router.get("/entities/{entity_id}/relations")
 async def get_related_entities(
     entity_id: str = Path(..., description="Entity UUID"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1312,12 +1183,12 @@ async def get_related_entities(
         raise HTTPException(status_code=500, detail="Failed to get related entities")
 
 
+@router.delete("/relations", response_model=MemoryDeleteRelationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_relation",
     error_code_prefix="MEMORY",
 )
-@router.delete("/relations")
 async def delete_relation(
     admin_check: bool = Depends(check_admin_permission),
     from_entity: str = Query(..., description="Source entity name"),
@@ -1382,12 +1253,12 @@ async def delete_relation(
 # ====================================================================
 
 
+@router.get("/search", response_model=MemorySearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_entities",
     error_code_prefix="MEMORY",
 )
-@router.get("/search")
 async def search_entities(
     admin_check: bool = Depends(check_admin_permission),
     query: str = Query(..., min_length=1, description="Search query"),
@@ -1455,12 +1326,12 @@ async def search_entities(
         raise HTTPException(status_code=500, detail="Search failed")
 
 
+@router.get("/graph", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_entity_graph",
     error_code_prefix="MEMORY",
 )
-@router.get("/graph")
 async def get_entity_graph(
     admin_check: bool = Depends(check_admin_permission),
     entity_id: Optional[str] = Query(None, description="Root entity ID (optional)"),
@@ -1518,12 +1389,44 @@ async def get_entity_graph(
 # ====================================================================
 
 
+@register_health_probe("memory")
+async def probe_memory(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the memory graph."""
+    if request is None:
+        return ComponentHealth(
+            name="memory",
+            status="degraded",
+            detail="request not provided; cannot reach app.state",
+        )
+    try:
+        memory_graph = getattr(request.app.state, "memory_graph", None)
+        if memory_graph is None:
+            return ComponentHealth(
+                name="memory",
+                status="down",
+                detail="memory_graph not initialized in app state",
+            )
+        if not getattr(memory_graph, "initialized", False):
+            return ComponentHealth(
+                name="memory", status="degraded", detail="memory_graph not initialized"
+            )
+        return ComponentHealth(name="memory", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="memory",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
+@router.get("/health", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="memory_health_check",
     error_code_prefix="MEMORY",
 )
-@router.get("/health")
 async def memory_health_check(
     admin_check: bool = Depends(check_admin_permission),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
@@ -1651,12 +1554,12 @@ def _build_invalidate_relation_response(
     )
 
 
+@router.patch("/entities/{entity_id}/invalidate", response_model=MemoryEntityInvalidateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="invalidate_entity",
     error_code_prefix="MEMORY",
 )
-@router.patch("/entities/{entity_id}/invalidate")
 async def invalidate_entity(
     entity_id: str = Path(..., description="UUID of the entity to invalidate"),
     body: InvalidateEntityRequest = Body(default_factory=InvalidateEntityRequest),
@@ -1715,12 +1618,12 @@ async def invalidate_entity(
         raise HTTPException(status_code=500, detail="Failed to invalidate entity")
 
 
+@router.patch("/relations/invalidate", response_model=MemoryRelationInvalidateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="invalidate_relation",
     error_code_prefix="MEMORY",
 )
-@router.patch("/relations/invalidate")
 async def invalidate_relation(
     body: InvalidateRelationRequest = Body(...),
     admin_check: bool = Depends(check_admin_permission),

@@ -212,41 +212,14 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 // @ts-ignore - Component may not have type declarations
 import BaseButton from '@/components/base/BaseButton.vue'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { useToast } from '@/composables/useToast'
-import { getApiBase } from '@/config/ssot-config'
+import { useCodeEvolutionData } from '@/composables/analytics/useCodeEvolutionData'
+import type { TimelinePoint, TrendData, PatternPoint } from '@/composables/analytics/useCodeEvolutionData'
 
 const { t } = useI18n()
 
-interface TimelinePoint {
-  timestamp: string
-  overall_score?: number
-  maintainability?: number
-  testability?: number
-  documentation?: number
-  complexity?: number
-  security?: number
-  performance?: number
-  total_files?: number
-  total_lines?: number
-}
-
-interface TrendData {
-  first_value: number
-  last_value: number
-  change: number
-  percent_change: number
-  direction: 'improving' | 'declining' | 'stable'
-  data_points: number
-}
-
-interface PatternPoint {
-  timestamp: string
-  count: number
-  pattern_type: string
-}
-
 const { showToast } = useToast()
+const { fetchTimeline: apiFetchTimeline, fetchTrends: apiFetchTrends, fetchPatterns: apiFetchPatterns, fetchExport: apiFetchExport } = useCodeEvolutionData()
 
 // State
 const loading = ref(false)
@@ -324,33 +297,21 @@ async function fetchTimeline() {
     const startDate = new Date(Date.now() - parseInt(selectedDays.value) * 24 * 60 * 60 * 1000)
       .toISOString().split('T')[0]
 
-    const params = new URLSearchParams({
-      start_date: startDate,
-      end_date: endDate,
-      granularity: selectedGranularity.value,
-      metrics: selectedMetrics.value.join(',')
-    })
-
-    // Issue #552: Fixed path - backend uses /api/evolution/* not /api/analytics/evolution/*
-    const [timelineRes, trendsRes, patternsRes] = await Promise.all([
-      fetchWithAuth(`${getApiBase()}/evolution/timeline?${params}`),
-      fetchWithAuth(`${getApiBase()}/evolution/trends?days=${selectedDays.value}`),
-      fetchWithAuth(`${getApiBase()}/evolution/patterns`)
+    const [timelineResult, trendsResult, patternsResult] = await Promise.all([
+      apiFetchTimeline(startDate, endDate, selectedGranularity.value, selectedMetrics.value),
+      apiFetchTrends(selectedDays.value),
+      apiFetchPatterns()
     ])
 
-    if (!timelineRes.ok || !trendsRes.ok) {
+    if (!timelineResult || !trendsResult) {
       throw new Error('Failed to fetch evolution data')
     }
 
-    const timelineJson = await timelineRes.json()
-    const trendsJson = await trendsRes.json()
-    const patternsJson = await patternsRes.json()
+    timelineData.value = timelineResult.timeline || []
+    trends.value = trendsResult.trends || {}
+    patterns.value = patternsResult?.patterns || {}
 
-    timelineData.value = timelineJson.timeline || []
-    trends.value = trendsJson.trends || {}
-    patterns.value = patternsJson.patterns || {}
-
-    if (timelineJson.status === 'demo') {
+    if (timelineResult.status === 'demo') {
       showToast(t('analytics.codeEvolution.demoDataWarning'), 'warning')
     }
 
@@ -367,14 +328,9 @@ async function exportData() {
       .toISOString().split('T')[0]
     const endDate = new Date().toISOString().split('T')[0]
 
-    // Issue #552: Fixed path - backend uses /api/evolution/* not /api/analytics/evolution/*
-    const response = await fetchWithAuth(
-      `${getApiBase()}/evolution/export?format=csv&start_date=${startDate}&end_date=${endDate}`
-    )
+    const blob = await apiFetchExport(startDate, endDate)
+    if (!blob) throw new Error('Export failed')
 
-    if (!response.ok) throw new Error('Export failed')
-
-    const blob = await response.blob()
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -548,7 +504,7 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .control-select {
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);

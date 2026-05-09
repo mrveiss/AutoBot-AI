@@ -28,16 +28,28 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     HTTPException,
+    Request,
     WebSocket,
     WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
-
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
+from api.schemas_workflows import (
+    CodebaseIndexingRequest,
+    KnowledgeBaseRequest,
+    LongRunningOperationCancelResponse,
+    LongRunningOperationHealthResponse,
+    LongRunningOperationListResponse,
+    LongRunningOperationMigrateResponse,
+    LongRunningOperationResumeResponse,
+    LongRunningOperationStatusResponse,
+    SecurityScanRequest,
+    TestSuiteRequest,
+)
 
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))
@@ -50,98 +62,31 @@ try:
         OperationMigrator,
         operation_integration_manager,
     )
-except ImportError as e:
-    logging.warning(f"Long-running operations framework not available: {e}")
-    # Provide fallback implementations
-    operation_integration_manager = None
+    _OPERATIONS_AVAILABLE = True
+except ImportError as _e:
+    from autobot_shared.missing_dep import MissingDep as _MissingDep
+
+    logging.warning(f"Long-running operations framework not available: {_e}")
+    OperationStatus = _MissingDep("OperationStatus", _e)  # type: ignore[assignment]
+    OperationType = _MissingDep("OperationType", _e)  # type: ignore[assignment]
+    CreateOperationRequest = _MissingDep("CreateOperationRequest", _e)  # type: ignore[assignment]
+    OperationMigrator = _MissingDep("OperationMigrator", _e)  # type: ignore[assignment]
+    operation_integration_manager = _MissingDep("operation_integration_manager", _e)  # type: ignore[assignment]
+    _OPERATIONS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["long-running-operations"])
 
 # Performance optimization: O(1) lookup for failed operation statuses (Issue #326)
-FAILED_OPERATION_STATUSES = (
-    {OperationStatus.FAILED, OperationStatus.TIMEOUT}
-    if operation_integration_manager
-    else set()
-)
-
-
-# Additional models specific to AutoBot integration
-class CodebaseIndexingRequest(BaseModel):
-    """Request model for codebase indexing operations"""
-
-    codebase_path: str = Field(
-        default=str(PATH.PROJECT_ROOT), description="Path to codebase to index"
-    )
-    file_patterns: List[str] = Field(
-        default=["*.py", "*.js", "*.vue", "*.ts", "*.jsx", "*.tsx"],
-        description="File patterns to include",
-    )
-    include_tests: bool = Field(default=True, description="Include test files")
-    include_docs: bool = Field(default=True, description="Include documentation files")
-    max_file_size: int = Field(
-        default=1024 * 1024, description="Maximum file size in bytes"
-    )
-    priority: str = Field(default="normal", description="Operation priority")
-
-
-class TestSuiteRequest(BaseModel):
-    """Request model for comprehensive test suite operations"""
-
-    test_path: str = Field(
-        default=str(PATH.TESTS_DIR), description="Path to test directory"
-    )
-    test_patterns: List[str] = Field(
-        default=["test_*.py", "*_test.py"], description="Test file patterns"
-    )
-    test_types: List[str] = Field(
-        default=["unit", "integration", "performance"],
-        description="Types of tests to run",
-    )
-    parallel_execution: bool = Field(default=True, description="Run tests in parallel")
-    timeout_per_test: int = Field(
-        default=300, description="Timeout per individual test in seconds"
-    )
-    priority: str = Field(default="high", description="Operation priority")
-
-
-class KnowledgeBaseRequest(BaseModel):
-    """Request model for knowledge base operations"""
-
-    source_paths: List[str] = Field(
-        default=[str(PATH.PROJECT_ROOT)], description="Paths to populate from"
-    )
-    document_types: List[str] = Field(
-        default=["code", "docs", "config"], description="Document types to include"
-    )
-    chunk_size: int = Field(default=1000, description="Chunk size for text processing")
-    overlap: int = Field(default=200, description="Overlap between chunks")
-    force_reindex: bool = Field(
-        default=False, description="Force reindexing of existing documents"
-    )
-    priority: str = Field(default="normal", description="Operation priority")
-
-
-class SecurityScanRequest(BaseModel):
-    """Request model for security scan operations"""
-
-    scan_paths: List[str] = Field(
-        default=[str(PATH.PROJECT_ROOT)], description="Paths to scan"
-    )
-    scan_types: List[str] = Field(
-        default=["vulnerability", "dependency", "secrets"],
-        description="Types of security scans",
-    )
-    severity_threshold: str = Field(
-        default="medium", description="Minimum severity to report"
-    )
-    include_dependencies: bool = Field(default=True, description="Scan dependencies")
-    priority: str = Field(default="high", description="Operation priority")
+try:
+    FAILED_OPERATION_STATUSES = {OperationStatus.FAILED, OperationStatus.TIMEOUT}
+except ImportError:
+    FAILED_OPERATION_STATUSES = set()
 
 
 async def get_operation_manager():
     """Dependency to get the operation integration manager"""
-    if operation_integration_manager is None:
+    if not _OPERATIONS_AVAILABLE:
         raise HTTPException(
             status_code=503, detail="Long-running operations service not available"
         )
@@ -149,12 +94,12 @@ async def get_operation_manager():
 
 
 # Enhanced API endpoints with AutoBot-specific operations
+@router.post("/codebase/index", response_model=Dict[str, str])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_codebase_indexing",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.post("/codebase/index", response_model=Dict[str, str])
 async def start_codebase_indexing(
     request: CodebaseIndexingRequest,
     background_tasks: BackgroundTasks,
@@ -227,12 +172,12 @@ async def start_codebase_indexing(
         raise HTTPException(status_code=500, detail="Failed to start operation")
 
 
+@router.post("/testing/comprehensive", response_model=Dict[str, str])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_comprehensive_testing",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.post("/testing/comprehensive", response_model=Dict[str, str])
 async def start_comprehensive_testing(
     request: TestSuiteRequest,
     background_tasks: BackgroundTasks,
@@ -303,12 +248,12 @@ async def start_comprehensive_testing(
         raise HTTPException(status_code=500, detail="Failed to start operation")
 
 
+@router.post("/knowledge-base/populate", response_model=Dict[str, str])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_knowledge_base_population",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.post("/knowledge-base/populate", response_model=Dict[str, str])
 async def start_knowledge_base_population(
     request: KnowledgeBaseRequest,
     background_tasks: BackgroundTasks,
@@ -358,12 +303,12 @@ async def start_knowledge_base_population(
         raise HTTPException(status_code=500, detail="Failed to start operation")
 
 
+@router.post("/security/scan", response_model=Dict[str, str])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_security_scan",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.post("/security/scan", response_model=Dict[str, str])
 async def start_security_scan(
     request: SecurityScanRequest,
     background_tasks: BackgroundTasks,
@@ -411,12 +356,12 @@ async def start_security_scan(
 
 
 # Legacy operation migration endpoints
+@router.post("/migrate/existing", response_model=LongRunningOperationMigrateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="migrate_existing_operation",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.post("/migrate/existing")
 async def migrate_existing_operation(
     operation_name: str,
     timeout_seconds: int,
@@ -456,12 +401,12 @@ async def migrate_existing_operation(
 
 
 # Operation status and control endpoints (proxy to integration manager)
+@router.get("/{operation_id}", response_model=LongRunningOperationStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_operation_status",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.get("/{operation_id}")
 async def get_operation_status(
     operation_id: str, manager=Depends(get_operation_manager)
 ):
@@ -477,12 +422,12 @@ async def get_operation_status(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/", response_model=LongRunningOperationListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_operations",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.get("/")
 async def list_operations(
     status: Optional[str] = None,
     operation_type: Optional[str] = None,
@@ -531,12 +476,12 @@ async def list_operations(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/{operation_id}/cancel", response_model=LongRunningOperationCancelResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cancel_operation",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.post("/{operation_id}/cancel")
 async def cancel_operation(operation_id: str, manager=Depends(get_operation_manager)):
     """Cancel a running operation"""
     try:
@@ -553,12 +498,12 @@ async def cancel_operation(operation_id: str, manager=Depends(get_operation_mana
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/{operation_id}/resume", response_model=LongRunningOperationResumeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resume_operation",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.post("/{operation_id}/resume")
 async def resume_operation(operation_id: str, manager=Depends(get_operation_manager)):
     """Resume operation from latest checkpoint"""
     try:
@@ -588,9 +533,14 @@ async def resume_operation(operation_id: str, manager=Depends(get_operation_mana
 
 
 @router.websocket("/{operation_id}/progress")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="websocket_progress_updates",
+    error_code_prefix="LONG_RUNNING_OPERATIONS",
+)
 async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
     """WebSocket endpoint for real-time progress updates"""
-    if operation_integration_manager is None:
+    if not _OPERATIONS_AVAILABLE:
         await websocket.close(code=1003, reason="Service not available")
         return
 
@@ -642,16 +592,66 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
             )
 
 
+@register_health_probe("long_running")
+async def probe_long_running(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333 / #6902: probe with rich data so the frontend can read
+    ``probes[name=long_running].data.{active_operations,total_operations,...}``
+    from /api/system/health and migrate off the legacy
+    /api/long-running/health route before sunset.
+    """
+    if not _OPERATIONS_AVAILABLE:
+        return ComponentHealth(
+            name="long_running",
+            status="down",
+            detail="operations framework not available",
+            data={
+                "active_operations": 0,
+                "total_operations": 0,
+                "redis_connected": False,
+                "background_processor_running": False,
+            },
+        )
+    try:
+        all_operations = operation_integration_manager.get_all_operations()
+        active_operations = sum(
+            1 for op in all_operations if op.status == OperationStatus.RUNNING
+        )
+        redis_connected = (
+            operation_integration_manager.redis_client is not None
+        )
+        background_processor_running = (
+            operation_integration_manager.is_background_processor_running()
+        )
+        return ComponentHealth(
+            name="long_running",
+            status="ok",
+            data={
+                "active_operations": active_operations,
+                "total_operations": len(all_operations),
+                "redis_connected": redis_connected,
+                "background_processor_running": background_processor_running,
+            },
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="long_running",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
 # Health check endpoint
+@router.get("/health", response_model=LongRunningOperationHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="operations_health",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.get("/health")
 async def operations_health():
     """Health check for long-running operations service"""
-    if operation_integration_manager is None:
+    if not _OPERATIONS_AVAILABLE:
         return JSONResponse(
             status_code=503,
             content={
@@ -673,8 +673,7 @@ async def operations_health():
             "total_operations": len(all_operations),
             "redis_connected": operation_integration_manager.redis_client is not None,
             "background_processor_running": (
-                operation_integration_manager.operation_manager._background_processor_task
-                is not None
+                operation_integration_manager.is_background_processor_running()
             ),
         }
 

@@ -119,7 +119,7 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   gap: var(--spacing-3);
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   line-height: 1.25rem;

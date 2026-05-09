@@ -9,12 +9,21 @@ from VM4 (uses NetworkConstants.AI_STACK_VM_IP) with the main AutoBot backend.
 """
 
 import logging
-from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+
+from api.system_health import register_singleton_probe
+from api.schemas_knowledge import (
+    KbCodeSearchRequest,
+    ContentClassificationRequest,
+    DevelopmentAnalysisRequest,
+    EnhancedChatRequest,
+    KnowledgeExtractionRequest,
+    RAGQueryRequest,
+    ResearchRequest,
+)
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -25,6 +34,14 @@ from type_defs.common import Metadata
 
 # Import shared response utilities (Issue #292 - Eliminate duplicate code)
 from utils.response_helpers import create_success_response
+
+from api.schemas_ai_stack import AIStackAgentPayload, AIStackAgentsData, AIStackHealthData
+from api.schemas_common import DataResponse
+from api.schemas_agent import (
+    ComprehensiveResearchData,
+    EnhancedKnowledgeSearchData,
+    MultiAgentQueryData,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,79 +55,6 @@ AgentQueryHandler = Callable[[Any, str], Awaitable[Dict[str, Any]]]
 router = APIRouter(tags=["ai-stack"])
 
 # ====================================================================
-# Request/Response Models
-# ====================================================================
-
-
-class RAGQueryRequest(BaseModel):
-    """RAG query request model."""
-
-    query: str = Field(..., min_length=1, max_length=10000, description="Search query")
-    documents: Optional[List[Metadata]] = Field(
-        None, description="Pre-retrieved documents"
-    )
-    context: Optional[str] = Field(None, description="Additional context")
-    max_results: int = Field(10, ge=1, le=50, description="Maximum results to return")
-
-
-class EnhancedChatRequest(BaseModel):
-    """Enhanced chat request model."""
-
-    message: str = Field(
-        ..., min_length=1, max_length=50000, description="Chat message"
-    )
-    context: Optional[str] = Field(None, description="Conversation context")
-    chat_history: Optional[List[Metadata]] = Field(
-        None, description="Previous messages"
-    )
-    use_knowledge_base: bool = Field(True, description="Whether to use knowledge base")
-    response_style: str = Field("conversational", description="Response style")
-
-
-class KnowledgeExtractionRequest(BaseModel):
-    """Knowledge extraction request model."""
-
-    content: str = Field(
-        ..., min_length=1, description="Content to extract knowledge from"
-    )
-    content_type: str = Field("text", description="Content type (text, document, url)")
-    extraction_mode: str = Field("comprehensive", description="Extraction detail level")
-
-
-class ResearchRequest(BaseModel):
-    """Research request model."""
-
-    query: str = Field(..., min_length=1, max_length=5000, description="Research query")
-    research_depth: str = Field("comprehensive", description="Research depth")
-    sources: Optional[List[str]] = Field(None, description="Specific sources")
-    include_web: bool = Field(True, description="Include web research")
-
-
-class CodeSearchRequest(BaseModel):
-    """Code search request model."""
-
-    query: str = Field(..., min_length=1, description="Code search query")
-    search_scope: str = Field("codebase", description="Search scope")
-    include_npu: bool = Field(True, description="Use NPU acceleration")
-
-
-class DevelopmentAnalysisRequest(BaseModel):
-    """Development analysis request model."""
-
-    code_path: Optional[str] = Field(None, description="Specific path to analyze")
-    analysis_type: str = Field("comprehensive", description="Analysis type")
-
-
-class ContentClassificationRequest(BaseModel):
-    """Content classification request model."""
-
-    content: str = Field(..., min_length=1, description="Content to classify")
-    classification_types: Optional[List[str]] = Field(
-        None, description="Classification types"
-    )
-
-
-# ====================================================================
 # Utility Functions (imported from backend.utils.response_helpers)
 # ====================================================================
 # handle_ai_stack_error and create_success_response are imported from
@@ -122,12 +66,15 @@ class ContentClassificationRequest(BaseModel):
 # ====================================================================
 
 
+register_singleton_probe("ai_stack", get_ai_stack_client, async_getter=True)
+
+
+@router.get("/health", response_model=DataResponse[AIStackHealthData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="ai_stack_health_check",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.get("/health")
 async def ai_stack_health_check(admin_check: bool = Depends(check_admin_permission)):
     """
     Check AI Stack health and connectivity.
@@ -142,27 +89,27 @@ async def ai_stack_health_check(admin_check: bool = Depends(check_admin_permissi
             status_code=200 if health_status["status"] == "healthy" else 503,
             content=create_success_response(
                 health_status, "AI Stack health check completed"
-            ),
+            ).model_dump(),
         )
     except Exception as e:
-        logger.error("AI Stack health check failed: %s", e)
+        logger.error("AI Stack health check failed: %s: %s", type(e).__name__, e)
         return JSONResponse(
             status_code=503,
             content={
                 "success": False,
                 "error": "AI Stack unavailable",
-                "details": "Internal server error",
+                "details": f"{type(e).__name__}: {e}",
                 "timestamp": utc_timestamp(),
             },
         )
 
 
+@router.get("/agents", response_model=DataResponse[AIStackAgentsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_ai_agents",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.get("/agents")
 async def list_ai_agents(admin_check: bool = Depends(check_admin_permission)):
     """
     List all available AI agents.
@@ -180,12 +127,12 @@ async def list_ai_agents(admin_check: bool = Depends(check_admin_permission)):
 # ====================================================================
 
 
+@router.post("/rag/query", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rag_query",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/rag/query")
 async def rag_query(
     request: RAGQueryRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -224,12 +171,12 @@ async def rag_query(
     return create_success_response(rag_result, "RAG query completed successfully")
 
 
+@router.post("/rag/reformulate", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reformulate_query",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/rag/reformulate")
 async def reformulate_query(
     query: str,
     context: Optional[str] = None,
@@ -246,12 +193,12 @@ async def reformulate_query(
     return create_success_response(result, "Query reformulated successfully")
 
 
+@router.post("/rag/analyze-documents", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_documents",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/rag/analyze-documents")
 async def analyze_documents(
     documents: List[Metadata], admin_check: bool = Depends(check_admin_permission)
 ):
@@ -271,12 +218,12 @@ async def analyze_documents(
 # ====================================================================
 
 
+@router.post("/chat/enhanced", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_chat",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/chat/enhanced")
 async def enhanced_chat(
     request: EnhancedChatRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -323,12 +270,12 @@ async def enhanced_chat(
 # ====================================================================
 
 
+@router.post("/knowledge/extract", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="extract_knowledge",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/knowledge/extract")
 async def extract_knowledge(
     request: KnowledgeExtractionRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -350,12 +297,12 @@ async def extract_knowledge(
     )
 
 
+@router.post("/knowledge/enhanced-search", response_model=DataResponse[EnhancedKnowledgeSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_knowledge_search",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/knowledge/enhanced-search")
 async def enhanced_knowledge_search(
     query: str,
     search_type: str = "comprehensive",
@@ -395,12 +342,12 @@ async def enhanced_knowledge_search(
     return create_success_response(results, "Enhanced knowledge search completed")
 
 
+@router.get("/knowledge/system", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_knowledge",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.get("/knowledge/system")
 async def get_system_knowledge(
     knowledge_category: Optional[str] = None,
     admin_check: bool = Depends(check_admin_permission),
@@ -421,12 +368,12 @@ async def get_system_knowledge(
 # ====================================================================
 
 
+@router.post("/research/comprehensive", response_model=DataResponse[ComprehensiveResearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="comprehensive_research",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/research/comprehensive")
 async def comprehensive_research(
     request: ResearchRequest, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -462,12 +409,12 @@ async def comprehensive_research(
     )
 
 
+@router.post("/research/web", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="web_research",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/research/web")
 async def web_research(
     query: str,
     max_pages: int = 10,
@@ -492,14 +439,14 @@ async def web_research(
 # ====================================================================
 
 
+@router.post("/development/search-code", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_code",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/development/search-code")
 async def search_code(
-    request: CodeSearchRequest, admin_check: bool = Depends(check_admin_permission)
+    request: KbCodeSearchRequest, admin_check: bool = Depends(check_admin_permission)
 ):
     """
     Search codebase using NPU-accelerated AI.
@@ -516,12 +463,12 @@ async def search_code(
     return create_success_response(result, "Code search completed successfully")
 
 
+@router.post("/development/analyze-speedup", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_development_speedup",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/development/analyze-speedup")
 async def analyze_development_speedup(
     request: DevelopmentAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -546,12 +493,12 @@ async def analyze_development_speedup(
 # ====================================================================
 
 
+@router.post("/classification/classify", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="classify_content",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/classification/classify")
 async def classify_content(
     request: ContentClassificationRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -673,12 +620,12 @@ async def _execute_sequential_agents(
 # ====================================================================
 
 
+@router.post("/orchestrate/multi-agent-query", response_model=DataResponse[MultiAgentQueryData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="multi_agent_query",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/orchestrate/multi-agent-query")
 async def multi_agent_query(
     query: str,
     agents: List[str],
@@ -719,12 +666,12 @@ async def multi_agent_query(
 # ====================================================================
 
 
+@router.post("/legacy/rag-search", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="legacy_rag_search",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/legacy/rag-search")
 async def legacy_rag_search(
     query: str,
     max_results: int = 10,
@@ -739,12 +686,12 @@ async def legacy_rag_search(
     return await rag_query(request)
 
 
+@router.post("/legacy/enhanced-chat", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="legacy_enhanced_chat",
-    error_code_prefix="AI_STACK",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/legacy/enhanced-chat")
 async def legacy_enhanced_chat(
     message: str,
     context: Optional[str] = None,

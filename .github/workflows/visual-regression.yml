@@ -44,7 +44,7 @@ permissions:
 jobs:
   visual-regression:
     name: Storybook visual regression
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
@@ -52,7 +52,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 

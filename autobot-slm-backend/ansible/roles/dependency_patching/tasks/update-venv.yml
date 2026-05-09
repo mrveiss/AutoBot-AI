@@ -85,4 +85,4 @@
     update_results:
       host: "{{ inventory_hostname }}"
       packages_updated: "{{ pip_update.changed | default(false) }}"
-      timestamp: "{{ ansible_date_time.iso8601 }}"
+      timestamp: "{{ ansible_facts['date_time'].iso8601 }}"

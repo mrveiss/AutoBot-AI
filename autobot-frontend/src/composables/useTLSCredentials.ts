@@ -13,9 +13,9 @@
 
 import { ref, computed } from 'vue'
 import { getSLMUrl, getApiBase } from '@/config/ssot-config'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { createLogger } from '@/utils/debugUtils'
+import { useLoadingState } from './useLoadingState'
 
 const logger = createLogger('useTLSCredentials')
 
@@ -79,7 +79,7 @@ export interface SLMNode {
 const credentials = ref<TLSCredential[]>([])
 const endpoints = ref<TLSEndpoint[]>([])
 const nodes = ref<SLMNode[]>([])
-const isLoading = ref(false)
+const { isLoading, wrap } = useLoadingState()
 const error = ref<string | null>(null)
 const authToken = ref<string | null>(null)
 
@@ -188,23 +188,21 @@ function isAuthenticated(): boolean {
  * Fetch all nodes from SLM.
  */
 async function fetchNodes(): Promise<SLMNode[]> {
-  isLoading.value = true
   error.value = null
-
-  try {
-    const response = await slmFetch(`${getApiBase()}/nodes`)
-    const data = await response.json()
-    nodes.value = data.nodes || []
-    return nodes.value
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to fetch nodes'
-    error.value = message
-    showSubtleErrorNotification('Fetch Nodes Failed', message, 'error')
-    logger.error('Error fetching nodes:', err)
-    return []
-  } finally {
-    isLoading.value = false
-  }
+  return wrap(async () => {
+    try {
+      const response = await slmFetch(`${getApiBase()}/nodes`)
+      const data = await response.json()
+      nodes.value = data.nodes || []
+      return nodes.value
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch nodes'
+      error.value = message
+      showSubtleErrorNotification('Fetch Nodes Failed', message, 'error')
+      logger.error('Error fetching nodes:', err)
+      return []
+    }
+  })
 }
 
 // =============================================================================
@@ -215,23 +213,21 @@ async function fetchNodes(): Promise<SLMNode[]> {
  * Fetch TLS credentials for a specific node.
  */
 async function fetchNodeCredentials(nodeId: string): Promise<TLSCredential[]> {
-  isLoading.value = true
   error.value = null
-
-  try {
-    const response = await slmFetch(`${getApiBase()}/nodes/${nodeId}/tls-credentials`)
-    const data = await response.json()
-    credentials.value = data.credentials || []
-    return credentials.value
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to fetch TLS credentials'
-    error.value = message
-    showSubtleErrorNotification('Fetch TLS Credentials Failed', message, 'error')
-    logger.error('Error fetching TLS credentials:', err)
-    return []
-  } finally {
-    isLoading.value = false
-  }
+  return wrap(async () => {
+    try {
+      const response = await slmFetch(`${getApiBase()}/nodes/${nodeId}/tls-credentials`)
+      const data = await response.json()
+      credentials.value = data.credentials || []
+      return credentials.value
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch TLS credentials'
+      error.value = message
+      showSubtleErrorNotification('Fetch TLS Credentials Failed', message, 'error')
+      logger.error('Error fetching TLS credentials:', err)
+      return []
+    }
+  })
 }
 
 /**
@@ -241,28 +237,25 @@ async function createCredential(
   nodeId: string,
   data: TLSCredentialCreate
 ): Promise<TLSCredential | null> {
-  isLoading.value = true
   error.value = null
-
-  try {
-    const response = await slmFetch(`${getApiBase()}/nodes/${nodeId}/tls-credentials`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
-
-    const credential = await response.json()
-    credentials.value.push(credential)
-    showSubtleErrorNotification('TLS Credential Created', 'Certificate uploaded successfully', 'info')
-    return credential
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to create TLS credential'
-    error.value = message
-    showSubtleErrorNotification('Create TLS Credential Failed', message, 'error')
-    logger.error('Error creating TLS credential:', err)
-    return null
-  } finally {
-    isLoading.value = false
-  }
+  return wrap(async () => {
+    try {
+      const response = await slmFetch(`${getApiBase()}/nodes/${nodeId}/tls-credentials`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      })
+      const credential = await response.json()
+      credentials.value.push(credential)
+      showSubtleErrorNotification('TLS Credential Created', 'Certificate uploaded successfully', 'info')
+      return credential
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create TLS credential'
+      error.value = message
+      showSubtleErrorNotification('Create TLS Credential Failed', message, 'error')
+      logger.error('Error creating TLS credential:', err)
+      return null
+    }
+  })
 }
 
 /**
@@ -272,58 +265,52 @@ async function updateCredential(
   credentialId: string,
   data: TLSCredentialUpdate
 ): Promise<TLSCredential | null> {
-  isLoading.value = true
   error.value = null
-
-  try {
-    const response = await slmFetch(`${getApiBase()}/tls/credentials/${credentialId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    })
-
-    const updated = await response.json()
-    const index = credentials.value.findIndex(c => c.credential_id === credentialId)
-    if (index !== -1) {
-      credentials.value[index] = updated
+  return wrap(async () => {
+    try {
+      const response = await slmFetch(`${getApiBase()}/tls/credentials/${credentialId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      })
+      const updated = await response.json()
+      const index = credentials.value.findIndex(c => c.credential_id === credentialId)
+      if (index !== -1) {
+        credentials.value[index] = updated
+      }
+      showSubtleErrorNotification('TLS Credential Updated', 'Certificate updated successfully', 'info')
+      return updated
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update TLS credential'
+      error.value = message
+      showSubtleErrorNotification('Update TLS Credential Failed', message, 'error')
+      logger.error('Error updating TLS credential:', err)
+      return null
     }
-    showSubtleErrorNotification('TLS Credential Updated', 'Certificate updated successfully', 'info')
-    return updated
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to update TLS credential'
-    error.value = message
-    showSubtleErrorNotification('Update TLS Credential Failed', message, 'error')
-    logger.error('Error updating TLS credential:', err)
-    return null
-  } finally {
-    isLoading.value = false
-  }
+  })
 }
 
 /**
  * Delete a TLS credential.
  */
 async function deleteCredential(credentialId: string): Promise<boolean> {
-  isLoading.value = true
   error.value = null
-
-  try {
-    await slmFetch(`${getApiBase()}/tls/credentials/${credentialId}`, {
-      method: 'DELETE',
-    })
-
-    credentials.value = credentials.value.filter(c => c.credential_id !== credentialId)
-    endpoints.value = endpoints.value.filter(e => e.credential_id !== credentialId)
-    showSubtleErrorNotification('TLS Credential Deleted', 'Certificate removed successfully', 'info')
-    return true
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to delete TLS credential'
-    error.value = message
-    showSubtleErrorNotification('Delete TLS Credential Failed', message, 'error')
-    logger.error('Error deleting TLS credential:', err)
-    return false
-  } finally {
-    isLoading.value = false
-  }
+  return wrap(async () => {
+    try {
+      await slmFetch(`${getApiBase()}/tls/credentials/${credentialId}`, {
+        method: 'DELETE',
+      })
+      credentials.value = credentials.value.filter(c => c.credential_id !== credentialId)
+      endpoints.value = endpoints.value.filter(e => e.credential_id !== credentialId)
+      showSubtleErrorNotification('TLS Credential Deleted', 'Certificate removed successfully', 'info')
+      return true
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete TLS credential'
+      error.value = message
+      showSubtleErrorNotification('Delete TLS Credential Failed', message, 'error')
+      logger.error('Error deleting TLS credential:', err)
+      return false
+    }
+  })
 }
 
 /**
@@ -347,23 +334,21 @@ async function getCredential(credentialId: string): Promise<TLSCredential | null
  * Fetch all TLS endpoints across the fleet.
  */
 async function fetchAllEndpoints(): Promise<TLSEndpoint[]> {
-  isLoading.value = true
   error.value = null
-
-  try {
-    const response = await slmFetch(`${getApiBase()}/tls/endpoints`)
-    const data = await response.json()
-    endpoints.value = data.endpoints || []
-    return endpoints.value
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to fetch TLS endpoints'
-    error.value = message
-    showSubtleErrorNotification('Fetch TLS Endpoints Failed', message, 'error')
-    logger.error('Error fetching TLS endpoints:', err)
-    return []
-  } finally {
-    isLoading.value = false
-  }
+  return wrap(async () => {
+    try {
+      const response = await slmFetch(`${getApiBase()}/tls/endpoints`)
+      const data = await response.json()
+      endpoints.value = data.endpoints || []
+      return endpoints.value
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch TLS endpoints'
+      error.value = message
+      showSubtleErrorNotification('Fetch TLS Endpoints Failed', message, 'error')
+      logger.error('Error fetching TLS endpoints:', err)
+      return []
+    }
+  })
 }
 
 /**

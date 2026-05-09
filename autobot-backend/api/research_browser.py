@@ -13,26 +13,34 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import aiofiles
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+
+from api.system_health import ComponentHealth, register_health_probe
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.error_constants import ERR_SESSION_NOT_FOUND
-from constants.network_constants import NetworkConstants
+from api.schemas_common import DataResponse
+from api.schemas_code import ResearchBrowserHealthResponse
+from api.schemas_workflows import (
+    BrowserResearchRequest,
+    CreateChatBrowserRequest,
+    NavigationRequest,
+    SessionAction,
+)
 
 logger = logging.getLogger(__name__)
 
 # Issue #1009: Graceful fallback when playwright is not installed
 try:
-    from research_browser_manager import research_browser_manager
+    from research_browser_manager import get_research_browser_manager
 
     _BROWSER_AVAILABLE = True
 except ImportError:
-    research_browser_manager = None
+    get_research_browser_manager = None  # type: ignore[assignment]
     _BROWSER_AVAILABLE = False
     logger.warning("research_browser_manager unavailable (playwright not installed)")
 
@@ -41,18 +49,6 @@ config = get_config_manager()
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
-
-
-class ResearchRequest(BaseModel):
-    conversation_id: str
-    url: str
-    extract_content: bool = True
-
-
-class SessionAction(BaseModel):
-    session_id: str
-    action: str  # "wait", "manual_intervention", "save_mhtml", "extract_content"
-    timeout_seconds: Optional[int] = 300
 
 
 def _require_browser():
@@ -64,12 +60,38 @@ def _require_browser():
         )
 
 
+@register_health_probe("research_browser")
+async def probe_research_browser(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for research_browser module.
+
+    Lightweight check: inspect the module-level ``_BROWSER_AVAILABLE`` flag
+    set at import time. ``down`` when playwright is not installed; otherwise
+    ``ok``. Skips the manager call the handler performs.
+    """
+    try:
+        if not _BROWSER_AVAILABLE:
+            return ComponentHealth(
+                name="research_browser",
+                status="down",
+                detail="playwright not installed",
+            )
+        return ComponentHealth(name="research_browser", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="research_browser",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
+@router.get("/health", response_model=ResearchBrowserHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.get("/health")
 async def health_check():
     """Health check endpoint for research browser service"""
     if not _BROWSER_AVAILABLE:
@@ -80,7 +102,7 @@ async def health_check():
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
-    status = "healthy" if research_browser_manager else "not_initialized"
+    status = "healthy" if get_research_browser_manager else "not_initialized"
 
     browser_service_url = ssot_config.browser_service_url
 
@@ -92,32 +114,32 @@ async def health_check():
     }
 
 
+@router.post("/url", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="research_url",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.post("/url")
-async def research_url(request: ResearchRequest):
+async def research_url(request: BrowserResearchRequest):
     """Research a URL with automatic fallbacks and interaction handling"""
     _require_browser()
-    result = await research_browser_manager.research_url(
+    result = await get_research_browser_manager().research_url(
         request.conversation_id, request.url, request.extract_content
     )
 
     return JSONResponse(status_code=200, content=result)
 
 
+@router.post("/session/action", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="handle_session_action",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.post("/session/action")
 async def handle_session_action(request: SessionAction):
     """Handle actions on a research session"""
     _require_browser()
-    session = research_browser_manager.get_session(request.session_id)
+    session = get_research_browser_manager().get_session(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
@@ -158,16 +180,16 @@ async def handle_session_action(request: SessionAction):
     return JSONResponse(status_code=200, content=result)
 
 
+@router.get("/session/{session_id}/status", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_status",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.get("/session/{session_id}/status")
 async def get_session_status(session_id: str):
     """Get the status of a research session"""
     _require_browser()
-    session = research_browser_manager.get_session(session_id)
+    session = get_research_browser_manager().get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
@@ -187,16 +209,16 @@ async def get_session_status(session_id: str):
     )
 
 
+@router.get("/session/{session_id}/mhtml/{filename}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="download_mhtml",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.get("/session/{session_id}/mhtml/{filename}")
 async def download_mhtml(session_id: str, filename: str):
     """Download an MHTML file from a research session"""
     _require_browser()
-    session = research_browser_manager.get_session(session_id)
+    session = get_research_browser_manager().get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
@@ -233,16 +255,16 @@ async def download_mhtml(session_id: str, filename: str):
     )
 
 
+@router.delete("/session/{session_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_session",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.delete("/session/{session_id}")
 async def cleanup_session(session_id: str):
     """Clean up a research session"""
     _require_browser()
-    await research_browser_manager.cleanup_session(session_id)
+    await get_research_browser_manager().cleanup_session(session_id)
 
     return JSONResponse(
         status_code=200,
@@ -250,18 +272,18 @@ async def cleanup_session(session_id: str):
     )
 
 
+@router.get("/sessions", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_sessions",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.get("/sessions")
 async def list_sessions():
     """List all active research sessions"""
     _require_browser()
     sessions_info = []
 
-    for session_id, session in research_browser_manager.sessions.items():
+    for session_id, session in get_research_browser_manager().sessions.items():
         sessions_info.append(
             {
                 "session_id": session_id,
@@ -280,20 +302,16 @@ async def list_sessions():
     )
 
 
-class NavigationRequest(BaseModel):
-    url: str
-
-
+@router.post("/session/{session_id}/navigate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="navigate_session",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.post("/session/{session_id}/navigate")
 async def navigate_session(session_id: str, request: NavigationRequest):
     """Navigate a research session to a specific URL"""
     _require_browser()
-    session = research_browser_manager.get_session(session_id)
+    session = get_research_browser_manager().get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
@@ -303,12 +321,12 @@ async def navigate_session(session_id: str, request: NavigationRequest):
 
 
 # Browser integration endpoints for frontend
+@router.get("/browser/{session_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_browser_info",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.get("/browser/{session_id}")
 async def get_browser_info(session_id: str):
     """Get browser information for frontend integration (Issue #665: refactored)."""
     _require_browser()
@@ -336,12 +354,12 @@ async def get_browser_info(session_id: str):
 
 def _get_or_create_browser_session(session_id: str):
     """Get existing session or create default for chat-browser (Issue #665: extracted helper)."""
-    session = research_browser_manager.get_session(session_id)
+    session = get_research_browser_manager().get_session(session_id)
 
     # Special handling for chat-browser - create default session if needed
     if not session and session_id == "chat-browser":
         logger.info("Creating default chat-browser session for frontend integration")
-        session = research_browser_manager.create_session(
+        session = get_research_browser_manager().create_session(
             conversation_id="default-chat",
             interaction_settings={
                 "captcha": False,
@@ -404,20 +422,12 @@ def _get_browser_actions() -> list:
 # These endpoints tie browser sessions to chat conversations like terminal
 
 
-class CreateChatBrowserRequest(BaseModel):
-    """Request to create/get browser session for chat"""
-
-    conversation_id: str
-    headless: bool = False
-    initial_url: Optional[str] = None
-
-
+@router.post("/chat-session", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_or_create_chat_browser_session",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.post("/chat-session")
 async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
     """
     Get existing or create new browser session for a chat conversation.
@@ -429,7 +439,7 @@ async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
     """
     _require_browser()
     # Check for existing session for this conversation
-    existing_session = research_browser_manager.get_session_by_conversation(
+    existing_session = get_research_browser_manager().get_session_by_conversation(
         request.conversation_id
     )
 
@@ -454,14 +464,14 @@ async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
     logger.info(
         f"Creating new browser session for conversation {request.conversation_id}"
     )
-    session_id = await research_browser_manager.create_session(
+    session_id = await get_research_browser_manager().create_session(
         request.conversation_id, headless=request.headless
     )
 
     if not session_id:
         raise HTTPException(status_code=500, detail="Failed to create browser session")
 
-    session = research_browser_manager.get_session(session_id)
+    session = get_research_browser_manager().get_session(session_id)
 
     # Navigate to initial URL if provided
     if request.initial_url and session:
@@ -480,12 +490,12 @@ async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
     )
 
 
+@router.get("/chat-session/{conversation_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_chat_browser_session",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.get("/chat-session/{conversation_id}")
 async def get_chat_browser_session(conversation_id: str):
     """
     Get browser session info for a chat conversation.
@@ -493,7 +503,7 @@ async def get_chat_browser_session(conversation_id: str):
     Issue #73: Browser sessions tied to chat like terminal
     """
     _require_browser()
-    session = research_browser_manager.get_session_by_conversation(conversation_id)
+    session = get_research_browser_manager().get_session_by_conversation(conversation_id)
 
     if not session:
         raise HTTPException(
@@ -531,12 +541,12 @@ async def get_chat_browser_session(conversation_id: str):
     )
 
 
+@router.delete("/chat-session/{conversation_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_chat_browser_session",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.delete("/chat-session/{conversation_id}")
 async def delete_chat_browser_session(conversation_id: str):
     """
     Close browser session for a chat conversation.
@@ -544,7 +554,7 @@ async def delete_chat_browser_session(conversation_id: str):
     Issue #73: Browser sessions tied to chat like terminal
     """
     _require_browser()
-    session = research_browser_manager.get_session_by_conversation(conversation_id)
+    session = get_research_browser_manager().get_session_by_conversation(conversation_id)
 
     if not session:
         raise HTTPException(
@@ -553,7 +563,7 @@ async def delete_chat_browser_session(conversation_id: str):
         )
 
     session_id = session.session_id
-    await research_browser_manager.cleanup_session(session_id)
+    await get_research_browser_manager().cleanup_session(session_id)
 
     return JSONResponse(
         status_code=200,

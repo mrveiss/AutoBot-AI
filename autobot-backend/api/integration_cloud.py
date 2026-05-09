@@ -13,14 +13,24 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
+from api.schemas_workflows import (
+    CloudConnectionTestRequest,
+    CloudProviderInfo,
+)
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from integrations.base import IntegrationConfig
 from integrations.cloud_integration import (
     AWSIntegration,
     AzureIntegration,
     GCPIntegration,
+)
+from api.schemas_code import (
+    CloudAccountInfoResponse,
+    CloudConnectionTestResponse,
+    CloudResourcesResponse,
+    CloudStorageResponse,
 )
 
 router = APIRouter(
@@ -30,41 +40,12 @@ router = APIRouter(
 logger = logging.getLogger(__name__)
 
 
-class CloudProviderInfo(BaseModel):
-    """Information about a supported cloud provider."""
-
-    provider: str
-    name: str
-    description: str
-    required_fields: List[str]
-
-
-class ConnectionTestRequest(BaseModel):
-    """Request model for testing cloud provider connection."""
-
-    provider: str = Field(..., description="Cloud provider (aws, azure, gcp)")
-    api_key: Optional[str] = Field(None, description="API key or access key")
-    api_secret: Optional[str] = Field(None, description="API secret key")
-    token: Optional[str] = Field(None, description="Access token")
-    extra: Dict[str, Any] = Field(
-        default_factory=dict, description="Provider-specific config"
-    )
-
-
-class ResourceListRequest(BaseModel):
-    """Request model for listing cloud resources."""
-
-    provider: str
-    api_key: Optional[str] = None
-    api_secret: Optional[str] = None
-    token: Optional[str] = None
-    extra: Dict[str, Any] = Field(default_factory=dict)
-    resource_type: str = Field(
-        ..., description="Type of resource (instances, vms, storage)"
-    )
-
-
 @router.get("/providers", response_model=List[CloudProviderInfo])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_providers",
+    error_code_prefix="INTEGRATION_CLOUD",
+)
 async def list_providers():
     """List all supported cloud providers."""
     return [
@@ -93,8 +74,13 @@ async def list_providers():
     ]
 
 
-@router.post("/test-connection")
-async def test_connection(request: ConnectionTestRequest):
+@router.post("/test-connection", response_model=CloudConnectionTestResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_connection",
+    error_code_prefix="INTEGRATION_CLOUD",
+)
+async def test_connection(request: CloudConnectionTestRequest):
     """Test connection to a cloud provider."""
     try:
         integration = _create_integration(
@@ -122,7 +108,12 @@ async def test_connection(request: ConnectionTestRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{provider}/resources")
+@router.get("/{provider}/resources", response_model=CloudResourcesResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_resources",
+    error_code_prefix="INTEGRATION_CLOUD",
+)
 async def list_resources(
     provider: str,
     api_key: Optional[str] = None,
@@ -161,7 +152,12 @@ async def list_resources(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{provider}/storage")
+@router.get("/{provider}/storage", response_model=CloudStorageResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_storage",
+    error_code_prefix="INTEGRATION_CLOUD",
+)
 async def list_storage(
     provider: str,
     api_key: Optional[str] = None,
@@ -199,7 +195,12 @@ async def list_storage(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{provider}/account")
+@router.get("/{provider}/account", response_model=CloudAccountInfoResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_account_info",
+    error_code_prefix="INTEGRATION_CLOUD",
+)
 async def get_account_info(
     provider: str,
     api_key: Optional[str] = None,

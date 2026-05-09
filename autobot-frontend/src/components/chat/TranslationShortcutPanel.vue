@@ -93,12 +93,11 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
-import { createLogger } from '@/utils/debugUtils'
+import { useLoadingState } from '@/composables/useLoadingState'
+import { useChatTranslation } from '@/composables/chat/useChatTranslation'
 
 const { t } = useI18n()
-const logger = createLogger('TranslationShortcutPanel')
+const { translateText: doTranslate, detectLanguage: doDetect } = useChatTranslation()
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -117,7 +116,7 @@ const props = defineProps<{
 // State
 const textToTranslate = ref(props.initialText || '')
 const targetLanguage = ref('Latvian')
-const isLoading = ref(false)
+const { isLoading, wrap } = useLoadingState()
 const detectedLanguage = ref('')
 const translationError = ref('')
 
@@ -154,55 +153,34 @@ const canTranslate = computed(() => {
 const translateText = async () => {
   if (!canTranslate.value) return
 
-  isLoading.value = true
   translationError.value = ''
-
-  try {
-    const result = await apiClient.post(`${getApiBase()}/translate`, {
-      text: textToTranslate.value.trim(),
-      target_language: targetLanguage.value,
-    })
-
-    if (result.status === 'success') {
+  await wrap(async () => {
+    const result = await doTranslate(textToTranslate.value.trim(), targetLanguage.value)
+    if ('translatedText' in result) {
       emit('translation-result', {
         originalText: textToTranslate.value.trim(),
-        translatedText: result.response,
+        translatedText: result.translatedText,
         targetLanguage: targetLanguage.value,
       })
     } else {
-      translationError.value = result.response || t('chat.translate.error')
+      translationError.value = result.error || t('chat.translate.error')
     }
-  } catch (error) {
-    logger.error('Translation failed:', error)
-    translationError.value = t('chat.translate.error')
-  } finally {
-    isLoading.value = false
-  }
+  })
 }
 
 const detectLanguage = async () => {
   if (!textToTranslate.value.trim()) return
 
-  isLoading.value = true
   detectedLanguage.value = ''
   translationError.value = ''
-
-  try {
-    const result = await apiClient.post(`${getApiBase()}/detect-language`, {
-      text: textToTranslate.value.trim(),
-    })
-
-    if (result.status === 'success') {
-      detectedLanguage.value = result.response
+  await wrap(async () => {
+    const result = await doDetect(textToTranslate.value.trim())
+    if ('detectedLanguage' in result) {
+      detectedLanguage.value = result.detectedLanguage
     } else {
-      translationError.value = result.response || t('chat.translate.error')
+      translationError.value = result.error || t('chat.translate.error')
     }
-  } catch (error) {
-    logger.error('Language detection failed:', error)
-    translationError.value = t('chat.translate.error')
-  } finally {
-    isLoading.value = false
-  }
+  })
 }
 </script>
 

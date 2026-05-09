@@ -19,6 +19,7 @@ import apiClient from '@/utils/ApiClient'
 import { formatCategoryName as formatCategoryHelper } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { useLoadingState } from '../useLoadingState'
 import type {
   CategoryResponse,
   CategoriesListResponse,
@@ -65,6 +66,41 @@ export function getCategoryIcon(category: string): string {
 }
 
 // ==================== Bare imperative API ====================
+
+/**
+ * Fetch fact count for a single category (used by CategoryEditModal delete-warning).
+ * Hits GET /api/knowledge_base/categories/:id/facts?limit=1 and returns total_count.
+ */
+export const fetchCategoryFactCount = async (categoryId: string): Promise<number> => {
+  const data = await apiClient.get<Record<string, unknown>>(
+    `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(categoryId)}/facts?limit=1`
+  )
+  return typeof data?.total_count === 'number' ? data.total_count : 0
+}
+
+/**
+ * Update a category's name, description, icon, and/or color.
+ * Returns the raw API response (status + message).
+ */
+export const updateCategory = async (
+  categoryId: string,
+  payload: { name?: string; description?: string; icon?: string; color?: string }
+): Promise<Record<string, unknown>> =>
+  apiClient.put<Record<string, unknown>>(
+    `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(categoryId)}`,
+    payload
+  )
+
+/**
+ * Delete a category by ID.
+ * Returns the raw API response (status + message).
+ */
+export const deleteKnowledgeCategory = async (
+  categoryId: string
+): Promise<Record<string, unknown>> =>
+  apiClient.delete<Record<string, unknown>>(
+    `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(categoryId)}`
+  )
 
 /**
  * Fetch all categories with counts.
@@ -155,6 +191,46 @@ export const buildCategoryFilterOptions = (
 
 // ==================== Reactive composable ====================
 
+export interface MainCategoryItem {
+  id: string
+  name: string
+  description: string
+  examples: string
+  icon: string
+  color: string
+  count: number
+  [key: string]: unknown
+}
+
+export interface CategoryDocumentsResponse {
+  documents: Record<string, unknown>[]
+  [key: string]: unknown
+}
+
+/**
+ * Fetch the main category cards shown on the KnowledgeCategories landing page.
+ * Returns the validated categories array or throws.
+ */
+export const fetchMainCategories = async (): Promise<MainCategoryItem[]> => {
+  const data = await apiClient.get<Record<string, unknown>>(`${getApiBase()}/knowledge_base/categories/main`)
+  if (!data?.categories || !Array.isArray(data.categories)) {
+    throw new Error('Invalid main categories response format')
+  }
+  return data.categories as MainCategoryItem[]
+}
+
+/**
+ * Fetch all documents for a specific category path.
+ */
+export const fetchCategoryDocuments = async (
+  categoryPath: string
+): Promise<Record<string, unknown>[]> => {
+  const data = await apiClient.get<CategoryDocumentsResponse>(
+    `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(categoryPath)}`
+  )
+  return data?.documents ?? []
+}
+
 export interface UseKnowledgeCategoriesReturn {
   /** Latest categories list. */
   categories: Readonly<Ref<KnowledgeCategoryItem[]>>
@@ -174,48 +250,52 @@ export interface UseKnowledgeCategoriesReturn {
   // Imperative passthroughs — BC with pre-#5149 callers
   fetchCategories: typeof fetchCategories
   fetchCategory: typeof fetchCategory
+  fetchMainCategories: typeof fetchMainCategories
+  fetchCategoryDocuments: typeof fetchCategoryDocuments
   getCategorizedFacts: typeof getCategorizedFacts
   buildCategoryFilterOptions: typeof buildCategoryFilterOptions
   getCategoryIcon: typeof getCategoryIcon
+  // Category CRUD — migrated from CategoryEditModal (#6044)
+  fetchCategoryFactCount: typeof fetchCategoryFactCount
+  updateCategory: typeof updateCategory
+  deleteKnowledgeCategory: typeof deleteKnowledgeCategory
 }
 
 export function useKnowledgeCategories(): UseKnowledgeCategoriesReturn {
   const categories = ref<KnowledgeCategoryItem[]>([])
   const categorizedFacts = ref<CategorizedFactsResponse | null>(null)
-  const isLoading = ref(false)
+  const { isLoading, wrap } = useLoadingState()
   const error = ref<Error | null>(null)
 
   const refresh = async (): Promise<KnowledgeCategoryItem[]> => {
-    isLoading.value = true
     error.value = null
-    try {
-      const data = await fetchCategories()
-      categories.value = data
-      return data
-    } catch (err) {
-      error.value = err instanceof Error ? err : new Error(String(err))
-      throw err
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const data = await fetchCategories()
+        categories.value = data
+        return data
+      } catch (err) {
+        error.value = err instanceof Error ? err : new Error(String(err))
+        throw err
+      }
+    })
   }
 
   const refreshCategorizedFacts = async (
     category: string | null = null,
     limit: number = 100
   ): Promise<CategorizedFactsResponse> => {
-    isLoading.value = true
     error.value = null
-    try {
-      const data = await getCategorizedFacts(category, limit)
-      categorizedFacts.value = data
-      return data
-    } catch (err) {
-      error.value = err instanceof Error ? err : new Error(String(err))
-      throw err
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const data = await getCategorizedFacts(category, limit)
+        categorizedFacts.value = data
+        return data
+      } catch (err) {
+        error.value = err instanceof Error ? err : new Error(String(err))
+        throw err
+      }
+    })
   }
 
   return {
@@ -227,8 +307,13 @@ export function useKnowledgeCategories(): UseKnowledgeCategoriesReturn {
     refreshCategorizedFacts,
     fetchCategories,
     fetchCategory,
+    fetchMainCategories,
+    fetchCategoryDocuments,
     getCategorizedFacts,
     buildCategoryFilterOptions,
     getCategoryIcon,
+    fetchCategoryFactCount,
+    updateCategory,
+    deleteKnowledgeCategory,
   }
 }

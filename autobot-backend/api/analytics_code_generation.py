@@ -24,26 +24,36 @@ import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 from auth_middleware import check_admin_permission
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from api.schemas_common import DataResponse
+from api.schemas_analytics import (
+    CodeGenerationHealthResponse,
+    CodeGenerationRefactoringTypesResponse,
+    CodeGenerationRequest,
+    CodeGenerationResponse,
+    CodeGenerationStatsResponse,
+    CodeGenerationValidateResponse,
+    CodeGenerationVersionsResponse,
+    CodeGenRollbackRequest,
+    CodeGenValidationRequest,
+    CodeLanguage,
+    RefactoringRequest,
+    RefactoringResponse,
+    RefactoringType,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-# LLM Interface for real code generation
-try:
-    from llm_interface import LLMInterface
+# LLM Service for real code generation
+from services.llm_service import get_llm_service
 
-    LLM_INTERFACE_AVAILABLE = True
-except ImportError:
-    LLM_INTERFACE_AVAILABLE = False
-    LLMInterface = None
-    logging.warning("LLMInterface not available - code generation will fail")
+LLM_INTERFACE_AVAILABLE = True
 
 # Issue #552: Prefix set in router_registry to match frontend calls at /api/code-generation/*
 router = APIRouter(tags=["code-generation", "analytics"])
@@ -91,40 +101,6 @@ def _extract_language_stats(stats_data: dict) -> dict:
 # =============================================================================
 # Enums and Constants
 # =============================================================================
-
-
-class RefactoringType(str, Enum):
-    """Types of code refactoring operations"""
-
-    EXTRACT_FUNCTION = "extract_function"
-    RENAME_VARIABLE = "rename_variable"
-    SIMPLIFY_CONDITIONAL = "simplify_conditional"
-    REMOVE_DUPLICATION = "remove_duplication"
-    ADD_TYPE_HINTS = "add_type_hints"
-    IMPROVE_NAMING = "improve_naming"
-    OPTIMIZE_LOOPS = "optimize_loops"
-    ADD_DOCSTRINGS = "add_docstrings"
-    CLEAN_IMPORTS = "clean_imports"
-    GENERAL = "general"
-
-
-class CodeLanguage(str, Enum):
-    """Supported programming languages"""
-
-    PYTHON = "python"
-    TYPESCRIPT = "typescript"
-    JAVASCRIPT = "javascript"
-    VUE = "vue"
-
-
-class GenerationStatus(str, Enum):
-    """Status of code generation request"""
-
-    PENDING = "pending"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    ROLLED_BACK = "rolled_back"
 
 
 # Prompt templates for different refactoring types
@@ -285,81 +261,6 @@ class RefactoringResult:
     validation: ValidationResult
     tokens_used: int = 0
     processing_time: float = 0.0
-
-
-# =============================================================================
-# Pydantic Models for API
-# =============================================================================
-
-
-class CodeGenerationRequest(BaseModel):
-    """Request model for code generation"""
-
-    description: str = Field(
-        ..., description="Natural language description of code to generate"
-    )
-    language: CodeLanguage = Field(
-        default=CodeLanguage.PYTHON, description="Target language"
-    )
-    context: Optional[str] = Field(
-        None, description="Additional context or requirements"
-    )
-    file_path: Optional[str] = Field(None, description="Target file path for context")
-    existing_code: Optional[str] = Field(
-        None, description="Existing code to integrate with"
-    )
-
-
-class RefactoringRequest(BaseModel):
-    """Request model for code refactoring"""
-
-    code: str = Field(..., description="Code to refactor")
-    refactoring_type: RefactoringType = Field(default=RefactoringType.GENERAL)
-    language: CodeLanguage = Field(default=CodeLanguage.PYTHON)
-    file_path: Optional[str] = Field(None, description="Source file path for context")
-    preserve_comments: bool = Field(default=True)
-    preserve_formatting: bool = Field(default=False)
-
-
-class ValidationRequest(BaseModel):
-    """Request model for code validation"""
-
-    code: str = Field(..., description="Code to validate")
-    language: CodeLanguage = Field(default=CodeLanguage.PYTHON)
-
-
-class RollbackRequest(BaseModel):
-    """Request model for code rollback"""
-
-    file_path: str = Field(..., description="File to rollback")
-    version_id: Optional[str] = Field(
-        None, description="Specific version to rollback to"
-    )
-
-
-class CodeGenerationResponse(BaseModel):
-    """Response model for code generation"""
-
-    success: bool
-    generated_code: Optional[str] = None
-    validation: Optional[Dict[str, Any]] = None
-    tokens_used: int = 0
-    processing_time: float = 0.0
-    error: Optional[str] = None
-
-
-class RefactoringResponse(BaseModel):
-    """Response model for refactoring"""
-
-    success: bool
-    original_code: str
-    refactored_code: Optional[str] = None
-    diff: Optional[str] = None
-    changes: List[str] = []
-    validation: Optional[Dict[str, Any]] = None
-    tokens_used: int = 0
-    processing_time: float = 0.0
-    error: Optional[str] = None
 
 
 # =============================================================================
@@ -554,16 +455,11 @@ class CodeGenerationEngine:
             )
         return self._redis
 
-    def _get_llm_client(self) -> "LLMInterface":
+    def _get_llm_client(self):
         """Get or create LLM client lazily."""
         if self._llm_client is None:
-            if not LLM_INTERFACE_AVAILABLE:
-                raise RuntimeError(
-                    "LLM Interface is not available. "
-                    "Code generation requires LLM connectivity."
-                )
-            self._llm_client = LLMInterface()
-            logger.info("LLMInterface initialized for code generation")
+            self._llm_client = get_llm_service()
+            logger.info("LLMService initialized for code generation")
         return self._llm_client
 
     def _generate_version_id(self, code: str) -> str:
@@ -649,8 +545,8 @@ class CodeGenerationEngine:
                 )
             messages.append({"role": "user", "content": prompt})
 
-            # Call LLM via chat_completion
-            response = await llm_client.chat_completion(
+            # Call LLM via chat
+            response = await llm_client.chat(
                 messages=messages,
                 llm_type="task",  # Use task-optimized model
                 temperature=0.2,  # Lower temperature for code generation
@@ -953,7 +849,14 @@ get_code_generation_engine = lazy_singleton(CodeGenerationEngine)
 # =============================================================================
 
 
-@router.get("/health")
+
+
+@router.get("/health", response_model=CodeGenerationHealthResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_health",
+    error_code_prefix="ANALYTICS_CODE_GENERATION",
+)
 async def get_health(admin_check: bool = Depends(check_admin_permission)):
     """Get code generation service health status.
 
@@ -983,6 +886,11 @@ async def get_health(admin_check: bool = Depends(check_admin_permission)):
 
 
 @router.post("/generate", response_model=CodeGenerationResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="generate_code",
+    error_code_prefix="ANALYTICS_CODE_GENERATION",
+)
 async def generate_code(
     admin_check: bool = Depends(check_admin_permission),
     request: CodeGenerationRequest = None,
@@ -1000,6 +908,11 @@ async def generate_code(
 
 
 @router.post("/refactor", response_model=RefactoringResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="refactor_code",
+    error_code_prefix="ANALYTICS_CODE_GENERATION",
+)
 async def refactor_code(
     admin_check: bool = Depends(check_admin_permission),
     request: RefactoringRequest = None,
@@ -1016,10 +929,15 @@ async def refactor_code(
     return await engine.refactor_code(request)
 
 
-@router.post("/validate")
+@router.post("/validate", response_model=CodeGenerationValidateResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="validate_code",
+    error_code_prefix="ANALYTICS_CODE_GENERATION",
+)
 async def validate_code(
     admin_check: bool = Depends(check_admin_permission),
-    request: ValidationRequest = None,
+    request: CodeGenValidationRequest = None,
 ):
     """
     Validate code syntax and structure.
@@ -1039,7 +957,12 @@ async def validate_code(
     }
 
 
-@router.get("/versions/{file_path:path}")
+@router.get("/versions/{file_path:path}", response_model=CodeGenerationVersionsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_versions",
+    error_code_prefix="ANALYTICS_CODE_GENERATION",
+)
 async def get_versions(
     admin_check: bool = Depends(check_admin_permission), file_path: str = None
 ):
@@ -1060,9 +983,14 @@ async def get_versions(
     }
 
 
-@router.post("/rollback")
+@router.post("/rollback", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="rollback_code",
+    error_code_prefix="ANALYTICS_CODE_GENERATION",
+)
 async def rollback_code(
-    admin_check: bool = Depends(check_admin_permission), request: RollbackRequest = None
+    admin_check: bool = Depends(check_admin_permission), request: CodeGenRollbackRequest = None
 ):
     """
     Rollback code to a previous version.
@@ -1087,7 +1015,12 @@ async def rollback_code(
     }
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=CodeGenerationStatsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_stats",
+    error_code_prefix="ANALYTICS_CODE_GENERATION",
+)
 async def get_stats(
     admin_check: bool = Depends(check_admin_permission),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
@@ -1108,7 +1041,12 @@ async def get_stats(
     return await engine.get_stats(source_id=source_id)
 
 
-@router.get("/refactoring-types")
+@router.get("/refactoring-types", response_model=CodeGenerationRefactoringTypesResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_refactoring_types",
+    error_code_prefix="ANALYTICS_CODE_GENERATION",
+)
 async def get_refactoring_types(admin_check: bool = Depends(check_admin_permission)):
     """
     Get available refactoring types with descriptions.

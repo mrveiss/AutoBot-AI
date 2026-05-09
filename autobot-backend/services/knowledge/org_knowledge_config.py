@@ -30,7 +30,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
 logger = logging.getLogger(__name__)
 
@@ -71,20 +71,14 @@ def _key(org_id: Optional[str]) -> str:
     return f"{_KEY_PREFIX}{org_id or DEFAULT_ORG_ID}"
 
 
-class OrgKnowledgeConfigService:
+class OrgKnowledgeConfigService(AsyncRedisClientMixin):
     """Persisted per-org knowledge model config with SSOT fallback."""
 
-    def __init__(self, redis_client=None) -> None:
-        # Injected client (for tests) or lazy-fetched from the knowledge DB.
-        self._redis = redis_client
+    _redis_database = "knowledge"
 
-    async def _get_redis(self):
-        if self._redis is not None:
-            return self._redis
-        self._redis = await get_redis_client(
-            database="knowledge", async_client=True
-        )
-        return self._redis
+    def __init__(self, redis_client=None) -> None:
+        # Injected client (for tests) or lazy-fetched from the knowledge DB via mixin.
+        self._redis = redis_client
 
     async def get(self, org_id: Optional[str] = None) -> Optional[OrgKnowledgeConfig]:
         """Return the persisted config for ``org_id`` or None if unset."""

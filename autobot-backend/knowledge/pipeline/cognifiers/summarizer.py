@@ -23,7 +23,7 @@ from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.models.summary import Summary, SummaryLevel
 from knowledge.pipeline.registry import TaskRegistry
-from llm_interface_pkg import LLMInterface
+from services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class HierarchicalSummarizer(BaseCognifier):
         self.document_max_words = document_max_words
         self.section_size = section_size
         self.cluster_size_range = cluster_size_range
-        self.llm = LLMInterface()
+        self.llm = get_llm_service()
 
     async def process(self, context: PipelineContext) -> PipelineContext:
         """
@@ -227,8 +227,8 @@ class HierarchicalSummarizer(BaseCognifier):
         """Summarize text using LLM."""
         try:
             prompt = SUMMARY_PROMPT.format(max_words=max_words, text=text)
-            response = await self.llm.chat_completion(
-                messages=[{"role": "user", "content": prompt}]
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}]
             )
             raw = parse_llm_json_response(response.content, fallback_dict=True)
             parsed = (

@@ -25,117 +25,35 @@ Usage:
 """
 
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
-
 from auth_middleware import check_admin_permission
 from autobot_shared.ssot_config import PermissionAction, PermissionMode, config
 from services.approval_memory import get_approval_memory
 from services.permission_matcher import get_permission_matcher
+from api.schemas_system import (
+    ApprovalRecordResponse,
+    CheckCommandRequest,
+    CheckCommandResponse,
+    PermissionAddRuleRequest,
+    PermissionClearApprovalsResponse,
+    PermissionMemoryStatsResponse,
+    PermissionModeRequest,
+    PermissionModeResponse,
+    PermissionRemoveRuleRequest,
+    PermissionRuleMutateResponse,
+    PermissionRuleResponse,
+    PermissionRulesResponse,
+    PermissionStatusResponse,
+    ProjectApprovalsResponse,
+    PermissionStoreApprovalResponse,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/permissions", tags=["permissions"])
-
-
-# =============================================================================
-# Request/Response Models
-# =============================================================================
-
-
-class PermissionModeResponse(BaseModel):
-    """Response model for permission mode."""
-
-    mode: str
-    enabled: bool
-    is_admin_only: bool
-    allowed_modes: List[str]
-
-
-class PermissionModeRequest(BaseModel):
-    """Request model for setting permission mode."""
-
-    mode: str = Field(..., description="Permission mode to set")
-
-
-class PermissionRuleResponse(BaseModel):
-    """Response model for a single rule."""
-
-    tool: str
-    pattern: str
-    action: str
-    description: str
-
-
-class PermissionRulesResponse(BaseModel):
-    """Response model for all rules."""
-
-    allow: List[PermissionRuleResponse]
-    ask: List[PermissionRuleResponse]
-    deny: List[PermissionRuleResponse]
-
-
-class AddRuleRequest(BaseModel):
-    """Request model for adding a rule."""
-
-    tool: str = Field(default="Bash", description="Tool name")
-    pattern: str = Field(..., description="Glob pattern")
-    action: str = Field(..., description="allow, ask, or deny")
-    description: str = Field(default="", description="Rule description")
-
-
-class RemoveRuleRequest(BaseModel):
-    """Request model for removing a rule."""
-
-    tool: str = Field(default="Bash", description="Tool name")
-    pattern: str = Field(..., description="Pattern to remove")
-
-
-class ApprovalRecordResponse(BaseModel):
-    """Response model for an approval record."""
-
-    pattern: str
-    tool: str
-    risk_level: str
-    user_id: str
-    created_at: float
-    original_command: str
-    comment: Optional[str] = None
-
-
-class ProjectApprovalsResponse(BaseModel):
-    """Response model for project approvals."""
-
-    project_path: str
-    approvals: List[ApprovalRecordResponse]
-
-
-class PermissionStatusResponse(BaseModel):
-    """Response model for permission system status."""
-
-    enabled: bool
-    mode: str
-    approval_memory_enabled: bool
-    approval_memory_ttl_days: int
-    rules_file: str
-    rules_count: dict
-
-
-class CheckCommandRequest(BaseModel):
-    """Request model for checking a command."""
-
-    command: str = Field(..., description="Command to check")
-    tool: str = Field(default="Bash", description="Tool name")
-
-
-class CheckCommandResponse(BaseModel):
-    """Response model for command check."""
-
-    result: str  # allow, ask, deny, default
-    pattern: Optional[str] = None
-    description: Optional[str] = None
 
 
 # =============================================================================
@@ -144,6 +62,11 @@ class CheckCommandResponse(BaseModel):
 
 
 @router.get("/status", response_model=PermissionStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_permission_status",
+    error_code_prefix="PERMISSIONS",
+)
 async def get_permission_status(admin_check: bool = Depends(check_admin_permission)):
     """
     Get permission system status.
@@ -175,6 +98,11 @@ async def get_permission_status(admin_check: bool = Depends(check_admin_permissi
 
 
 @router.get("/mode", response_model=PermissionModeResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_permission_mode",
+    error_code_prefix="PERMISSIONS",
+)
 async def get_permission_mode(
     admin_check: bool = Depends(check_admin_permission),
     is_admin: bool = Query(default=False),
@@ -203,6 +131,11 @@ async def get_permission_mode(
 
 
 @router.put("/mode", response_model=PermissionModeResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="set_permission_mode",
+    error_code_prefix="PERMISSIONS",
+)
 async def set_permission_mode(
     request: PermissionModeRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -258,6 +191,11 @@ async def set_permission_mode(
 
 
 @router.get("/rules", response_model=PermissionRulesResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_permission_rules",
+    error_code_prefix="PERMISSIONS",
+)
 async def get_permission_rules(admin_check: bool = Depends(check_admin_permission)):
     """
     Get all permission rules.
@@ -302,9 +240,14 @@ async def get_permission_rules(admin_check: bool = Depends(check_admin_permissio
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/rules")
+@router.post("/rules", response_model=PermissionRuleMutateResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_permission_rule",
+    error_code_prefix="PERMISSIONS",
+)
 async def add_permission_rule(
-    request: AddRuleRequest,
+    request: PermissionAddRuleRequest,
     admin_check: bool = Depends(check_admin_permission),
     is_admin: bool = Query(default=False),
 ):
@@ -350,9 +293,14 @@ async def add_permission_rule(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.delete("/rules")
+@router.delete("/rules", response_model=PermissionRuleMutateResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="remove_permission_rule",
+    error_code_prefix="PERMISSIONS",
+)
 async def remove_permission_rule(
-    request: RemoveRuleRequest, admin_check: bool = Depends(check_admin_permission)
+    request: PermissionRemoveRuleRequest, admin_check: bool = Depends(check_admin_permission)
 ):
     """
     Remove a permission rule.
@@ -380,6 +328,11 @@ async def remove_permission_rule(
 
 
 @router.post("/check", response_model=CheckCommandResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_command",
+    error_code_prefix="PERMISSIONS",
+)
 async def check_command(
     request: CheckCommandRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -407,6 +360,11 @@ async def check_command(
 
 
 @router.get("/memory/{project_path:path}", response_model=ProjectApprovalsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_project_approvals",
+    error_code_prefix="PERMISSIONS",
+)
 async def get_project_approvals(
     project_path: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -441,7 +399,12 @@ async def get_project_approvals(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.delete("/memory/{project_path:path}")
+@router.delete("/memory/{project_path:path}", response_model=PermissionClearApprovalsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_project_approvals",
+    error_code_prefix="PERMISSIONS",
+)
 async def clear_project_approvals(
     project_path: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -477,7 +440,12 @@ async def clear_project_approvals(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/memory")
+@router.post("/memory", response_model=PermissionStoreApprovalResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="store_approval",
+    error_code_prefix="PERMISSIONS",
+)
 async def store_approval(
     admin_check: bool = Depends(check_admin_permission),
     project_path: str = Query(..., description="Project path"),
@@ -520,7 +488,12 @@ async def store_approval(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/memory/stats")
+@router.get("/memory/stats", response_model=PermissionMemoryStatsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_memory_stats",
+    error_code_prefix="PERMISSIONS",
+)
 async def get_memory_stats(admin_check: bool = Depends(check_admin_permission)):
     """
     Get approval memory statistics.

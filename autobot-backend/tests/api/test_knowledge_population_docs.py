@@ -2,7 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Tests for populate_autobot_docs endpoint and TaskStatus dataclass.
+Tests for populate_autobot_docs endpoint and TaskStatusRecord dataclass.
 
 Tests for GitHub issue #4103: Background task for documentation indexing.
 Ensures populate_autobot_docs returns immediately with task_id.
@@ -14,10 +14,10 @@ import pytest
 
 
 def test_task_status_dataclass_initialization():
-    """Test TaskStatus dataclass initialization with default values."""
-    from services.knowledge.task_status_manager import TaskStatus
+    """Test TaskStatusRecord dataclass initialization with default values."""
+    from services.knowledge.task_status_manager import TaskStatusRecord
 
-    task = TaskStatus(task_id="test-task-123", status="queued", message="Documentation indexing started")
+    task = TaskStatusRecord(task_id="test-task-123", status="queued", message="Documentation indexing started")
 
     # Verify all fields are initialized correctly
     assert task.task_id == "test-task-123"
@@ -32,10 +32,10 @@ def test_task_status_dataclass_initialization():
 
 
 def test_task_status_dataclass_custom_values():
-    """Test TaskStatus dataclass with custom field values."""
-    from services.knowledge.task_status_manager import TaskStatus
+    """Test TaskStatusRecord dataclass with custom field values."""
+    from services.knowledge.task_status_manager import TaskStatusRecord
 
-    task = TaskStatus(
+    task = TaskStatusRecord(
         task_id="test-task-456",
         status="running",
         message="Indexing files",
@@ -54,11 +54,11 @@ def test_task_status_dataclass_custom_values():
 
 
 def test_task_status_dataclass_with_error():
-    """Test TaskStatus dataclass with error information."""
-    from services.knowledge.task_status_manager import TaskStatus
+    """Test TaskStatusRecord dataclass with error information."""
+    from services.knowledge.task_status_manager import TaskStatusRecord
 
     error_message = "Failed to read documentation file"
-    task = TaskStatus(
+    task = TaskStatusRecord(
         task_id="test-task-error", status="failed", message="Documentation indexing failed", error=error_message
     )
 

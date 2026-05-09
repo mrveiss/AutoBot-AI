@@ -63,9 +63,19 @@ class LLMFailsafeAgent(StandardizedAgent):
     # Agent identifier for SSOT config lookup
     AGENT_ID = "llm_failsafe"
 
-    def __init__(self):
-        """Initialize the failsafe LLM agent (#3387: migrated to StandardizedAgent)."""
-        super().__init__("llm_failsafe", DeploymentMode.LOCAL)
+    def __init__(
+        self,
+        agent_type: Optional[str] = None,
+        deployment_mode: DeploymentMode = DeploymentMode.LOCAL,
+    ):
+        """Initialize the failsafe LLM agent (#3387: migrated to StandardizedAgent).
+
+        Issue #6660: Accepts the parent's full constructor signature so factory
+        callers (`cls(agent_type, deployment_mode)`) keep working. Defaults
+        match the historical no-arg call site so existing instantiations are
+        unaffected.
+        """
+        super().__init__(agent_type or self.AGENT_ID, deployment_mode)
         # Override self.logger to preserve existing naming convention
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
@@ -498,17 +508,17 @@ class LLMFailsafeAgent(StandardizedAgent):
         """Try primary LLM communication (Issue #398: refactored)."""
         self.tier_stats[LLMTier.PRIMARY]["requests"] += 1
         try:
-            from llm_interface import LLMInterface
+            from services.llm_service import get_llm_service
 
-            llm = LLMInterface()
+            llm = get_llm_service()
             for model in self.primary_models:
                 try:
                     messages = self._create_structured_messages(prompt, context)
                     response_data = await asyncio.wait_for(
-                        llm.chat_completion(messages, llm_type="task"),
+                        llm.chat(messages, llm_type="task"),
                         timeout=self.timeouts[LLMTier.PRIMARY],
                     )
-                    response = response_data.get("response", "")
+                    response = response_data.content
                     if response and response.strip():
                         return self._build_llm_response(
                             response, LLMTier.PRIMARY, model, context, start_time
@@ -532,18 +542,18 @@ class LLMFailsafeAgent(StandardizedAgent):
         """Try secondary LLM communication (Issue #398: refactored)."""
         self.tier_stats[LLMTier.SECONDARY]["requests"] += 1
         try:
-            from llm_interface import LLMInterface
+            from services.llm_service import get_llm_service
 
-            llm = LLMInterface()
+            llm = get_llm_service()
             simplified_prompt = self._simplify_prompt(prompt)
             for model in self.secondary_models:
                 try:
                     messages = [{"role": "user", "content": simplified_prompt}]
                     response_data = await asyncio.wait_for(
-                        llm.chat_completion(messages, llm_type="task"),
+                        llm.chat(messages, llm_type="task"),
                         timeout=self.timeouts[LLMTier.SECONDARY],
                     )
-                    response = response_data.get("response", "")
+                    response = response_data.content
                     if response and response.strip():
                         return self._build_llm_response(
                             response,

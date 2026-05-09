@@ -1,5 +1,9 @@
 # Browser VM VNC Setup - Infrastructure as Code
 
+> **DORMANT (as of #1130):** The VNC-based browser path has been replaced by the screenshot
+> panel approach in `VisualBrowserPanel.vue`. This document is preserved for reference.
+> VNC will be re-integrated as part of #5136 (region-marking).
+
 ## Overview
 
 Real-time collaborative browser viewing system for AutoBot - enables both users and AI agents to observe and control the same browser instance through VNC on Browser VM (<browser-ip>).

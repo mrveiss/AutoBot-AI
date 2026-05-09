@@ -168,35 +168,19 @@
  * Issue #165: Chat Documentation UI Integration
  */
 
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DocumentationResultCard from './DocumentationResultCard.vue'
 import DocumentationSuggestionChip from './DocumentationSuggestionChip.vue'
 import DocumentationCategoryFilter from './DocumentationCategoryFilter.vue'
-import { useApi } from '@/composables/useApi'
-import { getApiBase } from '@/config/ssot-config'
+import { useDocumentationSearch } from '@/composables/chat/useDocumentationSearch'
+import type { DocResult, DocCategory } from '@/composables/chat/useDocumentationSearch'
 import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
 const logger = createLogger('DocumentationSearchSidebar')
 
-interface DocResult {
-  id?: string
-  contentHash?: string
-  title: string
-  content: string
-  category: string
-  section?: string
-  filePath: string
-  score?: number
-}
-
-interface Category {
-  id: string
-  name: string
-  description?: string
-  count: number
-}
+type Category = DocCategory
 
 interface RecentDoc {
   id: string
@@ -222,41 +206,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<Emits>()
 
-const apiClient = useApi()
-
-interface SearchResultItem {
-  node_id?: string
-  doc_id?: string
-  content?: string
-  score?: number
-  rrf_score?: number
-  metadata?: {
-    content_hash?: string
-    title?: string
-    category?: string
-    section?: string
-    file_path?: string
-  }
-}
-
-interface SearchResponse {
-  results?: SearchResultItem[]
-}
-
-interface BrowseDocument {
-  content_hash?: string
-  title?: string
-  category?: string
-  file_path?: string
-}
-
-interface BrowseResponse {
-  documents?: BrowseDocument[]
-}
-
-interface CategoriesResponse {
-  categories?: Category[]
-}
+const { searchDocs, browseMore, fetchCategories: fetchCategoriesApi } = useDocumentationSearch()
 
 // State
 const isCollapsed = ref(!props.initiallyOpen)
@@ -329,27 +279,9 @@ const executeSearch = async () => {
   currentPage.value = 1
 
   try {
-    const data = await apiClient.post<SearchResponse>(`${getApiBase()}/knowledge_base/search`, {
-      query: searchQuery.value || '*',
-      top_k: 20,
-      filters: selectedCategories.value.length > 0
-        ? { category: selectedCategories.value }
-        : undefined
-    })
-
-    if (data?.results) {
-      results.value = data.results.map((r) => ({
-        id: r.node_id || r.doc_id,
-        contentHash: r.metadata?.content_hash,
-        title: r.metadata?.title || 'Untitled',
-        content: r.content || '',
-        category: r.metadata?.category || 'general',
-        section: r.metadata?.section,
-        filePath: r.metadata?.file_path || '',
-        score: r.score || r.rrf_score
-      }))
-      hasMore.value = results.value.length >= 20
-    }
+    const data = await searchDocs(searchQuery.value, selectedCategories.value)
+    results.value = data
+    hasMore.value = results.value.length >= 20
   } catch (error) {
     logger.error('Search failed:', error)
     results.value = []
@@ -390,24 +322,13 @@ const loadMore = async () => {
   currentPage.value++
 
   try {
-    const data = await apiClient.post<BrowseResponse>(`${getApiBase()}/knowledge_base/docs/browse`, {
-      search_query: searchQuery.value,
-      category: selectedCategories.value[0] || null,
-      page: currentPage.value,
-      page_size: 20
-    })
-
-    if (data?.documents) {
-      const newResults = data.documents.map((d) => ({
-        id: d.content_hash,
-        title: d.title || 'Untitled',
-        content: '',
-        category: d.category || 'general',
-        filePath: d.file_path || ''
-      }))
-      results.value = [...results.value, ...newResults]
-      hasMore.value = newResults.length >= 20
-    }
+    const newResults = await browseMore(
+      searchQuery.value,
+      selectedCategories.value[0] || null,
+      currentPage.value
+    )
+    results.value = [...results.value, ...newResults]
+    hasMore.value = newResults.length >= 20
   } catch (error) {
     logger.error('Load more failed:', error)
   } finally {
@@ -468,10 +389,7 @@ const openRecentDoc = (doc: RecentDoc) => {
 const loadCategories = async () => {
   isLoadingCategories.value = true
   try {
-    const data = await apiClient.get<CategoriesResponse>(`${getApiBase()}/knowledge_base/docs/categories`)
-    if (data?.categories) {
-      categories.value = data.categories
-    }
+    categories.value = await fetchCategoriesApi()
   } catch (error) {
     logger.error('Failed to load categories:', error)
   } finally {

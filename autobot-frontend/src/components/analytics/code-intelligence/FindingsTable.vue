@@ -266,7 +266,7 @@ function copyPath(finding: Finding): void {
 
 /* Issue #901: Technical Precision severity badges */
 .severity-badge {
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-xs);
   font-size: var(--text-xs);
   font-weight: 500;
@@ -406,7 +406,7 @@ code {
 /* Issue #901: Electric blue for OWASP tags */
 .owasp-tag {
   display: inline-block;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--color-info-bg);
   color: var(--color-info-dark);
   border-radius: var(--radius-xs);
@@ -425,7 +425,7 @@ code {
 
 /* Issue #901: Technical Precision button styling */
 .btn-small {
-  padding: 6px 12px;
+  padding: var(--spacing-1-5) var(--spacing-3);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xs);

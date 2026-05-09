@@ -1,0 +1,74 @@
+# #7050/#7051 shared role-active facts — DUPLICATE of inventory/group_vars/all.yml.
+#
+# WHY DUPLICATED:
+# When SLM triggers provision-fleet-roles.yml from a node-add or wizard flow,
+# it generates a TEMP inventory file in /tmp/ (no sibling group_vars/ dir).
+# Ansible only loads group_vars from directories adjacent to the inventory
+# file, so the facts in inventory/group_vars/all.yml are NOT available to
+# playbooks invoked with the temp inventory. Result: every conditional
+# `when: role_X_active` evaluates as undefined → fatal.
+#
+# Fix: load these facts via `vars_files: [vars/role_active_facts.yml]` in
+# every playbook that uses them, regardless of inventory layout. Static
+# inventories (localhost.yml, slm-nodes.yml) still get them via group_vars
+# for direct invocations; dynamic inventories get them via this file.
+#
+# DRY trade-off: kept identical to group_vars/all.yml definitions. If they
+# diverge, the CI test playbook (#7068) won't catch it — that test loads
+# group_vars directly. TODO follow-up: single source of truth via include.
+---
+role_backend_active: >-
+  {{ ('backend' in (node_roles | default([]))) or
+     ('autobot-backend' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('main', []) | default([]))) or
+     (inventory_hostname in (groups.get('backend', []) | default([]))) }}
+
+role_frontend_active: >-
+  {{ ('frontend' in (node_roles | default([]))) or
+     ('autobot-frontend' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('frontend', []) | default([]))) }}
+
+role_ai_stack_active: >-
+  {{ ('ai-stack' in (node_roles | default([]))) or
+     ('autobot-ai-stack' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('ai_stack', []) | default([]))) or
+     (inventory_hostname in (groups.get('aiml', []) | default([]))) }}
+
+role_npu_worker_active: >-
+  {{ ('npu-worker' in (node_roles | default([]))) or
+     ('autobot-npu-worker' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('npu_worker', []) | default([]))) or
+     (inventory_hostname in (groups.get('npu_workers', []) | default([]))) or
+     (inventory_hostname in (groups.get('npu', []) | default([]))) }}
+
+role_browser_active: >-
+  {{ ('browser' in (node_roles | default([]))) or
+     ('autobot-browser-worker' in (node_roles | default([]))) or
+     ('browser-service' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('browser', []) | default([]))) or
+     (inventory_hostname in (groups.get('browser_worker', []) | default([]))) }}
+
+role_slm_active: >-
+  {{ (inventory_hostname == '00-SLM-Manager') or
+     (inventory_hostname in (groups.get('slm_server', []) | default([]))) or
+     (inventory_hostname in (groups.get('slm', []) | default([]))) }}
+
+role_redis_active: >-
+  {{ ('redis' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('redis', []) | default([]))) or
+     (inventory_hostname in (groups.get('database', []) | default([]))) }}
+
+role_vnc_active: >-
+  {{ ('vnc' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('main', []) | default([]))) or
+     (inventory_hostname in (groups.get('backend', []) | default([]))) or
+     (inventory_hostname in (groups.get('vnc_nodes', []) | default([]))) }}
+
+role_llm_active: >-
+  {{ ('llm' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('ai_stack', []) | default([]))) or
+     (inventory_hostname in (groups.get('llm_nodes', []) | default([]))) }}
+
+role_tts_worker_active: >-
+  {{ ('tts-worker' in (node_roles | default([]))) or
+     ('autobot-tts-worker' in (node_roles | default([]))) }}

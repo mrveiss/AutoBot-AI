@@ -72,12 +72,8 @@ _jina_session_lock: Optional[asyncio.Lock] = None
 class LinkPipeline(BasePipeline):
     """Pipeline for processing web links and URLs."""
 
-    def __init__(self):
-        """Initialize link processing pipeline."""
-        super().__init__(
-            pipeline_name="link",
-            supported_types=[MediaType.LINK],
-        )
+    PIPELINE_NAME = "link"
+    SUPPORTED_TYPES = [MediaType.LINK]
 
     async def _process_impl(self, media_input: MediaInput) -> ProcessingResult:
         """Process link content."""

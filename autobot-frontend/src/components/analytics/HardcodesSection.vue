@@ -398,7 +398,7 @@ const formatSeverityGroup = (severity: string): string => {
 }
 
 .export-btn {
-  padding: 4px 10px;
+  padding: var(--spacing-1) var(--spacing-2-5);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
   background: var(--bg-tertiary);

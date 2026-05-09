@@ -23,10 +23,16 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
-from api.knowledge_models import (
+from api.schemas_knowledge import (
     PendingSourceResponse,
     VerificationConfig,
     VerificationRequest,
+)
+from api.schemas_knowledge import (
+    KnowledgeVerificationApproveResponse,
+    KnowledgeVerificationConfigResponse,
+    KnowledgeVerificationPendingResponse,
+    KnowledgeVerificationRejectResponse,
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -73,7 +79,7 @@ def _build_pending_response(fact: dict) -> PendingSourceResponse:
     )
 
 
-@router.get("/verification/pending")
+@router.get("/verification/pending", response_model=KnowledgeVerificationPendingResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_pending_verification",
@@ -132,7 +138,7 @@ async def list_pending_verification(
     }
 
 
-@router.post("/verification/{fact_id}/approve")
+@router.post("/verification/{fact_id}/approve", response_model=KnowledgeVerificationApproveResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="approve_fact",
@@ -185,7 +191,7 @@ async def approve_fact(
     }
 
 
-@router.post("/verification/{fact_id}/reject")
+@router.post("/verification/{fact_id}/reject", response_model=KnowledgeVerificationRejectResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reject_fact",
@@ -250,7 +256,12 @@ async def reject_fact(
     }
 
 
-@router.get("/verification/config")
+@router.get("/verification/config", response_model=KnowledgeVerificationConfigResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_verification_config",
+    error_code_prefix="KNOWLEDGE_VERIFICATION",
+)
 async def get_verification_config(req: Request = None):
     """Return current verification mode configuration.
 
@@ -266,7 +277,12 @@ async def get_verification_config(req: Request = None):
     }
 
 
-@router.put("/verification/config")
+@router.put("/verification/config", response_model=KnowledgeVerificationConfigResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_verification_config",
+    error_code_prefix="KNOWLEDGE_VERIFICATION",
+)
 async def update_verification_config(
     body: VerificationConfig,
     req: Request = None,

@@ -13,14 +13,20 @@ Endpoints:
 """
 
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
 
-from auth_middleware import auth_middleware
+from auth_middleware import get_auth_middleware
 from autobot_shared.message_bus import get_message_bus
+from api.schemas_system import (
+    CorrelationChainResponse,
+    LatestMessagesResponse,
+    ServiceMessageResponse,
+    SingleMessageResponse,
+)
 from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -32,43 +38,6 @@ router = APIRouter(prefix="/service-messages", tags=["service-messages"])
 # ------------------------------------------------------------------
 
 
-class ServiceMessageResponse(BaseModel):
-    """Single serialised ServiceMessage."""
-
-    msg_id: str
-    ts: str
-    sender: str
-    receiver: str
-    msg_type: str
-    content: str
-    correlation_id: str
-    meta: dict = Field(default_factory=dict)
-
-
-class LatestMessagesResponse(BaseModel):
-    """Response for GET /latest."""
-
-    success: bool
-    count: int
-    messages: List[ServiceMessageResponse]
-
-
-class SingleMessageResponse(BaseModel):
-    """Response for GET /{msg_id}."""
-
-    success: bool
-    message: Optional[ServiceMessageResponse] = None
-
-
-class CorrelationChainResponse(BaseModel):
-    """Response for GET /chain/{correlation_id}."""
-
-    success: bool
-    correlation_id: str
-    count: int
-    messages: List[ServiceMessageResponse]
-
-
 # ------------------------------------------------------------------
 # Auth helper
 # ------------------------------------------------------------------
@@ -77,7 +46,7 @@ class CorrelationChainResponse(BaseModel):
 def _check_admin(request: Request) -> bool:
     """Require admin role for service-message access."""
     try:
-        user_data = auth_middleware.get_user_from_request(request)
+        user_data = get_auth_middleware().get_user_from_request(request)
         if not user_data:
             raise_auth_error(
                 "AUTH_0002",
@@ -119,6 +88,11 @@ def _msg_to_response(msg) -> ServiceMessageResponse:
 
 
 @router.get("/latest", response_model=LatestMessagesResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_latest_messages",
+    error_code_prefix="SERVICE_MESSAGES",
+)
 async def get_latest_messages(
     request: Request,
     count: int = Query(50, ge=1, le=500, description="Number of messages"),
@@ -152,6 +126,11 @@ async def get_latest_messages(
 
 
 @router.get("/chain/{correlation_id}", response_model=CorrelationChainResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_correlation_chain",
+    error_code_prefix="SERVICE_MESSAGES",
+)
 async def get_correlation_chain(
     request: Request,
     correlation_id: str,
@@ -182,6 +161,11 @@ async def get_correlation_chain(
 
 
 @router.get("/{msg_id}", response_model=SingleMessageResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_message",
+    error_code_prefix="SERVICE_MESSAGES",
+)
 async def get_message(
     request: Request,
     msg_id: str,

@@ -17,16 +17,34 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.models.pagination import PaginationParams
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client, get_redis_client
+from api.schemas_workflows import (
+    APIBatchRequest,
+    APIBatchResponse,
+    BatchChatInitResponse,
+    BatchJob,
+    BatchJobCreate,
+    BatchJobDeleteResponse,
+    BatchJobList,
+    BatchJobStatus,
+    BatchJobType,
+    BatchJobsHealthResponse,
+    BatchLoadResponse,
+    BatchLogEntry,
+    BatchSchedule,
+    BatchScheduleDeleteResponse,
+    BatchStatusResponse,
+    BatchTemplate,
+    BatchTemplateDeleteResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["batch-jobs", "management"])
@@ -35,92 +53,6 @@ router = APIRouter(tags=["batch-jobs", "management"])
 # =============================================================================
 # Data Models
 # =============================================================================
-
-
-class BatchJobStatus(str, Enum):
-    """Status of a batch job"""
-
-    pending = "pending"
-    running = "running"
-    completed = "completed"
-    failed = "failed"
-    cancelled = "cancelled"
-
-
-class BatchJobType(str, Enum):
-    """Type of batch job"""
-
-    data_processing = "data_processing"
-    file_conversion = "file_conversion"
-    report_generation = "report_generation"
-    backup = "backup"
-    custom = "custom"
-
-
-class BatchJobCreate(BaseModel):
-    """Request model for creating a batch job"""
-
-    name: str = Field(..., description="Human-readable name for the job")
-    job_type: BatchJobType = Field(..., description="Type of batch job")
-    parameters: Dict = Field(
-        default_factory=dict, description="Job-specific parameters"
-    )
-    schedule: Optional[str] = Field(
-        None, description="Optional cron expression for scheduling"
-    )
-    template_id: Optional[str] = Field(None, description="Optional template ID to use")
-
-
-class BatchJob(BaseModel):
-    """Batch job model"""
-
-    job_id: str
-    name: str
-    job_type: BatchJobType
-    status: BatchJobStatus
-    progress: int = Field(0, ge=0, le=100, description="Progress percentage")
-    parameters: Dict
-    created_at: datetime
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-    result: Optional[Dict] = None
-
-
-class BatchTemplate(BaseModel):
-    """Batch job template model"""
-
-    template_id: str
-    name: str
-    job_type: BatchJobType
-    parameters: Dict
-    created_at: datetime
-
-
-class BatchSchedule(BaseModel):
-    """Batch job schedule model"""
-
-    schedule_id: str
-    job_id: str
-    cron_expression: str
-    enabled: bool
-    next_run: datetime
-
-
-class BatchJobList(BaseModel):
-    """Response model for job list"""
-
-    jobs: List[BatchJob]
-    total_count: int
-    status_counts: Dict[str, int]
-
-
-class LogEntry(BaseModel):
-    """Log entry model"""
-
-    timestamp: datetime
-    level: str
-    message: str
 
 
 # =============================================================================
@@ -164,12 +96,12 @@ def _deserialize_job(data: str) -> BatchJob:
 # =============================================================================
 
 
+@router.post("", response_model=BatchJob)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_batch_job",
     error_code_prefix="BATCH_JOBS",
 )
-@router.post("", response_model=BatchJob)
 async def create_batch_job(
     job_data: BatchJobCreate,
     current_user: dict = Depends(get_current_user),
@@ -211,12 +143,12 @@ async def create_batch_job(
     return job
 
 
+@router.get("", response_model=BatchJobList)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_batch_jobs",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("", response_model=BatchJobList)
 async def list_batch_jobs(
     status: Optional[BatchJobStatus] = Query(None, description="Filter by status"),
     job_type: Optional[BatchJobType] = Query(None, description="Filter by type"),
@@ -270,12 +202,12 @@ async def list_batch_jobs(
     return BatchJobList(jobs=jobs, total_count=total_count, status_counts=status_counts)
 
 
+@router.get("/{job_id}", response_model=BatchJob)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_batch_job",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/{job_id}", response_model=BatchJob)
 async def get_batch_job(
     job_id: str,
     current_user: dict = Depends(get_current_user),
@@ -304,12 +236,12 @@ async def get_batch_job(
     return _deserialize_job(job_data.decode("utf-8"))
 
 
+@router.delete("/{job_id}", response_model=BatchJobDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_batch_job",
     error_code_prefix="BATCH_JOBS",
 )
-@router.delete("/{job_id}")
 async def delete_batch_job(
     job_id: str,
     current_user: dict = Depends(get_current_user),
@@ -352,12 +284,12 @@ async def delete_batch_job(
     return {"status": "success", "job_id": job_id, "message": "Job deleted"}
 
 
+@router.get("/{job_id}/logs", response_model=List[BatchLogEntry])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_job_logs",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/{job_id}/logs", response_model=List[LogEntry])
 async def get_job_logs(
     job_id: str,
     current_user: dict = Depends(get_current_user),
@@ -371,7 +303,7 @@ async def get_job_logs(
         job_id: Job ID
 
     Returns:
-        List[LogEntry]: Job execution logs
+        List[BatchLogEntry]: Job execution logs
     """
     redis_client = get_redis_client(database="main")
     if not redis_client:
@@ -387,7 +319,7 @@ async def get_job_logs(
     logs = []
     for entry_bytes in log_entries:
         entry = json.loads(entry_bytes.decode("utf-8"))
-        logs.append(LogEntry(**entry))
+        logs.append(BatchLogEntry(**entry))
 
     return logs
 
@@ -397,12 +329,12 @@ async def get_job_logs(
 # =============================================================================
 
 
+@router.get("/templates/", response_model=List[BatchTemplate])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_batch_templates",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/templates/", response_model=List[BatchTemplate])
 async def list_batch_templates(
     current_user: dict = Depends(get_current_user),
 ):
@@ -430,12 +362,12 @@ async def list_batch_templates(
     return templates
 
 
+@router.post("/templates/", response_model=BatchTemplate)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_batch_template",
     error_code_prefix="BATCH_JOBS",
 )
-@router.post("/templates/", response_model=BatchTemplate)
 async def create_batch_template(
     name: str,
     job_type: BatchJobType,
@@ -468,12 +400,12 @@ async def create_batch_template(
     return template
 
 
+@router.get("/templates/{template_id}", response_model=BatchTemplate)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_batch_template",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/templates/{template_id}", response_model=BatchTemplate)
 async def get_batch_template(
     template_id: str,
     current_user: dict = Depends(get_current_user),
@@ -497,12 +429,12 @@ async def get_batch_template(
     return BatchTemplate(**template_dict)
 
 
+@router.delete("/templates/{template_id}", response_model=BatchTemplateDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_batch_template",
     error_code_prefix="BATCH_JOBS",
 )
-@router.delete("/templates/{template_id}")
 async def delete_batch_template(
     template_id: str,
     current_user: dict = Depends(get_current_user),
@@ -532,12 +464,12 @@ async def delete_batch_template(
 # =============================================================================
 
 
+@router.get("/schedules/", response_model=List[BatchSchedule])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_batch_schedules",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/schedules/", response_model=List[BatchSchedule])
 async def list_batch_schedules(
     current_user: dict = Depends(get_current_user),
 ):
@@ -565,12 +497,12 @@ async def list_batch_schedules(
     return schedules
 
 
+@router.post("/schedules/", response_model=BatchSchedule)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_batch_schedule",
     error_code_prefix="BATCH_JOBS",
 )
-@router.post("/schedules/", response_model=BatchSchedule)
 async def create_batch_schedule(
     job_id: str,
     cron_expression: str,
@@ -607,12 +539,12 @@ async def create_batch_schedule(
     return schedule
 
 
+@router.delete("/schedules/{schedule_id}", response_model=BatchScheduleDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_batch_schedule",
     error_code_prefix="BATCH_JOBS",
 )
-@router.delete("/schedules/{schedule_id}")
 async def delete_batch_schedule(
     schedule_id: str,
     current_user: dict = Depends(get_current_user),
@@ -642,12 +574,53 @@ async def delete_batch_schedule(
 # =============================================================================
 
 
+@register_health_probe("batch_jobs")
+async def probe_batch_jobs(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #6902: probe with rich data so the frontend can read
+    ``probes[name=batch_jobs].data.redis_connected`` from /api/system/health.
+
+    Mirrors the legacy /api/batch-jobs/health response keys.
+    """
+    try:
+        client = await get_async_redis_client(database="main")
+        if client is None:
+            return ComponentHealth(
+                name="batch_jobs",
+                status="down",
+                detail="redis client unavailable",
+                data={"redis_connected": False, "service": "batch_jobs_manager"},
+            )
+        redis_connected = True
+        try:
+            await client.ping()
+        except Exception:
+            redis_connected = False
+        return ComponentHealth(
+            name="batch_jobs",
+            status="ok" if redis_connected else "degraded",
+            detail=None if redis_connected else "redis ping failed",
+            data={
+                "redis_connected": redis_connected,
+                "service": "batch_jobs_manager",
+            },
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="batch_jobs",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+            data={"redis_connected": False, "service": "batch_jobs_manager"},
+        )
+
+
+@router.get("/health", response_model=BatchJobsHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_batch_jobs_health",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/health")
 async def get_batch_jobs_health(
     current_user: dict = Depends(get_current_user),
 ):
@@ -721,26 +694,12 @@ def _process_session_file(filename: str, chats_directory: str):
         return None
 
 
-class BatchRequest(BaseModel):
-    """Request multiple endpoints in one call"""
-
-    requests: List[Dict]
-
-
-class BatchResponse(BaseModel):
-    """Combined response from multiple endpoints"""
-
-    responses: Dict
-    errors: Dict[str, str]
-    timing: Dict[str, float]
-
-
+@router.get("/status", response_model=BatchStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_batch_status",
-    error_code_prefix="BATCH",
+    error_code_prefix="BATCH_JOBS",
 )
-@router.get("/status")
 async def get_batch_status():
     """Get batch processing service status"""
     return {
@@ -753,13 +712,13 @@ async def get_batch_status():
     }
 
 
+@router.post("/load", response_model=BatchLoadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="batch_load",
-    error_code_prefix="BATCH",
+    error_code_prefix="BATCH_JOBS",
 )
-@router.post("/load")
-async def batch_load(batch_request: BatchRequest):
+async def batch_load(batch_request: APIBatchRequest):
     """Execute multiple API calls in parallel and return combined results."""
     import time
 
@@ -804,16 +763,16 @@ async def batch_load(batch_request: BatchRequest):
     tasks = [execute_request(req) for req in batch_request.requests]
     await asyncio.gather(*tasks, return_exceptions=True)
 
-    return BatchResponse(responses=responses, errors=errors, timing=timing)
+    return APIBatchResponse(responses=responses, errors=errors, timing=timing)
 
 
+@router.get("/chat-init", response_model=BatchChatInitResponse)
+@router.post("/chat-init", response_model=BatchChatInitResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="batch_chat_initialization",
-    error_code_prefix="BATCH",
+    error_code_prefix="BATCH_JOBS",
 )
-@router.get("/chat-init")
-@router.post("/chat-init")
 async def batch_chat_initialization():
     """
     Optimized endpoint for chat interface initialization.

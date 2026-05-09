@@ -9,15 +9,25 @@
     url: https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
     state: present
 
-- name: Add OpenVINO repository
-  apt_repository:
-    repo: "deb https://apt.repos.intel.com/openvino/{{ openvino_version }} ubuntu22 main"
-    state: present
-    filename: intel-openvino
+# #7218: idempotent repo-add — preserve device-shipped OpenVINO repo if present
+- name: "Add OpenVINO repository (idempotent, #7218)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
+  vars:
+    apt_repo_match: "apt.repos.intel.com/openvino"
+    apt_repo_spec: "deb https://apt.repos.intel.com/openvino/{{ openvino_version }} ubuntu22 main"
+    apt_repo_filename: "intel-openvino"
+    apt_repo_label: "OpenVINO"
 
-- name: Update apt cache after adding OpenVINO repo
-  apt:
-    update_cache: yes
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: agent_config openvino | Refresh apt cache after OpenVINO repo add (best-effort, bounded; #6719)
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
 
 - name: Install OpenVINO Runtime
   package:

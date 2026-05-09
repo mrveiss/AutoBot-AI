@@ -98,116 +98,50 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { formatDateTime } from '@/utils/formatHelpers'
-import { useAsyncOperation } from '@/composables/useAsyncOperation'
+import { useKnowledgeVectorization } from '@/composables/knowledge/useKnowledgeVectorization'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import { createLogger } from '@/utils/debugUtils'
 
-const logger = createLogger('FailedVectorizationsManager')
 const { t } = useI18n()
 
-interface FailedJob {
-  job_id: string
-  fact_id: string
-  status: string
-  started_at: string
-  completed_at: string | null
-  error: string | null
-}
+const {
+  failedJobs,
+  retryingJobs,
+  isLoading: loading,
+  error,
+  refreshFailedJobs,
+  retryJob: retryJobBase,
+  deleteJob: deleteJobBase,
+  clearAllFailed: clearAllFailedBase,
+} = useKnowledgeVectorization()
 
-// State
-const failedJobs = ref<FailedJob[]>([])
-const retryingJobs = ref<Set<string>>(new Set())
-
-// Use composable for async operations
-const { execute: fetchFailedJobs, loading, error } = useAsyncOperation()
-
-// Fetch failed jobs
-const fetchFailedJobsFn = async () => {
-  const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_jobs/failed`)
-
-  if (data.status === 'success') {
-    failedJobs.value = data.failed_jobs
-  } else {
-    throw new Error('Failed to load failed jobs')
-  }
-}
-
-// Refresh failed jobs
-const refreshFailedJobs = async () => {
-  await fetchFailedJobs(fetchFailedJobsFn)
-}
-
-// Retry a single job
-const retryJob = async (jobId: string) => {
-  retryingJobs.value.add(jobId)
-
-  try {
-    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_jobs/${jobId}/retry`)
-
-    if (data.status === 'success') {
-      // Remove from failed list
-      failedJobs.value = failedJobs.value.filter(job => job.job_id !== jobId)
-
-      logger.debug(`Job ${jobId} retry started as ${data.new_job_id}`)
-    } else {
-      throw new Error(`Failed to retry job: ${data.message || 'Unknown error'}`)
-    }
-  } catch (err) {
-    logger.error('Error retrying job:', err)
-    throw err instanceof Error ? err : new Error(`Error retrying job: ${err}`)
-  } finally {
-    retryingJobs.value.delete(jobId)
-  }
-}
-
-// Delete a single job
+// Delete a single job — confirm before delegating to composable
 const deleteJob = async (jobId: string) => {
   if (!confirm(t('knowledge.failedVectorizations.confirmDelete'))) {
     return
   }
-
-  await fetchFailedJobs(async () => {
-    const data = await apiClient.delete<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_jobs/${jobId}`)
-
-    if (data.status === 'success') {
-      // Remove from list
-      failedJobs.value = failedJobs.value.filter(job => job.job_id !== jobId)
-    } else {
-      throw new Error(data.message || 'Failed to delete job')
-    }
-  })
+  await deleteJobBase(jobId)
 }
 
-// Clear all failed jobs
+// Clear all failed jobs — confirm before delegating to composable
 const clearAllFailed = async () => {
   if (!confirm(t('knowledge.failedVectorizations.confirmClearAll', { count: failedJobs.value.length }))) {
     return
   }
-
-  await fetchFailedJobs(async () => {
-    const data = await apiClient.delete<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_jobs/failed/clear`)
-
-    if (data.status === 'success') {
-      failedJobs.value = []
-      logger.debug(`Cleared ${data.deleted_count} failed jobs`)
-    } else {
-      throw new Error(data.message || 'Failed to clear jobs')
-    }
-  })
+  await clearAllFailedBase()
 }
+
+const retryJob = retryJobBase
 
 // Use shared datetime formatting utility
 const formatTime = formatDateTime
 
 // Load on mount
 onMounted(() => {
-  fetchFailedJobs(fetchFailedJobsFn)
+  refreshFailedJobs()
 })
 </script>
 

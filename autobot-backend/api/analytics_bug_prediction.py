@@ -14,18 +14,33 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import get_redis_client
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_5_MINUTES
 from utils.background_task_manager import BackgroundTaskManager
+from api.schemas_analytics import (
+    BugPredictionAnalysisResponse,
+    BugPredictionAnalyzeResponse,
+    BugPredictionCachedResponse,
+    BugPredictionClearStuckResponse,
+    BugPredictionFileResponse,
+    BugPredictionHeatmapResponse,
+    BugPredictionHighRiskResponse,
+    BugPredictionRecordBugResponse,
+    BugPredictionRiskFactorsResponse,
+    BugPredictionStatusResponse,
+    BugPredictionSummaryResponse,
+    BugPredictionTrendsResponse,
+    RiskFactor,
+    RiskLevel,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -185,54 +200,6 @@ def _build_file_risk_dict(
 # ============================================================================
 # Models
 # ============================================================================
-
-
-class RiskLevel(str, Enum):
-    """Bug risk levels."""
-
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-    MINIMAL = "minimal"
-
-
-class RiskFactor(str, Enum):
-    """Factors contributing to bug risk."""
-
-    COMPLEXITY = "complexity"
-    CHANGE_FREQUENCY = "change_frequency"
-    CODE_AGE = "code_age"
-    TEST_COVERAGE = "test_coverage"
-    BUG_HISTORY = "bug_history"
-    AUTHOR_EXPERIENCE = "author_experience"
-    FILE_SIZE = "file_size"
-    DEPENDENCY_COUNT = "dependency_count"
-
-
-class FileRisk(BaseModel):
-    """Bug risk assessment for a file."""
-
-    file_path: str
-    risk_score: float = Field(..., ge=0, le=100)
-    risk_level: RiskLevel
-    factors: dict[str, float] = Field(default_factory=dict)
-    bug_count_history: int = 0
-    last_bug_date: Optional[str] = None
-    prevention_tips: list[str] = Field(default_factory=list)
-    suggested_tests: list[str] = Field(default_factory=list)
-
-
-class PredictionResult(BaseModel):
-    """Bug prediction result for the codebase."""
-
-    timestamp: datetime
-    total_files: int
-    high_risk_count: int
-    predicted_bugs: int
-    accuracy_score: float
-    risk_distribution: dict[str, int] = Field(default_factory=dict)
-    top_risk_files: list[FileRisk] = Field(default_factory=list)
 
 
 # ============================================================================
@@ -913,7 +880,12 @@ async def _run_bug_analysis(
     }
 
 
-@router.get("/analyze")
+@router.get("/analyze", response_model=BugPredictionAnalysisResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_codebase",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 async def analyze_codebase(
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query(".", description="Path to analyze"),
@@ -1027,7 +999,12 @@ async def _run_batched_bug_analysis(
         await _bg_manager.fail_task(task_id, str(e))
 
 
-@router.get("/cached")
+@router.get("/cached", response_model=BugPredictionCachedResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cached_bug_prediction",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 async def get_cached_bug_prediction():
     """Return the latest completed bug prediction result (#1540)."""
     cached = await _bg_manager.get_latest_result()
@@ -1041,7 +1018,12 @@ async def get_cached_bug_prediction():
     return _no_data_response("No cached bug prediction available")
 
 
-@router.post("/analyze")
+@router.post("/analyze", response_model=BugPredictionAnalyzeResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_bug_analysis",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 async def start_bug_analysis(
     background_tasks: BackgroundTasks,
     admin_check: bool = Depends(check_admin_permission),
@@ -1059,7 +1041,12 @@ async def start_bug_analysis(
     return {"task_id": task_id, "status": "pending"}
 
 
-@router.get("/status/{task_id}")
+@router.get("/status/{task_id}", response_model=BugPredictionStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_bug_prediction_status",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 async def get_bug_prediction_status(
     task_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -1071,7 +1058,12 @@ async def get_bug_prediction_status(
     return task
 
 
-@router.post("/tasks/clear-stuck")
+@router.post("/tasks/clear-stuck", response_model=BugPredictionClearStuckResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_stuck_bug_tasks",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 async def clear_stuck_bug_tasks(
     force: bool = Query(default=False, description="Force clear ALL running tasks"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1084,7 +1076,12 @@ async def clear_stuck_bug_tasks(
     }
 
 
-@router.get("/high-risk")
+@router.get("/high-risk", response_model=BugPredictionHighRiskResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_high_risk_files",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 async def get_high_risk_files(
     admin_check: bool = Depends(check_admin_permission),
     threshold: float = Query(60, ge=0, le=100),
@@ -1152,7 +1149,12 @@ def _build_file_risk_response(file_path: str, factors: dict, bug_history: dict) 
     }
 
 
-@router.get("/file/{file_path:path}")
+@router.get("/file/{file_path:path}", response_model=BugPredictionFileResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_file_risk",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 async def get_file_risk(
     file_path: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -1249,7 +1251,12 @@ def _get_flat_heatmap_data(files: list) -> list:
     ]
 
 
-@router.get("/heatmap")
+@router.get("/heatmap", response_model=BugPredictionHeatmapResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_risk_heatmap",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 async def get_risk_heatmap(
     admin_check: bool = Depends(check_admin_permission),
     grouping: str = Query("directory", pattern="^(directory|module|flat)$"),
@@ -1298,7 +1305,12 @@ async def get_risk_heatmap(
         return _no_data_response("Heatmap generation failed")
 
 
-@router.get("/trends")
+@router.get("/trends", response_model=BugPredictionTrendsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_prediction_trends",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 async def get_prediction_trends(
     admin_check: bool = Depends(check_admin_permission),
     period: str = Query("30d", pattern="^(7d|30d|90d)$"),
@@ -1411,7 +1423,12 @@ def _generate_summary_recommendations(
     return recommendations[:5]
 
 
-@router.get("/summary")
+@router.get("/summary", response_model=BugPredictionSummaryResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_prediction_summary",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 async def get_prediction_summary(
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query(".", description="Path to analyze"),
@@ -1471,7 +1488,12 @@ async def get_prediction_summary(
         return _no_data_response("Summary generation failed")
 
 
-@router.get("/factors")
+@router.get("/factors", response_model=BugPredictionRiskFactorsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_risk_factors",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 async def get_risk_factors(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:
@@ -1518,7 +1540,12 @@ def _get_factor_description(factor: RiskFactor) -> str:
     return descriptions.get(factor, "Unknown factor")
 
 
-@router.post("/record-bug")
+@router.post("/record-bug", response_model=BugPredictionRecordBugResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="record_bug",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 async def record_bug(
     admin_check: bool = Depends(check_admin_permission),
     file_path: str = None,

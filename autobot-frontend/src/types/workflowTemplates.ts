@@ -5,20 +5,84 @@
 /**
  * Workflow Templates TypeScript interfaces
  * Issue #778 - Workflow Templates Enhancement
+ * Issue #6951 Phase 2F + #7044: TemplateStep regenerated from canonical
+ *   autobot_shared.workflow.WorkflowTask shape. Old fields step_id /
+ *   requires_confirmation / risk_level removed — those belonged to the
+ *   runtime workflow_automation path, NOT the static template path.
+ *   See AutomationWorkflowStep below for the runtime shape.
  */
 
 export type TemplateCategory = 'security' | 'research' | 'development' | 'system_admin' | 'analysis' | 'community'
 export type TaskComplexity = 'simple' | 'moderate' | 'complex' | 'research' | 'security_scan' | 'install'
-export type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
 
+/**
+ * Generated unions/types — single source of truth is the canonical Python
+ * (#7122 / #7226). Re-exported here so consumers keep a stable import path
+ * (`@/types/workflowTemplates`) regardless of how the backing classes are
+ * sourced (shared dataclasses, backend enums, etc.).
+ *
+ * The `frontend-codegen-drift` CI check fails if the generated file goes stale.
+ */
+import type {
+  PromptSpec,
+  WorkflowTask,
+  WorkflowPlan,
+  WorkflowStepStatus,
+  RiskLevel,
+} from './_generated/workflow'
+export type { PromptSpec, WorkflowTask, WorkflowPlan, WorkflowStepStatus, RiskLevel }
+
+/**
+ * Static template step — matches backend `_template_step_dict()` from
+ * `workflow_templates/types.py`. Field names align with canonical
+ * `autobot_shared.workflow.WorkflowTask`. Runtime-state fields
+ * (status / start_time / end_time / error / outputs) are intentionally
+ * absent — a template step has no execution state.
+ */
 export interface TemplateStep {
-  step_id: string
+  task_id: string
+  agent_type: string
+  action: string
+  command: string | null
   description: string
+  requires_approval: boolean
+  dependencies: string[]
+  inputs: Record<string, unknown>
+  estimated_duration_seconds: number
+  prompt: PromptSpec | null
+  tools_allowed: string[] | null
+  tools_denied: string[]
+}
+
+/**
+ * Runtime workflow step — matches backend
+ * `services/workflow_automation/WorkflowStep.to_status_dict()`. Used by the
+ * shell+vision execution path with risk levels and confirmation gating.
+ * Distinct from `TemplateStep` per #7044 split.
+ *
+ * #7123: extended to be the canonical runtime shape consumed across the
+ * frontend. The previous local `WorkflowStep` interface in
+ * `composables/useWorkflowBuilder.ts` is now `type WorkflowStep = AutomationWorkflowStep`.
+ *
+ * Field nullability matches backend payload exactly:
+ * - `started_at` / `completed_at` are `string | null` (backend always sends
+ *   the key, with ISO-8601 string when set, null otherwise).
+ * - `risk_level` is required (backend always emits it; the previous
+ *   optional ? was a guess that masked the bug #7044 documented).
+ */
+export interface AutomationWorkflowStep {
+  step_id: string
   command: string
+  description: string
+  explanation?: string
+  status: WorkflowStepStatus
   requires_confirmation: boolean
   risk_level: RiskLevel
-  estimated_duration_seconds: number
-  agent_type?: string
+  estimated_duration: number
+  dependencies?: string[]
+  execution_result?: Record<string, unknown>
+  started_at: string | null
+  completed_at: string | null
 }
 
 export interface SecretRequirement {

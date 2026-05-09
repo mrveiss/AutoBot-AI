@@ -23,11 +23,34 @@ Usage::
     await cache.delete("my:key")
 """
 
+import dataclasses
 import json
 import logging
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _json_default(obj: Any) -> Any:
+    """Fallback serializer for ``json.dumps`` covering common AutoBot types.
+
+    #6696: A bare ``json.dumps`` raised TypeError on dataclasses (e.g.
+    ``SystemMetric``) and Pydantic models, silently failing every cache
+    write. Handle them centrally so callers don't repeat the conversion.
+    """
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return dataclasses.asdict(obj)
+    # Pydantic v2 BaseModel exposes model_dump(); v1 exposes dict(). Detect
+    # via duck-typing to avoid importing pydantic in the shared layer.
+    model_dump = getattr(obj, "model_dump", None)
+    if callable(model_dump):
+        return model_dump()
+    pydantic_v1_dict = getattr(obj, "dict", None)
+    if callable(pydantic_v1_dict) and getattr(obj, "__fields__", None) is not None:
+        return pydantic_v1_dict()
+    raise TypeError(
+        f"Object of type {type(obj).__name__} is not JSON serializable"
+    )
 
 
 class RedisCache:
@@ -69,9 +92,7 @@ class RedisCache:
             logger.warning("Cache get failed for %s: %s", key, exc)
             return default
 
-    async def set_json(
-        self, key: str, data: Any, ttl: Optional[int] = None
-    ) -> bool:
+    async def set_json(self, key: str, data: Any, ttl: Optional[int] = None) -> bool:
         """JSON-encode *data* and store it at *key* in Redis.
 
         Args:
@@ -85,7 +106,7 @@ class RedisCache:
         """
         try:
             ex = ttl if ttl is not None else self._default_ttl
-            payload = json.dumps(data, ensure_ascii=False)
+            payload = json.dumps(data, ensure_ascii=False, default=_json_default)
             if ex:
                 await self._client.set(key, payload, ex=ex)
             else:

@@ -82,6 +82,19 @@
     group: root
   tags: ['backend', 'config']
 
+# #6677 + #7272: Stat the SLM TLS certs before rendering the env file.
+# The template only sets AUTOBOT_TLS_CA_PATH when the cert actually exists,
+# so installs without TLS (or where distribute-tls-certs.yml has not yet
+# run) don't ship a dangling env var that points at a missing file.
+# Now uses the shared _shared/tasks/stat_tls_certs.yml helper (#7272) —
+# the helper registers tls_server_cert/tls_server_key/tls_ca_cert; the
+# backend template only references tls_ca_cert.
+- name: "Backend | Stat SLM TLS certs (#6677/#7272)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/stat_tls_certs.yml
+  vars:
+    tls_cert_dir: /etc/autobot/certs
+  tags: ['backend', 'config']
+
 - name: "Backend | Deploy /etc/autobot/autobot-backend.env"
   ansible.builtin.template:
     src: backend.env.j2
@@ -116,6 +129,18 @@
 # ============================================================
 # Backend-specific system dependencies (Python 3.12 now in shared Phase 0)
 # ============================================================
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: "Backend | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  tags: ['backend', 'packages']
+
 - name: "Backend | Install backend-specific system dependencies"
   ansible.builtin.apt:
     name:
@@ -149,7 +174,6 @@
       # Matplotlib GUI backend
       - python3-tk
     state: present
-    update_cache: true
   tags: ['backend', 'packages']
 
 
@@ -250,6 +274,14 @@
       - "--exclude=archives"
   tags: ['backend', 'deploy']
 
+- name: "Backend | Clear stale .pyc files after source sync (#6193)"
+  ansible.builtin.shell: |
+    find "{{ backend_code_dir }}" -name '*.pyc' -delete
+    find "{{ backend_install_dir }}/autobot_shared" -name '*.pyc' -delete 2>/dev/null || true
+    find "{{ backend_shared_standalone_dir }}" -name '*.pyc' -delete 2>/dev/null || true
+  changed_when: false
+  tags: ['backend', 'deploy']
+
 - name: Create backend symlink for imports
   ansible.builtin.file:
     src: "{{ backend_code_dir }}"
@@ -328,6 +360,27 @@
     path: "{{ backend_code_dir }}/venv"
     state: absent
   when: venv_check.stat.exists and venv_check.stat.islnk
+
+# #7052: Detect partially-corrupted venv from a prior failed install.
+# A venv with a working python3.12 binary but stale .pth files (e.g. from
+# an editable install whose finder module was removed during venv rebuild)
+# breaks pip on first import. The `Create venv` task below skips when
+# bin/activate exists, so without this check the corruption survives reinstall.
+- name: "Backend | Check venv health (pip importable, #7052)"
+  ansible.builtin.command:
+    cmd: "{{ backend_code_dir }}/venv/bin/python3.12 -c 'import pip'"
+  register: _venv_health
+  changed_when: false
+  failed_when: false
+  when: venv_check.stat.exists and venv_check.stat.isdir
+
+- name: "Backend | Remove broken venv when health check failed (#7052)"
+  ansible.builtin.file:
+    path: "{{ backend_code_dir }}/venv"
+    state: absent
+  when:
+    - venv_check.stat.exists and venv_check.stat.isdir
+    - (_venv_health.rc | default(0)) != 0
 
 - name: Create Python 3.12 virtual environment via deadsnakes
   ansible.builtin.command:
@@ -522,6 +575,33 @@
 - name: Enable and start Celery worker service
   ansible.builtin.systemd:
     name: autobot-celery
+    state: started
+    enabled: true
+    daemon_reload: true
+
+# Issue #6555: Deploy Celery Beat — fires the periodic schedules
+# declared in celery_app.conf.beat_schedule (knowledge cleanup,
+# sync queue prune). Without Beat the schedules are dead config.
+- name: "Beat | Ensure schedule directory exists"
+  ansible.builtin.file:
+    path: "{{ celery_beat_schedule_file | default('/var/lib/autobot/celerybeat-schedule') | dirname }}"
+    state: directory
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+    mode: "0750"
+
+- name: "Beat | Deploy Celery Beat systemd service (#6555)"
+  ansible.builtin.template:
+    src: autobot-celery-beat.service.j2
+    dest: /etc/systemd/system/autobot-celery-beat.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart celery beat
+
+- name: "Beat | Enable and start Celery Beat service"
+  ansible.builtin.systemd:
+    name: autobot-celery-beat
     state: started
     enabled: true
     daemon_reload: true

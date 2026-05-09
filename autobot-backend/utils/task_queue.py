@@ -19,16 +19,18 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
+from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.status_enums import TaskStatus
 from autobot_shared.time_utils import parse_utc_iso
 
 try:
     from redis.exceptions import RedisError
 
     from autobot_shared.redis_client import get_redis_client
-except ImportError:
+except ImportError as _e:
     RedisError = Exception  # Fallback if redis not available
-    get_redis_client = None
+    get_redis_client = _MissingDep("get_redis_client", _e)  # type: ignore[assignment]
 
 from constants.threshold_constants import RetryConfig, TimingConstants
 
@@ -45,17 +47,6 @@ ErrorCategory = None
 # except ImportError:
 def log_performance_metric(*args, **kwargs):
     """Log performance metric placeholder until logging_config module is created."""
-
-
-class TaskStatus(Enum):
-    """Task execution status."""
-
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    RETRY = "retry"
 
 
 class TaskPriority(Enum):
@@ -175,7 +166,7 @@ class TaskQueue:
             enable_scheduler: Whether to enable scheduled task processing
         """
         self.queue_name = queue_name
-        self.redis = redis_client or (get_redis_client() if get_redis_client else None)
+        self.redis = redis_client or get_redis_client()
         self.max_workers = max_workers
         self.enable_scheduler = enable_scheduler
 

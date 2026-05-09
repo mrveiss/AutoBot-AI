@@ -72,12 +72,8 @@ _MAX_FRAMES = 5
 class VideoPipeline(BasePipeline):
     """Pipeline for processing video content."""
 
-    def __init__(self):
-        """Initialize video processing pipeline."""
-        super().__init__(
-            pipeline_name="video",
-            supported_types=[MediaType.VIDEO],
-        )
+    PIPELINE_NAME = "video"
+    SUPPORTED_TYPES = [MediaType.VIDEO]
 
     async def _process_impl(self, media_input: MediaInput) -> ProcessingResult:
         """Process video content."""

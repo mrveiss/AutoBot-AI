@@ -22,13 +22,41 @@ import hashlib
 import json
 import logging
 import re
-from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Request
 
+from api.system_health import ComponentHealth, register_health_probe
+
+from api.schemas_code import (
+    CodeAction,
+    CodeActionKind,
+    CompletionItem,
+    CompletionItemKind,
+    CompletionRequest,
+    CompletionResponse,
+    Diagnostic,
+    DiagnosticSeverity,
+    HoverRequest,
+    HoverResponse,
+    IDEAnalysisRequest,
+    IDEAnalysisResponse,
+    IDEBatchAnalyzeResponse,
+    IDECategoriesResponse,
+    IDEConfigUpdateResponse,
+    IDEConfigurationUpdate,
+    IDEHealthResponse,
+    IDEPatternCategory,
+    IDERulesResponse,
+    IDESeveritiesResponse,
+    LSPPosition,
+    LSPRange,
+    QuickFixRequest,
+    QuickFixResponse,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.singleton_factory import lazy_optional_singleton, lazy_singleton
 from models.completion_context import CompletionContext
 from services.context_analyzer import ContextAnalyzer
 from services.pattern_extractor import PatternExtractor
@@ -40,8 +68,10 @@ try:
     from training.completion_trainer import CompletionTrainer
 
     HAS_ML = True
-except ImportError:
-    logger.warning("ML dependencies not available, using pattern-only completions")
+except (ImportError, RuntimeError) as e:
+    logger.warning(
+        "ML dependencies not available, using pattern-only completions: %s", e
+    )
     CompletionTrainer = None  # type: ignore
     HAS_ML = False
 
@@ -52,50 +82,16 @@ _FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
 _CONTROL_FLOW_TYPES = (ast.If, ast.For, ast.While, ast.With)
 _NESTING_TYPES = (ast.If, ast.For, ast.While, ast.With, ast.Try)
 
-# Issue #906: Module-level instances for code completion
-redis_client = get_redis_client(async_client=False, database="main")
-context_analyzer = ContextAnalyzer()
-pattern_extractor = PatternExtractor()
-trainer = CompletionTrainer() if HAS_ML else None
+# Issue #6225: Lazy singletons — nothing instantiated at module import time
+_get_redis_client = lazy_singleton(lambda: get_redis_client(async_client=False, database="main"))
+_get_context_analyzer = lazy_singleton(ContextAnalyzer)
+_get_pattern_extractor = lazy_singleton(PatternExtractor)
+_get_trainer = lazy_optional_singleton(lambda: CompletionTrainer() if HAS_ML and CompletionTrainer is not None else None)
 
 
 # =============================================================================
 # Enums and Constants
 # =============================================================================
-
-
-class DiagnosticSeverity(str, Enum):
-    """LSP-compatible diagnostic severity levels."""
-
-    ERROR = "error"  # 1 in LSP
-    WARNING = "warning"  # 2 in LSP
-    INFORMATION = "information"  # 3 in LSP
-    HINT = "hint"  # 4 in LSP
-
-
-class CodeActionKind(str, Enum):
-    """LSP-compatible code action kinds."""
-
-    QUICKFIX = "quickfix"
-    REFACTOR = "refactor"
-    REFACTOR_EXTRACT = "refactor.extract"
-    REFACTOR_INLINE = "refactor.inline"
-    REFACTOR_REWRITE = "refactor.rewrite"
-    SOURCE = "source"
-    SOURCE_ORGANIZE_IMPORTS = "source.organizeImports"
-    SOURCE_FIX_ALL = "source.fixAll"
-
-
-class PatternCategory(str, Enum):
-    """Categories of detected patterns."""
-
-    SECURITY = "security"
-    PERFORMANCE = "performance"
-    CODE_QUALITY = "code_quality"
-    BEST_PRACTICE = "best_practice"
-    ERROR_PRONE = "error_prone"
-    STYLE = "style"
-    DEPRECATED = "deprecated"
 
 
 # Pattern detection rules
@@ -104,7 +100,7 @@ PATTERN_RULES = [
         "id": "sql_injection",
         "name": "Potential SQL Injection",
         "pattern": r'execute\s*\(\s*["\'].*\s*\+\s*\w+',
-        "category": PatternCategory.SECURITY,
+        "category": IDEPatternCategory.SECURITY,
         "severity": DiagnosticSeverity.ERROR,
         "message": "Potential SQL injection vulnerability. Use parameterized queries.",
         "fix_template": "Use parameterized query: execute(query, (params,))",
@@ -113,7 +109,7 @@ PATTERN_RULES = [
         "id": "hardcoded_secret",
         "name": "Hardcoded Secret",
         "pattern": r'(password|secret|api_key|token)\s*=\s*["\'][^"\']+["\']',
-        "category": PatternCategory.SECURITY,
+        "category": IDEPatternCategory.SECURITY,
         "severity": DiagnosticSeverity.ERROR,
         "message": "Hardcoded secret detected. Use environment variables.",
         "fix_template": "Use os.environ.get('SECRET_NAME')",
@@ -122,7 +118,7 @@ PATTERN_RULES = [
         "id": "bare_except",
         "name": "Bare Except Clause",
         "pattern": r"except\s*:",
-        "category": PatternCategory.ERROR_PRONE,
+        "category": IDEPatternCategory.ERROR_PRONE,
         "severity": DiagnosticSeverity.WARNING,
         "message": "Bare except clause catches all exceptions including KeyboardInterrupt.",
         "fix_template": "except Exception:",
@@ -131,7 +127,7 @@ PATTERN_RULES = [
         "id": "mutable_default",
         "name": "Mutable Default Argument",
         "pattern": r"def\s+\w+\([^)]*=\s*(\[\]|\{\}|\set\(\))",
-        "category": PatternCategory.ERROR_PRONE,
+        "category": IDEPatternCategory.ERROR_PRONE,
         "severity": DiagnosticSeverity.WARNING,
         "message": "Mutable default argument. Use None and initialize inside function.",
         "fix_template": "def func(arg=None):\n    if arg is None:\n        arg = []",
@@ -140,7 +136,7 @@ PATTERN_RULES = [
         "id": "print_statement",
         "name": "Debug Print Statement",
         "pattern": r"^\s*print\s*\(",
-        "category": PatternCategory.CODE_QUALITY,
+        "category": IDEPatternCategory.CODE_QUALITY,
         "severity": DiagnosticSeverity.INFORMATION,
         "message": "Debug print statement found. Consider using logging.",
         "fix_template": "logging.debug(...)",
@@ -150,7 +146,7 @@ PATTERN_RULES = [
         "name": "TODO Comment",
         # Require colon to avoid false positives (Issue #617)
         "pattern": r"#\s*TODO:\s*",
-        "category": PatternCategory.CODE_QUALITY,
+        "category": IDEPatternCategory.CODE_QUALITY,
         "severity": DiagnosticSeverity.HINT,
         "message": "TODO comment found. Consider tracking in issue tracker.",
         "fix_template": None,
@@ -160,7 +156,7 @@ PATTERN_RULES = [
         "name": "FIXME Comment",
         # Require colon to avoid false positives (Issue #617)
         "pattern": r"#\s*FIXME:\s*",
-        "category": PatternCategory.CODE_QUALITY,
+        "category": IDEPatternCategory.CODE_QUALITY,
         "severity": DiagnosticSeverity.WARNING,
         "message": "FIXME comment indicates code that needs attention.",
         "fix_template": None,
@@ -169,7 +165,7 @@ PATTERN_RULES = [
         "id": "eval_usage",
         "name": "Eval Usage",
         "pattern": r"\beval\s*\(",
-        "category": PatternCategory.SECURITY,
+        "category": IDEPatternCategory.SECURITY,
         "severity": DiagnosticSeverity.ERROR,
         "message": "eval() is dangerous. Use ast.literal_eval() for safe parsing.",
         "fix_template": "ast.literal_eval(...)",
@@ -178,7 +174,7 @@ PATTERN_RULES = [
         "id": "exec_usage",
         "name": "Exec Usage",
         "pattern": r"\bexec\s*\(",
-        "category": PatternCategory.SECURITY,
+        "category": IDEPatternCategory.SECURITY,
         "severity": DiagnosticSeverity.ERROR,
         "message": "exec() is dangerous. Consider alternatives.",
         "fix_template": None,
@@ -187,7 +183,7 @@ PATTERN_RULES = [
         "id": "assert_in_production",
         "name": "Assert Statement",
         "pattern": r"^\s*assert\s+",
-        "category": PatternCategory.ERROR_PRONE,
+        "category": IDEPatternCategory.ERROR_PRONE,
         "severity": DiagnosticSeverity.HINT,
         "message": "Assert statements are removed with -O flag. Use explicit checks.",
         "fix_template": "if not condition:\n    raise AssertionError(...)",
@@ -196,7 +192,7 @@ PATTERN_RULES = [
         "id": "subprocess_shell",
         "name": "Subprocess with Shell",
         "pattern": r"subprocess\.\w+\([^)]*shell\s*=\s*True",
-        "category": PatternCategory.SECURITY,
+        "category": IDEPatternCategory.SECURITY,
         "severity": DiagnosticSeverity.WARNING,
         "message": "shell=True can be a security risk. Use shell=False with list args.",
         "fix_template": "subprocess.run(['cmd', 'arg'], shell=False)",
@@ -205,7 +201,7 @@ PATTERN_RULES = [
         "id": "wildcard_import",
         "name": "Wildcard Import",
         "pattern": r"from\s+\w+\s+import\s+\*",
-        "category": PatternCategory.STYLE,
+        "category": IDEPatternCategory.STYLE,
         "severity": DiagnosticSeverity.WARNING,
         "message": "Wildcard imports pollute namespace. Import specific names.",
         "fix_template": "from module import name1, name2",
@@ -214,7 +210,7 @@ PATTERN_RULES = [
         "id": "global_statement",
         "name": "Global Statement",
         "pattern": r"^\s*global\s+\w+",
-        "category": PatternCategory.CODE_QUALITY,
+        "category": IDEPatternCategory.CODE_QUALITY,
         "severity": DiagnosticSeverity.INFORMATION,
         "message": "Global statements can make code harder to understand.",
         "fix_template": None,
@@ -223,7 +219,7 @@ PATTERN_RULES = [
         "id": "magic_number",
         "name": "Magic Number",
         "pattern": r"(?<![0-9a-zA-Z_])[2-9]\d{2,}(?![0-9a-zA-Z_])",
-        "category": PatternCategory.CODE_QUALITY,
+        "category": IDEPatternCategory.CODE_QUALITY,
         "severity": DiagnosticSeverity.HINT,
         "message": "Magic number detected. Consider using a named constant.",
         "fix_template": "CONSTANT_NAME = value",
@@ -232,7 +228,7 @@ PATTERN_RULES = [
         "id": "long_line",
         "name": "Line Too Long",
         "pattern": r"^.{121,}$",
-        "category": PatternCategory.STYLE,
+        "category": IDEPatternCategory.STYLE,
         "severity": DiagnosticSeverity.HINT,
         "message": "Line exceeds 120 characters. Consider breaking it up.",
         "fix_template": None,
@@ -241,7 +237,7 @@ PATTERN_RULES = [
         "id": "unused_variable",
         "name": "Potentially Unused Variable",
         "pattern": r"^\s*(\w+)\s*=\s*[^=].*(?!.*\1)",
-        "category": PatternCategory.CODE_QUALITY,
+        "category": IDEPatternCategory.CODE_QUALITY,
         "severity": DiagnosticSeverity.HINT,
         "message": "Variable may be unused. Prefix with _ if intentional.",
         "fix_template": "_unused = value",
@@ -250,7 +246,7 @@ PATTERN_RULES = [
         "id": "empty_except",
         "name": "Empty Except Block",
         "pattern": r"except[^:]*:\s*\n\s*(pass|\.\.\.)\s*$",
-        "category": PatternCategory.ERROR_PRONE,
+        "category": IDEPatternCategory.ERROR_PRONE,
         "severity": DiagnosticSeverity.WARNING,
         "message": "Empty except block silently swallows errors.",
         "fix_template": "except Exception as e:\n    logging.exception('Error occurred')",
@@ -259,7 +255,7 @@ PATTERN_RULES = [
         "id": "deprecated_method",
         "name": "Deprecated Method",
         "pattern": r"\.(has_key|iteritems|itervalues|iterkeys)\s*\(",
-        "category": PatternCategory.DEPRECATED,
+        "category": IDEPatternCategory.DEPRECATED,
         "severity": DiagnosticSeverity.WARNING,
         "message": "Using deprecated Python 2 method.",
         "fix_template": "Use Python 3 equivalents: 'in', .items(), .values(), .keys()",
@@ -268,7 +264,7 @@ PATTERN_RULES = [
         "id": "sync_in_async",
         "name": "Sync Call in Async Function",
         "pattern": r"async\s+def[^:]+:[^}]*(?:time\.sleep|requests\.\w+|open\()",
-        "category": PatternCategory.PERFORMANCE,
+        "category": IDEPatternCategory.PERFORMANCE,
         "severity": DiagnosticSeverity.WARNING,
         "message": "Blocking call in async function. Use async alternatives.",
         "fix_template": "Use asyncio.sleep(), aiohttp, aiofiles",
@@ -277,7 +273,7 @@ PATTERN_RULES = [
         "id": "hardcoded_ip",
         "name": "Hardcoded IP Address",
         "pattern": r'["\'](?:\d{1,3}\.){3}\d{1,3}["\']',
-        "category": PatternCategory.CODE_QUALITY,
+        "category": IDEPatternCategory.CODE_QUALITY,
         "severity": DiagnosticSeverity.INFORMATION,
         "message": "Hardcoded IP address. Consider using configuration.",
         "fix_template": "Use config.get('HOST') or environment variable",
@@ -288,169 +284,6 @@ PATTERN_RULES = [
 # =============================================================================
 # Data Models
 # =============================================================================
-
-
-class Position(BaseModel):
-    """LSP-compatible position (0-indexed)."""
-
-    line: int = Field(..., ge=0)
-    character: int = Field(..., ge=0)
-
-
-class Range(BaseModel):
-    """LSP-compatible range."""
-
-    start: Position
-    end: Position
-
-
-class Diagnostic(BaseModel):
-    """LSP-compatible diagnostic."""
-
-    range: Range
-    severity: DiagnosticSeverity
-    code: str  # Pattern ID
-    source: str = "autobot"
-    message: str
-    category: PatternCategory
-    data: Optional[Dict[str, Any]] = None
-
-
-class TextEdit(BaseModel):
-    """LSP-compatible text edit."""
-
-    range: Range
-    new_text: str
-
-
-class CodeAction(BaseModel):
-    """LSP-compatible code action."""
-
-    title: str
-    kind: CodeActionKind
-    diagnostics: List[Diagnostic] = []
-    is_preferred: bool = False
-    edit: Optional[Dict[str, Any]] = None  # Workspace edit
-
-
-class AnalysisRequest(BaseModel):
-    """Request for code analysis."""
-
-    file_path: str = Field(..., description="Path to the file being analyzed")
-    content: str = Field(..., description="File content to analyze")
-    language: str = Field(default="python", description="Programming language")
-    include_hints: bool = Field(
-        default=True, description="Include hint-level diagnostics"
-    )
-    categories: Optional[List[PatternCategory]] = Field(
-        None, description="Filter by categories"
-    )
-
-
-class AnalysisResponse(BaseModel):
-    """Response from code analysis."""
-
-    file_path: str
-    diagnostics: List[Diagnostic]
-    analysis_time_ms: float
-    patterns_checked: int
-    issues_found: int
-
-
-class QuickFixRequest(BaseModel):
-    """Request for quick fix suggestions."""
-
-    file_path: str
-    content: str
-    diagnostic_code: str
-    range: Range
-
-
-class QuickFixResponse(BaseModel):
-    """Response with quick fix suggestions."""
-
-    actions: List[CodeAction]
-    diagnostic_code: str
-
-
-class HoverRequest(BaseModel):
-    """Request for hover information."""
-
-    file_path: str
-    content: str
-    position: Position
-
-
-class HoverResponse(BaseModel):
-    """Response with hover information."""
-
-    contents: str  # Markdown content
-    range: Optional[Range] = None
-
-
-class ConfigurationUpdate(BaseModel):
-    """Configuration update for IDE plugin."""
-
-    enabled_rules: Optional[List[str]] = None
-    disabled_rules: Optional[List[str]] = None
-    severity_overrides: Optional[Dict[str, DiagnosticSeverity]] = None
-    categories: Optional[List[PatternCategory]] = None
-
-
-class CompletionItemKind(str, Enum):
-    """LSP-compatible completion item kinds."""
-
-    TEXT = "Text"
-    METHOD = "Method"
-    FUNCTION = "Function"
-    CONSTRUCTOR = "Constructor"
-    FIELD = "Field"
-    VARIABLE = "Variable"
-    CLASS = "Class"
-    INTERFACE = "Interface"
-    MODULE = "Module"
-    PROPERTY = "Property"
-    UNIT = "Unit"
-    VALUE = "Value"
-    ENUM = "Enum"
-    CONSTANT = "Constant"
-    KEYWORD = "Keyword"
-    SNIPPET = "Snippet"
-
-
-class CompletionItem(BaseModel):
-    """LSP-compatible completion item."""
-
-    label: str = Field(..., description="Display text")
-    kind: CompletionItemKind = Field(
-        default=CompletionItemKind.TEXT, description="Item kind"
-    )
-    detail: Optional[str] = Field(None, description="Additional details")
-    documentation: Optional[str] = Field(None, description="Documentation")
-    insert_text: Optional[str] = Field(None, description="Text to insert")
-    sort_text: Optional[str] = Field(None, description="Sort order")
-    filter_text: Optional[str] = Field(None, description="Filter text")
-    score: float = Field(default=0.0, description="Relevance score")
-
-
-class CompletionRequest(BaseModel):
-    """Request for code completion."""
-
-    file_path: str = Field(..., description="Path to the file")
-    content: str = Field(..., description="File content")
-    cursor_line: int = Field(..., ge=0, description="Cursor line (0-indexed)")
-    cursor_position: int = Field(..., ge=0, description="Cursor column position")
-    language: str = Field(default="python", description="Programming language")
-    max_completions: int = Field(default=20, ge=1, le=100, description="Max results")
-
-
-class CompletionResponse(BaseModel):
-    """Response with code completions."""
-
-    completions: List[CompletionItem]
-    completion_time_ms: float
-    source: str  # "ml", "patterns", "hybrid"
-    cached: bool = False
 
 
 # =============================================================================
@@ -521,9 +354,9 @@ class IDEIntegrationEngine:
                 matches = list(re.finditer(rule["pattern"], line, re.IGNORECASE))
                 for match in matches:
                     diagnostic = Diagnostic(
-                        range=Range(
-                            start=Position(line=line_num, character=match.start()),
-                            end=Position(line=line_num, character=match.end()),
+                        range=LSPRange(
+                            start=LSPPosition(line=line_num, character=match.start()),
+                            end=LSPPosition(line=line_num, character=match.end()),
                         ),
                         severity=severity,
                         code=rule["id"],
@@ -609,13 +442,13 @@ class IDEIntegrationEngine:
         )
 
     def _get_cached_analysis(self, cache_key: str, content_hash: str, file_path: str):
-        """Helper for analyze. Return cached AnalysisResponse if valid, else None. Ref: #1088."""
+        """Helper for analyze. Return cached IDEAnalysisResponse if valid, else None. Ref: #1088."""
         if cache_key not in self.analysis_cache:
             return None
         cached_hash, cached_diagnostics = self.analysis_cache[cache_key]
         if cached_hash != content_hash:
             return None
-        return AnalysisResponse(
+        return IDEAnalysisResponse(
             file_path=file_path,
             diagnostics=cached_diagnostics,
             analysis_time_ms=0.0,
@@ -633,7 +466,7 @@ class IDEIntegrationEngine:
             for key in keys[:500]:
                 del self.analysis_cache[key]
 
-    def _run_pattern_rules(self, request: AnalysisRequest, lines) -> tuple:
+    def _run_pattern_rules(self, request: IDEAnalysisRequest, lines) -> tuple:
         """Helper for analyze. Apply all enabled pattern rules. Ref: #1088.
 
         Returns (diagnostics_list, patterns_checked_count).
@@ -652,7 +485,7 @@ class IDEIntegrationEngine:
             diagnostics.extend(self._check_rule_on_lines(rule, lines, severity))
         return diagnostics, patterns_checked
 
-    async def analyze(self, request: AnalysisRequest) -> AnalysisResponse:
+    async def analyze(self, request: IDEAnalysisRequest) -> IDEAnalysisResponse:
         """
         Analyze code and return diagnostics.
 
@@ -684,7 +517,7 @@ class IDEIntegrationEngine:
 
         self._store_and_evict_cache(cache_key, content_hash, diagnostics)
         analysis_time = (_time.time() - start_time) * 1000
-        return AnalysisResponse(
+        return IDEAnalysisResponse(
             file_path=request.file_path,
             diagnostics=diagnostics,
             analysis_time_ms=round(analysis_time, 2),
@@ -707,11 +540,11 @@ class IDEIntegrationEngine:
                 if hasattr(node, "body") and len(node.body) > 50:
                     diagnostics.append(
                         Diagnostic(
-                            range=Range(
-                                start=Position(
+                            range=LSPRange(
+                                start=LSPPosition(
                                     line=node.lineno - 1, character=node.col_offset
                                 ),
-                                end=Position(
+                                end=LSPPosition(
                                     line=node.lineno - 1,
                                     character=node.col_offset + len(node.name),
                                 ),
@@ -719,7 +552,7 @@ class IDEIntegrationEngine:
                             severity=DiagnosticSeverity.INFORMATION,
                             code="complex_function",
                             message=f"Function '{node.name}' has {len(node.body)} statements. Consider refactoring.",
-                            category=PatternCategory.CODE_QUALITY,
+                            category=IDEPatternCategory.CODE_QUALITY,
                         )
                     )
 
@@ -729,11 +562,11 @@ class IDEIntegrationEngine:
                 if depth > 4:
                     diagnostics.append(
                         Diagnostic(
-                            range=Range(
-                                start=Position(
+                            range=LSPRange(
+                                start=LSPPosition(
                                     line=node.lineno - 1, character=node.col_offset
                                 ),
-                                end=Position(
+                                end=LSPPosition(
                                     line=node.lineno - 1,
                                     character=node.col_offset + 10,
                                 ),
@@ -741,7 +574,7 @@ class IDEIntegrationEngine:
                             severity=DiagnosticSeverity.WARNING,
                             code="deep_nesting",
                             message=f"Code is nested {depth} levels deep. Consider extracting to functions.",
-                            category=PatternCategory.CODE_QUALITY,
+                            category=IDEPatternCategory.CODE_QUALITY,
                         )
                     )
 
@@ -820,7 +653,7 @@ class IDEIntegrationEngine:
 
         # Check if position is on a diagnostic
         analysis = await self.analyze(
-            AnalysisRequest(
+            IDEAnalysisRequest(
                 file_path=request.file_path,
                 content=request.content,
             )
@@ -840,7 +673,7 @@ class IDEIntegrationEngine:
 
         return HoverResponse(contents="")
 
-    def update_configuration(self, config: ConfigurationUpdate):
+    def update_configuration(self, config: IDEConfigurationUpdate):
         """Update analysis configuration."""
         if config.enabled_rules:
             for rule_id in config.enabled_rules:
@@ -872,7 +705,7 @@ class IDEIntegrationEngine:
         """Helper for complete. Return cached CompletionResponse or None. Ref: #1088."""
         import time as _time
 
-        cached_result = redis_client.get(cache_key)
+        cached_result = _get_redis_client().get(cache_key)
         if not cached_result:
             return None
         completions_data = json.loads(cached_result.decode())
@@ -928,7 +761,7 @@ class IDEIntegrationEngine:
         if cached:
             return cached
 
-        context = context_analyzer.analyze(
+        context = _get_context_analyzer().analyze(
             file_content=request.content,
             cursor_line=request.cursor_line,
             cursor_position=request.cursor_position,
@@ -939,7 +772,7 @@ class IDEIntegrationEngine:
         completions = self._rank_completions(completions, context)
         completions = completions[: request.max_completions]
 
-        redis_client.setex(
+        _get_redis_client().setex(
             cache_key, 10, json.dumps([c.model_dump() for c in completions])
         )
         elapsed_ms = (_time.time() - start_time) * 1000
@@ -955,7 +788,8 @@ class IDEIntegrationEngine:
     ) -> List[CompletionItem]:
         """Get ML-based completions. (Issue #906 - helper)"""
         # Check if ML is available
-        if not HAS_ML or trainer is None:
+        trainer = _get_trainer()
+        if trainer is None:
             return []
 
         # Load trained model (cached)
@@ -1141,8 +975,15 @@ async def get_engine() -> IDEIntegrationEngine:
 # =============================================================================
 
 
-@router.post("/analyze", summary="Analyze code for patterns")
-async def analyze_code(request: AnalysisRequest) -> AnalysisResponse:
+@router.post(
+    "/analyze", summary="Analyze code for patterns", response_model=IDEAnalysisResponse
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_code",
+    error_code_prefix="IDE_INTEGRATION",
+)
+async def analyze_code(request: IDEAnalysisRequest) -> IDEAnalysisResponse:
     """
     Analyze code and return LSP-compatible diagnostics.
 
@@ -1152,21 +993,38 @@ async def analyze_code(request: AnalysisRequest) -> AnalysisResponse:
     return await engine.analyze(request)
 
 
-@router.post("/quickfix", summary="Get quick fix suggestions")
+@router.post(
+    "/quickfix", summary="Get quick fix suggestions", response_model=QuickFixResponse
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_quick_fixes",
+    error_code_prefix="IDE_INTEGRATION",
+)
 async def get_quick_fixes(request: QuickFixRequest) -> QuickFixResponse:
     """Get available quick fixes for a diagnostic."""
     engine = await get_engine()
     return await engine.get_quick_fixes(request)
 
 
-@router.post("/hover", summary="Get hover information")
+@router.post("/hover", summary="Get hover information", response_model=HoverResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_hover_info",
+    error_code_prefix="IDE_INTEGRATION",
+)
 async def get_hover_info(request: HoverRequest) -> HoverResponse:
     """Get hover information for a position."""
     engine = await get_engine()
     return await engine.get_hover(request)
 
 
-@router.get("/rules", summary="Get available rules")
+@router.get("/rules", summary="Get available rules", response_model=IDERulesResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_rules",
+    error_code_prefix="IDE_INTEGRATION",
+)
 async def get_rules() -> Dict[str, Any]:
     """Get list of all available analysis rules."""
     engine = await get_engine()
@@ -1178,26 +1036,49 @@ async def get_rules() -> Dict[str, Any]:
     }
 
 
-@router.put("/config", summary="Update configuration")
-async def update_config(config: ConfigurationUpdate) -> Dict[str, Any]:
+@router.put(
+    "/config", summary="Update configuration", response_model=IDEConfigUpdateResponse
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_config",
+    error_code_prefix="IDE_INTEGRATION",
+)
+async def update_config(config: IDEConfigurationUpdate) -> Dict[str, Any]:
     """Update IDE integration configuration."""
     engine = await get_engine()
     engine.update_configuration(config)
     return {"updated": True}
 
 
-@router.get("/categories", summary="Get pattern categories")
+@router.get(
+    "/categories",
+    summary="Get pattern categories",
+    response_model=IDECategoriesResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_categories",
+    error_code_prefix="IDE_INTEGRATION",
+)
 async def get_categories() -> Dict[str, Any]:
     """Get available pattern categories."""
     return {
         "categories": [
             {"id": cat.value, "name": cat.value.replace("_", " ").title()}
-            for cat in PatternCategory
+            for cat in IDEPatternCategory
         ]
     }
 
 
-@router.get("/severities", summary="Get severity levels")
+@router.get(
+    "/severities", summary="Get severity levels", response_model=IDESeveritiesResponse
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_severities",
+    error_code_prefix="IDE_INTEGRATION",
+)
 async def get_severities() -> Dict[str, Any]:
     """Get available severity levels."""
     return {
@@ -1208,9 +1089,18 @@ async def get_severities() -> Dict[str, Any]:
     }
 
 
-@router.post("/batch-analyze", summary="Analyze multiple files")
+@router.post(
+    "/batch-analyze",
+    summary="Analyze multiple files",
+    response_model=IDEBatchAnalyzeResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="batch_analyze",
+    error_code_prefix="IDE_INTEGRATION",
+)
 async def batch_analyze(
-    requests: List[AnalysisRequest],
+    requests: List[IDEAnalysisRequest],
 ) -> Dict[str, Any]:
     """Analyze multiple files in batch."""
     engine = await get_engine()
@@ -1232,7 +1122,14 @@ async def batch_analyze(
     }
 
 
-@router.post("/completion", summary="Get code completions")
+@router.post(
+    "/completion", summary="Get code completions", response_model=CompletionResponse
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_completions",
+    error_code_prefix="IDE_INTEGRATION",
+)
 async def get_completions(request: CompletionRequest) -> CompletionResponse:
     """
     Get intelligent code completions.
@@ -1246,7 +1143,38 @@ async def get_completions(request: CompletionRequest) -> CompletionResponse:
     return await engine.complete(request)
 
 
-@router.get("/health", summary="Health check")
+@register_health_probe("ide_integration")
+async def probe_ide_integration(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for ide_integration module."""
+    try:
+        engine = await get_engine()
+        rules_loaded = len(engine.rules)
+        return ComponentHealth(
+            name="ide_integration",
+            status="ok" if rules_loaded > 0 else "degraded",
+            detail=f"{rules_loaded} rules loaded",
+            data={
+                "rules_loaded": rules_loaded,
+                "disabled_rules": len(engine.disabled_rules),
+                "cache_size": len(engine.analysis_cache),
+            },
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="ide_integration",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
+@router.get("/health", summary="Health check", response_model=IDEHealthResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="IDE_INTEGRATION",
+)
 async def health_check() -> Dict[str, Any]:
     """Check health of the IDE integration service."""
     engine = await get_engine()

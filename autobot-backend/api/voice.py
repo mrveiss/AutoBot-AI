@@ -9,6 +9,15 @@ import tempfile
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 
+from typing import Any, Dict, List
+
+from api.schemas_agent import VoiceCreateResponse
+from api.schemas_code import (
+    VoiceDeleteResponse,
+    VoiceListenResponse,
+    VoiceSpeakResponse,
+    VoiceTranscribeResponse,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.tts_client import get_tts_client
@@ -19,12 +28,12 @@ router = APIRouter(
 logger = logging.getLogger(__name__)
 
 
+@router.post("/listen", response_model=VoiceListenResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_listen_api",
     error_code_prefix="VOICE",
 )
-@router.post("/listen")
 async def voice_listen_api(request: Request, user_role: str = Form("user")):
     """Listen and convert speech to text"""
     security_layer = request.app.state.security_layer
@@ -60,12 +69,12 @@ async def voice_listen_api(request: Request, user_role: str = Form("user")):
         )
 
 
+@router.post("/speak", response_model=VoiceSpeakResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_speak_api",
     error_code_prefix="VOICE",
 )
-@router.post("/speak")
 async def voice_speak_api(
     request: Request, text: str = Form(...), user_role: str = Form("user")
 ):
@@ -109,12 +118,12 @@ async def voice_speak_api(
         )
 
 
+@router.post("/synthesize", response_model=None)  # Returns audio/wav Response — no Pydantic schema
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_synthesize_api",
     error_code_prefix="VOICE",
 )
-@router.post("/synthesize")
 async def voice_synthesize_api(
     request: Request,
     text: str = Form(...),
@@ -145,12 +154,12 @@ async def voice_synthesize_api(
     )
 
 
+@router.post("/clone-voice", response_model=None)  # Returns audio/wav Response — no Pydantic schema
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_clone_api",
     error_code_prefix="VOICE",
 )
-@router.post("/clone-voice")
 async def voice_clone_api(
     request: Request,
     text: str = Form(...),
@@ -186,7 +195,12 @@ async def voice_clone_api(
 # ------------------------------------------------------------------
 
 
-@router.get("/voices")
+@router.get("/voices", response_model=List[Dict[str, Any]])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_list_api",
+    error_code_prefix="VOICE",
+)
 async def voice_list_api():
     """List available voice profiles from TTS worker."""
     tts = get_tts_client()
@@ -194,12 +208,12 @@ async def voice_list_api():
     return voices
 
 
+@router.post("/voices/create", response_model=VoiceCreateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_create_api",
     error_code_prefix="VOICE",
 )
-@router.post("/voices/create")
 async def voice_create_api(
     name: str = Form(...),
     audio: UploadFile = File(...),
@@ -211,12 +225,12 @@ async def voice_create_api(
     return result
 
 
+@router.delete("/voices/{voice_id}", response_model=VoiceDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_delete_api",
     error_code_prefix="VOICE",
 )
-@router.delete("/voices/{voice_id}")
 async def voice_delete_api(voice_id: str):
     """Delete a custom voice profile."""
     tts = get_tts_client()
@@ -294,12 +308,12 @@ async def _transcribe_with_whisper(
     return await asyncio.to_thread(_whisper_sync, pipe, audio_bytes, suffix, language)
 
 
+@router.post("/transcribe", response_model=VoiceTranscribeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_transcribe_api",
     error_code_prefix="VOICE",
 )
-@router.post("/transcribe")
 async def voice_transcribe_api(
     request: Request,
     audio: UploadFile = File(...),

@@ -355,7 +355,7 @@ watch(saveSuccess, (val) => {
 }
 
 .field-input {
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--color-border, #374151);
   border-radius: var(--radius-md);
   background: var(--color-bg-secondary, #1e293b);
@@ -453,7 +453,7 @@ watch(saveSuccess, (val) => {
 
 .matrix-cell {
   flex: 1;
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   text-align: center;
   font-size: 0.8125rem;
 }
@@ -488,7 +488,7 @@ watch(saveSuccess, (val) => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1-5);
-  padding: 0.5rem 1.25rem;
+  padding: var(--spacing-2) var(--spacing-5);
   border: none;
   border-radius: var(--radius-md);
   background: var(--color-primary, #3b82f6);
@@ -519,7 +519,7 @@ watch(saveSuccess, (val) => {
   gap: var(--spacing-2);
   font-size: var(--text-sm);
   color: var(--color-text-secondary, #94a3b8);
-  padding: 0.75rem 0;
+  padding: var(--spacing-3) var(--spacing-0);
 }
 
 .spinner {
@@ -538,7 +538,7 @@ watch(saveSuccess, (val) => {
 }
 
 .error-banner {
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   border-radius: var(--radius-md);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);

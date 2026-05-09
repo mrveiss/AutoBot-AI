@@ -5,10 +5,9 @@
 """CI/CD integration API endpoints."""
 
 import logging
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from integrations.base import IntegrationConfig
@@ -17,6 +16,20 @@ from integrations.cicd_integration import (
     GitLabCIIntegration,
     JenkinsIntegration,
 )
+from api.schemas_code import (
+    CICDConnectionTestResponse,
+    CICDPipelineLogsResponse,
+    CICDPipelineStatusResponse,
+    CICDPipelinesResponse,
+    CICDPipelineTriggerResponse,
+)
+from api.schemas_workflows import (
+    CICDConnectionTestRequest,
+    CICDProvider,
+    CICDProviderInfo,
+    PipelineTriggerRequest,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -25,39 +38,15 @@ router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
 
-CICDProvider = Literal["jenkins", "gitlab", "circleci"]
 
 
-class ConnectionTestRequest(BaseModel):
-    """Request model for testing CI/CD connection."""
-
-    provider: CICDProvider = Field(..., description="CI/CD provider type")
-    base_url: str = Field(..., description="Base URL of the CI/CD service")
-    credentials: Dict[str, str] = Field(..., description="Authentication credentials")
-
-
-class PipelineTriggerRequest(BaseModel):
-    """Request model for triggering a pipeline."""
-
-    confirm: bool = Field(
-        False, description="Confirmation flag - must be true to trigger"
-    )
-    parameters: Dict[str, Any] = Field(
-        default_factory=dict, description="Pipeline parameters"
-    )
-
-
-class ProviderInfo(BaseModel):
-    """CI/CD provider information."""
-
-    id: str = Field(..., description="Provider identifier")
-    name: str = Field(..., description="Provider display name")
-    description: str = Field(..., description="Provider description")
-    auth_type: str = Field(..., description="Authentication type")
-
-
-@router.post("/test-connection")
-async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
+@router.post("/test-connection", response_model=CICDConnectionTestResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_connection",
+    error_code_prefix="INTEGRATION_CICD",
+)
+async def test_connection(request: CICDConnectionTestRequest) -> Dict[str, Any]:
     """Test connection to a CI/CD provider.
 
     Args:
@@ -84,27 +73,32 @@ async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/providers")
-async def list_providers() -> List[ProviderInfo]:
+@router.get("/providers", response_model=List[CICDProviderInfo])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_providers",
+    error_code_prefix="INTEGRATION_CICD",
+)
+async def list_providers() -> List[CICDProviderInfo]:
     """List supported CI/CD providers.
 
     Returns:
         List of supported provider information
     """
     return [
-        ProviderInfo(
+        CICDProviderInfo(
             id="jenkins",
             name="Jenkins",
             description="Jenkins automation server",
             auth_type="basic",
         ),
-        ProviderInfo(
+        CICDProviderInfo(
             id="gitlab",
             name="GitLab CI",
             description="GitLab integrated CI/CD",
             auth_type="token",
         ),
-        ProviderInfo(
+        CICDProviderInfo(
             id="circleci",
             name="CircleCI",
             description="CircleCI continuous integration",
@@ -113,7 +107,12 @@ async def list_providers() -> List[ProviderInfo]:
     ]
 
 
-@router.get("/{provider}/pipelines")
+@router.get("/{provider}/pipelines", response_model=CICDPipelinesResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_pipelines",
+    error_code_prefix="INTEGRATION_CICD",
+)
 async def list_pipelines(
     provider: CICDProvider,
     base_url: str = Query(..., description="CI/CD service base URL"),
@@ -154,7 +153,12 @@ async def list_pipelines(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{provider}/pipelines/{pipeline_id}/status")
+@router.get("/{provider}/pipelines/{pipeline_id}/status", response_model=CICDPipelineStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pipeline_status",
+    error_code_prefix="INTEGRATION_CICD",
+)
 async def get_pipeline_status(
     provider: CICDProvider,
     pipeline_id: str,
@@ -194,7 +198,12 @@ async def get_pipeline_status(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/{provider}/pipelines/{pipeline_id}/trigger")
+@router.post("/{provider}/pipelines/{pipeline_id}/trigger", response_model=CICDPipelineTriggerResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="trigger_pipeline",
+    error_code_prefix="INTEGRATION_CICD",
+)
 async def trigger_pipeline(
     provider: CICDProvider,
     pipeline_id: str,
@@ -237,7 +246,12 @@ async def trigger_pipeline(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{provider}/pipelines/{pipeline_id}/logs")
+@router.get("/{provider}/pipelines/{pipeline_id}/logs", response_model=CICDPipelineLogsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pipeline_logs",
+    error_code_prefix="INTEGRATION_CICD",
+)
 async def get_pipeline_logs(
     provider: CICDProvider,
     pipeline_id: str,

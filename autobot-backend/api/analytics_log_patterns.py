@@ -16,10 +16,19 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.schemas_analytics import (
+    LogAnomaly,
+    LogPattern,
+    LogPatternDetailResponse,
+    LogPatternHotspotsResponse,
+    LogPatternRealtimeResponse,
+    LogPatternStatsResponse,
+    LogTrend,
+    PatternMiningResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,58 +45,6 @@ LOG_LEVEL_PRIORITIES = ["CRITICAL", "ERROR", "WARNING", "WARN", "INFO", "DEBUG"]
 # ============================================================================
 # Pydantic Models
 # ============================================================================
-
-
-class LogPattern(BaseModel):
-    """Represents a discovered log pattern"""
-
-    pattern_id: str
-    pattern_template: str
-    occurrences: int
-    first_seen: str
-    last_seen: str
-    log_levels: List[str]
-    sources: List[str]
-    sample_messages: List[str] = Field(default_factory=list, max_length=5)
-    frequency_per_hour: float = 0.0
-    is_error_pattern: bool = False
-    is_anomaly: bool = False
-
-
-class LogAnomaly(BaseModel):
-    """Represents a detected anomaly in logs"""
-
-    anomaly_id: str
-    anomaly_type: str  # spike, gap, new_pattern, error_surge
-    severity: str  # critical, high, medium, low
-    description: str
-    timestamp: str
-    affected_sources: List[str]
-    metric_before: float
-    metric_after: float
-    confidence: float
-
-
-class LogTrend(BaseModel):
-    """Represents a trend in log data"""
-
-    trend_id: str
-    metric_name: str
-    direction: str  # increasing, decreasing, stable
-    change_percent: float
-    time_period: str
-    data_points: List[Dict[str, Any]]
-
-
-class PatternMiningResult(BaseModel):
-    """Result of pattern mining operation"""
-
-    patterns: List[LogPattern]
-    anomalies: List[LogAnomaly]
-    trends: List[LogTrend]
-    summary: Dict[str, Any]
-    analysis_time_ms: float
-    logs_analyzed: int
 
 
 # ============================================================================
@@ -825,12 +782,12 @@ def _build_mining_summary(
     }
 
 
+@router.get("/mine", response_model=PatternMiningResult)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="mine_log_patterns",
-    error_code_prefix="LOGPAT",
+    error_code_prefix="ANALYTICS_LOG_PATTERNS",
 )
-@router.get("/mine", response_model=PatternMiningResult)
 async def mine_log_patterns(
     sources: Optional[str] = Query(None, description="Comma-separated log sources"),
     hours: int = Query(24, ge=1, le=168, description="Hours of logs to analyze"),
@@ -916,12 +873,12 @@ def _analyze_pattern_lines(
     return timestamps, levels, sources, hourly_dist
 
 
+@router.get("/pattern/{pattern_id}", response_model=LogPatternDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pattern_details",
-    error_code_prefix="LOGPAT",
+    error_code_prefix="ANALYTICS_LOG_PATTERNS",
 )
-@router.get("/pattern/{pattern_id}")
 async def get_pattern_details(
     pattern_id: str,
     hours: int = Query(24, ge=1, le=168, description="Hours of logs to search"),
@@ -965,12 +922,12 @@ async def get_pattern_details(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/hotspots", response_model=LogPatternHotspotsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_error_hotspots",
-    error_code_prefix="LOGPAT",
+    error_code_prefix="ANALYTICS_LOG_PATTERNS",
 )
-@router.get("/hotspots")
 async def get_error_hotspots(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     limit: int = Query(10, ge=1, le=50, description="Number of hotspots to return"),
@@ -1043,12 +1000,12 @@ def _aggregate_log_stats(
     return total, by_level, by_source, by_hour, timestamps
 
 
+@router.get("/stats", response_model=LogPatternStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_log_stats",
-    error_code_prefix="LOGPAT",
+    error_code_prefix="ANALYTICS_LOG_PATTERNS",
 )
-@router.get("/stats")
 async def get_log_stats(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1087,12 +1044,12 @@ async def get_log_stats(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/realtime", response_model=LogPatternRealtimeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_realtime_summary",
-    error_code_prefix="LOGPAT",
+    error_code_prefix="ANALYTICS_LOG_PATTERNS",
 )
-@router.get("/realtime")
 async def get_realtime_summary(
     admin_check: bool = Depends(check_admin_permission),
 ):

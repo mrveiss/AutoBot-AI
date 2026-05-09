@@ -1,0 +1,61 @@
+# #7122: Drift guard for frontend TypeScript types generated from
+# canonical Python dataclasses.
+#
+# Runs `gen_frontend_types.py --check`. If the committed
+# `autobot-frontend/src/types/_generated/workflow.ts` differs from what
+# the script would emit today (i.e. a backend dataclass field was added,
+# removed, or retyped without re-running the generator), the job fails
+# and asks the contributor to re-run the script and commit.
+#
+# Catches the same class of drift bug as #7044 (frontend `TemplateStep`
+# silently mismatched the backend `to_status_dict()` shape for 18
+# months). Codegen + this guard makes the drift impossible to introduce
+# silently.
+#
+# #7226: extended path filter to cover all MANIFEST sources
+# (status_enums + workflow_automation models).
+#
+# Security: this workflow does NOT interpolate any untrusted GitHub
+# event data (no issue titles, PR bodies, commit messages, head_ref,
+# etc.) into run: commands. All inputs are static repo paths.
+
+name: frontend-codegen-drift
+
+on:
+  pull_request:
+    paths:
+      # Canonical sources covered by MANIFEST (#7122 / #7226)
+      - 'autobot_shared/workflow/types.py'
+      - 'autobot_shared/status_enums.py'
+      - 'autobot-backend/services/workflow_automation/models.py'
+      # Codegen output + tooling
+      - 'autobot-frontend/src/types/_generated/**'
+      - 'autobot-infrastructure/shared/scripts/gen_frontend_types.py'
+      - '.github/workflows/frontend-codegen-drift.yml'
+  push:
+    branches: [Dev_new_gui]
+    paths:
+      - 'autobot_shared/workflow/types.py'
+      - 'autobot_shared/status_enums.py'
+      - 'autobot-backend/services/workflow_automation/models.py'
+      - 'autobot-frontend/src/types/_generated/**'
+      - 'autobot-infrastructure/shared/scripts/gen_frontend_types.py'
+
+permissions:
+  contents: read
+
+jobs:
+  check-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+
+      - name: Setup Python
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c  # v5.0.0
+        with:
+          python-version: '3.10'
+
+      - name: Run codegen drift check
+        run: |
+          python3 autobot-infrastructure/shared/scripts/gen_frontend_types.py --check

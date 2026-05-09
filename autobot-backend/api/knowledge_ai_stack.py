@@ -11,12 +11,10 @@ intelligent content analysis using the AI Stack VM.
 
 import asyncio
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -24,11 +22,18 @@ from autobot_shared.time_utils import utc_timestamp
 from dependencies import get_knowledge_base
 from knowledge_factory import get_or_create_knowledge_base
 from services.ai_stack_client import AIStackError, get_ai_stack_client
-from type_defs.common import Metadata
 from utils.response_helpers import (
     create_error_response,
     create_success_response,
     handle_ai_stack_error,
+)
+
+from api.schemas_common import DataResponse
+from api.schemas_knowledge import (
+    AIStackEnhancedSearchRequest,
+    AIStackKnowledgeExtractionRequest,
+    AIStackRAGQueryRequest,
+    DocumentAnalysisRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,60 +47,6 @@ router = APIRouter(tags=["knowledge-enhanced"])
 # ====================================================================
 # Request/Response Models
 # ====================================================================
-
-
-class EnhancedSearchRequest(BaseModel):
-    """Enhanced search request with AI Stack integration."""
-
-    query: str = Field(..., min_length=1, max_length=5000, description="Search query")
-    search_type: str = Field(
-        "comprehensive", description="Search type (precise, comprehensive, broad)"
-    )
-    max_results: int = Field(10, ge=1, le=50, description="Maximum results to return")
-    include_rag: bool = Field(True, description="Include RAG-enhanced results")
-    include_local: bool = Field(
-        True, description="Include local knowledge base results"
-    )
-    confidence_threshold: float = Field(
-        0.3, ge=0.0, le=1.0, description="Minimum confidence score"
-    )
-
-
-class KnowledgeExtractionRequest(BaseModel):
-    """Request model for knowledge extraction."""
-
-    content: str = Field(
-        ..., min_length=1, description="Content to extract knowledge from"
-    )
-    title: Optional[str] = Field(None, description="Content title")
-    source: Optional[str] = Field("api", description="Content source")
-    category: Optional[str] = Field("general", description="Content category")
-    content_type: str = Field("text", description="Content type (text, document, url)")
-    extraction_mode: str = Field("comprehensive", description="Extraction mode")
-    auto_store: bool = Field(
-        True, description="Automatically store extracted knowledge"
-    )
-
-
-class DocumentAnalysisRequest(BaseModel):
-    """Request model for document analysis."""
-
-    documents: List[Metadata] = Field(..., description="Documents to analyze")
-    analysis_type: str = Field("comprehensive", description="Analysis type")
-    extract_entities: bool = Field(True, description="Extract entities")
-    generate_summary: bool = Field(True, description="Generate summary")
-
-
-class RAGQueryRequest(BaseModel):
-    """Request model for RAG queries."""
-
-    query: str = Field(..., min_length=1, max_length=5000, description="RAG query")
-    documents: Optional[List[Metadata]] = Field(
-        None, description="Specific documents to query"
-    )
-    context: Optional[str] = Field(None, description="Additional context")
-    max_results: int = Field(10, ge=1, le=30, description="Maximum results")
-    include_reasoning: bool = Field(False, description="Include reasoning steps")
 
 
 # ====================================================================
@@ -264,7 +215,7 @@ def _combine_search_results(
 
 
 async def _run_all_search_sources(
-    request_data: "EnhancedSearchRequest",
+    request_data: "AIStackEnhancedSearchRequest",
     req: Request,
     knowledge_base,
 ) -> Dict[str, Any]:
@@ -308,14 +259,14 @@ async def _run_all_search_sources(
     return results
 
 
+@router.post("/search/enhanced", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_search",
-    error_code_prefix="KNOWLEDGE_ENHANCED",
+    error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-@router.post("/search/enhanced")
 async def enhanced_search(
-    request_data: EnhancedSearchRequest,
+    request_data: AIStackEnhancedSearchRequest,
     req: Request,
     knowledge_base=Depends(get_knowledge_base),
     current_user: dict = Depends(get_current_user),
@@ -359,14 +310,14 @@ async def enhanced_search(
         )
 
 
+@router.post("/search/rag", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rag_search",
-    error_code_prefix="KNOWLEDGE_ENHANCED",
+    error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-@router.post("/search/rag")
 async def rag_search(
-    request_data: RAGQueryRequest,
+    request_data: AIStackRAGQueryRequest,
     knowledge_base=Depends(get_knowledge_base),
     current_user: dict = Depends(get_current_user),
 ):
@@ -450,7 +401,7 @@ async def _store_single_fact_with_semaphore(
 
 
 async def _store_extracted_facts(
-    req: Request, extraction_result: dict, request_data: KnowledgeExtractionRequest
+    req: Request, extraction_result: dict, request_data: AIStackKnowledgeExtractionRequest
 ) -> List[Dict[str, Any]]:
     """Store extracted facts in knowledge base with parallel processing."""
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -492,14 +443,14 @@ async def _store_extracted_facts(
     return stored_facts
 
 
+@router.post("/extract", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="extract_knowledge",
-    error_code_prefix="KNOWLEDGE_ENHANCED",
+    error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-@router.post("/extract")
 async def extract_knowledge(
-    request_data: KnowledgeExtractionRequest,
+    request_data: AIStackKnowledgeExtractionRequest,
     req: Request,
     current_user: dict = Depends(get_current_user),
 ):
@@ -544,12 +495,12 @@ async def extract_knowledge(
         await handle_ai_stack_error(e, "Knowledge extraction")
 
 
+@router.post("/analyze/documents", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_documents",
-    error_code_prefix="KNOWLEDGE_ENHANCED",
+    error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-@router.post("/analyze/documents")
 async def analyze_documents(
     request_data: DocumentAnalysisRequest,
     current_user: dict = Depends(get_current_user),
@@ -589,12 +540,12 @@ async def analyze_documents(
 # ====================================================================
 
 
+@router.post("/query/reformulate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reformulate_query",
-    error_code_prefix="KNOWLEDGE_ENHANCED",
+    error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-@router.post("/query/reformulate")
 async def reformulate_query(
     query: str,
     context: Optional[str] = None,
@@ -632,12 +583,12 @@ async def reformulate_query(
 # ====================================================================
 
 
+@router.get("/system/insights", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_knowledge_insights",
-    error_code_prefix="KNOWLEDGE_ENHANCED",
+    error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-@router.get("/system/insights")
 async def get_system_knowledge_insights(
     knowledge_category: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
@@ -670,12 +621,12 @@ async def get_system_knowledge_insights(
 # ====================================================================
 
 
+@router.get("/stats/enhanced", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_enhanced_stats",
-    error_code_prefix="KNOWLEDGE_ENHANCED",
+    error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-@router.get("/stats/enhanced")
 async def get_enhanced_stats(
     req: Request,
     current_user: dict = Depends(get_current_user),
@@ -724,12 +675,12 @@ async def get_enhanced_stats(
         )
 
 
+@router.get("/health/enhanced", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_knowledge_health",
-    error_code_prefix="KNOWLEDGE_ENHANCED",
+    error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-@router.get("/health/enhanced")
 async def enhanced_knowledge_health(
     current_user: dict = Depends(get_current_user),
 ):

@@ -20,8 +20,8 @@
       {{ postgresql_apt_release
          | default('', true)
          | ternary(postgresql_apt_release,
-             _pgdg_codename_map[ansible_distribution_release]
-             | default(ansible_distribution_release)) }}
+             _pgdg_codename_map[ansible_facts['distribution_release']]
+             | default(ansible_facts['distribution_release'])) }}
   vars:
     _pgdg_codename_map:
       kali-rolling: "bookworm"
@@ -31,12 +31,12 @@
   ansible.builtin.fail:
     msg: >-
       PostgreSQL {{ postgresql_version }} requires Ubuntu 22.04+ or Debian 11+.
-      Target runs {{ ansible_distribution }} {{ ansible_distribution_version }}
-      ({{ ansible_distribution_release }}).
+      Target runs {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}
+      ({{ ansible_facts['distribution_release'] }}).
       Either upgrade the VM OS or set postgresql_version to "14".
   when:
     - _pg_installed.rc != 0
-    - ansible_distribution_release in ['focal', 'bionic', 'xenial', 'buster']
+    - ansible_facts['distribution_release'] in ['focal', 'bionic', 'xenial', 'buster']
     - postgresql_apt_release | default('', true) | length == 0
 
 - name: Add PostgreSQL APT signing key
@@ -47,19 +47,26 @@
   become: true
   when: _pg_installed.rc != 0
 
-- name: Add PostgreSQL APT repository
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt {{ _pgdg_release }}-pgdg main"
-    state: present
-    filename: pgdg
-  become: true
+# #7218: idempotent repo-add — preserve device-shipped pgdg repo if present
+- name: "PostgreSQL | Add PostgreSQL APT repository (idempotent, #7218)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
+  vars:
+    apt_repo_match: "apt.postgresql.org"
+    apt_repo_spec: "deb [signed-by=/usr/share/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt {{ _pgdg_release }}-pgdg main"
+    apt_repo_filename: "pgdg"
+    apt_repo_label: "PostgreSQL pgdg"
   when: _pg_installed.rc != 0
 
-- name: Update APT cache
-  ansible.builtin.apt:
-    update_cache: true
-    cache_valid_time: 3600
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: PostgreSQL | Refresh apt cache after PPA add (best-effort, bounded; #6719)
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
   become: true
+  changed_when: false
+  failed_when: false
   when: _pg_installed.rc != 0
 
 - name: Ensure en_US.UTF-8 locale is available

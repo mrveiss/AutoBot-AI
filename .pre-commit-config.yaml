@@ -94,6 +94,56 @@ repos:
         stages: [pre-commit]
         description: "Use autobot_shared.time_utils.utc_timestamp() instead of datetime.utcnow().isoformat()"
 
+  # AutoBot custom: regression-prevention for #7150 git safe.directory migration.
+  # When code_source/ is owned by `autobot` (cloned by install.sh) and the
+  # Ansible playbook runs as root via sudo, git 2.35+ aborts read-only
+  # operations with rc=128 ("dubious ownership"). #7150 fixed 17 sites
+  # mechanically; #7219 found 7 more in update-all-nodes.yml (top-level vs
+  # playbooks/ basename collision). This guard blocks future regressions.
+  - repo: local
+    hooks:
+      - id: git-safe-directory-required
+        name: Block unguarded `git -C {{ git_repo_root }}` (#7150 #7219)
+        entry: tools/lint/check_git_safe_directory.py
+        language: python
+        files: \.(yml|yaml)$
+        stages: [pre-commit]
+        description: "Pass -c safe.directory={{ git_repo_root }} to every git -C invocation against code_source"
+
+  # AutoBot custom: regression-prevention for #7180. ansible-core 2.24 will
+  # remove INJECT_FACTS_AS_VARS, breaking any `{{ ansible_X }}` reference
+  # to an auto-injected fact (date_time, default_ipv4, hostname,
+  # distribution_release, os_family, env, kernel, etc.). The migration
+  # landed 84 files; this guard prevents reintroduction.
+  # Inventory/connection vars (ansible_user, ansible_host, ansible_become_*,
+  # ansible_ssh_*, ansible_python_interpreter, ansible_connection) are
+  # explicitly NOT facts and remain valid.
+  - repo: local
+    hooks:
+      - id: no-deprecated-ansible-facts
+        name: Block deprecated `{{ ansible_X }}` fact refs (#7180 #7221)
+        entry: tools/lint/check_no_deprecated_ansible_facts.py
+        language: python
+        files: \.(yml|yaml|j2)$
+        stages: [pre-commit]
+        description: "Use ansible_facts['X'] instead of the deprecated ansible_X top-level fact"
+
+  # AutoBot custom: regression-prevention for #6940. PR #6881 found 7 files
+  # calling response.get("content") on LLMResponse (a Pydantic BaseModel)
+  # — masked by MockLLMInterface in tests but raised AttributeError in prod.
+  # AST-aware: only flags `.get(...)` / `[...]` access on variables assigned
+  # from llm_service.chat() / chat_optimized() / etc. in files that import
+  # LLMResponse. Allowlists judges/__init__.py (intentional triple-fallback).
+  - repo: local
+    hooks:
+      - id: no-llm-response-dict-access
+        name: Block dict-style access on LLMResponse (#6940)
+        entry: tools/lint/check_no_llm_response_dict_access.py
+        language: python
+        files: \.py$
+        stages: [pre-commit]
+        description: "Use response.content (attribute), not response.get('content') — LLMResponse is a Pydantic BaseModel"
+
   # AutoBot custom: regression-prevention for #5225 KB redis accessor migration.
   # Blocks any reference to the old public ``aioredis_client`` attribute
   # (renamed to ``_aioredis_client`` in #5225) and any reference to the new
@@ -111,6 +161,52 @@ repos:
         files: \.py$
         stages: [pre-commit]
         description: "Use kb.redis() instead of reaching into KB internals (#5225)"
+
+  # AutoBot custom: regression-prevention for #5913 response_model=DataResponse safety check.
+  # Blocks any FastAPI route decorated with response_model=DataResponse unless its body
+  # calls create_success_response(), returns a dict literal with a 'success' key, or
+  # returns a bypass response type (JSONResponse, StreamingResponse, etc.).
+  # Background: #5843 → #5896 → #5904 cascade where 52 endpoints got DataResponse
+  # annotations but returned plain dicts without 'success', causing HTTP 500 at runtime.
+  - repo: local
+    hooks:
+      - id: response-model-data-response
+        name: Verify response_model=DataResponse endpoints return success-compatible shapes (#5913)
+        entry: tools/lint/check_response_models.py
+        language: python
+        files: \.py$
+        stages: [pre-commit]
+        description: "Use create_success_response() or a named schema when annotating with response_model=DataResponse (#5913)"
+
+  # AutoBot custom: prevent re-introduction of local BaseModel definitions in
+  # non-schema API endpoint files. Schema migration (#5799, #5996) moved
+  # 375+ classes to domain schemas_*.py files. This hook blocks new ones.
+  - repo: local
+    hooks:
+      - id: no-local-schemas
+        name: Block local BaseModel definitions in non-schema API files (#6056)
+        entry: tools/lint/check_no_local_schemas.py
+        language: python
+        files: ^autobot-backend/api/(?!schemas_).*\.py$
+        stages: [pre-commit]
+        description: "Move BaseModel subclasses to domain schemas_*.py files (#6056)"
+
+  # AutoBot custom: regression-prevention for #6558 (decorator order) +
+  # #6633 (stacked-duplicate). In Python ``@A @B def f`` ≡ ``f = A(B(f))``;
+  # if ``@with_error_handling`` is placed above ``@router.*`` the FastAPI
+  # router registers the unwrapped function and the error wrapper becomes
+  # dead code. #6558 swapped 1801 endpoints across 188 files; this hook
+  # blocks the regression. Also catches two adjacent
+  # ``@with_error_handling`` decorators (#6633).
+  - repo: local
+    hooks:
+      - id: decorator-order
+        name: Check @with_error_handling/@router decorator order (#6638)
+        entry: tools/lint/check_decorator_order.py
+        language: python
+        files: ^autobot-backend/api/.*\.py$
+        stages: [pre-commit]
+        description: "Ensure @router.* is OUTERMOST and @with_error_handling is not stacked (#6558, #6633)"
 
   # Python-specific checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -206,6 +302,54 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
         description: "Blocks commits with direct redis.Redis() — use get_redis_client() instead"
+
+  # No new /health routes outside api/system_health.py (Issue #3333)
+  - repo: local
+    hooks:
+      - id: no-new-health-route
+        name: No New /health Routes Outside system_health.py (Issue #3333)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-new-health-route
+        language: script
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks new @router.get('/health') definitions; modules must call api.system_health.register_health_probe instead"
+
+  # No new top-level WorkflowStep/AgentTask/WorkflowPlan outside canonical (Issue #6951)
+  - repo: local
+    hooks:
+      - id: no-new-workflow-step
+        name: No New WorkflowStep/AgentTask/WorkflowPlan Outside Canonical (Issue #6951)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-new-workflow-step
+        language: script
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks new top-level dataclass declarations of WorkflowStep/AgentTask/WorkflowPlan outside autobot_shared/workflow/types.py; subclasses and aliases are allowed"
+
+  # No new ad-hoc *Status(Enum) outside canonical (Issue #6973)
+  - repo: local
+    hooks:
+      - id: no-new-status-enum
+        name: No New *Status(Enum) Outside Canonical (Issue #6973)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-new-status-enum
+        language: script
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks new ad-hoc *Status(Enum) declarations outside autobot_shared/status_enums.py; lifecycle-shaped enums must use canonical TaskStatus/JobStatus/WorkflowStatus aliases"
+
+  # No tag-pinned 3rd-party GitHub Actions (Issue #7120, preventive for #7091)
+  - repo: local
+    hooks:
+      - id: no-tag-pinned-action
+        name: No Tag-Pinned 3rd-Party GitHub Actions (Issue #7120)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-tag-pinned-action
+        language: script
+        files: ^\.github/(workflows|actions)/.*\.ya?ml$
+        pass_filenames: true
+        stages: [pre-commit]
+        description: "Blocks tag-pinned `uses: <org>/<repo>@vN` for non-actions/* orgs in workflows/composite actions; SHA pins required for supply-chain immutability"
 
   # No print()/console.* in production code (Issue #1082)
   - repo: local

@@ -30,13 +30,24 @@
   when: current_timezone.stdout != time_sync.timezone
   tags: ['time_sync', 'timezone']
 
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: "Time Sync | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  tags: ['time_sync', 'packages']
+
 - name: "Time Sync | Install NTP packages"
   apt:
     name:
       - systemd-timesyncd
       - cron
     state: present
-    update_cache: yes
     lock_timeout: 120
   tags: ['time_sync', 'packages']
 

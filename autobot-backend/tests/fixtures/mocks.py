@@ -1,0 +1,487 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Mock fixtures for AutoBot backend testing (canonical location for #6994).
+
+Provides mock implementations of core components for tests and the
+`__main__` demo blocks under `intelligence/`:
+
+- MockLLMInterface  - Legacy mock matching the deleted LLMInterface surface
+                      (kept per "never delete code — wire it in" policy).
+- MockLLMService    - Mock matching the LLMService surface that replaced
+                      LLMInterface in #3185. Returns LLMResponse-shaped
+                      objects via `.chat(...)` so demos exercising
+                      `IntelligentAgent` / `StreamingCommandExecutor`
+                      run offline without network calls.
+- MockCommandValidator - Mock validator for command safety testing.
+- MockKnowledgeBase    - In-memory knowledge base for testing.
+- MockWorkerNode       - Mock NPU/worker node for distributed-flow tests.
+"""
+
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+
+
+class MockLLMInterface:
+    """Legacy mock LLM interface for testing agent workflows.
+
+    Predates the #3185 LLMInterface retirement. Kept for any test that
+    still depends on the `generate_response()` surface. New code should
+    prefer `MockLLMService`.
+    """
+
+    def __init__(self, responses: Optional[Dict[str, str]] = None):
+        self._custom_responses = responses or {}
+        self._call_count = 0
+        self._call_history: list = []
+
+    async def generate_response(self, prompt: str, **kwargs) -> str:
+        self._call_count += 1
+        self._call_history.append({"prompt": prompt, "kwargs": kwargs})
+
+        for keyword, response in self._custom_responses.items():
+            if keyword.lower() in prompt.lower():
+                return response
+
+        prompt_lower = prompt.lower()
+        if "progress" in prompt_lower:
+            return "Processing data..."
+        if "completion" in prompt_lower:
+            return "Task completed successfully!"
+        if "command" in prompt_lower:
+            return "COMMAND: echo 'This is a test response'\nEXPLANATION: Testing the system"
+        return "Command executing..."
+
+    @property
+    def call_count(self) -> int:
+        return self._call_count
+
+    @property
+    def call_history(self) -> list:
+        return self._call_history
+
+    def reset(self) -> None:
+        self._call_count = 0
+        self._call_history = []
+
+
+@dataclass
+class _MockLLMResponseShim:
+    """Duck-typed fallback if `llm_interface_pkg.models.LLMResponse` is
+    unavailable at import time. Matches the fields agents/cognifiers read
+    (`.content`, `.model`, `.provider`)."""
+
+    content: str
+    model: str = "mock"
+    provider: str = "mock"
+    tokens_used: Optional[int] = None
+    processing_time: float = 0.0
+    cached: bool = False
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    usage: Dict[str, int] = field(default_factory=dict)
+    finish_reason: str = "stop"
+    request_id: str = ""
+    error: Optional[str] = None
+
+
+def make_llm_response(
+    *,
+    content: str = "",
+    error: Optional[str] = None,
+    model: str = "mock",
+    provider: str = "mock",
+):
+    """Build an LLMResponse-shaped value for tests (canonical, #7134).
+
+    Returns the real ``LLMResponse`` from ``llm_interface_pkg.models`` when
+    importable — that pins the field contract, so a future field rename or
+    type change breaks the fixture (and every test that uses it) at import
+    time rather than silently producing wrong-shape mocks. Falls back to a
+    duck-typed shim when the real module isn't available (e.g. during
+    `tests/fixtures/` collection in a stripped-down environment).
+
+    All arguments are keyword-only — positional args would invite the same
+    field-shape drift the lesson in
+    ``feedback_verify_return_shape_in_method_migration.md`` is about.
+
+    Replaces the 7+ ad-hoc patterns surfaced in #7134:
+      - ``_StubResponse`` / ``_MockLLMResponseShim`` private classes
+      - ``MagicMock(content=..., error=None)`` inline forms
+      - ``_make_llm_response(content)`` factories
+      - ``MagicMock(content=...)`` without explicit error= field
+
+    Args:
+        content: ``LLMResponse.content`` value.
+        error: ``LLMResponse.error`` value (None for healthy responses).
+        model: provider model name; defaults to ``"mock"``.
+        provider: provider name; defaults to ``"mock"``.
+    """
+    try:
+        from llm_interface_pkg.models import LLMResponse
+
+        return LLMResponse(content=content, error=error, model=model, provider=provider)
+    except Exception:
+        return _MockLLMResponseShim(
+            content=content, error=error, model=model, provider=provider
+        )
+
+
+# Back-compat alias — internal callers still reference the underscore name.
+# New code should use `make_llm_response` directly.
+def _build_mock_response(content: str):
+    return make_llm_response(content=content)
+
+
+def make_async_redis(
+    *,
+    get_returns: Any = None,
+    set_returns: Any = True,
+    setex_returns: Any = True,
+    delete_returns: int = 1,
+    expire_returns: bool = True,
+    exists_returns: int = 0,
+    incr_returns: int = 1,
+    decr_returns: int = 0,
+    keys_returns: Optional[List[bytes]] = None,
+    ttl_returns: int = -1,
+    # Hash ops
+    hget_returns: Any = None,
+    hset_returns: int = 1,
+    hgetall_returns: Optional[Dict[bytes, bytes]] = None,
+    hkeys_returns: Optional[List[bytes]] = None,
+    hvals_returns: Optional[List[bytes]] = None,
+    hdel_returns: int = 1,
+    hexists_returns: int = 0,
+    # Set ops
+    sadd_returns: int = 1,
+    srem_returns: int = 1,
+    smembers_returns: Optional[set] = None,
+    sismember_returns: bool = False,
+    # List ops
+    lrange_returns: Optional[List[bytes]] = None,
+    lpush_returns: int = 1,
+    rpush_returns: int = 1,
+    llen_returns: int = 0,
+    # Sorted-set ops
+    zadd_returns: int = 1,
+    zcard_returns: int = 0,
+    zrange_returns: Optional[List[bytes]] = None,
+    zrangebyscore_returns: Optional[List[bytes]] = None,
+    zrevrange_returns: Optional[List[bytes]] = None,
+    zremrangebyrank_returns: int = 0,
+    # Pub/sub
+    publish_returns: int = 0,
+    **extra_methods: Any,
+) -> "AsyncMock":
+    """Build an async-redis-shaped ``AsyncMock`` for tests (canonical, #7264).
+
+    Replaces the 11+ ad-hoc ``_make_redis*()`` helpers across the test
+    tree. All redis methods are pre-configured as ``AsyncMock`` so
+    ``await redis.X(...)`` works correctly — the same lesson as #7216
+    (``return_value=`` alone isn't awaitable).
+
+    Defaults pick the common "empty/healthy" shape:
+
+      - get/hget/hgetall/keys/smembers/lrange/zrange → empty/None
+      - set/setex/expire → True
+      - sadd/srem/zadd/lpush/rpush/incr/hset/delete → ``1`` (one element changed)
+      - sismember/hexists/exists → ``0/False`` (not present)
+
+    Override per call via the corresponding ``X_returns`` kwarg. For methods
+    not pre-configured (e.g. project-specific Redis modules), pass via
+    ``**extra_methods`` — each becomes ``AsyncMock(return_value=value)``::
+
+        redis = make_async_redis(get_returns=b"hello", xadd=("stream", "1-0"))
+
+    Args:
+        \\*_returns: per-method return value overrides (see method names above).
+        \\**extra_methods: arbitrary additional method names → return values.
+
+    Returns:
+        An ``AsyncMock`` matching the redis-py async client surface.
+    """
+    from unittest.mock import AsyncMock
+
+    redis = AsyncMock()
+
+    # Defaults — picks the empty/healthy shape callers usually want.
+    redis.get = AsyncMock(return_value=get_returns)
+    redis.set = AsyncMock(return_value=set_returns)
+    redis.setex = AsyncMock(return_value=setex_returns)
+    redis.delete = AsyncMock(return_value=delete_returns)
+    redis.expire = AsyncMock(return_value=expire_returns)
+    redis.exists = AsyncMock(return_value=exists_returns)
+    redis.incr = AsyncMock(return_value=incr_returns)
+    redis.decr = AsyncMock(return_value=decr_returns)
+    redis.keys = AsyncMock(return_value=keys_returns or [])
+    redis.ttl = AsyncMock(return_value=ttl_returns)
+
+    redis.hget = AsyncMock(return_value=hget_returns)
+    redis.hset = AsyncMock(return_value=hset_returns)
+    redis.hgetall = AsyncMock(return_value=hgetall_returns or {})
+    redis.hkeys = AsyncMock(return_value=hkeys_returns or [])
+    redis.hvals = AsyncMock(return_value=hvals_returns or [])
+    redis.hdel = AsyncMock(return_value=hdel_returns)
+    redis.hexists = AsyncMock(return_value=hexists_returns)
+
+    redis.sadd = AsyncMock(return_value=sadd_returns)
+    redis.srem = AsyncMock(return_value=srem_returns)
+    redis.smembers = AsyncMock(return_value=smembers_returns or set())
+    redis.sismember = AsyncMock(return_value=sismember_returns)
+
+    redis.lrange = AsyncMock(return_value=lrange_returns or [])
+    redis.lpush = AsyncMock(return_value=lpush_returns)
+    redis.rpush = AsyncMock(return_value=rpush_returns)
+    redis.llen = AsyncMock(return_value=llen_returns)
+
+    redis.zadd = AsyncMock(return_value=zadd_returns)
+    redis.zcard = AsyncMock(return_value=zcard_returns)
+    redis.zrange = AsyncMock(return_value=zrange_returns or [])
+    redis.zrangebyscore = AsyncMock(return_value=zrangebyscore_returns or [])
+    redis.zrevrange = AsyncMock(return_value=zrevrange_returns or [])
+    redis.zremrangebyrank = AsyncMock(return_value=zremrangebyrank_returns)
+
+    redis.publish = AsyncMock(return_value=publish_returns)
+
+    for method_name, value in extra_methods.items():
+        setattr(redis, method_name, AsyncMock(return_value=value))
+
+    return redis
+
+
+@contextmanager
+def patch_async_redis(target: str, redis: Optional["AsyncMock"] = None):
+    """Context manager: patch ``get_async_redis_client`` at ``target`` with
+    correct ``AsyncMock`` wrapping (canonical, #7264).
+
+    Production code does ``await get_async_redis_client(database="...")``,
+    so the patched callable must itself be an ``AsyncMock`` whose call
+    returns the redis mock when awaited. Bare ``patch(target,
+    return_value=redis)`` returns the default AsyncMock when awaited —
+    that's the #7216 bug. This helper applies the correct shape and
+    yields the **inner redis mock** so callers can configure per-call
+    behavior::
+
+        with patch_async_redis("api.foo.get_async_redis_client") as redis:
+            redis.get = AsyncMock(return_value=b"hit")
+            result = await foo()
+            redis.get.assert_awaited_once_with("key")
+
+    Or pass a pre-configured redis::
+
+        redis = make_async_redis(get_returns=b"value")
+        with patch_async_redis("api.foo.get_async_redis_client", redis=redis):
+            ...
+
+    Args:
+        target: dotted path to ``get_async_redis_client`` on the module
+            that production code imports it from.
+        redis: pre-configured ``AsyncMock`` (default: ``make_async_redis()``).
+
+    Yields:
+        The redis mock — production's ``await get_async_redis_client(...)``
+        receives this same object.
+    """
+    from unittest.mock import AsyncMock, patch
+
+    redis = redis if redis is not None else make_async_redis()
+    with patch(target, new=AsyncMock(return_value=redis)):
+        yield redis
+
+
+class MockLLMService:
+    """Mock `LLMService` for offline demo / sanity-check runs (#6994 wire-in).
+
+    `IntelligentAgent` and `StreamingCommandExecutor` switched to the
+    `LLMService.chat(messages, **kwargs)` surface during the #3185
+    `LLMInterface` retirement. Their `__main__` demo blocks need a mock
+    exposing that surface — which `MockLLMInterface` (with its legacy
+    `generate_response()` method) does not. This class fills the gap.
+    """
+
+    def __init__(self, responses: Optional[Dict[str, str]] = None):
+        self._custom_responses = responses or {}
+        self._call_count = 0
+        self._call_history: List[Dict[str, Any]] = []
+
+    async def chat(self, messages, **kwargs):
+        """Return a deterministic `LLMResponse` for the last user message."""
+        self._call_count += 1
+        prompt = self._extract_prompt(messages)
+        self._call_history.append({"prompt": prompt, "kwargs": kwargs})
+        return _build_mock_response(self._select_response(prompt))
+
+    async def chat_optimized(self, messages, **kwargs):
+        return await self.chat(messages, **kwargs)
+
+    async def generate(self, prompt: str, **kwargs):
+        return await self.chat([{"role": "user", "content": prompt}], **kwargs)
+
+    async def get_metrics(self) -> Dict[str, Any]:
+        return {"calls": self._call_count, "provider": "mock", "cached": 0}
+
+    @staticmethod
+    def _extract_prompt(messages) -> str:
+        if isinstance(messages, str):
+            return messages
+        if isinstance(messages, list) and messages:
+            last = messages[-1]
+            if isinstance(last, dict):
+                return str(last.get("content", ""))
+            return str(last)
+        return ""
+
+    def _select_response(self, prompt: str) -> str:
+        for keyword, response in self._custom_responses.items():
+            if keyword.lower() in prompt.lower():
+                return response
+
+        prompt_lower = prompt.lower()
+        if "command" in prompt_lower:
+            return "COMMAND: echo 'mock LLM response'\n" "EXPLANATION: Demo path — no real LLM was called."
+        if "progress" in prompt_lower:
+            return "Processing data..."
+        if "complet" in prompt_lower:
+            return "Task completed successfully!"
+        return "Mock LLM response."
+
+    @property
+    def call_count(self) -> int:
+        return self._call_count
+
+    @property
+    def call_history(self) -> list:
+        return self._call_history
+
+    def reset(self) -> None:
+        self._call_count = 0
+        self._call_history = []
+
+
+class MockCommandValidator:
+    """Mock command validator for testing command safety."""
+
+    def __init__(
+        self,
+        default_safe: bool = True,
+        dangerous_patterns: Optional[list] = None,
+    ):
+        self._default_safe = default_safe
+        self._dangerous_patterns = dangerous_patterns or [
+            "rm -r",
+            "format",
+            "del /s",
+            "mkfs",
+            "dd if=",
+        ]
+        self._validation_history: list = []
+
+    def is_command_safe(self, command: str) -> bool:
+        self._validation_history.append(command)
+        command_lower = command.lower()
+        for pattern in self._dangerous_patterns:
+            if pattern.lower() in command_lower:
+                return False
+        return self._default_safe
+
+    @property
+    def validation_history(self) -> list:
+        return self._validation_history
+
+    def reset(self) -> None:
+        self._validation_history = []
+
+
+class MockKnowledgeBase:
+    """In-memory mock knowledge base for testing."""
+
+    def __init__(self):
+        self._facts: list = []
+        self._queries: list = []
+
+    async def store_fact(
+        self,
+        content: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        fact = {
+            "id": len(self._facts) + 1,
+            "content": content,
+            "metadata": metadata or {},
+        }
+        self._facts.append(fact)
+        return {"status": "stored", "id": fact["id"]}
+
+    async def query(self, query: str, limit: int = 10) -> list:
+        self._queries.append(query)
+        query_lower = query.lower()
+        matches = [f for f in self._facts if query_lower in f["content"].lower()]
+        return matches[:limit]
+
+    @property
+    def facts(self) -> list:
+        return self._facts
+
+    @property
+    def query_history(self) -> list:
+        return self._queries
+
+    def reset(self) -> None:
+        self._facts = []
+        self._queries = []
+
+
+class MockWorkerNode:
+    """Mock worker node for testing distributed processing."""
+
+    def __init__(
+        self,
+        node_id: str = "mock-worker-1",
+        capabilities: Optional[list] = None,
+    ):
+        self.node_id = node_id
+        self.capabilities = capabilities or ["text", "vision", "audio"]
+        self._tasks_processed: list = []
+        self._is_healthy = True
+
+    async def process_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        self._tasks_processed.append(task)
+        return {
+            "status": "completed",
+            "node_id": self.node_id,
+            "task_id": task.get("id", "unknown"),
+            "result": f"Mock processed: {task.get('type', 'unknown')}",
+        }
+
+    async def health_check(self) -> Dict[str, Any]:
+        return {
+            "healthy": self._is_healthy,
+            "node_id": self.node_id,
+            "capabilities": self.capabilities,
+            "tasks_processed": len(self._tasks_processed),
+        }
+
+    def set_healthy(self, healthy: bool) -> None:
+        self._is_healthy = healthy
+
+    @property
+    def tasks_processed(self) -> list:
+        return self._tasks_processed
+
+    def reset(self) -> None:
+        self._tasks_processed = []
+        self._is_healthy = True
+
+
+__all__ = [
+    "MockLLMInterface",
+    "MockLLMService",
+    "MockCommandValidator",
+    "MockKnowledgeBase",
+    "MockWorkerNode",
+    "make_llm_response",
+    "make_async_redis",
+    "patch_async_redis",
+]

@@ -19,13 +19,17 @@ Issue #2153 — Secret management for workflow credentials.
 """
 
 import logging
-import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
 
+from api.schemas_workflows import (
+    WorkflowSecretCreateRequest,
+    WorkflowSecretMetadata,
+    WorkflowSecretUpdateRequest,
+)
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.workflow_secret_service import (
     WorkflowSecretService,
     get_workflow_secret_service,
@@ -34,58 +38,6 @@ from services.workflow_secret_service import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# Allowed characters in a secret name — same rule as the general secrets API.
-_NAME_RE = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
-
-
-# ---------------------------------------------------------------------------
-# Request / response schemas
-# ---------------------------------------------------------------------------
-
-
-def _validate_secret_name(name: str) -> str:
-    """Reject names containing characters outside the safe set. Issue #2153."""
-    if not _NAME_RE.match(name):
-        raise ValueError(
-            "Secret name must contain only alphanumeric characters, "
-            "underscores, hyphens, and dots"
-        )
-    return name
-
-
-class WorkflowSecretCreateRequest(BaseModel):
-    """Request body for creating a workflow secret. Issue #2303: owner_id derived from auth."""
-
-    name: str = Field(..., min_length=1, max_length=256)
-    value: str = Field(..., min_length=1, max_length=65536)
-    secret_type: str = Field(default="api_key", max_length=50)
-    workflow_id: Optional[str] = Field(default=None, max_length=128)
-    description: Optional[str] = Field(default=None, max_length=1024)
-
-    @field_validator("name")
-    @classmethod
-    def validate_name(cls, v: str) -> str:
-        """Reject unsafe characters in the secret name."""
-        return _validate_secret_name(v)
-
-
-class WorkflowSecretUpdateRequest(BaseModel):
-    """Request body for updating a workflow secret's value. Issue #2303: owner_id from auth."""
-
-    value: str = Field(..., min_length=1, max_length=65536)
-
-
-class WorkflowSecretMetadata(BaseModel):
-    """Safe metadata response — no value field. Issue #2153."""
-
-    id: str
-    name: str
-    secret_type: str
-    scope: str
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-    description: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -117,6 +69,11 @@ def _to_metadata(row: dict) -> WorkflowSecretMetadata:
 
 
 @router.post("", status_code=201, response_model=WorkflowSecretMetadata)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_workflow_secret",
+    error_code_prefix="WORKFLOW_SECRETS",
+)
 async def create_workflow_secret(
     request: WorkflowSecretCreateRequest,
     current_user: dict = Depends(get_current_user),
@@ -161,6 +118,11 @@ async def create_workflow_secret(
 
 
 @router.get("", response_model=List[WorkflowSecretMetadata])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_workflow_secrets",
+    error_code_prefix="WORKFLOW_SECRETS",
+)
 async def list_workflow_secrets(
     workflow_id: Optional[str] = Query(default=None, max_length=128),
     current_user: dict = Depends(get_current_user),
@@ -184,6 +146,11 @@ async def list_workflow_secrets(
 
 
 @router.put("/{name}", response_model=WorkflowSecretMetadata)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_workflow_secret",
+    error_code_prefix="WORKFLOW_SECRETS",
+)
 async def update_workflow_secret(
     name: str,
     request: WorkflowSecretUpdateRequest,
@@ -230,7 +197,12 @@ async def update_workflow_secret(
     )
 
 
-@router.delete("/{name}", status_code=204)
+@router.delete("/{name}", status_code=204, response_model=None)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_workflow_secret",
+    error_code_prefix="WORKFLOW_SECRETS",
+)
 async def delete_workflow_secret(
     name: str,
     current_user: dict = Depends(get_current_user),

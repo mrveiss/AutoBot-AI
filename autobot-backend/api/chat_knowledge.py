@@ -40,20 +40,35 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Dict, List, Optional
 
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from pydantic import BaseModel
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from chat_history import ChatHistoryManager
+from api.system_health import ComponentHealth, register_health_probe
 
 # Import existing components
 from knowledge_base import KnowledgeBase
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 from type_defs.common import Metadata
+
+from api.schemas_common import DataResponse
+from api.schemas_knowledge import (
+    AddKnowledgeRequest,
+    AssociateFileRequest,
+    ChatKnowledgeHealthResponse,
+    ChatKnowledgeSearchRequest,
+    CompileChatRequest,
+    CreateContextRequest,
+    FileAssociationType,
+    KnowledgeDecision,
+    KnowledgeDecisionRequest,
+    MarkFactsPreservedRequest,
+    PreserveSessionFactsResponse,
+    SessionFactsResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,23 +105,6 @@ async def get_chat_knowledge_manager_instance(request: Request = None):
         )
 
     return new_manager
-
-
-class KnowledgeDecision(str, Enum):
-    """Decision for knowledge persistence"""
-
-    ADD_TO_KB = "add_to_kb"
-    KEEP_TEMPORARY = "keep_temporary"
-    DELETE = "delete"
-
-
-class FileAssociationType(str, Enum):
-    """Type of file association"""
-
-    REFERENCE = "reference"  # File referenced in chat
-    UPLOAD = "upload"  # File uploaded to chat
-    GENERATED = "generated"  # File generated during chat
-    MODIFIED = "modified"  # File modified during chat
 
 
 @dataclass
@@ -149,7 +147,7 @@ class ChatKnowledgeManager:
         """Initialize manager with knowledge base and storage paths."""
         self.knowledge_base = KnowledgeBase()
         self.chat_history_manager = ChatHistoryManager()
-        self.llm_interface = LLMInterface()
+        self.llm_interface = get_llm_service()
 
         # In-memory storage (should be persisted to database in production)
         self.chat_contexts: Dict[str, ChatKnowledgeContext] = {}
@@ -449,10 +447,10 @@ class ChatKnowledgeManager:
         Format the summary with clear sections and bullet points.
         """
 
-        summary_response = await self.llm_interface.chat_completion(
-            model="default", messages=[{"role": "user", "content": summary_prompt}]
+        summary_response = await self.llm_interface.chat(
+            messages=[{"role": "user", "content": summary_prompt}]
         )
-        summary = summary_response.get("content", "")
+        summary = summary_response.content
 
         context = self.chat_contexts.get(chat_id)
         compiled_knowledge = self._build_compiled_knowledge_dict(
@@ -530,21 +528,12 @@ chat_knowledge_manager = None
 # API Endpoints
 
 
-class CreateContextRequest(BaseModel):
-    """Create chat context request (Issue #688: added user_id)."""
-
-    chat_id: str
-    topic: Optional[str] = None
-    keywords: Optional[List[str]] = None
-    user_id: Optional[str] = None  # Issue #688: Track user ownership
-
-
+@router.post("/context/create", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_chat_context",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/context/create")
 async def create_chat_context(request_data: CreateContextRequest, request: Request):
     """Create or update knowledge context for a chat (Issue #688: added user_id)."""
     try:
@@ -573,19 +562,12 @@ async def create_chat_context(request_data: CreateContextRequest, request: Reque
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-class AssociateFileRequest(BaseModel):
-    chat_id: str
-    file_path: str
-    association_type: FileAssociationType
-    metadata: Optional[Metadata] = None
-
-
+@router.post("/files/associate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="associate_file_with_chat",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/files/associate")
 async def associate_file_with_chat(
     request_data: AssociateFileRequest, request: Request
 ):
@@ -614,12 +596,12 @@ async def associate_file_with_chat(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/files/upload/{chat_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="upload_file_to_chat",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/files/upload/{chat_id}")
 async def upload_file_to_chat(
     chat_id: str,
     file: UploadFile = File(...),
@@ -661,18 +643,12 @@ async def upload_file_to_chat(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-class AddKnowledgeRequest(BaseModel):
-    chat_id: str
-    content: str
-    metadata: Optional[Metadata] = None
-
-
+@router.post("/knowledge/add_temporary", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_temporary_knowledge",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/knowledge/add_temporary")
 async def add_temporary_knowledge(request: AddKnowledgeRequest):
     """Add temporary knowledge to chat context"""
     try:
@@ -687,12 +663,12 @@ async def add_temporary_knowledge(request: AddKnowledgeRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/knowledge/pending/{chat_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pending_knowledge_decisions",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.get("/knowledge/pending/{chat_id}")
 async def get_pending_knowledge_decisions(chat_id: str):
     """Get knowledge items pending user decision"""
     try:
@@ -709,18 +685,12 @@ async def get_pending_knowledge_decisions(chat_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-class KnowledgeDecisionRequest(BaseModel):
-    chat_id: str
-    knowledge_id: str
-    decision: KnowledgeDecision
-
-
+@router.post("/knowledge/decide", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="apply_knowledge_decision",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/knowledge/decide")
 async def apply_knowledge_decision(request: KnowledgeDecisionRequest):
     """Apply user decision for temporary knowledge"""
     try:
@@ -740,18 +710,12 @@ async def apply_knowledge_decision(request: KnowledgeDecisionRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-class CompileChatRequest(BaseModel):
-    chat_id: str
-    title: Optional[str] = None
-    include_system_messages: bool = False
-
-
+@router.post("/compile", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="compile_chat_to_knowledge",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/compile")
 async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: Request):
     """Compile entire chat conversation to knowledge base"""
     try:
@@ -769,19 +733,13 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-class SearchRequest(BaseModel):
-    query: str
-    chat_id: Optional[str] = None
-    include_temporary: bool = True
-
-
+@router.post("/search", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_chat_knowledge",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/search")
-async def search_chat_knowledge(request: SearchRequest):
+async def search_chat_knowledge(request: ChatKnowledgeSearchRequest):
     """Search knowledge across chats or within specific chat"""
     try:
         results = await chat_knowledge_manager.search_chat_knowledge(
@@ -797,12 +755,12 @@ async def search_chat_knowledge(request: SearchRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/context/{chat_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_chat_context",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.get("/context/{chat_id}")
 async def get_chat_context(chat_id: str):
     """Get complete knowledge context for a chat"""
     try:
@@ -841,12 +799,37 @@ async def get_chat_context(chat_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@register_health_probe("chat_knowledge")
+async def probe_chat_knowledge(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the chat-knowledge manager."""
+    try:
+        app_manager = None
+        if request is not None:
+            app_manager = getattr(request.app.state, "chat_knowledge_manager", None)
+        manager = app_manager or chat_knowledge_manager
+        if manager is None:
+            return ComponentHealth(
+                name="chat_knowledge",
+                status="degraded",
+                detail="chat_knowledge_manager not initialized",
+            )
+        return ComponentHealth(name="chat_knowledge", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="chat_knowledge",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
+@router.get("/health", response_model=ChatKnowledgeHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.get("/health")
 async def health_check():
     """Health check endpoint for chat knowledge system"""
     try:
@@ -866,14 +849,7 @@ async def health_check():
 # ============================================================================
 
 
-class MarkFactsPreservedRequest(BaseModel):
-    """Request model for marking facts as preserved/important."""
-
-    fact_ids: List[str]
-    preserve: bool = True
-
-
-@router.get("/chat/sessions/{session_id}/facts")
+@router.get("/chat/sessions/{session_id}/facts", response_model=SessionFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_facts",
@@ -998,7 +974,7 @@ def _count_preserve_results(results: list, session_id: str) -> tuple[int, int, l
     return updated_count, failed_count, errors
 
 
-@router.post("/chat/sessions/{session_id}/facts/preserve")
+@router.post("/chat/sessions/{session_id}/facts/preserve", response_model=PreserveSessionFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="preserve_session_facts",

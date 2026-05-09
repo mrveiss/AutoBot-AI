@@ -172,17 +172,22 @@
             </div>
           </div>
 
-          <!-- Issue #249, #1186: Source Attribution Display -->
+          <!-- Issue #249, #1186, #4448: Source Attribution Display
+               Prefer top-level message.sources (persisted via Issue #4448) when
+               present; fall back to metadata.citations for live-streaming chunks
+               where sources have not been persisted yet.  Only knowledge_base
+               entries are included in message.sources so no llm_training
+               sentinel is appended here. -->
           <CitationsDisplay
-            v-if="message.sender === 'assistant' && ((message.metadata as any)?.citations?.length || 0) > 0"
-            :citations="(message.metadata as any)?.citations || []"
+            v-if="message.sender === 'assistant' && getMessageCitations(message).length > 0"
+            :citations="getMessageCitations(message)"
           />
 
           <!-- Attachments -->
           <div v-if="message.attachments && message.attachments.length > 0" class="message-attachments">
             <div class="attachment-header">
               <i class="fas fa-paperclip" aria-hidden="true"></i>
-              <span>{{ $t('chat.messages.attachments', { count: message.attachments.length }) }}</span>
+              <span>{{ $t('chat.messages.attachments', { count: message.attachments.length }, message.attachments.length) }}</span>
             </div>
             <div class="attachment-list">
               <div
@@ -526,12 +531,9 @@ import BaseModal from '@/components/ui/BaseModal.vue'
 import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
 import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
 import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'
-import appConfig from '@/config/AppConfig.js'
-import { getApiBase } from '@/config/ssot-config'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
-import { useToast } from '@/composables/useToast'
 import { createLogger } from '@/utils/debugUtils'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { useCommandApproval } from '@/composables/useCommandApproval'
 import { sanitizeChatHtml } from '@/utils/sanitize'
 
 const logger = createLogger('ChatMessages')
@@ -558,10 +560,47 @@ const controller = useChatController()
 const { displaySettings } = useDisplaySettings()
 const permissionStore = usePermissionStore()
 
-// Toast notifications
-const { showToast } = useToast()
-const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
-  showToast(message, type, type === 'error' ? 5000 : 3000)
+// Command Approval composable — replaces all inline fetchWithAuth calls
+const {
+  processingApproval,
+  showCommentInput,
+  activeCommentSessionId,
+  approvalComment,
+  pendingApprovalDecision,
+  autoApproveFuture,
+  rememberForProject,
+  currentProjectPath,
+  approveCommand: _approveCommand,
+  promptForComment,
+  submitApprovalWithComment,
+  cancelComment,
+  getRiskClass,
+} = useCommandApproval()
+
+/**
+ * Thin wrapper: calls the composable's approveCommand with the store's
+ * message-update callback wired in.
+ */
+const approveCommand = (
+  terminal_session_id: string,
+  approved: boolean,
+  comment?: string,
+  command_id?: string,
+  commandInfo?: { command: string; risk_level: string }
+) => {
+  const onMessageUpdate = (sessionId: string, status: string, updateComment?: string) => {
+    const targetMessage = store.currentMessages.find(
+      msg => msg.metadata?.terminal_session_id === sessionId &&
+             msg.metadata?.requires_approval === true
+    )
+    if (targetMessage && targetMessage.metadata) {
+      targetMessage.metadata.approval_status = status
+      targetMessage.metadata.approval_comment = updateComment
+    } else {
+      logger.warn('Could not find message to update approval status')
+    }
+  }
+  return _approveCommand(terminal_session_id, approved, comment, command_id, onMessageUpdate, commandInfo)
 }
 
 // Refs
@@ -583,22 +622,6 @@ const estimatedResponseTime = ref<number | null>(null)
 // Issue #249: Citation display state
 const citationExpansion = useExpansion<string>()
 const expandedCitations = citationExpansion.expanded
-
-// Approval state
-const processingApproval = ref(false)
-
-// Comment functionality state
-const showCommentInput = ref(false)
-const activeCommentSessionId = ref<string | null>(null)
-const approvalComment = ref('')
-const pendingApprovalDecision = ref<boolean | null>(null)
-
-// Auto-approve functionality state
-const autoApproveFuture = ref(false)
-
-// Permission v2: Project memory state
-const rememberForProject = ref(false)
-const currentProjectPath = ref<string | null>(null)
 
 // CRITICAL FIX: Prevent EmptyState from flashing during polling/reactivity updates
 // Once messages have been loaded, never show EmptyState again (prevents flicker)
@@ -880,6 +903,40 @@ const shouldShowMetadata = (message: ChatMessage): boolean => {
          Object.keys(message.metadata).length > 0
 }
 
+/**
+ * Issue #4448: Return the canonical citation list for a message.
+ *
+ * Priority order:
+ * 1. message.sources — top-level persisted sources (knowledge_base entries only,
+ *    shape: {title, path, score, chunk_id}).  Present after the message is saved
+ *    and reloaded from the backend.
+ * 2. metadata.citations — present during live streaming before persistence.
+ *    May include the always-appended llm_training sentinel; filter it out so
+ *    the user only sees real knowledge-base references.
+ *
+ * Returns a Citation-compatible array accepted by CitationsDisplay.
+ */
+const getMessageCitations = (message: ChatMessage): Record<string, unknown>[] => {
+  if (Array.isArray(message.sources) && message.sources.length > 0) {
+    return message.sources.map((s) => ({
+      id: s.chunk_id,
+      title: s.title,
+      source: s.path,
+      score: s.score,
+      type: 'knowledge_base' as const,
+      reliability: 'high' as const,
+    }))
+  }
+  const metaCitations = (message.metadata as Record<string, unknown> | undefined)
+    ?.citations
+  if (Array.isArray(metaCitations)) {
+    return (metaCitations as Record<string, unknown>[]).filter(
+      (c) => c.type !== 'llm_training'
+    )
+  }
+  return []
+}
+
 const hasCodeBlocks = (content: string): boolean => {
   return /```[\s\S]*?```/.test(content)
 }
@@ -1038,248 +1095,6 @@ const detectToolCalls = (message: ChatMessage) => {
   }
 }
 
-// Poll command state from queue (event-driven, no timeouts!)
-const pollCommandState = async (command_id: string, callback: (result: any) => void) => {
-  const maxAttempts = 100  // 100 * 500ms = 50 seconds max
-  let attempt = 0
-
-  const poll = async () => {
-    try {
-      const backendUrl = await appConfig.getApiUrl(`${getApiBase()}/agent-terminal/commands/${command_id}`)
-      const response = await fetchWithAuth(backendUrl)
-
-      if (!response.ok) {
-        logger.error('Failed to get command state:', response.status)
-        if (attempt < maxAttempts) {
-          attempt++
-          setTimeout(poll, 500)
-        } else {
-          callback({ state: 'error', error: 'HTTP error' })
-        }
-        return
-      }
-
-      const command = await response.json()
-      logger.debug(`Command state (attempt ${attempt + 1}):`, command.state)
-
-      // Check if command is finished
-      if (command.state === 'completed' || command.state === 'failed' || command.state === 'denied') {
-        logger.debug('Command finished:', {
-          state: command.state,
-          output_length: command.output?.length || 0,
-          return_code: command.return_code
-        })
-        callback({
-          state: command.state,
-          output: command.output,
-          stderr: command.stderr,
-          return_code: command.return_code,
-          command: command.command
-        })
-        return  // Stop polling
-      }
-
-      // Command still running - poll again
-      if (attempt < maxAttempts) {
-        attempt++
-        setTimeout(poll, 500)  // Poll every 500ms
-      } else {
-        logger.error('Polling timed out after 50 seconds')
-        callback({ state: 'timeout', error: 'Polling timeout' })
-      }
-    } catch (error) {
-      logger.error('Polling error:', error)
-      if (attempt < maxAttempts) {
-        attempt++
-        setTimeout(poll, 500)
-      } else {
-        callback({ state: 'error', error: (error as Error).message })
-      }
-    }
-  }
-
-  // Start polling
-  logger.debug('Starting command state polling for:', command_id)
-  poll()
-}
-
-// Command Approval - Use HTTP POST to agent-terminal API with dynamic URL
-// Permission v2: Enhanced with project memory support
-const approveCommand = async (
-  terminal_session_id: string,
-  approved: boolean,
-  comment?: string,
-  command_id?: string,
-  commandInfo?: { command: string; risk_level: string }  // Permission v2: Command details for memory
-) => {
-  if (!terminal_session_id) {
-    logger.error('No terminal_session_id provided for approval')
-    return
-  }
-
-  processingApproval.value = true
-  logger.debug(`${approved ? 'Approving' : 'Denying'} command for session:`, terminal_session_id)
-  if (comment) {
-    logger.debug('With comment:', comment)
-  }
-  if (autoApproveFuture.value) {
-    logger.debug('Auto-approve similar commands in future:', autoApproveFuture.value)
-  }
-  if (rememberForProject.value) {
-    logger.debug('Remember for project:', currentProjectPath.value)
-  }
-
-  try {
-    // Get backend URL from appConfig
-    const backendUrl = await appConfig.getApiUrl(`${getApiBase()}/agent-terminal/sessions/${terminal_session_id}/approve`)
-
-    const response = await fetchWithAuth(backendUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        approved,
-        user_id: 'web_user',
-        comment: comment || null,
-        auto_approve_future: autoApproveFuture.value,  // Send auto-approve preference
-        remember_for_project: rememberForProject.value,  // Permission v2
-        project_path: currentProjectPath.value  // Permission v2
-      })
-    })
-
-    const result = await response.json()
-    logger.debug('Approval response:', result)
-
-    if (result.status === 'approved' || result.status === 'denied') {
-      logger.debug(`Command ${approved ? 'approved' : 'denied'} successfully`)
-      notify(`Command ${approved ? 'approved' : 'denied'}`, approved ? 'success' : 'warning')
-
-      // Update the message metadata to reflect approval status
-      const targetMessage = store.currentMessages.find(
-        msg => msg.metadata?.terminal_session_id === terminal_session_id &&
-               msg.metadata?.requires_approval === true
-      )
-
-      if (targetMessage && targetMessage.metadata) {
-        targetMessage.metadata.approval_status = result.status
-        targetMessage.metadata.approval_comment = comment || result.comment
-        logger.debug('Updated message approval status:', targetMessage.metadata)
-      } else {
-        logger.warn('Could not find message to update approval status')
-      }
-
-      // START POLLING: If approved and we have command_id, poll for completion
-      if (result.status === 'approved' && approved && command_id) {
-        logger.debug('Starting polling for approved command:', command_id)
-
-        pollCommandState(command_id, (pollResult) => {
-          logger.debug('Command execution complete:', pollResult)
-
-          if (pollResult.state === 'completed') {
-            logger.debug('Command completed successfully')
-            logger.debug('Output:', pollResult.output)
-            // Note: Backend already handles LLM interpretation and sends it to chat
-            // The output will appear naturally through the WebSocket/streaming flow
-          } else if (pollResult.state === 'failed') {
-            logger.error('Command failed:', pollResult.stderr)
-            notify('Command execution failed', 'error')
-          } else if (pollResult.state === 'timeout') {
-            logger.warn('Polling timed out')
-            notify('Command execution timed out', 'warning')
-          } else if (pollResult.state === 'error') {
-            logger.error('Polling error:', pollResult.error)
-            notify('Command polling error', 'error')
-          }
-        })
-      } else if (!command_id && approved) {
-        logger.warn('No command_id available for polling (legacy approval flow)')
-      }
-
-      // Permission v2: Store approval in project memory if requested
-      if (
-        rememberForProject.value &&
-        approved &&
-        currentProjectPath.value &&
-        commandInfo &&
-        permissionStore.isEnabled
-      ) {
-        const stored = await permissionStore.storeApproval(
-          currentProjectPath.value,
-          'web_user',
-          commandInfo.command,
-          commandInfo.risk_level,
-          'Bash',
-          comment
-        )
-        if (stored) {
-          logger.info('Approval stored in project memory')
-          notify('Approval remembered for this project', 'info')
-        }
-      }
-
-      // Reset checkboxes after submission
-      autoApproveFuture.value = false
-      rememberForProject.value = false
-    } else if (result.status === 'error') {
-      logger.error('Approval error:', result.error)
-      notify(`Approval failed: ${result.error}`, 'error')
-    }
-
-    processingApproval.value = false
-  } catch (error) {
-    logger.error('Error sending approval:', error)
-    notify('Failed to process command approval', 'error')
-    processingApproval.value = false
-  }
-}
-
-const getRiskClass = (riskLevel: string): string => {
-  const riskClasses: Record<string, string> = {
-    'LOW': 'text-green-600',
-    'MODERATE': 'text-yellow-600',
-    'HIGH': 'text-orange-600',
-    'DANGEROUS': 'text-red-600'
-  }
-  return riskClasses[riskLevel] || 'text-autobot-text-secondary'
-}
-
-// Comment functionality methods
-const promptForComment = (sessionId: string) => {
-  showCommentInput.value = true
-  activeCommentSessionId.value = sessionId
-  approvalComment.value = ''
-  pendingApprovalDecision.value = null
-}
-
-const submitApprovalWithComment = async (sessionId: string, approved: boolean | null) => {
-  if (!approvalComment.value.trim()) {
-    logger.warn('Cannot submit approval with empty comment')
-    return
-  }
-
-  // Determine approval decision
-  const finalDecision = approved !== null ? approved : pendingApprovalDecision.value
-
-  if (finalDecision === null) {
-    logger.error('No approval decision provided')
-    return
-  }
-
-  // Call existing approveCommand with comment
-  await approveCommand(sessionId, finalDecision, approvalComment.value)
-
-  // Reset state
-  cancelComment()
-}
-
-const cancelComment = () => {
-  showCommentInput.value = false
-  activeCommentSessionId.value = null
-  approvalComment.value = ''
-  pendingApprovalDecision.value = null
-}
-
 // Issue #1312: Consolidated watcher — auto-scroll + screen reader announcement
 // Replaces two separate watchers (one with deep: true that traversed all message
 // properties on every streaming chunk). Now watches only array length (O(1)).
@@ -1363,7 +1178,7 @@ onMounted(async () => {
 .message-wrapper {
   @apply rounded-lg shadow-sm border transition-all duration-200 relative;
   max-width: 85%;
-  padding: 6px 10px;
+  padding: var(--spacing-1-5) var(--spacing-2-5);
 }
 
 .message-wrapper:hover {

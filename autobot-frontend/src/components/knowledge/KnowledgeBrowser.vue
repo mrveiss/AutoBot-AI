@@ -124,10 +124,10 @@
 
         <div v-else-if="error" class="error-state">
           <i class="fas fa-exclamation-triangle"></i>
-          <p>{{ error }}</p>
+          <p>{{ error?.message }}</p>
           <BaseButton
             variant="primary"
-            @click="() => loadKnowledgeTree(loadKnowledgeTreeFn)"
+            @click="retryLoadKnowledgeTree"
             class="retry-btn"
           >
             <i class="fas fa-redo"></i> {{ $t('knowledge.browser.retryBtn') }}
@@ -190,19 +190,22 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useRouter } from 'vue-router'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
-
-// Create scoped logger for KnowledgeBrowser
-const logger = createLogger('KnowledgeBrowser')
+import {
+  fetchMainCategories,
+  fetchFactsByCategory,
+  fetchEntriesPage,
+  fetchFolderContents,
+  fetchFactContent,
+  type MainCategory,
+} from '@/composables/knowledge/useKnowledgeBrowser'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { useKnowledgeCategories } from '@/composables/knowledge/useKnowledgeCategories'
 import { useMachineKnowledge } from '@/composables/knowledge/useMachineKnowledge'
 import { useManPages } from '@/composables/knowledge/useManPages'
 import { formatDate, formatFileSize, formatCategoryName } from '@/utils/formatHelpers'
 import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
-import { useAsyncOperation } from '@/composables/useAsyncOperation'
+import { useLoadingState } from '@/composables/useLoadingState'
 import { usePagination } from '@/composables/usePagination'
 import { useDebounce } from '@/composables/useTimeout'
 import TreeNodeComponent, { type TreeNode } from './TreeNodeComponent.vue'
@@ -212,6 +215,9 @@ import KnowledgeContentViewer from './KnowledgeContentViewer.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import KnowledgeMainCategories from './KnowledgeMainCategories.vue'
+
+// Create scoped logger for KnowledgeBrowser
+const logger = createLogger('KnowledgeBrowser')
 
 // Domain composables (migrated from useKnowledgeBase BC shim in #5193)
 const { getCategoryIcon, getFileIcon: getFileIconUtil } = useKnowledgeIcons()
@@ -270,7 +276,7 @@ const updateDebouncedSearch = useDebounce((value: string) => {
 }, 300)
 const selectedCategory = ref<string | null>(null)
 const selectedMainCategory = ref<string | null>(null)
-const mainCategories = ref<any[]>([])
+const mainCategories = ref<MainCategory[]>([])
 // Issue #5201: track backend KB connectivity so the UI can distinguish
 // "empty KB" (all counts 0, kb_connected=true) from "broken KB"
 // (kb_connected=false). Defaults to true so we don't flash the error
@@ -291,18 +297,10 @@ const populationStates = ref<Record<string, { isPopulating: boolean; progress: n
 
 
 // Use composables for async operations
-const {
-  execute: loadKnowledgeTree,
-  loading: isLoading,
-  error
-} = useAsyncOperation()
-
-const {
-  execute: loadFileContentOp,
-  loading: isLoadingContent,
-  error: contentError,
-  reset: resetContentError
-} = useAsyncOperation()
+const { isLoading, wrap: loadKnowledgeTree } = useLoadingState()
+const error = ref<Error | null>(null)
+const { isLoading: isLoadingContent, wrap: loadFileContentOp } = useLoadingState()
+const contentError = ref<Error | null>(null)
 
 // Cursor-based pagination for user knowledge entries
 const allLoadedEntries = ref<any[]>([])
@@ -310,34 +308,8 @@ const entriesCursor = ref<string>('0')
 const hasMoreEntries = ref<boolean>(true)
 const isLoadingMore = ref<boolean>(false)
 
-// Fetch function for cursor-based pagination
-const fetchEntries = async (cursor: string) => {
-  const params = new URLSearchParams({
-    limit: '100',
-    cursor: cursor || '0'
-  })
-  const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/entries?${params}`)
-
-  // Handle both cursor-based and offset-based formats
-  if (data.next_cursor !== undefined) {
-    return {
-      items: data.entries || [],
-      nextCursor: data.next_cursor || '0',
-      hasMore: data.has_more || false
-    }
-  } else if (data.offset !== undefined) {
-    const total = data.total || 0
-    const currentOffset = data.offset || 0
-    const entries = data.entries || []
-    const hasMore = (currentOffset + entries.length) < total
-    return {
-      items: entries,
-      nextCursor: hasMore ? String(currentOffset + entries.length) : '0',
-      hasMore
-    }
-  }
-  return { items: data.entries || [], nextCursor: '0', hasMore: false }
-}
+// Fetch function for cursor-based pagination — delegates to useKnowledgeBrowser
+const fetchEntries = fetchEntriesPage
 
 // Load more entries function
 const loadMore = async () => {
@@ -578,7 +550,7 @@ const selectMainCategory = (mainCatId: string) => {
 const loadMainCategories = async () => {
   kbFetchError.value = false
   try {
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/categories/main`)
+    const data = await fetchMainCategories()
 
     if (data && data.categories) {
       mainCategories.value = data.categories
@@ -667,10 +639,17 @@ const refreshVectorizationStatus = async () => {
   }
 }
 
-// Load main knowledge tree with useAsyncOperation wrapper
+// Load main knowledge tree with useLoadingState wrapper
+const retryLoadKnowledgeTree = () => {
+  error.value = null
+  loadKnowledgeTree(loadKnowledgeTreeFn).catch(err => {
+    error.value = err instanceof Error ? err : new Error(String(err))
+  })
+}
+
 const loadKnowledgeTreeFn = async () => {
   // Load facts from knowledge base by category
-  const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/facts/by_category`)
+  const data = await fetchFactsByCategory()
 
   if (data && data.categories) {
     // Build tree structure from categories
@@ -931,7 +910,10 @@ const handlePopulate = async (categoryId: string) => {
     populationStates.value[categoryId] = { isPopulating: false, progress: 0 }
 
     // Reload the knowledge tree to show new items
-    await loadKnowledgeTree(loadKnowledgeTreeFn)
+    error.value = null
+    await loadKnowledgeTree(loadKnowledgeTreeFn).catch(err => {
+      error.value = err instanceof Error ? err : new Error(String(err))
+    })
 
     logger.info(`${categoryId} population completed:`, result)
   } catch (error) {
@@ -946,12 +928,7 @@ const handleImport = () => {
 
 const loadFolderContents = async (folder: TreeNode) => {
   try {
-    // Load files for this category
-    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/search`, {
-      query: '',
-      category: folder.category,
-      n_results: 100
-    })
+    const data = await fetchFolderContents(folder.category || '')
 
     if (data.results && Array.isArray(data.results)) {
       folder.children = data.results.map((item: any, idx: number) => ({
@@ -971,6 +948,7 @@ const loadFolderContents = async (folder: TreeNode) => {
 }
 
 const loadFileContent = async (file: TreeNode) => {
+  contentError.value = null
   await loadFileContentOp(async () => {
     // First check if we have full_content in metadata
     if (file.metadata?.full_content) {
@@ -985,7 +963,7 @@ const loadFileContent = async (file: TreeNode) => {
 
       if (factKey) {
         // Fetch full fact data from backend
-        const response = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/fact/${factKey}`)
+        const response = await fetchFactContent(factKey)
 
         if (response && response.content) {
           fileContent.value = response.content
@@ -996,6 +974,8 @@ const loadFileContent = async (file: TreeNode) => {
         fileContent.value = file.content || 'Content not available'
       }
     }
+  }).catch(err => {
+    contentError.value = err instanceof Error ? err : new Error(String(err))
   })
   // Update size to reflect actual loaded content length
   if (selectedFile.value && fileContent.value) {
@@ -1055,7 +1035,7 @@ const restoreExpandedState = (nodes: TreeNode[], expandedPaths: Set<string>) => 
 const clearSelection = () => {
   selectedFile.value = null
   fileContent.value = ''
-  resetContentError()
+  contentError.value = null
 }
 
 const handleSearch = (query: string) => {
@@ -1082,7 +1062,10 @@ const getFileIcon = (node: TreeNode): string => {
 // Lifecycle
 onMounted(() => {
   loadMainCategories()
-  loadKnowledgeTree(loadKnowledgeTreeFn)
+  error.value = null
+  loadKnowledgeTree(loadKnowledgeTreeFn).catch(err => {
+    error.value = err instanceof Error ? err : new Error(String(err))
+  })
 
   // Set preselected category from props
   if (props.preselectedCategory) {
@@ -1098,7 +1081,10 @@ onUnmounted(() => {
 watch(() => props.mode, () => {
   // Reset pagination state when switching modes
   resetPagination()
-  loadKnowledgeTree(loadKnowledgeTreeFn)
+  error.value = null
+  loadKnowledgeTree(loadKnowledgeTreeFn).catch(err => {
+    error.value = err instanceof Error ? err : new Error(String(err))
+  })
   clearSelection()
   nodeExpansion.collapseAll()
 })
@@ -1186,7 +1172,7 @@ watch(() => props.mode, () => {
   justify-content: center;
   min-width: 1.5rem;
   height: 1.25rem;
-  padding: 0 0.375rem;
+  padding: var(--spacing-0) var(--spacing-1-5);
   background: rgba(0, 0, 0, 0.1);
   border-radius: var(--radius-xl);
   font-size: var(--text-xs);
@@ -1204,7 +1190,7 @@ watch(() => props.mode, () => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 0.375rem 0.75rem;
+  padding: var(--spacing-1-5) var(--spacing-3);
   background: var(--color-primary-bg);
   border: 1px solid var(--color-primary-light);
   border-radius: var(--radius-2xl);
@@ -1291,7 +1277,7 @@ watch(() => props.mode, () => {
   z-index: 100;
   background: var(--color-primary);
   box-shadow: 0 4px 12px var(--color-primary-alpha-30);
-  padding: 0.75rem 1.5rem;
+  padding: var(--spacing-3) var(--spacing-6);
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
@@ -1361,7 +1347,7 @@ watch(() => props.mode, () => {
 
 .search-input {
   width: 100%;
-  padding: 0.625rem 2.5rem 0.625rem 2.5rem;
+  padding: var(--spacing-2-5) var(--spacing-10) var(--spacing-2-5) var(--spacing-10);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
@@ -1388,7 +1374,7 @@ watch(() => props.mode, () => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 0.75rem 1.5rem;
+  padding: var(--spacing-3) var(--spacing-6);
   background: var(--bg-card);
   border-bottom: 1px solid var(--border-default);
   font-size: var(--text-sm);
@@ -1460,7 +1446,7 @@ watch(() => props.mode, () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3rem 1.5rem;
+  padding: var(--spacing-12) var(--spacing-6);
   text-align: center;
   color: var(--text-tertiary);
 }

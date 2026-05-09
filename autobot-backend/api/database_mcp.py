@@ -29,15 +29,29 @@ import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc
-from type_defs.common import JSONObject, Metadata
+from type_defs.common import Metadata
+
+from .schemas_code import (
+    DatabaseDescribeSchemaResponse,
+    DatabaseExecuteResponse,
+    DatabaseListDatabasesResponse,
+    DatabaseListTablesResponse,
+    DatabaseMCPStatusResponse,
+    DatabaseMCPTool,
+    DatabaseQueryResponse,
+    DatabaseStatisticsResponse,
+    SQLExecuteRequest,
+    SQLQueryRequest,
+    SchemaRequest,
+    TableListRequest,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -397,90 +411,16 @@ def _get_db_statistics_sync(db_path: Path) -> dict:
             conn.close()
 
 
-# Pydantic Models
-
-
-class MCPTool(BaseModel):
-    """Standard MCP tool definition"""
-
-    name: str
-    description: str
-    input_schema: JSONObject
-
-
-class SQLQueryRequest(BaseModel):
-    """SQL query request model"""
-
-    database: str = Field(..., description="Database name from whitelist")
-    query: str = Field(..., description="SQL SELECT query (parameterized)")
-    params: Optional[List[Any]] = (
-        Field(default=None, description="Query parameters for ? placeholders"),
-    )
-    limit: Optional[int] = Field(
-        default=100,
-        ge=1,
-        le=MAX_RESULT_ROWS,
-        description=f"Max rows to return (1-{MAX_RESULT_ROWS})",
-    )
-
-    @field_validator("query")
-    @classmethod
-    def validate_query_is_select(cls, v):
-        """Ensure query is SELECT only"""
-        normalized = v.strip().upper()
-        if not normalized.startswith("SELECT"):
-            raise ValueError(
-                "Only SELECT queries allowed. Use execute_sql for modifications."
-            )
-        return v
-
-
-class SQLExecuteRequest(BaseModel):
-    """SQL execute request model (for INSERT/UPDATE/DELETE)"""
-
-    database: str = Field(..., description="Database name from whitelist")
-    statement: str = Field(..., description="SQL statement (INSERT/UPDATE/DELETE)")
-    params: Optional[List[Any]] = Field(
-        default=None, description="Statement parameters for ? placeholders"
-    )
-
-    @field_validator("statement")
-    @classmethod
-    def validate_statement_type(cls, v):
-        """Ensure statement is DML operation (Issue #380: use module-level constant)"""
-        normalized = v.strip().upper()
-        if not any(normalized.startswith(op) for op in _ALLOWED_DML_OPERATIONS):
-            raise ValueError(
-                f"Only {', '.join(_ALLOWED_DML_OPERATIONS)} statements allowed"
-            )
-        return v
-
-
-class SchemaRequest(BaseModel):
-    """Database schema request model"""
-
-    database: str = Field(..., description="Database name from whitelist")
-    table: Optional[str] = Field(
-        default=None, description="Specific table to describe (optional)"
-    )
-
-
-class TableListRequest(BaseModel):
-    """List tables request model"""
-
-    database: str = Field(..., description="Database name from whitelist")
-
-
 # MCP Tool Definitions
 
 
-def _create_database_query_tool() -> MCPTool:
+def _create_database_query_tool() -> DatabaseMCPTool:
     """
     Create MCP tool definition for database SELECT queries.
 
     Issue #620.
     """
-    return MCPTool(
+    return DatabaseMCPTool(
         name="database_query",
         description=(
             "Execute SELECT query on SQLite database. Returns rows as JSON. Rate limited to 60"
@@ -522,13 +462,13 @@ def _create_database_query_tool() -> MCPTool:
     )
 
 
-def _create_database_execute_tool() -> MCPTool:
+def _create_database_execute_tool() -> DatabaseMCPTool:
     """
     Create MCP tool definition for database DML operations.
 
     Issue #620.
     """
-    return MCPTool(
+    return DatabaseMCPTool(
         name="database_execute",
         description=(
             "Execute INSERT/UPDATE/DELETE on SQLite database. Only works on non-read-only"
@@ -559,7 +499,7 @@ def _create_database_execute_tool() -> MCPTool:
     )
 
 
-def _get_database_query_tools() -> List[MCPTool]:
+def _get_database_query_tools() -> List[DatabaseMCPTool]:
     """
     Get MCP tools for database query and execute operations.
 
@@ -575,13 +515,13 @@ def _get_database_query_tools() -> List[MCPTool]:
     ]
 
 
-def _create_list_tables_tool() -> MCPTool:
+def _create_list_tables_tool() -> DatabaseMCPTool:
     """
     Create MCP tool definition for listing database tables.
 
     Issue #620.
     """
-    return MCPTool(
+    return DatabaseMCPTool(
         name="database_list_tables",
         description="List all tables in a SQLite database with row counts and basic info.",
         input_schema={
@@ -598,13 +538,13 @@ def _create_list_tables_tool() -> MCPTool:
     )
 
 
-def _create_describe_schema_tool() -> MCPTool:
+def _create_describe_schema_tool() -> DatabaseMCPTool:
     """
     Create MCP tool definition for describing database schema.
 
     Issue #620.
     """
-    return MCPTool(
+    return DatabaseMCPTool(
         name="database_describe_schema",
         description=(
             "Get schema information for database tables including columns, types,"
@@ -630,13 +570,13 @@ def _create_describe_schema_tool() -> MCPTool:
     )
 
 
-def _create_list_databases_tool() -> MCPTool:
+def _create_list_databases_tool() -> DatabaseMCPTool:
     """
     Create MCP tool definition for listing available databases.
 
     Issue #620.
     """
-    return MCPTool(
+    return DatabaseMCPTool(
         name="database_list_databases",
         description=(
             "List all available whitelisted databases with their access permissions and"
@@ -650,13 +590,13 @@ def _create_list_databases_tool() -> MCPTool:
     )
 
 
-def _create_statistics_tool() -> MCPTool:
+def _create_statistics_tool() -> DatabaseMCPTool:
     """
     Create MCP tool definition for getting database statistics.
 
     Issue #620.
     """
-    return MCPTool(
+    return DatabaseMCPTool(
         name="database_statistics",
         description=(
             "Get statistics for a database including size, table count,"
@@ -676,7 +616,7 @@ def _create_statistics_tool() -> MCPTool:
     )
 
 
-def _get_database_schema_tools() -> List[MCPTool]:
+def _get_database_schema_tools() -> List[DatabaseMCPTool]:
     """
     Get MCP tools for database schema and metadata operations.
 
@@ -694,13 +634,13 @@ def _get_database_schema_tools() -> List[MCPTool]:
     ]
 
 
+@router.get("/mcp/tools", response_model=List[DatabaseMCPTool])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_database_mcp_tools",
-    error_code_prefix="DB_MCP",
+    error_code_prefix="DATABASE_MCP",
 )
-@router.get("/mcp/tools")
-async def get_database_mcp_tools() -> List[MCPTool]:
+async def get_database_mcp_tools() -> List[DatabaseMCPTool]:
     """
     Return all available Database MCP tools
 
@@ -716,12 +656,12 @@ async def get_database_mcp_tools() -> List[MCPTool]:
 # Tool Implementations
 
 
+@router.post("/mcp/query", response_model=DatabaseQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="database_query_mcp",
     error_code_prefix="DATABASE_MCP",
 )
-@router.post("/mcp/query")
 async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
     """
     Execute SELECT query on SQLite database
@@ -787,12 +727,12 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
         raise HTTPException(status_code=500, detail="Database query error")
 
 
+@router.post("/mcp/execute", response_model=DatabaseExecuteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="database_execute_mcp",
     error_code_prefix="DATABASE_MCP",
 )
-@router.post("/mcp/execute")
 async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
     """Execute INSERT/UPDATE/DELETE on SQLite with security controls. Ref: #1088."""
     # Security checks
@@ -853,12 +793,12 @@ async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
         raise HTTPException(status_code=500, detail="Database execute error")
 
 
+@router.post("/mcp/list_tables", response_model=DatabaseListTablesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="database_list_tables_mcp",
     error_code_prefix="DATABASE_MCP",
 )
-@router.post("/mcp/list_tables")
 async def database_list_tables_mcp(request: TableListRequest) -> Metadata:
     """
     List all tables in a SQLite database
@@ -906,12 +846,12 @@ async def database_list_tables_mcp(request: TableListRequest) -> Metadata:
         raise HTTPException(status_code=500, detail="Error listing tables")
 
 
+@router.post("/mcp/describe_schema", response_model=DatabaseDescribeSchemaResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="database_describe_schema_mcp",
     error_code_prefix="DATABASE_MCP",
 )
-@router.post("/mcp/describe_schema")
 async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
     """
     Get schema information for database tables
@@ -963,12 +903,12 @@ async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
         raise HTTPException(status_code=500, detail="Error describing schema")
 
 
+@router.get("/mcp/list_databases", response_model=DatabaseListDatabasesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="database_list_databases_mcp",
     error_code_prefix="DATABASE_MCP",
 )
-@router.get("/mcp/list_databases")
 async def database_list_databases_mcp() -> Metadata:
     """
     List all available whitelisted databases
@@ -1009,12 +949,12 @@ async def database_list_databases_mcp() -> Metadata:
     }
 
 
+@router.post("/mcp/statistics", response_model=DatabaseStatisticsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="database_statistics_mcp",
     error_code_prefix="DATABASE_MCP",
 )
-@router.post("/mcp/statistics")
 async def database_statistics_mcp(request: TableListRequest) -> Metadata:
     """
     Get statistics for a database
@@ -1064,12 +1004,12 @@ async def database_statistics_mcp(request: TableListRequest) -> Metadata:
         raise HTTPException(status_code=500, detail="Error getting statistics")
 
 
+@router.get("/mcp/status", response_model=DatabaseMCPStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_database_mcp_status",
-    error_code_prefix="DB_MCP",
+    error_code_prefix="DATABASE_MCP",
 )
-@router.get("/mcp/status")
 async def get_database_mcp_status() -> Metadata:
     """
     Get Database MCP service status

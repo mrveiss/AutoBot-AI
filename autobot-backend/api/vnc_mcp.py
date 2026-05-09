@@ -15,13 +15,29 @@ from typing import List
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
-
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
+from api.schemas_system import (
+    BrowserVncContextResponse,
+    DesktopClickMcpResponse,
+    DesktopKeyboardTypeMcpResponse,
+    DesktopKeyboardTypeRequest,
+    DesktopMouseClickRequest,
+    DesktopObserveStateMcpResponse,
+    DesktopObserveStateRequest,
+    DesktopScreenshotMcpResponse,
+    DesktopSpecialKeyMcpResponse,
+    DesktopSpecialKeyRequest,
+    VNCObservationRequest,
+    VNCStatusRequest,
+    VncMCPTool,
+    VncObservationMcpResponse,
+    VncRecordObservationResponse,
+    VncStatusMcpResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -199,36 +215,13 @@ VNC_MCP_TOOL_DEFINITIONS = (
 )
 
 
-class MCPTool(BaseModel):
-    """Standard MCP tool definition"""
-
-    name: str
-    description: str
-    input_schema: Metadata
-
-
-class VNCStatusRequest(BaseModel):
-    """Request model for VNC status check"""
-
-    vnc_type: str = Field("browser", description="VNC type: 'desktop' or 'browser'")
-
-
-class VNCObservationRequest(BaseModel):
-    """Request model for VNC observations"""
-
-    vnc_type: str = Field("browser", description="VNC type: 'desktop' or 'browser'")
-    duration_seconds: int = Field(
-        5, description="How many seconds of recent activity to return"
-    )
-
-
+@router.get("/mcp/tools", response_model=List[VncMCPTool])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_vnc_mcp_tools",
     error_code_prefix="VNC_MCP",
 )
-@router.get("/mcp/tools")
-async def get_vnc_mcp_tools() -> List[MCPTool]:
+async def get_vnc_mcp_tools() -> List[VncMCPTool]:
     """
     Get available MCP tools for VNC observation.
 
@@ -241,17 +234,17 @@ async def get_vnc_mcp_tools() -> List[MCPTool]:
     - Get real-time status of what humans are viewing
     """
     return [
-        MCPTool(name=name, description=desc, input_schema=schema)
+        VncMCPTool(name=name, description=desc, input_schema=schema)
         for name, desc, schema in VNC_MCP_TOOL_DEFINITIONS
     ]
 
 
+@router.post("/mcp/check_vnc_status", response_model=VncStatusMcpResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_vnc_status_mcp",
     error_code_prefix="VNC_MCP",
 )
-@router.post("/mcp/check_vnc_status")
 async def check_vnc_status_mcp(request: VNCStatusRequest) -> Metadata:
     """
     MCP tool implementation: check_vnc_status
@@ -301,12 +294,12 @@ async def check_vnc_status_mcp(request: VNCStatusRequest) -> Metadata:
         }
 
 
+@router.post("/mcp/observe_vnc_activity", response_model=VncObservationMcpResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="observe_vnc_activity_mcp",
     error_code_prefix="VNC_MCP",
 )
-@router.post("/mcp/observe_vnc_activity")
 async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Metadata:
     """
     MCP tool implementation: observe_vnc_activity
@@ -348,12 +341,12 @@ async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Metadata:
     }
 
 
+@router.post("/mcp/get_browser_vnc_context", response_model=BrowserVncContextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_browser_vnc_context_mcp",
     error_code_prefix="VNC_MCP",
 )
-@router.post("/mcp/get_browser_vnc_context")
 async def get_browser_vnc_context_mcp() -> Metadata:
     """Get comprehensive browser VNC context: Playwright state + VNC activity. Ref: #1088."""
     backend_url = (
@@ -418,12 +411,12 @@ async def get_browser_vnc_context_mcp() -> Metadata:
 
 
 # Observation recording endpoint (called by VNC proxy)
+@router.post("/observations/{vnc_type}", response_model=VncRecordObservationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_vnc_observation",
     error_code_prefix="VNC_MCP",
 )
-@router.post("/observations/{vnc_type}")
 async def record_vnc_observation(vnc_type: str, observation: Metadata):
     """
     Record VNC observation from the proxy
@@ -457,38 +450,12 @@ async def record_vnc_observation(vnc_type: str, observation: Metadata):
 # These endpoints allow AI agents to interact with the desktop via MCP tools
 
 
-class DesktopMouseClickRequest(BaseModel):
-    """Agent mouse click request"""
-
-    x: int = Field(..., ge=0)
-    y: int = Field(..., ge=0)
-    button: str = Field(default="left")
-
-
-class DesktopKeyboardTypeRequest(BaseModel):
-    """Agent keyboard type request"""
-
-    text: str
-
-
-class DesktopSpecialKeyRequest(BaseModel):
-    """Agent special key request"""
-
-    key: str
-
-
-class DesktopObserveStateRequest(BaseModel):
-    """Agent desktop observation request"""
-
-    include_screenshot: bool = Field(default=True)
-
-
+@router.post("/mcp/desktop_mouse_click", response_model=DesktopClickMcpResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="desktop_mouse_click_mcp",
     error_code_prefix="VNC_MCP",
 )
-@router.post("/mcp/desktop_mouse_click")
 async def desktop_mouse_click_mcp(request: DesktopMouseClickRequest) -> Metadata:
     """
     MCP tool: Click mouse at coordinates on desktop.
@@ -512,12 +479,12 @@ async def desktop_mouse_click_mcp(request: DesktopMouseClickRequest) -> Metadata
     }
 
 
+@router.post("/mcp/desktop_keyboard_type", response_model=DesktopKeyboardTypeMcpResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="desktop_keyboard_type_mcp",
     error_code_prefix="VNC_MCP",
 )
-@router.post("/mcp/desktop_keyboard_type")
 async def desktop_keyboard_type_mcp(request: DesktopKeyboardTypeRequest) -> Metadata:
     """
     MCP tool: Type text on desktop keyboard.
@@ -535,12 +502,12 @@ async def desktop_keyboard_type_mcp(request: DesktopKeyboardTypeRequest) -> Meta
     }
 
 
+@router.post("/mcp/desktop_special_key", response_model=DesktopSpecialKeyMcpResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="desktop_special_key_mcp",
     error_code_prefix="VNC_MCP",
 )
-@router.post("/mcp/desktop_special_key")
 async def desktop_special_key_mcp(request: DesktopSpecialKeyRequest) -> Metadata:
     """
     MCP tool: Send special key or key combination.
@@ -558,12 +525,12 @@ async def desktop_special_key_mcp(request: DesktopSpecialKeyRequest) -> Metadata
     }
 
 
+@router.post("/mcp/desktop_screenshot", response_model=DesktopScreenshotMcpResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="desktop_screenshot_mcp",
     error_code_prefix="VNC_MCP",
 )
-@router.post("/mcp/desktop_screenshot")
 async def desktop_screenshot_mcp() -> Metadata:
     """
     MCP tool: Capture desktop screenshot.
@@ -628,12 +595,12 @@ async def desktop_screenshot_mcp() -> Metadata:
         }
 
 
+@router.post("/mcp/desktop_observe_state", response_model=DesktopObserveStateMcpResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="desktop_observe_state_mcp",
     error_code_prefix="VNC_MCP",
 )
-@router.post("/mcp/desktop_observe_state")
 async def desktop_observe_state_mcp(request: DesktopObserveStateRequest) -> Metadata:
     """
     MCP tool: Observe current desktop state with metadata.

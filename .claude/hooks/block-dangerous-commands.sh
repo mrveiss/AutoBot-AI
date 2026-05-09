@@ -82,6 +82,25 @@ if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+clean[[:space:]]+-[a-zA-Z
 fi
 
 # ──────────────────────────────────────────────
+# Worktree isolation — block checkouts to protected branches (#6512)
+# Parallel Claude sessions that run `git checkout main` or `git switch main`
+# trample HEAD on other sessions sharing the same working tree. CLAUDE.md
+# states main is read-only and the main session must stay on Dev_new_gui;
+# checking out main locally has no legitimate use case here.
+# ──────────────────────────────────────────────
+
+if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(checkout|switch)[[:space:]]+(main|master)([[:space:]]|$)'; then
+  deny "Blocked: never check out main/master locally (#4113, #6512). Main is read-only; commits flow Dev_new_gui → main via release cycle. If you need to inspect main, use git log origin/main or create a worktree: git worktree add .worktrees/inspect-main main"
+fi
+
+# Block bare `git reset <ref>` on Dev_new_gui — parallel sessions doing
+# `git reset origin/Dev_new_gui` from a feature branch silently move HEAD
+# and lose committed work that wasn't pushed yet (#6512).
+if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+reset[[:space:]]+(--mixed[[:space:]]+|--soft[[:space:]]+)?(origin/)?(main|master|Dev_new_gui)([[:space:]]|$)'; then
+  deny "Blocked: git reset onto a protected ref moves HEAD and can lose unpushed commits in parallel sessions (#6512). Use 'git fetch && git merge --ff-only' or create a fresh branch with 'git checkout -b NEW origin/Dev_new_gui'."
+fi
+
+# ──────────────────────────────────────────────
 # Destructive filesystem operations
 # ──────────────────────────────────────────────
 

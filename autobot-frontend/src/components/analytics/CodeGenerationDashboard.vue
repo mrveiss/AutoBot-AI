@@ -329,10 +329,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { escapeHtml } from '@/utils/sanitize'
-import { getApiBase } from '@/config/ssot-config'
+import { useCodeGenerationData } from '@/composables/analytics/useCodeGenerationData'
+import type {
+  GenerateRequest,
+  RefactorRequest,
+  GenerationResult,
+  ValidationInfo,
+  CodeGenerationStats,
+  RefactoringType,
+} from '@/composables/analytics/useCodeGenerationData'
 
 const logger = createLogger('CodeGenerationDashboard')
 
@@ -348,51 +355,13 @@ function withSourceId(url: string): string {
   return `${url}${sep}source_id=${encodeURIComponent(id)}`
 }
 
-
-// Types
-interface GenerateRequest {
-  description: string
-  language: string
-  context: string
-  existing_code: string
-}
-
-interface RefactorRequest {
-  code: string
-  language: string
-  refactoring_type: string
-  preserve_comments: boolean
-}
-
-interface ValidationInfo {
-  is_valid: boolean
-  errors: string[]
-  warnings: string[]
-  ast_info: Record<string, unknown>
-}
-
-interface GenerationResult {
-  success: boolean
-  generated_code?: string
-  refactored_code?: string
-  diff?: string
-  changes?: string[]
-  validation?: ValidationInfo
-  tokens_used: number
-  processing_time: number
-  error?: string
-}
-
-interface Stats {
-  generation: { total: number; success: number; tokens: number }
-  refactoring: { total: number; success: number; tokens: number }
-}
-
-interface RefactoringType {
-  id: string
-  name: string
-  description: string
-}
+const {
+  generateCode: apiGenerateCode,
+  refactorCode: apiRefactorCode,
+  validateCode: apiValidateCode,
+  fetchStats: apiFetchStats,
+  fetchRefactoringTypes: apiFetchRefactoringTypes,
+} = useCodeGenerationData(withSourceId)
 
 // State
 const mode = ref<'generate' | 'refactor'>('generate')
@@ -415,7 +384,7 @@ const refactorRequest = ref<RefactorRequest>({
   preserve_comments: true
 })
 
-const stats = ref<Stats>({
+const stats = ref<CodeGenerationStats>({
   generation: { total: 0, success: 0, tokens: 0 },
   refactoring: { total: 0, success: 0, tokens: 0 }
 })
@@ -489,15 +458,8 @@ const generateCode = async () => {
   result.value = null
 
   try {
-    const response = await fetchWithAuth(`${getApiBase()}/code-generation/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(generateRequest.value)
-    })
-
-    if (!response.ok) throw new Error('Generation failed')
-
-    result.value = await response.json()
+    const data = await apiGenerateCode(generateRequest.value)
+    result.value = data ?? { success: false, error: 'Generation failed', tokens_used: 0, processing_time: 0 }
     await fetchStats()
   } catch (err) {
     logger.error('Generation error:', err)
@@ -517,15 +479,8 @@ const refactorCode = async () => {
   result.value = null
 
   try {
-    const response = await fetchWithAuth(`${getApiBase()}/code-generation/refactor`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(refactorRequest.value)
-    })
-
-    if (!response.ok) throw new Error('Refactoring failed')
-
-    result.value = await response.json()
+    const data = await apiRefactorCode(refactorRequest.value)
+    result.value = data ?? { success: false, error: 'Refactoring failed', tokens_used: 0, processing_time: 0 }
     await fetchStats()
   } catch (err) {
     logger.error('Refactoring error:', err)
@@ -541,46 +496,24 @@ const refactorCode = async () => {
 }
 
 const validateCodeSubmit = async () => {
-  try {
-    const response = await fetchWithAuth(`${getApiBase()}/code-generation/validate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        code: validateCode.value,
-        language: validateLanguage.value
-      })
-    })
-
-    if (!response.ok) throw new Error('Validation failed')
-
-    validationResult.value = await response.json()
-  } catch (err) {
-    logger.error('Validation error:', err)
+  const data = await apiValidateCode(validateCode.value, validateLanguage.value)
+  if (data !== null) {
+    validationResult.value = data
   }
 }
 
 const fetchStats = async () => {
-  try {
-    // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/code-generation/stats`))
-    if (response.ok) {
-      const data = await response.json()
-      stats.value = data
-    }
-  } catch (err) {
-    logger.error('Failed to fetch stats:', err)
+  // Issue #3436: scope to project when sourceId is present
+  const data = await apiFetchStats()
+  if (data !== null) {
+    stats.value = data
   }
 }
 
 const fetchRefactoringTypes = async () => {
-  try {
-    const response = await fetchWithAuth(`${getApiBase()}/code-generation/refactoring-types`)
-    if (response.ok) {
-      const data = await response.json()
-      refactoringTypes.value = data.types
-    }
-  } catch (err) {
-    logger.error('Failed to fetch refactoring types:', err)
+  const types = await apiFetchRefactoringTypes()
+  if (types.length > 0) {
+    refactoringTypes.value = types
   }
 }
 

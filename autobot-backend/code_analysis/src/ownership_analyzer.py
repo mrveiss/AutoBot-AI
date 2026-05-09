@@ -34,8 +34,10 @@ try:
 
     _REDIS_AVAILABLE = True
     _CONFIG_AVAILABLE = True
-except ImportError:
-    get_redis_client = None
+except ImportError as _e:
+    from autobot_shared.missing_dep import MissingDep as _MissingDep
+
+    get_redis_client = _MissingDep("get_redis_client", _e)  # type: ignore[assignment]
     TTL_1_HOUR = 3_600
     _REDIS_AVAILABLE = False
     _CONFIG_AVAILABLE = False
@@ -154,7 +156,6 @@ class OwnershipAnalyzer:
         else:
             self.redis_client = None
             logger.info("Redis not available - caching disabled for OwnershipAnalyzer")
-        self.config = config
 
         # Caching keys
         self.OWNERSHIP_KEY = "ownership_analysis:files"

@@ -8,77 +8,52 @@ Provides monitoring, desktop streaming, and takeover management endpoints
 
 import asyncio
 import logging
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
-
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.threshold_constants import TimingConstants
-from desktop_streaming_manager import desktop_streaming
+from desktop_streaming_manager import get_desktop_streaming
 from enhanced_memory_manager_async import TaskPriority
-from takeover_manager import TakeoverTrigger, takeover_manager
-from task_execution_tracker import task_tracker
+from takeover_manager import TakeoverTrigger, get_takeover_manager
+from task_execution_tracker import get_task_tracker
 from type_defs.common import Metadata
+from api.schemas_system import (
+    StreamingSessionRequest,
+    StreamingSessionResponse,
+    SystemMonitoringResponse,
+    TakeoverActionRequest,
+    TakeoverApprovalRequest,
+    TakeoverRequest,
+)
+from api.schemas_workflows import (
+    AdvancedControlActiveTakeoversListResponse,
+    AdvancedControlEmergencyStopResponse,
+    AdvancedControlHealthResponse,
+    AdvancedControlInfoResponse,
+    AdvancedControlPendingTakeoversListResponse,
+    AdvancedControlStreamingCapabilitiesResponse,
+    AdvancedControlStreamingSessionListResponse,
+    AdvancedControlStreamingTerminateResponse,
+    AdvancedControlTakeoverActionResponse,
+    AdvancedControlTakeoverApproveResponse,
+    AdvancedControlTakeoverRequestResponse,
+    AdvancedControlTakeoverSessionStatusResponse,
+    AdvancedControlTakeoverSystemStatusResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["advanced_control"])
 
 
-# Request/Response Models
-class StreamingSessionRequest(BaseModel):
-    user_id: str
-    resolution: str = "1024x768"
-    depth: int = 24
-
-
-class StreamingSessionResponse(BaseModel):
-    session_id: str
-    vnc_port: int
-    novnc_port: Optional[int]
-    display: str
-    vnc_url: str
-    web_url: Optional[str]
-    websocket_endpoint: str
-
-
-class TakeoverRequest(BaseModel):
-    trigger: str
-    reason: str
-    requesting_agent: Optional[str] = None
-    affected_tasks: Optional[List[str]] = None
-    priority: str = "HIGH"
-    timeout_minutes: Optional[int] = None
-    auto_approve: bool = False
-
-
-class TakeoverApprovalRequest(BaseModel):
-    human_operator: str
-    takeover_scope: Optional[Metadata] = None
-
-
-class TakeoverActionRequest(BaseModel):
-    action_type: str
-    action_data: Metadata
-
-
-class SystemMonitoringResponse(BaseModel):
-    system_status: Metadata
-    active_sessions: List[Metadata]
-    pending_takeovers: List[Metadata]
-    active_takeovers: List[Metadata]
-    resource_usage: Metadata
-
-
 # Desktop Streaming Endpoints
+@router.post("/streaming/create", response_model=StreamingSessionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_streaming_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/streaming/create", response_model=StreamingSessionResponse)
 async def create_streaming_session(
     request: StreamingSessionRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -88,7 +63,7 @@ async def create_streaming_session(
 
     Issue #744: Requires admin authentication.
     """
-    async with task_tracker.track_task(
+    async with get_task_tracker().track_task(
         "Create Desktop Streaming Session",
         f"Creating streaming session for user {request.user_id}",
         agent_type="advanced_control",
@@ -97,7 +72,7 @@ async def create_streaming_session(
     ) as task_context:
         session_config = {"resolution": request.resolution, "depth": request.depth}
 
-        result = await desktop_streaming.create_streaming_session(
+        result = await get_desktop_streaming().create_streaming_session(
             user_id=request.user_id, session_config=session_config
         )
 
@@ -108,12 +83,12 @@ async def create_streaming_session(
         return response
 
 
+@router.delete("/streaming/{session_id}", response_model=AdvancedControlStreamingTerminateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="terminate_streaming_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.delete("/streaming/{session_id}")
 async def terminate_streaming_session(
     session_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -123,7 +98,7 @@ async def terminate_streaming_session(
 
     Issue #744: Requires admin authentication.
     """
-    success = await desktop_streaming.terminate_streaming_session(session_id)
+    success = await get_desktop_streaming().terminate_streaming_session(session_id)
     if success:
         logger.info("Desktop streaming session terminated: %s", session_id)
         return {"success": True, "session_id": session_id}
@@ -131,12 +106,12 @@ async def terminate_streaming_session(
         raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
 
+@router.get("/streaming/sessions", response_model=AdvancedControlStreamingSessionListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_streaming_sessions",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/streaming/sessions")
 async def list_streaming_sessions(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -145,16 +120,16 @@ async def list_streaming_sessions(
 
     Issue #744: Requires admin authentication.
     """
-    sessions = desktop_streaming.vnc_manager.list_active_sessions()
+    sessions = get_desktop_streaming().vnc_manager.list_active_sessions()
     return {"sessions": sessions, "count": len(sessions)}
 
 
+@router.get("/streaming/capabilities", response_model=AdvancedControlStreamingCapabilitiesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_streaming_capabilities",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/streaming/capabilities")
 async def get_streaming_capabilities(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -163,17 +138,17 @@ async def get_streaming_capabilities(
 
     Issue #744: Requires admin authentication.
     """
-    capabilities = desktop_streaming.get_system_capabilities()
+    capabilities = get_desktop_streaming().get_system_capabilities()
     return capabilities
 
 
 # Takeover Management Endpoints
+@router.post("/takeover/request", response_model=AdvancedControlTakeoverRequestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="request_takeover",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/request")
 async def request_takeover(
     request: TakeoverRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -210,7 +185,7 @@ async def request_takeover(
 
     priority = priority_mapping.get(request.priority.upper(), TaskPriority.HIGH)
 
-    request_id = await takeover_manager.request_takeover(
+    request_id = await get_takeover_manager().request_takeover(
         trigger=trigger,
         reason=request.reason,
         requesting_agent=request.requesting_agent,
@@ -224,12 +199,12 @@ async def request_takeover(
     return {"success": True, "request_id": request_id}
 
 
+@router.post("/takeover/{request_id}/approve", response_model=AdvancedControlTakeoverApproveResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="approve_takeover",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/{request_id}/approve")
 async def approve_takeover(
     request_id: str,
     approval: TakeoverApprovalRequest,
@@ -241,7 +216,7 @@ async def approve_takeover(
     Issue #744: Requires admin authentication.
     """
     try:
-        session_id = await takeover_manager.approve_takeover(
+        session_id = await get_takeover_manager().approve_takeover(
             request_id=request_id,
             human_operator=approval.human_operator,
             takeover_scope=approval.takeover_scope,
@@ -256,12 +231,12 @@ async def approve_takeover(
         raise HTTPException(status_code=409, detail="Internal server error")
 
 
+@router.post("/takeover/sessions/{session_id}/action", response_model=AdvancedControlTakeoverActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_takeover_action",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/sessions/{session_id}/action")
 async def execute_takeover_action(
     session_id: str,
     action: TakeoverActionRequest,
@@ -273,7 +248,7 @@ async def execute_takeover_action(
     Issue #744: Requires admin authentication.
     """
     try:
-        result = await takeover_manager.execute_takeover_action(
+        result = await get_takeover_manager().execute_takeover_action(
             session_id=session_id,
             action_type=action.action_type,
             action_data=action.action_data,
@@ -288,12 +263,12 @@ async def execute_takeover_action(
         raise HTTPException(status_code=404, detail="Internal server error")
 
 
+@router.post("/takeover/sessions/{session_id}/pause", response_model=AdvancedControlTakeoverSessionStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="pause_takeover_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/sessions/{session_id}/pause")
 async def pause_takeover_session(
     session_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -303,19 +278,19 @@ async def pause_takeover_session(
 
     Issue #744: Requires admin authentication.
     """
-    success = await takeover_manager.pause_takeover_session(session_id)
+    success = await get_takeover_manager().pause_takeover_session(session_id)
     if success:
         return {"success": True, "session_id": session_id, "status": "paused"}
     else:
         raise HTTPException(status_code=404, detail="Session not found or not pausable")
 
 
+@router.post("/takeover/sessions/{session_id}/resume", response_model=AdvancedControlTakeoverSessionStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resume_takeover_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/sessions/{session_id}/resume")
 async def resume_takeover_session(
     session_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -325,7 +300,7 @@ async def resume_takeover_session(
 
     Issue #744: Requires admin authentication.
     """
-    success = await takeover_manager.resume_takeover_session(session_id)
+    success = await get_takeover_manager().resume_takeover_session(session_id)
     if success:
         return {"success": True, "session_id": session_id, "status": "active"}
     else:
@@ -334,12 +309,12 @@ async def resume_takeover_session(
         )
 
 
+@router.post("/takeover/sessions/{session_id}/complete", response_model=AdvancedControlTakeoverSessionStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="complete_takeover_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/sessions/{session_id}/complete")
 async def complete_takeover_session(
     session_id: str,
     completion_data: Metadata,
@@ -350,7 +325,7 @@ async def complete_takeover_session(
 
     Issue #744: Requires admin authentication.
     """
-    success = await takeover_manager.complete_takeover_session(
+    success = await get_takeover_manager().complete_takeover_session(
         session_id=session_id,
         resolution=completion_data.get("resolution", "Session completed"),
         handback_notes=completion_data.get("handback_notes"),
@@ -362,12 +337,12 @@ async def complete_takeover_session(
         raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
 
+@router.get("/takeover/pending", response_model=AdvancedControlPendingTakeoversListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pending_takeovers",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/takeover/pending")
 async def get_pending_takeovers(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -376,16 +351,16 @@ async def get_pending_takeovers(
 
     Issue #744: Requires admin authentication.
     """
-    pending = takeover_manager.get_pending_requests()
+    pending = get_takeover_manager().get_pending_requests()
     return {"pending_requests": pending, "count": len(pending)}
 
 
+@router.get("/takeover/active", response_model=AdvancedControlActiveTakeoversListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_active_takeovers",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/takeover/active")
 async def get_active_takeovers(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -394,16 +369,16 @@ async def get_active_takeovers(
 
     Issue #744: Requires admin authentication.
     """
-    active = takeover_manager.get_active_sessions()
+    active = get_takeover_manager().get_active_sessions()
     return {"active_sessions": active, "count": len(active)}
 
 
+@router.get("/takeover/status", response_model=AdvancedControlTakeoverSystemStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_takeover_status",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/takeover/status")
 async def get_takeover_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -412,17 +387,17 @@ async def get_takeover_status(
 
     Issue #744: Requires admin authentication.
     """
-    status = takeover_manager.get_system_status()
+    status = get_takeover_manager().get_system_status()
     return status
 
 
 # System Monitoring and Control
+@router.get("/system/status", response_model=SystemMonitoringResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_status",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/system/status", response_model=SystemMonitoringResponse)
 async def get_system_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -443,16 +418,16 @@ async def get_system_status(
     }
 
     # Get streaming sessions
-    streaming_sessions = desktop_streaming.vnc_manager.list_active_sessions()
+    streaming_sessions = get_desktop_streaming().vnc_manager.list_active_sessions()
 
     # Get takeover data
-    pending_takeovers = takeover_manager.get_pending_requests()
-    active_takeovers = takeover_manager.get_active_sessions()
+    pending_takeovers = get_takeover_manager().get_pending_requests()
+    active_takeovers = get_takeover_manager().get_active_sessions()
     system_status = {
         "status": "healthy",
         "timestamp": psutil.boot_time(),
         "uptime_seconds": psutil.boot_time(),
-        "streaming_capabilities": desktop_streaming.get_system_capabilities(),
+        "streaming_capabilities": get_desktop_streaming().get_system_capabilities(),
     }
 
     response = SystemMonitoringResponse(
@@ -466,12 +441,12 @@ async def get_system_status(
     return response
 
 
+@router.post("/system/emergency-stop", response_model=AdvancedControlEmergencyStopResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="emergency_system_stop",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/system/emergency-stop")
 async def emergency_system_stop(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -481,7 +456,7 @@ async def emergency_system_stop(
     Issue #744: Requires admin authentication.
     """
     # Request emergency takeover
-    request_id = await takeover_manager.request_takeover(
+    request_id = await get_takeover_manager().request_takeover(
         trigger=TakeoverTrigger.CRITICAL_ERROR,
         reason="Emergency stop activated",
         requesting_agent="emergency_system",
@@ -497,12 +472,12 @@ async def emergency_system_stop(
     }
 
 
+@router.get("/system/health", response_model=AdvancedControlHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_health",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/system/health")
 async def get_system_health(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -514,14 +489,14 @@ async def get_system_health(
     try:
         health_status = {
             "status": "healthy",
-            "desktop_streaming_available": desktop_streaming.vnc_manager.vnc_available,
-            "novnc_available": desktop_streaming.vnc_manager.novnc_available,
+            "desktop_streaming_available": get_desktop_streaming().vnc_manager.vnc_available,
+            "novnc_available": get_desktop_streaming().vnc_manager.novnc_available,
             "active_streaming_sessions": len(
-                desktop_streaming.vnc_manager.active_sessions
+                get_desktop_streaming().vnc_manager.active_sessions
             ),
-            "pending_takeovers": len(takeover_manager.pending_requests),
-            "active_takeovers": len(takeover_manager.active_sessions),
-            "paused_tasks": len(takeover_manager.paused_tasks),
+            "pending_takeovers": len(get_takeover_manager().pending_requests),
+            "active_takeovers": len(get_takeover_manager().active_sessions),
+            "paused_tasks": len(get_takeover_manager().paused_tasks),
         }
 
         return health_status
@@ -586,19 +561,19 @@ async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
 
     try:
         # Use the desktop streaming manager's WebSocket handler
-        await desktop_streaming.handle_websocket_client(
+        await get_desktop_streaming().handle_websocket_client(
             websocket, f"/ws/desktop/{session_id}"
         )
     except WebSocketDisconnect:
         logger.info("Desktop streaming WebSocket client disconnected: %s", session_id)
 
 
+@router.get("/", response_model=AdvancedControlInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="advanced_control_info",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/")
 async def advanced_control_info(
     admin_check: bool = Depends(check_admin_permission),
 ):

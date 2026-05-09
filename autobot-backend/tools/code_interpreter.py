@@ -22,6 +22,8 @@ import sys
 import tempfile
 from typing import Dict, Any
 
+from services.tool_output_filter import get_tool_output_filter
+
 logger = logging.getLogger(__name__)
 
 MAX_OUTPUT_BYTES = 10 * 1024  # 10 KB per stream
@@ -64,8 +66,11 @@ def execute_code(code: str, timeout_seconds: int = 30) -> Dict[str, Any]:
             len(raw_stdout) > MAX_OUTPUT_BYTES or len(raw_stderr) > MAX_OUTPUT_BYTES
         )
 
+        stdout_text = get_tool_output_filter().prepare_and_filter(
+            "python", raw_stdout[:MAX_OUTPUT_BYTES].decode("utf-8", errors="replace")
+        )
         return {
-            "stdout": raw_stdout[:MAX_OUTPUT_BYTES].decode("utf-8", errors="replace"),
+            "stdout": stdout_text,
             "stderr": raw_stderr[:MAX_OUTPUT_BYTES].decode("utf-8", errors="replace"),
             "exit_code": result.returncode,
             "truncated": truncated,

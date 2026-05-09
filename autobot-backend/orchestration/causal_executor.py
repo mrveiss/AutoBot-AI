@@ -96,7 +96,12 @@ class CausalExecutor:
         self.effect_trace = EffectTrace(workflow_id=workflow_id)
 
         # Pre-execution validation
-        if validate_causal and self.metadata_map:
+        # #7010 cluster 4: validation runs whenever validate_causal=True,
+        # regardless of whether metadata_map is populated. An empty
+        # metadata_map yields a trivially-valid result (no causal
+        # relationships declared = nothing to invalidate); the test
+        # `test_validation_before_execution` documents this contract.
+        if validate_causal:
             validator = CausalValidator()
             self.validation_result = validator.validate_workflow(dag, self.metadata_map)
             logger.info("Causal validation: %s", self.validation_result.summary())
@@ -337,8 +342,11 @@ class CausalExecutor:
 
     def trace_effect_chain(self, state_key: str) -> str:
         """Generate a human-readable trace of how a state key was set."""
+        # #7010 cluster 4: callers (incl. UI) match on the substring
+        # "not available" / "not modified" to detect the no-data case;
+        # phrase both arms with those tokens explicitly.
         if not self.effect_trace:
-            return f"No trace available for key '{state_key}'"
+            return f"Effect trace not available for key '{state_key}' (no execution data)"
 
         chain = self.effect_trace.trace_effect(state_key)
         if not chain:
@@ -355,11 +363,14 @@ class CausalExecutor:
         if not self.effect_trace:
             return "No execution data available"
 
+        # #7010 cluster 4: UI/test consumers grep these labels case-sensitively
+        # for tokens "steps executed" and "mutated" — keep the lowercase
+        # form so substring searches succeed.
         lines = [
             f"Workflow: {self.effect_trace.workflow_id}",
-            f"Steps executed: {len(self.effect_trace.execution_frames)}",
-            f"State keys mutated: {len(self.effect_trace.mutation_map)}",
-            f"Total mutations: {sum(len(m) for m in self.effect_trace.mutation_map.values())}",
+            f"steps executed: {len(self.effect_trace.execution_frames)}",
+            f"state keys mutated: {len(self.effect_trace.mutation_map)}",
+            f"total mutations: {sum(len(m) for m in self.effect_trace.mutation_map.values())}",
         ]
 
         if self.validation_result:

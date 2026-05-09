@@ -23,8 +23,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
-
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import config
@@ -33,19 +31,57 @@ from constants.threshold_constants import TimingConstants
 # Add scripts path for log forwarder import
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from scripts.logging.log_forwarder import (
-    DestinationConfig,
-    DestinationScope,
-    DestinationType,
-    LogForwarder,
-    SyslogProtocol,
+try:
+    # log_forwarder lives in autobot-infrastructure/shared/scripts/logging/ —
+    # only available when the infrastructure repo is on PYTHONPATH (#6666).
+    from scripts.logging.log_forwarder import (
+        DestinationConfig,
+        DestinationScope,
+        DestinationType,
+        LogForwarder,
+        SyslogProtocol,
+    )
+except ImportError as _log_forwarder_import_error:
+    from autobot_shared.missing_dep import MissingDep as _MissingDep
+
+    DestinationConfig = _MissingDep(  # type: ignore[assignment, misc]
+        "DestinationConfig", _log_forwarder_import_error
+    )
+    DestinationScope = _MissingDep(  # type: ignore[assignment, misc]
+        "DestinationScope", _log_forwarder_import_error
+    )
+    DestinationType = _MissingDep(  # type: ignore[assignment, misc]
+        "DestinationType", _log_forwarder_import_error
+    )
+    LogForwarder = _MissingDep(  # type: ignore[assignment, misc]
+        "LogForwarder", _log_forwarder_import_error
+    )
+    SyslogProtocol = _MissingDep(  # type: ignore[assignment, misc]
+        "SyslogProtocol", _log_forwarder_import_error
+    )
+from api.schemas_system import (
+    LogForwardingDestinationItem,
+    LogFwdAutoStartResponse,
+    LogFwdCreateUpdateResponse,
+    LogFwdDestinationCreate,
+    LogFwdDestinationResponse,
+    LogFwdDestinationTypesResponse,
+    LogFwdDestinationUpdate,
+    LogFwdKnownHostsResponse,
+    LogFwdMessageResponse,
+    LogFwdStatusResponse,
+    LogFwdTestAllResponse,
+    LogFwdTestResponse,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["log-forwarding"])
 
-# Singleton forwarder instance
+# Singleton forwarder instance.
+# #6794: _MissingDep now no-ops on type subscript so Optional[LogForwarder]
+# evaluates safely even when scripts.logging is missing — no forward-ref
+# string needed.
 _forwarder: Optional[LogForwarder] = None
 _forwarder_lock = asyncio.Lock()
 
@@ -60,95 +96,6 @@ async def _get_forwarder() -> LogForwarder:
 
 
 # Pydantic models for API
-class DestinationCreate(BaseModel):
-    """Model for creating a new destination."""
-
-    name: str = Field(..., description="Unique name for the destination")
-    type: str = Field(
-        ...,
-        description="Destination type: seq, elasticsearch, loki, syslog, webhook, file",
-    )
-    enabled: bool = Field(True, description="Whether the destination is enabled")
-    url: Optional[str] = Field(None, description="URL/host for the destination")
-    api_key: Optional[str] = Field(None, description="API key for authentication")
-    username: Optional[str] = Field(None, description="Username for authentication")
-    password: Optional[str] = Field(None, description="Password for authentication")
-    index: Optional[str] = Field(
-        "autobot-logs", description="Index name (Elasticsearch)"
-    )
-    file_path: Optional[str] = Field(None, description="File path (file destination)")
-    min_level: str = Field("Information", description="Minimum log level to forward")
-    batch_size: int = Field(10, ge=1, le=1000, description="Batch size for sending")
-    batch_timeout: float = Field(
-        5.0, ge=0.1, le=60.0, description="Batch timeout in seconds"
-    )
-    retry_count: int = Field(3, ge=0, le=10, description="Number of retries on failure")
-    retry_delay: float = Field(
-        1.0, ge=0.1, le=30.0, description="Delay between retries"
-    )
-    # Scope configuration
-    scope: str = Field("global", description="Scope: global (all hosts) or per_host")
-    target_hosts: List[str] = Field(
-        default_factory=list, description="Target hosts for per_host scope"
-    )
-    # Syslog-specific options
-    syslog_protocol: str = Field(
-        "udp", description="Syslog protocol: udp, tcp, tcp_tls"
-    )
-    ssl_verify: bool = Field(True, description="Verify SSL certificates for TLS")
-    ssl_ca_cert: Optional[str] = Field(None, description="Path to CA certificate")
-    ssl_client_cert: Optional[str] = Field(
-        None, description="Path to client certificate"
-    )
-    ssl_client_key: Optional[str] = Field(None, description="Path to client key")
-
-
-class DestinationUpdate(BaseModel):
-    """Model for updating an existing destination."""
-
-    enabled: Optional[bool] = None
-    url: Optional[str] = None
-    api_key: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
-    index: Optional[str] = None
-    file_path: Optional[str] = None
-    min_level: Optional[str] = None
-    batch_size: Optional[int] = None
-    batch_timeout: Optional[float] = None
-    retry_count: Optional[int] = None
-    retry_delay: Optional[float] = None
-    scope: Optional[str] = None
-    target_hosts: Optional[List[str]] = None
-    syslog_protocol: Optional[str] = None
-    ssl_verify: Optional[bool] = None
-    ssl_ca_cert: Optional[str] = None
-    ssl_client_cert: Optional[str] = None
-    ssl_client_key: Optional[str] = None
-
-
-class DestinationResponse(BaseModel):
-    """Response model for a destination."""
-
-    name: str
-    type: str
-    enabled: bool
-    url: Optional[str]
-    index: Optional[str]
-    file_path: Optional[str]
-    min_level: str
-    batch_size: int
-    batch_timeout: float
-    scope: str
-    target_hosts: List[str]
-    syslog_protocol: str
-    ssl_verify: bool
-    # Status fields
-    healthy: bool
-    last_error: Optional[str]
-    sent_count: int
-    failed_count: int
-
 
 def _build_updated_destination_config(
     name: str,
@@ -187,7 +134,7 @@ def _build_updated_destination_config(
     )
 
 
-def _config_to_destination_config(data: DestinationCreate) -> DestinationConfig:
+def _config_to_destination_config(data: LogFwdDestinationCreate) -> DestinationConfig:
     """Convert API model to DestinationConfig."""
     try:
         dest_type = DestinationType(data.type)
@@ -231,9 +178,9 @@ def _config_to_destination_config(data: DestinationCreate) -> DestinationConfig:
     )
 
 
-def _destination_to_response(dest) -> DestinationResponse:
+def _destination_to_response(dest) -> LogFwdDestinationResponse:
     """Convert LogDestination to API response."""
-    return DestinationResponse(
+    return LogFwdDestinationResponse(
         name=dest.config.name,
         type=dest.config.type.value,
         enabled=dest.config.enabled,
@@ -254,12 +201,12 @@ def _destination_to_response(dest) -> DestinationResponse:
     )
 
 
+@router.get("/destinations", response_model=List[LogForwardingDestinationItem])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_destinations",
-    error_code_prefix="LOGFWD",
+    error_code_prefix="LOG_FORWARDING",
 )
-@router.get("/destinations")
 async def list_destinations(
     admin_check: bool = Depends(check_admin_permission),
 ) -> List[Dict[str, Any]]:
@@ -286,12 +233,12 @@ async def list_destinations(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/destinations/{name}", response_model=LogForwardingDestinationItem)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_destination",
-    error_code_prefix="LOGFWD",
+    error_code_prefix="LOG_FORWARDING",
 )
-@router.get("/destinations/{name}")
 async def get_destination(
     name: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -322,14 +269,14 @@ async def get_destination(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/destinations", response_model=LogFwdCreateUpdateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="create_destination",
-    error_code_prefix="LOGFWD",
+    operation="create_destination_endpoint",
+    error_code_prefix="LOG_FORWARDING",
 )
-@router.post("/destinations")
 async def create_destination_endpoint(
-    data: DestinationCreate,
+    data: LogFwdDestinationCreate,
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Create a new log forwarding destination.
@@ -369,15 +316,15 @@ async def create_destination_endpoint(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.put("/destinations/{name}", response_model=LogFwdCreateUpdateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_destination",
-    error_code_prefix="LOGFWD",
+    error_code_prefix="LOG_FORWARDING",
 )
-@router.put("/destinations/{name}")
 async def update_destination(
     name: str,
-    data: DestinationUpdate,
+    data: LogFwdDestinationUpdate,
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Update an existing destination.
@@ -420,12 +367,12 @@ async def update_destination(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.delete("/destinations/{name}", response_model=LogFwdMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_destination",
-    error_code_prefix="LOGFWD",
+    error_code_prefix="LOG_FORWARDING",
 )
-@router.delete("/destinations/{name}")
 async def delete_destination(
     name: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -454,12 +401,12 @@ async def delete_destination(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/destinations/{name}/test", response_model=LogFwdTestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_destination",
-    error_code_prefix="LOGFWD",
+    error_code_prefix="LOG_FORWARDING",
 )
-@router.post("/destinations/{name}/test")
 async def test_destination(
     name: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -498,12 +445,12 @@ async def test_destination(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/test-all", response_model=LogFwdTestAllResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_all_destinations",
-    error_code_prefix="LOGFWD",
+    error_code_prefix="LOG_FORWARDING",
 )
-@router.post("/test-all")
 async def test_all_destinations(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -526,12 +473,12 @@ async def test_all_destinations(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/status", response_model=LogFwdStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_status",
-    error_code_prefix="LOGFWD",
+    error_code_prefix="LOG_FORWARDING",
 )
-@router.get("/status")
 async def get_status(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -582,12 +529,12 @@ async def get_status(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/start", response_model=LogFwdMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_forwarding",
-    error_code_prefix="LOGFWD",
+    error_code_prefix="LOG_FORWARDING",
 )
-@router.post("/start")
 async def start_forwarding(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, str]:
@@ -616,12 +563,12 @@ async def start_forwarding(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/stop", response_model=LogFwdMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_forwarding",
-    error_code_prefix="LOGFWD",
+    error_code_prefix="LOG_FORWARDING",
 )
-@router.post("/stop")
 async def stop_forwarding(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, str]:
@@ -717,12 +664,12 @@ def _get_syslog_protocol_list() -> list:
     ]
 
 
+@router.get("/destination-types", response_model=LogFwdDestinationTypesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_destination_types",
-    error_code_prefix="LOGFWD",
+    error_code_prefix="LOG_FORWARDING",
 )
-@router.get("/destination-types")
 async def get_destination_types(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -747,12 +694,12 @@ async def get_destination_types(
     }
 
 
+@router.get("/known-hosts", response_model=LogFwdKnownHostsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_known_hosts",
-    error_code_prefix="LOGFWD",
+    error_code_prefix="LOG_FORWARDING",
 )
-@router.get("/known-hosts")
 async def get_known_hosts(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -799,12 +746,12 @@ async def get_known_hosts(
 
 
 # Issue #553: Auto-start configuration
+@router.get("/auto-start", response_model=LogFwdAutoStartResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_auto_start",
-    error_code_prefix="LOGFWD",
+    error_code_prefix="LOG_FORWARDING",
 )
-@router.get("/auto-start")
 async def get_auto_start(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -823,12 +770,12 @@ async def get_auto_start(
     }
 
 
+@router.put("/auto-start", response_model=LogFwdAutoStartResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="set_auto_start",
-    error_code_prefix="LOGFWD",
+    error_code_prefix="LOG_FORWARDING",
 )
-@router.put("/auto-start")
 async def set_auto_start(
     enabled: bool = Query(..., description="Enable or disable auto-start"),
     admin_check: bool = Depends(check_admin_permission),

@@ -15,7 +15,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from enhanced_memory_manager_async import TaskPriority
-from task_execution_tracker import task_tracker
+from task_execution_tracker import get_task_tracker
 
 from ..models import ContextElement, DecisionContext
 from ..time_provider import TimeProvider
@@ -104,7 +104,7 @@ class ContextCollector:
         self, decision_type: DecisionType, primary_goal: str
     ) -> DecisionContext:
         """Collect comprehensive context for decision making."""
-        async with task_tracker.track_task(
+        async with get_task_tracker().track_task(
             "Context Collection",
             f"Collecting context for {decision_type.value} decision",
             agent_type="context_collector",

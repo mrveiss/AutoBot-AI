@@ -16,9 +16,9 @@ Playwright-based browser automation worker. Executes web scraping, GUI automatio
 
 | Port | Protocol | Public | Purpose |
 |------|----------|--------|---------|
-| 3000 | HTTP | No (fleet-internal) | Browser worker API |
+| 9001 | HTTP | No (fleet-internal) | Browser worker API |
 
-**Warning**: Port 3000 also used by Grafana in `autobot-monitoring`. These roles must be on different nodes.
+**Warning**: Port 9001 is the browser worker API port. Port 3000 is used by Grafana in `autobot-monitoring`. These roles must be on different nodes.
 
 ---
 
@@ -33,7 +33,7 @@ Playwright-based browser automation worker. Executes web scraping, GUI automatio
 ## Health Check
 
 ```bash
-curl http://172.16.168.25:3000/health | jq
+curl http://172.16.168.25:9001/health | jq
 # Expected: {"status": "healthy", "browsers": {...}}
 ```
 
@@ -68,7 +68,7 @@ ansible-playbook playbooks/slm-service-control.yml \
 ## Known Gotchas
 
 - **Service name is `autobot-playwright`**: Not `autobot-browser-worker`. Using the wrong name in systemctl calls will fail silently.
-- **Port 3000 conflict with monitoring**: monitoring (Grafana) also uses port 3000. Both are on different nodes by default. See COEXISTENCE_MATRIX.md.
+- **Port conflict with monitoring**: Browser worker uses port 9001; monitoring (Grafana) uses port 3000. Both are on different nodes by default. See COEXISTENCE_MATRIX.md.
 - **Playwright install**: Playwright browsers (~400MB) must be downloaded after install. The `browser` Ansible role runs `playwright install chromium` after pip install.
 - **Display required**: Some automation requires a virtual display. The `browser` role installs `xvfb` and configures `DISPLAY=:99`.
 - **CAPTCHA human-in-the-loop**: Browser worker integrates with `captcha_human_loop.py` — needs a running main backend to relay CAPTCHA challenges.

@@ -164,6 +164,15 @@ export interface FileDriftReport {
   checked_at: string
 }
 
+// Issue #7149: Drift resolution types
+export interface DriftResolveResponse {
+  success: boolean
+  component: string
+  message: string
+  source_dir: string
+  deployed_dir: string
+}
+
 // Re-export role types for consumers (Issue #779)
 export type { Role, SyncResult }
 
@@ -649,6 +658,38 @@ export function useCodeSync() {
     }
   }
 
+  /**
+   * Resync a component from code_source/ to /opt/autobot/<component>/ (#7149).
+   *
+   * Drives the same local rsync used by SLM self-sync. Used by CodeSyncView's
+   * "Resync from Source" button on the drift card so users can clear drift in
+   * one click instead of finding the SLM self-node and triggering a full sync.
+   *
+   * @param component - Sub-directory under /opt/autobot/. Must be in ALLOWED_COMPONENTS.
+   */
+  async function resolveDrift(component: string): Promise<DriftResolveResponse | null> {
+    loading.value = true
+    error.value = null
+
+    try {
+      const response = await client.post<DriftResolveResponse>('/code-sync/drift/resolve', {
+        component,
+      })
+      if (!response.data.success) {
+        error.value = response.data.message
+      }
+      return response.data
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to resolve drift'
+      if (axios.isAxiosError(e) && e.response?.data?.detail) {
+        error.value = e.response.data.detail
+      }
+      return null
+    } finally {
+      loading.value = false
+    }
+  }
+
   // =============================================================================
   // Return Public API
   // =============================================================================
@@ -700,7 +741,8 @@ export function useCodeSync() {
     syncRole: rolesComposable.syncRole,
     pullFromSource: rolesComposable.pullFromSource,
 
-    // Drift detection (Issue #2834)
+    // Drift detection (Issue #2834) + resolution (#7149)
     fetchDrift,
+    resolveDrift,
   }
 }

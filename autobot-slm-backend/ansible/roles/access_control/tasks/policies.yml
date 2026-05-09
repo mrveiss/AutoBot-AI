@@ -24,7 +24,7 @@
   copy:
     content: |
       # Access Control Mode Configuration
-      # Generated: {{ ansible_date_time.iso8601 }}
+      # Generated: {{ ansible_facts['date_time'].iso8601 }}
       ACCESS_CONTROL_MODE={{ access_control_mode }}
       ENFORCEMENT_ENABLED={{ 'true' if access_control_mode == 'full' else 'false' }}
       LOG_ONLY_MODE={{ 'true' if access_control_mode == 'log_only' else 'false' }}

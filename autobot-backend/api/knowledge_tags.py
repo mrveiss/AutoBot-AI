@@ -33,10 +33,22 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from starlette.requests import Request
 
-from api.knowledge_models import (
+from api.schemas_knowledge import (
     AddTagsRequest,
     BulkTagRequest,
     FactIdValidator,
+    KnowledgeTagBulkResponse,
+    KnowledgeTagDeleteResponse,
+    KnowledgeTagDeleteStyleResponse,
+    KnowledgeTagFactsByTagResponse,
+    KnowledgeTagFactTagsResponse,
+    KnowledgeTagGetFactTagsResponse,
+    KnowledgeTagInfoResponse,
+    KnowledgeTagListResponse,
+    KnowledgeTagMergeResponse,
+    KnowledgeTagRenameResponse,
+    KnowledgeTagSearchResponse,
+    KnowledgeTagStyleResponse,
     MergeTagsRequest,
     RemoveTagsRequest,
     RenameTagRequest,
@@ -50,8 +62,14 @@ from knowledge_factory import get_or_create_knowledge_base
 
 logger = logging.getLogger(__name__)
 
-# Issue #380: Pre-compiled regex for tag prefix validation
-_TAG_PREFIX_RE = re.compile(r"^[a-z0-9_-]*$")
+
+# Issue #380: Pre-compiled regex for tag-name + prefix validation.
+# #6672: was r"^[a-z0-9_-]*$" — the `*` quantifier accepted empty/whitespace
+# input (after .strip()) as a "valid" tag name across 7 endpoints, letting
+# blank tags slip past the create/update/delete/get/relations callsites.
+# The `+` quantifier matches schemas_knowledge.py:_LOWERCASE_TAG_RE which is
+# the canonical tag validator (used by TagValidator + 9 other field validators).
+_TAG_PREFIX_RE = re.compile(r"^[a-z0-9_-]+$")
 
 # Create router for tag management endpoints
 router = APIRouter(tags=["knowledge-tags"])
@@ -68,12 +86,12 @@ def _raise_kb_error(error_message: str, default_code: int = 500) -> None:
 # ===== TAG MANAGEMENT ENDPOINTS (Issue #77) =====
 
 
+@router.post("/fact/{fact_id}/tags", response_model=KnowledgeTagFactTagsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_tags_to_fact",
-    error_code_prefix="KNOWLEDGE",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
-@router.post("/fact/{fact_id}/tags")
 async def add_tags_to_fact(
     fact_id: str = Path(..., description="Fact ID to add tags to"),
     request: AddTagsRequest = ...,
@@ -123,12 +141,12 @@ async def add_tags_to_fact(
         _raise_kb_error(result.get("message", "Unknown error"))
 
 
+@router.delete("/fact/{fact_id}/tags", response_model=KnowledgeTagFactTagsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="remove_tags_from_fact",
-    error_code_prefix="KNOWLEDGE",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
-@router.delete("/fact/{fact_id}/tags")
 async def remove_tags_from_fact(
     fact_id: str = Path(..., description="Fact ID to remove tags from"),
     request: RemoveTagsRequest = ...,
@@ -178,12 +196,12 @@ async def remove_tags_from_fact(
         _raise_kb_error(result.get("message", "Unknown error"))
 
 
+@router.get("/fact/{fact_id}/tags", response_model=KnowledgeTagGetFactTagsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_fact_tags",
-    error_code_prefix="KNOWLEDGE",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
-@router.get("/fact/{fact_id}/tags")
 async def get_fact_tags(
     fact_id: str = Path(..., description="Fact ID to get tags for"),
     admin_check: bool = Depends(check_admin_permission),
@@ -224,12 +242,12 @@ async def get_fact_tags(
         _raise_kb_error(result.get("message", "Unknown error"))
 
 
+@router.post("/tags/search", response_model=KnowledgeTagSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_facts_by_tags",
-    error_code_prefix="KNOWLEDGE",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
-@router.post("/tags/search")
 async def search_facts_by_tags(
     request: SearchByTagsRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -283,12 +301,12 @@ async def search_facts_by_tags(
     }
 
 
+@router.get("/tags", response_model=KnowledgeTagListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_all_tags",
-    error_code_prefix="KNOWLEDGE",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
-@router.get("/tags")
 async def list_all_tags(
     admin_check: bool = Depends(check_admin_permission),
     limit: int = Query(default=QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT, ge=1, le=1000),
@@ -334,12 +352,12 @@ async def list_all_tags(
     }
 
 
+@router.post("/tags/bulk", response_model=KnowledgeTagBulkResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="bulk_tag_facts",
-    error_code_prefix="KNOWLEDGE",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
-@router.post("/tags/bulk")
 async def bulk_tag_facts(
     request: BulkTagRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -392,12 +410,12 @@ async def bulk_tag_facts(
 # ===== TAG CRUD OPERATIONS (Issue #409) =====
 
 
+@router.put("/tags/{tag_name}", response_model=KnowledgeTagRenameResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rename_tag",
-    error_code_prefix="KNOWLEDGE",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
-@router.put("/tags/{tag_name}")
 async def rename_tag(
     tag_name: str = Path(..., description="Current tag name to rename"),
     request: RenameTagRequest = ...,
@@ -452,12 +470,12 @@ async def rename_tag(
         _raise_kb_error(result.get("message", "Unknown error"), 400)
 
 
+@router.delete("/tags/{tag_name}", response_model=KnowledgeTagDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_tag_globally",
-    error_code_prefix="KNOWLEDGE",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
-@router.delete("/tags/{tag_name}")
 async def delete_tag_globally(
     tag_name: str = Path(..., description="Tag name to delete"),
     admin_check: bool = Depends(check_admin_permission),
@@ -508,12 +526,12 @@ async def delete_tag_globally(
         _raise_kb_error(result.get("message", "Unknown error"))
 
 
+@router.post("/tags/merge", response_model=KnowledgeTagMergeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="merge_tags",
-    error_code_prefix="KNOWLEDGE",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
-@router.post("/tags/merge")
 async def merge_tags(
     request: MergeTagsRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -566,12 +584,12 @@ async def merge_tags(
         raise HTTPException(status_code=400, detail=error_message)
 
 
+@router.get("/tags/{tag_name}/facts", response_model=KnowledgeTagFactsByTagResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_facts_by_tag",
-    error_code_prefix="KNOWLEDGE",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
-@router.get("/tags/{tag_name}/facts")
 async def get_facts_by_tag(
     tag_name: str = Path(..., description="Tag name to get facts for"),
     admin_check: bool = Depends(check_admin_permission),
@@ -638,12 +656,12 @@ async def get_facts_by_tag(
         raise HTTPException(status_code=500, detail=error_message)
 
 
+@router.get("/tags/{tag_name}/info", response_model=KnowledgeTagInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_tag_info",
-    error_code_prefix="KNOWLEDGE",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
-@router.get("/tags/{tag_name}/info")
 async def get_tag_info(
     tag_name: str = Path(..., description="Tag name to get info for"),
     admin_check: bool = Depends(check_admin_permission),
@@ -694,12 +712,12 @@ async def get_tag_info(
 # ===== TAG STYLING OPERATIONS (Issue #410) =====
 
 
+@router.patch("/tags/{tag_name}/style", response_model=KnowledgeTagStyleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_tag_style",
-    error_code_prefix="KNOWLEDGE",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
-@router.patch("/tags/{tag_name}/style")
 async def update_tag_style(
     tag_name: str = Path(..., description="Tag name to update styling for"),
     request: UpdateTagStyleRequest = ...,
@@ -764,12 +782,12 @@ async def update_tag_style(
         _raise_kb_error(result.get("message", "Unknown error"), 400)
 
 
+@router.get("/tags/{tag_name}/style", response_model=KnowledgeTagStyleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_tag_style",
-    error_code_prefix="KNOWLEDGE",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
-@router.get("/tags/{tag_name}/style")
 async def get_tag_style(
     tag_name: str = Path(..., description="Tag name to get styling for"),
     admin_check: bool = Depends(check_admin_permission),
@@ -825,12 +843,12 @@ async def get_tag_style(
         raise HTTPException(status_code=500, detail=error_message)
 
 
+@router.delete("/tags/{tag_name}/style", response_model=KnowledgeTagDeleteStyleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_tag_style",
-    error_code_prefix="KNOWLEDGE",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
-@router.delete("/tags/{tag_name}/style")
 async def delete_tag_style(
     tag_name: str = Path(..., description="Tag name to reset styling for"),
     admin_check: bool = Depends(check_admin_permission),

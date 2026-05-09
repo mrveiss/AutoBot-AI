@@ -17,110 +17,132 @@ default.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
+import os
 import time
 from typing import Any, AsyncIterator, Dict, List, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
-
+from api.schemas_code import (
+    ChatCompletionChunk,
+    ChatCompletionRequest,
+    ChatCompletionResponse,
+    OAIChoice,
+    OAIChoiceMessage,
+    OAIDeltaMessage,
+    OAIMessage,
+    OAIModelCard,
+    OAIModelListResponse,
+    OAIStreamChoice,
+    OAIStreamOptions,
+    OAIUsage,
+)
 from auth_middleware import get_current_user
 from llm_interface_pkg.models import LLMRequest
 from llm_providers.provider_registry import get_provider_registry
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["openai-compat"])
 
-
 # ---------------------------------------------------------------------------
-# Request / response models (OpenAI wire format)
+# Rate limiting — per-IP sliding window via Redis sorted-set (#6588)
 # ---------------------------------------------------------------------------
 
-
-class OAIMessage(BaseModel):
-    role: str
-    content: str
-    name: Optional[str] = None
-
-
-class OAIStreamOptions(BaseModel):
-    include_usage: bool = False
+_OAI_RATE_LIMIT = int(os.environ.get("AUTOBOT_OAI_RATE_LIMIT", "60"))  # per minute
+_OAI_RATE_BUCKET_MAX_KEYS = 10_000
+# #6588: in-process fallback only — used when Redis is unavailable. Production
+# uses the Redis sorted-set path so all uvicorn workers share state.
+_oai_rate_buckets: Dict[str, list] = {}
 
 
-class ChatCompletionRequest(BaseModel):
-    model: str = "autobot-default"
-    messages: List[OAIMessage]
-    temperature: float = 0.7
-    max_tokens: Optional[int] = None
-    top_p: float = 1.0
-    frequency_penalty: float = 0.0
-    presence_penalty: float = 0.0
-    stop: Optional[List[str]] = None
-    stream: bool = False
-    stream_options: Optional[OAIStreamOptions] = None
-    n: int = Field(default=1, ge=1)
-    user: Optional[str] = None
+def _check_oai_rate_limit_inprocess(remote_addr: str) -> None:
+    """Fallback per-IP rate limit when Redis is unavailable (#6588).
+
+    Per-process state — does NOT enforce the documented limit across uvicorn
+    workers. Only used when Redis is unreachable; the Redis path is the
+    production-correct enforcement.
+    """
+    now = time.time()
+    window_start = now - 60
+    bucket = [t for t in _oai_rate_buckets.get(remote_addr, []) if t > window_start]
+    if len(bucket) >= _OAI_RATE_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded ({_OAI_RATE_LIMIT} requests/min). Try again later.",
+        )
+    bucket.append(now)
+    _oai_rate_buckets[remote_addr] = bucket
+    if len(_oai_rate_buckets) > _OAI_RATE_BUCKET_MAX_KEYS:
+        cutoff = now - 60
+        stale = [ip for ip, ts in _oai_rate_buckets.items() if not any(t > cutoff for t in ts)]
+        for ip in stale:
+            del _oai_rate_buckets[ip]
 
 
-class OAIChoiceMessage(BaseModel):
-    role: str
-    content: str
+async def _check_oai_rate_limit(remote_addr: str) -> None:
+    """Enforce a per-IP rate limit on /v1/chat/completions requests.
+
+    #6588: state is shared across all uvicorn workers via Redis sorted-set
+    (per-IP key, score=timestamp). Previous in-process dict made the effective
+    limit 4× the configured value under ``backend_workers: 4`` because each
+    worker had its own state. The Redis sliding window:
+
+      ZREMRANGEBYSCORE  ratelimit:oai:<ip>  0  (now-60)   # drop expired
+      ZADD              ratelimit:oai:<ip>  now  uuid
+      ZCARD             ratelimit:oai:<ip>                # current count
+      EXPIRE            ratelimit:oai:<ip>  120           # auto-evict idle keys
+
+    All four ops are pipelined atomically. If Redis is unreachable the helper
+    falls back to ``_check_oai_rate_limit_inprocess`` so the endpoint stays
+    responsive (degraded mode logs a warning).
+
+    Raises HTTPException(429) if the caller has exceeded ``_OAI_RATE_LIMIT``
+    requests in the last 60 seconds.
+    """
+    from autobot_shared.redis_client import get_async_redis_client
+
+    redis = await get_async_redis_client()
+    if redis is None:
+        logger.warning(
+            "Redis unavailable for OAI rate-limit; falling back to in-process bucket (per-worker, undercounts under multi-worker)"
+        )
+        _check_oai_rate_limit_inprocess(remote_addr)
+        return
+
+    key = f"ratelimit:oai:{remote_addr}"
+    now = time.time()
+    window_start = now - 60
+    try:
+        async with redis.pipeline(transaction=False) as pipe:
+            pipe.zremrangebyscore(key, 0, window_start)
+            pipe.zadd(key, {f"{now}:{uuid4()}": now})
+            pipe.zcard(key)
+            pipe.expire(key, 120)
+            results = await pipe.execute()
+        count = int(results[2])
+    except Exception as exc:
+        logger.warning("Redis OAI rate-limit pipeline failed (%s) — falling back to in-process", exc)
+        _check_oai_rate_limit_inprocess(remote_addr)
+        return
+
+    if count > _OAI_RATE_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded ({_OAI_RATE_LIMIT} requests/min). Try again later.",
+        )
 
 
-class OAIChoice(BaseModel):
-    index: int
-    message: OAIChoiceMessage
-    finish_reason: str = "stop"
-
-
-class OAIUsage(BaseModel):
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    total_tokens: int = 0
-
-
-class ChatCompletionResponse(BaseModel):
-    id: str
-    object: str = "chat.completion"
-    created: int
-    model: str
-    choices: List[OAIChoice]
-    usage: OAIUsage
-
-
-class OAIDeltaMessage(BaseModel):
-    role: Optional[str] = None
-    content: Optional[str] = None
-
-
-class OAIStreamChoice(BaseModel):
-    index: int
-    delta: OAIDeltaMessage
-    finish_reason: Optional[str] = None
-
-
-class ChatCompletionChunk(BaseModel):
-    id: str
-    object: str = "chat.completion.chunk"
-    created: int
-    model: str
-    choices: List[OAIStreamChoice]
-    usage: Optional[OAIUsage] = None
-
-
-class OAIModelCard(BaseModel):
-    id: str
-    object: str = "model"
-    created: int = 0
-    owned_by: str = "autobot"
-
-
-class ModelListResponse(BaseModel):
-    object: str = "list"
-    data: List[OAIModelCard]
+def _remote_addr(request: Request) -> str:
+    """Extract real client IP (respects X-Forwarded-For from nginx)."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -267,6 +289,11 @@ async def _stream_generator(
 
 
 @router.post("/chat/completions", response_model=None)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="chat_completions",
+    error_code_prefix="OPENAI_COMPAT",
+)
 async def chat_completions(
     body: ChatCompletionRequest,
     request: Request,
@@ -277,6 +304,7 @@ async def chat_completions(
     OpenAI-format response (streaming or non-streaming).
     """
     _get_user(request)
+    await _check_oai_rate_limit(_remote_addr(request))
 
     registry = get_provider_registry()
     llm_request = _build_llm_request(body)
@@ -284,6 +312,10 @@ async def chat_completions(
     provider = await registry.get_provider_for_request(request=llm_request)
     if provider is None:
         raise HTTPException(status_code=503, detail="No LLM providers available")
+
+    # Fix 3: validate stream_completion is an async generator function (#5132)
+    if not inspect.isasyncgenfunction(provider.stream_completion):
+        raise ValueError(f"Provider {provider.provider_name!r} stream_completion must be an async generator function")
 
     completion_id = _make_completion_id()
     # Use resolved provider name as model echo when caller sent "autobot-default"
@@ -339,8 +371,13 @@ async def chat_completions(
     )
 
 
-@router.get("/models", response_model=ModelListResponse)
-async def list_models(request: Request) -> ModelListResponse:
+@router.get("/models", response_model=OAIModelListResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_models",
+    error_code_prefix="OPENAI_COMPAT",
+)
+async def list_models(request: Request) -> OAIModelListResponse:
     """OpenAI-compatible models list endpoint (#4447).
 
     Returns all models available across registered providers.
@@ -354,7 +391,7 @@ async def list_models(request: Request) -> ModelListResponse:
 
     for provider_info in registry.list_providers():
         provider_name = provider_info["name"]
-        provider = registry._providers.get(str(provider_name))
+        provider = registry.get_provider_by_name(str(provider_name))
         if provider is None:
             continue
         try:
@@ -362,9 +399,7 @@ async def list_models(request: Request) -> ModelListResponse:
             for m in models:
                 if m not in seen:
                     seen.add(m)
-                    model_cards.append(
-                        OAIModelCard(id=m, created=created, owned_by=str(provider_name))
-                    )
+                    model_cards.append(OAIModelCard(id=m, created=created, owned_by=str(provider_name)))
         except Exception as exc:
             logger.debug("list_models failed for %s: %s", provider_name, exc)
 
@@ -372,4 +407,4 @@ async def list_models(request: Request) -> ModelListResponse:
     if not model_cards:
         model_cards.append(OAIModelCard(id="autobot-default", created=created))
 
-    return ModelListResponse(data=model_cards)
+    return OAIModelListResponse(data=model_cards)

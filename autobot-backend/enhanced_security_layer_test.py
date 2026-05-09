@@ -26,7 +26,7 @@ class TestEnhancedSecurityLayer:
         self.temp_audit_file.close()
 
         # Mock config to use temporary file
-        with patch("src.enhanced_security_layer.global_config_manager") as mock_config:
+        with patch("enhanced_security_layer.global_config_manager") as mock_config:
             mock_config.get.return_value = {
                 "enable_auth": False,
                 "enable_command_security": True,
@@ -63,7 +63,7 @@ class TestEnhancedSecurityLayer:
     def test_create_security_policy(self):
         """Test security policy creation from configuration"""
         # Test with custom policies in config
-        with patch("src.enhanced_security_layer.global_config_manager") as mock_config:
+        with patch("enhanced_security_layer.global_config_manager") as mock_config:
             mock_config.get.return_value = {
                 "enable_command_security": True,
                 "command_policies": {
@@ -85,14 +85,31 @@ class TestEnhancedSecurityLayer:
         assert self.security.check_permission("user", "allow_shell_execute") is True
         assert self.security.check_permission("guest", "allow_all") is True
 
-    def test_check_permission_god_mode(self):
-        """Test GOD MODE permissions"""
+    def test_deprecated_privileged_roles_downgrade_to_admin(self):
+        """#7161 / #744: god/superuser/root are deprecated and downgraded.
+
+        Previously this test ('test_check_permission_god_mode') asserted
+        unrestricted "god mode" access including auto-granted
+        ``dangerous_action`` — a security anti-pattern. Issue #744
+        explicitly removed the god-mode bypass: privileged role names get
+        downgraded to 'admin' via ``_handle_deprecated_role`` and inherit
+        admin's RBAC permissions (no wildcard for arbitrary actions).
+
+        Pin the new contract: deprecated roles get admin-equivalent access
+        for legitimate actions (``allow_shell_execute``), but NOT for
+        arbitrary unmapped actions (no god-bypass wildcard).
+        """
         self.security.enable_auth = True
 
-        god_roles = ["god", "superuser", "root"]
-        for role in god_roles:
-            assert self.security.check_permission(role, "allow_shell_execute") is True
-            assert self.security.check_permission(role, "dangerous_action") is True
+        for role in ["god", "superuser", "root"]:
+            # Deprecated roles inherit admin perms — admin has shell_execute.
+            assert (
+                self.security.check_permission(role, "allow_shell_execute") is True
+            ), f"deprecated role {role!r} should inherit admin shell-execute"
+            # No god-bypass: unmapped action_type is denied (not auto-True).
+            assert (
+                self.security.check_permission(role, "dangerous_action") is False
+            ), f"deprecated role {role!r} must NOT auto-grant unmapped actions"
 
     def test_check_permission_shell_execute(self):
         """Test shell execution permissions"""
@@ -100,9 +117,7 @@ class TestEnhancedSecurityLayer:
 
         # Test different roles for shell execution
         assert self.security.check_permission("admin", "allow_shell_execute") is True
-        assert (
-            self.security.check_permission("developer", "allow_shell_execute") is True
-        )
+        assert self.security.check_permission("developer", "allow_shell_execute") is True
         assert self.security.check_permission("user", "allow_shell_execute") is False
         assert self.security.check_permission("guest", "allow_shell_execute") is False
 
@@ -111,9 +126,7 @@ class TestEnhancedSecurityLayer:
         self.security.enable_auth = True
 
         # Developer should have safe shell execution permission
-        assert (
-            self.security.check_permission("developer", "allow_shell_execute") is True
-        )
+        assert self.security.check_permission("developer", "allow_shell_execute") is True
 
         # User should not have shell execution permission
         assert self.security.check_permission("user", "allow_shell_execute") is False
@@ -121,19 +134,11 @@ class TestEnhancedSecurityLayer:
     def test_check_permission_custom_roles(self):
         """Test permission checking with custom role configuration"""
         self.security.enable_auth = True
-        self.security.roles = {
-            "custom_role": {"permissions": ["allow_shell_execute", "custom_permission"]}
-        }
+        self.security.roles = {"custom_role": {"permissions": ["allow_shell_execute", "custom_permission"]}}
 
-        assert (
-            self.security.check_permission("custom_role", "allow_shell_execute") is True
-        )
-        assert (
-            self.security.check_permission("custom_role", "custom_permission") is True
-        )
-        assert (
-            self.security.check_permission("custom_role", "forbidden_action") is False
-        )
+        assert self.security.check_permission("custom_role", "allow_shell_execute") is True
+        assert self.security.check_permission("custom_role", "custom_permission") is True
+        assert self.security.check_permission("custom_role", "forbidden_action") is False
 
     def test_check_permission_wildcard(self):
         """Test wildcard permission matching"""
@@ -146,7 +151,12 @@ class TestEnhancedSecurityLayer:
         assert self.security.check_permission("test_role", "api.write.users") is False
 
     def test_get_default_role_permissions(self):
-        """Test default role permissions"""
+        """Test default role permissions.
+
+        #7161 / #744: guest role was REMOVED as a security vulnerability —
+        unauthenticated requests must be rejected, not assigned default
+        permissions. Tests now pin the post-#744 contract.
+        """
         default_perms = self.security._get_default_role_permissions("developer")
         assert "allow_shell_execute_safe" in default_perms
         assert "allow_kb_write" in default_perms
@@ -155,9 +165,15 @@ class TestEnhancedSecurityLayer:
         assert "allow_shell_execute" not in user_perms
         assert "allow_kb_read" in user_perms
 
+        # #744: guest is REMOVED — empty permissions list returned.
+        # Unauthenticated requests must be rejected upstream, not granted
+        # any default access here.
         guest_perms = self.security._get_default_role_permissions("guest")
-        assert "files.view" in guest_perms
-        assert len(guest_perms) == 1  # Very limited permissions
+        assert guest_perms == [], (
+            "guest role was removed by #744 as a security vulnerability; "
+            "_get_default_role_permissions('guest') must return [] so "
+            "unauthenticated requests are rejected upstream"
+        )
 
     @pytest.mark.asyncio
     async def test_command_approval_callback_auto_approve(self):
@@ -185,9 +201,7 @@ class TestEnhancedSecurityLayer:
         }
 
         # Start approval in background
-        approval_task = asyncio.create_task(
-            self.security._command_approval_callback(approval_data)
-        )
+        approval_task = asyncio.create_task(self.security._command_approval_callback(approval_data))
 
         # Wait a moment then approve
         await asyncio.sleep(0.1)
@@ -254,9 +268,7 @@ class TestEnhancedSecurityLayer:
     @pytest.mark.asyncio
     async def test_execute_command_with_permission(self):
         """Test command execution with proper permissions"""
-        with patch.object(
-            self.security.command_executor, "run_shell_command"
-        ) as mock_run:
+        with patch.object(self.security.command_executor, "run_shell_command") as mock_run:
             mock_run.return_value = {
                 "stdout": "file1 file2",
                 "stderr": "",
@@ -265,9 +277,7 @@ class TestEnhancedSecurityLayer:
                 "security": {"risk": "safe"},
             }
 
-            result = await self.security.execute_command(
-                "ls -la", "admin_user", "admin"
-            )
+            result = await self.security.execute_command("ls -la", "admin_user", "admin")
 
             assert result["status"] == "success"
             assert result["stdout"] == "file1 file2"
@@ -278,14 +288,10 @@ class TestEnhancedSecurityLayer:
         """Test command execution with forced approval for restricted roles"""
         self.security.enable_auth = True
 
-        with patch.object(
-            self.security.command_executor, "assess_command_risk"
-        ) as mock_assess:
+        with patch.object(self.security.command_executor, "assess_command_risk") as mock_assess:
             mock_assess.return_value = (CommandRisk.HIGH, ["High risk command"])
 
-            with patch.object(
-                self.security.command_executor, "run_shell_command"
-            ) as mock_run:
+            with patch.object(self.security.command_executor, "run_shell_command") as mock_run:
                 mock_run.return_value = {
                     "stdout": "",
                     "stderr": "Command execution denied by user",
@@ -295,9 +301,7 @@ class TestEnhancedSecurityLayer:
                 }
 
                 # Developer can only execute safe commands without approval
-                await self.security.execute_command(
-                    "rm file.txt", "dev_user", "developer"
-                )
+                await self.security.execute_command("rm file.txt", "dev_user", "developer")
 
                 # Should force approval for non-safe command
                 mock_run.assert_called_once_with("rm file.txt", force_approval=True)
@@ -313,9 +317,7 @@ class TestEnhancedSecurityLayer:
             mock_process.returncode = 0
             mock_subprocess.return_value = mock_process
 
-            result = await self.security.execute_command(
-                "echo hello", "test_user", "user"
-            )
+            result = await self.security.execute_command("echo hello", "test_user", "user")
 
             assert result["status"] == "success"
             assert result["stdout"] == "output"
@@ -346,9 +348,7 @@ class TestEnhancedSecurityLayer:
         self.security.audit_log_file = "/invalid/path/audit.log"
 
         # Should not raise exception
-        self.security.audit_log(
-            action="test_action", user="test_user", outcome="success", details={}
-        )
+        self.security.audit_log(action="test_action", user="test_user", outcome="success", details={})
 
     def test_get_command_history_empty(self):
         """Test getting command history when empty"""
@@ -454,7 +454,7 @@ class TestEnhancedSecurityLayerIntegration:
 
     def setup_method(self):
         """Set up test fixtures"""
-        with patch("src.enhanced_security_layer.global_config_manager") as mock_config:
+        with patch("enhanced_security_layer.global_config_manager") as mock_config:
             mock_config.get.return_value = {
                 "enable_auth": False,
                 "enable_command_security": True,
@@ -472,9 +472,7 @@ class TestEnhancedSecurityLayerIntegration:
             mock_process.returncode = 0
             mock_subprocess.return_value = mock_process
 
-            result = await self.security.execute_command(
-                "echo 'hello world'", "test_user", "admin"
-            )
+            result = await self.security.execute_command("echo 'hello world'", "test_user", "admin")
 
             assert result["status"] == "success"
             assert result["stdout"] == "hello world"

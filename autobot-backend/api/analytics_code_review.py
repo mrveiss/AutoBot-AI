@@ -15,20 +15,37 @@ import re
 import uuid
 from datetime import datetime, timezone
 from autobot_shared.time_utils import parse_utc_iso
-from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from api.analytics_shared import (  # noqa: F401 – used by history/metrics/summary
     resolve_source_or_404 as _resolve_source_or_404,
 )
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
+from api.schemas_analytics import (
+    PatternToggleRequest,
+    ReviewCategory,
+    ReviewComment,
+    ReviewSeverity,
+)
+from api.schemas_code import (
+    CodeReviewAnalyzeResponse,
+    CodeReviewFeedbackResponse,
+    CodeReviewFileResponse,
+    CodeReviewHistoryResponse,
+    CodeReviewMetricsResponse,
+    CodeReviewPatternPreferencesResponse,
+    CodeReviewPatternToggleResponse,
+    CodeReviewReviewByIdResponse,
+    CodeReviewSummaryResponse,
+)
 from auth_middleware import check_admin_permission, get_current_user
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
+from api.schemas_analytics import CodeReviewPatternItem, CodeReviewCategoryItem
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -52,54 +69,6 @@ _NEXT_TOPLEVEL_RE = re.compile(r"\n(?=\S)")
 # ============================================================================
 # Models
 # ============================================================================
-
-
-class ReviewSeverity(str, Enum):
-    """Review comment severity levels."""
-
-    CRITICAL = "critical"
-    WARNING = "warning"
-    INFO = "info"
-    SUGGESTION = "suggestion"
-
-
-class ReviewCategory(str, Enum):
-    """Categories of review findings."""
-
-    SECURITY = "security"
-    PERFORMANCE = "performance"
-    STYLE = "style"
-    BUG_RISK = "bug_risk"
-    MAINTAINABILITY = "maintainability"
-    DOCUMENTATION = "documentation"
-    TESTING = "testing"
-    BEST_PRACTICE = "best_practice"
-
-
-class ReviewComment(BaseModel):
-    """A single review comment."""
-
-    id: str
-    file_path: str
-    line_number: int
-    severity: ReviewSeverity
-    category: ReviewCategory
-    message: str
-    suggestion: Optional[str] = None
-    code_snippet: Optional[str] = None
-    pattern_id: Optional[str] = None
-
-
-class ReviewResult(BaseModel):
-    """Complete review result for a diff or PR."""
-
-    id: str
-    timestamp: datetime
-    files_reviewed: int
-    total_comments: int
-    comments: list[ReviewComment] = Field(default_factory=list)
-    summary: dict[str, Any] = Field(default_factory=dict)
-    score: float = Field(..., ge=0, le=100)
 
 
 # ============================================================================
@@ -457,7 +426,12 @@ async def get_git_diff(commit_range: Optional[str] = None) -> str:
 # ============================================================================
 
 
-@router.get("/analyze")
+@router.get("/analyze", response_model=CodeReviewAnalyzeResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_diff",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 async def analyze_diff(
     admin_check: bool = Depends(check_admin_permission),
     commit_range: Optional[str] = Query(
@@ -576,7 +550,12 @@ async def analyze_diff(
     }
 
 
-@router.get("/review/{review_id}")
+@router.get("/review/{review_id}", response_model=CodeReviewReviewByIdResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_review_by_id",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 async def get_review_by_id(
     review_id: str,
     _user: dict = Depends(get_current_user),
@@ -617,7 +596,12 @@ async def get_review_by_id(
         raise HTTPException(status_code=500, detail="Failed to retrieve review result")
 
 
-@router.post("/review-file")
+@router.post("/review-file", response_model=CodeReviewFileResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="review_file",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 async def review_file(
     admin_check: bool = Depends(check_admin_permission),
     file_path: str = None,
@@ -659,7 +643,12 @@ async def review_file(
     }
 
 
-@router.get("/patterns")
+@router.get("/patterns", response_model=List[CodeReviewPatternItem])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_review_patterns",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 async def get_review_patterns(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict[str, Any]]:
@@ -684,7 +673,12 @@ async def get_review_patterns(
     ]
 
 
-@router.get("/history")
+@router.get("/history", response_model=CodeReviewHistoryResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_review_history",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 async def get_review_history(
     admin_check: bool = Depends(check_admin_permission),
     limit: int = Query(20, ge=1, le=100),
@@ -744,7 +738,12 @@ async def get_review_history(
         )
 
 
-@router.get("/metrics")
+@router.get("/metrics", response_model=CodeReviewMetricsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_review_metrics",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 async def get_review_metrics(
     admin_check: bool = Depends(check_admin_permission),
     period: str = Query("30d", pattern="^(7d|30d|90d)$"),
@@ -765,7 +764,12 @@ async def get_review_metrics(
     )
 
 
-@router.post("/feedback")
+@router.post("/feedback", response_model=CodeReviewFeedbackResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="submit_feedback",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 async def submit_feedback(
     admin_check: bool = Depends(check_admin_permission),
     comment_id: str = None,
@@ -811,7 +815,12 @@ async def submit_feedback(
     }
 
 
-@router.get("/summary")
+@router.get("/summary", response_model=CodeReviewSummaryResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_review_summary",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 async def get_review_summary(
     admin_check: bool = Depends(check_admin_permission),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
@@ -831,7 +840,12 @@ async def get_review_summary(
     )
 
 
-@router.get("/categories")
+@router.get("/categories", response_model=List[CodeReviewCategoryItem])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_review_categories",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 async def get_review_categories(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict[str, Any]]:
@@ -851,14 +865,12 @@ async def get_review_categories(
     ]
 
 
-class PatternToggleRequest(BaseModel):
-    """Request model for toggling pattern preference."""
-
-    pattern_id: str
-    enabled: bool
-
-
-@router.post("/patterns/toggle")
+@router.post("/patterns/toggle", response_model=CodeReviewPatternToggleResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="toggle_pattern_preference",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 async def toggle_pattern_preference(
     request: PatternToggleRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -907,7 +919,12 @@ async def toggle_pattern_preference(
         raise HTTPException(status_code=500, detail="Failed to save preference")
 
 
-@router.get("/patterns/preferences")
+@router.get("/patterns/preferences", response_model=CodeReviewPatternPreferencesResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pattern_preferences",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 async def get_pattern_preferences(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:

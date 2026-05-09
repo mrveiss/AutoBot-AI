@@ -10,53 +10,29 @@ Handles vector storage configuration and embedding model selection.
 
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 from config import unified_config_manager
 from services.config_service import ConfigService
+from api.schemas_common import DataResponse
+from api.schemas_knowledge import EmbeddingUpdate
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["embeddings"])
 
 
-class EmbeddingProviderConfig(BaseModel):
-    """Embedding provider configuration model"""
-
-    provider: str
-    endpoint: str
-    selected_model: str
-    models: List[str] = []
-
-
-class EmbeddingConfig(BaseModel):
-    """Embedding configuration model"""
-
-    provider: str
-    providers: Dict[str, EmbeddingProviderConfig]
-
-
-class EmbeddingUpdate(BaseModel):
-    """Embedding configuration update request"""
-
-    provider: str
-    selected_model: str
-    endpoint: Optional[str] = None
-
-
+@router.get("/settings", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_embedding_settings",
     error_code_prefix="EMBEDDINGS",
 )
-@router.get("/settings")
 async def get_embedding_settings(
     current_user: dict = Depends(get_current_user),
 ):
@@ -99,12 +75,12 @@ async def get_embedding_settings(
         raise HTTPException(status_code=500, detail="Failed to get embedding settings")
 
 
+@router.put("/settings", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_embedding_settings",
     error_code_prefix="EMBEDDINGS",
 )
-@router.put("/settings")
 async def update_embedding_settings(
     update: EmbeddingUpdate,
     admin_check: bool = Depends(check_admin_permission),
@@ -158,12 +134,12 @@ async def update_embedding_settings(
         )
 
 
+@router.get("/models", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_available_embedding_models",
     error_code_prefix="EMBEDDINGS",
 )
-@router.get("/models")
 async def get_available_embedding_models(
     current_user: dict = Depends(get_current_user),
 ):
@@ -206,12 +182,12 @@ async def get_available_embedding_models(
         raise HTTPException(status_code=500, detail="Failed to get embedding models")
 
 
+@router.post("/providers/{provider_name}/refresh-models", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refresh_embedding_models",
     error_code_prefix="EMBEDDINGS",
 )
-@router.post("/providers/{provider_name}/refresh-models")
 async def refresh_embedding_models(
     provider_name: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -267,12 +243,12 @@ async def refresh_embedding_models(
         )
 
 
+@router.get("/status", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_embedding_status",
     error_code_prefix="EMBEDDINGS",
 )
-@router.get("/status")
 async def get_embedding_status(
     current_user: dict = Depends(get_current_user),
 ):

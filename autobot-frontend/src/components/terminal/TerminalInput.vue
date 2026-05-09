@@ -343,7 +343,7 @@ defineExpose({
 /* Responsive */
 @media (max-width: 768px) {
   .terminal-input-line {
-    padding: 0 12px 12px 12px;
+    padding: var(--spacing-0) var(--spacing-3) var(--spacing-3) var(--spacing-3);
   }
 
   .footer-info {

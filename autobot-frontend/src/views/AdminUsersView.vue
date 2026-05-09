@@ -10,25 +10,25 @@
       </div>
       <div class="header-actions">
         <button class="btn-action-primary" @click="showCreateModal = true">
-          <i class="fas fa-user-plus"></i>
+          <Icon name="user-plus" />
           Add User
         </button>
         <button class="btn-action-secondary" :disabled="loading" @click="loadUsers">
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+          <Icon name="sync-alt" :spin="loading" />
           Refresh
         </button>
       </div>
     </div>
 
     <div v-if="error" class="error-banner">
-      <i class="fas fa-exclamation-circle"></i>
+      <Icon name="exclamation-circle" />
       <span>{{ error }}</span>
-      <button class="btn-dismiss" @click="error = null"><i class="fas fa-times"></i></button>
+      <button class="btn-dismiss" @click="error = null"><Icon name="times" /></button>
     </div>
 
     <!-- Search bar -->
     <div class="search-bar">
-      <i class="fas fa-search search-icon"></i>
+      <Icon name="search" class="search-icon" />
       <input
         v-model="searchQuery"
         type="text"
@@ -41,7 +41,7 @@
     <!-- Users table -->
     <div class="table-section">
       <div v-if="loading && users.length === 0" class="loading-state">
-        <i class="fas fa-spinner fa-spin"></i> Loading users…
+        <Icon name="sync-alt" :spin="true" /> Loading users…
       </div>
 
       <table v-else class="data-table">
@@ -86,7 +86,7 @@
                 title="Deactivate"
                 @click="toggleActive(user, false)"
               >
-                <i class="fas fa-ban"></i>
+                <Icon name="ban" />
               </button>
               <button
                 v-else
@@ -94,14 +94,14 @@
                 title="Activate"
                 @click="toggleActive(user, true)"
               >
-                <i class="fas fa-check-circle"></i>
+                <Icon name="check-circle" />
               </button>
               <button
                 class="btn-icon btn-danger"
                 title="Delete"
                 @click="confirmDelete(user)"
               >
-                <i class="fas fa-trash"></i>
+                <Icon name="trash" />
               </button>
             </td>
           </tr>
@@ -114,11 +114,11 @@
       <!-- Pagination -->
       <div v-if="total > pageSize" class="pagination">
         <button :disabled="page === 0" class="btn-page" @click="changePage(-1)">
-          <i class="fas fa-chevron-left"></i>
+          <Icon name="chevron-left" />
         </button>
         <span class="page-info">{{ page + 1 }} / {{ totalPages }}</span>
         <button :disabled="page >= totalPages - 1" class="btn-page" @click="changePage(1)">
-          <i class="fas fa-chevron-right"></i>
+          <Icon name="chevron-right" />
         </button>
       </div>
     </div>
@@ -128,7 +128,7 @@
       <div class="modal">
         <div class="modal-header">
           <h3>Add User</h3>
-          <button class="btn-close" @click="showCreateModal = false"><i class="fas fa-times"></i></button>
+          <button class="btn-close" @click="showCreateModal = false"><Icon name="times" /></button>
         </div>
         <form class="modal-body" @submit.prevent="createUser">
           <div class="form-group">
@@ -151,7 +151,7 @@
           <div class="modal-footer">
             <button type="button" class="btn-action-secondary" @click="showCreateModal = false">Cancel</button>
             <button type="submit" class="btn-action-primary" :disabled="creating">
-              <i v-if="creating" class="fas fa-spinner fa-spin"></i>
+              <Icon v-if="creating" name="sync-alt" :spin="true" />
               Create User
             </button>
           </div>
@@ -180,8 +180,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
-import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('AdminUsersView')
 
@@ -202,7 +203,6 @@ interface NewUserForm {
   display_name: string
 }
 
-const userStore = useUserStore()
 
 const users = ref<UserRecord[]>([])
 const total = ref(0)
@@ -221,15 +221,6 @@ const deleteTarget = ref<UserRecord | null>(null)
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize))
 
-function authHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  const token = userStore.authState.token
-  if (token && token !== 'single_user_mode') {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-  return headers
-}
-
 function primaryRole(user: UserRecord): string {
   if (user.is_platform_admin) return 'admin'
   const sysRole = user.roles.find(r => r.is_system)
@@ -247,9 +238,7 @@ async function loadUsers(): Promise<void> {
     if (searchQuery.value.trim()) {
       params.set('search', searchQuery.value.trim())
     }
-    const res = await fetch(`${getBackendUrl()}/user-management/users?${params}`, {
-      headers: authHeaders(),
-    })
+    const res = await fetchWithAuth(`${getBackendUrl()}/user-management/users?${params}`)
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
       throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
@@ -281,9 +270,9 @@ function changePage(delta: number): void {
 
 async function onRoleChange(user: UserRecord, role: string): Promise<void> {
   try {
-    const res = await fetch(`${getBackendUrl()}/user-management/users/${user.id}/role`, {
+    const res = await fetchWithAuth(`${getBackendUrl()}/user-management/users/${user.id}/role`, {
       method: 'PUT',
-      headers: authHeaders(),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role }),
     })
     if (!res.ok) {
@@ -300,9 +289,8 @@ async function onRoleChange(user: UserRecord, role: string): Promise<void> {
 async function toggleActive(user: UserRecord, activate: boolean): Promise<void> {
   const action = activate ? 'activate' : 'deactivate'
   try {
-    const res = await fetch(`${getBackendUrl()}/user-management/users/${user.id}/${action}`, {
+    const res = await fetchWithAuth(`${getBackendUrl()}/user-management/users/${user.id}/${action}`, {
       method: 'POST',
-      headers: authHeaders(),
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
@@ -322,9 +310,8 @@ function confirmDelete(user: UserRecord): void {
 async function deleteUser(): Promise<void> {
   if (!deleteTarget.value) return
   try {
-    const res = await fetch(`${getBackendUrl()}/user-management/users/${deleteTarget.value.id}`, {
+    const res = await fetchWithAuth(`${getBackendUrl()}/user-management/users/${deleteTarget.value.id}`, {
       method: 'DELETE',
-      headers: authHeaders(),
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
@@ -343,9 +330,9 @@ async function createUser(): Promise<void> {
   creating.value = true
   createError.value = null
   try {
-    const res = await fetch(`${getBackendUrl()}/user-management/users`, {
+    const res = await fetchWithAuth(`${getBackendUrl()}/user-management/users`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: newUser.value.email,
         username: newUser.value.username,
@@ -390,7 +377,7 @@ onMounted(loadUsers)
 .page-title {
   font-size: var(--text-2xl);
   font-weight: 600;
-  margin: 0 0 0.25rem;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-1);
 }
 
 .page-subtitle {
@@ -408,7 +395,7 @@ onMounted(loadUsers)
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   background: var(--color-error-bg, #fef2f2);
   border: 1px solid var(--color-error-border, #fca5a5);
   border-radius: var(--radius-lg);
@@ -439,7 +426,7 @@ onMounted(loadUsers)
 
 .search-input {
   width: 100%;
-  padding: 0.5rem 0.75rem 0.5rem 2.25rem;
+  padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-9);
   border: 1px solid var(--color-border, #d1d5db);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
@@ -466,7 +453,7 @@ onMounted(loadUsers)
 
 .data-table th {
   text-align: left;
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
@@ -477,7 +464,7 @@ onMounted(loadUsers)
 }
 
 .data-table td {
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   border-bottom: 1px solid var(--color-border, #f3f4f6);
   font-size: var(--text-sm);
 }
@@ -498,7 +485,7 @@ onMounted(loadUsers)
 
 .badge {
   display: inline-block;
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-full);
   font-size: 0.7rem;
   font-weight: 600;
@@ -520,7 +507,7 @@ onMounted(loadUsers)
 }
 
 .role-select {
-  padding: 0.25rem 0.5rem;
+  padding: var(--spacing-1) var(--spacing-2);
   border: 1px solid var(--color-border, #d1d5db);
   border-radius: var(--radius-md);
   font-size: 0.8125rem;
@@ -575,7 +562,7 @@ onMounted(loadUsers)
 }
 
 .btn-page {
-  padding: 0.375rem 0.75rem;
+  padding: var(--spacing-1-5) var(--spacing-3);
   border: 1px solid var(--color-border, #d1d5db);
   border-radius: var(--radius-md);
   background: transparent;
@@ -598,7 +585,7 @@ onMounted(loadUsers)
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1-5);
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -654,7 +641,7 @@ onMounted(loadUsers)
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.25rem;
+  padding: var(--spacing-4) var(--spacing-5);
   border-bottom: 1px solid var(--color-border, #e5e7eb);
 }
 
@@ -689,7 +676,7 @@ onMounted(loadUsers)
 
 .form-input {
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--color-border, #d1d5db);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);

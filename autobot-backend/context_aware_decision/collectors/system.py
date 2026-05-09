@@ -29,7 +29,7 @@ class SystemContextCollector:
     async def collect(self) -> List[ContextElement]:
         """Collect system state context."""
         try:
-            from takeover_manager import takeover_manager
+            from takeover_manager import get_takeover_manager
 
             system_elements = []
 
@@ -37,7 +37,7 @@ class SystemContextCollector:
             system_elements.append(self._create_takeover_status_context())
 
             # Active takeovers
-            active_takeovers = takeover_manager.get_active_sessions()
+            active_takeovers = get_takeover_manager().get_active_sessions()
             if active_takeovers:
                 system_elements.append(
                     self._create_active_takeovers_context(active_takeovers)
@@ -56,9 +56,9 @@ class SystemContextCollector:
 
     def _create_takeover_status_context(self) -> ContextElement:
         """Create context element for takeover system status."""
-        from takeover_manager import takeover_manager
+        from takeover_manager import get_takeover_manager
 
-        takeover_status = takeover_manager.get_system_status()
+        takeover_status = get_takeover_manager().get_system_status()
         return ContextElement(
             context_id=f"takeover_status_{self.time_provider.current_timestamp_millis()}",
             context_type=ContextType.SYSTEM_STATE,

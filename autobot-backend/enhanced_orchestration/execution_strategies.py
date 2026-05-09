@@ -10,11 +10,11 @@ Contains execution strategy implementations for workflow orchestration.
 
 import asyncio
 import logging
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Dict, Tuple
 
 from constants.threshold_constants import TimingConstants
 
-from .types import AgentTask, ExecutionStrategy, WorkflowPlan
+from .types import AgentTask, ExecutionStrategy, WorkflowDependencies, WorkflowPlan
 
 logger = logging.getLogger(__name__)
 
@@ -26,34 +26,16 @@ class ExecutionStrategyHandler:
         self,
         max_parallel_tasks: int,
         resource_semaphore: asyncio.Semaphore,
-        execute_single_task: Callable,
-        topological_sort_tasks: Callable,
-        dependencies_met: Callable,
-        group_pipeline_stages: Callable,
-        enhance_task_for_collaboration: Callable,
-        coordinate_collaboration: Callable,
-    ):
-        """
-        Initialize strategy handler with required dependencies.
-
-        Args:
-            max_parallel_tasks: Maximum concurrent tasks
-            resource_semaphore: Semaphore for resource management
-            execute_single_task: Function to execute a single task
-            topological_sort_tasks: Function to sort tasks by dependencies
-            dependencies_met: Function to check if dependencies are satisfied
-            group_pipeline_stages: Function to group tasks into pipeline stages
-            enhance_task_for_collaboration: Function to enhance tasks for collaboration
-            coordinate_collaboration: Coroutine for coordination
-        """
+        deps: WorkflowDependencies,
+    ) -> None:
         self.max_parallel_tasks = max_parallel_tasks
         self.resource_semaphore = resource_semaphore
-        self._execute_single_task = execute_single_task
-        self._topological_sort_tasks = topological_sort_tasks
-        self._dependencies_met = dependencies_met
-        self._group_pipeline_stages = group_pipeline_stages
-        self._enhance_task_for_collaboration = enhance_task_for_collaboration
-        self._coordinate_collaboration = coordinate_collaboration
+        self._execute_single_task = deps.execute_single_task
+        self._topological_sort_tasks = deps.topological_sort_tasks
+        self._dependencies_met = deps.dependencies_met
+        self._group_pipeline_stages = deps.group_pipeline_stages
+        self._enhance_task_for_collaboration = deps.enhance_task_for_collaboration
+        self._coordinate_collaboration = deps.coordinate_collaboration
         self.coordination_prefix = "autobot:orchestrator:coord:"
 
     async def execute_by_strategy(self, plan: WorkflowPlan) -> Dict[str, Any]:
@@ -77,17 +59,20 @@ class ExecutionStrategyHandler:
         for task in sorted_tasks:
             logger.info("Executing task %s (%s)", task.task_id, task.agent_type)
 
-            # Wait for dependencies
-            await self._wait_for_dependencies(task, results)
+            try:
+                await self._wait_for_dependencies(task, results)
+            except RuntimeError as exc:
+                result = task.to_failed_result(str(exc))
+                results[task.task_id] = result
+                if self._is_required_failure(task, result):
+                    logger.error("Required task %s blocked by failed dep, stopping", task.task_id)
+                    break
+                continue
 
-            # Execute task
-            result = await self._execute_single_task(task, results)
+            result = await self._safe_execute(task, results)
             results[task.task_id] = result
 
-            # Check if we should continue
-            if result.get("status") == "failed" and not task.metadata.get(
-                "optional", False
-            ):
+            if self._is_required_failure(task, result):
                 logger.error("Required task %s failed, stopping workflow", task.task_id)
                 break
 
@@ -112,7 +97,7 @@ class ExecutionStrategyHandler:
                 if len(running_tasks) < self.max_parallel_tasks:
                     logger.info("Starting parallel task %s", task.task_id)
                     task_future = asyncio.create_task(
-                        self._execute_single_task(task, results)
+                        self._safe_execute(task, results)
                     )
                     running_tasks.append((task, task_future))
 
@@ -130,9 +115,15 @@ class ExecutionStrategyHandler:
                         results[task.task_id] = result
                         running_tasks.remove((task, future))
                         logger.info("Completed parallel task %s", task.task_id)
-            else:
-                # No tasks running, wait a bit
-                await asyncio.sleep(TimingConstants.MICRO_DELAY)
+            elif pending_tasks:
+                # No running tasks but pending remain — dependency deadlock (#6420)
+                logger.error(
+                    "Dependency deadlock: %d tasks unresolvable, failing them",
+                    len(pending_tasks),
+                )
+                for task in pending_tasks:
+                    results[task.task_id] = task.to_failed_result("Dependency deadlock")
+                break
 
         return results
 
@@ -147,21 +138,24 @@ class ExecutionStrategyHandler:
         for stage_num, stage_tasks in enumerate(stages):
             logger.info("Executing pipeline stage %d/%d", stage_num + 1, len(stages))
 
-            # Execute stage tasks in parallel
             stage_results = await asyncio.gather(
                 *[
-                    self._execute_single_task(task, {**results, **pipeline_data})
+                    self._safe_execute(task, {**results, **pipeline_data})
                     for task in stage_tasks
                 ]
             )
 
-            # Collect results and prepare pipeline data for next stage
+            stage_failed = False
             for task, result in zip(stage_tasks, stage_results):
                 results[task.task_id] = result
-
-                # Extract outputs for pipeline
                 if result.get("status") == "completed" and "output" in result:
                     pipeline_data.update(result["output"])
+                if self._is_required_failure(task, result):
+                    stage_failed = True
+
+            if stage_failed:
+                logger.error("Pipeline stage %d has required failures, stopping", stage_num + 1)
+                break
 
         return results
 
@@ -174,7 +168,7 @@ class ExecutionStrategyHandler:
 
         # Start collaboration coordinator
         coordinator_task = asyncio.create_task(
-            self._coordinate_collaboration(plan, collab_channel)
+            self._coordinate_collaboration(collab_channel)
         )
 
         # Execute tasks with collaboration
@@ -182,7 +176,7 @@ class ExecutionStrategyHandler:
         for task in plan.tasks:
             enhanced_task = self._enhance_task_for_collaboration(task, collab_channel)
             future = asyncio.create_task(
-                self._execute_single_task(enhanced_task, results)
+                self._safe_execute(enhanced_task, results)
             )
             task_futures.append((task, future))
 
@@ -191,8 +185,12 @@ class ExecutionStrategyHandler:
             result = await future
             results[task.task_id] = result
 
-        # Stop coordinator
+        # Stop coordinator and wait for its cleanup (finally/unsubscribe) to complete (#6431)
         coordinator_task.cancel()
+        try:
+            await coordinator_task
+        except asyncio.CancelledError:
+            pass
 
         return results
 
@@ -210,23 +208,36 @@ class ExecutionStrategyHandler:
 
         return current
 
+    def _is_required_failure(self, task: AgentTask, result: dict) -> bool:
+        return result.get("status") == "failed" and not task.metadata.get("optional", False)
+
+    async def _safe_execute(self, task: AgentTask, ctx: Dict[str, Any]) -> dict:
+        """Run _execute_single_task and convert any unhandled Exception to a failed result (#6459).
+
+        CancelledError is re-raised so cooperative cancellation still works.
+        """
+        try:
+            return await self._execute_single_task(task, ctx)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.exception("Task %s raised during execution", task.task_id)
+            return task.to_failed_result(repr(exc))
+
     async def _execute_parallel_batch(
         self, pending_tasks: list, results: Dict[str, Any]
     ) -> Tuple[int, int]:
         """Execute tasks in parallel batch."""
         batch_size = min(self.max_parallel_tasks, len(pending_tasks))
         batch_tasks = pending_tasks[:batch_size]
+        ready_tasks = [t for t in batch_tasks if self._dependencies_met(t, results)]
 
         batch_results = await asyncio.gather(
-            *[
-                self._execute_single_task(task, results)
-                for task in batch_tasks
-                if self._dependencies_met(task, results)
-            ]
+            *[self._safe_execute(task, results) for task in ready_tasks]
         )
 
         completed, failed = 0, 0
-        for task, result in zip(batch_tasks, batch_results):
+        for task, result in zip(ready_tasks, batch_results):
             results[task.task_id] = result
             pending_tasks.remove(task)
             if result.get("status") == "completed":
@@ -244,7 +255,7 @@ class ExecutionStrategyHandler:
             if not self._dependencies_met(task, results):
                 continue
 
-            result = await self._execute_single_task(task, results)
+            result = await self._safe_execute(task, results)
             results[task.task_id] = result
             pending_tasks.remove(task)
 
@@ -273,6 +284,16 @@ class ExecutionStrategyHandler:
             else:
                 c, f = await self._execute_sequential_step(pending_tasks, results)
 
+            if c == 0 and f == 0 and pending_tasks:
+                # No progress made — dependency deadlock (#6429)
+                logger.error(
+                    "Dependency deadlock in adaptive: %d tasks unresolvable, failing them",
+                    len(pending_tasks),
+                )
+                for task in pending_tasks:
+                    results[task.task_id] = task.to_failed_result("Dependency deadlock")
+                break
+
             completed_tasks += c
             failed_tasks += f
 
@@ -281,6 +302,16 @@ class ExecutionStrategyHandler:
     async def _wait_for_dependencies(
         self, task: AgentTask, results: Dict[str, Any]
     ) -> None:
-        """Wait for task dependencies to complete."""
+        """Wait for task dependencies to complete, or raise if a dep is in any terminal non-completed state."""
         while not self._dependencies_met(task, results):
+            terminal_deps = [
+                dep for dep in task.dependencies
+                if dep in results and results[dep].get("status") != "completed"
+            ]
+            if terminal_deps:
+                status = results[terminal_deps[0]].get("status")
+                raise RuntimeError(
+                    f"Task {task.task_id} cannot run: dependency {terminal_deps[0]}"
+                    f" is terminal (status={status})"
+                )
             await asyncio.sleep(TimingConstants.SHORT_DELAY)

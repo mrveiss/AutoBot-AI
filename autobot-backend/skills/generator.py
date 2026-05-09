@@ -54,16 +54,32 @@ class SkillGenerator:
         """Generate a skill package for the described capability gap.
 
         Returns dict with keys: name, skill_md, skill_py, manifest, gap_description.
+
+        Note: generate_structured() does not exist on LLMService; this uses
+        chat() + json.loads as a stop-gap. A proper structured-output method
+        is tracked in the discovery issue filed during Phase 2D (#3185).
         """
+        import json
+
         prompt = (
             f"Generate a skill package for this capability: {gap_description}\n\n"
-            "Return JSON with 'skill_md' and 'skill_py' keys."
+            "Return ONLY a JSON object with keys 'skill_md' and 'skill_py'. No prose."
         )
-        result = await self._llm.generate_structured(
-            system=_SYSTEM_PROMPT,
-            prompt=prompt,
-            schema=_GENERATION_SCHEMA,
+        response = await self._llm.chat(
+            [
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
         )
+        try:
+            result = json.loads(response.content)
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"LLM returned invalid JSON: {e}\nResponse: {response.content[:500]}"
+            ) from e
+        if not isinstance(result, dict) or "skill_md" not in result or "skill_py" not in result:
+            raise ValueError(f"LLM response missing required keys: {list(result.keys())}")
         manifest = _parse_manifest(result["skill_md"])
         return {
             "name": manifest.get("name", "generated-skill"),
@@ -75,10 +91,10 @@ class SkillGenerator:
 
     @staticmethod
     def _get_default_llm() -> Any:
-        """Get the AutoBot LLM interface singleton."""
-        from llm_interface_pkg.interface import get_llm_interface
+        """Get the AutoBot LLM service singleton."""
+        from services.llm_service import get_llm_service
 
-        return get_llm_interface()
+        return get_llm_service()
 
 
 def _parse_manifest(skill_md: str) -> Dict[str, Any]:

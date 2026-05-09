@@ -18,47 +18,33 @@ Endpoints:
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.access_control_metrics import AccessControlMetrics, get_metrics_service
 from services.audit_logger import audit_log
-from services.feature_flags import EnforcementMode, FeatureFlags, get_feature_flags
+from services.feature_flags import FeatureFlags, get_feature_flags
+
+from .schemas_code import (
+    AccessControlCleanupResponse,
+    AccessControlEndpointMetricsResponse,
+    AccessControlMetricsResponse,
+    AccessControlUserMetricsResponse,
+)
+from .schemas_system import (
+    EnforcementModeUpdate,
+    FeatureFlagEndpointRemoveResponse,
+    FeatureFlagEndpointSetResponse,
+    FeatureFlagEnforcementModeResponse,
+    FeatureFlagStatusResponse,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["admin", "feature-flags"])
-
-
-# Request/Response Models
-class EnforcementModeUpdate(BaseModel):
-    """Update enforcement mode request"""
-
-    mode: EnforcementMode = Field(..., description="New enforcement mode")
-
-
-class FeatureFlagInfo(BaseModel):
-    """Feature flag information"""
-
-    name: str
-    current_mode: str
-    description: str
-    available_modes: List[str]
-
-
-class ViolationStatistics(BaseModel):
-    """Access control violation statistics"""
-
-    total_violations: int
-    period_days: int
-    by_endpoint: Dict[str, int]
-    by_user: Dict[str, int]
-    by_day: Dict[str, int]
-    current_mode: str
 
 
 # Dependency for admin authentication
@@ -95,12 +81,12 @@ async def require_admin(
     return current_user
 
 
+@router.get("/feature-flags/status", response_model=FeatureFlagStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_feature_flags_status",
     error_code_prefix="FEATURE_FLAGS",
 )
-@router.get("/feature-flags/status")
 async def get_feature_flags_status(
     admin: Dict = Depends(require_admin),
     flags: FeatureFlags = Depends(get_feature_flags),
@@ -120,12 +106,12 @@ async def get_feature_flags_status(
         raise HTTPException(status_code=500, detail="Failed to get status")
 
 
+@router.put("/feature-flags/enforcement-mode", response_model=FeatureFlagEnforcementModeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_enforcement_mode",
     error_code_prefix="FEATURE_FLAGS",
 )
-@router.put("/feature-flags/enforcement-mode")
 async def update_enforcement_mode(
     update: EnforcementModeUpdate,
     admin: Dict = Depends(require_admin),
@@ -188,12 +174,12 @@ async def update_enforcement_mode(
         raise HTTPException(status_code=500, detail="Failed to update mode")
 
 
+@router.put("/feature-flags/endpoint/{endpoint:path}", response_model=FeatureFlagEndpointSetResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="set_endpoint_enforcement",
     error_code_prefix="FEATURE_FLAGS",
 )
-@router.put("/feature-flags/endpoint/{endpoint:path}")
 async def set_endpoint_enforcement(
     endpoint: str,
     update: EnforcementModeUpdate,
@@ -242,12 +228,12 @@ async def set_endpoint_enforcement(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.delete("/feature-flags/endpoint/{endpoint:path}", response_model=FeatureFlagEndpointRemoveResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="remove_endpoint_enforcement",
     error_code_prefix="FEATURE_FLAGS",
 )
-@router.delete("/feature-flags/endpoint/{endpoint:path}")
 async def remove_endpoint_enforcement(
     endpoint: str,
     admin: Dict = Depends(require_admin),
@@ -285,12 +271,12 @@ async def remove_endpoint_enforcement(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/access-control/metrics", response_model=AccessControlMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_access_control_metrics",
     error_code_prefix="FEATURE_FLAGS",
 )
-@router.get("/access-control/metrics")
 async def get_access_control_metrics(
     days: int = Query(7, ge=1, le=30, description="Number of days to include"),
     include_details: bool = Query(
@@ -331,12 +317,12 @@ async def get_access_control_metrics(
         raise HTTPException(status_code=500, detail="Failed to get metrics")
 
 
+@router.get("/access-control/endpoint/{endpoint:path}", response_model=AccessControlEndpointMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_endpoint_metrics",
     error_code_prefix="FEATURE_FLAGS",
 )
-@router.get("/access-control/endpoint/{endpoint:path}")
 async def get_endpoint_metrics(
     endpoint: str,
     days: int = Query(7, ge=1, le=30),
@@ -363,12 +349,12 @@ async def get_endpoint_metrics(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/access-control/user/{username}", response_model=AccessControlUserMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_user_metrics",
     error_code_prefix="FEATURE_FLAGS",
 )
-@router.get("/access-control/user/{username}")
 async def get_user_metrics(
     username: str,
     days: int = Query(7, ge=1, le=30),
@@ -395,12 +381,12 @@ async def get_user_metrics(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/access-control/cleanup", response_model=AccessControlCleanupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_old_metrics",
     error_code_prefix="FEATURE_FLAGS",
 )
-@router.post("/access-control/cleanup")
 async def cleanup_old_metrics(
     admin: Dict = Depends(require_admin),
     metrics: AccessControlMetrics = Depends(get_metrics_service),

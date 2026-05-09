@@ -11,6 +11,8 @@
 import { ref } from 'vue';
 import { getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
+import { useLoadingState } from '@/composables/useLoadingState';
+import apiClient from '@/utils/ApiClient';
 
 const logger = createLogger('NotificationConfig');
 
@@ -51,64 +53,44 @@ function emptyConfig(): NotificationConfigData {
   };
 }
 
-function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem('token') || localStorage.getItem('access_token');
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
 
 export function useNotificationConfig() {
   const config = ref<NotificationConfigData>(emptyConfig());
-  const loading = ref(false);
-  const saving = ref(false);
+  const { isLoading: loading, wrap } = useLoadingState();
+  const { isLoading: saving, wrap: wrapSaving } = useLoadingState();
   const error = ref<string | null>(null);
 
   async function fetchConfig(workflowId: string): Promise<void> {
-    loading.value = true;
     error.value = null;
-    try {
-      const url = `${getApiBase()}/workflow-automation/notification_config/${workflowId}`;
-      const resp = await fetch(url, { headers: getAuthHeaders() });
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
+    await wrap(async () => {
+      try {
+        const url = `${getApiBase()}/workflow-automation/notification_config/${workflowId}`;
+        const data = await apiClient.get<{ notification_config?: NotificationConfigData }>(url);
+        config.value = data.notification_config ?? emptyConfig();
+        logger.info('Fetched notification config for workflow', workflowId);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        error.value = msg;
+        logger.error('Failed to fetch notification config', msg);
       }
-      const data = await resp.json();
-      config.value = data.notification_config ?? emptyConfig();
-      logger.info('Fetched notification config for workflow', workflowId);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      error.value = msg;
-      logger.error('Failed to fetch notification config', msg);
-    } finally {
-      loading.value = false;
-    }
+    });
   }
 
   async function saveConfig(workflowId: string): Promise<boolean> {
-    saving.value = true;
     error.value = null;
-    try {
-      const url = `${getApiBase()}/workflow-automation/notification_config/${workflowId}`;
-      const resp = await fetch(url, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(config.value),
-      });
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
+    return wrapSaving(async () => {
+      try {
+        const url = `${getApiBase()}/workflow-automation/notification_config/${workflowId}`;
+        await apiClient.put(url, config.value);
+        logger.info('Saved notification config for workflow', workflowId);
+        return true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        error.value = msg;
+        logger.error('Failed to save notification config', msg);
+        return false;
       }
-      logger.info('Saved notification config for workflow', workflowId);
-      return true;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      error.value = msg;
-      logger.error('Failed to save notification config', msg);
-      return false;
-    } finally {
-      saving.value = false;
-    }
+    });
   }
 
   return { config, loading, saving, error, fetchConfig, saveConfig };

@@ -511,11 +511,12 @@
 
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import apiClient from '@/utils/ApiClient'
-import { getConfig, getApiBase } from '@/config/ssot-config'
+import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { useLoadingState } from '@/composables/useLoadingState'
+import { useSystemArchitectureData } from '@/composables/visualizations/useSystemArchitectureData'
 
 const { t } = useI18n()
 
@@ -597,7 +598,8 @@ const props = withDefaults(defineProps<Props>(), {
 // State
 // ============================================================================
 
-const isLoading = ref(false)
+const { isLoading, wrap } = useLoadingState()
+const { fetchArchitectureHealth } = useSystemArchitectureData()
 const allComponents = ref<Component[]>([])
 const connections = ref<Connection[]>([])
 const componentGroups = ref<ComponentGroup[]>([])
@@ -700,22 +702,10 @@ const visibleConnections = computed(() => {
 // ============================================================================
 
 async function refreshArchitecture() {
-  isLoading.value = true
-
-  try {
-    // Issue #552: Fixed path - backend uses /api/monitoring/services/health
-    const healthData = await apiClient.get<Record<string, any>>(`${getApiBase()}/monitoring/services/health`)
-
-    // Generate architecture based on known infrastructure
-    generateArchitecture(healthData?.data?.services || healthData?.services || {})
-
-  } catch (error) {
-    logger.error('Failed to fetch architecture data:', error)
-    // Generate default architecture on error
-    generateArchitecture({})
-  } finally {
-    isLoading.value = false
-  }
+  await wrap(async () => {
+    const serviceHealth = await fetchArchitectureHealth()
+    generateArchitecture(serviceHealth)
+  })
 }
 
 function generateArchitecture(serviceHealth: Record<string, unknown>) {

@@ -28,10 +28,26 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiofiles
-from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, Query, Request
 
 from auth_middleware import check_admin_permission
+from api.schemas_analytics import (
+    AnalyticsArchitectureConsistencyResponse,
+    AnalyticsArchitectureDiagramResponse,
+    AnalyticsArchitectureHealthResponse,
+    AnalyticsArchitectureLayersResponse,
+    AnalyticsArchitecturePatternsResponse,
+    AnalyticsArchitectureQuickScanResponse,
+    ArchitectureAnalysisRequest,
+    ArchitectureLayer,
+    ArchitectureReport,
+    ConsistencyLevel,
+    PatternConsistency,
+    PatternMatch,
+    PatternType,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.status_enums import Severity
 
 logger = logging.getLogger(__name__)
 
@@ -46,75 +62,13 @@ _FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
 # =============================================================================
 
 
-class PatternType(str, Enum):
-    """Types of architectural patterns."""
-
-    # Creational Patterns
-    FACTORY = "factory"
-    ABSTRACT_FACTORY = "abstract_factory"
-    SINGLETON = "singleton"
-    BUILDER = "builder"
-    PROTOTYPE = "prototype"
-
-    # Structural Patterns
-    ADAPTER = "adapter"
-    BRIDGE = "bridge"
-    COMPOSITE = "composite"
-    DECORATOR = "decorator"
-    FACADE = "facade"
-    PROXY = "proxy"
-
-    # Behavioral Patterns
-    OBSERVER = "observer"
-    STRATEGY = "strategy"
-    COMMAND = "command"
-    STATE = "state"
-    TEMPLATE_METHOD = "template_method"
-    CHAIN_OF_RESPONSIBILITY = "chain_of_responsibility"
-
-    # Architectural Patterns
-    MVC = "mvc"
-    MVP = "mvp"
-    MVVM = "mvvm"
-    REPOSITORY = "repository"
-    SERVICE_LAYER = "service_layer"
-    DEPENDENCY_INJECTION = "dependency_injection"
-
-    # AutoBot-Specific
-    AUTOBOT_ROUTER = "autobot_router"
-    AUTOBOT_SERVICE = "autobot_service"
-    AUTOBOT_MANAGER = "autobot_manager"
-    AUTOBOT_HANDLER = "autobot_handler"
-    REDIS_CACHING = "redis_caching"
-    MCP_TOOL = "mcp_tool"
-
-
-# Module-level constants for O(1) lookups (Issue #326)
+# Module-level constants for O(1) lookups
 NAMING_CONSISTENCY_PATTERN_TYPES = {
     PatternType.REPOSITORY,
     PatternType.SERVICE_LAYER,
     PatternType.FACTORY,
 }
 CLASS_SUFFIX_INDICATORS = {"Repository", "Repo", "Service", "Factory"}
-
-
-class ConsistencyLevel(str, Enum):
-    """Levels of pattern consistency."""
-
-    CONSISTENT = "consistent"
-    MOSTLY_CONSISTENT = "mostly_consistent"
-    INCONSISTENT = "inconsistent"
-    UNKNOWN = "unknown"
-
-
-class Severity(str, Enum):
-    """Severity of pattern violations."""
-
-    INFO = "info"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
 
 
 # Pattern indicators for detection
@@ -220,69 +174,6 @@ PATTERN_INDICATORS = {
 # =============================================================================
 # Data Models
 # =============================================================================
-
-
-class PatternMatch(BaseModel):
-    """A detected pattern match."""
-
-    pattern_type: PatternType
-    file_path: str
-    class_name: Optional[str] = None
-    function_name: Optional[str] = None
-    line_number: int
-    confidence: float = Field(..., ge=0.0, le=1.0)
-    indicators_found: List[str]
-    code_snippet: Optional[str] = None
-
-
-class PatternConsistency(BaseModel):
-    """Pattern consistency analysis."""
-
-    pattern_type: PatternType
-    consistency_level: ConsistencyLevel
-    total_instances: int
-    consistent_instances: int
-    violations: List[Dict[str, Any]]
-    recommendations: List[str]
-
-
-class ArchitectureLayer(BaseModel):
-    """An architectural layer in the system."""
-
-    name: str
-    description: str
-    components: List[str]
-    dependencies: List[str]
-    patterns_used: List[PatternType]
-
-
-class ArchitectureReport(BaseModel):
-    """Complete architecture analysis report."""
-
-    timestamp: datetime
-    total_files_analyzed: int
-    patterns_detected: Dict[str, int]
-    pattern_matches: List[PatternMatch]
-    consistency_analysis: List[PatternConsistency]
-    layers: List[ArchitectureLayer]
-    recommendations: List[str]
-    mermaid_diagram: str
-
-
-class AnalysisRequest(BaseModel):
-    """Request for architecture analysis."""
-
-    paths: List[str] = Field(
-        default_factory=lambda: ["backend/", "src/"],
-        description="Paths to analyze",
-    )
-    patterns_to_detect: Optional[List[PatternType]] = Field(
-        None, description="Specific patterns to look for"
-    )
-    include_autobot_patterns: bool = Field(
-        True, description="Include AutoBot-specific patterns"
-    )
-    generate_diagram: bool = Field(True, description="Generate Mermaid diagram")
 
 
 # =============================================================================
@@ -1250,10 +1141,15 @@ async def get_analyzer() -> ArchitectureAnalyzer:
 # =============================================================================
 
 
-@router.post("/analyze", summary="Analyze codebase architecture")
+@router.post("/analyze", response_model=ArchitectureReport, summary="Analyze codebase architecture")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_architecture",
+    error_code_prefix="ANALYTICS_ARCHITECTURE",
+)
 async def analyze_architecture(
     admin_check: bool = Depends(check_admin_permission),
-    request: AnalysisRequest = None,
+    request: ArchitectureAnalysisRequest = None,
 ) -> ArchitectureReport:
     """
     Perform comprehensive architecture analysis.
@@ -1270,7 +1166,12 @@ async def analyze_architecture(
     )
 
 
-@router.get("/patterns", summary="List available pattern types")
+@router.get("/patterns", response_model=AnalyticsArchitecturePatternsResponse, summary="List available pattern types")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_pattern_types",
+    error_code_prefix="ANALYTICS_ARCHITECTURE",
+)
 async def list_pattern_types(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -1293,7 +1194,12 @@ async def list_pattern_types(
     return {"patterns": patterns, "total": len(patterns)}
 
 
-@router.get("/quick-scan", summary="Quick architecture scan")
+@router.get("/quick-scan", response_model=AnalyticsArchitectureQuickScanResponse, summary="Quick architecture scan")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="quick_scan",
+    error_code_prefix="ANALYTICS_ARCHITECTURE",
+)
 async def quick_scan(
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query("backend/api/", description="Path to scan"),
@@ -1326,7 +1232,12 @@ async def quick_scan(
     }
 
 
-@router.get("/layers", summary="Get architecture layers")
+@router.get("/layers", response_model=AnalyticsArchitectureLayersResponse, summary="Get architecture layers")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_layers",
+    error_code_prefix="ANALYTICS_ARCHITECTURE",
+)
 async def get_layers(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -1350,7 +1261,12 @@ async def get_layers(
     }
 
 
-@router.get("/diagram", summary="Generate architecture diagram")
+@router.get("/diagram", response_model=AnalyticsArchitectureDiagramResponse, summary="Generate architecture diagram")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_diagram",
+    error_code_prefix="ANALYTICS_ARCHITECTURE",
+)
 async def get_diagram(
     admin_check: bool = Depends(check_admin_permission),
     format: str = Query("mermaid", description="Diagram format"),
@@ -1375,7 +1291,12 @@ async def get_diagram(
     }
 
 
-@router.get("/consistency", summary="Check pattern consistency")
+@router.get("/consistency", response_model=AnalyticsArchitectureConsistencyResponse, summary="Check pattern consistency")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_consistency",
+    error_code_prefix="ANALYTICS_ARCHITECTURE",
+)
 async def check_consistency(
     admin_check: bool = Depends(check_admin_permission),
     pattern: Optional[PatternType] = Query(None, description="Specific pattern"),
@@ -1404,7 +1325,14 @@ async def check_consistency(
     }
 
 
-@router.get("/health", summary="Health check")
+
+
+@router.get("/health", response_model=AnalyticsArchitectureHealthResponse, summary="Health check")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="ANALYTICS_ARCHITECTURE",
+)
 async def health_check(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:

@@ -64,13 +64,9 @@ class TaskMetricsRecorder(BaseMetricsRecorder):
         duration: Optional[float] = None,
     ) -> None:
         """Record a task execution."""
-        self.tasks_executed_total.labels(
-            task_type=task_type, agent_type=agent_type, status=status
-        ).inc()
+        self.tasks_executed_total.labels(task_type=task_type, agent_type=agent_type, status=status).inc()
         if duration is not None:
-            self.task_duration.labels(
-                task_type=task_type, agent_type=agent_type
-            ).observe(duration)
+            self.task_duration.labels(task_type=task_type, agent_type=agent_type).observe(duration)
 
     def update_active_count(self, task_type: str, agent_type: str, count: int) -> None:
         """Update active tasks count."""

@@ -11,6 +11,7 @@
  */
 
 import { ref, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, type Ref } from 'vue'
+import { useLoadingState } from '@/composables/useLoadingState'
 import { NetworkConstants } from '@/constants/network'
 import redisServiceAPI, {
   type ServiceOperationResult,
@@ -94,7 +95,7 @@ export function useServiceManagement(
   })
 
   const healthStatus = ref<ServiceHealth | null>(null)
-  const loading = ref(false)
+  const { isLoading: loading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
 
   // WebSocket subscription teardown function
@@ -103,119 +104,111 @@ export function useServiceManagement(
   // ---- Actions ----
 
   const refreshStatus = async (): Promise<void> => {
-    try {
-      loading.value = true
-      error.value = null
+    error.value = null
+    await wrap(async () => {
+      try {
+        const [statusData, healthData] = await Promise.all([
+          redisServiceAPI.getStatus(),
+          redisServiceAPI.getHealth(),
+        ])
 
-      const [statusData, healthData] = await Promise.all([
-        redisServiceAPI.getStatus(),
-        redisServiceAPI.getHealth(),
-      ])
+        serviceStatus.value = statusData as ExtendedServiceStatus
+        healthStatus.value = healthData
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        logger.error('Failed to refresh status:', err)
+        error.value = msg || 'Failed to refresh service status'
 
-      serviceStatus.value = statusData as ExtendedServiceStatus
-      healthStatus.value = healthData
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      logger.error('Failed to refresh status:', err)
-      error.value = msg || 'Failed to refresh service status'
-
-      showSubtleErrorNotification(
-        'Service Status Error',
-        'Failed to refresh Redis service status',
-        'warning',
-      )
-    } finally {
-      loading.value = false
-    }
+        showSubtleErrorNotification(
+          'Service Status Error',
+          'Failed to refresh Redis service status',
+          'warning',
+        )
+      }
+    })
   }
 
   const startService = async (): Promise<ServiceOperationResult> => {
-    try {
-      loading.value = true
-      error.value = null
+    error.value = null
+    return wrap(async () => {
+      try {
+        const result = await redisServiceAPI.startService()
 
-      const result = await redisServiceAPI.startService()
+        if (result.success) {
+          await refreshStatus()
+          return result
+        }
+        throw new Error(result.message || 'Failed to start service')
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        logger.error('Start service failed:', err)
+        error.value = msg || 'Failed to start service'
 
-      if (result.success) {
-        await refreshStatus()
-        return result
+        showSubtleErrorNotification(
+          'Service Start Failed',
+          msg || 'Failed to start Redis service',
+          'error',
+        )
+
+        throw err
       }
-      throw new Error(result.message || 'Failed to start service')
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      logger.error('Start service failed:', err)
-      error.value = msg || 'Failed to start service'
-
-      showSubtleErrorNotification(
-        'Service Start Failed',
-        msg || 'Failed to start Redis service',
-        'error',
-      )
-
-      throw err
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   const stopService = async (
     confirmation: boolean = true,
   ): Promise<ServiceOperationResult> => {
-    try {
-      loading.value = true
-      error.value = null
+    error.value = null
+    return wrap(async () => {
+      try {
+        const result = await redisServiceAPI.stopService(confirmation)
 
-      const result = await redisServiceAPI.stopService(confirmation)
+        if (result.success) {
+          await refreshStatus()
+          return result
+        }
+        throw new Error(result.message || 'Failed to stop service')
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        logger.error('Stop service failed:', err)
+        error.value = msg || 'Failed to stop service'
 
-      if (result.success) {
-        await refreshStatus()
-        return result
+        showSubtleErrorNotification(
+          'Service Stop Failed',
+          msg || 'Failed to stop Redis service',
+          'error',
+        )
+
+        throw err
       }
-      throw new Error(result.message || 'Failed to stop service')
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      logger.error('Stop service failed:', err)
-      error.value = msg || 'Failed to stop service'
-
-      showSubtleErrorNotification(
-        'Service Stop Failed',
-        msg || 'Failed to stop Redis service',
-        'error',
-      )
-
-      throw err
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   const restartService = async (): Promise<ServiceOperationResult> => {
-    try {
-      loading.value = true
-      error.value = null
+    error.value = null
+    return wrap(async () => {
+      try {
+        const result = await redisServiceAPI.restartService()
 
-      const result = await redisServiceAPI.restartService()
+        if (result.success) {
+          await refreshStatus()
+          return result
+        }
+        throw new Error(result.message || 'Failed to restart service')
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        logger.error('Restart service failed:', err)
+        error.value = msg || 'Failed to restart service'
 
-      if (result.success) {
-        await refreshStatus()
-        return result
+        showSubtleErrorNotification(
+          'Service Restart Failed',
+          msg || 'Failed to restart Redis service',
+          'error',
+        )
+
+        throw err
       }
-      throw new Error(result.message || 'Failed to restart service')
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      logger.error('Restart service failed:', err)
-      error.value = msg || 'Failed to restart service'
-
-      showSubtleErrorNotification(
-        'Service Restart Failed',
-        msg || 'Failed to restart Redis service',
-        'error',
-      )
-
-      throw err
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   // ---- WebSocket ----

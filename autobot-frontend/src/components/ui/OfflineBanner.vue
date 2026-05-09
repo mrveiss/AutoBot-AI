@@ -31,10 +31,9 @@
           />
         </svg>
         <span>
-          Offline mode — local Ollama inference and knowledge base are available.
-          Web research and cloud LLMs are disabled.
+          {{ t('ui.offlineBanner.backendLost') }}
           <span v-if="pendingCount > 0">
-            {{ pendingCount }} action{{ pendingCount === 1 ? '' : 's' }} queued for retry.
+            {{ t('ui.offlineBanner.queuedForRetry', { count: pendingCount }, pendingCount) }}
           </span>
         </span>
       </div>
@@ -43,7 +42,7 @@
         @click="retryNow"
         :disabled="isChecking"
       >
-        {{ isChecking ? 'Checking…' : 'Retry' }}
+        {{ isChecking ? t('ui.offlineBanner.checking') : t('ui.offlineBanner.retry') }}
       </button>
     </div>
   </Transition>
@@ -51,9 +50,11 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useActionQueue } from '@/composables/useActionQueue'
 
+const { t } = useI18n()
 const { isOnline, isChecking } = useNetworkStatus()
 const { queue } = useActionQueue()
 

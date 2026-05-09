@@ -4,7 +4,7 @@
       <div class="not-found-inner">
         <!-- 404 Icon -->
         <div class="error-icon">
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" size="xl" />
         </div>
 
         <!-- Error Message -->
@@ -16,11 +16,11 @@
         <!-- Navigation Options -->
         <div class="action-buttons">
           <router-link to="/chat" class="btn-action-primary">
-            <i class="fas fa-home"></i>
+            <Icon name="home" />
             <span>{{ $t('views.notFound.goToChat') }}</span>
           </router-link>
           <button @click="$router.go(-1)" class="btn-action-secondary">
-            <i class="fas fa-arrow-left"></i>
+            <Icon name="arrow-left" />
             <span>{{ $t('views.notFound.goBack') }}</span>
           </button>
         </div>
@@ -30,19 +30,19 @@
           <h3 class="quick-links-title">{{ $t('views.notFound.quickLinks') }}</h3>
           <div class="quick-links-grid">
             <router-link to="/chat" class="quick-link-card">
-              <i class="fas fa-comments"></i>
+              <Icon name="comments" size="lg" />
               <span>{{ $t('views.notFound.aiAssistant') }}</span>
             </router-link>
             <router-link to="/knowledge" class="quick-link-card">
-              <i class="fas fa-database"></i>
+              <Icon name="database" size="lg" />
               <span>{{ $t('views.notFound.knowledgeBase') }}</span>
             </router-link>
             <router-link to="/automation" class="quick-link-card">
-              <i class="fas fa-bolt"></i>
+              <Icon name="bolt" size="lg" />
               <span>{{ $t('views.notFound.automation') }}</span>
             </router-link>
             <router-link to="/analytics" class="quick-link-card">
-              <i class="fas fa-chart-line"></i>
+              <Icon name="chart-line" size="lg" />
               <span>{{ $t('views.notFound.analytics') }}</span>
             </router-link>
           </div>
@@ -56,6 +56,7 @@
 // View-level component for 404 error page
 // Issue #753: Design token usage instead of Tailwind utilities
 import { useI18n } from 'vue-i18n'
+import Icon from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
 </script>
@@ -82,11 +83,10 @@ const { t } = useI18n()
 
 .error-icon {
   margin-bottom: var(--spacing-2xl);
-}
-
-.error-icon i {
   font-size: var(--text-6xl);
   color: var(--text-muted);
+  display: flex;
+  justify-content: center;
 }
 
 /* ============================================
@@ -169,17 +169,13 @@ const { t } = useI18n()
   transition: all var(--duration-200) var(--ease-in-out);
   text-decoration: none;
   border: 1px solid var(--border-default);
+  color: var(--color-primary);
 }
 
 .quick-link-card:hover {
   box-shadow: var(--shadow-md);
   transform: translateY(-4px);
   border-color: var(--color-primary);
-}
-
-.quick-link-card i {
-  font-size: var(--text-2xl);
-  color: var(--color-primary);
 }
 
 .quick-link-card span {
@@ -193,10 +189,6 @@ const { t } = useI18n()
  * ============================================ */
 
 @media (max-width: 768px) {
-  .error-icon i {
-    font-size: var(--text-5xl);
-  }
-
   .error-title {
     font-size: var(--text-2xl);
   }

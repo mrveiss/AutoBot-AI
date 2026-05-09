@@ -29,6 +29,22 @@
       </div>
     </div>
 
+    <!-- Issue #6671: surface backend status:"no_data" instead of silently rendering zeros -->
+    <EmptyState
+      v-if="noDataState.noData"
+      icon="chart-line"
+      :message="noDataState.message ?? $t('analytics.codeQuality.noScanData')"
+      variant="info"
+    >
+      <template #actions>
+        <button @click="refreshData" class="btn-link" :disabled="loading">
+          {{ $t('analytics.codeQuality.refresh') }}
+        </button>
+      </template>
+    </EmptyState>
+
+    <!-- Issue #6671: hide all data-driven sections when backend reports no_data -->
+    <template v-if="!noDataState.noData">
     <!-- Health Score Hero Card -->
     <div class="health-hero">
       <div class="health-score-circle">
@@ -364,6 +380,8 @@
       </div>
     </div>
 
+    </template>
+
     <!-- Drill-Down Modal -->
     <div v-if="drillDownCategory" class="modal-overlay" @click.self="drillDownCategory = null">
       <div class="modal-content drill-down-modal">
@@ -422,11 +440,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
 import { useRoute } from 'vue-router';
-import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
-import { getApiBase } from '@/config/ssot-config';
 import { getCssVar } from '@/composables/useCssVars';
 import { useWebSocket } from '@/composables/useWebSocket';
+import { useCodeQualityData } from '@/composables/analytics/useCodeQualityData';
+import EmptyState from '@/components/ui/EmptyState.vue';
 
 const logger = createLogger('CodeQualityDashboard');
 
@@ -441,6 +459,18 @@ function withSourceId(url: string): string {
   const sep = url.includes('?') ? '&' : '?';
   return `${url}${sep}source_id=${encodeURIComponent(id)}`;
 }
+
+const {
+  fetchHealthScore,
+  fetchMetrics,
+  fetchPatterns,
+  fetchComplexity,
+  fetchTrends,
+  fetchSnapshot,
+  fetchDrillDown,
+  fetchExport,
+  noDataState,
+} = useCodeQualityData(withSourceId);
 
 // Helper to get CSS variable value for JavaScript usage (SVG, charts, etc.)
 
@@ -725,156 +755,53 @@ async function refreshData(): Promise<void> {
 }
 
 async function loadHealthScore(): Promise<void> {
-  try {
-    // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/health-score`));
-    if (response.ok) {
-      const data = await response.json();
-      // Validate structure and merge with defaults
-      healthScore.value = {
-        overall: data.overall ?? 0,
-        grade: data.grade || 'C',
-        components: data.components || { code_quality: 0, security: 0, performance: 0 },
-        recommendations: data.recommendations || [],
-      };
-    } else {
-      logger.warn('Failed to load health score: HTTP', response.status);
-    }
-  } catch (error) {
-    logger.error('Failed to load health score:', error);
-    // Keep default empty state
+  const data = await fetchHealthScore();
+  if (data) {
+    healthScore.value = data;
   }
 }
 
 async function loadMetrics(): Promise<void> {
-  try {
-    // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/metrics`));
-    if (response.ok) {
-      const data = await response.json();
-      // Ensure data is always an array
-      metrics.value = Array.isArray(data) ? data : data.metrics || [];
-    } else {
-      logger.warn('Failed to load metrics: HTTP', response.status);
-      metrics.value = [];
-    }
-  } catch (error) {
-    logger.error('Failed to load metrics:', error);
-    metrics.value = [];
-  }
+  metrics.value = await fetchMetrics();
 }
 
 async function loadPatterns(): Promise<void> {
-  try {
-    // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/patterns`));
-    if (response.ok) {
-      const data = await response.json();
-      // Ensure data is always an array
-      patterns.value = Array.isArray(data) ? data : data.patterns || [];
-    } else {
-      logger.warn('Failed to load patterns: HTTP', response.status);
-      patterns.value = [];
-    }
-  } catch (error) {
-    logger.error('Failed to load patterns:', error);
-    patterns.value = [];
-  }
+  patterns.value = await fetchPatterns();
 }
 
 async function loadComplexity(): Promise<void> {
-  try {
-    // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/complexity?top_n=5`));
-    if (response.ok) {
-      const data = await response.json();
-      // Validate structure and merge with defaults
-      complexity.value = {
-        averages: data.averages || { cyclomatic: 0, cognitive: 0 },
-        maximums: data.maximums || { cyclomatic: 0, cognitive: 0 },
-        hotspots: data.hotspots || [],
-      };
-    } else {
-      logger.warn('Failed to load complexity: HTTP', response.status);
-    }
-  } catch (error) {
-    logger.error('Failed to load complexity:', error);
-    // Keep default empty state
+  const data = await fetchComplexity();
+  if (data) {
+    complexity.value = data;
   }
 }
 
 async function loadTrends(): Promise<void> {
-  try {
-    // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/trends?period=${selectedPeriod.value}`));
-    if (response.ok) {
-      const data = await response.json();
-      trendData.value = data.data_points || [];
-    } else {
-      logger.warn('Failed to load trends: HTTP', response.status);
-      trendData.value = [];
-    }
-  } catch (error) {
-    logger.error('Failed to load trends:', error);
-    trendData.value = [];
-  }
+  trendData.value = await fetchTrends(selectedPeriod.value);
 }
 
 async function loadSnapshot(): Promise<void> {
-  try {
-    // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/snapshot`));
-    if (response.ok) {
-      const data = await response.json();
-      codebaseStats.value = data.codebase_stats || { files: 0, lines: 0, issues: 0 };
-    } else {
-      logger.warn('Failed to load snapshot: HTTP', response.status);
-    }
-  } catch (error) {
-    logger.error('Failed to load snapshot:', error);
-    // Keep default empty state
+  const data = await fetchSnapshot();
+  if (data) {
+    codebaseStats.value = data;
   }
 }
 
 async function drillDown(category: string): Promise<void> {
   drillDownCategory.value = category;
-  try {
-    // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/drill-down/${category}`));
-    if (response.ok) {
-      drillDownData.value = await response.json();
-    } else {
-      logger.warn('Failed to load drill-down data: HTTP', response.status);
-      drillDownData.value = { total_files: 0, total_issues: 0, average_score: 0, files: [] };
-    }
-  } catch (error) {
-    logger.error('Failed to load drill-down data:', error);
-    drillDownData.value = { total_files: 0, total_issues: 0, average_score: 0, files: [] };
-  }
+  const data = await fetchDrillDown(category);
+  drillDownData.value = data ?? { total_files: 0, total_issues: 0, average_score: 0, files: [] };
 }
 
 async function exportReport(format: string): Promise<void> {
   exportMenuOpen.value = false;
-  try {
-    // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetchWithAuth(`${getApiBase()}/quality/export?format=${format}`);
-    if (response.ok) {
-      const data = await response.json();
-      if (format === 'json') {
-        downloadFile(JSON.stringify(data, null, 2), `quality-report-${Date.now()}.json`, 'application/json');
-      } else if (format === 'csv') {
-        downloadFile(data.content, `quality-report-${Date.now()}.csv`, 'text/csv');
-      }
+  const data = await fetchExport(format);
+  if (data) {
+    if (format === 'json') {
+      downloadFile(JSON.stringify(data, null, 2), `quality-report-${Date.now()}.json`, 'application/json');
+    } else if (format === 'csv') {
+      downloadFile(data.content as string, `quality-report-${Date.now()}.csv`, 'text/csv');
     }
-  } catch (error) {
-    logger.error('Failed to export report:', error);
   }
 }
 

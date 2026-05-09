@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -36,7 +36,7 @@ jobs:
 
       - name: Determine next version
         id: version
-        uses: orhun/git-cliff-action@v4
+        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5  # v4
         with:
           config: cliff.toml
           args: --bumped-version
@@ -59,7 +59,7 @@ jobs:
       - name: Generate release notes (git-cliff)
         if: steps.check.outputs.release_needed == 'true'
         id: cliff_notes
-        uses: orhun/git-cliff-action@v4
+        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5  # v4
         with:
           config: cliff.toml
           args: --latest --strip header
@@ -79,7 +79,7 @@ jobs:
 
       - name: Update CHANGELOG.md (full history index)
         if: steps.check.outputs.release_needed == 'true'
-        uses: orhun/git-cliff-action@v4
+        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5  # v4
         with:
           config: cliff.toml
           args: --verbose
@@ -101,7 +101,7 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.check.outputs.release_needed == 'true'
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3
         with:
           tag_name: ${{ steps.check.outputs.version }}
           name: ${{ steps.check.outputs.version }}

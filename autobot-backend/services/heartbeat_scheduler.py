@@ -194,7 +194,7 @@ class HeartbeatScheduler:
             await session.commit()
         logger.info("Heartbeat run %s started for agent %s", run_id, agent_id)
         await publish_live_event(
-            f"agent:{agent_id}",
+            f"heartbeat:{agent_id}",
             HEARTBEAT_RUN_STARTED,
             {"run_id": str(run_id), "agent_id": agent_id, "trigger": trigger.value},
         )
@@ -259,7 +259,7 @@ class HeartbeatScheduler:
             )
             await session.commit()
         await publish_live_event(
-            f"agent:{agent_id}",
+            f"heartbeat:{agent_id}",
             HEARTBEAT_RUN_COMPLETED,
             {
                 "run_id": str(run_id),

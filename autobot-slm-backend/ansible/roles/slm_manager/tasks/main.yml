@@ -16,6 +16,18 @@
 # ==========================================================
 # System packages (assume blank host)
 # ==========================================================
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: "SLM | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  tags: ['slm', 'packages']
+
 - name: "SLM | Install prerequisites"
   ansible.builtin.apt:
     name:
@@ -29,17 +41,46 @@
       - software-properties-common
       - build-essential
     state: present
-    update_cache: true
   tags: ['slm', 'packages']
 
 # ==========================================================
 # Ansible PPA (for latest Ansible 2.17+)
 # ==========================================================
+- name: "SLM | Remove stale Ansible PPA source files (#7140)"
+  # On re-install, prior runs can leave both `*.list` (legacy) and
+  # `*.sources` (deb822) describing the same PPA with mismatched
+  # Signed-By values, causing APT to abort with:
+  #   E:Conflicting values set for option Signed-By regarding source
+  # Sweep them before re-adding so apt_repository can write a single
+  # consistent file.
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      rm -f /etc/apt/sources.list.d/ansible-ubuntu-ansible-*.list
+      rm -f /etc/apt/sources.list.d/ansible-ubuntu-ansible-*.sources
+  become: true
+  changed_when: false
+  tags: ['slm', 'packages', 'ansible']
+
 - name: "SLM | Add Ansible PPA repository"
   ansible.builtin.apt_repository:
     repo: ppa:ansible/ansible
     state: present
-    update_cache: true
+    # #6719: don't trigger Ansible-module apt-get update here — the bounded
+    # shell update below tolerates the same Launchpad timeouts that this
+    # PPA add would otherwise abort on.
+    update_cache: false
+  tags: ['slm', 'packages', 'ansible']
+
+- name: "SLM | Refresh apt cache after PPA add (best-effort; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
   tags: ['slm', 'packages', 'ansible']
 
 - name: "SLM | Install Ansible from PPA (2.17+)"
@@ -182,6 +223,29 @@
   when:
     - slm_requirements_stat.stat.exists
     - _venv_py_version.rc != 0 or _venv_py_version.stdout != '3.12'
+  tags: ['slm', 'backend']
+
+# #7052: also detect partially-corrupted venv (correct python version but
+# broken pip — e.g. stale .pth referencing a removed editable-install finder).
+- name: "SLM | Check venv health (pip importable, #7052)"
+  ansible.builtin.command:
+    cmd: "{{ slm_backend_dir }}/venv/bin/python3 -c 'import pip'"
+  register: _slm_venv_health
+  changed_when: false
+  failed_when: false
+  when:
+    - slm_requirements_stat.stat.exists
+    - _venv_py_version.rc == 0
+    - _venv_py_version.stdout == '3.12'
+  tags: ['slm', 'backend']
+
+- name: "SLM | Remove broken venv when health check failed (#7052)"
+  ansible.builtin.file:
+    path: "{{ slm_backend_dir }}/venv"
+    state: absent
+  when:
+    - slm_requirements_stat.stat.exists
+    - (_slm_venv_health.rc | default(0)) != 0
   tags: ['slm', 'backend']
 
 - name: "SLM | Create Python 3.12 virtual environment"

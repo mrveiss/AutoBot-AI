@@ -12,46 +12,38 @@ Includes:
 """
 
 import logging
-from typing import Any, Dict, List, Optional
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from api.schemas_system import (
+    CommandApprovalRequest,
+    CommandApprovalResponse,
+    DomainSecurityStatsResponse,
+    SecurityStatusResponse,
+    ThreatIntelStatusResponse,
+    URLCheckRequest,
+    URLCheckResponse,
+)
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from enhanced_security_layer import EnhancedSecurityLayer
 from security.domain_security import get_domain_security_manager
 from security.threat_intelligence import ThreatLevel, get_threat_intelligence_service
-from type_defs.common import Metadata
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 
 
-class CommandApprovalRequest(BaseModel):
-    command_id: str
-    approved: bool
 
 
-class CommandApprovalResponse(BaseModel):
-    success: bool
-    message: str
-
-
-class SecurityStatusResponse(BaseModel):
-    security_enabled: bool
-    command_security_enabled: bool
-    docker_sandbox_enabled: bool
-    pending_approvals: List[Metadata]
-
-
+@router.get("/status", response_model=SecurityStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_security_status",
     error_code_prefix="SECURITY",
 )
-@router.get("/status", response_model=SecurityStatusResponse)
 async def get_security_status(request: Request):
     """Get current security configuration and status"""
     try:
@@ -92,12 +84,12 @@ async def get_security_status(request: Request):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/approve-command", response_model=CommandApprovalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="approve_command",
     error_code_prefix="SECURITY",
 )
-@router.post("/approve-command", response_model=CommandApprovalResponse)
 async def approve_command(request: Request, approval: CommandApprovalRequest):
     """Approve or deny a pending command execution"""
     try:
@@ -121,12 +113,12 @@ async def approve_command(request: Request, approval: CommandApprovalRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/pending-approvals", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pending_approvals",
     error_code_prefix="SECURITY",
 )
-@router.get("/pending-approvals")
 async def get_pending_approvals(request: Request):
     """Get list of commands waiting for approval"""
     try:
@@ -143,12 +135,12 @@ async def get_pending_approvals(request: Request):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/command-history", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_command_history",
     error_code_prefix="SECURITY",
 )
-@router.get("/command-history")
 async def get_command_history(request: Request, user: str = None, limit: int = 50):
     """Get command execution history from audit log"""
     try:
@@ -192,12 +184,12 @@ async def _read_audit_log_file(log_file: str, limit: int) -> list:
         return []
 
 
+@router.get("/audit-log", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_audit_log",
     error_code_prefix="SECURITY",
 )
-@router.get("/audit-log")
 async def get_audit_log(request: Request, limit: int = 100):
     """Get recent audit log entries"""
     try:
@@ -225,48 +217,12 @@ async def get_audit_log(request: Request, limit: int = 100):
 # ============================================================================
 
 
-class URLCheckRequest(BaseModel):
-    """Request model for URL reputation check."""
-
-    url: str = Field(..., description="URL to check for threats")
-
-
-class URLCheckResponse(BaseModel):
-    """Response model for URL reputation check."""
-
-    success: bool
-    url: str
-    overall_score: float
-    threat_level: str
-    virustotal_score: Optional[float] = None
-    urlvoid_score: Optional[float] = None
-    sources_checked: int
-    cached: bool
-    message: Optional[str] = None
-
-
-class ThreatIntelStatusResponse(BaseModel):
-    """Response model for threat intelligence service status."""
-
-    any_service_configured: bool
-    virustotal: Dict[str, Any]
-    urlvoid: Dict[str, Any]
-    cache_stats: Dict[str, Any]
-
-
-class DomainSecurityStatsResponse(BaseModel):
-    """Response model for domain security statistics."""
-
-    success: bool
-    stats: Dict[str, Any]
-
-
+@router.get("/threat-intel/status", response_model=ThreatIntelStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_threat_intel_status",
     error_code_prefix="SECURITY",
 )
-@router.get("/threat-intel/status", response_model=ThreatIntelStatusResponse)
 async def get_threat_intel_status(request: Request):
     """
     Get threat intelligence service configuration and status.
@@ -289,12 +245,12 @@ async def get_threat_intel_status(request: Request):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/threat-intel/check-url", response_model=URLCheckResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_url_reputation",
     error_code_prefix="SECURITY",
 )
-@router.post("/threat-intel/check-url", response_model=URLCheckResponse)
 async def check_url_reputation(request: Request, url_request: URLCheckRequest):
     """
     Check URL reputation against threat intelligence services.
@@ -335,12 +291,12 @@ async def check_url_reputation(request: Request, url_request: URLCheckRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/domain-security/stats", response_model=DomainSecurityStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_domain_security_stats",
     error_code_prefix="SECURITY",
 )
-@router.get("/domain-security/stats", response_model=DomainSecurityStatsResponse)
 async def get_domain_security_stats(request: Request):
     """
     Get domain security statistics including whitelist/blacklist counts,

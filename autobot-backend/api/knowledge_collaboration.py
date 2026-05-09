@@ -17,13 +17,22 @@ import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
 
+from api.schemas_knowledge import (
+    KnowledgeAccessInfoResponse,
+    KnowledgePermissionsUpdateResponse,
+    KnowledgeScopedFactsResponse,
+    KnowledgeShareResponse,
+    KnowledgeUnshareResponse,
+    ShareKnowledgeRequest,
+    UpdatePermissionsRequest,
+)
 from auth_middleware import get_current_user
 from autobot_shared.models.pagination import PaginationParams
 from knowledge.ownership import VisibilityLevel
 from knowledge.search_filters import extract_user_context_from_request
 from knowledge_factory import get_or_create_knowledge_base
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -33,57 +42,6 @@ router = APIRouter(prefix="/knowledge/collaboration", tags=["knowledge-collabora
 # =============================================================================
 # Pydantic Models
 # =============================================================================
-
-
-class KnowledgeScopeFilter(BaseModel):
-    """Filter for knowledge by scope."""
-
-    scope: Optional[VisibilityLevel] = Field(
-        default=None, description="Visibility level to filter by"
-    )
-    organization_id: Optional[str] = Field(
-        default=None, description="Organization ID filter"
-    )
-    group_ids: Optional[List[str]] = Field(
-        default=None, description="Group IDs to filter by"
-    )
-
-
-class ShareKnowledgeRequest(BaseModel):
-    """Request to share knowledge with users or groups."""
-
-    user_ids: Optional[List[str]] = Field(
-        default=None, description="User IDs to share with"
-    )
-    group_ids: Optional[List[str]] = Field(
-        default=None, description="Group IDs to share with"
-    )
-
-
-class UpdatePermissionsRequest(BaseModel):
-    """Request to update knowledge permissions."""
-
-    visibility: VisibilityLevel = Field(description="New visibility level")
-    organization_id: Optional[str] = Field(
-        default=None, description="Organization ID for org-level knowledge"
-    )
-    group_ids: Optional[List[str]] = Field(
-        default=None, description="Group IDs for group-level knowledge"
-    )
-
-
-class KnowledgeAccessResponse(BaseModel):
-    """Response with knowledge access details."""
-
-    fact_id: str
-    owner_id: str
-    visibility: VisibilityLevel
-    organization_id: Optional[str] = None
-    group_ids: List[str] = []
-    shared_with: List[str] = []
-    can_edit: bool
-    can_share: bool
-    can_delete: bool
 
 
 # =============================================================================
@@ -275,7 +233,12 @@ async def _unshare_fact_by_entity(
 # =============================================================================
 
 
-@router.get("/facts")
+@router.get("/facts", response_model=KnowledgeScopedFactsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_knowledge_by_scope",
+    error_code_prefix="KNOWLEDGE_COLLABORATION",
+)
 async def get_knowledge_by_scope(
     request: Request,
     current_user: Dict = Depends(get_current_user),
@@ -332,7 +295,12 @@ async def get_knowledge_by_scope(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/facts/organization/{organization_id}")
+@router.get("/facts/organization/{organization_id}", response_model=KnowledgeScopedFactsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_organization_knowledge",
+    error_code_prefix="KNOWLEDGE_COLLABORATION",
+)
 async def get_organization_knowledge(
     organization_id: str,
     request: Request,
@@ -381,7 +349,12 @@ async def get_organization_knowledge(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/facts/group/{group_id}")
+@router.get("/facts/group/{group_id}", response_model=KnowledgeScopedFactsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_group_knowledge",
+    error_code_prefix="KNOWLEDGE_COLLABORATION",
+)
 async def get_group_knowledge(
     group_id: str,
     request: Request,
@@ -432,7 +405,12 @@ async def get_group_knowledge(
 # =============================================================================
 
 
-@router.post("/facts/{fact_id}/share")
+@router.post("/facts/{fact_id}/share", response_model=KnowledgeShareResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="share_knowledge",
+    error_code_prefix="KNOWLEDGE_COLLABORATION",
+)
 async def share_knowledge(
     fact_id: str,
     share_request: ShareKnowledgeRequest,
@@ -497,7 +475,12 @@ async def share_knowledge(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.delete("/facts/{fact_id}/share/{entity_id}")
+@router.delete("/facts/{fact_id}/share/{entity_id}", response_model=KnowledgeUnshareResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="unshare_knowledge",
+    error_code_prefix="KNOWLEDGE_COLLABORATION",
+)
 async def unshare_knowledge(
     fact_id: str,
     entity_id: str,
@@ -556,7 +539,12 @@ async def unshare_knowledge(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.put("/facts/{fact_id}/permissions")
+@router.put("/facts/{fact_id}/permissions", response_model=KnowledgePermissionsUpdateResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_knowledge_permissions",
+    error_code_prefix="KNOWLEDGE_COLLABORATION",
+)
 async def update_knowledge_permissions(
     fact_id: str,
     permissions_request: UpdatePermissionsRequest,
@@ -619,7 +607,12 @@ async def update_knowledge_permissions(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/facts/{fact_id}/access")
+@router.get("/facts/{fact_id}/access", response_model=KnowledgeAccessInfoResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_knowledge_access_info",
+    error_code_prefix="KNOWLEDGE_COLLABORATION",
+)
 async def get_knowledge_access_info(
     fact_id: str, request: Request, current_user: Dict = Depends(get_current_user)
 ):

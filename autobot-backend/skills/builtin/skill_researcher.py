@@ -20,9 +20,9 @@ from skills.base_skill import BaseSkill, SkillManifest
 logger = logging.getLogger(__name__)
 
 try:
-    from llm_interface_pkg import LLMInterface
+    from services.llm_service import get_llm_service
 except ImportError:
-    LLMInterface = None  # type: ignore[assignment,misc]
+    get_llm_service = None  # type: ignore[assignment]
 
 
 # Three angles — each represents an independent "source" of knowledge.
@@ -120,8 +120,8 @@ class SkillResearcherSkill(BaseSkill):
         capability = params.get("capability", "").strip()
         if not capability:
             return {"success": False, "error": "capability is required"}
-        if LLMInterface is None:
-            return {"success": False, "error": "LLMInterface not available"}
+        if get_llm_service is None:
+            return {"success": False, "error": "LLMService not available"}
 
         sources = await self._query_sources(capability)
         findings = await self._synthesize(capability, sources)
@@ -134,11 +134,11 @@ class SkillResearcherSkill(BaseSkill):
 
     async def _query_sources(self, capability: str) -> List[Dict[str, str]]:
         """Run each research query; skip silently on LLM failure."""
-        llm = LLMInterface()
+        llm = get_llm_service()
         sources = []
         for label, prompt in _build_queries(capability):
             try:
-                response = await llm.chat_completion([{"role": "user", "content": prompt}], llm_type="task")
+                response = await llm.chat([{"role": "user", "content": prompt}])
                 sources.append({"angle": label, "content": response.content.strip()})
             except Exception as exc:
                 self.logger.warning("Research query '%s' failed: %s", label, exc)
@@ -149,9 +149,9 @@ class SkillResearcherSkill(BaseSkill):
         if not sources:
             return _empty_findings()
         prompt = _build_synthesis_prompt(capability, sources)
-        llm = LLMInterface()
+        llm = get_llm_service()
         try:
-            response = await llm.chat_completion([{"role": "user", "content": prompt}], llm_type="task")
+            response = await llm.chat([{"role": "user", "content": prompt}])
             return _parse_synthesis(response.content)
         except Exception as exc:
             self.logger.warning("Synthesis failed: %s", exc)

@@ -19,10 +19,11 @@
  */
 
 import { ref, computed, watch } from 'vue'
-import appConfig from '@/config/AppConfig.js'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
+import { useLoadingState } from '@/composables/useLoadingState'
 import type {
   WorkflowTemplateSummary,
   WorkflowTemplateDetail,
@@ -98,6 +99,9 @@ export function useWorkflowTemplates() {
     onError: () => { /* logger.error already fired inside endpoint */ },
   })
 
+  // Loading state for POST mutations
+  const { isLoading: mutationLoading, wrap: wrapMutation } = useLoadingState()
+
   // Bridge per-endpoint loading flags into the composable-level `loading` ref
   // so the public API (consumers reading `loading.value`) is preserved.
   // Endpoints that only set state (templates/categories/stats) AND on-demand
@@ -110,6 +114,7 @@ export function useWorkflowTemplates() {
       categoriesEndpoint.loading,
       statsEndpoint.loading,
       ondemandLoading,
+      mutationLoading,
     ],
     (flags: boolean[]) => {
       loading.value = flags.some(Boolean)
@@ -204,42 +209,24 @@ export function useWorkflowTemplates() {
   }
 
   // ---------------------------------------------------------------------------
-  // POST endpoints (out of scope for #5154 — useAnalyticsEndpoint is GET-only).
+  // POST endpoints — migrated to ApiClient (#6029).
   // ---------------------------------------------------------------------------
-
-  async function getBackendUrl(): Promise<string> {
-    return await appConfig.getServiceUrl('backend')
-  }
 
   async function createWorkflowFromTemplate(
     templateId: string,
     variables?: Record<string, string>
   ): Promise<CreateWorkflowResponse | null> {
-    loading.value = true
     error.value = null
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(
-        `${backendUrl}/api/templates/templates/${templateId}/create-workflow`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            template_id: templateId,
-            variables: variables || {},
-            auto_approve: false
-          })
-        }
+    return wrapMutation(async () => {
+      return await apiClient.post<CreateWorkflowResponse>(
+        `${getApiBase()}/templates/templates/${templateId}/create-workflow`,
+        { template_id: templateId, variables: variables || {}, auto_approve: false }
       )
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      return await response.json()
-    } catch (e) {
+    }).catch((e) => {
       error.value = `Failed to create workflow: ${e}`
       logger.error('createWorkflowFromTemplate failed:', e)
       return null
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   async function executeTemplate(
@@ -247,31 +234,17 @@ export function useWorkflowTemplates() {
     variables?: Record<string, string>,
     autoApprove = false
   ): Promise<CreateWorkflowResponse | null> {
-    loading.value = true
     error.value = null
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(
-        `${backendUrl}/api/templates/templates/${templateId}/execute`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            template_id: templateId,
-            variables: variables || {},
-            auto_approve: autoApprove
-          })
-        }
+    return wrapMutation(async () => {
+      return await apiClient.post<CreateWorkflowResponse>(
+        `${getApiBase()}/templates/templates/${templateId}/execute`,
+        { template_id: templateId, variables: variables || {}, auto_approve: autoApprove }
       )
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      return await response.json()
-    } catch (e) {
+    }).catch((e) => {
       error.value = `Failed to execute template: ${e}`
       logger.error('executeTemplate failed:', e)
       return null
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   async function initializeTemplates(): Promise<void> {

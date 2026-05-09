@@ -262,66 +262,17 @@
  * Issue #704: Migrated to design tokens for centralized theming
  */
 import { ref, onMounted, computed } from 'vue'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
-import { getApiBase } from '@/config/ssot-config'
+import {
+  useConversationFlowData,
+  type IntentPattern,
+} from '@/composables/analytics/useConversationFlowData'
 
 const logger = createLogger('ConversationFlowDashboard')
 
-
-// Types
-interface IntentPattern {
-  intent_id: string
-  intent_name: string
-  pattern_regex: string
-  occurrences: number
-  success_rate: number
-  avg_turns_to_resolve: number
-  sample_queries: string[]
-}
-
-interface ConversationFlow {
-  flow_id: string
-  path: string[]
-  frequency: number
-  avg_duration_seconds: number
-  completion_rate: number
-  drop_off_point: string | null
-}
-
-interface FlowBottleneck {
-  bottleneck_id: string
-  location: string
-  description: string
-  impact_score: number
-  affected_conversations: number
-  suggested_improvements: string[]
-}
-
-interface ConversationMetrics {
-  total_conversations: number
-  total_messages: number
-  avg_messages_per_conversation: number
-  avg_conversation_duration_seconds: number
-  user_satisfaction_estimate: number
-  resolution_rate: number
-  escalation_rate: number
-}
-
-interface AnalysisResult {
-  metrics: ConversationMetrics
-  intent_patterns: IntentPattern[]
-  common_flows: ConversationFlow[]
-  bottlenecks: FlowBottleneck[]
-  hourly_distribution: Record<string, number>
-  analysis_period: string
-  conversations_analyzed: number
-}
-
 // State
 const timeRange = ref(24)
-const isLoading = ref(false)
-const analysisResult = ref<AnalysisResult | null>(null)
+const { isLoading, analysisResult, runAnalysis: fetchAnalysis } = useConversationFlowData()
 const selectedIntent = ref<IntentPattern | null>(null)
 
 // Computed
@@ -332,17 +283,7 @@ const maxHourlyCount = computed(() => {
 
 // Methods
 const runAnalysis = async () => {
-  isLoading.value = true
-  try {
-    const response = await fetchWithAuth(`${getApiBase()}/conversation-flow/analyze?hours=${timeRange.value}`)
-    if (response.ok) {
-      analysisResult.value = await response.json()
-    }
-  } catch (error) {
-    logger.error('Failed to analyze conversations:', error)
-  } finally {
-    isLoading.value = false
-  }
+  await fetchAnalysis(timeRange.value)
 }
 
 const formatIntentName = (intentId: string): string => {

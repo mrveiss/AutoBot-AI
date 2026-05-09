@@ -265,7 +265,7 @@ const formatCell = (value: any, column: Column) => {
   position: absolute;
   width: 1px;
   height: 1px;
-  padding: 0;
+  padding: var(--spacing-0);
   margin: var(--spacing-neg-px);
   overflow: hidden;
   clip: rect(0, 0, 0, 0);

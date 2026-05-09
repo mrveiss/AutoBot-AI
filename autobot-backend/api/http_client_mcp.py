@@ -27,14 +27,21 @@ Issue #49 - Additional MCP Bridges (Browser, HTTP, Database, Git)
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
 
+from api.schemas_workflows import (
+    HTTPClientMCPTool,
+    HTTPDeleteRequest,
+    HTTPGetRequest,
+    HTTPHeadRequest,
+    HTTPPatchRequest,
+    HTTPPostRequest,
+    HTTPPutRequest,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
@@ -42,6 +49,8 @@ from autobot_shared.time_utils import now_utc
 from constants.network_constants import NetworkConstants
 from type_defs.common import JSONObject, Metadata
 from utils.template_loader import load_mcp_tools, mcp_tools_exist
+
+from .schemas_code import HTTPClientMCPStatusResponse, HTTPRequestResultResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -308,86 +317,12 @@ async def check_rate_limit() -> bool:
 # Pydantic Models
 
 
-class MCPTool(BaseModel):
-    """Standard MCP tool definition"""
-
-    name: str
-    description: str
-    input_schema: JSONObject
-
-
-class HTTPRequestBase(BaseModel):
-    """Base model for HTTP requests"""
-
-    url: str = Field(..., description="Target URL for the request")
-    headers: Optional[Dict[str, str]] = Field(
-        default=None, description="Optional HTTP headers"
-    )
-    timeout: Optional[int] = Field(
-        default=DEFAULT_TIMEOUT,
-        ge=1,
-        le=MAX_TIMEOUT,
-        description=f"Request timeout in seconds (1-{MAX_TIMEOUT})",
-    )
-
-    @field_validator("url")
-    @classmethod
-    def validate_url_format(cls, v):
-        """Ensure URL is properly formatted"""
-        if not v.startswith(_VALID_URL_SCHEMES):  # Issue #380
-            raise ValueError("URL must start with http:// or https://")
-        return v
-
-
-class HTTPGetRequest(HTTPRequestBase):
-    """GET request model"""
-
-    params: Optional[Dict[str, str]] = Field(
-        default=None, description="Query parameters"
-    )
-
-
-class HTTPPostRequest(HTTPRequestBase):
-    """POST request model"""
-
-    json_body: Optional[JSONObject] = Field(
-        default=None, description="JSON request body"
-    )
-    form_data: Optional[Dict[str, str]] = Field(
-        default=None, description="Form data (mutually exclusive with json_body)"
-    )
-
-
-class HTTPPutRequest(HTTPRequestBase):
-    """PUT request model"""
-
-    json_body: Optional[JSONObject] = Field(
-        default=None, description="JSON request body"
-    )
-
-
-class HTTPPatchRequest(HTTPRequestBase):
-    """PATCH request model"""
-
-    json_body: Optional[JSONObject] = Field(
-        default=None, description="JSON request body for partial update"
-    )
-
-
-class HTTPDeleteRequest(HTTPRequestBase):
-    """DELETE request model"""
-
-
-class HTTPHeadRequest(HTTPRequestBase):
-    """HEAD request model"""
-
-
 # MCP Tool Definitions
 
 
-def _get_http_get_tool() -> MCPTool:
+def _get_http_get_tool() -> HTTPClientMCPTool:
     """Helper for _get_http_read_tools. Build the http_get MCPTool. Ref: #1088."""
-    return MCPTool(
+    return HTTPClientMCPTool(
         name="http_get",
         description=(
             "Perform HTTP GET request to retrieve data from a URL. Supports query parameters and"
@@ -424,9 +359,9 @@ def _get_http_get_tool() -> MCPTool:
     )
 
 
-def _get_http_head_tool() -> MCPTool:
+def _get_http_head_tool() -> HTTPClientMCPTool:
     """Helper for _get_http_read_tools. Build the http_head MCPTool. Ref: #1088."""
-    return MCPTool(
+    return HTTPClientMCPTool(
         name="http_head",
         description=(
             "Perform HTTP HEAD request to retrieve headers only (no body). Useful for"
@@ -451,7 +386,7 @@ def _get_http_head_tool() -> MCPTool:
     )
 
 
-def _get_http_read_tools() -> List[MCPTool]:
+def _get_http_read_tools() -> List[HTTPClientMCPTool]:
     """Get MCP tools for HTTP read operations (GET, HEAD). Ref: #1088.
 
     Issue #281: Extracted from get_http_client_mcp_tools to reduce function length.
@@ -488,9 +423,9 @@ def _build_json_body_property(desc: str = "JSON request body") -> dict:
     return {"type": "object", "description": desc}
 
 
-def _get_http_post_tool() -> MCPTool:
+def _get_http_post_tool() -> HTTPClientMCPTool:
     """Build HTTP POST tool definition. Issue #484: Extracted from _get_http_write_tools."""
-    return MCPTool(
+    return HTTPClientMCPTool(
         name="http_post",
         description=(
             "Perform HTTP POST request to send data to a URL. "
@@ -514,9 +449,9 @@ def _get_http_post_tool() -> MCPTool:
     )
 
 
-def _get_http_put_tool() -> MCPTool:
+def _get_http_put_tool() -> HTTPClientMCPTool:
     """Build HTTP PUT tool definition. Issue #484: Extracted from _get_http_write_tools."""
-    return MCPTool(
+    return HTTPClientMCPTool(
         name="http_put",
         description=(
             "Perform HTTP PUT request to update/replace resource. "
@@ -537,9 +472,9 @@ def _get_http_put_tool() -> MCPTool:
     )
 
 
-def _get_http_patch_tool() -> MCPTool:
+def _get_http_patch_tool() -> HTTPClientMCPTool:
     """Build HTTP PATCH tool definition. Issue #484: Extracted from _get_http_write_tools."""
-    return MCPTool(
+    return HTTPClientMCPTool(
         name="http_patch",
         description=(
             "Perform HTTP PATCH request for partial resource update. "
@@ -560,9 +495,9 @@ def _get_http_patch_tool() -> MCPTool:
     )
 
 
-def _get_http_delete_tool() -> MCPTool:
+def _get_http_delete_tool() -> HTTPClientMCPTool:
     """Build HTTP DELETE tool definition. Issue #484: Extracted from _get_http_write_tools."""
-    return MCPTool(
+    return HTTPClientMCPTool(
         name="http_delete",
         description=(
             "Perform HTTP DELETE request to remove a resource. "
@@ -583,7 +518,7 @@ def _get_http_delete_tool() -> MCPTool:
     )
 
 
-def _get_http_write_tools() -> List[MCPTool]:
+def _get_http_write_tools() -> List[HTTPClientMCPTool]:
     """
     Get MCP tools for HTTP write operations (POST, PUT, PATCH, DELETE).
 
@@ -601,7 +536,7 @@ def _get_http_write_tools() -> List[MCPTool]:
     ]
 
 
-def _load_tools_from_yaml() -> List[MCPTool]:
+def _load_tools_from_yaml() -> List[HTTPClientMCPTool]:
     """
     Load MCP tools from YAML file with placeholder substitution.
 
@@ -616,16 +551,16 @@ def _load_tools_from_yaml() -> List[MCPTool]:
     }
 
     tool_dicts = load_mcp_tools("http_client_tools", config=config)
-    return [MCPTool(**tool) for tool in tool_dicts]
+    return [HTTPClientMCPTool(**tool) for tool in tool_dicts]
 
 
+@router.get("/mcp/tools", response_model=List[HTTPClientMCPTool])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_http_client_mcp_tools",
-    error_code_prefix="HTTP_MCP",
+    error_code_prefix="HTTP_CLIENT_MCP",
 )
-@router.get("/mcp/tools")
-async def get_http_client_mcp_tools() -> List[MCPTool]:
+async def get_http_client_mcp_tools() -> List[HTTPClientMCPTool]:
     """
     Return all available HTTP Client MCP tools
 
@@ -712,12 +647,12 @@ async def execute_http_request(
         raise HTTPException(status_code=502, detail="HTTP request failed")
 
 
+@router.post("/mcp/get", response_model=HTTPRequestResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="http_get_mcp",
     error_code_prefix="HTTP_CLIENT_MCP",
 )
-@router.post("/mcp/get")
 async def http_get_mcp(request: HTTPGetRequest) -> JSONObject:
     """
     Execute HTTP GET request
@@ -755,12 +690,12 @@ async def http_get_mcp(request: HTTPGetRequest) -> JSONObject:
     return result
 
 
+@router.post("/mcp/post", response_model=HTTPRequestResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="http_post_mcp",
     error_code_prefix="HTTP_CLIENT_MCP",
 )
-@router.post("/mcp/post")
 async def http_post_mcp(request: HTTPPostRequest) -> JSONObject:
     """
     Execute HTTP POST request
@@ -815,12 +750,12 @@ async def http_post_mcp(request: HTTPPostRequest) -> JSONObject:
     return result
 
 
+@router.post("/mcp/put", response_model=HTTPRequestResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="http_put_mcp",
     error_code_prefix="HTTP_CLIENT_MCP",
 )
-@router.post("/mcp/put")
 async def http_put_mcp(request: HTTPPutRequest) -> JSONObject:
     """
     Execute HTTP PUT request
@@ -867,12 +802,12 @@ async def http_put_mcp(request: HTTPPutRequest) -> JSONObject:
     return result
 
 
+@router.post("/mcp/patch", response_model=HTTPRequestResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="http_patch_mcp",
     error_code_prefix="HTTP_CLIENT_MCP",
 )
-@router.post("/mcp/patch")
 async def http_patch_mcp(request: HTTPPatchRequest) -> JSONObject:
     """
     Execute HTTP PATCH request
@@ -919,12 +854,12 @@ async def http_patch_mcp(request: HTTPPatchRequest) -> JSONObject:
     return result
 
 
+@router.post("/mcp/delete", response_model=HTTPRequestResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="http_delete_mcp",
     error_code_prefix="HTTP_CLIENT_MCP",
 )
-@router.post("/mcp/delete")
 async def http_delete_mcp(request: HTTPDeleteRequest) -> JSONObject:
     """
     Execute HTTP DELETE request
@@ -961,12 +896,12 @@ async def http_delete_mcp(request: HTTPDeleteRequest) -> JSONObject:
     return result
 
 
+@router.post("/mcp/head", response_model=HTTPRequestResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="http_head_mcp",
     error_code_prefix="HTTP_CLIENT_MCP",
 )
-@router.post("/mcp/head")
 async def http_head_mcp(request: HTTPHeadRequest) -> JSONObject:
     """
     Execute HTTP HEAD request
@@ -1002,12 +937,12 @@ async def http_head_mcp(request: HTTPHeadRequest) -> JSONObject:
     return result
 
 
+@router.get("/mcp/status", response_model=HTTPClientMCPStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_http_client_mcp_status",
-    error_code_prefix="HTTP_MCP",
+    error_code_prefix="HTTP_CLIENT_MCP",
 )
-@router.get("/mcp/status")
 async def get_http_client_mcp_status() -> Metadata:
     """
     Get HTTP Client MCP service status

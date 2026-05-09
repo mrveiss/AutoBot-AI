@@ -8,12 +8,11 @@ Advanced multi-agent orchestration endpoints with improved coordination and stra
 """
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
+from api.schemas_workflows import AgentRecommendationRequest, WorkflowRequest
 from auth_middleware import check_admin_permission, get_current_user
 
 try:
@@ -24,30 +23,19 @@ try:
     # get_performance_report, get_agent_recommendations, etc.).
     orchestrator = get_orchestrator_sync()
     _ORCHESTRATOR_AVAILABLE = True
-except ImportError:
+except ImportError as _e:
+    from autobot_shared.missing_dep import MissingDep as _MissingDep
+
     _ORCHESTRATOR_AVAILABLE = False
-    create_and_execute_workflow = None
-    orchestrator = None
-    logging.getLogger(__name__).warning(
-        "orchestrator module not available"
-    )
+    create_and_execute_workflow = _MissingDep("create_and_execute_workflow", _e)  # type: ignore[assignment]
+    orchestrator = _MissingDep("orchestrator", _e)  # type: ignore[assignment]
+    logging.getLogger(__name__).warning("orchestrator module not available")
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.schemas_common import DataResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-class WorkflowRequest(BaseModel):
-    goal: str
-    strategy: Optional[str] = None  # Let system decide if not specified
-    context: Optional[dict] = None
-    max_parallel_tasks: Optional[int] = 5
-
-
-class AgentRecommendationRequest(BaseModel):
-    task_type: str
-    capabilities_needed: list[str]
 
 
 @with_error_handling(
@@ -103,7 +91,12 @@ def _build_single_task_response(result: dict) -> JSONResponse:
     )
 
 
-@router.post("/workflow/execute")
+@router.post("/workflow/execute", response_model=None)  # Returns JSONResponse directly — no Pydantic schema
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_workflow",
+    error_code_prefix="ORCHESTRATION",
+)
 async def execute_workflow(
     request: WorkflowRequest,
     current_user: dict = Depends(get_current_user),
@@ -130,7 +123,7 @@ async def execute_workflow(
 
         # Update max parallel tasks if specified
         if request.max_parallel_tasks:
-            orchestrator.max_parallel_tasks = request.max_parallel_tasks
+            orchestrator.config.max_parallel_tasks = request.max_parallel_tasks
 
         # Create and execute workflow
         result = await create_and_execute_workflow(request.goal, request.context)
@@ -148,12 +141,12 @@ async def execute_workflow(
         raise HTTPException(status_code=500, detail="Workflow execution failed")
 
 
+@router.post("/workflow/plan", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_workflow_plan",
     error_code_prefix="ORCHESTRATION",
 )
-@router.post("/workflow/plan")
 async def create_workflow_plan(
     request: WorkflowRequest,
     current_user: dict = Depends(get_current_user),
@@ -213,12 +206,12 @@ async def create_workflow_plan(
         raise HTTPException(status_code=500, detail="Plan creation failed")
 
 
+@router.get("/agents/performance", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_performance",
     error_code_prefix="ORCHESTRATION",
 )
-@router.get("/agents/performance")
 async def get_agent_performance(
     current_user: dict = Depends(get_current_user),
 ):
@@ -246,12 +239,12 @@ async def get_agent_performance(
         raise HTTPException(status_code=500, detail="Failed to get performance report")
 
 
+@router.post("/agents/recommend", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="recommend_agents",
     error_code_prefix="ORCHESTRATION",
 )
-@router.post("/agents/recommend")
 async def recommend_agents(
     request: AgentRecommendationRequest,
     current_user: dict = Depends(get_current_user),
@@ -266,7 +259,7 @@ async def recommend_agents(
     if not _ORCHESTRATOR_AVAILABLE:
         raise HTTPException(status_code=503, detail="Orchestrator module not available")
     try:
-        from enhanced_orchestration import AgentCapability  # noqa: PLC0415
+        from orchestration import AgentCapability  # noqa: PLC0415
 
         # Convert capability strings to enums
         capabilities_needed = set()
@@ -282,9 +275,7 @@ async def recommend_agents(
             )
 
         # Get recommendations
-        recommendations = await orchestrator.get_agent_recommendations(
-            request.task_type, capabilities_needed
-        )
+        recommendations = await orchestrator.get_agent_recommendations(capabilities_needed)
 
         return JSONResponse(
             status_code=200,
@@ -302,12 +293,12 @@ async def recommend_agents(
         raise HTTPException(status_code=500, detail="Failed to get recommendations")
 
 
+@router.get("/workflow/active", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_active_workflows",
     error_code_prefix="ORCHESTRATION",
 )
-@router.get("/workflow/active")
 async def get_active_workflows(
     current_user: dict = Depends(get_current_user),
 ):
@@ -353,12 +344,12 @@ async def get_active_workflows(
         raise HTTPException(status_code=500, detail="Failed to get active workflows")
 
 
+@router.get("/strategies", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_execution_strategies",
     error_code_prefix="ORCHESTRATION",
 )
-@router.get("/strategies")
 async def get_execution_strategies(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -400,12 +391,12 @@ async def get_execution_strategies(
     )
 
 
+@router.get("/capabilities", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_capabilities",
     error_code_prefix="ORCHESTRATION",
 )
-@router.get("/capabilities")
 async def get_agent_capabilities(
     current_user: dict = Depends(get_current_user),
 ):
@@ -424,21 +415,35 @@ async def get_agent_capabilities(
             },
         )
     try:
-        # Get capability coverage
-        coverage = orchestrator._calculate_capability_coverage()
+        # Post-#5058 refactor: capability_coverage and agent_performance live on
+        # the orchestrator's collaborators (WorkflowRunner / PerformanceTracker),
+        # not on the Orchestrator itself.
+        runner = getattr(orchestrator, "_runner", None)
+        perf_tracker = getattr(orchestrator, "_perf", None)
+
+        if runner is not None:
+            try:
+                coverage = runner.get_performance_report().get(
+                    "capabilities_coverage", {}
+                )
+            except Exception:
+                coverage = {}
+        else:
+            coverage = {}
+
+        agent_perf = (
+            getattr(perf_tracker, "agent_performance", {}) if perf_tracker else {}
+        )
 
         # Get detailed agent capabilities
         agent_details = {}
         for agent, caps in orchestrator.agent_capabilities.items():
+            perf = agent_perf.get(agent)
             agent_details[agent] = {
                 "capabilities": [cap.value for cap in caps],
                 "performance": {
-                    "reliability": (
-                        orchestrator.agent_performance[agent].reliability_score
-                    ),
-                    "total_tasks": (
-                        orchestrator.agent_performance[agent].total_tasks
-                    ),
+                    "reliability": getattr(perf, "reliability_score", 1.0),
+                    "total_tasks": getattr(perf, "total_tasks", 0),
                 },
             }
 
@@ -456,12 +461,12 @@ async def get_agent_capabilities(
         raise HTTPException(status_code=500, detail="Failed to get capabilities")
 
 
+@router.get("/status", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_orchestration_status",
     error_code_prefix="ORCHESTRATION",
 )
-@router.get("/status")
 async def get_orchestration_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -488,7 +493,7 @@ async def get_orchestration_status(
             content={
                 "status": "operational",
                 "active_workflows": performance_report.get("active_workflows", 0),
-                "max_parallel_tasks": orchestrator.max_parallel_tasks,
+                "max_parallel_tasks": orchestrator.config.max_parallel_tasks,
                 "total_agents": len(orchestrator.agent_capabilities),
                 "capabilities": {
                     "execution_strategies": [
@@ -511,12 +516,12 @@ async def get_orchestration_status(
         raise HTTPException(status_code=500, detail="Failed to get status")
 
 
+@router.get("/examples", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_orchestration_examples",
     error_code_prefix="ORCHESTRATION",
 )
-@router.get("/examples")
 async def get_orchestration_examples(
     admin_check: bool = Depends(check_admin_permission),
 ):

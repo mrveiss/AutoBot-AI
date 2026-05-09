@@ -8,11 +8,15 @@ API endpoints for executing commands in the secure Docker sandbox environment.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
+from api.schemas_workflows import (
+    SandboxBatchRequest,
+    SandboxExecuteRequest,
+    SandboxScriptRequest,
+)
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.network_constants import NetworkConstants
@@ -27,43 +31,23 @@ from utils.response_builder import (
     service_unavailable_response,
     success_response,
 )
+from api.schemas_code import (
+    SandboxExecutionResponse,
+    SandboxStatsResponse,
+    SandboxSecurityLevelsResponse,
+    SandboxExamplesResponse,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-class SandboxExecuteRequest(BaseModel):
-    command: str
-    security_level: str = "high"  # low, medium, high
-    timeout: int = 300  # 5 minutes default
-    execution_mode: str = "command"  # command, script, batch
-    enable_network: bool = False
-    environment: Optional[dict] = None
-
-
-class SandboxScriptRequest(BaseModel):
-    script_content: str
-    language: str = "bash"  # bash, python, etc.
-    security_level: str = "high"
-    timeout: int = 300
-    enable_network: bool = False
-    environment: Optional[dict] = None
-
-
-class SandboxBatchRequest(BaseModel):
-    commands: List[str]
-    security_level: str = "high"
-    timeout: int = 600  # 10 minutes for batch
-    stop_on_error: bool = True
-    enable_network: bool = False
-
-
+@router.post("/execute", response_model=SandboxExecutionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_command",
     error_code_prefix="SANDBOX",
 )
-@router.post("/execute")
 async def execute_command(
     request: SandboxExecuteRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -119,12 +103,12 @@ async def execute_command(
         )
 
 
+@router.post("/execute/script", response_model=SandboxExecutionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_script",
     error_code_prefix="SANDBOX",
 )
-@router.post("/execute/script")
 async def execute_script(
     request: SandboxScriptRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -180,12 +164,12 @@ async def execute_script(
         )
 
 
+@router.post("/execute/batch", response_model=SandboxExecutionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_batch",
     error_code_prefix="SANDBOX",
 )
-@router.post("/execute/batch")
 async def execute_batch(
     request: SandboxBatchRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -310,12 +294,12 @@ def _build_batch_result_data(commands: List[str], result: Any) -> Dict[str, Any]
     }
 
 
+@router.get("/stats", response_model=SandboxStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_sandbox_stats",
     error_code_prefix="SANDBOX",
 )
-@router.get("/stats")
 async def get_sandbox_stats(
     current_user: dict = Depends(get_current_user),
 ):
@@ -365,12 +349,12 @@ async def get_sandbox_stats(
         )
 
 
+@router.get("/security-levels", response_model=SandboxSecurityLevelsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_security_levels",
     error_code_prefix="SANDBOX",
 )
-@router.get("/security-levels")
 async def get_security_levels(
     current_user: dict = Depends(get_current_user),
 ):
@@ -434,12 +418,12 @@ async def get_security_levels(
     )
 
 
+@router.get("/examples", response_model=SandboxExamplesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_sandbox_examples",
     error_code_prefix="SANDBOX",
 )
-@router.get("/examples")
 async def get_sandbox_examples(
     current_user: dict = Depends(get_current_user),
 ):

@@ -25,7 +25,7 @@ from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.models.summary import Summary, SummaryLevel
 from knowledge.pipeline.registry import TaskRegistry
-from llm_interface_pkg import LLMInterface
+from services.llm_service import get_llm_service
 from rlm.evaluator import ResponseQualityEvaluator
 from rlm.types import RLMConfig
 
@@ -70,7 +70,7 @@ class RecursiveSummarizer(BaseCognifier):
             max_reflections=max_refinement_depth,
             quality_threshold=0.7,
         )
-        self.llm = LLMInterface()
+        self.llm = get_llm_service()
         self.evaluator = ResponseQualityEvaluator(config=self.rlm_config)
 
     # ------------------------------------------------------------------
@@ -259,8 +259,8 @@ class RecursiveSummarizer(BaseCognifier):
 
     async def _generate_and_parse(self, prompt: str) -> dict:
         """Call LLM and parse JSON response (#1383: extracted helper)."""
-        response = await self.llm.chat_completion(
-            messages=[{"role": "user", "content": prompt}]
+        response = await self.llm.chat(
+            [{"role": "user", "content": prompt}]
         )
         raw = parse_llm_json_response(response.content, fallback_dict=True)
         if isinstance(raw, dict):

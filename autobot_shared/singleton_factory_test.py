@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Tests for autobot_shared.singleton_factory."""
+
 import asyncio
 import threading
 import pytest
@@ -11,9 +12,11 @@ from autobot_shared.singleton_factory import async_lazy_singleton, lazy_optional
 class TestLazySingleton:
     def test_basic_caching(self):
         calls = []
+
         def factory():
             calls.append(1)
             return object()
+
         get = lazy_singleton(factory)
         a = get()
         b = get()
@@ -22,9 +25,11 @@ class TestLazySingleton:
 
     def test_factory_receives_first_call_args(self):
         received = []
+
         def factory(*args, **kwargs):
             received.append((args, kwargs))
             return object()
+
         get = lazy_singleton(factory)
         get(1, 2, x=3)
         assert received == [((1, 2), {"x": 3})]
@@ -36,7 +41,9 @@ class TestLazySingleton:
             get(2)
 
     def test_arg_guard_raises_on_kwarg_mismatch(self):
-        def factory(**kwargs): return object()
+        def factory(**kwargs):
+            return object()
+
         get = lazy_singleton(factory)
         get(x=1)
         with pytest.raises(RuntimeError, match="different args"):
@@ -81,9 +88,11 @@ class TestLazySingleton:
 
     def test_thread_safety(self):
         calls = []
+
         def factory():
             calls.append(1)
             return object()
+
         get = lazy_singleton(factory)
         results = []
         threads = [threading.Thread(target=lambda: results.append(get())) for _ in range(20)]
@@ -170,7 +179,7 @@ def test_lazy_optional_singleton_none_not_reinitialised():
         return None
 
     get = lazy_optional_singleton(factory)
-    get()           # initialises to None
+    get()  # initialises to None
     result = get()  # must use cached None, not call factory again
     assert result is None
     assert call_count == 1  # still exactly one call
@@ -186,9 +195,11 @@ class TestAsyncLazySingleton:
     async def test_sync_factory_cached(self):
         """Sync factory called once; all awaits return the same instance."""
         calls = []
+
         def factory():
             calls.append(1)
             return object()
+
         get = async_lazy_singleton(factory)
         a = await get()
         b = await get()
@@ -199,9 +210,11 @@ class TestAsyncLazySingleton:
     async def test_async_factory_cached(self):
         """Async factory called once; all awaits return the same instance."""
         calls = []
+
         async def factory():
             calls.append(1)
             return object()
+
         get = async_lazy_singleton(factory)
         a = await get()
         b = await get()
@@ -221,10 +234,12 @@ class TestAsyncLazySingleton:
     async def test_concurrent_callers_receive_same_instance(self):
         """Concurrent awaiters all receive the same object; factory called once."""
         calls = []
+
         async def factory():
             calls.append(1)
             await asyncio.sleep(0)
             return object()
+
         get = async_lazy_singleton(factory)
         results = await asyncio.gather(*[get() for _ in range(20)])
         assert all(r is results[0] for r in results)

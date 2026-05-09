@@ -13,11 +13,38 @@ Includes metrics and health tracking (Issue #4339).
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Query, Request
+
+from api.system_health import ComponentHealth, register_health_probe
 
 from skills.manager import SkillManager
 from skills.registry import get_skill_registry
+from api.schemas_agent import (
+    SkillActionRequest,
+    SkillConfigUpdate,
+    SkillFeedbackRequest,
+    SkillInstallRequest,
+)
+from api.schemas_code import (
+    SkillConfigUpdateResponse,
+    SkillExecuteResponse,
+    SkillToggleResponse,
+)
+from api.schemas_common import DataResponse
+from api.schemas_workflows import (
+    MCPSpanResponse,
+    SkillsListResponse,
+    SkillsCategoriesResponse,
+    SkillsAllHealthResponse,
+    SkillsInitializeResponse,
+    SkillDetailResponse,
+    SkillHealthResponse,
+    SkillActionsResponse,
+    SkillMetricsResponse,
+    SkillSuggestionsResponse,
+    SkillTracesResponse,
+)
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -38,43 +65,15 @@ def _get_manager() -> SkillManager:
     return _manager
 
 
-# --- Request/Response Models ---
-
-
-class SkillConfigUpdate(BaseModel):
-    """Request body for updating a skill's configuration."""
-
-    config: Dict[str, Any] = Field(..., description="Configuration values")
-
-
-class SkillActionRequest(BaseModel):
-    """Request body for executing a skill action."""
-
-    action: str = Field(..., description="Tool/action name to execute")
-    params: Dict[str, Any] = Field(
-        default_factory=dict, description="Action parameters"
-    )
-
-
-class UserSkillPreferences(BaseModel):
-    """Request body for updating user skill preferences."""
-
-    preferences: Dict[str, bool] = Field(
-        ..., description="Mapping of skill_name -> enabled"
-    )
-
-
-class SkillFeedbackRequest(BaseModel):
-    """Request body for submitting skill feedback."""
-
-    rating: int = Field(..., description="User rating (1-5)", ge=1, le=5)
-    feedback: Optional[str] = Field(None, description="Feedback text")
-
-
 # --- Endpoints ---
 
 
-@router.get("/", summary="List all skills")
+@router.get("/", summary="List all skills", response_model=SkillsListResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_skills",
+    error_code_prefix="SKILLS",
+)
 async def list_skills(
     category: Optional[str] = Query(None, description="Filter by category"),
     search: Optional[str] = Query(None, description="Search query"),
@@ -101,7 +100,12 @@ async def list_skills(
     }
 
 
-@router.get("/categories", summary="List skill categories")
+@router.get("/categories", summary="List skill categories", response_model=SkillsCategoriesResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_categories",
+    error_code_prefix="SKILLS",
+)
 async def list_categories() -> Dict[str, Any]:
     """List all available skill categories with counts."""
     manager = _get_manager()
@@ -109,14 +113,46 @@ async def list_categories() -> Dict[str, Any]:
     return {"categories": {cat: len(skills) for cat, skills in by_cat.items()}}
 
 
-@router.get("/health", summary="Get health of all skills")
+@register_health_probe("skills")
+async def probe_skills(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for skills module."""
+    try:
+        registry = get_skill_registry()
+        skill_count = len(registry.list_skills()) if registry else 0
+        return ComponentHealth(
+            name="skills",
+            status="ok" if skill_count > 0 else "degraded",
+            detail=f"{skill_count} skills loaded",
+            data={"skill_count": skill_count},
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="skills",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
+@router.get("/health", summary="Get health of all skills", response_model=SkillsAllHealthResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_all_health",
+    error_code_prefix="SKILLS",
+)
 async def get_all_health() -> Dict[str, Any]:
     """Get health status for all registered skills."""
     registry = get_skill_registry()
     return {"skills": registry.get_all_health()}
 
 
-@router.post("/initialize", summary="Initialize skills system")
+@router.post("/initialize", summary="Initialize skills system", response_model=SkillsInitializeResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="initialize_skills",
+    error_code_prefix="SKILLS",
+)
 async def initialize_skills() -> Dict[str, Any]:
     """Discover and load all builtin skills."""
     manager = _get_manager()
@@ -124,7 +160,150 @@ async def initialize_skills() -> Dict[str, Any]:
     return result
 
 
-@router.get("/{name}", summary="Get skill details")
+@router.get("/traces", summary="Get recent MCP tool-call traces", response_model=SkillTracesResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_skill_traces",
+    error_code_prefix="SKILLS",
+)
+async def get_skill_traces(
+    skill: Optional[str] = Query(None, description="Filter by skill name"),
+    limit: int = Query(50, ge=1, le=500, description="Maximum number of traces to return"),
+) -> Dict[str, Any]:
+    """Return recent MCP tool-call spans from Redis (Issue #4413).
+
+    Queries ``mcp_trace_idx:{skill}`` (sorted set, newest first) when a skill
+    name is provided, or iterates all ``mcp_trace_idx:*`` keys otherwise.
+    """
+    import json as _json
+
+    from autobot_shared.redis_client import get_async_redis_client
+
+    redis = await get_async_redis_client(database="main")
+    if redis is None:
+        return {"skill": skill, "traces": [], "total": 0}
+
+    if skill:
+        idx_keys = [f"mcp_trace_idx:{skill}"]
+    else:
+        idx_keys = [k.decode() if isinstance(k, bytes) else k async for k in redis.scan_iter("mcp_trace_idx:*")]
+
+    trace_ids: list = []
+    for idx_key in idx_keys:
+        ids = await redis.zrevrange(idx_key, 0, limit - 1)
+        trace_ids.extend(ids)
+
+    # Deduplicate while preserving insertion order
+    seen: set = set()
+    unique_ids = []
+    for tid in trace_ids:
+        tid_str = tid.decode() if isinstance(tid, bytes) else tid
+        if tid_str not in seen:
+            seen.add(tid_str)
+            unique_ids.append(tid_str)
+    unique_ids = unique_ids[:limit]
+
+    traces: list = []
+    keys = [f"mcp_trace:{tid}" for tid in unique_ids]
+    raws = await redis.mget(*keys)
+    for raw in raws:
+        if raw is None:
+            continue
+        try:
+            traces.append(MCPSpanResponse(**_json.loads(raw)))
+        except Exception as exc:
+            logger.debug("mcp_trace: failed to deserialise span: %s", exc)
+
+    return {"skill": skill, "traces": traces, "total": len(traces)}
+
+
+@router.get("/catalog", summary="List external skill catalog entries", response_model=Dict[str, Any])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_catalog",
+    error_code_prefix="SKILLS",
+)
+async def list_catalog(
+    catalog_url: str = Query(..., description="HTTP URL of the remote skill catalog"),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+) -> Dict[str, Any]:
+    """Fetch paginated skill entries from an HTTP catalog and return them with install actions.
+
+    Each returned entry includes an ``install_action`` field describing the
+    ``POST /skills/catalog/{name}/install`` endpoint to materialize the skill.
+    """
+    from skills.external_importer import ExternalSkillImporter
+
+    importer = ExternalSkillImporter()
+    try:
+        entries = await importer.import_http_catalog(catalog_url, page=page, page_size=page_size)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    # Annotate each entry with an install action hint
+    for entry in entries:
+        name = entry.get("name", "")
+        entry["install_action"] = f"POST /api/skills/catalog/{name}/install"
+
+    return {"catalog_url": catalog_url, "page": page, "page_size": page_size, "skills": entries, "total": len(entries)}
+
+
+@router.post("/catalog/{name}/install", summary="Install a skill from an HTTP catalog", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="install_catalog_skill",
+    error_code_prefix="SKILLS",
+)
+async def install_catalog_skill(name: str, body: SkillInstallRequest) -> Dict[str, Any]:
+    """Fetch a skill from a remote catalog and persist it as a SANDBOXED SkillPackage.
+
+    The catalog must expose a ``/skills/{name}`` endpoint (or equivalent) that
+    returns the catalog entry dict containing at minimum a ``skill_md`` field.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from skills.db import get_skills_engine
+    from skills.external_importer import ExternalSkillImporter
+    from skills.models import SkillPackage
+
+    importer = ExternalSkillImporter()
+    # Fetch the single-entry detail URL: catalog_url/name
+    detail_url = body.catalog_url.rstrip("/") + f"/{name}"
+    try:
+        entries = await importer.import_http_catalog(detail_url, page=1, page_size=1)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    if not entries:
+        raise HTTPException(status_code=404, detail=f"Skill '{name}' not found in catalog at {body.catalog_url}")
+
+    entry = entries[0]
+    try:
+        pkg = await importer.install_from_catalog(name, entry, repo_id=body.repo_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    engine = get_skills_engine()
+    async with AsyncSession(engine) as session:
+        existing = await session.scalar(select(SkillPackage).where(SkillPackage.name == pkg.name))
+        if existing is not None:
+            raise HTTPException(status_code=409, detail=f"Skill '{name}' is already installed")
+        session.add(pkg)
+        await session.commit()
+        await session.refresh(pkg)
+
+    logger.info("Installed catalog skill '%s' (id=%s)", pkg.name, pkg.id)
+    return {"success": True, "id": pkg.id, "name": pkg.name, "version": pkg.version, "trust_level": pkg.trust_level}
+
+
+@router.get("/{name}", summary="Get skill details", response_model=SkillDetailResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_skill",
+    error_code_prefix="SKILLS",
+)
 async def get_skill(name: str) -> Dict[str, Any]:
     """Get detailed information about a specific skill."""
     registry = get_skill_registry()
@@ -134,7 +313,12 @@ async def get_skill(name: str) -> Dict[str, Any]:
     return detail
 
 
-@router.post("/{name}/enable", summary="Enable a skill")
+@router.post("/{name}/enable", summary="Enable a skill", response_model=SkillToggleResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enable_skill",
+    error_code_prefix="SKILLS",
+)
 async def enable_skill(name: str) -> Dict[str, Any]:
     """Enable a skill, checking dependencies. Persists state to Redis (Issue #993)."""
     registry = get_skill_registry()
@@ -146,7 +330,12 @@ async def enable_skill(name: str) -> Dict[str, Any]:
     return result
 
 
-@router.post("/{name}/disable", summary="Disable a skill")
+@router.post("/{name}/disable", summary="Disable a skill", response_model=SkillToggleResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="disable_skill",
+    error_code_prefix="SKILLS",
+)
 async def disable_skill(name: str) -> Dict[str, Any]:
     """Disable a skill. Persists state to Redis (Issue #993)."""
     registry = get_skill_registry()
@@ -158,7 +347,12 @@ async def disable_skill(name: str) -> Dict[str, Any]:
     return result
 
 
-@router.put("/{name}/config", summary="Update skill config")
+@router.put("/{name}/config", summary="Update skill config", response_model=SkillConfigUpdateResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_config",
+    error_code_prefix="SKILLS",
+)
 async def update_config(name: str, body: SkillConfigUpdate) -> Dict[str, Any]:
     """Update a skill's configuration values."""
     registry = get_skill_registry()
@@ -173,7 +367,12 @@ async def update_config(name: str, body: SkillConfigUpdate) -> Dict[str, Any]:
     return result
 
 
-@router.post("/{name}/execute", summary="Execute a skill action")
+@router.post("/{name}/execute", summary="Execute a skill action", response_model=SkillExecuteResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_skill",
+    error_code_prefix="SKILLS",
+)
 async def execute_skill(name: str, body: SkillActionRequest) -> Dict[str, Any]:
     """Execute a specific action on a skill."""
     manager = _get_manager()
@@ -186,7 +385,12 @@ async def execute_skill(name: str, body: SkillActionRequest) -> Dict[str, Any]:
     return result
 
 
-@router.get("/{name}/health", summary="Get skill health")
+@router.get("/{name}/health", summary="Get skill health", response_model=SkillHealthResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_skill_health",
+    error_code_prefix="SKILLS",
+)
 async def get_skill_health(name: str) -> Dict[str, Any]:
     """Get health status for a specific skill."""
     registry = get_skill_registry()
@@ -196,7 +400,12 @@ async def get_skill_health(name: str) -> Dict[str, Any]:
     return health.model_dump()
 
 
-@router.get("/{name}/actions", summary="List skill actions")
+@router.get("/{name}/actions", summary="List skill actions", response_model=SkillActionsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_skill_actions",
+    error_code_prefix="SKILLS",
+)
 async def list_skill_actions(name: str) -> Dict[str, Any]:
     """List available actions for a skill."""
     registry = get_skill_registry()
@@ -209,7 +418,12 @@ async def list_skill_actions(name: str) -> Dict[str, Any]:
     }
 
 
-@router.get("/{name}/metrics", summary="Get skill metrics")
+@router.get("/{name}/metrics", summary="Get skill metrics", response_model=SkillMetricsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_skill_metrics",
+    error_code_prefix="SKILLS",
+)
 async def get_skill_metrics(
     name: str,
     days: int = Query(30, description="Number of days to analyze"),
@@ -231,7 +445,12 @@ async def get_skill_metrics(
         raise HTTPException(status_code=500, detail="Failed to retrieve metrics")
 
 
-@router.post("/{name}/feedback", summary="Submit skill feedback")
+@router.post("/{name}/feedback", summary="Submit skill feedback", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="submit_skill_feedback",
+    error_code_prefix="SKILLS",
+)
 async def submit_skill_feedback(
     name: str,
     body: SkillFeedbackRequest,
@@ -257,7 +476,12 @@ async def submit_skill_feedback(
         raise HTTPException(status_code=500, detail="Failed to log feedback")
 
 
-@router.get("/{name}/suggestions", summary="Get skill refinement suggestions")
+@router.get("/{name}/suggestions", summary="Get skill refinement suggestions", response_model=SkillSuggestionsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_refinement_suggestions",
+    error_code_prefix="SKILLS",
+)
 async def get_refinement_suggestions(name: str) -> Dict[str, Any]:
     """Get suggestions for improving a skill (Issue #4339)."""
     try:

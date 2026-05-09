@@ -77,7 +77,7 @@ export interface UseWebSocketOptions {
   /**
    * Callback when message received
    */
-  onMessage?: (data: any) => void
+  onMessage?: (data: unknown) => void
 
   /**
    * Callback when error occurs
@@ -133,7 +133,7 @@ export function useWebSocket(
   const ws = ref<WebSocket | null>(null)
   const isConnected = ref(false)
   const isConnecting = ref(false)
-  const lastMessage = ref<any>(null)
+  const lastMessage = ref<unknown>(null)
   const errors = ref<Error[]>([])
   const error = computed<Error | null>(() => {
     if (errors.value.length === 0) return null
@@ -312,7 +312,7 @@ export function useWebSocket(
   /**
    * Send data through WebSocket
    */
-  const send = (data: any): boolean => {
+  const send = (data: unknown): boolean => {
     if (!ws.value || ws.value.readyState !== WebSocket.OPEN) {
       logger.warn('Cannot send - not connected')
       return false

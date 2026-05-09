@@ -18,9 +18,24 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
+# #7127: running this file directly cannot work — top-level project imports
+# below need sys.path entries that an inline `__main__` block cannot install
+# in time. Guard before the project imports so users get a useful pointer
+# instead of a cryptic ModuleNotFoundError.
+if __name__ == "__main__":
+    import sys as _sys
+
+    print(  # noqa: print
+        "intelligence.streaming_executor has no runnable __main__ block.\n"
+        "Run the demo via:\n"
+        "  python3 autobot-backend/intelligence/demos/run_streaming_executor.py",
+        file=_sys.stderr,
+    )
+    raise SystemExit(2)
+
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.network_constants import NetworkConstants
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service  # Phase 2D #3185
 from utils.command_validator import CommandValidator
 
 logger = logging.getLogger(__name__)
@@ -73,7 +88,9 @@ class StreamingCommandExecutor:
     """Real-time streaming command executor with intelligent commentary."""
 
     def __init__(
-        self, llm_interface: LLMInterface, command_validator: CommandValidator
+        self,
+        llm_interface: Any,  # duck-typed; accepts LLMService (Phase 2D #3185)
+        command_validator: CommandValidator,
     ):
         """
         Initialize the streaming executor.
@@ -493,9 +510,13 @@ class StreamingCommandExecutor:
             )
 
             # Get LLM commentary
-            response = await self.llm_interface.generate_response(
-                prompt, temperature=0.7, max_tokens=50
+            # Note: generate_response() did not exist; replaced with chat() (Phase 2D #3185)
+            _resp = await self.llm_interface.chat(
+                [{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=50,
             )
+            response = _resp.content
 
             # Skip if LLM suggests it
             if response.strip().upper() == "SKIP":
@@ -528,9 +549,13 @@ class StreamingCommandExecutor:
                 "Use emojis when appropriate."
             )
 
-            response = await self.llm_interface.generate_response(
-                prompt, temperature=0.7, max_tokens=75
+            # Note: generate_response() did not exist; replaced with chat() (Phase 2D #3185)
+            _resp = await self.llm_interface.chat(
+                [{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=75,
             )
+            response = _resp.content
 
             yield StreamChunk(
                 timestamp=self._get_timestamp(),
@@ -629,65 +654,6 @@ class StreamingCommandExecutor:
         }
 
 
-if __name__ == "__main__":
-    """Test the streaming executor functionality."""
-    import asyncio
-    import sys
-    from pathlib import Path
-
-    # Add project root for test imports
-    project_root = Path(__file__).parent.parent.parent
-    sys.path.insert(0, str(project_root))
-
-    # Import mock components from test fixtures (Issue #458)
-    from tests.fixtures.mocks import MockCommandValidator, MockLLMInterface
-
-    async def test_executor():
-        """Test streaming executor with mock components and sample commands."""
-        # Create mock components from tests/fixtures/mocks.py
-        llm = MockLLMInterface()
-        validator = MockCommandValidator()
-
-        # Create executor
-        executor = StreamingCommandExecutor(llm, validator)
-
-        logger.info("=== Streaming Executor Test ===")
-
-        # Test commands
-        test_commands = [
-            ("echo 'Hello, World!'", "test echo command"),
-            ("ls -la", "list current directory"),
-            (
-                f"ping -c 3 {NetworkConstants.PUBLIC_DNS_IP}",
-                "test network connectivity",
-            ),
-            ("sleep 5", "test long-running command"),
-        ]
-
-        for command, goal in test_commands:
-            logger.info("\nTesting: {command}")
-            logger.info("Goal: {goal}")
-            logger.info("-" * 50)
-
-            chunk_count = 0
-            async for chunk in executor.execute_with_streaming(
-                command, goal, timeout=10
-            ):
-                timestamp = chunk.timestamp.split("T")[1][:8]
-                chunk_type = chunk.chunk_type.value.upper()
-                content = chunk.content
-
-                logger.info("[%s] %s: %s", timestamp, chunk_type, content)
-
-                chunk_count += 1
-                if chunk.chunk_type == ChunkType.COMPLETE:
-                    break
-
-                # Limit output for test
-                if chunk_count > 20:
-                    logger.info("... (limiting output for test)")
-                    break
-
-            print()  # noqa: print
-
-    asyncio.run(test_executor())
+# Note (#7127): early `__main__` guard at the top of this file handles the
+# "run as script" case before any project import runs. The standalone demo
+# lives at intelligence/demos/run_streaming_executor.py.

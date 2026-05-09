@@ -22,13 +22,18 @@
  * injection point. The analytics alias flips the default back for its own
  * callers so the #5111 bug class remains structurally prevented there.
  *
+ * Internally implemented on top of `useApiResource` so race-condition
+ * handling, in-flight abort, and lifecycle teardown from `useApiResource`
+ * automatically benefit all callers (#5180).
+ *
  * Issue #5153 scope C.
  */
 
-import { ref, type Ref } from 'vue'
+import { computed, type Ref } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
+import { useApiResource } from '@/composables/useApiResource'
 
 const logger = createLogger('useFetchEndpoint')
 
@@ -179,10 +184,6 @@ export function useFetchEndpoint<TRaw, TOut, Ctx = undefined>(
   opts: UseFetchEndpointOptions<TRaw, TOut, Ctx>,
   deps?: UseFetchEndpointDeps,
 ): UseFetchEndpointReturn<TOut, Ctx> {
-  const data = ref<TOut | null>(null) as Ref<TOut | null>
-  const loading = ref(false)
-  const error = ref('')
-
   const scopeToSource = opts.scopeToSource === true
   const method: FetchEndpointMethod = opts.method ?? 'GET'
   const label = opts.label ?? opts.path
@@ -197,36 +198,48 @@ export function useFetchEndpoint<TRaw, TOut, Ctx = undefined>(
   }
   const withSourceId = deps?.withSourceId ?? ((u: string) => u)
 
-  const load = async (
-    queryExtras?: Record<string, string>,
-    context?: Ctx,
-  ): Promise<void> => {
-    // #5457: context is captured into the closure at load-time, so
-    // concurrent load() calls each see their own context in callbacks —
-    // no module-scope `let` workaround needed. The `as Ctx` cast is safe
-    // because when `Ctx = undefined` (the default) the optional parameter
-    // fills the slot correctly.
-    const ctx = context as Ctx
-    loading.value = true
-    error.value = ''
-    try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      let url = `${backendUrl}${opts.path}`
-      if (scopeToSource) {
-        url = withSourceId(url)
-      }
-      url = appendQueryExtras(url, queryExtras)
+  // Per-call parameters updated by load() before each refresh(). The fetcher
+  // closure reads from these so each call sees its own queryExtras + context
+  // without requiring per-call arguments on the useApiResource fetcher
+  // signature (#5457 context threading is preserved).
+  let pendingExtras: Record<string, string> | undefined = undefined
+  let pendingCtx: Ctx = undefined as Ctx
 
-      const init: RequestInit = {
-        method,
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-      }
-      if (method !== 'GET' && opts.body) {
-        init.body = JSON.stringify(opts.body())
-      }
+  // Internally implemented on top of useApiResource (#5180) — race-condition
+  // handling (monotonic call IDs), AbortController abort-prior, and lifecycle
+  // teardown on scope dispose are all inherited automatically.
+  //
+  // The fetcher returns `TOut | null`:
+  //   - `TOut`  → success, data assigned by useApiResource
+  //   - `null`  → no-data path (pickData returned null), data stays null, no error
+  //   - throw   → error path; message is surfaced via resource.error
+  //
+  // fallbackData is handled by catching inside the fetcher and returning the
+  // fallback value rather than re-throwing, so useApiResource sees a success.
+  const resource = useApiResource<TOut | null>(async (signal: AbortSignal) => {
+    const ctx = pendingCtx
+    const queryExtras = pendingExtras
+
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    let url = `${backendUrl}${opts.path}`
+    if (scopeToSource) {
+      url = withSourceId(url)
+    }
+    url = appendQueryExtras(url, queryExtras)
+
+    const init: RequestInit = {
+      method,
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      signal, // forward the AbortSignal so fetchWithAuth cancels the network request
+    }
+    if (method !== 'GET' && opts.body) {
+      init.body = JSON.stringify(opts.body())
+    }
+
+    try {
       const response = await fetchWithAuth(url, init)
       if (!response.ok) {
         const overrideMsg = opts.onResponse
@@ -241,41 +254,63 @@ export function useFetchEndpoint<TRaw, TOut, Ctx = undefined>(
         : ((await response.json()) as TRaw)
       const picked = opts.pickData(raw)
       if (picked === null) {
-        data.value = null
         opts.onNoData?.(ctx)
-        return
+        return null
       }
-      data.value = picked
       opts.onSuccess?.(picked, raw, ctx)
+      return picked
     } catch (err: unknown) {
+      // AbortError fires on reset()/disposal/rapid reload — not a real failure
+      if (
+        (err instanceof DOMException && err.name === 'AbortError') ||
+        (err as Error)?.name === 'AbortError'
+      ) return null
       const message = err instanceof Error ? err.message : String(err)
       logger.error(`Failed to load ${label}:`, err)
       opts.onError?.(message, err, ctx)
-      // #5389: when a fallback value is configured, return it as the
-      // effective result instead of exposing the error. Callers opting
-      // into this explicitly accept "success with stale/default data"
-      // over "user-visible error" semantics.
+      // #5389: when fallbackData is configured, return it as the effective
+      // result so useApiResource sees a success (data=fallback, no error).
       if (opts.fallbackData !== undefined) {
         const fallback =
           typeof opts.fallbackData === 'function'
             ? (opts.fallbackData as () => TOut)()
             : opts.fallbackData
-        data.value = fallback
-        error.value = ''
-      } else {
-        error.value = message
-        data.value = null
+        return fallback
       }
-    } finally {
-      loading.value = false
+      throw err
     }
+  }, { immediate: false })
+
+  const load = async (
+    queryExtras?: Record<string, string>,
+    context?: Ctx,
+  ): Promise<void> => {
+    // Capture per-call params before delegating to useApiResource.refresh().
+    // Because refresh() immediately reads these inside the fetcher closure,
+    // and useApiResource serialises concurrent calls (abort-prior), there is
+    // no window where a second load() can clobber the first's pending params
+    // before the fetcher reads them.
+    pendingExtras = queryExtras
+    pendingCtx = context as Ctx
+    await resource.refresh()
   }
 
   const reset = (): void => {
-    data.value = null
-    loading.value = false
-    error.value = ''
+    resource.abort() // cancel any in-flight request and clear isLoading atomically
+    resource.data.value = null
+    resource.error.value = null
+    // isLoading is now managed by resource.abort() — do NOT set it directly here
   }
 
-  return { data, loading, error, load, reset }
+  // Map useApiResource's shape to useFetchEndpoint's public API:
+  //   isLoading  → loading  (name alias)
+  //   error: Ref<Error|null> → error: Ref<string>  (type transform via computed)
+  //
+  // ComputedRef<string> satisfies Ref<string> structurally — both expose
+  // `.value: string`. The cast below is safe: callers only read error.value;
+  // internal mutation goes through resource.error.value (an Error|null ref).
+  const loading = resource.isLoading
+  const error = computed(() => resource.error.value?.message ?? '') as unknown as Ref<string>
+
+  return { data: resource.data as Ref<TOut | null>, loading, error, load, reset }
 }

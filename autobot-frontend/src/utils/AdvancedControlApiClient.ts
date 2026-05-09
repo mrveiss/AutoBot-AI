@@ -9,6 +9,7 @@
  */
 
 import { getConfig, getApiBase } from '@/config/ssot-config';
+import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
 import type { ApiResponse } from '@/types/api';
 
@@ -203,7 +204,7 @@ class AdvancedControlApiClient {
     };
 
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         ...options,
         headers: { ...defaultHeaders, ...options.headers },
       });

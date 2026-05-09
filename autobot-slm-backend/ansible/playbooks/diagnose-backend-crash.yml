@@ -250,7 +250,7 @@
     - name: Fetch diagnostic files to local machine
       fetch:
         src: "{{ diagnostic_output_dir }}/{{ item }}"
-        dest: "/tmp/backend-diagnostics-{{ ansible_date_time.iso8601_basic_short }}/"
+        dest: "/tmp/backend-diagnostics-{{ ansible_facts['date_time'].iso8601_basic_short }}/"
         flat: no
       loop:
         - 01-service-status.txt
@@ -271,8 +271,8 @@
           ====================================================
           AutoBot Backend Crash-Loop Diagnostic Report
           ====================================================
-          Timestamp: {{ ansible_date_time.iso8601 }}
-          Host: {{ ansible_hostname }} ({{ ansible_host }})
+          Timestamp: {{ ansible_facts['date_time'].iso8601 }}
+          Host: {{ ansible_facts['hostname'] }} ({{ ansible_host }})
 
           === Quick Summary ===
           Backend directory exists: {{ backend_dir.stat.exists }}

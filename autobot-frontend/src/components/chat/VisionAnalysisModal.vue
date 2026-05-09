@@ -372,7 +372,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
 }
 
@@ -538,7 +538,7 @@ onUnmounted(() => {
 
 .option-group select,
 .option-group input {
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -559,7 +559,7 @@ onUnmounted(() => {
 
 /* Analyze button */
 .btn-analyze {
-  padding: 10px 24px;
+  padding: var(--spacing-2-5) var(--spacing-6);
   background: var(--color-primary);
   color: var(--text-on-primary, #fff);
   border: none;
@@ -588,7 +588,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 10px 14px;
+  padding: var(--spacing-2-5) var(--spacing-3-5);
   background: var(--color-error-bg);
   border: 1px solid var(--color-error-border, var(--color-error));
   border-radius: var(--radius-lg);
@@ -615,7 +615,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   background: var(--color-success-bg);
 }
 
@@ -692,7 +692,7 @@ onUnmounted(() => {
 .object-row {
   display: flex;
   justify-content: space-between;
-  padding: 6px 10px;
+  padding: var(--spacing-1-5) var(--spacing-2-5);
   background: var(--bg-secondary);
   border-radius: var(--radius-default);
   font-size: var(--text-sm);
@@ -705,7 +705,7 @@ onUnmounted(() => {
 }
 
 .btn-toggle-json {
-  padding: 6px 10px;
+  padding: var(--spacing-1-5) var(--spacing-2-5);
   background: none;
   border: none;
   color: var(--text-tertiary);
@@ -736,7 +736,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 20px;
+  padding: var(--spacing-3-5) var(--spacing-5);
   border-top: 1px solid var(--border-default);
 }
 
@@ -746,7 +746,7 @@ onUnmounted(() => {
 }
 
 .btn-primary {
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   background: var(--color-primary);
   color: var(--text-on-primary, #fff);
   border: none;
@@ -769,7 +769,7 @@ onUnmounted(() => {
 }
 
 .btn-secondary {
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);

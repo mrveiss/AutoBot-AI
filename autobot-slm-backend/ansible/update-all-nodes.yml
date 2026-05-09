@@ -77,14 +77,14 @@
       tags: [always]
 
     - name: "[PRE-FLIGHT] Get current git branch"
-      command: git -C {{ git_repo_root }} branch --show-current
+      command: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} branch --show-current
       register: git_branch
       changed_when: false
       tags: [always]
 
     - name: "[PRE-FLIGHT] Resolve deploy ref to commit"
       command: >-
-        git -C {{ git_repo_root }}
+        git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }}
         log -1 --format='%h %s' {{ deploy_ref }}
       register: deploy_info
       changed_when: false
@@ -92,14 +92,14 @@
 
     - name: "[PRE-FLIGHT] Get deploy commit SHA"
       command: >-
-        git -C {{ git_repo_root }}
+        git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }}
         rev-parse --short {{ deploy_ref }}
       register: deploy_commit
       changed_when: false
       tags: [always]
 
     - name: "[PRE-FLIGHT] Check for uncommitted changes"
-      command: git -C {{ git_repo_root }} status --porcelain
+      command: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} status --porcelain
       register: git_dirty
       changed_when: false
       tags: [always]
@@ -139,7 +139,7 @@
 
     - name: "[PRE-FLIGHT] Create component archives"
       shell: >-
-        git -C {{ git_repo_root }} archive {{ deploy_ref }}
+        git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} archive {{ deploy_ref }}
         -- {{ item.path }} | gzip > {{ deploy_tmp }}/{{ item.name }}.tar.gz
       loop:
         - { name: slm-backend, path: autobot-slm-backend/ }
@@ -159,14 +159,14 @@
     # strip-components=1 removes the leading autobot-slm-backend/ path prefix.
     - name: "[PRE-FLIGHT] Create slm-agent code archive"
       shell: >-
-        git -C {{ git_repo_root }} archive {{ deploy_ref }}
+        git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} archive {{ deploy_ref }}
         -- autobot-slm-backend/slm/agent/ | gzip > {{ deploy_tmp }}/slm-agent.tar.gz
       changed_when: true
       tags: [always, slm-agent]
 
     - name: "[PRE-FLIGHT] Create AI Stack archive"
       shell: >-
-        git -C {{ git_repo_root }} archive {{ deploy_ref }}
+        git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} archive {{ deploy_ref }}
         -- autobot-infrastructure/shared/docker/ai-stack/
         | gzip > {{ deploy_tmp }}/ai-stack.tar.gz
       changed_when: true

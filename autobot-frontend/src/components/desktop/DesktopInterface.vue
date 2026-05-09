@@ -11,9 +11,10 @@
 
     <div class="desktop-container">
       <UnifiedLoadingView
-        loading-key="desktop-vnc"
+        :is-loading="loading"
+        :error="error"
         :has-content="!loading && !error"
-        :auto-timeout-ms="15000"
+        :timeout-ms="15000"
         @loading-complete="handleDesktopConnected"
         @loading-error="handleDesktopError"
         @loading-timeout="handleDesktopTimeout"
@@ -58,6 +59,14 @@
       </button>
       <button @click="reconnect" class="control-btn">
         {{ $t('desktop.interface.reconnect') }}
+      </button>
+      <button
+        v-if="vncUrl"
+        class="control-btn"
+        :title="$t('desktop.interface.openInNewWindow')"
+        @click="window.open(vncUrl, '_blank', 'noopener')"
+      >
+        {{ $t('desktop.interface.openInNewWindow') }}
       </button>
       <button @click="showContextPanel = !showContextPanel" class="control-btn" :title="$t('desktop.contextPanel.title')">
         ℹ️
@@ -168,25 +177,36 @@
   </div>
 </template>
 
-<script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 // MIGRATED: Removed environment.js, using AppConfig.js only
 import appConfig from '@/config/AppConfig.js'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import TouchFriendlyButton from '@/components/ui/TouchFriendlyButton.vue'
 import DesktopContextPanel from '@/components/desktop/DesktopContextPanel.vue'
-import { useAsyncOperation } from '@/composables/useAsyncOperation'
+import { useLoadingState } from '@/composables/useLoadingState'
 import { useVncControls } from '@/composables/useVncControls'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { createLogger } from '@/utils/debugUtils'
+import type { SelectorHost } from '@/composables/useHostSelector'
+
+/** Optional host prop — when provided, drives the VNC URL directly from the
+ *  host record rather than fetching from AppConfig (Issue #4977). */
+interface Props {
+  host?: SelectorHost | null
+}
+
+const props = withDefaults(defineProps<Props>(), { host: null })
 
 const { t } = useI18n()
 const logger = createLogger('DesktopInterface')
 
 // Async operation composables
-const { execute: executeLoadVnc, loading: loadingVnc, error: errorVnc } = useAsyncOperation()
-const { execute: executeCheckConnection, loading: loadingCheck, error: errorCheck } = useAsyncOperation()
+const { isLoading: loadingVnc, wrap: wrapLoadVnc } = useLoadingState()
+const { isLoading: loadingCheck, wrap: wrapCheckConnection } = useLoadingState()
+const errorVnc = ref<Error | null>(null)
+const errorCheck = ref<Error | null>(null)
 
 // VNC controls (Issue #74)
 const vncControls = useVncControls()
@@ -196,9 +216,9 @@ const screenshotData = ref<string | null>(null)
 const textToType = ref('')
 const showTypeDialog = ref(false)
 
-const vncFrame = ref(null)
+const vncFrame = ref<HTMLIFrameElement | null>(null)
 const loading = ref(true)
-const error = ref(null)
+const error = ref<string | null>(null)
 const isFullscreen = ref(false)
 const connectionStatus = ref('Connecting...')
 
@@ -215,13 +235,25 @@ const connectionStatusDisplay = computed(() => {
   return statusMap[connectionStatus.value] || connectionStatus.value
 })
 
-// VNC connection URL - will be loaded asynchronously from AppConfig
+// VNC connection URL - will be loaded asynchronously from AppConfig or derived from host prop
 const vncUrl = ref('') // Will be loaded on mount
+
+/** Build VNC URL from a SelectorHost record (Issue #4977). */
+const buildHostVncUrl = (h: SelectorHost): string => {
+  const port = h.vnc_port || 6080
+  const scheme = window.location.protocol === 'https:' ? 'https' : 'http'
+  return `${scheme}://${h.host}:${port}/vnc.html?autoconnect=true`
+}
 
 // Load dynamic VNC URL on component mount
 const loadVncUrlFn = async () => {
-  const dynamicVncUrl = await appConfig.getVncUrl('desktop');
-  vncUrl.value = dynamicVncUrl;
+  // Issue #4977: when a host prop is supplied, derive URL directly — no AppConfig call needed
+  if (props.host) {
+    vncUrl.value = buildHostVncUrl(props.host)
+  } else {
+    const dynamicVncUrl = await appConfig.getVncUrl('desktop');
+    vncUrl.value = dynamicVncUrl;
+  }
   // Clear any previous errors and update status
   error.value = null;
   loading.value = false;
@@ -229,7 +261,8 @@ const loadVncUrlFn = async () => {
 }
 
 const loadVncUrl = async () => {
-  await executeLoadVnc(loadVncUrlFn).catch(err => {
+  errorVnc.value = null
+  await wrapLoadVnc(loadVncUrlFn).catch(err => {
     logger.error('Failed to load VNC URL from config:', err);
 
     // CRITICAL: No fallbacks - config failure is real failure
@@ -255,6 +288,16 @@ const loadVncUrl = async () => {
     logger.error('Desktop unavailable - no configuration loaded');
   });
 }
+
+// Issue #4977: when the host prop changes, reload the VNC URL
+watch(() => props.host, async (newHost: SelectorHost | null | undefined) => {
+  if (newHost !== undefined) {
+    loading.value = true
+    error.value = null
+    connectionStatus.value = 'Connecting...'
+    await loadVncUrl()
+  }
+})
 
 const connectionStatusClass = computed(() => {
   switch (connectionStatus.value) {
@@ -324,7 +367,8 @@ const checkConnectionFn = async () => {
 }
 
 const checkConnection = async () => {
-  await executeCheckConnection(checkConnectionFn).catch(err => {
+  errorCheck.value = null
+  await wrapCheckConnection(checkConnectionFn).catch(err => {
     connectionStatus.value = 'Disconnected'
 
     if (err.name === 'AbortError') {
@@ -465,7 +509,7 @@ onUnmounted(() => {
 }
 
 .desktop-header {
-  padding: 1rem 1.5rem;
+  padding: var(--spacing-4) var(--spacing-6);
   background-color: var(--bg-card);
   border-bottom: 1px solid var(--border-default);
 }
@@ -491,7 +535,7 @@ onUnmounted(() => {
 /* Loading and error styles moved to UnifiedLoadingView */
 
 .desktop-controls {
-  padding: 0.75rem 1.5rem;
+  padding: var(--spacing-3) var(--spacing-6);
   background-color: var(--bg-card);
   border-top: 1px solid var(--border-default);
   display: flex;
@@ -500,7 +544,7 @@ onUnmounted(() => {
 }
 
 .control-btn {
-  padding: 0.375rem 0.75rem;
+  padding: var(--spacing-1-5) var(--spacing-3);
   font-size: var(--text-sm);
   background-color: var(--bg-secondary);
   color: var(--text-secondary);
@@ -521,7 +565,7 @@ onUnmounted(() => {
 
 /* Desktop Actions Toolbar (Issue #74) */
 .desktop-actions {
-  padding: 0.75rem 1.5rem;
+  padding: var(--spacing-3) var(--spacing-6);
   background-color: var(--bg-card);
   border-top: 1px solid var(--border-default);
   display: flex;
@@ -541,7 +585,7 @@ onUnmounted(() => {
 }
 
 .action-btn {
-  padding: 0.375rem 0.75rem;
+  padding: var(--spacing-1-5) var(--spacing-3);
   font-size: var(--text-sm);
   background-color: var(--color-primary-bg);
   color: var(--color-primary);
@@ -582,7 +626,7 @@ onUnmounted(() => {
 }
 
 .screenshot-header {
-  padding: 1rem 1.5rem;
+  padding: var(--spacing-4) var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   display: flex;
   align-items: center;
@@ -603,7 +647,7 @@ onUnmounted(() => {
 }
 
 .screenshot-footer {
-  padding: 1rem 1.5rem;
+  padding: var(--spacing-4) var(--spacing-6);
   border-top: 1px solid var(--border-default);
   display: flex;
   align-items: center;
@@ -612,7 +656,7 @@ onUnmounted(() => {
 }
 
 .download-btn {
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   background-color: var(--color-primary);
   color: white;
   border: none;
@@ -626,7 +670,7 @@ onUnmounted(() => {
 }
 
 .cancel-btn {
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   background-color: var(--bg-secondary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
@@ -672,7 +716,7 @@ onUnmounted(() => {
 }
 
 .type-dialog-header {
-  padding: 1rem 1.5rem;
+  padding: var(--spacing-4) var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   display: flex;
   align-items: center;
@@ -685,7 +729,7 @@ onUnmounted(() => {
 
 .type-textarea {
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   background-color: var(--bg-secondary);
@@ -705,7 +749,7 @@ onUnmounted(() => {
 }
 
 .type-dialog-footer {
-  padding: 1rem 1.5rem;
+  padding: var(--spacing-4) var(--spacing-6);
   border-top: 1px solid var(--border-default);
   display: flex;
   align-items: center;
@@ -714,7 +758,7 @@ onUnmounted(() => {
 }
 
 .type-btn {
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   background-color: var(--color-primary);
   color: white;
   border: none;

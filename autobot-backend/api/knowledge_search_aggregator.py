@@ -22,8 +22,18 @@ import logging
 from typing import Any, Dict, List, Optional, Set
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel, Field
 
+from api.schemas_knowledge import (
+    ContextRequest,
+    GraphRequest,
+    KnowledgeDocumentationSearchResponse,
+    KnowledgeDocumentationStatsResponse,
+    KnowledgeUnifiedContextResponse,
+    KnowledgeUnifiedGraphResponse,
+    KnowledgeUnifiedSearchResponse,
+    KnowledgeUnifiedStatsResponse,
+    UnifiedSearchRequest,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from knowledge_factory import get_or_create_knowledge_base
 
@@ -244,37 +254,6 @@ def get_documentation_searcher():
 # ============================================================================
 
 
-class UnifiedSearchRequest(BaseModel):
-    """Request model for unified knowledge search."""
-
-    query: str = Field(..., description="Search query text")
-    top_k: int = Field(10, ge=1, le=50, description="Max results from fact search")
-    doc_results: int = Field(3, ge=0, le=10, description="Max documentation results")
-    expand_relations: bool = Field(True, description="Include related facts via graph")
-    score_threshold: float = Field(
-        0.3, ge=0.0, le=1.0, description="Minimum relevance score"
-    )
-    include_sources: List[str] = Field(
-        default=["facts", "relations", "documentation"],
-        description="Which sources to search: facts, relations, documentation",
-    )
-
-
-class ContextRequest(BaseModel):
-    """Request model for getting LLM context."""
-
-    query: str = Field(..., description="User query for context retrieval")
-    max_context_length: int = Field(
-        4000, ge=500, le=16000, description="Maximum context length in characters"
-    )
-    include_documentation: bool = Field(
-        True, description="Include documentation in context"
-    )
-    include_relations: bool = Field(
-        True, description="Include related facts in context"
-    )
-
-
 # ============================================================================
 # API Endpoints
 # ============================================================================
@@ -357,12 +336,12 @@ def _search_documentation(
         logger.warning("Documentation search failed: %s", e)
 
 
+@router.post("/search", response_model=KnowledgeUnifiedSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="unified_search",
-    error_code_prefix="KNOWLEDGE_UNIFIED",
+    error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
-@router.post("/search")
 async def unified_search(req: Request, body: UnifiedSearchRequest):
     """
     Search across all knowledge sources in a unified query.
@@ -406,12 +385,12 @@ async def unified_search(req: Request, body: UnifiedSearchRequest):
     return result
 
 
+@router.get("/stats", response_model=KnowledgeUnifiedStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="unified_stats",
-    error_code_prefix="KNOWLEDGE_UNIFIED",
+    error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
-@router.get("/stats")
 async def unified_stats(req: Request):
     """Get statistics from all unified knowledge sources (KB facts, relations, docs). Ref: #1088."""
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -474,12 +453,12 @@ async def unified_stats(req: Request):
     return stats
 
 
+@router.post("/context", response_model=KnowledgeUnifiedContextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_llm_context",
-    error_code_prefix="KNOWLEDGE_UNIFIED",
+    error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
-@router.post("/context")
 async def get_llm_context(req: Request, body: ContextRequest):
     """
     Get formatted context for LLM prompts from unified knowledge sources.
@@ -545,12 +524,12 @@ async def get_llm_context(req: Request, body: ContextRequest):
     }
 
 
+@router.get("/documentation/search", response_model=KnowledgeDocumentationSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_documentation",
-    error_code_prefix="KNOWLEDGE_UNIFIED",
+    error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
-@router.get("/documentation/search")
 async def search_documentation(
     query: str,
     n_results: int = 5,
@@ -598,12 +577,12 @@ async def search_documentation(
         )
 
 
+@router.get("/documentation/stats", response_model=KnowledgeDocumentationStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="documentation_stats",
-    error_code_prefix="KNOWLEDGE_UNIFIED",
+    error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
-@router.get("/documentation/stats")
 async def documentation_stats():
     """
     Get statistics about indexed documentation.
@@ -641,16 +620,6 @@ async def documentation_stats():
 # ============================================================================
 # Unified Knowledge Graph Endpoint (for KnowledgeGraph.vue)
 # ============================================================================
-
-
-class GraphRequest(BaseModel):
-    """Request model for unified knowledge graph."""
-
-    max_facts: int = Field(50, ge=1, le=200, description="Maximum facts to include")
-    max_depth: int = Field(2, ge=1, le=3, description="Maximum relation depth")
-    include_categories: bool = Field(True, description="Include category nodes")
-    include_relations: bool = Field(True, description="Include fact relations")
-    category_filter: Optional[str] = Field(None, description="Filter by category path")
 
 
 def _create_category_node(category: Dict[str, Any]) -> Dict[str, Any]:
@@ -938,12 +907,12 @@ def _update_category_fact_counts(
             node["metadata"]["fact_count"] = count
 
 
+@router.post("/graph", response_model=KnowledgeUnifiedGraphResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_unified_graph",
-    error_code_prefix="KNOWLEDGE_UNIFIED",
+    error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
-@router.post("/graph")
 async def get_unified_graph(req: Request, body: GraphRequest):
     """
     Get unified knowledge graph combining categories, facts, and relations.
@@ -1008,12 +977,12 @@ async def get_unified_graph(req: Request, body: GraphRequest):
     }
 
 
+@router.get("/graph", response_model=KnowledgeUnifiedGraphResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_unified_graph_simple",
-    error_code_prefix="KNOWLEDGE_UNIFIED",
+    error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
-@router.get("/graph")
 async def get_unified_graph_simple(
     req: Request,
     max_facts: int = Query(50, ge=1, le=200, description="Maximum facts to include"),

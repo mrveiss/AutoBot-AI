@@ -14,14 +14,27 @@ import re
 import subprocess  # nosec B404
 import threading
 from datetime import datetime, timezone
-from enum import Enum
 from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
+from api.schemas_analytics import (
+    CheckCategory,
+    CheckDefinition,
+    CheckResult,
+    CheckSeverity,
+    CheckToggleResponse,
+    CommitCheckResult,
+    HookConfig,
+    HookConfigUpdateResponse,
+    HookInstallResponse,
+    HookStatus,
+    PrecommitCategoryItem,
+    PrecommitSummaryResponse,
+)
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
@@ -30,94 +43,6 @@ router = APIRouter(tags=["precommit", "analytics"])  # Prefix set in router_regi
 
 # Issue #380: Module-level frozenset for expensive checks to skip in fast mode
 _EXPENSIVE_CHECKS = frozenset({"QUA002", "DOC001"})
-
-
-# ============================================================================
-# Models
-# ============================================================================
-
-
-class CheckSeverity(str, Enum):
-    """Severity levels for pre-commit checks."""
-
-    BLOCK = "block"  # Prevents commit
-    WARN = "warn"  # Shows warning but allows commit
-    INFO = "info"  # Informational only
-
-
-class CheckCategory(str, Enum):
-    """Categories of pre-commit checks."""
-
-    SECURITY = "security"
-    QUALITY = "quality"
-    STYLE = "style"
-    DEBUG = "debug"
-    DOCS = "docs"
-
-
-class CheckResult(BaseModel):
-    """Result of a single check."""
-
-    check_id: str
-    name: str
-    category: CheckCategory
-    severity: CheckSeverity
-    passed: bool
-    message: str
-    file: Optional[str] = None
-    line: Optional[int] = None
-    snippet: Optional[str] = None
-    suggestion: Optional[str] = None
-
-
-class CommitCheckResult(BaseModel):
-    """Result of checking staged files."""
-
-    passed: bool
-    total_checks: int
-    passed_checks: int
-    failed_checks: int
-    warnings: int
-    blocked: bool
-    duration_ms: float
-    results: list[CheckResult]
-    files_checked: list[str]
-    timestamp: str
-
-
-class HookConfig(BaseModel):
-    """Configuration for pre-commit hooks."""
-
-    enabled: bool = True
-    fast_mode: bool = True  # Skip expensive checks
-    timeout_seconds: int = Field(default=5, ge=1, le=30)
-    bypass_keyword: str = "[skip-hooks]"
-    enabled_checks: list[str] = Field(default_factory=list)
-    disabled_checks: list[str] = Field(default_factory=list)
-
-
-class CheckDefinition(BaseModel):
-    """Definition of a check rule."""
-
-    id: str
-    name: str
-    category: CheckCategory
-    severity: CheckSeverity
-    pattern: str
-    description: str
-    suggestion: str
-    file_patterns: list[str] = Field(default_factory=lambda: ["*"])
-    enabled: bool = True
-
-
-class HookStatus(BaseModel):
-    """Status of installed hooks."""
-
-    installed: bool
-    path: Optional[str] = None
-    version: Optional[str] = None
-    last_run: Optional[str] = None
-    config: HookConfig
 
 
 # ============================================================================
@@ -453,7 +378,12 @@ def _calculate_check_statistics(
 # ============================================================================
 
 
-@router.get("/check")
+@router.get("/check", response_model=CommitCheckResult)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_staged_files",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 async def check_staged_files(
     admin_check: bool = Depends(check_admin_permission),
     fast_mode: bool = Query(True, description="Skip expensive checks"),
@@ -511,7 +441,12 @@ async def check_staged_files(
     return result
 
 
-@router.post("/check-content")
+@router.post("/check-content", response_model=list[CheckResult])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_content",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 async def check_content(
     content: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -534,7 +469,12 @@ async def check_content(
     return results
 
 
-@router.get("/checks")
+@router.get("/checks", response_model=list[CheckDefinition])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_checks",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 async def list_checks(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[CheckDefinition]:
@@ -546,7 +486,12 @@ async def list_checks(
     return list(BUILTIN_CHECKS.values())
 
 
-@router.get("/checks/{check_id}")
+@router.get("/checks/{check_id}", response_model=CheckDefinition)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_check",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 async def get_check(
     check_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -561,7 +506,12 @@ async def get_check(
     return BUILTIN_CHECKS[check_id]
 
 
-@router.post("/checks/{check_id}/toggle")
+@router.post("/checks/{check_id}/toggle", response_model=CheckToggleResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="toggle_check",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 async def toggle_check(
     check_id: str,
     enabled: bool,
@@ -584,7 +534,12 @@ async def toggle_check(
     }
 
 
-@router.get("/config")
+@router.get("/config", response_model=HookConfig)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_config",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 async def get_config(
     admin_check: bool = Depends(check_admin_permission),
 ) -> HookConfig:
@@ -597,7 +552,12 @@ async def get_config(
         return _hook_config
 
 
-@router.post("/config")
+@router.post("/config", response_model=HookConfigUpdateResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_config",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 async def update_config(
     config: HookConfig,
     admin_check: bool = Depends(check_admin_permission),
@@ -614,7 +574,12 @@ async def update_config(
     return {"message": "Configuration updated", "config": config}
 
 
-@router.get("/status")
+@router.get("/status", response_model=HookStatus)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_status",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 async def get_status(
     admin_check: bool = Depends(check_admin_permission),
 ) -> HookStatus:
@@ -741,7 +706,12 @@ async def _write_hook_file(hook_path: Path, content: str) -> dict:
         raise HTTPException(status_code=500, detail="Failed to install hooks")
 
 
-@router.post("/install")
+@router.post("/install", response_model=HookInstallResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="install_hooks",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 async def install_hooks(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict:
@@ -765,7 +735,12 @@ async def install_hooks(
     return await _write_hook_file(hook_path, hook_content)
 
 
-@router.post("/uninstall")
+@router.post("/uninstall", response_model=HookInstallResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="uninstall_hooks",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 async def uninstall_hooks(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict:
@@ -799,7 +774,12 @@ async def uninstall_hooks(
         raise HTTPException(status_code=500, detail="Failed to uninstall hooks")
 
 
-@router.get("/history")
+@router.get("/history", response_model=list[CommitCheckResult])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_history",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 async def get_history(
     admin_check: bool = Depends(check_admin_permission),
     limit: int = Query(20, ge=1, le=100, description="Number of results"),
@@ -813,7 +793,12 @@ async def get_history(
         return _check_history[:limit]
 
 
-@router.get("/summary")
+@router.get("/summary", response_model=PrecommitSummaryResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_summary",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 async def get_summary(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict:
@@ -876,7 +861,12 @@ async def get_summary(
     }
 
 
-@router.get("/categories")
+@router.get("/categories", response_model=list[PrecommitCategoryItem])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_categories",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 async def get_categories(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict]:
@@ -918,6 +908,7 @@ def get_demo_content(filepath: str) -> str:
     if filepath.endswith(".py"):
         return """
 import os
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Configuration
 password = "admin123"  # noqa: S105 — intentional demo credential for analyzer testing

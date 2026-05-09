@@ -27,7 +27,7 @@
   become: yes
 
   vars:
-    enrollment_timestamp: "{{ ansible_date_time.iso8601 }}"
+    enrollment_timestamp: "{{ ansible_facts['date_time'].iso8601 }}"
     autobot_user: "autobot"
     autobot_group: "autobot"
     autobot_home: "/home/autobot"
@@ -86,8 +86,8 @@
           - "========================================"
           - "Target Host: {{ inventory_hostname }}"
           - "Node Role: {{ node_role | default('not specified') }}"
-          - "IP Address: {{ ansible_default_ipv4.address | default('N/A') }}"
-          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "IP Address: {{ ansible_facts['default_ipv4'].address | default('N/A') }}"
+          - "OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
           - "Timestamp: {{ enrollment_timestamp }}"
       tags: ['always']
 
@@ -99,8 +99,8 @@
 
     - name: "Check OS compatibility"
       fail:
-        msg: "Unsupported OS: {{ ansible_distribution }}. AutoBot requires Debian or Ubuntu."
-      when: ansible_os_family != 'Debian'
+        msg: "Unsupported OS: {{ ansible_facts['distribution'] }}. AutoBot requires Debian or Ubuntu."
+      when: ansible_facts['os_family'] != 'Debian'
       tags: ['always']
 
   tasks:
@@ -387,7 +387,7 @@
               {
                 "hostname": "{{ inventory_hostname }}",
                 "role": "{{ node_role }}",
-                "ip": "{{ ansible_default_ipv4.address }}",
+                "ip": "{{ ansible_facts['default_ipv4'].address }}",
                 "enrolled_at": "{{ enrollment_timestamp }}",
                 "status": "enrolled"
               }
@@ -407,7 +407,7 @@
           - "========================================"
           - "Host: {{ inventory_hostname }}"
           - "Role: {{ node_role }}"
-          - "IP: {{ ansible_default_ipv4.address }}"
+          - "IP: {{ ansible_facts['default_ipv4'].address }}"
           - "Status: Ready"
           - ""
           - "Next Steps:"

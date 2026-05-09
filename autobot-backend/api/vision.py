@@ -10,21 +10,35 @@ Author: mrveiss
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
-
+from fastapi import APIRouter, Depends, HTTPException, Request
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from computer_vision_system import ElementType, InteractionType, ScreenAnalyzer
-from type_defs.common import Metadata
+
+from api.system_health import register_singleton_probe
 
 router = APIRouter(tags=["vision", "gui-automation"])
 logger = logging.getLogger(__name__)
 
 # Global screen analyzer instance (thread-safe)
 import threading
+from api.schemas_system import (
+    ElementDetectionRequest,
+    OCRRequest,
+    ScreenAnalysisRequest,
+    ScreenAnalysisResponse,
+    UIElementResponse,
+    VisionDetectElementsResponse,
+    VisionHealthResponse,
+    VisionOCRResponse,
+    VisionAutomationOpportunitiesResponse,
+    VisionElementTypesResponse,
+    VisionInteractionTypesResponse,
+    VisionLayoutResponse,
+    VisionStatusResponse,
+)
 
 _screen_analyzer: Optional[ScreenAnalyzer] = None
 _screen_analyzer_lock = threading.Lock()
@@ -42,93 +56,16 @@ def get_screen_analyzer() -> ScreenAnalyzer:
     return _screen_analyzer
 
 
-# Request/Response Models
-class ScreenAnalysisRequest(BaseModel):
-    """Request for screen analysis"""
-
-    session_id: Optional[str] = Field(
-        None, description="Optional session ID for context"
-    )
-    include_multimodal: bool = Field(True, description="Include multi-modal analysis")
-
-
-class ElementDetectionRequest(BaseModel):
-    """Request for element detection"""
-
-    element_type: Optional[str] = Field(None, description="Filter by element type")
-    min_confidence: float = Field(
-        0.5, ge=0.0, le=1.0, description="Minimum confidence threshold"
-    )
-    session_id: Optional[str] = None
-
-
-class OCRRequest(BaseModel):
-    """Request for OCR text extraction"""
-
-    region: Optional[Dict[str, int]] = Field(
-        None,
-        description=(
-            "Region to extract text from {x, y, width, height}. If None,"
-            "analyzes full screen."
-        ),
-    )
-    session_id: Optional[str] = None
-
-
-class ElementInteractionRequest(BaseModel):
-    """Request for element interaction validation"""
-
-    element_id: str = Field(..., description="ID of element to interact with")
-    interaction_type: str = Field(..., description="Type of interaction to perform")
-    parameters: Optional[Metadata] = Field(
-        None, description="Additional interaction parameters"
-    )
-
-
-class UIElementResponse(BaseModel):
-    """Response model for UI element"""
-
-    element_id: str
-    element_type: str
-    bbox: Dict[str, int]
-    center_point: List[int]
-    confidence: float
-    text_content: str
-    attributes: Metadata
-    possible_interactions: List[str]
-
-
-class ScreenAnalysisResponse(BaseModel):
-    """Response model for screen analysis"""
-
-    timestamp: float
-    ui_elements: List[UIElementResponse]
-    text_regions: List[Metadata]
-    dominant_colors: List[Metadata]
-    layout_structure: Metadata
-    automation_opportunities: List[Metadata]
-    context_analysis: Metadata
-    confidence_score: float
-    multimodal_analysis: Optional[List[Metadata]] = None
-
-
-class VisionHealthResponse(BaseModel):
-    """Health check response"""
-
-    status: str
-    analyzer_ready: bool
-    capabilities: List[str]
-    element_types_supported: List[str]
-    interaction_types_supported: List[str]
-
-
 # API Endpoints
+register_singleton_probe("vision", get_screen_analyzer)
+
+
+@router.get("/health", response_model=VisionHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="vision_health_check",
     error_code_prefix="VISION",
 )
-@router.get("/health", response_model=VisionHealthResponse)
 async def vision_health_check(
     current_user: dict = Depends(get_current_user),
 ):
@@ -166,12 +103,12 @@ async def vision_health_check(
         )
 
 
+@router.post("/analyze", response_model=ScreenAnalysisResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_screen",
     error_code_prefix="VISION",
 )
-@router.post("/analyze", response_model=ScreenAnalysisResponse)
 async def analyze_screen(
     request: ScreenAnalysisRequest,
     current_user: dict = Depends(get_current_user),
@@ -226,12 +163,12 @@ async def analyze_screen(
         raise HTTPException(status_code=500, detail="Screen analysis failed")
 
 
+@router.post("/elements", response_model=VisionDetectElementsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_elements",
     error_code_prefix="VISION",
 )
-@router.post("/elements")
 async def detect_elements(
     request: ElementDetectionRequest,
     current_user: dict = Depends(get_current_user),
@@ -288,12 +225,12 @@ async def detect_elements(
         raise HTTPException(status_code=500, detail="Element detection failed")
 
 
+@router.post("/ocr", response_model=VisionOCRResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="extract_text_ocr",
     error_code_prefix="VISION",
 )
-@router.post("/ocr")
 async def extract_text_ocr(
     request: OCRRequest,
     current_user: dict = Depends(get_current_user),
@@ -344,12 +281,12 @@ async def extract_text_ocr(
         raise HTTPException(status_code=500, detail="OCR extraction failed")
 
 
+@router.get("/automation-opportunities", response_model=VisionAutomationOpportunitiesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_automation_opportunities",
     error_code_prefix="VISION",
 )
-@router.get("/automation-opportunities")
 async def get_automation_opportunities(
     session_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
@@ -376,12 +313,12 @@ async def get_automation_opportunities(
         raise HTTPException(status_code=500, detail="Failed to identify opportunities")
 
 
+@router.get("/element-types", response_model=VisionElementTypesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_element_types",
     error_code_prefix="VISION",
 )
-@router.get("/element-types")
 async def get_element_types(
     current_user: dict = Depends(get_current_user),
 ):
@@ -403,12 +340,12 @@ async def get_element_types(
     }
 
 
+@router.get("/interaction-types", response_model=VisionInteractionTypesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_interaction_types",
     error_code_prefix="VISION",
 )
-@router.get("/interaction-types")
 async def get_interaction_types(
     current_user: dict = Depends(get_current_user),
 ):
@@ -430,12 +367,12 @@ async def get_interaction_types(
     }
 
 
+@router.get("/layout", response_model=VisionLayoutResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_layout_analysis",
     error_code_prefix="VISION",
 )
-@router.get("/layout")
 async def get_layout_analysis(
     session_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
@@ -461,12 +398,12 @@ async def get_layout_analysis(
         raise HTTPException(status_code=500, detail="Layout analysis failed")
 
 
+@router.get("/status", response_model=VisionStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="vision_service_status",
+    operation="get_vision_status",
     error_code_prefix="VISION",
 )
-@router.get("/status")
 async def get_vision_status(
     current_user: dict = Depends(get_current_user),
 ):

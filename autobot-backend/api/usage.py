@@ -21,26 +21,19 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 
+from api.schemas_common import UsageRecordResponse
+from api.schemas_analytics import (
+    UsageByUserAllResponse,
+    UsageMyUsageResponse,
+    UsageRecordEndpointRequest,
+    UsageByUserSingleResponse,
+    UsageSummaryResponse,
+)
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.llm_cost_tracker import get_cost_tracker
-
-
-class UsageRecordRequest(BaseModel):
-    """Request body for POST /api/usage/record. Issue #1807."""
-
-    provider: str
-    model: str
-    input_tokens: int
-    output_tokens: int
-    session_id: str | None = None
-    user_id: str | None = None
-    agent_id: str | None = None
-    latency_ms: float | None = None
-    success: bool = True
 
 
 logger = logging.getLogger(__name__)
@@ -52,12 +45,12 @@ router = APIRouter(prefix="/usage", tags=["usage", "analytics"])
 # ============================================================================
 
 
+@router.get("/summary", response_model=UsageSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_usage_summary",
     error_code_prefix="USAGE",
 )
-@router.get("/summary")
 async def get_usage_summary(
     days: int = Query(default=30, ge=1, le=365, description="Number of days to include"),
     admin_check: bool = Depends(check_admin_permission),
@@ -100,12 +93,12 @@ async def get_usage_summary(
     }
 
 
+@router.get("/by-user", response_model=UsageByUserAllResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_usage_by_user_all",
     error_code_prefix="USAGE",
 )
-@router.get("/by-user")
 async def get_usage_by_user_all(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:
@@ -124,12 +117,12 @@ async def get_usage_by_user_all(
     }
 
 
+@router.get("/by-user/{user_id}", response_model=UsageByUserSingleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_usage_by_user_single",
     error_code_prefix="USAGE",
 )
-@router.get("/by-user/{user_id}")
 async def get_usage_by_user_single(
     user_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -143,12 +136,12 @@ async def get_usage_by_user_single(
     return await tracker.get_cost_by_user(user_id)
 
 
+@router.get("/me", response_model=UsageMyUsageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_my_usage",
     error_code_prefix="USAGE",
 )
-@router.get("/me")
 async def get_my_usage(
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -181,14 +174,14 @@ async def get_my_usage(
 # ============================================================================
 
 
+@router.post("/record", response_model=UsageRecordResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_usage_event",
     error_code_prefix="USAGE",
 )
-@router.post("/record")
 async def record_usage_event(
-    body: UsageRecordRequest,
+    body: UsageRecordEndpointRequest,
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """
@@ -225,12 +218,12 @@ async def record_usage_event(
 # ============================================================================
 
 
+@router.get("/export/csv", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_usage_csv",
     error_code_prefix="USAGE",
 )
-@router.get("/export/csv")
 async def export_usage_csv(
     days: int = Query(default=30, ge=1, le=365, description="Days of data to export"),
     admin_check: bool = Depends(check_admin_permission),

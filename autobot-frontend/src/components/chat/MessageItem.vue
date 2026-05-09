@@ -349,7 +349,7 @@ const formattedContent = computed(() => {
 .message-wrapper {
   @apply rounded-lg shadow-sm border transition-all duration-200;
   max-width: 85%;
-  padding: 6px 10px;
+  padding: var(--spacing-1-5) var(--spacing-2-5);
   animation: slideInFromBottom 0.25s ease-out;
 }
 

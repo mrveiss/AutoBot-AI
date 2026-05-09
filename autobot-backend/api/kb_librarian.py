@@ -32,46 +32,30 @@ Overlap note (issue #3336):
 """
 
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from agents.kb_librarian_agent import get_kb_librarian
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from type_defs.common import Metadata
+from api.schemas_knowledge import (
+    KBQuery,
+    KBQueryResponse,
+    KbLibrarianConfigureResponse,
+    KbLibrarianStatusResponse,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-class KBQuery(BaseModel):
-    """Knowledge base query request model."""
-
-    query: str
-    max_results: Optional[int] = None
-    similarity_threshold: Optional[float] = None
-    auto_summarize: Optional[bool] = None
-
-
-class KBQueryResponse(BaseModel):
-    """Knowledge base query response model."""
-
-    enabled: bool
-    is_question: bool
-    query: str
-    documents_found: int
-    documents: List[Metadata]
-    summary: Optional[str] = None
-
-
+@router.post("/query", response_model=KBQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="query_knowledge_base",
     error_code_prefix="KB_LIBRARIAN",
 )
-@router.post("/query", response_model=KBQueryResponse)
 async def query_knowledge_base(
     kb_query: KBQuery,
     current_user: dict = Depends(get_current_user),
@@ -123,12 +107,12 @@ async def query_knowledge_base(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/status", response_model=KbLibrarianStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_kb_librarian_status",
     error_code_prefix="KB_LIBRARIAN",
 )
-@router.get("/status")
 async def get_kb_librarian_status(
     current_user: dict = Depends(get_current_user),
 ):
@@ -154,12 +138,12 @@ async def get_kb_librarian_status(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.put("/configure", response_model=KbLibrarianConfigureResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="configure_kb_librarian",
     error_code_prefix="KB_LIBRARIAN",
 )
-@router.put("/configure")
 async def configure_kb_librarian(
     enabled: Optional[bool] = None,
     similarity_threshold: Optional[float] = None,

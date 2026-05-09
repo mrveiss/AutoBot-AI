@@ -34,9 +34,7 @@ from typing import Optional
 from config.registry import ConfigRegistry
 
 # Deprecation flag - set to True to enable deprecation warnings
-_SHOW_DEPRECATION_WARNINGS = (
-    os.getenv("AUTOBOT_SHOW_DEPRECATION_WARNINGS", "").lower() == "true"
-)
+_SHOW_DEPRECATION_WARNINGS = os.getenv("AUTOBOT_SHOW_DEPRECATION_WARNINGS", "").lower() == "true"
 
 
 def _emit_deprecation_warning(old_pattern: str, new_pattern: str) -> None:
@@ -48,8 +46,7 @@ def _emit_deprecation_warning(old_pattern: str, new_pattern: str) -> None:
     """
     if _SHOW_DEPRECATION_WARNINGS:
         warnings.warn(
-            f"ConfigRegistry Migration: '{old_pattern}' is deprecated. "
-            f"Use '{new_pattern}' instead. (Issue #763)",
+            f"ConfigRegistry Migration: '{old_pattern}' is deprecated. " f"Use '{new_pattern}' instead. (Issue #763)",
             DeprecationWarning,
             stacklevel=3,
         )
@@ -92,12 +89,8 @@ class NetworkConstants:
     # === Loopback/Local IP sets for O(1) membership checks (#625) ===
     # Use these frozensets instead of inline lists for `in` checks
     # nosec B104 - These contain intentional bind-all-interfaces for loopback checking
-    LOOPBACK_IPS: frozenset = frozenset(
-        {"127.0.0.1", "localhost", "0.0.0.0", "::1"}  # nosec B104
-    )
-    LOOPBACK_IPS_V4: frozenset = frozenset(
-        {"127.0.0.1", "localhost", "0.0.0.0"}  # nosec B104
-    )
+    LOOPBACK_IPS: frozenset = frozenset({"127.0.0.1", "localhost", "0.0.0.0", "::1"})  # nosec B104
+    LOOPBACK_IPS_V4: frozenset = frozenset({"127.0.0.1", "localhost", "0.0.0.0"})  # nosec B104
 
     # === Network prefixes for IP validation (static) ===
     # All RFC 1918 private IP prefixes — deployment-agnostic
@@ -111,9 +104,7 @@ class NetworkConstants:
     PUBLIC_DNS_IP: str = "8.8.8.8"  # Google Public DNS for connectivity testing
 
     # === Special purpose IPs (static) ===
-    DUMMY_ROUTE_IP: str = (
-        "10.255.255.255"  # Dummy IP for local IP detection via socket routing
-    )
+    DUMMY_ROUTE_IP: str = "10.255.255.255"  # Dummy IP for local IP detection via socket routing
     TEST_HOST_IP: str = "10.0.0.99"  # Test host IP for unit tests (not a real VM)
 
     # === Standard ports (from ConfigRegistry) ===
@@ -218,8 +209,16 @@ class NetworkConstants:
 
     @classmethod
     def get_websocket_url(cls) -> str:
-        """Get WebSocket URL for frontend (Issue #372 - reduces feature envy)."""
-        return f"ws://{cls.MAIN_MACHINE_IP}:{cls.BACKEND_PORT}/ws"
+        """Get WebSocket URL for frontend (Issue #372 - reduces feature envy).
+
+        Issue #6303: Returns wss:// when backend TLS is enabled; omits port
+        because nginx terminates TLS on 443 and proxies to the backend.
+        """
+        from autobot_shared.ssot_config import config  # lazy to avoid circular import
+
+        if config.tls.backend_tls_enabled:
+            return f"wss://{cls.MAIN_MACHINE_IP}/api/ws"
+        return f"ws://{cls.MAIN_MACHINE_IP}:{cls.BACKEND_PORT}/api/ws"
 
 
 class ServiceURLs:
@@ -234,34 +233,20 @@ class ServiceURLs:
     """
 
     # Backend API URLs (computed from ConfigRegistry)
-    BACKEND_API: str = (
-        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-    )
-    BACKEND_LOCAL: str = (
-        f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
-    )
+    BACKEND_API: str = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    BACKEND_LOCAL: str = f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
 
     # Frontend URLs (computed from ConfigRegistry)
-    FRONTEND_VM: str = (
-        f"http://{NetworkConstants.FRONTEND_VM_IP}:{NetworkConstants.FRONTEND_PORT}"
-    )
-    FRONTEND_LOCAL: str = (
-        f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.FRONTEND_PORT}"
-    )
+    FRONTEND_VM: str = f"http://{NetworkConstants.FRONTEND_VM_IP}:{NetworkConstants.FRONTEND_PORT}"
+    FRONTEND_LOCAL: str = f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.FRONTEND_PORT}"
 
     # Redis URLs (computed from ConfigRegistry)
-    REDIS_VM: str = (
-        f"redis://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT}"
-    )
-    REDIS_LOCAL: str = (
-        f"redis://{NetworkConstants.LOCALHOST_IP}:{NetworkConstants.REDIS_PORT}"
-    )
+    REDIS_VM: str = f"redis://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT}"
+    REDIS_LOCAL: str = f"redis://{NetworkConstants.LOCALHOST_IP}:{NetworkConstants.REDIS_PORT}"
 
     # Ollama LLM URLs (computed from ConfigRegistry)
     # Ollama runs on the local host (.20); OLLAMA_MAIN pointed to .24 (wrong).
-    OLLAMA_LOCAL: str = (
-        f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
-    )
+    OLLAMA_LOCAL: str = f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
 
     # VNC Desktop URLs (computed from ConfigRegistry)
     # fmt: off
@@ -276,9 +261,7 @@ class ServiceURLs:
         f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.CHROME_DEBUGGER_PORT}"
     )
     # fmt: on
-    VNC_LOCAL: str = (
-        f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}/vnc.html"
-    )
+    VNC_LOCAL: str = f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}/vnc.html"
 
     # Browser automation service (computed from ConfigRegistry)
     # fmt: off
@@ -288,14 +271,10 @@ class ServiceURLs:
     # fmt: on
 
     # AI Stack service (computed from ConfigRegistry)
-    AI_STACK_SERVICE: str = (
-        f"http://{NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT}"
-    )
+    AI_STACK_SERVICE: str = f"http://{NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT}"
 
     # NPU Worker services (computed from ConfigRegistry)
-    NPU_WORKER_SERVICE: str = (
-        f"http://{NetworkConstants.NPU_WORKER_VM_IP}:{NetworkConstants.NPU_WORKER_PORT}"
-    )
+    NPU_WORKER_SERVICE: str = f"http://{NetworkConstants.NPU_WORKER_VM_IP}:{NetworkConstants.NPU_WORKER_PORT}"
     # fmt: off
     NPU_WORKER_WINDOWS_SERVICE: str = (
         f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.NPU_WORKER_WINDOWS_PORT}"
@@ -303,15 +282,9 @@ class ServiceURLs:
     # fmt: on
 
     # Issue #474: Monitoring stack services (hosted on Redis VM)
-    PROMETHEUS_API: str = (
-        f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.PROMETHEUS_PORT}"
-    )
-    ALERTMANAGER_API: str = (
-        f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.ALERTMANAGER_PORT}"
-    )
-    GRAFANA_URL: str = (
-        f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.GRAFANA_PORT}"
-    )
+    PROMETHEUS_API: str = f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.PROMETHEUS_PORT}"
+    ALERTMANAGER_API: str = f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.ALERTMANAGER_PORT}"
+    GRAFANA_URL: str = f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.GRAFANA_PORT}"
 
 
 class NetworkConfig:

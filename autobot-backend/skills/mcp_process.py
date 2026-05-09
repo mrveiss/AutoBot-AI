@@ -14,11 +14,14 @@ import logging
 import os
 import sys
 import tempfile
+import time
 from autobot_shared.singleton_factory import lazy_singleton
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.fire_and_forget import run_redis_write
 from autobot_shared.ssot_config import config
+from skills.mcp_trace import MCPSpan, new_span, write_span
 
 logger = logging.getLogger(__name__)
 
@@ -136,22 +139,46 @@ class MCPProcessManager:
         """Call a named tool on the skill server and return its result.
 
         Raises RuntimeError if the tool call returns an error.
+        Each call produces an MCPSpan written to Redis fire-and-forget (Issue #4413).
         """
         entry = self._get_entry(name)
-        async with entry._lock:
-            await self._send(
-                entry,
-                {
-                    "jsonrpc": "2.0",
-                    "id": 2,
-                    "method": "tools/call",
-                    "params": {"name": tool, "arguments": args},
-                },
-            )
-            resp = await asyncio.wait_for(self._recv(entry), timeout=CALL_TIMEOUT)
-        if "error" in resp:
-            raise RuntimeError(f"Tool call failed: {resp['error']}")
-        return resp.get("result")
+        span: MCPSpan = new_span(
+            skill_name=name,
+            tool_name=tool,
+            input_params=args,
+            pid=entry.proc.pid,
+        )
+        logger.debug("mcp_trace: starting trace_id=%s", span.trace_id)
+
+        result = None
+        error_str: Optional[str] = None
+        try:
+            async with entry._lock:
+                await self._send(
+                    entry,
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "method": "tools/call",
+                        "params": {"name": tool, "arguments": args},
+                    },
+                )
+                resp = await asyncio.wait_for(self._recv(entry), timeout=CALL_TIMEOUT)
+            if "error" in resp:
+                error_str = str(resp["error"])
+                raise RuntimeError(f"Tool call failed: {resp['error']}")
+            result = resp.get("result")
+            return result
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            error_str = str(exc)
+            raise
+        finally:
+            span.ended_at = time.time()
+            span.output = result if isinstance(result, dict) else ({"value": result} if result is not None else None)
+            span.error = error_str
+            run_redis_write(write_span(span), label="mcp_trace")
 
     async def stop(self, name: str) -> None:
         """Terminate the skill subprocess and remove its temp file."""

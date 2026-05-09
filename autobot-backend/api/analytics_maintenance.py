@@ -15,19 +15,38 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, Query, Request
 
 from auth_middleware import check_admin_permission
+from api.system_health import register_singleton_probe
+from api.schemas_analytics import (
+    CustomReportRequest,
+    DashboardResponse,
+    MaintenanceRecommendationResponse,
+    ResourceOptimizationResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.analytics_service import (
     MaintenancePriority,
     ResourceType,
     get_analytics_service,
+)
+from api.schemas_analytics import (
+    MaintenanceRecommendationsResponse,
+    MaintenanceByCategoryResponse,
+    MaintenanceSummaryResponse,
+    OptimizationRecommendationsResponse,
+    OptimizationByTypeResponse,
+    OptimizationQuickWinsResponse,
+    MaintenanceDashboardResponse,
+    MaintenanceHealthStatusResponse,
+    MaintenanceCustomReportResponse,
+    MaintenanceInsightsResponse,
+    MaintenanceTrendsResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,75 +59,17 @@ router = APIRouter(tags=["analytics", "advanced"])
 # ============================================================================
 
 
-class MaintenanceRecommendationResponse(BaseModel):
-    """Maintenance recommendation response model."""
-
-    id: str
-    title: str
-    description: str
-    priority: str
-    category: str
-    affected_component: str
-    predicted_issue: str
-    confidence: float
-    recommended_action: str
-    estimated_impact: str
-    detected_at: str
-    metadata: dict = Field(default_factory=dict)
-
-
-class ResourceOptimizationResponse(BaseModel):
-    """Resource optimization response model."""
-
-    id: str
-    resource_type: str
-    title: str
-    current_usage: dict
-    recommended_change: str
-    expected_savings: dict
-    implementation_effort: str
-    priority: str
-    details: str
-
-
-class DashboardResponse(BaseModel):
-    """Unified dashboard response model."""
-
-    generated_at: str
-    period_days: int
-    health: dict
-    cost: dict
-    agents: dict
-    engagement: dict
-    maintenance: dict
-    optimization: dict
-
-
-class CustomReportRequest(BaseModel):
-    """Custom report generation request."""
-
-    report_type: str = Field(
-        default="executive",
-        description="Report type: executive, technical, cost, performance",
-    )
-    days: int = Field(default=30, ge=1, le=365, description="Days to include")
-    include_sections: Optional[List[str]] = Field(
-        default=None,
-        description="Sections to include: cost, agents, behavior, maintenance, optimization",
-    )
-
-
 # ============================================================================
 # PREDICTIVE MAINTENANCE ENDPOINTS
 # ============================================================================
 
 
+@router.get("/maintenance", response_model=MaintenanceRecommendationsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_maintenance_recommendations",
-    error_code_prefix="MAINT",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
-@router.get("/maintenance")
 async def get_maintenance_recommendations(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -144,12 +105,12 @@ async def get_maintenance_recommendations(
     }
 
 
+@router.get("/maintenance/category/{category}", response_model=MaintenanceByCategoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_maintenance_by_category",
-    error_code_prefix="MAINT",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
-@router.get("/maintenance/category/{category}")
 async def get_maintenance_by_category(
     category: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -173,12 +134,12 @@ async def get_maintenance_by_category(
     }
 
 
+@router.get("/maintenance/summary", response_model=MaintenanceSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_maintenance_summary",
-    error_code_prefix="MAINT",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
-@router.get("/maintenance/summary")
 async def get_maintenance_summary(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -239,12 +200,12 @@ async def get_maintenance_summary(
 # ============================================================================
 
 
+@router.get("/optimization", response_model=OptimizationRecommendationsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_resource_optimizations",
-    error_code_prefix="OPT",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
-@router.get("/optimization")
 async def get_resource_optimizations(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -281,12 +242,12 @@ async def get_resource_optimizations(
     }
 
 
+@router.get("/optimization/type/{resource_type}", response_model=OptimizationByTypeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_optimization_by_type",
-    error_code_prefix="OPT",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
-@router.get("/optimization/type/{resource_type}")
 async def get_optimization_by_type(
     resource_type: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -310,12 +271,12 @@ async def get_optimization_by_type(
     }
 
 
+@router.get("/optimization/quick-wins", response_model=OptimizationQuickWinsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_quick_wins",
-    error_code_prefix="OPT",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
-@router.get("/optimization/quick-wins")
 async def get_quick_wins(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -352,12 +313,12 @@ async def get_quick_wins(
 # ============================================================================
 
 
+@router.get("/dashboard", response_model=MaintenanceDashboardResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_unified_dashboard",
-    error_code_prefix="DASH",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
-@router.get("/dashboard")
 async def get_unified_dashboard(
     days: int = Query(default=30, ge=1, le=365, description="Days to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -375,12 +336,15 @@ async def get_unified_dashboard(
     return dashboard
 
 
+register_singleton_probe("analytics_maintenance", get_analytics_service)
+
+
+@router.get("/health", response_model=MaintenanceHealthStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_health_status",
-    error_code_prefix="HEALTH",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
-@router.get("/health")
 async def get_health_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -413,12 +377,12 @@ async def get_health_status(
 # ============================================================================
 
 
+@router.post("/report", response_model=MaintenanceCustomReportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_custom_report",
-    error_code_prefix="REPORT",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
-@router.post("/report")
 async def generate_custom_report(
     request: CustomReportRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -449,12 +413,12 @@ async def generate_custom_report(
     return report
 
 
+@router.get("/report/executive", response_model=MaintenanceCustomReportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_executive_summary",
-    error_code_prefix="REPORT",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
-@router.get("/report/executive")
 async def get_executive_summary(
     days: int = Query(default=30, ge=7, le=90, description="Days to summarize"),
     admin_check: bool = Depends(check_admin_permission),
@@ -486,12 +450,12 @@ async def get_executive_summary(
 # ============================================================================
 
 
+@router.get("/insights", response_model=MaintenanceInsightsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_insights",
-    error_code_prefix="INSIGHT",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
-@router.get("/insights")
 async def get_insights(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -554,12 +518,12 @@ async def get_insights(
     }
 
 
+@router.get("/trends", response_model=MaintenanceTrendsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_trends_analysis",
-    error_code_prefix="TREND",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
-@router.get("/trends")
 async def get_trends_analysis(
     days: int = Query(default=30, ge=7, le=90, description="Days to analyze"),
     admin_check: bool = Depends(check_admin_permission),

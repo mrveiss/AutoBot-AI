@@ -23,13 +23,24 @@ Enables agents to:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
+from api.schemas_common import DataResponse
+from api.schemas_system import (
+    ClearHistoryRequest,
+    GenerateSummaryRequest,
+    ProcessThoughtRequest,
+    StructuredThinkingMCPTool,
+    ThinkingStage,
+)
+from api.schemas_workflows import (
+    StructuredThinkingClearResponse,
+    StructuredThinkingProcessThoughtResponse,
+    StructuredThinkingSessionDetailResponse,
+    StructuredThinkingSessionsResponse,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
@@ -41,108 +52,11 @@ router = APIRouter(
 )
 
 
-class ThinkingStage(str, Enum):
-    """Five cognitive stages for structured thinking"""
-
-    PROBLEM_DEFINITION = "Problem Definition"
-    RESEARCH = "Research"
-    ANALYSIS = "Analysis"
-    SYNTHESIS = "Synthesis"
-    CONCLUSION = "Conclusion"
-
-
 # In-memory storage for structured thinking sessions
 structured_sessions: Dict[str, List[Metadata]] = {}
 
 # Lock for thread-safe access to structured_sessions
 _structured_sessions_lock = asyncio.Lock()
-
-
-class MCPTool(BaseModel):
-    """Standard MCP tool definition"""
-
-    name: str
-    description: str
-    input_schema: Metadata
-
-
-class ProcessThoughtRequest(BaseModel):
-    """Request model for processing a thought in structured framework"""
-
-    thought: str = Field(..., description="The content of the thought")
-    thought_number: int = Field(
-        ..., ge=1, description="Position in the thinking sequence"
-    )
-    total_thoughts: int = Field(
-        ..., ge=1, description="Expected total number of thoughts"
-    )
-    next_thought_needed: bool = Field(
-        ..., description="Whether more thoughts will follow"
-    )
-    stage: ThinkingStage = Field(..., description="Cognitive stage for this thought")
-
-    # Optional metadata
-    tags: Optional[List[str]] = Field(
-        None, description="Keywords or categories for this thought"
-    )
-    axioms_used: Optional[List[str]] = Field(
-        None, description="Fundamental principles applied"
-    )
-    assumptions_challenged: Optional[List[str]] = Field(
-        None, description="Assumptions being questioned"
-    )
-
-    # Session management
-    session_id: Optional[str] = Field(
-        "default", description="Thinking session identifier"
-    )
-
-    # === Issue #372: Feature Envy Reduction Methods ===
-
-    def to_thought_record(self) -> Metadata:
-        """Convert request to thought record for storage (Issue #372 - reduces feature envy)."""
-        return {
-            "thought_number": self.thought_number,
-            "thought": self.thought,
-            "total_thoughts": self.total_thoughts,
-            "next_thought_needed": self.next_thought_needed,
-            "stage": self.stage.value,
-            "tags": self.tags or [],
-            "axioms_used": self.axioms_used or [],
-            "assumptions_challenged": self.assumptions_challenged or [],
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        }
-
-    def get_progress_percentage(self) -> float:
-        """Calculate progress percentage (Issue #372 - reduces feature envy)."""
-        return (self.thought_number / self.total_thoughts) * 100
-
-    def get_session_key(self) -> str:
-        """Get session key with fallback (Issue #372 - reduces feature envy)."""
-        return self.session_id or "default"
-
-    def is_thinking_complete(self) -> bool:
-        """Check if thinking process is complete (Issue #372 - reduces feature envy)."""
-        return not self.next_thought_needed
-
-    def get_progress_message(self) -> str:
-        """Get formatted progress message (Issue #372 - reduces feature envy)."""
-        return (
-            f"Processed thought {self.thought_number}/{self.total_thoughts} "
-            f"in {self.stage.value} stage"
-        )
-
-
-class GenerateSummaryRequest(BaseModel):
-    """Request model for generating thinking summary"""
-
-    session_id: Optional[str] = Field("default", description="Session to summarize")
-
-
-class ClearHistoryRequest(BaseModel):
-    """Request model for clearing thinking history"""
-
-    session_id: Optional[str] = Field("default", description="Session to clear")
 
 
 # =============================================================================
@@ -337,13 +251,13 @@ STRUCTURED_THINKING_MCP_TOOL_DEFINITIONS = (
 )
 
 
+@router.get("/mcp/tools", response_model=List[StructuredThinkingMCPTool])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_structured_thinking_mcp_tools",
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
-@router.get("/mcp/tools")
-async def get_structured_thinking_mcp_tools() -> List[MCPTool]:
+async def get_structured_thinking_mcp_tools() -> List[StructuredThinkingMCPTool]:
     """
     Get available MCP tools for structured thinking.
 
@@ -352,17 +266,17 @@ async def get_structured_thinking_mcp_tools() -> List[MCPTool]:
     """
     # Issue #281: Build MCPTool instances from module-level definitions
     return [
-        MCPTool(name=name, description=desc, input_schema=schema)
+        StructuredThinkingMCPTool(name=name, description=desc, input_schema=schema)
         for name, desc, schema in STRUCTURED_THINKING_MCP_TOOL_DEFINITIONS
     ]
 
 
+@router.post("/mcp/process_thought", response_model=StructuredThinkingProcessThoughtResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="process_thought_mcp",
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
-@router.post("/mcp/process_thought")
 async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     """
     Process and record a thought within the structured cognitive framework.
@@ -428,12 +342,12 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     return response
 
 
+@router.post("/mcp/generate_summary", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_summary_mcp",
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
-@router.post("/mcp/generate_summary")
 async def generate_summary_mcp(request: GenerateSummaryRequest) -> Metadata:
     """
     Generate a comprehensive summary of the thinking process.
@@ -495,12 +409,12 @@ async def generate_summary_mcp(request: GenerateSummaryRequest) -> Metadata:
     }
 
 
+@router.post("/mcp/clear_history", response_model=StructuredThinkingClearResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_history_mcp",
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
-@router.post("/mcp/clear_history")
 async def clear_history_mcp(request: ClearHistoryRequest) -> Metadata:
     """Clear the thinking history for a session"""
     session_id = request.session_id or "default"
@@ -522,12 +436,12 @@ async def clear_history_mcp(request: ClearHistoryRequest) -> Metadata:
     }
 
 
+@router.get("/sessions/{session_id}", response_model=StructuredThinkingSessionDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_structured_session",
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
-@router.get("/sessions/{session_id}")
 async def get_structured_session(session_id: str) -> Metadata:
     """Get complete structured thinking session"""
     async with _structured_sessions_lock:
@@ -561,12 +475,12 @@ async def get_structured_session(session_id: str) -> Metadata:
     }
 
 
+@router.get("/sessions", response_model=StructuredThinkingSessionsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_structured_sessions",
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
-@router.get("/sessions")
 async def list_structured_sessions() -> Metadata:
     """List all active structured thinking sessions"""
     async with _structured_sessions_lock:

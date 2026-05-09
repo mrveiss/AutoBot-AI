@@ -24,7 +24,9 @@ from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
+from autobot_shared.redis_client import RedisDatabase
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from autobot_shared.status_enums import TaskStatus
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
 
@@ -42,17 +44,6 @@ class AgentType(str, Enum):
     BROWSER = "browser"
     WORKFLOW = "workflow"
     CUSTOM = "custom"
-
-
-class TaskStatus(str, Enum):
-    """Task execution status"""
-
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    TIMEOUT = "timeout"
 
 
 @dataclass
@@ -188,7 +179,7 @@ class AgentMetrics:
         ]
 
 
-class AgentAnalytics:
+class AgentAnalytics(AsyncRedisClientMixin):
     """
     Tracks and analyzes agent performance across the system.
 
@@ -200,20 +191,16 @@ class AgentAnalytics:
     - Historical trends
     """
 
+    _redis_database = RedisDatabase.ANALYTICS
+
     REDIS_KEY_PREFIX = "agent_analytics:"
     TASK_LIST_KEY = f"{REDIS_KEY_PREFIX}tasks"
     AGENT_METRICS_KEY = f"{REDIS_KEY_PREFIX}metrics"
     AGENT_HISTORY_KEY = f"{REDIS_KEY_PREFIX}history"
 
-    def __init__(self):
-        """Initialize agent analytics service with lazy Redis client."""
-        self._redis_client = None
-
     async def get_redis(self):
         """Get async Redis client"""
-        if self._redis_client is None:
-            self._redis_client = await get_async_redis_client(database=RedisDatabase.ANALYTICS)
-        return self._redis_client
+        return await self._get_redis()
 
     async def track_task_start(
         self,

@@ -5,7 +5,7 @@
 # SLM Agent Configuration
 # Managed by Ansible - do not edit manually
 # Node: {{ slm_node_id }}
-# Generated: {{ ansible_date_time.iso8601 }}
+# Generated: {{ ansible_facts['date_time'].iso8601 }}
 #
 # Auto-detect if agent runs on same host as SLM backend - use localhost if so (#2955)
 {% set admin_host = slm_admin_url | regex_replace('^https?://([^:/]+).*$', '\\1') %}

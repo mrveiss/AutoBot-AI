@@ -448,12 +448,12 @@ import threading
 _npu_events_lock = threading.Lock()
 
 
+@router.websocket("/ws-test")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="websocket_test_endpoint",
     error_code_prefix="WEBSOCKETS",
 )
-@router.websocket("/ws-test")
 async def websocket_test_endpoint(websocket: WebSocket):
     """Simple test WebSocket endpoint without event manager integration."""
     # Issue #2818: Authenticate before accepting connection
@@ -527,9 +527,9 @@ def _register_event_manager_broadcast(broadcast_event: Callable) -> None:
         broadcast_event: Broadcast callback function
     """
     try:
-        from event_manager import event_manager
+        from event_manager import get_event_manager
 
-        event_manager.register_websocket_broadcast(broadcast_event)
+        get_event_manager().register_websocket_broadcast(broadcast_event)
         logger.info("Successfully registered WebSocket broadcast with event manager")
     except ImportError as e:
         logger.warning("Event manager not available, continuing without it: %s", e)
@@ -544,9 +544,9 @@ def _unregister_event_manager_broadcast() -> None:
     Issue #665: Extracted from websocket_endpoint to reduce function length.
     """
     try:
-        from event_manager import event_manager
+        from event_manager import get_event_manager
 
-        event_manager.register_websocket_broadcast(None)
+        get_event_manager().register_websocket_broadcast(None)
         logger.info("WebSocket broadcast unregistered from event manager")
     except ImportError:
         logger.debug("Event manager not available for cleanup")
@@ -554,12 +554,12 @@ def _unregister_event_manager_broadcast() -> None:
         logger.error("Error during event manager cleanup: %s", e)
 
 
+@router.websocket("/ws")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="websocket_endpoint",
     error_code_prefix="WEBSOCKETS",
 )
-@router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint for real-time event stream between backend and frontend.
@@ -609,12 +609,12 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info("WebSocket connection cleanup completed")
 
 
+@router.websocket("/ws/npu-workers")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="npu_workers_websocket_endpoint",
     error_code_prefix="WEBSOCKETS",
 )
-@router.websocket("/ws/npu-workers")
 async def npu_workers_websocket_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint for real-time NPU worker status updates.
@@ -862,16 +862,16 @@ def init_npu_worker_websocket():
             return
 
         try:
-            from event_manager import event_manager
+            from event_manager import get_event_manager
 
             # Subscribe to all NPU worker events
-            event_manager.subscribe(
+            get_event_manager().subscribe(
                 "npu.worker.status.changed", broadcast_npu_worker_event
             )
-            event_manager.subscribe("npu.worker.added", broadcast_npu_worker_event)
-            event_manager.subscribe("npu.worker.updated", broadcast_npu_worker_event)
-            event_manager.subscribe("npu.worker.removed", broadcast_npu_worker_event)
-            event_manager.subscribe(
+            get_event_manager().subscribe("npu.worker.added", broadcast_npu_worker_event)
+            get_event_manager().subscribe("npu.worker.updated", broadcast_npu_worker_event)
+            get_event_manager().subscribe("npu.worker.removed", broadcast_npu_worker_event)
+            get_event_manager().subscribe(
                 "npu.worker.metrics.updated", broadcast_npu_worker_event
             )
 

@@ -15,7 +15,7 @@ from typing import Any, Dict
 from fastapi import FastAPI, Request
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from circuit_breaker import circuit_breaker_manager
+from circuit_breaker import get_circuit_breaker_manager
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 def _get_circuit_breaker_states() -> Dict[str, Any]:
     """Return all registered circuit breaker states for health reporting."""
     try:
-        return circuit_breaker_manager.get_all_states()
+        return get_circuit_breaker_manager().get_all_states()
     except Exception:
         logger.debug("Could not retrieve circuit breaker states", exc_info=True)
         return {}
@@ -131,7 +131,11 @@ def register_root_endpoints(app: FastAPI) -> None:
             "service": "autobot-backend",
             "services": services,
             "ai_enhanced": ai_stack_ready,
-            "agent_count": _get_agent_count(state),
+            # `_get_agent_count` only counts AI Stack agents, not the local
+            # backend agent registry. Renamed to make the semantic explicit so
+            # consumers don't conflate this with the (much larger) total in
+            # /api/agents/registry. (#6749 follow-up — Chrome-plugin TODO #8.)
+            "ai_stack_agent_count": _get_agent_count(state),
             "capabilities": _build_capabilities(ai_stack_ready, ai_agents_ready),
             "circuit_breakers": _get_circuit_breaker_states(),
         }
@@ -165,6 +169,35 @@ def register_root_endpoints(app: FastAPI) -> None:
             "total": len(states),
             "open": open_count,
             "circuit_breakers": states,
+        }
+
+    @app.get("/api/health/feature-routers")
+    @with_error_handling(category=ErrorCategory.SYSTEM)
+    async def feature_routers_health():
+        """Surface feature-router load status (#6797).
+
+        Returns the structured load-results registry populated by
+        ``load_feature_routers()``. Until this endpoint existed, the
+        graceful-fallback pattern from #281 silently dropped failed routers
+        (boot succeeded with /api/* endpoints absent — see #6583, #6664-6667).
+        SLM dashboards and operators can now poll this endpoint to detect
+        partial-boot state without scraping logs.
+        """
+        from initialization.router_registry.feature_routers import (
+            FEATURE_ROUTER_CONFIGS,
+            get_feature_router_load_results,
+        )
+
+        results = get_feature_router_load_results()
+        loaded_count = sum(1 for r in results if r["loaded"])
+        expected = len(FEATURE_ROUTER_CONFIGS)
+        return {
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "expected": expected,
+            "loaded": loaded_count,
+            "failed": expected - loaded_count,
+            "all_loaded": loaded_count == expected,
+            "routers": results,
         }
 
     @app.get("/api/version")

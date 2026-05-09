@@ -13,23 +13,17 @@ Issue #2315: Fix decorator order, router prefix, GPU guard, and tag case.
 
 import logging
 from dataclasses import asdict
-from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 
+from api.schemas_common import DataResponse
+from api.schemas_system import GPUConfigUpdateRequest
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["gpu-monitoring"])
-
-
-class GPUConfigUpdateRequest(BaseModel):
-    """Request body for GPU optimization configuration updates."""
-
-    updates: Dict[str, Any]
 
 
 def _gpu_unavailable_error() -> HTTPException:
@@ -43,7 +37,7 @@ def _gpu_unavailable_error() -> HTTPException:
     )
 
 
-@router.get("/efficiency")
+@router.get("/efficiency", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_gpu_efficiency",
@@ -69,7 +63,7 @@ async def get_gpu_efficiency(
     return {"success": True, "efficiency": result}
 
 
-@router.get("/capabilities")
+@router.get("/capabilities", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_gpu_capabilities",
@@ -92,7 +86,7 @@ async def get_gpu_capabilities(
     return {"success": True, "capabilities": caps}
 
 
-@router.post("/benchmark")
+@router.post("/benchmark", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_gpu_benchmark",
@@ -115,7 +109,7 @@ async def run_gpu_benchmark(
     return {"success": True, "benchmark": result}
 
 
-@router.post("/optimize")
+@router.post("/optimize", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="optimize_gpu_multimodal",
@@ -142,7 +136,7 @@ async def optimize_gpu_multimodal(
     return {"success": True, "optimization": asdict(result)}
 
 
-@router.patch("/config")
+@router.patch("/config", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_gpu_config",

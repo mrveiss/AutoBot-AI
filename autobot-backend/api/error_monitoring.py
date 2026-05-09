@@ -15,9 +15,19 @@ import os
 import sys
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Header, HTTPException, Request, status
 
+from api.system_health import ComponentHealth, register_health_probe
+from api.schemas_analytics import (
+    AlertThresholdRequest,
+    ErrorMonitoringAlertThresholdResponse,
+    ErrorMonitoringClearResponse,
+    ErrorMonitoringCleanupResponse,
+    ErrorMonitoringDataResponse,
+    ErrorMonitoringResolveResponse,
+    ErrorMonitoringTestErrorResponse,
+    TestErrorRequest,
+)
 from autobot_shared.error_boundaries import (
     ErrorCategory,
     get_error_boundary_manager,
@@ -42,12 +52,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Error Monitoring"])
 
 
+
+
+@router.get("/statistics", response_model=ErrorMonitoringDataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_error_statistics",
     error_code_prefix="ERROR_MONITORING",
 )
-@router.get("/statistics")
 async def get_system_error_statistics():
     """Get system-wide error statistics"""
     try:
@@ -61,12 +73,12 @@ async def get_system_error_statistics():
         )
 
 
+@router.get("/recent", response_model=ErrorMonitoringDataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_recent_errors",
     error_code_prefix="ERROR_MONITORING",
 )
-@router.get("/recent")
 async def get_recent_errors(limit: int = 20):
     """Get recent error reports"""
     try:
@@ -116,12 +128,12 @@ async def get_recent_errors(limit: int = 20):
         )
 
 
+@router.get("/categories", response_model=ErrorMonitoringDataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_error_categories",
     error_code_prefix="ERROR_MONITORING",
 )
-@router.get("/categories")
 async def get_error_categories():
     """Get error breakdown by category"""
     try:
@@ -151,12 +163,12 @@ async def get_error_categories():
         )
 
 
+@router.get("/components", response_model=ErrorMonitoringDataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_error_by_component",
     error_code_prefix="ERROR_MONITORING",
 )
-@router.get("/components")
 async def get_error_by_component():
     """Get error breakdown by component"""
     try:
@@ -198,12 +210,45 @@ def _calculate_health_status(
     return "excellent", 100
 
 
+@register_health_probe("error_monitoring")
+async def probe_error_monitoring(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for error-monitoring service."""
+    try:
+        stats = get_error_statistics()
+        total_errors = stats.get("total_errors", 0)
+        severities = stats.get("severities", {}) or {}
+        critical = severities.get("critical", 0)
+        high = severities.get("high", 0)
+        health_status, _ = _calculate_health_status(critical, high, total_errors)
+        if health_status in ("excellent", "healthy"):
+            return ComponentHealth(name="error_monitoring", status="ok")
+        if health_status in ("warning", "degraded"):
+            return ComponentHealth(
+                name="error_monitoring",
+                status="degraded",
+                detail=health_status,
+            )
+        return ComponentHealth(
+            name="error_monitoring",
+            status="down",
+            detail=health_status,
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="error_monitoring",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
+@router.get("/health", response_model=ErrorMonitoringDataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_error_system_health",
     error_code_prefix="ERROR_MONITORING",
 )
-@router.get("/health")
 async def get_error_system_health():
     """Get error system health status"""
     try:
@@ -238,12 +283,12 @@ async def get_error_system_health():
         )
 
 
+@router.post("/clear", response_model=ErrorMonitoringClearResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_error_history",
     error_code_prefix="ERROR_MONITORING",
 )
-@router.post("/clear")
 async def clear_error_history(authorization: Optional[str] = Header(None)):
     """Clear error history (admin only)"""
     try:
@@ -282,17 +327,12 @@ async def clear_error_history(authorization: Optional[str] = Header(None)):
         )
 
 
-class TestErrorRequest(BaseModel):
-    error_type: str = "ValueError"
-    message: str = "Test error for error boundary system"
-
-
+@router.post("/test-error", response_model=ErrorMonitoringTestErrorResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_error_system",
     error_code_prefix="ERROR_MONITORING",
 )
-@router.post("/test-error")
 async def test_error_system(request: TestErrorRequest):
     """Test the error boundary system (development only)"""
     try:
@@ -384,12 +424,12 @@ def _get_health_recommendations(health_status: str, stats: Metadata) -> list:
 # =============================================================================
 
 
+@router.get("/metrics/summary", response_model=ErrorMonitoringDataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_metrics_summary",
     error_code_prefix="ERROR_MONITORING",
 )
-@router.get("/metrics/summary")
 async def get_metrics_summary():
     """
     Get comprehensive error metrics summary
@@ -410,12 +450,12 @@ async def get_metrics_summary():
         )
 
 
+@router.get("/metrics/timeline", response_model=ErrorMonitoringDataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_error_timeline",
+    operation="get_error_timeline_endpoint",
     error_code_prefix="ERROR_MONITORING",
 )
-@router.get("/metrics/timeline")
 async def get_error_timeline_endpoint(hours: int = 24, component: Optional[str] = None):
     """
     Get error timeline data for visualization
@@ -449,12 +489,12 @@ async def get_error_timeline_endpoint(hours: int = 24, component: Optional[str] 
         )
 
 
+@router.get("/metrics/top-errors", response_model=ErrorMonitoringDataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_top_errors",
+    operation="get_top_errors_endpoint",
     error_code_prefix="ERROR_MONITORING",
 )
-@router.get("/metrics/top-errors")
 async def get_top_errors_endpoint(limit: int = 10):
     """
     Get top N most frequent errors
@@ -480,12 +520,12 @@ async def get_top_errors_endpoint(limit: int = 10):
         )
 
 
+@router.post("/metrics/resolve/{trace_id}", response_model=ErrorMonitoringResolveResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="mark_error_resolved",
+    operation="mark_error_resolved_endpoint",
     error_code_prefix="ERROR_MONITORING",
 )
-@router.post("/metrics/resolve/{trace_id}")
 async def mark_error_resolved_endpoint(trace_id: str):
     """
     Mark an error as resolved
@@ -515,18 +555,12 @@ async def mark_error_resolved_endpoint(trace_id: str):
         )
 
 
-class AlertThresholdRequest(BaseModel):
-    component: str
-    error_code: Optional[str] = None
-    threshold: int
-
-
+@router.post("/metrics/alert-threshold", response_model=ErrorMonitoringAlertThresholdResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="set_alert_threshold",
+    operation="set_alert_threshold_endpoint",
     error_code_prefix="ERROR_MONITORING",
 )
-@router.post("/metrics/alert-threshold")
 async def set_alert_threshold_endpoint(request: AlertThresholdRequest):
     """
     Set alert threshold for a component/error
@@ -558,12 +592,12 @@ async def set_alert_threshold_endpoint(request: AlertThresholdRequest):
         )
 
 
+@router.post("/metrics/cleanup", response_model=ErrorMonitoringCleanupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="cleanup_metrics",
+    operation="cleanup_metrics_endpoint",
     error_code_prefix="ERROR_MONITORING",
 )
-@router.post("/metrics/cleanup")
 async def cleanup_metrics_endpoint():
     """
     Clean up old metrics beyond retention period

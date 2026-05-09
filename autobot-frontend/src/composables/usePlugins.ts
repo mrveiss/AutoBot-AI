@@ -13,6 +13,7 @@ import { ref } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('usePlugins')
 
@@ -49,36 +50,30 @@ export interface DiscoveredPlugin {
 export function usePlugins() {
   const plugins = ref<PluginInfo[]>([])
   const discovered = ref<PluginManifest[]>([])
-  const loading = ref(false)
+  const { isLoading: loading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
 
   async function listPlugins(): Promise<void> {
-    loading.value = true
     error.value = null
     try {
-      const data = await ApiClient.get(`${getApiBase()}/plugins`)
+      const data = await wrap(() => ApiClient.get(`${getApiBase()}/plugins`))
       plugins.value = data.plugins ?? []
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to list plugins'
       error.value = msg
       logger.error('listPlugins error: %s', msg)
-    } finally {
-      loading.value = false
     }
   }
 
   async function discoverPlugins(): Promise<void> {
-    loading.value = true
     error.value = null
     try {
-      const data = await ApiClient.get(`${getApiBase()}/plugins/discover`)
+      const data = await wrap(() => ApiClient.get(`${getApiBase()}/plugins/discover`))
       discovered.value = data.discovered ?? []
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to discover plugins'
       error.value = msg
       logger.error('discoverPlugins error: %s', msg)
-    } finally {
-      loading.value = false
     }
   }
 
@@ -187,6 +182,44 @@ export function usePlugins() {
     }
   }
 
+  // Issue #6464: install 3rd-party plugins from ZIP or Git URL
+  async function installFromZip(file: File): Promise<{ name: string; version: string } | null> {
+    error.value = null
+    const form = new FormData()
+    form.append('file', file)
+    try {
+      const data = await wrap(() =>
+        ApiClient.post(`${getApiBase()}/plugins/install/upload`, form),
+      ) as { name: string; version: string }
+      await discoverPlugins()
+      return { name: data.name, version: data.version }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to install plugin from ZIP'
+      error.value = msg
+      logger.error('installFromZip error: %s', msg)
+      return null
+    }
+  }
+
+  async function installFromGit(
+    url: string,
+    ref?: string,
+  ): Promise<{ name: string; version: string } | null> {
+    error.value = null
+    try {
+      const data = await wrap(() =>
+        ApiClient.post(`${getApiBase()}/plugins/install/git`, { url, ref: ref || null }),
+      ) as { name: string; version: string }
+      await discoverPlugins()
+      return { name: data.name, version: data.version }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to install plugin from Git'
+      error.value = msg
+      logger.error('installFromGit error: %s', msg)
+      return null
+    }
+  }
+
   return {
     plugins,
     discovered,
@@ -202,5 +235,7 @@ export function usePlugins() {
     getPluginInfo,
     getPluginConfig,
     updatePluginConfig,
+    installFromZip,
+    installFromGit,
   }
 }

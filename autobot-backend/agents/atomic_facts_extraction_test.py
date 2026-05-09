@@ -14,18 +14,23 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from models.atomic_fact import AtomicFact, FactType, TemporalType
 
-# TODO: fix import - from tests.mock_llm_interface import MockLLMInterface
+# TODO(#6994): re-enable using MockLLMService from tests.fixtures.mocks
+#   The mock matching the LLMService.chat() surface lives at
+#   autobot-backend/tests/fixtures/mocks.py — wiring this test to it
+#   also needs KnowledgeExtractionAgent's current constructor surface
+#   verified, which is out-of-scope for #6994.
 
 
 class TestAtomicFactsExtraction:
     """Test cases for atomic facts extraction functionality."""
 
     def __init__(self):
-        # Use mock LLM interface for testing
-        # TODO: Fix MockLLMInterface import before enabling this test
-        # mock_llm = MockLLMInterface()
+        # TODO(#6994): wire MockLLMService once KnowledgeExtractionAgent
+        # constructor + return-shape contract is re-validated.
+        # from tests.fixtures.mocks import MockLLMService
+        # mock_llm = MockLLMService()
         # self.extraction_agent = KnowledgeExtractionAgent(llm_interface=mock_llm)
-        pass  # Temporarily disabled until MockLLMInterface is available
+        pass  # Temporarily disabled — see TODO(#6994) above
         self.test_content = {
             "technical": """
             AutoBot is an intelligent automation platform built with Python.

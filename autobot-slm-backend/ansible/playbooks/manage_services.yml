@@ -33,7 +33,7 @@
           - "========================================"
           - "Target Host: {{ inventory_hostname }}"
           - "Action: {{ service_action }}"
-          - "Timestamp: {{ ansible_date_time.iso8601 }}"
+          - "Timestamp: {{ ansible_facts['date_time'].iso8601 }}"
       tags: ['always']
 
   tasks:
