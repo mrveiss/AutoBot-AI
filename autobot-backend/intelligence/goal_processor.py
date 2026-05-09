@@ -51,6 +51,12 @@ class ProcessedGoal:
     risk_level: RiskLevel
     warnings: List[str] = field(default_factory=list)
     suggested_commands: List[str] = field(default_factory=list)
+    # #7245: tool_selector expects `goal.parameters` for command-template
+    # substitution (e.g. ``{network}``, ``{target}``, ``{port}``). The field
+    # was missing from this dataclass, raising AttributeError on every
+    # `select_tool()` call. Default to empty dict — `_format_command` falls
+    # back to env-var defaults when keys are absent.
+    parameters: Dict[str, str] = field(default_factory=dict)
 
 
 class GoalProcessor:

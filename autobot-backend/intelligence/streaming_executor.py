@@ -236,11 +236,34 @@ class StreamingCommandExecutor:
 
         Handle process output streaming, completion, and timeout handling.
         """
+        # #7246: original code passed an async generator to
+        # `asyncio.wait_for(...)`, which raises
+        # "An asyncio.Future, a coroutine or an awaitable is required" because
+        # async generators aren't awaitable. Use a queue-based pattern so we
+        # can both forward streamed chunks AND apply the deadline.
+        sentinel = object()
+        chunk_queue: asyncio.Queue = asyncio.Queue()
+
+        async def _produce_chunks() -> None:
+            try:
+                async for c in self._stream_process_output(process, process_id, user_goal, provide_commentary):
+                    await chunk_queue.put(c)
+            finally:
+                await chunk_queue.put(sentinel)
+
+        producer = asyncio.create_task(_produce_chunks())
+        loop = asyncio.get_event_loop()
+        deadline = loop.time() + timeout
+
         try:
-            await asyncio.wait_for(
-                self._stream_process_output(process, process_id, user_goal, provide_commentary),
-                timeout=timeout,
-            )
+            while True:
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    raise asyncio.TimeoutError()
+                next_chunk = await asyncio.wait_for(chunk_queue.get(), timeout=remaining)
+                if next_chunk is sentinel:
+                    break
+                yield next_chunk
             return_code = await process.wait()
             execution_time = time.time() - start_time
             yield self._build_completion_chunk(return_code, execution_time, process_id)
@@ -249,9 +272,11 @@ class StreamingCommandExecutor:
                 async for chunk in self._provide_completion_commentary(command, user_goal, execution_time):
                     yield chunk
         except asyncio.TimeoutError:
+            producer.cancel()
             yield self._create_timeout_error_chunk(timeout)
             await self._terminate_process_safely(process)
         except Exception as e:
+            producer.cancel()
             yield self._create_execution_error_chunk(e)
 
     async def _stream_process_output(
