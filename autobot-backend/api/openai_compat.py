@@ -50,91 +50,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["openai-compat"])
 
 # ---------------------------------------------------------------------------
-# Rate limiting — per-IP sliding window via Redis sorted-set (#6588)
+# Rate limiting — per-IP sliding window via shared IPRateLimiter (#7271)
 # ---------------------------------------------------------------------------
+#
+# #6588 originally hand-rolled the Redis sorted-set + in-process fallback
+# directly here. #7271 extracted that into autobot_shared/rate_limit.py so
+# it can be reused by /a2a (#7270) and any future per-IP limiter.
 
-_OAI_RATE_LIMIT = int(os.environ.get("AUTOBOT_OAI_RATE_LIMIT", "60"))  # per minute
-_OAI_RATE_BUCKET_MAX_KEYS = 10_000
-# #6588: in-process fallback only — used when Redis is unavailable. Production
-# uses the Redis sorted-set path so all uvicorn workers share state.
-_oai_rate_buckets: Dict[str, list] = {}
+from autobot_shared.rate_limit import IPRateLimiter
 
-
-def _check_oai_rate_limit_inprocess(remote_addr: str) -> None:
-    """Fallback per-IP rate limit when Redis is unavailable (#6588).
-
-    Per-process state — does NOT enforce the documented limit across uvicorn
-    workers. Only used when Redis is unreachable; the Redis path is the
-    production-correct enforcement.
-    """
-    now = time.time()
-    window_start = now - 60
-    bucket = [t for t in _oai_rate_buckets.get(remote_addr, []) if t > window_start]
-    if len(bucket) >= _OAI_RATE_LIMIT:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Rate limit exceeded ({_OAI_RATE_LIMIT} requests/min). Try again later.",
-        )
-    bucket.append(now)
-    _oai_rate_buckets[remote_addr] = bucket
-    if len(_oai_rate_buckets) > _OAI_RATE_BUCKET_MAX_KEYS:
-        cutoff = now - 60
-        stale = [ip for ip, ts in _oai_rate_buckets.items() if not any(t > cutoff for t in ts)]
-        for ip in stale:
-            del _oai_rate_buckets[ip]
-
-
-async def _check_oai_rate_limit(remote_addr: str) -> None:
-    """Enforce a per-IP rate limit on /v1/chat/completions requests.
-
-    #6588: state is shared across all uvicorn workers via Redis sorted-set
-    (per-IP key, score=timestamp). Previous in-process dict made the effective
-    limit 4× the configured value under ``backend_workers: 4`` because each
-    worker had its own state. The Redis sliding window:
-
-      ZREMRANGEBYSCORE  ratelimit:oai:<ip>  0  (now-60)   # drop expired
-      ZADD              ratelimit:oai:<ip>  now  uuid
-      ZCARD             ratelimit:oai:<ip>                # current count
-      EXPIRE            ratelimit:oai:<ip>  120           # auto-evict idle keys
-
-    All four ops are pipelined atomically. If Redis is unreachable the helper
-    falls back to ``_check_oai_rate_limit_inprocess`` so the endpoint stays
-    responsive (degraded mode logs a warning).
-
-    Raises HTTPException(429) if the caller has exceeded ``_OAI_RATE_LIMIT``
-    requests in the last 60 seconds.
-    """
-    from autobot_shared.redis_client import get_async_redis_client
-
-    redis = await get_async_redis_client()
-    if redis is None:
-        logger.warning(
-            "Redis unavailable for OAI rate-limit; falling back to in-process bucket (per-worker, undercounts under multi-worker)"
-        )
-        _check_oai_rate_limit_inprocess(remote_addr)
-        return
-
-    key = f"ratelimit:oai:{remote_addr}"
-    now = time.time()
-    window_start = now - 60
-    try:
-        async with redis.pipeline(transaction=False) as pipe:
-            pipe.zremrangebyscore(key, 0, window_start)
-            pipe.zadd(key, {f"{now}:{uuid4()}": now})
-            pipe.zcard(key)
-            pipe.expire(key, 120)
-            results = await pipe.execute()
-        count = int(results[2])
-    except Exception as exc:
-        logger.warning("Redis OAI rate-limit pipeline failed (%s) — falling back to in-process", exc)
-        _check_oai_rate_limit_inprocess(remote_addr)
-        return
-
-    if count > _OAI_RATE_LIMIT:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Rate limit exceeded ({_OAI_RATE_LIMIT} requests/min). Try again later.",
-        )
+_oai_limiter = IPRateLimiter(
+    key_prefix="ratelimit:oai",
+    limit_env="AUTOBOT_OAI_RATE_LIMIT",
+    default_limit=60,
+    window_seconds=60,
+)
 
 
 def _remote_addr(request: Request) -> str:
@@ -304,7 +234,7 @@ async def chat_completions(
     OpenAI-format response (streaming or non-streaming).
     """
     _get_user(request)
-    await _check_oai_rate_limit(_remote_addr(request))
+    await _oai_limiter.check_or_429(_remote_addr(request))
 
     registry = get_provider_registry()
     llm_request = _build_llm_request(body)

@@ -62,39 +62,22 @@ router = APIRouter(
 )
 
 # ---------------------------------------------------------------------------
-# Rate limiting (simple in-process token bucket per IP)
+# Rate limiting — per-IP sliding window via shared IPRateLimiter (#7270/#7271)
 # ---------------------------------------------------------------------------
+#
+# #7270: pre-fix, this was an in-process dict with the same multi-worker
+# undercount that #6588 fixed for /v1/chat/completions. State is now shared
+# across all uvicorn workers via Redis sorted-set; the in-process fallback
+# is reserved for Redis outages only.
 
-_RATE_LIMIT = int(os.environ.get("AUTOBOT_A2A_RATE_LIMIT", "30"))  # per minute
-_RATE_BUCKET_MAX_KEYS = 10_000  # evict stale entries when dict exceeds this size
-_rate_buckets: Dict[str, list] = {}  # ip → [timestamps]
+from autobot_shared.rate_limit import IPRateLimiter
 
-
-def _check_rate_limit(remote_addr: str) -> None:
-    """
-    Enforce a per-IP rate limit on task submissions.
-
-    Raises HTTP 429 if the caller has exceeded _RATE_LIMIT requests/minute.
-    Uses a sliding window stored in _rate_buckets (in-process, per worker).
-
-    Stale entries (IPs whose entire window has expired) are evicted when the
-    dict exceeds _RATE_BUCKET_MAX_KEYS to prevent unbounded memory growth.
-    """
-    now = time.time()
-    window_start = now - 60
-    bucket = [t for t in _rate_buckets.get(remote_addr, []) if t > window_start]
-    if len(bucket) >= _RATE_LIMIT:
-        raise HTTPException(
-            status_code=429,
-            detail=f"A2A rate limit exceeded ({_RATE_LIMIT} tasks/min). Try again later.",
-        )
-    bucket.append(now)
-    _rate_buckets[remote_addr] = bucket
-    if len(_rate_buckets) > _RATE_BUCKET_MAX_KEYS:
-        cutoff = now - 60
-        stale = [ip for ip, ts in _rate_buckets.items() if not any(t > cutoff for t in ts)]
-        for ip in stale:
-            del _rate_buckets[ip]
+_a2a_limiter = IPRateLimiter(
+    key_prefix="ratelimit:a2a",
+    limit_env="AUTOBOT_A2A_RATE_LIMIT",
+    default_limit=30,
+    window_seconds=60,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -180,9 +163,7 @@ async def get_signed_agent_card(request: Request) -> Dict[str, Any]:
     try:
         signed = SecurityCardSigner.sign(card.to_dict())
     except RuntimeError as exc:
-        raise HTTPException(
-            status_code=503, detail="Service temporarily unavailable"
-        ) from exc
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable") from exc
     return signed
 
 
@@ -222,7 +203,7 @@ async def submit_task(
     Poll GET /tasks/{id} to retrieve results.
     """
     addr = _remote_addr(request)
-    _check_rate_limit(addr)
+    await _a2a_limiter.check_or_429(addr)
 
     jwt_sub = _extract_jwt_sub(authorization)
     caller_id = extract_caller_id(x_a2a_agent_id, jwt_sub, addr)
@@ -383,9 +364,7 @@ async def stream_task_events(task_id: str) -> StreamingResponse:
                                 await queue.put(None)  # sentinel — stop the loop
                                 return
                         except Exception:
-                            logger.debug(
-                                "Could not parse pub/sub payload for task %s", task_id
-                            )
+                            logger.debug("Could not parse pub/sub payload for task %s", task_id)
             except Exception as exc:
                 logger.warning("pubsub listener error for task %s: %s", task_id, exc)
                 await queue.put(None)  # unblock the outer loop on Redis failure
