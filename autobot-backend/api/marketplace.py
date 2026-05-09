@@ -12,7 +12,7 @@ Issue #1803 - Plugin and agent marketplace: package, share, and install extensio
 import json
 import logging
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -53,6 +53,7 @@ class CatalogSort(str, Enum):
     RATING = "rating"
     NAME = "name"
     NEWEST = "newest"
+
 
 logger = logging.getLogger(__name__)
 
@@ -155,25 +156,88 @@ _BUILTIN_CATALOG: list[dict[str, Any]] = [
     },
 ]
 
+
+def _coerce_str(value: Any, fallback: str = "") -> str:
+    """Return ``value`` if it's a string, otherwise ``fallback``.
+
+    #6525: untrusted external catalogs may emit ``None`` or non-string types
+    where strings are expected. ``dict.get(key, default)`` only fires the
+    default when the key is *missing* — present-but-null returns the stored
+    ``None`` and downstream ``.replace``/``.title`` calls crash. This coercion
+    keeps the response shape strict-string regardless of remote sloppiness.
+    """
+    return value if isinstance(value, str) else fallback
+
+
+def _coerce_list(value: Any) -> list:
+    """Return ``value`` if it's a list, else an empty list. (#6525)"""
+    return value if isinstance(value, list) else []
+
+
 def _remote_plugin_to_entry(plugin: dict[str, Any], source_name: str) -> dict[str, Any]:
     """Issue #6481: shape an external CatalogPlugin dict to look like a
     MarketplaceEntry. Missing fields get safe defaults so the existing
-    response model and frontend continue to work."""
+    response model and frontend continue to work.
+
+    #6525: hardened against three failure modes:
+      1. ``dict.get(key, default)`` does NOT fire ``default`` when the key
+         exists with value ``None``. ``_coerce_str`` / ``_coerce_list``
+         enforce the type contract regardless of remote payload shape.
+      2. ``str.title()`` butchers acronyms (``"GIT-tools"`` → ``"Git Tools"``)
+         and apostrophes (``"don't"`` → ``"Don'T"``). Prefer an
+         upstream-provided ``display_name`` when present; fall back to the
+         raw ``name`` (untransformed) only when no display_name is supplied.
+      3. (Caller side) one bad entry must not 500 the whole catalog —
+         see ``_safe_remote_plugin_to_entry`` wrapper.
+    """
+    raw_name = _coerce_str(plugin.get("name"))
+    raw_display = _coerce_str(plugin.get("display_name"))
     return {
-        "name": plugin.get("name", ""),
-        "version": plugin.get("version", ""),
-        "display_name": plugin.get("name", "").replace("-", " ").title(),
-        "description": plugin.get("description", ""),
-        "author": plugin.get("author", source_name),
-        "category": plugin.get("category", CatalogCategory.OTHER.value),
-        "tags": plugin.get("tags", []),
+        "name": raw_name,
+        "version": _coerce_str(plugin.get("version")),
+        # #6525: prefer upstream display_name; fall back to raw name (no
+        # destructive .title() transform). Keeps acronyms + apostrophes
+        # + non-Latin scripts intact.
+        "display_name": raw_display or raw_name,
+        "description": _coerce_str(plugin.get("description")),
+        "author": _coerce_str(plugin.get("author"), fallback=source_name),
+        "category": _coerce_str(plugin.get("category"), fallback=CatalogCategory.OTHER.value),
+        "tags": _coerce_list(plugin.get("tags")),
         "entry_point": "",
         "dependencies": [],
         "hooks": [],
         "downloads": 0,
         "rating": 0.0,
-        "source_url": plugin.get("git_url", ""),
+        "source_url": _coerce_str(plugin.get("git_url")),
     }
+
+
+def _safe_remote_plugin_to_entry(plugin: Any, source_name: str) -> Optional[dict[str, Any]]:
+    """Per-item wrapper that turns one bad plugin into a logged skip.
+
+    #6525: pre-fix, ``[_remote_plugin_to_entry(p, ...) for p in remote_plugins]``
+    let any single malformed entry from a user-added remote marketplace
+    raise mid-comprehension and 500 the entire ``/catalog?source_id=...``
+    response — trivial DoS surface. Now per-item: bad entries are logged
+    and skipped; good entries flow through.
+    """
+    if not isinstance(plugin, dict):
+        logger.warning("Skipping non-dict catalog entry from %r: %r", source_name, type(plugin).__name__)
+        return None
+    try:
+        return _remote_plugin_to_entry(plugin, source_name)
+    except Exception as exc:
+        # Defensive: even with the type coercions above, a future field
+        # added in the remote schema could still raise something we
+        # didn't anticipate. Log identifiable context, drop the entry.
+        identifier = plugin.get("name") if isinstance(plugin.get("name"), str) else "<unknown>"
+        logger.warning(
+            "Skipping malformed catalog entry %r from %r: %s",
+            identifier,
+            source_name,
+            exc,
+        )
+        return None
 
 
 async def _get_catalog() -> list[dict[str, Any]]:
@@ -245,7 +309,15 @@ async def list_catalog(
                 detail=f"Marketplace source '{source.name}' has no catalog URL configured",
             )
         remote_plugins = await fetch_remote_catalog(source.url)
-        catalog = [_remote_plugin_to_entry(p, source.name) for p in remote_plugins]
+        # #6525: per-item wrapper drops malformed entries instead of failing
+        # the whole catalog. One bad apple from a user-added remote
+        # marketplace no longer 500s the response.
+        catalog = [
+            entry
+            for p in remote_plugins
+            for entry in (_safe_remote_plugin_to_entry(p, source.name),)
+            if entry is not None
+        ]
 
     # Filter by category
     if category != CatalogCategory.ALL:
@@ -255,7 +327,8 @@ async def list_catalog(
     if search:
         q = search.lower()
         catalog = [
-            e for e in catalog
+            e
+            for e in catalog
             if q in e.get("name", "").lower()
             or q in e.get("description", "").lower()
             or any(q in t.lower() for t in e.get("tags", []))
@@ -336,8 +409,6 @@ async def list_categories() -> dict[str, list[str]]:
 # ---------------------------------------------------------------------------
 
 
-
-
 async def _get_installed() -> set[str]:
     """Return the set of installed plugin names from Redis."""
     try:
@@ -393,10 +464,7 @@ async def install_plugin(body: InstallRequest) -> dict[str, str]:
         await redis.sadd(_INSTALLED_KEY, body.plugin_name)
         # Bump download counter in cached catalog
         updated = [
-            {**e, "downloads": e.get("downloads", 0) + 1}
-            if e.get("name") == body.plugin_name
-            else e
-            for e in catalog
+            {**e, "downloads": e.get("downloads", 0) + 1} if e.get("name") == body.plugin_name else e for e in catalog
         ]
         await redis.set(_CATALOG_KEY, json.dumps(updated), ex=_CATALOG_TTL)
     except Exception as exc:
