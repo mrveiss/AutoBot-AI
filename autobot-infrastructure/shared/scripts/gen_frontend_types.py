@@ -78,14 +78,19 @@ OUTPUT_PATH = REPO_ROOT / "autobot-frontend" / "src" / "types" / "_generated" / 
 #
 #   5. CI's `frontend-codegen-drift` job will fail if the committed file
 #      drifts from the source.
+# Each entry: (relative file path from repo root, class name).
+# Using file paths (not module paths) lets us load source files directly
+# via spec_from_file_location, bypassing package `__init__.py` chains
+# that would pull in heavyweight runtime deps (aiohttp, pydantic, etc.).
+# CI runs in a slim Python-only environment without those deps installed.
 MANIFEST: List[Tuple[str, str]] = [
-    ("autobot_shared.workflow.types", "PromptSpec"),
-    ("autobot_shared.workflow.types", "ExecutionStrategy"),
-    ("autobot_shared.workflow.types", "WorkflowTask"),
-    ("autobot_shared.workflow.types", "WorkflowPlan"),
+    ("autobot_shared/workflow/types.py", "PromptSpec"),
+    ("autobot_shared/workflow/types.py", "ExecutionStrategy"),
+    ("autobot_shared/workflow/types.py", "WorkflowTask"),
+    ("autobot_shared/workflow/types.py", "WorkflowPlan"),
     # #7226: extend MANIFEST to cover hand-written types prone to drift
-    ("services.workflow_automation.models", "WorkflowStepStatus"),
-    ("autobot_shared.status_enums", "Severity"),  # exported as RiskLevel via alias below
+    ("autobot-backend/services/workflow_automation/models.py", "WorkflowStepStatus"),
+    ("autobot_shared/status_enums.py", "Severity"),  # exported as RiskLevel via alias below
 ]
 
 
@@ -98,9 +103,35 @@ ALIASES: Dict[str, List[str]] = {
 }
 
 
+def _load_module_from_path(file_path: Path, module_name: str) -> Any:
+    """Load a Python source file as a standalone module by file path.
+
+    Uses ``importlib.util.spec_from_file_location`` so the loader skips
+    the parent-package import chain (e.g. ``services/__init__.py``
+    pulling in ``aiohttp``). The module is registered under a synthetic
+    ``codegen_<basename>`` name so subsequent imports referenced by the
+    target file's own ``from ... import ...`` statements still resolve
+    via the normal sys.path search.
+    """
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    if spec is None or spec.loader is None:
+        raise SystemExit(f"Could not load source file: {file_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def _ensure_autobot_shared_on_path() -> None:
-    """Add ``autobot_shared`` and ``autobot-backend`` to sys.path so the script
-    can import canonical and (#7226) backend modules standalone."""
+    """Set up sys.path so target source files can resolve their internal
+    imports.
+
+    autobot_shared modules import each other via ``from autobot_shared.X``
+    (parent dir must be on path). autobot-backend modules use bare imports
+    like ``from type_defs.common import Metadata`` (autobot-backend itself
+    must be on path). We add both. Crucially, neither addition triggers a
+    package __init__.py — sys.path entries are only consulted when an
+    import statement runs inside a target file."""
     shared = REPO_ROOT / "autobot_shared"
     if str(shared.parent) not in sys.path:
         sys.path.insert(0, str(shared.parent))
@@ -249,16 +280,25 @@ HEADER = """// AutoBot - AI-Powered Automation Platform
 def generate() -> str:
     """Run the manifest and produce the full TS output as a string."""
     _ensure_autobot_shared_on_path()
+    # Cache loaded source files so multiple manifest entries pointing at
+    # the same file share one module load (and one execution of side
+    # effects in that module).
+    loaded_modules: Dict[str, Any] = {}
     entries: List[Tuple[str, type]] = []
-    for module_path, attr in MANIFEST:
-        spec = importlib.util.find_spec(module_path)
-        if spec is None:
-            raise SystemExit(f"Module not found: {module_path}")
-        module = importlib.import_module(module_path)
+    for rel_file_path, attr in MANIFEST:
+        abs_path = REPO_ROOT / rel_file_path
+        if not abs_path.is_file():
+            raise SystemExit(f"Source file not found: {rel_file_path}")
+        if rel_file_path not in loaded_modules:
+            # Synthetic module name avoids colliding with anything sys.path
+            # might also surface as `autobot_shared.workflow.types` etc.
+            synth_name = "codegen_" + rel_file_path.replace("/", "_").replace(".", "_")
+            loaded_modules[rel_file_path] = _load_module_from_path(abs_path, synth_name)
+        module = loaded_modules[rel_file_path]
         cls = getattr(module, attr, None)
         if cls is None:
-            raise SystemExit(f"{module_path}.{attr} not found")
-        entries.append((module_path, cls))
+            raise SystemExit(f"{rel_file_path}::{attr} not found")
+        entries.append((rel_file_path, cls))
 
     known_names = {c.__name__ for _, c in entries}
     # Aliases are also valid known names so dataclasses referencing them resolve.
@@ -266,11 +306,21 @@ def generate() -> str:
         known_names.update(alias_list)
 
     parts: List[str] = [HEADER]
-    for module_path, cls in entries:
+    for rel_file_path, cls in entries:
+        # For the rendered TS comment, convert path back to a dotted module
+        # path for human readability. autobot-backend/services/X/Y.py →
+        # services.X.Y; autobot_shared/workflow/types.py → autobot_shared.workflow.types.
+        display_module = rel_file_path
+        for prefix in ("autobot-backend/", ""):
+            if display_module.startswith(prefix):
+                display_module = display_module[len(prefix):]
+                break
+        display_module = display_module.removesuffix(".py").replace("/", ".")
+
         if isinstance(cls, type) and issubclass(cls, Enum):
-            parts.append(_render_enum(cls, module_path))
+            parts.append(_render_enum(cls, display_module))
         elif dataclasses.is_dataclass(cls):
-            parts.append(_render_dataclass(cls, known_names, module_path))
+            parts.append(_render_dataclass(cls, known_names, display_module))
         else:
             raise SystemExit(f"Unsupported class kind: {cls!r}")
         # Emit any aliases declared for this class
