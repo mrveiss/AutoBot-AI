@@ -64,22 +64,33 @@ def register_health_probe(name: str) -> Callable[[ProbeFn], ProbeFn]:
     Re-registering the same name overwrites and logs a warning — the
     rightmost import wins. This avoids duplicate-registration crashes when a
     module is reloaded (e.g. tests).
+
+    #6918: rejects sync probes at registration time. ``_run_probe`` enforces
+    ``_PROBE_TIMEOUT_S`` via ``asyncio.wait_for``, but ``wait_for`` only
+    cancels at ``await`` points — a sync probe that blocks the event loop
+    (e.g. ``time.sleep``, sync ``redis.ping``) holds the aggregator past the
+    timeout. The aggregator's documented invariant ("a slow component
+    cannot hold the aggregator hostage") is only true when every probe is
+    properly async. Catch the obvious case at registration; this shifts a
+    silent-prod-hang into an immediate import-time TypeError.
     """
 
     def _decorate(fn: ProbeFn) -> ProbeFn:
-        if name in _PROBES:
-            logger.warning(
-                "register_health_probe: %r already registered, overwriting", name
+        if not asyncio.iscoroutinefunction(fn):
+            raise TypeError(
+                f"register_health_probe({name!r}): probe must be `async def` — "
+                f"sync probes block the event loop and cannot be cancelled by "
+                f"the {_PROBE_TIMEOUT_S}s timeout. See #6918."
             )
+        if name in _PROBES:
+            logger.warning("register_health_probe: %r already registered, overwriting", name)
         _PROBES[name] = fn
         return fn
 
     return _decorate
 
 
-async def _run_probe(
-    name: str, fn: ProbeFn, request: Optional[Request]
-) -> ComponentHealth:
+async def _run_probe(name: str, fn: ProbeFn, request: Optional[Request]) -> ComponentHealth:
     started = time.perf_counter()
     try:
         result = await asyncio.wait_for(fn(request), timeout=_PROBE_TIMEOUT_S)
@@ -99,11 +110,7 @@ async def _run_probe(
             latency_ms=round((time.perf_counter() - started) * 1000, 2),
         )
     if result.latency_ms is None:
-        result = result.model_copy(
-            update={
-                "latency_ms": round((time.perf_counter() - started) * 1000, 2)
-            }
-        )
+        result = result.model_copy(update={"latency_ms": round((time.perf_counter() - started) * 1000, 2)})
     return result
 
 
@@ -261,13 +268,9 @@ def probe_app_state(probe_name: str, attr: str) -> ProbeFn:
     return _probe
 
 
-def register_singleton_probe(
-    name: str, getter: Callable, *, async_getter: bool = False
-) -> None:
+def register_singleton_probe(name: str, getter: Callable, *, async_getter: bool = False) -> None:
     """One-line wrapper: build + register a singleton-resolve probe."""
-    register_health_probe(name)(
-        probe_singleton(name, getter, async_getter=async_getter)
-    )
+    register_health_probe(name)(probe_singleton(name, getter, async_getter=async_getter))
 
 
 def register_redis_probe(name: str, *, database: str = "main") -> None:
