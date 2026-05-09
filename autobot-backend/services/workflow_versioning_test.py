@@ -26,6 +26,7 @@ from services.workflow_versioning import (
     _summary,
     _utc_now,
 )
+from tests.fixtures import make_async_redis, patch_async_redis
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -45,16 +46,12 @@ def _encode(record: dict) -> str:
     return json.dumps(record, ensure_ascii=False)
 
 
-def _make_redis() -> AsyncMock:
-    """Return an AsyncMock that behaves like a redis-py async client."""
-    redis = AsyncMock()
-    redis.set = AsyncMock(return_value=True)
-    redis.get = AsyncMock(return_value=None)
-    redis.delete = AsyncMock(return_value=1)
-    redis.zadd = AsyncMock(return_value=1)
-    redis.zrem = AsyncMock(return_value=1)
-    redis.zrevrange = AsyncMock(return_value=[])
-    return redis
+# Migrated to canonical ``make_async_redis()`` / ``patch_async_redis()`` helpers
+# from ``tests.fixtures`` (#7280 / #7264). ``_make_redis()`` and the local
+# ``patch(..., new=AsyncMock(return_value=...))`` boilerplate are gone — the
+# canonical fixture pre-configures the same defaults this file used (set=True,
+# get=None, delete=1, zadd=1, zrevrange=[]). ``zrem`` had a call-only assertion
+# (``assert_called_once``) so AsyncMock's auto-created child handles it.
 
 
 # ---------------------------------------------------------------------------
@@ -66,10 +63,10 @@ class TestSaveVersion:
     @pytest.mark.asyncio
     async def test_returns_version_1_for_new_workflow(self):
         store = WorkflowVersionStore()
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.zrevrange.return_value = []
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             version = await store.save_version("wf-1", _make_data())
 
         assert version == 1
@@ -77,10 +74,10 @@ class TestSaveVersion:
     @pytest.mark.asyncio
     async def test_auto_increments_existing_versions(self):
         store = WorkflowVersionStore()
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.zrevrange.return_value = ["3"]  # highest existing version
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             version = await store.save_version("wf-1", _make_data())
 
         assert version == 4
@@ -88,10 +85,10 @@ class TestSaveVersion:
     @pytest.mark.asyncio
     async def test_stores_record_and_updates_sorted_set(self):
         store = WorkflowVersionStore()
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.zrevrange.return_value = []
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             await store.save_version("wf-2", _make_data(), notes="initial save")
 
         mock_redis.set.assert_called_once()
@@ -129,12 +126,12 @@ class TestSaveVersion:
         async def fake_get(key):
             return stored.get(key)
 
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.set.side_effect = fake_set
         mock_redis.get.side_effect = fake_get
         mock_redis.zrevrange.return_value = []
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             version = await store.save_version("wf-rt", data, notes="rt")
             assert version == 1
 
@@ -156,7 +153,7 @@ class TestListVersions:
     @pytest.mark.asyncio
     async def test_returns_newest_first(self):
         store = WorkflowVersionStore()
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         # zrevrange already returns in descending order (newest first)
         mock_redis.zrevrange.return_value = ["3", "2", "1"]
 
@@ -173,7 +170,7 @@ class TestListVersions:
 
         mock_redis.get.side_effect = lambda key: _record(int(key.split(":")[-1]))
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             summaries = await store.list_versions("wf-order")
 
         assert [s["version"] for s in summaries] == [3, 2, 1]
@@ -181,10 +178,10 @@ class TestListVersions:
     @pytest.mark.asyncio
     async def test_returns_empty_for_unknown_workflow(self):
         store = WorkflowVersionStore()
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.zrevrange.return_value = []
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             summaries = await store.list_versions("wf-unknown")
 
         assert summaries == []
@@ -193,7 +190,7 @@ class TestListVersions:
     async def test_skips_missing_records_gracefully(self):
         """Sorted-set entry exists but the record key is gone — should not crash."""
         store = WorkflowVersionStore()
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.zrevrange.return_value = ["2", "1"]
         # Version 2 record is missing; version 1 record exists.
         record_v1 = _encode(
@@ -207,7 +204,7 @@ class TestListVersions:
         )
         mock_redis.get.side_effect = lambda key: None if ":2" in key else record_v1
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             summaries = await store.list_versions("wf-gap")
 
         assert len(summaries) == 1
@@ -225,7 +222,7 @@ class TestListVersions:
     async def test_summary_excludes_data_payload(self):
         """list_versions must not return the full data payload."""
         store = WorkflowVersionStore()
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.zrevrange.return_value = ["1"]
         record = _encode(
             {
@@ -238,7 +235,7 @@ class TestListVersions:
         )
         mock_redis.get.return_value = record
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             summaries = await store.list_versions("wf-sum")
 
         assert len(summaries) == 1
@@ -265,10 +262,10 @@ class TestGetVersion:
                 "notes": "v5",
             }
         )
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.get.return_value = record
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             wv = await store.get_version("wf-get", 5)
 
         assert wv is not None
@@ -280,10 +277,10 @@ class TestGetVersion:
     @pytest.mark.asyncio
     async def test_returns_none_on_miss(self):
         store = WorkflowVersionStore()
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.get.return_value = None
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             wv = await store.get_version("wf-miss", 99)
 
         assert wv is None
@@ -316,10 +313,10 @@ class TestRestoreVersion:
                 "notes": "",
             }
         )
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.get.return_value = record
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             restored = await store.restore_version("wf-restore", 2)
 
         assert restored == data
@@ -327,10 +324,10 @@ class TestRestoreVersion:
     @pytest.mark.asyncio
     async def test_returns_none_when_version_missing(self):
         store = WorkflowVersionStore()
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.get.return_value = None
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             restored = await store.restore_version("wf-restore", 99)
 
         assert restored is None
@@ -363,10 +360,10 @@ class TestDiffVersions:
         ]
         r1 = self._record("wf-diff", 1, steps_v1)
         r2 = self._record("wf-diff", 2, steps_v2)
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.get.side_effect = lambda key: r1 if ":1" in key else r2
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             diff = await store.diff_versions("wf-diff", v1=1, v2=2)
 
         assert diff is not None
@@ -385,10 +382,10 @@ class TestDiffVersions:
         steps_v2 = [{"step_id": "s1", "command": "ls", "description": "list"}]
         r1 = self._record("wf-diff", 1, steps_v1)
         r2 = self._record("wf-diff", 2, steps_v2)
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.get.side_effect = lambda key: r1 if ":1" in key else r2
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             diff = await store.diff_versions("wf-diff", v1=1, v2=2)
 
         assert diff is not None
@@ -404,10 +401,10 @@ class TestDiffVersions:
         steps_v2 = [{"step_id": "s1", "command": "ls -la", "description": "old desc"}]
         r1 = self._record("wf-diff", 1, steps_v1)
         r2 = self._record("wf-diff", 2, steps_v2)
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.get.side_effect = lambda key: r1 if ":1" in key else r2
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             diff = await store.diff_versions("wf-diff", v1=1, v2=2)
 
         assert diff is not None
@@ -423,10 +420,10 @@ class TestDiffVersions:
     @pytest.mark.asyncio
     async def test_returns_none_when_version_missing(self):
         store = WorkflowVersionStore()
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.get.return_value = None
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             diff = await store.diff_versions("wf-diff", v1=1, v2=2)
 
         assert diff is None
@@ -437,10 +434,10 @@ class TestDiffVersions:
         steps = [{"step_id": "s1", "command": "echo hi", "description": "greet"}]
         r1 = self._record("wf-same", 1, steps)
         r2 = self._record("wf-same", 2, steps)
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.get.side_effect = lambda key: r1 if ":1" in key else r2
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             diff = await store.diff_versions("wf-same", v1=1, v2=2)
 
         assert diff == {"added": [], "removed": [], "modified": []}
@@ -455,10 +452,10 @@ class TestDeleteVersion:
     @pytest.mark.asyncio
     async def test_returns_true_when_version_exists(self):
         store = WorkflowVersionStore()
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.delete.return_value = 1
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             result = await store.delete_version("wf-del", 3)
 
         assert result is True
@@ -468,10 +465,10 @@ class TestDeleteVersion:
     @pytest.mark.asyncio
     async def test_returns_false_when_version_not_found(self):
         store = WorkflowVersionStore()
-        mock_redis = _make_redis()
+        mock_redis = make_async_redis()
         mock_redis.delete.return_value = 0  # key did not exist
 
-        with patch("services.workflow_versioning.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch_async_redis("services.workflow_versioning.get_async_redis_client", redis=mock_redis):
             result = await store.delete_version("wf-del", 99)
 
         assert result is False
