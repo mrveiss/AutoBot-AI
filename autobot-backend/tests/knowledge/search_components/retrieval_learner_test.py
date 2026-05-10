@@ -18,6 +18,7 @@ from knowledge.search_components.retrieval_learner import (
     _ucb1_score,
     get_retrieval_learner,
 )
+from tests.fixtures import make_async_redis
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -25,15 +26,10 @@ from knowledge.search_components.retrieval_learner import (
 
 
 def _make_redis_mock() -> AsyncMock:
-    """Return a Redis mock with sensible defaults."""
-    redis = AsyncMock()
-    redis.xrange = AsyncMock(return_value=[])
-    redis.hgetall = AsyncMock(return_value={})
-    redis.hset = AsyncMock()
-    redis.expire = AsyncMock()
-    redis.delete = AsyncMock()
-    redis.scan = AsyncMock(return_value=(0, []))
-    return redis
+    # Migrated to canonical ``make_async_redis()`` (#7280 round 5).
+    # ``hgetall``, ``hset``, ``expire``, ``delete`` are canonical defaults;
+    # ``xrange=[]`` and ``scan=(0, [])`` flow through ``**extra_methods``.
+    return make_async_redis(xrange=[], scan=(0, []))
 
 
 def _make_learner(redis: AsyncMock) -> RetrievalLearner:
