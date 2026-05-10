@@ -172,7 +172,7 @@ async def _crawl_fallback(seed: str, max_urls: int) -> List[SiteMapEntry]:
     discovery is needed here; bodies are NOT fetched to keep this fast.
     robots.txt is always honored in the fallback path.
     """
-    from web_fetch.fetcher import _fetch_bs4
+    from web_fetch.fetcher import WebFetcher
     from web_fetch.frontier import Frontier, extract_links
 
     frontier = Frontier(seed, max_pages=max_urls, max_depth=3, same_origin=True)
@@ -183,7 +183,7 @@ async def _crawl_fallback(seed: str, max_urls: int) -> List[SiteMapEntry]:
         entries.append(SiteMapEntry(url=url, title=None, depth=depth))
         if len(entries) >= max_urls:
             break
-        html, status = await _fetch_bs4(url, timeout=10.0)
+        html, status = await WebFetcher.fetch_raw_html(url, timeout=10.0)
         if html and status is not None and status < 400:
             links = extract_links(html, url, same_origin_only=True)
             frontier.add_links(links, depth + 1)
@@ -196,7 +196,7 @@ async def _crawl_fallback_with_robots(seed: str, max_urls: int, respect_robots: 
     if not respect_robots:
         return await _crawl_fallback(seed, max_urls)
 
-    from web_fetch.fetcher import _fetch_bs4
+    from web_fetch.fetcher import WebFetcher
     from web_fetch.frontier import Frontier, extract_links
     from web_fetch.robots import RobotsCache
 
@@ -219,7 +219,7 @@ async def _crawl_fallback_with_robots(seed: str, max_urls: int, respect_robots: 
         entries.append(SiteMapEntry(url=url, title=None, depth=depth))
         if len(entries) >= max_urls:
             break
-        html, status = await _fetch_bs4(url, timeout=10.0)
+        html, status = await WebFetcher.fetch_raw_html(url, timeout=10.0)
         if html and status is not None and status < 400:
             links = extract_links(html, url, same_origin_only=True)
             frontier.add_links(links, depth + 1)

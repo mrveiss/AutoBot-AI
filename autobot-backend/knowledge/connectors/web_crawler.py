@@ -27,7 +27,6 @@ from knowledge.connectors.models import (
 from knowledge.connectors.registry import ConnectorRegistry
 from web_fetch import ERR_CONNECTION, FetchResult, Frontier, RobotsCache, RenderMode, WebFetcher
 from web_fetch.extractors import extract_markdown
-from web_fetch.fetcher import _fetch_bs4
 from web_fetch.frontier import extract_links
 
 logger = logging.getLogger(__name__)
@@ -223,8 +222,8 @@ class WebCrawlerConnector(AbstractConnector):
         """BFS crawl starting from *seed_urls*.
 
         Uses web_fetch.Frontier for BFS queue/dedup, web_fetch.RobotsCache
-        for per-domain robots.txt enforcement, and web_fetch._fetch_bs4 for
-        every URL (single request yields both HTML for link extraction and
+        for per-domain robots.txt enforcement, and ``WebFetcher.fetch_raw_html``
+        for every URL (single request yields both HTML for link extraction and
         content for KB ingest).
 
         Args:
@@ -327,7 +326,7 @@ class WebCrawlerConnector(AbstractConnector):
             if not await fetcher._robots.is_allowed(url):
                 return FetchResult(url=url, success=False, error_code="robots_blocked"), ""
 
-        html, status = await _fetch_bs4(url, timeout=30.0)
+        html, status = await WebFetcher.fetch_raw_html(url, timeout=30.0)
         if html is None or status is None or status >= 400:
             return (
                 FetchResult(url=url, success=False, error_code=ERR_CONNECTION, status_code=status),
