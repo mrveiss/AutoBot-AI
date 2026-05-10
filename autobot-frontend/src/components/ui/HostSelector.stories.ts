@@ -20,10 +20,11 @@ const meta = {
       description: 'v-model: currently selected host (or null)',
     },
   },
-} satisfies Meta<typeof HostSelector>;
+} as Meta<typeof HostSelector>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const Default: Story = {
   args: {

@@ -24,10 +24,11 @@ const meta = {
       description: 'Connection status text',
     },
   },
-} satisfies Meta<typeof ChatHeader>;
+} as Meta<typeof ChatHeader>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const Default: Story = {
   args: {

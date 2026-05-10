@@ -22,10 +22,11 @@ const meta = {
       description: 'Optional leading icon',
     },
   },
-} satisfies Meta<typeof StatusBadge>;
+} as Meta<typeof StatusBadge>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const Success: Story = {
   render: () => ({

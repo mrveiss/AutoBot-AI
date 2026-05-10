@@ -27,10 +27,11 @@ const meta = {
       description: 'Agent session that initiated the request',
     },
   },
-} satisfies Meta<typeof HostSelectionDialog>;
+} as Meta<typeof HostSelectionDialog>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const Default: Story = {
   args: {

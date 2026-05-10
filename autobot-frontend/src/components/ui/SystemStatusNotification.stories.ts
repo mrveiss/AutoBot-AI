@@ -40,10 +40,11 @@ const meta = {
       description: 'Auto-hide delay in ms (0 to disable)',
     },
   },
-} satisfies Meta<typeof SystemStatusNotification>;
+} as Meta<typeof SystemStatusNotification>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const InfoToast: Story = {
   args: {
