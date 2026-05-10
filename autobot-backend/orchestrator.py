@@ -745,7 +745,7 @@ class Orchestrator:
             planning_prompt = self._build_planning_prompt(goal)
             response = await get_robust_llm_response(planning_prompt, context)
             plan_data = self._parse_planning_response(response, goal)
-            plan = self._strategy_planner.build_workflow_plan(goal, plan_data)
+            plan = await self._strategy_planner.build_workflow_plan(goal, plan_data)
             self.active_workflows[plan.plan_id] = plan
             return plan
         except Exception as e:

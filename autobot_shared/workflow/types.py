@@ -122,6 +122,17 @@ class WorkflowTask:
     start_time: Optional[float] = None
     end_time: Optional[float] = None
 
+    # Skill binding (#7268 Phase 1, ADR-006: Skill-Bound Planning).
+    # Populated at plan time by StrategyPlanner via skill_router lookup
+    # (dry_run=True — no auto-enable, no Phase 3 gap-fill at plan time).
+    # ``skill_name`` is the registered skill name; ``skill_action`` is the
+    # action to invoke at execute time; ``skill_resolution_method`` records
+    # how it was resolved (``"keyword"`` / ``"llm"`` / ``None``).
+    # WorkflowExecutor consumption of these fields is Phase 2 — deferred.
+    skill_name: Optional[str] = None
+    skill_action: Optional[str] = None
+    skill_resolution_method: Optional[str] = None
+
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
