@@ -646,8 +646,33 @@ class DatabaseMCPStatusResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Sandbox-scoped file API response models — DEFERRED WIRE-IN to #7409
+# ---------------------------------------------------------------------------
+#
+# The 7 ``FileSandbox*`` classes below describe the response shape for
+# endpoints under ``/api/sandbox/files/*`` that don't yet exist. They were
+# orphaned by the #6042 migration and tracked under #6676.
+#
+# Disposition (#6676 closure): deferred-wire-in per CLAUDE.md — these are
+# scaffolding for a planned third file-API surface (sandbox-scoped CRUD,
+# distinct from ``api/files.py``'s workspace scope and ``api/sandbox.py``'s
+# code-execution scope). The wire-in plan lives at #7409: add
+# ``api/sandbox_files.py`` + register in ``feature_routers.py``, give each
+# class ≥1 production caller, surface a ``useSandboxFiles`` composable.
+#
+# Until #7409 lands, these classes are intentionally caller-less. The
+# closure-gate audit (``audit-unwired-trackers.py``) will keep flagging
+# them; that's expected — the cure is implementing #7409, not deleting.
+# ---------------------------------------------------------------------------
+
+
 class FileSandboxViewResponse(BaseModel):
-    """Response for GET /files/view/{path}."""
+    """Response for GET /api/sandbox/files/view/{path}.
+
+    Wire-in deferred to #7409 (the endpoint hosting this response model
+    is part of the planned ``/api/sandbox/files/*`` surface).
+    """
 
     file_info: Any
     content: Optional[str] = None
@@ -655,14 +680,20 @@ class FileSandboxViewResponse(BaseModel):
 
 
 class FileSandboxRenameResponse(BaseModel):
-    """Response for POST /files/rename."""
+    """Response for POST /api/sandbox/files/rename.
+
+    Wire-in deferred to #7409.
+    """
 
     message: str
     item_info: Any
 
 
 class FileSandboxPreviewResponse(BaseModel):
-    """Response for GET /files/preview."""
+    """Response for GET /api/sandbox/files/preview.
+
+    Wire-in deferred to #7409.
+    """
 
     type: str
     url: str
@@ -673,27 +704,39 @@ class FileSandboxPreviewResponse(BaseModel):
 
 
 class FileSandboxDeleteResponse(BaseModel):
-    """Response for DELETE /files/delete."""
+    """Response for DELETE /api/sandbox/files/delete.
+
+    Wire-in deferred to #7409.
+    """
 
     message: str
 
 
 class FileSandboxCreateDirResponse(BaseModel):
-    """Response for POST /files/create_directory."""
+    """Response for POST /api/sandbox/files/create_directory.
+
+    Wire-in deferred to #7409.
+    """
 
     message: str
     directory_info: Any
 
 
 class FileSandboxTreeResponse(BaseModel):
-    """Response for GET /files/tree."""
+    """Response for GET /api/sandbox/files/tree.
+
+    Wire-in deferred to #7409.
+    """
 
     path: str
     tree: List[Any]
 
 
 class FileSandboxStatsResponse(BaseModel):
-    """Response for GET /files/stats."""
+    """Response for GET /api/sandbox/files/stats.
+
+    Wire-in deferred to #7409.
+    """
 
     sandbox_root: str
     total_files: int
