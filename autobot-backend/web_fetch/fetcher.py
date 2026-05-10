@@ -145,7 +145,14 @@ async def _fetch_jina(url: str, timeout: float) -> Optional[str]:
 
 
 async def _fetch_bs4(url: str, timeout: float) -> tuple[Optional[str], Optional[int]]:
-    """Fetch raw HTML via aiohttp. Returns (html, status_code) or (None, None)."""
+    """Fetch raw HTML via aiohttp. Returns (html, status_code) or (None, None).
+
+    Single round-trip (#7459): streams the response body in 64 KiB chunks,
+    enforces ``WEB_FETCH_MAX_BYTES``, and returns ``("", status)`` for empty
+    bodies — the prior implementation issued a 1-byte probe request and
+    then re-fetched the full URL, doubling HTTP load on every fast-path
+    attempt.
+    """
     import aiohttp
 
     headers = {"User-Agent": _USER_AGENT}
@@ -158,21 +165,13 @@ async def _fetch_bs4(url: str, timeout: float) -> tuple[Optional[str], Optional[
                 allow_redirects=True,
                 max_redirects=_MAX_REDIRECTS,
             ) as resp:
-                if len(await resp.content.read(1)) == 0:
-                    return "", resp.status
-                # Re-fetch with full content
-        async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.get(
-                url,
-                timeout=aio_timeout,
-                allow_redirects=True,
-                max_redirects=_MAX_REDIRECTS,
-            ) as resp:
                 content = b""
                 async for chunk in resp.content.iter_chunked(65536):
                     content += chunk
                     if len(content) > WEB_FETCH_MAX_BYTES:
                         return None, None  # too large
+                if not content:
+                    return "", resp.status
                 html = content.decode("utf-8", errors="replace")
                 return html, resp.status
     except aiohttp.TooManyRedirects:
