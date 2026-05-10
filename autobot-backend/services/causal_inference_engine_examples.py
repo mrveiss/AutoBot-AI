@@ -23,14 +23,14 @@ Each scenario includes:
 - Confounders
 - Interventions
 - Recommendations
-- Severity assessment
+- CausalSeverity assessment
 """
 
 from services.causal_inference_engine import (
     CausalAnalysisReport,
+    CausalSeverity,
     Intervention,
     RecommendationType,
-    Severity,
 )
 from services.root_cause_analyzer import CausalEvent
 
@@ -553,7 +553,7 @@ def create_example_report_1() -> CausalAnalysisReport:
             )
             for interv in EXAMPLE_1_POOL_EXHAUSTION["interventions"]
         ],
-        severity=Severity(EXAMPLE_1_POOL_EXHAUSTION["severity"]),
+        severity=CausalSeverity(EXAMPLE_1_POOL_EXHAUSTION["severity"]),
         confidence=EXAMPLE_1_POOL_EXHAUSTION["confidence"],
         chain_depth=len(EXAMPLE_1_POOL_EXHAUSTION["causal_chain"]),
         confounding_strength=EXAMPLE_1_POOL_EXHAUSTION["confounding_strength"],

@@ -21,7 +21,7 @@ Reports include:
 - Confounders (multi-factor contributors)
 - Interventions (ranked by likelihood × cost)
 - Recommendations (IMMEDIATE, SHORT_TERM, LONG_TERM)
-- Severity (CRITICAL, DEGRADED, WARNING)
+- CausalSeverity (CRITICAL, DEGRADED, WARNING)
 """
 
 import logging
@@ -44,7 +44,7 @@ from services.root_cause_analyzer import (
 logger = logging.getLogger(__name__)
 
 
-class Severity(str, Enum):
+class CausalSeverity(str, Enum):
     """Error severity levels."""
 
     CRITICAL = "critical"  # Immediate action required
@@ -86,7 +86,7 @@ class CausalAnalysisReport:
     causal_chain: List[CausalEvent] = field(default_factory=list)
     confounders: List[CausalEvent] = field(default_factory=list)
     interventions: List[Intervention] = field(default_factory=list)
-    severity: Severity = Severity.WARNING
+    severity: CausalSeverity = CausalSeverity.WARNING
     confidence: float = 0.0
     chain_depth: int = 0
     confounding_strength: float = 0.0  # 0.0-1.0, how much confounders matter
@@ -638,7 +638,7 @@ class CausalInferenceEngine:
         report: RootCauseReport,
         confounding_strength: float,
         interventions: List[Intervention],
-    ) -> Severity:
+    ) -> CausalSeverity:
         """
         Assess error severity based on analysis results.
 
@@ -652,29 +652,29 @@ class CausalInferenceEngine:
             interventions: Generated interventions
 
         Returns:
-            Severity level
+            CausalSeverity level
         """
         # Start with confidence-based baseline
         if report.chain_depth >= 3 and report.confidence >= 0.7:
-            base_severity = Severity.CRITICAL
+            base_severity = CausalSeverity.CRITICAL
         elif report.chain_depth >= 2 and report.confidence >= 0.5:
-            base_severity = Severity.DEGRADED
+            base_severity = CausalSeverity.DEGRADED
         else:
-            base_severity = Severity.WARNING
+            base_severity = CausalSeverity.WARNING
 
         # Upgrade to CRITICAL if multi-factor
-        if confounding_strength >= 0.5 and base_severity == Severity.DEGRADED:
-            base_severity = Severity.CRITICAL
+        if confounding_strength >= 0.5 and base_severity == CausalSeverity.DEGRADED:
+            base_severity = CausalSeverity.CRITICAL
 
         # Downgrade if high-confidence interventions exist
         if interventions and interventions[0].predicted_success_rate >= 0.8 and interventions[0].confidence >= 0.8:
             # High-confidence fix available, not critical
-            if base_severity == Severity.CRITICAL:
-                base_severity = Severity.DEGRADED
+            if base_severity == CausalSeverity.CRITICAL:
+                base_severity = CausalSeverity.DEGRADED
 
         return base_severity
 
-    def _generate_recommendations(self, interventions: List[Intervention], severity: Severity) -> List[str]:
+    def _generate_recommendations(self, interventions: List[Intervention], severity: CausalSeverity) -> List[str]:
         """
         Generate human-readable recommendations ranked by priority.
 
@@ -702,9 +702,9 @@ class CausalInferenceEngine:
 
         # Generate urgency prefix based on severity
         urgency = ""
-        if severity == Severity.CRITICAL:
+        if severity == CausalSeverity.CRITICAL:
             urgency = "[URGENT] "
-        elif severity == Severity.DEGRADED:
+        elif severity == CausalSeverity.DEGRADED:
             urgency = "[ACTION] "
 
         # Add immediate actions
