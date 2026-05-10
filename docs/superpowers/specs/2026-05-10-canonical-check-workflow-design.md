@@ -89,9 +89,6 @@ tools/lint/canonical/infra_rules/             # 4 infrastructure rule modules
 Makefile                                      # `canonical-check`, `canonical-check-fix`
 .github/workflows/canonical-audit.yml         # Weekly cron — Mondays 03:00 UTC
 .claude/skills/canonical-audit/SKILL.md       # /canonical-audit slash command
-docs/canonical-audit/                         # Reports checked in for trend visibility
-  canonical-audit-2026-05-MM.md
-  latest.md -> ...                            # Symlink to newest
 docs/developer/CANONICAL_RULES.md             # Human-readable catalog
 ```
 
@@ -208,7 +205,12 @@ Run `python tools/lint/canonical_check.py --explain py-get-logger` for rationale
 
 ### 5.3 Audit report
 
-`docs/canonical-audit/canonical-audit-YYYY-MM-DD.md` — committed for trend visibility.
+Generated as `canonical-audit-YYYY-MM-DD.md` plus a `canonical-audit-YYYY-MM-DD.json` machine-readable sidecar. Storage:
+
+- **CI cron mode:** uploaded as a GitHub Actions workflow artifact (90-day default retention). Not committed to the repo.
+- **Local mode (`/canonical-audit` slash command):** written to `.canonical-audit/` (gitignored) in the working tree.
+
+Trend lines are computed at report-generation time by fetching the previous N artifacts via the GitHub API (`gh api repos/.../actions/artifacts`), extracting their `.json` sidecars, and diffing rule-by-rule counts. If fewer than 2 prior artifacts are available (e.g. first run), the trend section is omitted with a note.
 
 ```markdown
 # Canonical-style audit — 2026-05-10
@@ -238,7 +240,7 @@ Block-severity violations over time:
 - py-blocking-io, py-redis-factory, py-relative-path-guard, infra-pipefail
 ```
 
-A `latest.md` symlink in `docs/canonical-audit/` always points at the newest scan.
+The most-recent artifact is always discoverable via `gh run list --workflow=canonical-audit.yml --limit=1` followed by `gh run download <run-id>`. No `latest.md` symlink is needed since artifacts are addressable by run ID.
 
 ## 6. Waivers
 
@@ -294,14 +296,15 @@ The 18 existing pre-commit hooks stay in place during all 5 waves. After Wave 5 
 | Rules drift from canonical patterns | Each rule's docstring links to its #7458 issue and to the canonical example file; weekly audit catches drift |
 | 22+ rules = 22+ approval reviews | Use `parallel` skill: each Wave 2/3/4 rule lands in its own worktree, batched 3-at-a-time |
 | Frontend runner adds Node startup cost to every commit | Runner short-circuits if no FE files staged (`*.vue`, `*.ts`, `*.mjs`, `*.css` outside excluded dirs) |
-| Audit report bloat in git history | Reports kept in `docs/canonical-audit/`; old reports pruned to monthly granularity after 6 months |
+| Trend history lost when artifacts expire (90d default) | Workflow runs `actions/upload-artifact` with `retention-days: 365` for canonical audits; older trend data accepted as lossy |
 
 ## 9. Acceptance Criteria
 
 - All 22 #7458 sub-issues have a corresponding rule module (or are explicitly noted as covered by an existing hook).
 - `make canonical-check` runs in <30s on a clean checkout.
 - Pre-commit passes on `Dev_new_gui` HEAD (zero violations on staged files for any BLOCK rule).
-- Weekly audit cron produces a report and commits it to `docs/canonical-audit/`.
+- Weekly audit cron produces a report and uploads it as a workflow artifact with 365-day retention.
+- Trend section in audit reports works correctly once ≥2 prior artifacts exist.
 - `/canonical-audit` slash command works locally with same output.
 - `docs/developer/CANONICAL_RULES.md` lists every rule, severity, and rationale.
 - Each Wave 1+ rule has fixture tests covering positive case, negative case, and waiver behavior.
