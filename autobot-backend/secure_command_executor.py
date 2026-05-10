@@ -65,6 +65,10 @@ _DANGEROUS_ENV_VARS = frozenset(
         "BASH_ENV",
         "ENV",
         "PROMPT_COMMAND",
+        # #7406: SHELL controls which interpreter `sudo -E` (and other env-
+        # preserving wrappers) invoke — `SHELL=/bin/sh; sudo -E sh` is a
+        # real escalation chain.
+        "SHELL",
         # Interpreter library paths
         "PYTHONPATH",
         "PERL5LIB",
@@ -112,6 +116,17 @@ _FIND_SUID_RECON_PATTERNS = (
 # infiltration channels and external host enumeration. Worth at least
 # MODERATE so they're audit-logged.
 _DNS_RECON_COMMANDS = frozenset({"dig", "nslookup", "host", "whois", "drill"})
+
+# #7406: ordering for CommandRisk so chained-command detection can pick the
+# strictest risk across sub-commands. Strings are used here because the enum
+# class is defined later in this module; the caller compares via this lookup.
+_RISK_ORDER: Dict[str, int] = {
+    "safe": 0,
+    "moderate": 1,
+    "high": 2,
+    "critical": 3,
+    "forbidden": 4,
+}
 
 
 def _check_argument_aware_risk(command: str) -> Optional[Tuple["CommandRisk", List[str]]]:
@@ -163,6 +178,52 @@ def _check_argument_aware_risk(command: str) -> Optional[Tuple["CommandRisk", Li
             CommandRisk.MODERATE,
             [f"DNS-recon command: {tokens[0]} (audit-logged)"],
         )
+
+    # 4. #7406: `export VAR=value` shell-builtin form. Sibling of the
+    # prefix-form #7375 check — same dangerous-var list, different syntax.
+    # `export PATH=/x; ls` persists the var in the current shell so every
+    # subsequent command runs with the attacker-controlled PATH.
+    if tokens[0] == "export":
+        for token in tokens[1:]:
+            if "=" not in token:
+                continue
+            # Strip trailing shell separators (`;`, `&`, `&&`, etc.) that
+            # shlex.split keeps glued to the value (e.g. `SHELL=/bin/sh;`).
+            value_part = token.split("=", 1)[1].rstrip(";&|")
+            var = token.split("=", 1)[0]
+            if var in _DANGEROUS_ENV_VARS:
+                return (
+                    CommandRisk.FORBIDDEN,
+                    [f"export of dangerous env-var: {var}={value_part!r}"],
+                )
+
+    # 5. #7406: `cmd1; cmd2` chained-command separator with a high-risk
+    # right-hand side. shlex.split keeps `;` glued to the preceding token,
+    # so split on it manually and recurse on each sub-command. Take the
+    # highest risk seen across all sub-commands.
+    if any(";" in t for t in tokens):
+        # Re-split on the raw `;` separator to get the actual sub-command
+        # boundaries (shlex preserves `;` as a literal — strip it back out).
+        sub_commands = [s.strip() for s in command.split(";") if s.strip()]
+        if len(sub_commands) > 1:
+            from typing import cast
+
+            highest_risk: Optional["CommandRisk"] = None
+            all_reasons: List[str] = []
+            for sub in sub_commands:
+                sub_result = _check_argument_aware_risk(sub)
+                if sub_result is None:
+                    continue
+                sub_risk, sub_reasons = sub_result
+                # Take the strictest risk (FORBIDDEN > HIGH > MODERATE > SAFE).
+                if highest_risk is None or _RISK_ORDER[sub_risk.value] > _RISK_ORDER[highest_risk.value]:
+                    highest_risk = sub_risk
+                all_reasons.extend(sub_reasons)
+            if highest_risk is not None:
+                return (
+                    cast("CommandRisk", highest_risk),
+                    [f"Chained command (`;` separator): {r}" for r in all_reasons],
+                )
 
     return None
 
