@@ -142,3 +142,24 @@ async def test_env_status_endpoint_with_real_loader_no_mock(monkeypatch):
     assert entry.description == "Integration test var."
     assert entry.docs_url == "https://example.com/docs"
     assert entry.obtain_steps == ["step1", "step2"]
+
+
+# ---------------------------------------------------------------------------
+# get_plugin_manager singleton accessor (Issue #6970)
+# ---------------------------------------------------------------------------
+
+
+def test_get_plugin_manager_returns_singleton():
+    from plugin_manager import get_plugin_manager
+
+    a = get_plugin_manager()
+    b = get_plugin_manager()
+    assert a is b
+
+
+def test_get_plugin_manager_returns_plugin_manager_instance():
+    from plugin_manager import get_plugin_manager
+    from plugin_sdk.plugin_manager import PluginManager
+
+    pm = get_plugin_manager()
+    assert isinstance(pm, PluginManager)

@@ -50,6 +50,25 @@ def get_plugin_loader() -> PluginLoader:
     return _plugin_loader
 
 
+_plugin_manager_singleton: Optional["PluginManager"] = None
+
+
+def get_plugin_manager() -> "PluginManager":
+    """Return the shared PluginManager singleton.
+
+    Mirrors the get_plugin_loader pattern. Used by FastAPI lifespan and
+    Celery worker_init to dispatch extension-point hooks.
+
+    Issue #6970.
+    """
+    from plugin_sdk.plugin_manager import PluginManager
+
+    global _plugin_manager_singleton
+    if _plugin_manager_singleton is None:
+        _plugin_manager_singleton = PluginManager(plugin_dirs=[])
+    return _plugin_manager_singleton
+
+
 class PluginConfigUpdate(BaseModel):
     """Plugin configuration update request."""
 
