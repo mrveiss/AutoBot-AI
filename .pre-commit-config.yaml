@@ -458,6 +458,39 @@ repos:
         stages: [pre-commit]
         description: "Copies tracked post-commit hook into .git/hooks/ so it heals stash-pop conflicts"
 
+  # AutoBot custom: canonical-check Wave 0 (#7458). The three runners discover
+  # rule modules from their respective registries and emit pre-commit-style
+  # violations on staged files only. BLOCK-severity rules fail the commit;
+  # WARN/AUDIT rules print but exit 0. See docs/developer/CANONICAL_RULES.md.
+  - repo: local
+    hooks:
+      - id: canonical-check-py
+        name: Canonical check — Python (#7458)
+        entry: python tools/lint/canonical_check.py --files
+        language: python
+        files: \.py$
+        exclude: ^(\.worktrees/|tests/lint/canonical/fixtures/)
+        stages: [pre-commit]
+        description: "Pluggable canonical-pattern checks for Python files (#7458)"
+
+      - id: canonical-check-fe
+        name: Canonical check — Frontend (#7458)
+        entry: node autobot-frontend/scripts/canonical_check.mjs --files
+        language: system
+        files: ^autobot-frontend/.*\.(ts|vue|mjs|js)$
+        exclude: ^(autobot-frontend/node_modules/|autobot-frontend/dist/)
+        stages: [pre-commit]
+        description: "Pluggable canonical-pattern checks for Vue/TS files (#7458)"
+
+      - id: canonical-check-infra
+        name: Canonical check — Infrastructure (#7458)
+        entry: python tools/lint/canonical_check_infra.py --files
+        language: python
+        files: \.(sh|yml|yaml)$
+        exclude: ^(\.worktrees/|node_modules/|tests/lint/canonical/fixtures/)
+        stages: [pre-commit]
+        description: "Pluggable canonical-pattern checks for shell/YAML files (#7458)"
+
 # Configuration for specific file types
 default_language_version:
   python: python3
