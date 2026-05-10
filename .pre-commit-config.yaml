@@ -227,6 +227,23 @@ repos:
         stages: [pre-commit]
         description: "Ensure @router.* is OUTERMOST and @with_error_handling is not stacked (#6558, #6633)"
 
+  # AutoBot custom: regression-prevention for #7444 (blocking I/O in async).
+  # 159 production violations exist as of filing — `requests.get/...` and
+  # `Path.read_text/write_text` calls inside `async def` bodies block the
+  # event loop and cause intermittent latency spikes under concurrent load.
+  # This hook stops NEW violations from landing while the existing 159 are
+  # migrated separately. Pre-commit only runs on changed files, so existing
+  # violations don't trigger unless the file is touched.
+  - repo: local
+    hooks:
+      - id: no-blocking-io-in-async
+        name: Block sync I/O calls inside async def (#7444)
+        entry: tools/lint/check_no_blocking_io_in_async.py
+        language: python
+        files: ^(autobot-backend|autobot_shared|autobot-slm-backend)/.*\.py$
+        stages: [pre-commit]
+        description: "Block requests.* and Path.read_text/write_text inside async def bodies (#7444)"
+
   # Python-specific checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
