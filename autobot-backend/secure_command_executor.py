@@ -77,6 +77,96 @@ _DANGEROUS_ENV_VARS = frozenset(
 )
 
 
+# #7384: argument-aware risk for tools whose base command is allowlisted
+# but whose flags / arguments elevate them to attack vectors.
+# Same family as #7375 (env-var prefix) — the base command (`docker`,
+# `find`, `dig`) lookup says SAFE/MODERATE, but specific argument shapes
+# turn them into container-escape, SUID-recon, or DNS-tunneling vectors.
+_DOCKER_ESCAPE_FLAGS = (
+    "--privileged",
+    "--net=host",
+    "--network=host",
+    "--pid=host",
+    "--ipc=host",
+    "--uts=host",
+    "--userns=host",
+    "--cap-add",
+    "-v /:",
+    "--volume=/:",
+    "--device=",
+    "--security-opt=seccomp=unconfined",
+    "--security-opt=apparmor=unconfined",
+)
+# `find` argument shapes that signal SUID / setgid recon — used to locate
+# privilege-escalation primitives. The wrapped `find` itself is benign
+# (allowlisted MODERATE); these argument shapes elevate to HIGH.
+_FIND_SUID_RECON_PATTERNS = (
+    "-perm -4000",  # setuid bit (-4000)
+    "-perm -2000",  # setgid bit (-2000)
+    "-perm -u+s",  # setuid (symbolic)
+    "-perm -g+s",  # setgid (symbolic)
+    "-perm /4000",
+    "-perm /2000",
+)
+# DNS-recon / DNS-tunneling vectors. Real attacker techniques for
+# infiltration channels and external host enumeration. Worth at least
+# MODERATE so they're audit-logged.
+_DNS_RECON_COMMANDS = frozenset({"dig", "nslookup", "host", "whois", "drill"})
+
+
+def _check_argument_aware_risk(command: str) -> Optional[Tuple["CommandRisk", List[str]]]:
+    """#7384: detect attack vectors that base-command lookup misses.
+
+    Returns ``(risk, reasons)`` for argument-shape-elevated commands,
+    or ``None`` if no argument-aware rule fires. The caller short-circuits
+    risk assessment so the more-specific reason wins over the generic
+    base-command classification.
+    """
+    # Tokenise once; we use string membership for flag checks but a
+    # token list for first-token (DNS) detection.
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        # Malformed quoting; let the standard path handle it.
+        return None
+    if not tokens:
+        return None
+
+    # 1. Docker escape flags — `docker run --privileged …` etc.
+    if tokens[0] == "docker":
+        flagged_docker: List[str] = []
+        # Cheap substring check for compound flags (`-v /:`, `--cap-add SYS_ADMIN`).
+        for flag in _DOCKER_ESCAPE_FLAGS:
+            if flag in command:
+                flagged_docker.append(flag)
+        # `--cap-add` may appear with `=` or as a separate arg — if any
+        # token equals it AND a sibling token is supplied, count as flag.
+        if "--cap-add" in tokens or any(t.startswith("--cap-add=") for t in tokens):
+            if "--cap-add" not in flagged_docker:
+                flagged_docker.append("--cap-add")
+        if flagged_docker:
+            return (
+                CommandRisk.FORBIDDEN,
+                [f"Docker escape flag: {flag}" for flag in flagged_docker],
+            )
+
+    # 2. `find` SUID / setgid recon.
+    if tokens[0] == "find":
+        for pattern in _FIND_SUID_RECON_PATTERNS:
+            if pattern in command:
+                return (CommandRisk.HIGH, [f"SUID/setgid recon: {pattern}"])
+
+    # 3. DNS recon — first token (no env-var prefix has reached here, so
+    # tokens[0] is the actual base command).
+    if tokens[0] in _DNS_RECON_COMMANDS:
+        return (
+            CommandRisk.MODERATE,
+            [f"DNS-recon command: {tokens[0]} (audit-logged)"],
+        )
+
+    return None
+
+
 def _check_dangerous_env_var_prefix(command: str) -> Optional[List[str]]:
     """#7375: detect env-var prefix injection BEFORE base-command lookup.
 
@@ -547,6 +637,15 @@ class SecureCommandExecutor:
         if dangerous_env_vars:
             reasons = [f"Dangerous env-var prefix: {var}" for var in dangerous_env_vars]
             return CommandRisk.FORBIDDEN, reasons
+
+        # #7384: argument-aware risk for tools whose base command is
+        # allowlisted but whose flags / arguments elevate them to attack
+        # vectors — `docker run --privileged`, `find -perm -4000`, `dig`.
+        # Same family as the env-var check above; runs before base-command
+        # lookup so the more-specific reason wins.
+        arg_aware = _check_argument_aware_risk(command)
+        if arg_aware is not None:
+            return arg_aware
 
         base_command = self._extract_command_name(command)
 
