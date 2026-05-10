@@ -76,15 +76,17 @@ class RobotsCache:
     async def is_allowed(self, url: str, user_agent: str = _USER_AGENT) -> bool:
         """Return True if user_agent is allowed to fetch url per robots.txt.
 
-        Fail-open: returns True when robots.txt is unreachable.
+        Fail-open: ``_fetch_robots_text`` returns ``""`` on any error and
+        ``_parse_robots`` parses an empty string into a permissive
+        ``RobotFileParser`` whose ``can_fetch`` returns True for every URL.
+        No explicit None guard needed — ``_get_parser`` always returns a
+        parser (#7461).
         """
         domain = _extract_domain(url)
         parser = await self._get_parser(domain)
-        if parser is None:
-            return True
         return parser.can_fetch(user_agent, url)
 
-    async def _get_parser(self, domain: str) -> Optional[urllib.robotparser.RobotFileParser]:
+    async def _get_parser(self, domain: str) -> urllib.robotparser.RobotFileParser:
         """Return cached parser for domain, fetching and caching if needed."""
         async with self._lock:
             if domain in self._local:
