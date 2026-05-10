@@ -179,6 +179,15 @@ class WorkflowRunner:
         task.start_execution()
         try:
             async with self.resource_semaphore:
+                # #7430 Phase 2: if StrategyPlanner bound a skill at plan time
+                # (#7268 Phase 1), dispatch via SkillRegistry instead of the
+                # capability-based agent path. ADR-006 default: skill-bound
+                # execution **replaces** agent dispatch — the skill is the
+                # concrete implementation. Removed/disabled skill at execute
+                # time fails the step (don't silently re-route at execute time;
+                # plans should re-plan instead, per #7431 Q3).
+                if task.skill_name:
+                    return await self._dispatch_via_skill(task, context)
                 agent = await self._agent_router.get_agent_instance(task.agent_type)
                 if not agent:
                     raise Exception(f"Agent {task.agent_type} not available")
@@ -194,6 +203,54 @@ class WorkflowRunner:
             return await self._handle_task_timeout(task, context)
         except Exception as e:
             return self._handle_task_exception(task, e)
+
+    async def _dispatch_via_skill(
+        self, task: AgentTask, context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Dispatch task via the bound skill (#7430 Phase 2 of #7268 / ADR-006).
+
+        Caller already holds ``self.resource_semaphore`` and called
+        ``task.start_execution()``. We enforce the same timeout behavior as
+        the legacy agent path so resource accounting + perf metrics stay
+        consistent.
+
+        Failure modes:
+        - Skill not registered (or registered but disabled) → raise
+          ``RuntimeError`` so the existing ``_handle_task_exception`` path
+          surfaces it as a failed task. This is the explicit ADR-006 choice
+          per #7431 Q3 — fail the step, don't re-route at execute time.
+        - Skill ``execute`` raises → propagate up; same handler.
+        - Skill ``execute`` times out → propagate ``asyncio.TimeoutError``;
+          same handler.
+        """
+        # Lazy import — avoids circular dep if skills imports orchestration
+        from skills.registry import get_skill_registry
+
+        registry = get_skill_registry()
+        skill = registry.get(task.skill_name)
+        if skill is None:
+            raise RuntimeError(
+                f"Skill '{task.skill_name}' bound at plan time is not registered "
+                f"(registry may have been mutated between plan and execute). "
+                f"Failing step per ADR-006 'fail-don't-reroute' policy."
+            )
+        if not skill.enabled:
+            raise RuntimeError(
+                f"Skill '{task.skill_name}' is registered but disabled at execute time. "
+                f"Failing step per ADR-006 'fail-don't-reroute' policy."
+            )
+
+        enhanced_inputs = task.get_enhanced_inputs(context)
+        action = task.skill_action or "execute"
+        result = await asyncio.wait_for(
+            skill.execute(action, enhanced_inputs),
+            timeout=task.timeout_seconds,
+        )
+        task.complete_execution(result)
+        # Perf-tracker key uses skill_name — agent_type may still be set on
+        # the task for legacy reasons but the actual dispatch was the skill.
+        self._perf.update(f"skill:{task.skill_name}", True, task.get_execution_time())
+        return task.to_completed_result(result)
 
     async def _publish_workflow_event(self, workflow_id: str, event_type: str, data: Dict[str, Any]) -> None:
         await _get_event_manager().publish(

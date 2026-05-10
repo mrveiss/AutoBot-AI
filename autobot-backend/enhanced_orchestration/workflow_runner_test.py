@@ -163,3 +163,137 @@ def test_get_performance_report_shape():
     assert "agent_performance" in report
     assert report["active_workflows"] == 1
     assert "capabilities_coverage" in report
+
+
+# ---------------------------------------------------------------------------
+# #7430 Phase 2 — skill_name executor consumption (ADR-006 Phase 2 of #7268)
+# ---------------------------------------------------------------------------
+
+
+def _skill_bound_task(task_id: str, skill_name: str = "intent_classifier", action: str = "execute") -> AgentTask:
+    """Build an AgentTask with Phase-1 skill binding fields populated."""
+    t = _task(task_id)
+    t.skill_name = skill_name
+    t.skill_action = action
+    t.skill_resolution_method = "llm"
+    return t
+
+
+@pytest.mark.asyncio
+async def test_skill_bound_task_dispatches_via_skill_not_agent():
+    """A task with `skill_name` set must dispatch via SkillRegistry, NOT the agent path."""
+    runner = _make_runner()
+
+    # Skill registry mock returning an enabled skill that runs successfully
+    fake_skill = MagicMock()
+    fake_skill.enabled = True
+    fake_skill.execute = AsyncMock(return_value={"ok": True, "output": "classified"})
+
+    fake_registry = MagicMock()
+    fake_registry.get = MagicMock(return_value=fake_skill)
+
+    task = _skill_bound_task("t-skill", "intent_classifier", "classify")
+
+    with patch("skills.registry.get_skill_registry", return_value=fake_registry):
+        result = await runner._execute_single_agent_task(task, {})
+
+    # Skill was dispatched
+    fake_skill.execute.assert_awaited_once()
+    args, _ = fake_skill.execute.call_args
+    assert args[0] == "classify"  # action passed
+    # The agent path was NOT taken
+    runner._agent_router.get_agent_instance.assert_not_called()
+    # Perf metric uses the skill: prefix, not the agent_type
+    runner._perf.update.assert_called_with("skill:intent_classifier", True, pytest.approx(0.0, abs=10.0))
+    # Result reflects success
+    assert result.get("status") == "completed"
+
+
+@pytest.mark.asyncio
+async def test_unbound_task_falls_through_to_legacy_agent_path():
+    """A task with `skill_name=None` must use the existing capability-based agent dispatch."""
+    runner = _make_runner()
+
+    # Agent path mock
+    fake_agent = MagicMock()
+    fake_agent.process_request = AsyncMock(return_value={"ok": True, "via": "agent"})
+    runner._agent_router.get_agent_instance = AsyncMock(return_value=fake_agent)
+
+    task = _task("t-legacy")
+    assert task.skill_name is None  # regression guard for default
+
+    # Patch the skill registry import — it must NOT be called for unbound tasks
+    with patch("skills.registry.get_skill_registry") as mock_registry:
+        result = await runner._execute_single_agent_task(task, {})
+        mock_registry.assert_not_called()
+
+    # Agent path was taken
+    fake_agent.process_request.assert_awaited_once()
+    runner._agent_router.get_agent_instance.assert_awaited_once()
+    assert result.get("status") == "completed"
+
+
+@pytest.mark.asyncio
+async def test_bound_skill_missing_at_execute_time_fails_step():
+    """If the bound skill was unregistered between plan and execute, fail the step.
+
+    ADR-006 explicit choice (#7431 Q3): fail-don't-reroute. This ensures
+    plans can be re-planned by upstream callers, rather than silently
+    drifting between intent and execution.
+    """
+    runner = _make_runner()
+
+    fake_registry = MagicMock()
+    fake_registry.get = MagicMock(return_value=None)  # skill gone
+
+    task = _skill_bound_task("t-orphan", "removed_skill")
+
+    with patch("skills.registry.get_skill_registry", return_value=fake_registry):
+        result = await runner._execute_single_agent_task(task, {})
+
+    # Failed result, not a silent fallback to agent path
+    assert result.get("status") == "failed"
+    runner._agent_router.get_agent_instance.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_bound_skill_disabled_at_execute_time_fails_step():
+    """A skill that's registered but disabled at execute time also fails the step."""
+    runner = _make_runner()
+
+    fake_skill = MagicMock()
+    fake_skill.enabled = False  # disabled mid-flight
+
+    fake_registry = MagicMock()
+    fake_registry.get = MagicMock(return_value=fake_skill)
+
+    task = _skill_bound_task("t-disabled", "disabled_skill")
+
+    with patch("skills.registry.get_skill_registry", return_value=fake_registry):
+        result = await runner._execute_single_agent_task(task, {})
+
+    assert result.get("status") == "failed"
+    runner._agent_router.get_agent_instance.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_bound_skill_default_action_is_execute():
+    """If `skill_action` is None on the task, default action is 'execute' per Phase 1."""
+    runner = _make_runner()
+
+    fake_skill = MagicMock()
+    fake_skill.enabled = True
+    fake_skill.execute = AsyncMock(return_value={"ok": True})
+
+    fake_registry = MagicMock()
+    fake_registry.get = MagicMock(return_value=fake_skill)
+
+    task = _task("t-default-action")
+    task.skill_name = "some_skill"
+    task.skill_action = None  # not set by Phase 1's `or "execute"` fallback
+
+    with patch("skills.registry.get_skill_registry", return_value=fake_registry):
+        await runner._execute_single_agent_task(task, {})
+
+    args, _ = fake_skill.execute.call_args
+    assert args[0] == "execute"
