@@ -112,7 +112,11 @@
       <div v-if="statusMessage" :class="['status-message', statusMessage.type]">
         <i :class="statusMessage.icon"></i>
         <span>{{ statusMessage.text }}</span>
-        <button @click="statusMessage = null" class="dismiss-btn">
+        <button
+          @click="statusMessage = null"
+          class="dismiss-btn"
+          :aria-label="$t('common.dismiss')"
+        >
           <i class="fas fa-times"></i>
         </button>
       </div>

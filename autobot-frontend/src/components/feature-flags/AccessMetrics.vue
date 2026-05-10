@@ -8,12 +8,22 @@
         </p>
       </div>
       <div class="header-actions">
-        <select v-model="selectedDays" class="days-selector" @change="handleDaysChange">
+        <select
+          v-model="selectedDays"
+          class="days-selector"
+          :aria-label="$t('featureFlags.accessMetrics.title')"
+          @change="handleDaysChange"
+        >
           <option :value="7">{{ $t('featureFlags.accessMetrics.last7Days') }}</option>
-          <option :value="14">Last 14 days</option>
+          <option :value="14">{{ $t('featureFlags.accessMetrics.last14Days') }}</option>
           <option :value="30">{{ $t('featureFlags.accessMetrics.last30Days') }}</option>
         </select>
-        <button @click="handleRefresh" class="btn-refresh" :disabled="loading">
+        <button
+          @click="handleRefresh"
+          class="btn-refresh"
+          :disabled="loading"
+          :aria-label="$t('common.refresh')"
+        >
           <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
         </button>
       </div>

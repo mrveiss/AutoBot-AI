@@ -216,6 +216,7 @@ onUnmounted(() => {
         @click="toggleFullscreen"
         class="btn-icon"
         :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'"
+        :aria-label="isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
       >
         {{ isFullscreen ? '⬇️' : '⬆️' }}
       </button>
