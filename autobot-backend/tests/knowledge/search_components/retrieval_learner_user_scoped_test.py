@@ -27,6 +27,7 @@ from knowledge.search_components.retrieval_learner import (
     _compute_pattern_hash,
     get_retrieval_learner,
 )
+from tests.fixtures import make_async_redis
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -37,15 +38,11 @@ _USER_B = "user-bob-456"
 
 
 def _make_redis_mock() -> AsyncMock:
-    redis = AsyncMock()
-    redis.xrange = AsyncMock(return_value=[])
-    redis.xadd = AsyncMock()
-    redis.hgetall = AsyncMock(return_value={})
-    redis.hset = AsyncMock()
-    redis.expire = AsyncMock()
-    redis.delete = AsyncMock()
-    redis.scan = AsyncMock(return_value=(0, []))
-    return redis
+    # Migrated to canonical ``make_async_redis()`` (#7280 round 5).
+    # ``hgetall``, ``hset``, ``expire``, ``delete`` are canonical defaults;
+    # ``xrange=[]``, ``xadd`` (no-op), and ``scan=(0, [])`` flow through
+    # ``**extra_methods``.
+    return make_async_redis(xrange=[], xadd=None, scan=(0, []))
 
 
 def _make_learner(redis: AsyncMock) -> RetrievalLearner:
