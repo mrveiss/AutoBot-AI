@@ -25,14 +25,24 @@ def anyio_backend():
 
 @pytest.mark.anyio
 async def test_generator_returns_skill_package():
-    """Generator calls LLM and returns structured skill package dict."""
+    """Generator calls LLM and returns structured skill package dict.
+
+    #7398: production calls `self._llm.chat(...)` and parses
+    `response.content` as JSON. The previous test mocked
+    `generate_structured` (a method that doesn't exist on the LLM
+    service and never did) — fix the mock to match the real contract.
+    """
+    import json
+
     mock_llm = AsyncMock()
-    mock_llm.generate_structured = AsyncMock(
-        return_value={
+    mock_response = AsyncMock()
+    mock_response.content = json.dumps(
+        {
             "skill_md": VALID_SKILL_MD,
             "skill_py": VALID_SKILL_PY,
         }
     )
+    mock_llm.chat = AsyncMock(return_value=mock_response)
     gen = SkillGenerator(llm=mock_llm)
     pkg = await gen.generate("parse PDF documents")
     assert pkg["name"] == "pdf-parser"

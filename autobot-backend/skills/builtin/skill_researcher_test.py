@@ -114,11 +114,14 @@ async def test_research_requires_capability():
 
 @pytest.mark.asyncio
 async def test_research_fails_gracefully_without_llm():
-    with patch("skills.builtin.skill_researcher.LLMInterface", None):
+    # #7398: production uses `get_llm_service` factory; checks `is None` for
+    # absent-import fallback. Error message updated to match the new
+    # canonical name ("LLMService not available").
+    with patch("skills.builtin.skill_researcher.get_llm_service", None):
         skill = SkillResearcherSkill()
         result = await skill.execute("research_capability", {"capability": "test"})
     assert result["success"] is False
-    assert "LLMInterface" in result["error"]
+    assert "LLMService" in result["error"]
 
 
 # ---------------------------------------------------------------------------
@@ -145,8 +148,10 @@ async def test_research_returns_structured_findings():
         # First 3 calls: source queries; 4th: synthesis
         return synthesis_response if call_count > 3 else source_response
 
-    with patch("skills.builtin.skill_researcher.LLMInterface") as MockLLM:
-        MockLLM.return_value.chat_completion = mock_chat
+    # #7398: production uses `get_llm_service()` factory; mock returns instance.
+    with patch("skills.builtin.skill_researcher.get_llm_service") as mock_get_llm:
+        # #7398: production calls `llm.chat(...)` (not `chat_completion`).
+        mock_get_llm.return_value.chat = mock_chat
         skill = SkillResearcherSkill()
         result = await skill.execute("research_capability", {"capability": "voice transcription"})
 
@@ -180,8 +185,10 @@ async def test_research_continues_when_some_queries_fail():
             )
         return _mock_llm_response("content")
 
-    with patch("skills.builtin.skill_researcher.LLMInterface") as MockLLM:
-        MockLLM.return_value.chat_completion = mock_chat
+    # #7398: production uses `get_llm_service()` factory; mock returns instance.
+    with patch("skills.builtin.skill_researcher.get_llm_service") as mock_get_llm:
+        # #7398: production calls `llm.chat(...)` (not `chat_completion`).
+        mock_get_llm.return_value.chat = mock_chat
         skill = SkillResearcherSkill()
         result = await skill.execute("research_capability", {"capability": "voice transcription"})
 
@@ -201,8 +208,10 @@ async def test_research_returns_empty_findings_when_synthesis_fails():
     async def mock_chat(messages, llm_type="task"):
         raise RuntimeError("LLM down")
 
-    with patch("skills.builtin.skill_researcher.LLMInterface") as MockLLM:
-        MockLLM.return_value.chat_completion = mock_chat
+    # #7398: production uses `get_llm_service()` factory; mock returns instance.
+    with patch("skills.builtin.skill_researcher.get_llm_service") as mock_get_llm:
+        # #7398: production calls `llm.chat(...)` (not `chat_completion`).
+        mock_get_llm.return_value.chat = mock_chat
         skill = SkillResearcherSkill()
         result = await skill.execute("research_capability", {"capability": "voice transcription"})
 
