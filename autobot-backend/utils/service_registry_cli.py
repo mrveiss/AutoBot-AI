@@ -373,7 +373,13 @@ def _dispatch_command(args: argparse.Namespace) -> int:
     if args.command in sync_commands:
         return sync_commands[args.command](args)
     elif args.command in async_commands:
-        return asyncio.run(async_commands[args.command](args))
+        # #7469: bare asyncio.run() replaced with run_or_schedule for
+        # defense-in-depth. CLI is sync entrypoint, but the helper costs
+        # nothing in that case and survives if a future caller imports
+        # this dispatch from async code.
+        from autobot_shared.async_compat import run_or_schedule
+
+        return run_or_schedule(async_commands[args.command](args))
     else:
         print_status("error", f"Unknown command: {args.command}")
         return 1
