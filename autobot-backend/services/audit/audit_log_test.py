@@ -57,6 +57,7 @@ class TestAuditAction:
         required = {
             "SESSION_CREATE",
             "SESSION_DELETE",
+            "SESSION_EXPORT",  # #7399: added after the test was written
             "KNOWLEDGE_ADD",
             "KNOWLEDGE_REMOVE",
             "API_KEY_CREATE",
