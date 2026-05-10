@@ -45,7 +45,7 @@ export function useBrowserSessionData() {
       return null
     }
     try {
-      return (await apiClient.get(
+      return (await apiClient.get<any>(
         `${getApiBase()}/research-browser/browser/${sessionId}`
       )) as BrowserSessionResponse
     } catch (err) {
@@ -78,7 +78,7 @@ export function useBrowserSessionData() {
     sessionId: string
   ): Promise<PlaywrightNavigationResponse | null> {
     try {
-      return (await apiClient.post(`${playwrightApiUrl}/navigate`, {
+      return (await apiClient.post<any>(`${playwrightApiUrl}/navigate`, {
         url,
         session_id: sessionId
       })) as unknown as PlaywrightNavigationResponse
@@ -92,7 +92,7 @@ export function useBrowserSessionData() {
    * Playwright back navigation.
    */
   async function navigateBack(): Promise<PlaywrightNavigationResponse> {
-    return (await apiClient.post(
+    return (await apiClient.post<any>(
       `${getApiBase()}/playwright/back`
     )) as unknown as PlaywrightNavigationResponse
   }
@@ -101,7 +101,7 @@ export function useBrowserSessionData() {
    * Playwright forward navigation.
    */
   async function navigateForward(): Promise<PlaywrightNavigationResponse> {
-    return (await apiClient.post(
+    return (await apiClient.post<any>(
       `${getApiBase()}/playwright/forward`
     )) as unknown as PlaywrightNavigationResponse
   }
@@ -110,7 +110,7 @@ export function useBrowserSessionData() {
    * Playwright page reload.
    */
   async function reloadPage(): Promise<PlaywrightNavigationResponse> {
-    return (await apiClient.post(
+    return (await apiClient.post<any>(
       `${getApiBase()}/playwright/reload`
     )) as unknown as PlaywrightNavigationResponse
   }
@@ -119,7 +119,7 @@ export function useBrowserSessionData() {
    * Run a DuckDuckGo web search via Playwright.
    */
   async function webSearch(playwrightApiUrl: string, query: string): Promise<unknown> {
-    return await apiClient.post(`${playwrightApiUrl}/search`, {
+    return await apiClient.post<any>(`${playwrightApiUrl}/search`, {
       query,
       search_engine: 'duckduckgo'
     })
@@ -129,7 +129,7 @@ export function useBrowserSessionData() {
    * Run Playwright frontend tests against the current origin.
    */
   async function runFrontendTests(playwrightApiUrl: string): Promise<unknown> {
-    return await apiClient.post(`${playwrightApiUrl}/test-frontend`, {
+    return await apiClient.post<any>(`${playwrightApiUrl}/test-frontend`, {
       frontend_url: window.location.origin
     })
   }
@@ -138,7 +138,7 @@ export function useBrowserSessionData() {
    * Send a test automation message via Playwright.
    */
   async function sendTestMessage(playwrightApiUrl: string): Promise<unknown> {
-    return await apiClient.post(`${playwrightApiUrl}/send-test-message`, {
+    return await apiClient.post<any>(`${playwrightApiUrl}/send-test-message`, {
       message: 'Test message from browser automation',
       frontend_url: window.location.origin
     })

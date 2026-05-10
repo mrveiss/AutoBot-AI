@@ -128,7 +128,7 @@ function applyLayoutDensity(density: LayoutDensity): void {
  * Sync language preference to backend personality profile
  */
 function syncLanguageToBackend(code: string): void {
-  apiClient.get(`${getApiBase()}/personality/active`).then((res) => {
+  apiClient.get<any>(`${getApiBase()}/personality/active`).then((res: any) => {
     if (res.data && res.data.id) {
       apiClient.put(
         `${getApiBase()}/personality/profiles/${res.data.id}`,
@@ -146,7 +146,7 @@ function syncLanguageToBackend(code: string): void {
  */
 async function loadLanguageFromBackend(): Promise<void> {
   try {
-    const res = await apiClient.get(`${getApiBase()}/personality/active`)
+    const res = await apiClient.get<any>(`${getApiBase()}/personality/active`)
     const code: string | undefined = res.data?.language_code
     if (code && code !== language.value) {
       await setLanguage(code)

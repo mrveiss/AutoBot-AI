@@ -495,7 +495,7 @@ const deleteSession = async (sessionId: string) => {
   const [fileStatsResult, kbFactsResult] = await Promise.allSettled([
     // Fetch file stats
     (async () => {
-      const data = await ApiClient.get(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`)
+      const data = await ApiClient.get<any>(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`)
       return data?.stats || null
     })(),
     // Fetch KB facts (Issue #547)
@@ -618,7 +618,7 @@ const reloadSystem = async () => {
 
   try {
     // Call real system reload API
-    const response = await ApiClient.post(`${getApiBase()}/system/reload_config`)
+    const response = await ApiClient.post<any>(`${getApiBase()}/system/reload_config`)
     const data = await (response as any).json()
 
     if (data && data.success) {

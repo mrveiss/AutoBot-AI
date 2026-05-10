@@ -54,7 +54,7 @@ async function getBackendUrl(): Promise<string> {
 async function clearStuckTasks(clearUrl: string, signal?: AbortSignal): Promise<void> {
   // Note: apiClient.post does not support AbortSignal; signal parameter kept for API compatibility.
   void signal
-  await apiClient.post(`${clearUrl}?force=true`)
+  await apiClient.post<any>(`${clearUrl}?force=true`)
 }
 
 /**

@@ -113,7 +113,7 @@ export function useAnalyticsDebug(deps: UseAnalyticsDebugDeps) {
       const results: string[] = []
       for (const ep of _testEndpointConfigs) {
         try {
-          await apiClient.get(ep.path)
+          await apiClient.get<any>(ep.path)
           results.push(`${ep.name}: OK`)
         } catch (err) {
           const msg =

@@ -15,7 +15,7 @@
  * const fake = useFakeProgress({ target: 150, intervalMs: 100 })
  * fake.start()
  * try {
- *   await ApiClient.post('/populate', {})
+ *   await ApiClient.post<any>('/populate', {})
  *   fake.finish()
  * } finally {
  *   fake.stop()

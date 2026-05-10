@@ -168,7 +168,7 @@ export function useAIDocument() {
   async function deleteDocument(docId: string): Promise<void> {
     error.value = null
     try {
-      await apiClient.delete(`${_base()}/${docId}`)
+      await apiClient.delete<any>(`${_base()}/${docId}`)
       documents.value = documents.value.filter((d) => d.id !== docId)
       total.value = Math.max(0, total.value - 1)
       if (currentDocument.value?.id === docId) {

@@ -147,7 +147,7 @@ export function useCaptchaStatus() {
 
     isSubmitting.value = true
     try {
-      await apiClient.post(`${getApiBase()}/captcha/${activeCaptcha.value.captcha_id}/resolve`)
+      await apiClient.post<any>(`${getApiBase()}/captcha/${activeCaptcha.value.captcha_id}/resolve`)
       activeCaptcha.value = null
       stopTimer()
     } catch (error) {
@@ -162,7 +162,7 @@ export function useCaptchaStatus() {
 
     isSubmitting.value = true
     try {
-      await apiClient.post(`${getApiBase()}/captcha/${activeCaptcha.value.captcha_id}/skip`)
+      await apiClient.post<any>(`${getApiBase()}/captcha/${activeCaptcha.value.captcha_id}/skip`)
       activeCaptcha.value = null
       stopTimer()
     } catch (error) {

@@ -47,8 +47,7 @@ export function useOperationsApi() {
 
           const queryString = params.toString()
           const url = `${getApiBase()}/long-running/${queryString ? `?${queryString}` : ''}`
-          const response = await api.get(url)
-          return await response.json()
+          return await api.get<any>(url)
         },
         {
           errorMessage: 'Failed to load operations',
@@ -69,8 +68,7 @@ export function useOperationsApi() {
     async getOperation(operationId: string): Promise<Operation | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get(`${getApiBase()}/long-running/${operationId}`)
-          return await response.json()
+          return await api.get<any>(`${getApiBase()}/long-running/${operationId}`)
         },
         {
           errorMessage: 'Failed to get operation status',
@@ -85,8 +83,7 @@ export function useOperationsApi() {
     async cancelOperation(operationId: string): Promise<CancelOperationResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.post(`${getApiBase()}/long-running/${operationId}/cancel`)
-          return await response.json()
+          return await api.post<any>(`${getApiBase()}/long-running/${operationId}/cancel`)
         },
         {
           errorMessage: 'Failed to cancel operation'
@@ -100,8 +97,7 @@ export function useOperationsApi() {
     async resumeOperation(operationId: string): Promise<ResumeOperationResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.post(`${getApiBase()}/long-running/${operationId}/resume`)
-          return await response.json()
+          return await api.post<any>(`${getApiBase()}/long-running/${operationId}/resume`)
         },
         {
           errorMessage: 'Failed to resume operation'

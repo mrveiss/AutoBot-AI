@@ -81,7 +81,7 @@ export function useServiceMessages() {
             if (params?.msg_type) sp.append('msg_type', params.msg_type)
             const qs = sp.toString()
             const url = `${getApiBase()}/service-messages/latest${qs ? `?${qs}` : ''}`
-            const resp = await api.get(url)
+            const resp = await api.get<any>(url)
             return (await resp.json()) as LatestMessagesResponse
           },
           {
@@ -106,7 +106,7 @@ export function useServiceMessages() {
   ): Promise<SingleMessageResponse | null> {
     return withErrorHandling(
       async () => {
-        const resp = await api.get(`${getApiBase()}/service-messages/${msgId}`)
+        const resp = await api.get<any>(`${getApiBase()}/service-messages/${msgId}`)
         return (await resp.json()) as SingleMessageResponse
       },
       { errorMessage: 'Failed to fetch service message', fallbackValue: null }
@@ -121,7 +121,7 @@ export function useServiceMessages() {
       try {
         const result = await withErrorHandling(
           async () => {
-            const resp = await api.get(
+            const resp = await api.get<any>(
               `${getApiBase()}/service-messages/chain/${correlationId}`
             )
             return (await resp.json()) as CorrelationChainResponse

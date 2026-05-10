@@ -103,7 +103,7 @@ export function useAgentRegistry(options: UseAgentRegistryOptions = {}) {
     errors.value = []
     return wrap(async () => {
       try {
-        const data = await ApiClient.get(`${getApiBase()}/agent_config/agents/all`)
+        const data = await ApiClient.get<any>(`${getApiBase()}/agent_config/agents/all`)
         backendAgents.value = data.agents || []
         specializedAgents.value = data.specialized_agents || []
         summary.value = data.summary || null
@@ -123,7 +123,7 @@ export function useAgentRegistry(options: UseAgentRegistryOptions = {}) {
   async function fetchAgentDetail(agentId: string) {
     return wrapDetail(async () => {
       try {
-        const data = await ApiClient.get(
+        const data = await ApiClient.get<any>(
           `${getApiBase()}/agent_config/agents/specialized/${agentId}`
         )
         selectedAgent.value = data
