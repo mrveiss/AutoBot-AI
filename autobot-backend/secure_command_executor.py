@@ -9,6 +9,7 @@ Implements security measures to prevent arbitrary command execution
 import asyncio
 import logging
 import os
+import re
 import shlex
 from enum import Enum
 from pathlib import Path
@@ -33,6 +34,80 @@ if TYPE_CHECKING:
     from services.permission_matcher import PermissionMatcher
 
 logger = logging.getLogger(__name__)
+
+
+# #7375: env-var prefix injection — surfaced by #7367 test rot triage.
+# Production previously classified `PATH=/x:$PATH ls` and
+# `LD_PRELOAD=/x.so ls` as MODERATE because the base-command lookup hit
+# `ls` (a SAFE/MODERATE command) without parsing the env-var prefix as a
+# distinct injection vector. Both are real attacker techniques:
+#   - PATH manipulation shadows standard binaries (sudo helpers, cron,
+#     login shells) by prepending an attacker-controlled directory.
+#   - LD_PRELOAD / LD_LIBRARY_PATH / DYLD_INSERT_LIBRARIES hijack any
+#     dynamic-linker symbol before the target binary runs — used in
+#     container-escape and privilege-escalation chains.
+#   - IFS / BASH_ENV / ENV affect shell parsing in subshells.
+#   - PYTHONPATH / PERL5LIB / RUBYLIB / NODE_PATH inject malicious
+#     libraries into interpreter startup.
+_ENV_VAR_PREFIX_RE = re.compile(r"^\s*(?:[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'|\"[^\"]*\"|\S*)\s+)+")
+_DANGEROUS_ENV_VARS = frozenset(
+    {
+        # Linker / loader hijack
+        "LD_PRELOAD",
+        "LD_LIBRARY_PATH",
+        "LD_AUDIT",
+        "DYLD_INSERT_LIBRARIES",
+        "DYLD_LIBRARY_PATH",
+        # Path / executable resolution
+        "PATH",
+        # Shell parsing / startup
+        "IFS",
+        "BASH_ENV",
+        "ENV",
+        "PROMPT_COMMAND",
+        # Interpreter library paths
+        "PYTHONPATH",
+        "PERL5LIB",
+        "RUBYLIB",
+        "NODE_PATH",
+        "GEM_PATH",
+        # Process tracing
+        "LD_DEBUG",
+    }
+)
+
+
+def _check_dangerous_env_var_prefix(command: str) -> Optional[List[str]]:
+    """#7375: detect env-var prefix injection BEFORE base-command lookup.
+
+    Returns a list of dangerous env-var names found prefixed in the
+    command, or ``None`` if none. The caller upgrades the risk to
+    ``CommandRisk.FORBIDDEN`` since these prefixes shadow the linker /
+    interpreter / shell startup independent of the command they wrap.
+    """
+    match = _ENV_VAR_PREFIX_RE.match(command)
+    if not match:
+        return None
+    prefix = match.group(0)
+    flagged: List[str] = []
+    # Per-assignment: split by `=` to get the var name, ignore the value.
+    # We use `shlex.split` because values may contain quoted strings with
+    # whitespace (e.g. `PROMPT_COMMAND='rm -rf /'`) — naive `prefix.split()`
+    # would tokenize on space and miss the var-name extraction.
+    try:
+        tokens = shlex.split(prefix)
+    except ValueError:
+        # Malformed quoting — fall back to whitespace split; if the prefix
+        # is truly malformed it'll fail base-command validation downstream.
+        tokens = prefix.split()
+    for token in tokens:
+        if "=" not in token:
+            continue
+        var_name = token.split("=", 1)[0]
+        if var_name in _DANGEROUS_ENV_VARS:
+            flagged.append(var_name)
+    return flagged or None
+
 
 # Issue #765: Path constants now imported from security.command_patterns
 
@@ -461,6 +536,18 @@ class SecureCommandExecutor:
         Returns:
             (risk_level, list_of_reasons)
         """
+        # #7375: env-var prefix injection check runs FIRST. `PATH=/x ls`
+        # would otherwise resolve to base_command `ls` (SAFE/MODERATE) and
+        # miss the linker/path hijack entirely. Also catches malformed
+        # commands like `PROMPT_COMMAND='rm -rf /' bash` where
+        # _extract_command_name returns empty — we want the more specific
+        # FORBIDDEN reason ("Dangerous env-var prefix: PROMPT_COMMAND")
+        # rather than the generic "Empty or malformed command".
+        dangerous_env_vars = _check_dangerous_env_var_prefix(command)
+        if dangerous_env_vars:
+            reasons = [f"Dangerous env-var prefix: {var}" for var in dangerous_env_vars]
+            return CommandRisk.FORBIDDEN, reasons
+
         base_command = self._extract_command_name(command)
 
         if not base_command:
