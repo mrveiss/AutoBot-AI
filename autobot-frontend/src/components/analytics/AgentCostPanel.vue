@@ -219,7 +219,7 @@ const closeBudgetDialog = () => {
 const saveBudget = async () => {
   budgetDialog.value.saving = true
   try {
-    await api.put(
+    await api.put<any>(
       `${getApiBase()}/cost/by-agent/${budgetDialog.value.agentId}/budget`,
       { budget_monthly_usd: budgetDialog.value.amount }
     )

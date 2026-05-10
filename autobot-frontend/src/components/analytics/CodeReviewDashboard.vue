@@ -735,7 +735,7 @@ async function togglePattern(pattern: Pattern): Promise<void> {
   const newState = !pattern.enabled;
 
   try {
-    await api.post(`${getApiBase()}/code-review/patterns/toggle`, {
+    await api.post<any>(`${getApiBase()}/code-review/patterns/toggle`, {
       pattern_id: pattern.id,
       enabled: newState
     });
@@ -753,7 +753,7 @@ async function togglePattern(pattern: Pattern): Promise<void> {
 
 async function markResolved(issue: ReviewIssue) {
   try {
-    await api.post(`${getApiBase()}/code-review/feedback`, {
+    await api.post<any>(`${getApiBase()}/code-review/feedback`, {
       issue_id: issue.id,
       feedback: 'resolved'
     })
@@ -768,7 +768,7 @@ async function markResolved(issue: ReviewIssue) {
 
 async function markFalsePositive(issue: ReviewIssue) {
   try {
-    await api.post(`${getApiBase()}/code-review/feedback`, {
+    await api.post<any>(`${getApiBase()}/code-review/feedback`, {
       issue_id: issue.id,
       feedback: 'false_positive'
     })

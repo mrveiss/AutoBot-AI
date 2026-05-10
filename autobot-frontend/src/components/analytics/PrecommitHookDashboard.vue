@@ -534,7 +534,7 @@ async function installHooks() {
   installing.value = true
   try {
     // Issue #701: api.post requires data argument
-    await api.post(`${getApiBase()}/precommit/install`, {})
+    await api.post<any>(`${getApiBase()}/precommit/install`, {})
     await loadStatus()
     showToast(t('analytics.precommit.installSuccess'), 'success')
   } catch (error) {
@@ -549,7 +549,7 @@ async function uninstallHooks() {
   installing.value = true
   try {
     // Issue #701: api.post requires data argument
-    await api.post(`${getApiBase()}/precommit/uninstall`, {})
+    await api.post<any>(`${getApiBase()}/precommit/uninstall`, {})
     await loadStatus()
     showToast(t('analytics.precommit.uninstallSuccess'), 'info')
   } catch (error) {
@@ -588,7 +588,7 @@ async function toggleCheck(check: Check) {
   const newState = !check.enabled
   try {
     // Issue #701: Fixed api.post call - data should be second arg
-    await api.post(`${getApiBase()}/precommit/checks/${check.id}/toggle`, { enabled: newState })
+    await api.post<any>(`${getApiBase()}/precommit/checks/${check.id}/toggle`, { enabled: newState })
     check.enabled = newState
   } catch (error) {
     logger.warn('Failed to toggle check:', error)

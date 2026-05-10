@@ -21,7 +21,7 @@
  *
  * // Basic async operation wrapper
  * const { execute, loading, error } = useAsyncHandler(async () => {
- *   const response = await apiClient.get('/data')
+ *   const response = await apiClient.get<any>('/data')
  *   return response.data
  * })
  *

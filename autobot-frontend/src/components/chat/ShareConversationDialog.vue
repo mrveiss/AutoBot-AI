@@ -173,7 +173,7 @@ const loadFacts = async () => {
   if (!props.sessionId) return
   factsLoading.value = true
   try {
-    const data = await ApiClient.get(
+    const data = await ApiClient.get<any>(
       `${getApiBase()}/chat/sessions/${props.sessionId}/share/preview`
     )
     facts.value = data?.data?.facts || []
@@ -220,7 +220,7 @@ const handleShare = async () => {
     if (includeKnowledge.value && factSelection.selectedCount.value > 0) {
       body.knowledge_facts = Array.from(factSelection.selected.value)
     }
-    const result = await ApiClient.post(
+    const result = await ApiClient.post<any>(
       `${getApiBase()}/chat/sessions/${props.sessionId}/share`,
       body
     )

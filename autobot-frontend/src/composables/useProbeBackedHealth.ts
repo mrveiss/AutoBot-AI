@@ -68,7 +68,7 @@ export function useProbeBackedHealth<R>(
   return async (): Promise<R | null> => {
     return withErrorHandling(
       async () => {
-        const response = (await api.get(`${getApiBase()}/system/health`)) as Response
+        const response = (await api.get<any>(`${getApiBase()}/system/health`)) as Response
         const payload = await response.json()
         const probe = await findProbeByName<ProbeResponse>(payload?.probes, options.probeName)
         if (!probe) {
