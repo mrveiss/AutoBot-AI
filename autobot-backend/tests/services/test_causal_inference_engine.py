@@ -8,7 +8,7 @@ Issue #4069: Tests production-grade causal analysis with:
 - Chain traversal and confounder detection
 - Intervention prediction and ranking
 - Confidence scoring
-- Severity assessment
+- CausalSeverity assessment
 - Recommendation generation
 
 Test scenarios:
@@ -27,9 +27,9 @@ import pytest
 from services.causal_inference_engine import (
     CausalAnalysisReport,
     CausalInferenceEngine,
+    CausalSeverity,
     Intervention,
     RecommendationType,
-    Severity,
 )
 from services.root_cause_analyzer import CausalEvent, RootCauseReport
 
@@ -426,7 +426,7 @@ class TestSeverityAssessment:
         ]
 
         severity = engine._assess_severity(report, 0.6, interventions)
-        assert severity == Severity.CRITICAL
+        assert severity == CausalSeverity.CRITICAL
 
     def test_warning_severity(self):
         """Shallow chain, low confidence should be WARNING."""
@@ -456,7 +456,7 @@ class TestSeverityAssessment:
         interventions = []
 
         severity = engine._assess_severity(report, 0.0, interventions)
-        assert severity == Severity.WARNING
+        assert severity == CausalSeverity.WARNING
 
 
 class TestRecommendationGeneration:
@@ -502,7 +502,7 @@ class TestRecommendationGeneration:
             ),
         ]
 
-        recommendations = engine._generate_recommendations(interventions, Severity.DEGRADED)
+        recommendations = engine._generate_recommendations(interventions, CausalSeverity.DEGRADED)
 
         assert len(recommendations) >= 2
         # Check order: IMMEDIATE comes before SHORT_TERM comes before LONG_TERM
@@ -538,7 +538,7 @@ class TestRecommendationGeneration:
             )
         ]
 
-        recommendations = engine._generate_recommendations(interventions, Severity.WARNING)
+        recommendations = engine._generate_recommendations(interventions, CausalSeverity.WARNING)
 
         # Should have fallback or empty recommendations
         assert len(recommendations) >= 0
@@ -713,7 +713,7 @@ class TestAnalyzeFailure:
 
         assert report.confounding_strength > 0
         assert len(report.confounders) > 0
-        assert report.severity in [Severity.CRITICAL, Severity.DEGRADED]
+        assert report.severity in [CausalSeverity.CRITICAL, CausalSeverity.DEGRADED]
 
     @pytest.mark.asyncio
     async def test_analysis_graceful_degradation(self):
@@ -768,7 +768,7 @@ class TestReportSerialization:
                     confidence=0.9,
                 )
             ],
-            severity=Severity.DEGRADED,
+            severity=CausalSeverity.DEGRADED,
             confidence=0.75,
             analysis_status="success",
             recommendations=["Test recommendation"],
