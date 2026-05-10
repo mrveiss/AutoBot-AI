@@ -1923,10 +1923,17 @@ class ToolHandlerMixin:
         Gets structured entries from Playwright, fans out WebFetcher.fetch
         concurrently for each URL, attaches markdown (or fetch_error) per entry.
         Always returns 200 — per-URL failures are surfaced in fetch_error field.
+
+        On empty entries (Playwright unavailable or zero results) we fall back
+        directly to ``_web_search_via_browser_vm`` rather than re-routing
+        through ``_execute_web_search``. The latter would re-issue a Playwright
+        call via ``_web_search_via_playwright`` — wasteful when
+        ``_web_search_structured_entries`` already determined Playwright
+        unavailable (#7478).
         """
         entries = await self._web_search_structured_entries(query, max_pages)
         if not entries:
-            return await self._execute_web_search(query)
+            return await self._web_search_via_browser_vm(query)
         enriched = await _fetch_pages_concurrent(entries, max_pages)
         return _format_full_search_results(query, enriched)
 
