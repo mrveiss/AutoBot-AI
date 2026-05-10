@@ -796,3 +796,133 @@ async def test_register_extension_point_accepts_partial_of_async():
     bound = functools.partial(my_async_handler, "extra")
     plugin.register_extension_point(Hook.API_ROUTER_REGISTER, bound)
     assert HookRegistry().get_hook_count(Hook.API_ROUTER_REGISTER.value) == 1
+
+
+# ---------------------------------------------------------------------------
+# PluginManager.dispatch_extension_point (Issue #6970)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_dispatch_extension_point_invokes_async_handler():
+    from plugin_sdk.hooks import Hook, HookRegistry
+
+    HookRegistry().clear()
+    PluginRegistry().clear()
+    pm = PluginManager(plugin_dirs=[])
+
+    plugin = _ConcretePlugin(_make_manifest(name="dep-async-plugin"))
+    PluginRegistry().register(plugin)
+
+    invoked = []
+
+    async def handler(arg):
+        invoked.append(arg)
+
+    HookRegistry().register_hook(
+        Hook.API_ROUTER_REGISTER.value, handler, plugin_name="dep-async-plugin"
+    )
+
+    await pm.dispatch_extension_point(Hook.API_ROUTER_REGISTER, "test-arg")
+    assert invoked == ["test-arg"]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_extension_point_marks_failing_plugin_error_and_continues():
+    """Two plugins; first raises in handler. Second still fires. First is ERROR."""
+    from plugin_sdk.hooks import Hook, HookRegistry
+
+    HookRegistry().clear()
+    PluginRegistry().clear()
+    pm = PluginManager(plugin_dirs=[])
+
+    p1 = _ConcretePlugin(_make_manifest(name="dep-fail"))
+    p2 = _ConcretePlugin(_make_manifest(name="dep-ok"))
+    PluginRegistry().register(p1)
+    PluginRegistry().register(p2)
+    await p1.enable()
+    await p2.enable()
+
+    invoked = []
+
+    async def fail_handler(arg):
+        raise RuntimeError("intentional handler failure")
+
+    async def ok_handler(arg):
+        invoked.append(arg)
+
+    HookRegistry().register_hook(
+        Hook.API_ROUTER_REGISTER.value, fail_handler, plugin_name="dep-fail"
+    )
+    HookRegistry().register_hook(
+        Hook.API_ROUTER_REGISTER.value, ok_handler, plugin_name="dep-ok"
+    )
+
+    await pm.dispatch_extension_point(Hook.API_ROUTER_REGISTER, "x")
+
+    assert invoked == ["x"]  # second plugin's handler still ran
+    assert p1.status == PluginStatus.ERROR
+    assert p2.status == PluginStatus.ENABLED
+
+
+@pytest.mark.asyncio
+async def test_dispatch_extension_point_handles_no_registered_handlers():
+    from plugin_sdk.hooks import Hook, HookRegistry
+
+    HookRegistry().clear()
+    pm = PluginManager(plugin_dirs=[])
+    # Should not raise; no-op
+    await pm.dispatch_extension_point(Hook.API_ROUTER_REGISTER, "x")
+
+
+@pytest.mark.asyncio
+async def test_dispatch_extension_point_does_not_affect_call_hook_semantics():
+    """Verify event-style hooks are unaffected: a raising handler does NOT mark plugin ERROR."""
+    from plugin_sdk.hooks import Hook, HookRegistry
+
+    HookRegistry().clear()
+    PluginRegistry().clear()
+    pm = PluginManager(plugin_dirs=[])
+
+    plugin = _ConcretePlugin(_make_manifest(name="event-fail"))
+    PluginRegistry().register(plugin)
+    await plugin.enable()
+
+    async def fail_handler():
+        raise RuntimeError("intentional")
+
+    HookRegistry().register_hook(
+        Hook.ON_KB_DOCUMENT_ADDED.value, fail_handler, plugin_name="event-fail"
+    )
+
+    # call_hook (the event-style dispatch) should swallow + log; NOT mark ERROR
+    await HookRegistry().call_hook(Hook.ON_KB_DOCUMENT_ADDED.value)
+
+    # Plugin status remains ENABLED — extension-point semantics not applied here
+    assert plugin.status == PluginStatus.ENABLED
+
+
+@pytest.mark.asyncio
+async def test_dispatch_extension_point_forwards_args_and_kwargs():
+    from plugin_sdk.hooks import Hook, HookRegistry
+
+    HookRegistry().clear()
+    PluginRegistry().clear()
+    pm = PluginManager(plugin_dirs=[])
+
+    plugin = _ConcretePlugin(_make_manifest(name="args-test"))
+    PluginRegistry().register(plugin)
+
+    received = {}
+
+    async def handler(a, b, c=None):
+        received["a"] = a
+        received["b"] = b
+        received["c"] = c
+
+    HookRegistry().register_hook(
+        Hook.API_ROUTER_REGISTER.value, handler, plugin_name="args-test"
+    )
+
+    await pm.dispatch_extension_point(Hook.API_ROUTER_REGISTER, 1, 2, c=3)
+    assert received == {"a": 1, "b": 2, "c": 3}

@@ -10,12 +10,13 @@ Handles startup discovery, ordered plugin loading, and graceful shutdown.
 Issue #3278 - Plugin and extension system for third-party integrations.
 """
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from plugin_sdk.base import PluginRegistry, PluginStatus
-from plugin_sdk.hooks import HookRegistry
+from plugin_sdk.hooks import Hook, HookRegistry
 from plugin_sdk.loader import PluginLoader
 
 logger = logging.getLogger(__name__)
@@ -110,6 +111,44 @@ class PluginManager:
 
         self._started = False
         logger.info("PluginManager: shutdown complete")
+
+    async def dispatch_extension_point(
+        self, hook: Hook, *args, **kwargs
+    ) -> None:
+        """Dispatch an extension-point hook with per-plugin status tracking.
+
+        Use for one-time startup hooks (API_ROUTER_REGISTER, CELERY_TASK_REGISTER).
+        Failure semantics:
+          - Handler exception is logged at ERROR with plugin name + traceback.
+          - Plugin's status is set to PluginStatus.ERROR.
+          - Dispatch continues with remaining plugins (failure isolation).
+
+        Event-style hooks should continue to use HookRegistry.call_hook directly,
+        which logs and ignores exceptions without flipping plugin status.
+
+        Issue #6970.
+        """
+        handlers = self._hook_registry._hooks.get(hook.value, [])
+        for cb_info in handlers:
+            cb = cb_info["callback"]
+            plugin_name = cb_info["plugin_name"]
+            try:
+                if asyncio.iscoroutinefunction(cb):
+                    await cb(*args, **kwargs)
+                else:
+                    cb(*args, **kwargs)
+            except Exception as e:
+                logger.error(
+                    "Plugin '%s' failed to handle %s: %s",
+                    plugin_name,
+                    hook.value,
+                    e,
+                    exc_info=True,
+                )
+                if plugin_name:
+                    plugin = self._registry.get_plugin(plugin_name)
+                    if plugin is not None:
+                        plugin.status = PluginStatus.ERROR
 
     # ------------------------------------------------------------------
     # Accessors
