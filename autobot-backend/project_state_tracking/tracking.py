@@ -149,11 +149,18 @@ def _schedule_error_tracking(error: Exception, context: Dict[str, Any]) -> None:
 
 
 def _run_error_tracking(error: Exception, context: Dict[str, Any]) -> None:
-    """Run error tracking in new event loop"""
-    # Import here to avoid circular imports
-    from . import track_system_error
+    """Run error tracking from sync error handlers.
 
-    asyncio.run(track_system_error(error, context))
+    #7469: was bare asyncio.run() — crashes if this sync helper is
+    invoked from an async caller (e.g. an exception handler on an
+    async path that delegates via thread executor). The shared
+    run_or_schedule helper handles both sync and in-loop contexts.
+    """
+    # Import here to avoid circular imports.
+    from . import track_system_error
+    from autobot_shared.async_compat import run_or_schedule
+
+    run_or_schedule(track_system_error(error, context))
 
 
 def error_tracking_decorator(func: Callable) -> Callable:

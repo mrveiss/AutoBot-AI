@@ -276,11 +276,14 @@ class SystemIntegration:
 
     def _manage_linux_service_elevated(self, service_name: str, action: str) -> Dict[str, Any]:
         """Manage Linux service with elevation (Issue #665: extracted helper)."""
-        import asyncio
-
+        from autobot_shared.async_compat import run_or_schedule
         from elevation_wrapper import execute_with_elevation
 
-        elevation_result = asyncio.run(
+        # #7469: was bare asyncio.run() — crashes if this sync helper is
+        # ever invoked from an async caller (e.g. via thread executor
+        # dispatched from an HTTP handler). run_or_schedule uses the
+        # threadpool detour in that case; behavior identical otherwise.
+        elevation_result = run_or_schedule(
             execute_with_elevation(
                 f"systemctl {action} {service_name}",
                 operation=f"Manage service: {service_name}",
