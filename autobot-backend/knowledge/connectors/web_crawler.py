@@ -247,9 +247,7 @@ class WebCrawlerConnector(AbstractConnector):
         for seed in seed_urls:
             if pages_remaining <= 0:
                 break
-            seed_results = await self._crawl_seed(
-                seed, max_depth, pages_remaining, same_origin, fetcher
-            )
+            seed_results = await self._crawl_seed(seed, max_depth, pages_remaining, same_origin, fetcher)
             all_results.extend(seed_results)
             pages_remaining -= len(seed_results)
 
@@ -296,9 +294,7 @@ class WebCrawlerConnector(AbstractConnector):
         and markdown conversion in a single HTTP request per URL.
         """
         frontier_depth = max(0, max_depth - 1)
-        frontier = Frontier(
-            seed, max_pages=max_pages, max_depth=frontier_depth, same_origin=same_origin
-        )
+        frontier = Frontier(seed, max_pages=max_pages, max_depth=frontier_depth, same_origin=same_origin)
         results: List[FetchResult] = []
 
         while (item := frontier.next()) is not None:
@@ -308,9 +304,7 @@ class WebCrawlerConnector(AbstractConnector):
             if fetch_result.success and raw_html and depth < frontier_depth:
                 links = extract_links(raw_html, url, same_origin_only=same_origin)
                 frontier.add_links(links, depth + 1)
-            self.logger.debug(
-                "crawl: %s depth=%d success=%s", url, depth, fetch_result.success
-            )
+            self.logger.debug("crawl: %s depth=%d success=%s", url, depth, fetch_result.success)
 
         self.logger.info(
             "Crawl complete for seed %s: %d pages emitted, %d visited",
@@ -320,9 +314,7 @@ class WebCrawlerConnector(AbstractConnector):
         )
         return results
 
-    async def _fetch_page_with_html(
-        self, fetcher: WebFetcher, url: str
-    ) -> tuple:
+    async def _fetch_page_with_html(self, fetcher: WebFetcher, url: str) -> tuple:
         """Fetch a page via bs4; return (FetchResult, raw_html_str).
 
         Using bs4 directly yields the raw HTML needed for extract_links and
