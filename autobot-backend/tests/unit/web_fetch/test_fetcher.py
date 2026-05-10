@@ -337,3 +337,60 @@ class TestCacheIntegration:
         assert result.success is True
         # Verify something was stored in the cache store
         assert len(store) > 0
+
+
+# ---------------------------------------------------------------------------
+# WebFetcher.fetch_raw_html — public API (#7476)
+# ---------------------------------------------------------------------------
+
+
+class TestFetchRawHtml:
+    """Contract tests for ``WebFetcher.fetch_raw_html`` — the public alias
+    for ``_fetch_bs4`` introduced in #7476 to replace private-import usage
+    in ``site_mapper.py`` and ``knowledge/connectors/web_crawler.py``."""
+
+    @pytest.mark.asyncio
+    async def test_returns_html_and_status_tuple(self) -> None:
+        with patch(
+            "web_fetch.fetcher._fetch_bs4",
+            return_value=("<html><body>ok</body></html>", 200),
+        ):
+            html, status = await WebFetcher.fetch_raw_html("https://example.com")
+
+        assert html == "<html><body>ok</body></html>"
+        assert status == 200
+
+    @pytest.mark.asyncio
+    async def test_returns_none_tuple_on_error(self) -> None:
+        with patch("web_fetch.fetcher._fetch_bs4", return_value=(None, None)):
+            html, status = await WebFetcher.fetch_raw_html("https://example.com")
+
+        assert html is None
+        assert status is None
+
+    @pytest.mark.asyncio
+    async def test_threads_timeout_through(self) -> None:
+        captured = {}
+
+        async def _capture(url, timeout):
+            captured["url"] = url
+            captured["timeout"] = timeout
+            return ("<html/>", 200)
+
+        with patch("web_fetch.fetcher._fetch_bs4", side_effect=_capture):
+            await WebFetcher.fetch_raw_html("https://example.com", timeout=7.5)
+
+        assert captured == {"url": "https://example.com", "timeout": 7.5}
+
+    @pytest.mark.asyncio
+    async def test_default_timeout_is_30s(self) -> None:
+        captured = {}
+
+        async def _capture(url, timeout):
+            captured["timeout"] = timeout
+            return ("<html/>", 200)
+
+        with patch("web_fetch.fetcher._fetch_bs4", side_effect=_capture):
+            await WebFetcher.fetch_raw_html("https://example.com")
+
+        assert captured["timeout"] == 30.0

@@ -247,6 +247,32 @@ class WebFetcher:
         instance = cls(redis_client=redis_client, robots_cache=robots_cache)
         return await instance._fetch(url, render, timeout)
 
+    @classmethod
+    async def fetch_raw_html(cls, url: str, timeout: float = 30.0) -> tuple[Optional[str], Optional[int]]:
+        """Fetch raw HTML + status code via aiohttp (no markdown extraction).
+
+        Public API for callers that need the HTML body itself — link
+        extraction (Frontier in sitemap crawl), HTML format pass-through
+        (``POST /knowledge/scrape format=html``), or content-type detection
+        before deciding render mode. Closes the #7476 gap where 3 production
+        modules reached into the private ``_fetch_bs4`` to get raw HTML.
+
+        Bypasses cache, robots, SSRF check, semaphores, and the AUTO render
+        cascade — this is a low-level "give me the bytes" primitive. Callers
+        that need the full FetchResult pipeline should use ``fetch()``.
+
+        Args:
+            url: Absolute URL to fetch.
+            timeout: Per-request timeout in seconds.
+
+        Returns:
+            ``(html, status_code)`` on success. ``(None, None)`` on any error
+            (connection, redirect-limit, non-utf8 body, etc.). ``("", status)``
+            on empty body with a successful status — same shape as ``fetch()``
+            for empty content.
+        """
+        return await _fetch_bs4(url, timeout)
+
     async def _fetch(self, url: str, render: RenderMode, timeout: float) -> FetchResult:
         """Internal fetch dispatcher."""
         # Cache lookup
