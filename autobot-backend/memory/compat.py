@@ -56,26 +56,15 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
         """
         Run async coroutine synchronously (Issue #742 - backward compat helper).
 
-        Handles both sync and async contexts by detecting if an event loop
-        is already running and using a thread executor in that case.
-
-        Args:
-            coro: Coroutine to run synchronously
-
-        Returns:
-            Result of the coroutine
+        #7469: this helper now delegates to ``autobot_shared.async_compat.run_or_schedule``
+        which carries the same try-loop / threadpool defensive pattern,
+        deduplicated across the codebase. Behavior is identical; one
+        source of truth ensures all callers stay in sync if the pattern
+        ever needs an update.
         """
-        try:
-            asyncio.get_running_loop()
-            # Already in async context - use thread executor
-            import concurrent.futures
+        from autobot_shared.async_compat import run_or_schedule
 
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, coro)
-                return future.result()
-        except RuntimeError:
-            # No running loop - safe to use asyncio.run
-            return asyncio.run(coro)
+        return run_or_schedule(coro)
 
     def create_task_record(
         self,

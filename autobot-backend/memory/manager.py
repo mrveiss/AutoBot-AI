@@ -189,17 +189,11 @@ class UnifiedMemoryManager:
 
         For async code, prefer using: await manager.log_task(record)
         """
-        try:
-            asyncio.get_running_loop()
-            # Already in async context - use thread executor
-            import concurrent.futures
+        # #7469: delegate to the shared run_or_schedule helper that
+        # centralizes the try-loop / threadpool defensive pattern.
+        from autobot_shared.async_compat import run_or_schedule
 
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, self.log_task(record))
-                return future.result()
-        except RuntimeError:
-            # No running loop - safe to use asyncio.run
-            return asyncio.run(self.log_task(record))
+        return run_or_schedule(self.log_task(record))
 
     async def update_task_status(self, task_id: str, status: TaskStatus, **kwargs) -> bool:
         """
