@@ -272,6 +272,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["knowledge-scrape"],
         "knowledge_scrape",
     ),
+    # Issue #7403: Domain URL enumeration via sitemap.xml or BFS crawl
+    (
+        "api.knowledge_site_map",
+        "/knowledge",
+        ["knowledge-site-map"],
+        "knowledge_site_map",
+    ),
     # Issue #1256: Observable Research Panel — live browser WS stream
     (
         "api.knowledge_research_ws",
