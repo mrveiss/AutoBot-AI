@@ -5,8 +5,31 @@
 # Link Processing Pipeline
 # Issue #735: Organize media processing into dedicated pipelines
 # Issue #932: Implement actual link/web processing
+# Issue #7401: Scrape-consolidation — internals delegate to web_fetch.WebFetcher.
 
-"""Link processing pipeline for web content and URLs."""
+"""Link processing pipeline for web content and URLs.
+
+The :class:`LinkPipeline` class is the canonical media-pipeline owner for
+``MediaType.LINK`` inputs.  Its public interface (``process(MediaInput)``) is
+unchanged and is used by the :class:`media.manager.MediaPipelineManager`.
+
+A lightweight convenience entry-point ``process_url(url)`` is exposed for
+callers that only have a raw URL string and do not need a full
+``MediaInput``/``ProcessingResult`` round-trip.  Internally both paths now
+delegate all fetching to :class:`web_fetch.WebFetcher` so there is a single
+implementation of Jina/BS4/Playwright logic.
+
+This module retains ownership of:
+
+* SSRF guards (``_is_public_url``/``_is_public_url_async``) — reused by
+  ``web_fetch.fetcher`` via a reverse import.
+* Jina Reader circuit-breaker helpers (``_record_jina_failure`` etc.) — also
+  reused by ``web_fetch.fetcher``.
+* ``_parse_jina_output`` — shared parsing helper.
+
+None of these helpers are removed; they are kept here to preserve all call
+sites intact (see issue #7401 caller audit).
+"""
 
 import asyncio
 import ipaddress
@@ -14,6 +37,7 @@ import logging
 import re
 import socket
 import time
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
 
@@ -408,6 +432,68 @@ class LinkPipeline(BasePipeline):
     def _calculate_confidence(self, result_data: Dict[str, Any]) -> float:
         """Calculate confidence score from result data."""
         return result_data.get("confidence", 0.5)
+
+
+# ----------------------------------------------------------------------
+# LinkResult — lightweight result type for process_url() callers.
+# ----------------------------------------------------------------------
+
+
+@dataclass
+class LinkResult:
+    """Structured result returned by :func:`process_url`.
+
+    Attributes:
+        url:        The fetched URL (after redirects).
+        success:    True when usable content was obtained.
+        markdown:   Extracted markdown text (empty on failure).
+        title:      Page title, if parsed.
+        source:     Which backend produced the result (jina/bs4/playwright).
+        error_code: ``web_fetch`` error constant on failure, else ``None``.
+        retryable:  True when a retry may succeed.
+    """
+
+    url: str
+    success: bool
+    markdown: str = ""
+    title: str = ""
+    source: str = ""
+    error_code: Optional[str] = None
+    retryable: bool = False
+
+
+async def process_url(url: str, render: str = "auto", timeout: float = 30.0) -> LinkResult:
+    """Fetch *url* and return a :class:`LinkResult`.
+
+    This is the thin public convenience entry-point for callers that hold a
+    raw URL string.  Internally it delegates to :class:`web_fetch.WebFetcher`
+    so all Jina/BS4/Playwright logic, caching, and SSRF guards are exercised
+    through the canonical implementation.
+
+    The function is intentionally <= 30 lines (CLAUDE.md constraint).
+
+    Args:
+        url:     Absolute URL to fetch.
+        render:  ``"auto"`` | ``"fast"`` | ``"playwright"``.
+        timeout: Per-request timeout in seconds.
+
+    Returns:
+        :class:`LinkResult` with ``success=True`` and populated ``markdown``
+        on success; ``success=False`` and ``error_code`` on failure.
+    """
+    from web_fetch import FetchResult, RenderMode, WebFetcher
+
+    render_mode = RenderMode(render) if render in {m.value for m in RenderMode} else RenderMode.AUTO
+    fetch_result: FetchResult = await WebFetcher.fetch(url, render=render_mode, timeout=timeout)
+    return LinkResult(
+        url=fetch_result.url,
+        success=fetch_result.success,
+        markdown=fetch_result.markdown,
+        title=fetch_result.title,
+        source=fetch_result.source,
+        error_code=fetch_result.error_code,
+        retryable=fetch_result.retryable,
+    )
 
 
 # ----------------------------------------------------------------------

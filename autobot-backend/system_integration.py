@@ -412,30 +412,25 @@ class SystemIntegration:
             }
 
     async def web_fetch(self, url: str) -> Dict[str, Any]:
-        """
-        Fetches content from a specified URL and processes it into markdown.
-        """
-        try:
-            url = self._normalize_url(url)
-            http_client = get_http_client()
-            async with await http_client.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                response.raise_for_status()
-                content_type = response.headers.get("Content-Type", "").lower()
-                content = await response.text()
-                return self._process_web_content(url, content_type, content)
+        """Fetch content from a URL and return markdown.
 
-        except aiohttp.ClientError as e:
-            return {
-                "status": "error",
-                "message": f"Failed to fetch URL {url}: {e}",
-                "url": url,
-            }
-        except Exception as e:
-            return {
-                "status": "error",
-                "message": "An unexpected error occurred during " f"web fetch: {e}",
-                "url": url,
-            }
+        Delegator — all fetching logic lives in :mod:`web_fetch.WebFetcher`
+        (issue #7401 scrape-consolidation).  This method translates the
+        :class:`web_fetch.FetchResult` into the dict shape that all existing
+        callers (task_handlers/system_handlers.py, tools/tool_registry.py)
+        already expect, so no call-site changes are required.
+        """
+        url = self._normalize_url(url)
+        try:
+            from web_fetch import WebFetcher
+
+            result = await WebFetcher.fetch(url)
+        except Exception as exc:
+            return {"status": "error", "message": f"web_fetch error: {exc}", "url": url}
+
+        if result.success:
+            return {"status": "success", "url": result.url, "content_type": "text/markdown", "content": result.markdown}
+        return {"status": "error", "message": result.error_code or "fetch failed", "url": url}
 
 
 # Example Usage (for testing)
