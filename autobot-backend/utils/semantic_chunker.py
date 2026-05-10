@@ -408,23 +408,17 @@ class AutoBotSemanticChunker(SemanticChunkerBase):
 
         Live callers: `npu_semantic_search._generate_fallback_embedding` and
         `autobot-infrastructure/.../npu_performance_measurement.py`.
-        """
-        import asyncio
 
-        try:
-            asyncio.get_running_loop()
-            # Running loop -> sync encode inline (blocking; caller accepted this path)
-            logger.warning(
-                "Using sync embedding method in async context. " "Use _compute_sentence_embeddings_async instead."
-            )
-            logger.warning("WARNING: Model initialization may block event loop - use async method instead")
-            if self._embedding_model is None:
-                self._sync_initialize_model()
-            embeddings = self._embedding_model.encode(sentences, convert_to_tensor=False)
-            return np.array(embeddings)
-        except RuntimeError:
-            # No running loop -> delegate to async variant
-            return asyncio.run(self._compute_sentence_embeddings_async(sentences))
+        #7469: previously this had a hand-rolled try-loop / sync-fallback
+        pattern that BLOCKED the event loop on the in-async path
+        (running encoder synchronously inline). Migrated to the shared
+        ``run_or_schedule`` helper which uses a threadpool detour in
+        the in-async case — same final result, doesn't block the loop.
+        Caller still sees the same return shape.
+        """
+        from autobot_shared.async_compat import run_or_schedule
+
+        return run_or_schedule(self._compute_sentence_embeddings_async(sentences))
 
     # ------------------------------------------------------------------
     # Coherence scoring (CPU-only utility — not on hot chunk_text path)
