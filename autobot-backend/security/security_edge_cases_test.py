@@ -143,10 +143,6 @@ class TestSecurityEdgeCases:
             result = await self.security.execute_command(malicious_command, user="developer", user_role="developer")
             assert not result.get("success", False), f"Injection attempt succeeded: {malicious_command}"
 
-    @pytest.mark.xfail(
-        reason="#7384: `find -perm -4000` classifies as MODERATE — argument-aware risk assessment needed",
-        strict=True,
-    )
     async def test_privilege_escalation_attempts(self):
         """Test various privilege escalation techniques"""
         escalation_attempts = [
