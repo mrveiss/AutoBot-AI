@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
-from knowledge.pipeline.models.causal_edge import CausalEdge, EffectType
+from knowledge.pipeline.models.causal_edge import CausalEdge
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.registry import TaskRegistry
 from services.llm_service import get_llm_service
@@ -33,7 +33,8 @@ For each causal relationship, provide:
 - source_name: The cause entity (e.g., "cache_ttl", "request_rate")
 - target_name: The effect entity (e.g., "query_latency", "memory_usage")
 - effect_type: One of CAUSES, ENABLES, PREVENTS, AMPLIFIES, REDUCES, INHIBITS, ACCELERATES, DECELERATES
-- condition: When does this causality hold? (e.g., "when cache is full", "under high load", or empty string for unconditional)
+- condition: When does this causality hold? (e.g., "when cache is full", "under high load",
+  or empty string for unconditional)
 - evidence_text: The exact sentence supporting this causality
 - confidence: 0.9-1.0 for explicit statements, 0.7-0.85 for strong inference, reject (<0.7)
 

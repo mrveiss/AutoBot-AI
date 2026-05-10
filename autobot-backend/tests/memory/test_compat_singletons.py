@@ -10,8 +10,6 @@ class instances, not the lazy_singleton callable.
 import inspect
 from unittest.mock import patch
 
-import pytest
-
 from memory.compat import (
     EnhancedMemoryManager,
     LongTermMemoryManager,

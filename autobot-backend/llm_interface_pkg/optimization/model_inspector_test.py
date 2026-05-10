@@ -15,8 +15,6 @@ Issue #3186: Add test coverage for model_inspector.
 import time
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from llm_interface_pkg.optimization.model_inspector import (
     ModelInfo,
     _cache_put,

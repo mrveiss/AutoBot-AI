@@ -31,7 +31,6 @@ from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_7_DAYS
 from services.knowledge_grounding_models import (
     Claim,
-    ClaimType,
     KBSource,
     KBStatus,
 )

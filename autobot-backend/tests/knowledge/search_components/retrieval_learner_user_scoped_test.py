@@ -25,7 +25,6 @@ from knowledge.search_components.retrieval_learner import (
     RetrievalLearner,
     RetrievalPattern,
     _compute_pattern_hash,
-    get_retrieval_learner,
 )
 from tests.fixtures import make_async_redis
 

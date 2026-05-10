@@ -172,7 +172,6 @@ async def test_patch_async_redis_returns_async_callable() -> None:
     the redis mock (NOT the default AsyncMock that bare ``return_value=``
     would have given).
     """
-    from autobot_shared.redis_client import get_async_redis_client as orig
 
     with patch_async_redis("autobot_shared.redis_client.get_async_redis_client") as redis:
         # The patched function is now an AsyncMock; awaiting it returns redis.

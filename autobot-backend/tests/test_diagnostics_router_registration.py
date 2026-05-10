@@ -7,7 +7,6 @@ Test diagnostics router registration.
 Issue #4254: Verify diagnostics router is properly registered and discoverable.
 """
 
-
 import pytest
 
 # Test that the diagnostics router can be imported

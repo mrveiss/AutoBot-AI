@@ -24,7 +24,6 @@ from services.tool_output_filter import (
     inject_compact_flags,
     join_with_overflow,
     short_circuit_git,
-    tee_and_hint,
 )
 
 

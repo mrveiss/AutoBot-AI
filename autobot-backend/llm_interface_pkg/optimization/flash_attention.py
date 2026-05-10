@@ -22,7 +22,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional, Tuple
 
 if TYPE_CHECKING:
-    import torch as _torch_type  # noqa: F401
+    import torch  # noqa: F401  # used by deferred (string) type annotations
 
 logger = logging.getLogger(__name__)
 

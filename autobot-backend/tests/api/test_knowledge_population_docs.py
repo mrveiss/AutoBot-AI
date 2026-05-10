@@ -9,9 +9,6 @@ Ensures populate_autobot_docs returns immediately with task_id.
 """
 
 
-import pytest
-
-
 def test_task_status_dataclass_initialization():
     """Test TaskStatusRecord dataclass initialization with default values."""
     from services.knowledge.task_status_manager import TaskStatusRecord

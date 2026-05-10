@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.event_log import EventType, query_events
-from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
+from utils.catalog_http_exceptions import raise_auth_error
 
 router = APIRouter(prefix="/admin", tags=["admin", "compliance"])
 logger = logging.getLogger(__name__)

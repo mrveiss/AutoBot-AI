@@ -16,7 +16,6 @@ The knowledge-base singleton is monkey-patched on each request via
 
 import json
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

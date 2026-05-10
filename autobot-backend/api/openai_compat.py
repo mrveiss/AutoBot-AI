@@ -33,11 +33,9 @@ from api.schemas_code import (
     OAIChoice,
     OAIChoiceMessage,
     OAIDeltaMessage,
-    OAIMessage,
     OAIModelCard,
     OAIModelListResponse,
     OAIStreamChoice,
-    OAIStreamOptions,
     OAIUsage,
 )
 from auth_middleware import get_current_user

@@ -27,7 +27,6 @@ from typing import Any, Dict, Optional
 
 from orchestration.causal_models import (
     CascadeReport,
-    CausalEffectType,
     CausalMetadata,
     EffectTrace,
     StateFrame,

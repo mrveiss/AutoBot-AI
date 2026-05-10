@@ -8,8 +8,6 @@ from __future__ import annotations
 import os
 from unittest.mock import patch
 
-import pytest
-
 from services.mcp_isolation_config import (
     BridgePolicy,
     IsolationMode,

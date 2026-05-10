@@ -25,7 +25,7 @@ from context_aware_decision.models import (
     DecisionContext,
     InterventionOutcome,
 )
-from context_aware_decision.types import ConfidenceLevel, ContextType, DecisionType
+from context_aware_decision.types import ContextType, DecisionType
 
 # =============================================================================
 # Fixtures

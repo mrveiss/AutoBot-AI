@@ -11,8 +11,6 @@ from a user-added marketplace 404.
 
 import inspect
 
-import pytest
-
 
 def test_install_request_has_source_id_field():
     """``InstallRequest`` must accept ``source_id`` so the API can route

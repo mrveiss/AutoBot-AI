@@ -87,7 +87,7 @@ class PromptScorer(ABC):
         """
 
 
-from .models import Experiment, ExperimentResult, ExperimentTask, HyperParams
+from .models import Experiment, ExperimentTask, HyperParams
 from .runner import ExperimentRunner, build_task_inference_params
 
 

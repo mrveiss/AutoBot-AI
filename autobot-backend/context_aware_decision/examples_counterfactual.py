@@ -16,7 +16,7 @@ import time
 from .counterfactual_reasoner import CounterfactualReasoner
 from .decision_engine import DecisionEngine
 from .models import ContextElement, DecisionContext
-from .types import ConfidenceLevel, ContextType, DecisionType
+from .types import ContextType, DecisionType
 
 # =============================================================================
 # Example 1: Network Timeout Scenario
@@ -134,8 +134,8 @@ async def example_network_timeout():
 
     best_option = max(outcomes.items(), key=lambda x: x[1].predicted_success_rate)
     print(f"\nRecommended: {best_option[0].upper()}")
-    print(f"  Why: {best_outcome[1].reasoning}")
-    print(f"  Success likelihood: {best_outcome[1].predicted_success_rate:.0%}")
+    print(f"  Why: {best_option[1].reasoning}")
+    print(f"  Success likelihood: {best_option[1].predicted_success_rate:.0%}")
 
 
 # =============================================================================

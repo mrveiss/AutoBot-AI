@@ -50,7 +50,6 @@ from api.schemas_analytics import (
     AnalyticsUsageStatisticsResponse,
     RealTimeEvent,
 )
-from api.schemas_common import DataResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase

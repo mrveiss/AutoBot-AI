@@ -19,7 +19,7 @@ Related: Issue #206
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Path, Request
+from fastapi import APIRouter, HTTPException, Path
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse

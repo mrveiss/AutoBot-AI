@@ -13,7 +13,7 @@ import hashlib
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from cryptography import x509

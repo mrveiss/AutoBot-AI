@@ -432,7 +432,7 @@ class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
 
 import threading
 
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 _embedding_analyzer: Optional[EmbeddingPatternAnalyzer] = None

@@ -3,7 +3,7 @@
 # Author: mrveiss
 import logging
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 
 from api.schemas_system import (
     RedisConfigResponse,
@@ -12,7 +12,6 @@ from api.schemas_system import (
 )
 from api.system_health import register_redis_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.redis_client import get_async_redis_client
 from services.config_service import ConfigService
 from utils.connection_utils import ConnectionTester
 

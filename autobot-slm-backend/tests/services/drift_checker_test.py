@@ -12,8 +12,6 @@ the drift report even when their checksums differ between source and deployed.
 import tempfile
 from pathlib import Path
 
-import pytest
-
 # Load drift_checker without triggering services/__init__.py import chain.
 _mod_path = Path(__file__).parent.parent.parent / "services" / "drift_checker.py"
 _spec = __import__("importlib.util").util.spec_from_file_location("drift_checker", _mod_path)

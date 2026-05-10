@@ -30,18 +30,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from api.knowledge_grounding import (
-    get_stats,
-    ground_response,
-    list_conflicts,
-    resolve_conflict,
-    verify_claim,
-)
 from services.grounded_agent import (
     Claim,
     ClaimStatus,
-    Conflict,
-    ConflictResolution,
     GroundedAgent,
     GroundedResponse,
     VerifiedClaim,

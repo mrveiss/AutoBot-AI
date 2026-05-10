@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from agent_loop.think_tool import ThinkTool, think_causally
+from agent_loop.think_tool import ThinkTool
 from agent_loop.types import ThinkCategory, ThinkResult
 
 logger = logging.getLogger(__name__)

@@ -40,7 +40,6 @@ from typing import Any, Dict, Optional, Set
 
 from .dag_executor import (
     DAGExecutionContext,
-    DAGExecutor,
     DAGNode,
     NodeType,
     StepExecutorCallback,

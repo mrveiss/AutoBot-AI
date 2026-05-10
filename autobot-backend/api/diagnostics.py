@@ -20,7 +20,7 @@ Used for:
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query
 
 from api.schemas_system import (
     FailureAnalysisRequest,

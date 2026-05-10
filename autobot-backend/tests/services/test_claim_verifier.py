@@ -17,11 +17,8 @@ import pytest
 
 from services.claim_verifier import (
     ClaimVerifier,
-    RAGResult,
-    ResearchResult,
     ResearchStatus,
     VerificationStatus,
-    VerifiedClaim,
 )
 from services.knowledge_grounding_models import (
     Claim,

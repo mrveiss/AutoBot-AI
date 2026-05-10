@@ -57,7 +57,6 @@ for _name, _mod in [
 from knowledge.memory_graph.hybrid_scorer import (  # noqa: E402
     HybridScorer,
     SearchResult,
-    _build_explanation,
     _entity_to_text,
     cosine_similarity,
 )

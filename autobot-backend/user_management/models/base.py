@@ -58,7 +58,6 @@ class TimestampMixin:
     """
 
 
-
 class TenantMixin:
     """
     Mixin for multi-tenant models.

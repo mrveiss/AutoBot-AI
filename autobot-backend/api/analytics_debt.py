@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
 from api.schemas_analytics import DebtCalculationRequest
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client

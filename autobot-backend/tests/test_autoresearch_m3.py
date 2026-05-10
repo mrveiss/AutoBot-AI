@@ -18,7 +18,7 @@ from services.autoresearch.models import (
     HyperParams,
 )
 from services.autoresearch.prompt_optimizer import PromptOptimizer, PromptOptTarget
-from services.autoresearch.scorers import LLMJudgeScorer, ScorerResult
+from services.autoresearch.scorers import LLMJudgeScorer
 
 
 class TestM3Integration:

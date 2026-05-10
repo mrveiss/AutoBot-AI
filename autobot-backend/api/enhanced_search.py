@@ -11,7 +11,7 @@ import asyncio
 import time
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 
 from ai_hardware_accelerator import HardwareDevice
 from api.schemas_knowledge import (

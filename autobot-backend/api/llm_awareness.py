@@ -9,7 +9,7 @@ Provides endpoints for LLM agents to access system context and capabilities
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from api.schemas_agent import (

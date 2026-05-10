@@ -27,7 +27,6 @@ try:
 except ImportError:
     Browser = BrowserContext = Page = async_playwright = None  # type: ignore[assignment]
     PLAYWRIGHT_AVAILABLE = False
-from constants.network_constants import ServiceURLs
 from constants.security_constants import SecurityConstants
 from constants.threshold_constants import TimingConstants
 from source_attribution import SourceType, track_source

@@ -390,22 +390,12 @@ _metrics_collector = lazy_singleton(ErrorMetricsCollector)
 
 def get_metrics_collector(redis_client=None) -> ErrorMetricsCollector:
     """
-    Get global metrics collector instance (thread-safe)
+    Get global metrics collector instance (thread-safe).
 
-    Args:
-        redis_client: Optional Redis client for persistence
-
-    Returns:
-        ErrorMetricsCollector instance
+    `_metrics_collector` is a `lazy_singleton(ErrorMetricsCollector)` —
+    calling it returns the cached instance, threadsafe by construction.
     """
-
-    if _metrics_collector is None:
-        with _metrics_collector_lock:
-            # Double-check after acquiring lock
-            if _metrics_collector is None:
-                _metrics_collector = ErrorMetricsCollector(redis_client)
-
-    return _metrics_collector
+    return _metrics_collector(redis_client)
 
 
 async def record_error_metric(

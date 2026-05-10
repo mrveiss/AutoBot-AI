@@ -10,7 +10,7 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_system import (
     ServicesHealthAggregateResponse,

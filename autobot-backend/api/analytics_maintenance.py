@@ -17,24 +17,21 @@ import asyncio
 import logging
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query
 
 from api.schemas_analytics import (
     CustomReportRequest,
-    DashboardResponse,
     MaintenanceByCategoryResponse,
     MaintenanceCustomReportResponse,
     MaintenanceDashboardResponse,
     MaintenanceHealthStatusResponse,
     MaintenanceInsightsResponse,
-    MaintenanceRecommendationResponse,
     MaintenanceRecommendationsResponse,
     MaintenanceSummaryResponse,
     MaintenanceTrendsResponse,
     OptimizationByTypeResponse,
     OptimizationQuickWinsResponse,
     OptimizationRecommendationsResponse,
-    ResourceOptimizationResponse,
 )
 from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission

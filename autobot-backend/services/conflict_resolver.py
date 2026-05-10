@@ -40,10 +40,8 @@ from api.knowledge_grounding_models import (
     ReviewTicket,
     ReviewTicketPriority,
     ReviewTicketStatus,
-    SourceType,
 )
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
-from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)
 

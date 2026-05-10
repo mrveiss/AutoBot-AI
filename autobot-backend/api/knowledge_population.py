@@ -1007,7 +1007,6 @@ async def populate_autobot_docs(background_tasks: BackgroundTasks, request: dict
     """
     import uuid
 
-    from services.knowledge.doc_indexer import get_doc_indexer_service
     from services.knowledge.task_status_manager import TaskStatusManager
 
     task_id = str(uuid.uuid4())

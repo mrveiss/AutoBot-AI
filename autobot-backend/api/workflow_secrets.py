@@ -23,6 +23,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from api.schemas_system import _validate_secret_name
 from api.schemas_workflows import (
     WorkflowSecretCreateRequest,
     WorkflowSecretMetadata,

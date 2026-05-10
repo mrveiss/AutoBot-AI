@@ -24,8 +24,6 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-import aiohttp
-
 from autobot_shared.redis_client import get_async_redis_client
 from integrations.base import IntegrationAction
 from integrations.communication_integration import SlackIntegration

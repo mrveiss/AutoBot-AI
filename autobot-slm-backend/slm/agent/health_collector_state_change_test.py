@@ -6,8 +6,6 @@
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from slm.agent.health_collector import _STATE_CHANGE_CHANNEL_TEMPLATE, HealthCollector
 
 # ---------------------------------------------------------------------------

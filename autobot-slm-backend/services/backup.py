@@ -11,7 +11,7 @@ for stateful services (Redis, PostgreSQL, etc).
 import asyncio
 import hashlib
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 

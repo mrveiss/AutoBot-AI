@@ -18,7 +18,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
-from autobot_shared.time_utils import now_utc
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
     ChangeInfo,

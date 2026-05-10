@@ -18,11 +18,8 @@ import logging
 from typing import Dict, List, Optional
 
 from orchestration.causal_models import (
-    CausalEffect,
     CausalEffectType,
     CausalMetadata,
-    Dependency,
-    DependencyType,
 )
 from orchestration.dag_executor import WorkflowDAG
 

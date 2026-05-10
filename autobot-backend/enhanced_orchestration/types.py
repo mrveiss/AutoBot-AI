@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Callable, Dict, FrozenSet, List
 if TYPE_CHECKING:
     from .success_criteria import SuccessCriteria
 
-from autobot_shared.workflow import ExecutionStrategy as ExecutionStrategy
+from autobot_shared.workflow import ExecutionStrategy as ExecutionStrategy  # noqa: F401  # re-export
 from autobot_shared.workflow import WorkflowPlan as _SharedWorkflowPlan
 from autobot_shared.workflow import WorkflowTask
 from orchestration.types import AgentCapability  # single canonical definition (#6192)

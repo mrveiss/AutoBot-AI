@@ -32,8 +32,6 @@ import pytest
 from services.grounded_agent import (
     Claim,
     ClaimStatus,
-    Conflict,
-    ConflictResolution,
     GroundedAgent,
     GroundedResponse,
     VerifiedClaim,

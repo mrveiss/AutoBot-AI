@@ -1,8 +1,12 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+# flake8: noqa: E501
 """
 CausalInferenceEngine Examples - Production scenarios and expected outputs.
+
+Long descriptive strings in this examples file intentionally exceed
+line-length=120 for readability (file-level noqa above).
 
 Issue #4069: Real-world examples showing how the engine analyzes failures.
 
@@ -21,7 +25,6 @@ Each scenario includes:
 - Recommendations
 - Severity assessment
 """
-
 
 from services.causal_inference_engine import (
     CausalAnalysisReport,

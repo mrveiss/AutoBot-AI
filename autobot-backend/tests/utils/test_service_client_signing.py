@@ -15,8 +15,6 @@ import hmac
 import time
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from autobot_shared.http_client import sign_request
 
 

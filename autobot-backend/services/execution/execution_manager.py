@@ -18,10 +18,6 @@ from services.execution.base_backend import (
     ExecutionStatus,
     ExecutionTask,
 )
-from services.execution.docker_backend import DockerBackend
-from services.execution.local_backend import LocalBackend
-from services.execution.modal_backend import ModalBackend
-from services.execution.ssh_backend import SSHBackend
 
 logger = logging.getLogger(__name__)
 

@@ -17,7 +17,6 @@ import pytest
 
 from services.audit.audit_log import (
     _GLOBAL_KEY,
-    AUDIT_LOG_TTL_SECONDS,
     AuditAction,
     audit_record,
     query_audit_log,

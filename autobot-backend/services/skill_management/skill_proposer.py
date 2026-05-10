@@ -26,7 +26,6 @@ class SkillProposalError(Exception):
     """Error proposing skill to SLM."""
 
 
-
 class SkillProposer:
     """Proposes extracted skills to SLM for validation and activation."""
 

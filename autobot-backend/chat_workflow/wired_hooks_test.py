@@ -17,7 +17,6 @@ from typing import Any, Optional
 import pytest
 
 from chat_workflow.llm_handler import (
-    _emit_after_continuation,
     _emit_after_llm_response,
     _emit_after_prompt_build,
     _emit_after_response_send,
@@ -30,7 +29,6 @@ from chat_workflow.llm_handler import (
     _emit_before_tool_execute,
     _emit_before_tool_parse,
     _emit_critical_error,
-    _emit_during_llm_streaming,
     _emit_loop_complete,
     _emit_repairable_error,
     _emit_tool_error,
@@ -44,7 +42,6 @@ from chat_workflow.session_handler import (
     _emit_session_destroy,
 )
 from extensions.base import Extension, HookContext
-from extensions.hooks import HookPoint
 from extensions.manager import get_extension_manager, reset_extension_manager
 
 

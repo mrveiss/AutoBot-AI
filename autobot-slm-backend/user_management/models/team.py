@@ -8,7 +8,7 @@ Teams belong to organizations and contain users with specific roles.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
