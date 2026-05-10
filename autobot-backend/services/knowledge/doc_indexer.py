@@ -964,7 +964,8 @@ class DocIndexerService:
             return result
 
         try:
-            content = file_path.read_text(encoding="utf-8")
+            # #7467: was sync `file_path.read_text` blocking the event loop.
+            content = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
             if not content.strip():
                 result.skipped = 1
                 return result
@@ -988,11 +989,10 @@ class DocIndexerService:
 
     async def _index_single_file_content(self, file_path: str, tier: int, result: IndexResult) -> None:
         """Read, chunk, and index a single file. Helper for index_all (#1385)."""
-        import asyncio
-
         rel_path = os.path.relpath(file_path, self._root_dir)
         try:
-            content = Path(file_path).read_text(encoding="utf-8")
+            # #7467: was sync `Path(file_path).read_text` blocking the event loop.
+            content = await asyncio.to_thread(Path(file_path).read_text, encoding="utf-8")
             if not content.strip():
                 result.skipped += 1
                 return

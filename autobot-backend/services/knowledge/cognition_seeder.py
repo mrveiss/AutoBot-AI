@@ -211,7 +211,8 @@ class CognitionSeeder:
             return 0
 
         try:
-            content = Path(abs_path).read_text(encoding="utf-8")
+            # #7467: was sync `Path(abs_path).read_text` blocking the event loop.
+            content = await asyncio.to_thread(Path(abs_path).read_text, encoding="utf-8")
         except OSError as exc:
             logger.warning("Cannot read seed file %s: %s", abs_path, exc)
             return 0

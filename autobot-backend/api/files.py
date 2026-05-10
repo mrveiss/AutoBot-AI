@@ -11,6 +11,7 @@ Issue #718: Uses dedicated thread pool for file I/O to prevent blocking
 when the main asyncio thread pool is saturated by indexing operations.
 """
 
+import asyncio
 import logging
 import mimetypes
 import shutil
@@ -1305,6 +1306,8 @@ async def admin_read_file(path: str) -> dict:
     if target.stat().st_size > _ADMIN_MAX_READ_BYTES:
         raise HTTPException(status_code=413, detail="File too large to read inline (> 1 MB)")
     try:
-        return {"content": target.read_text(encoding="utf-8", errors="replace")}  # codeql[py/path-injection]
+        # #7467: was sync `target.read_text(...)` blocking the event loop.
+        content = await asyncio.to_thread(target.read_text, encoding="utf-8", errors="replace")
+        return {"content": content}  # codeql[py/path-injection]
     except PermissionError:
         raise HTTPException(status_code=403, detail="Permission denied")

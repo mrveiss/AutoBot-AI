@@ -26,6 +26,7 @@ Safety constraints:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 import uuid
@@ -135,7 +136,8 @@ class MetaAgent:
             A MetaPatch with original and proposed modified content.
         """
         self._validate_target(target_module_path)
-        original_content = target_module_path.read_text(encoding="utf-8")
+        # #7467: was sync `target_module_path.read_text` blocking the event loop.
+        original_content = await asyncio.to_thread(target_module_path.read_text, encoding="utf-8")
         self._validate_size(original_content, target_module_path)
 
         prompt = self._build_prompt(original_content, eval_context)
