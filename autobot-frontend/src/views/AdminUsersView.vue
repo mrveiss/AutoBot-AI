@@ -23,7 +23,7 @@
     <div v-if="error" class="error-banner">
       <Icon name="exclamation-circle" />
       <span>{{ error }}</span>
-      <button class="btn-dismiss" @click="error = null"><Icon name="times" /></button>
+      <button class="btn-dismiss" :aria-label="$t('common.dismiss')" @click="error = null"><Icon name="times" /></button>
     </div>
 
     <!-- Search bar -->
@@ -113,11 +113,21 @@
 
       <!-- Pagination -->
       <div v-if="total > pageSize" class="pagination">
-        <button :disabled="page === 0" class="btn-page" @click="changePage(-1)">
+        <button
+          :disabled="page === 0"
+          class="btn-page"
+          :aria-label="$t('common.previous')"
+          @click="changePage(-1)"
+        >
           <Icon name="chevron-left" />
         </button>
         <span class="page-info">{{ page + 1 }} / {{ totalPages }}</span>
-        <button :disabled="page >= totalPages - 1" class="btn-page" @click="changePage(1)">
+        <button
+          :disabled="page >= totalPages - 1"
+          class="btn-page"
+          :aria-label="$t('common.next')"
+          @click="changePage(1)"
+        >
           <Icon name="chevron-right" />
         </button>
       </div>

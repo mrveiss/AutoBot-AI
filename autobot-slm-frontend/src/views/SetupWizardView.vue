@@ -26,6 +26,7 @@
           class="close-btn"
           @click="exitWizard"
           title="Exit wizard without completing"
+          aria-label="Exit setup wizard"
         >
           &#10005;
         </button>
@@ -96,23 +97,52 @@
         <div class="add-node-form">
           <h3>Add a Node</h3>
           <div class="form-row">
-            <input v-model="newNode.hostname" placeholder="Hostname (e.g. frontend-01)" />
-            <input v-model="newNode.ip_address" placeholder="IP Address (e.g. 10.0.0.21)" />
+            <label class="field">
+              <span class="field-label">Hostname</span>
+              <input
+                v-model="newNode.hostname"
+                placeholder="e.g. frontend-01"
+                autocomplete="off"
+              />
+            </label>
+            <label class="field">
+              <span class="field-label">IP Address</span>
+              <input
+                v-model="newNode.ip_address"
+                placeholder="e.g. 10.0.0.21"
+                autocomplete="off"
+              />
+            </label>
           </div>
           <div class="form-row">
-            <input v-model="newNode.ssh_user" placeholder="SSH User (default: autobot)" />
-            <select v-model="newNode.auth_method">
-              <option value="key">SSH Key</option>
-              <option value="password">Password</option>
-            </select>
+            <label class="field">
+              <span class="field-label">SSH User</span>
+              <input
+                v-model="newNode.ssh_user"
+                placeholder="default: autobot"
+                autocomplete="username"
+              />
+            </label>
+            <label class="field">
+              <span class="field-label">Auth Method</span>
+              <select v-model="newNode.auth_method">
+                <option value="key">SSH Key</option>
+                <option value="password">Password</option>
+              </select>
+            </label>
           </div>
-          <input
+          <label
             v-if="newNode.auth_method === 'password'"
-            v-model="newNode.ssh_password"
-            type="password"
-            placeholder="SSH Password"
-            class="full-width"
-          />
+            class="field full-width"
+          >
+            <span class="field-label">SSH Password</span>
+            <input
+              v-model="newNode.ssh_password"
+              type="password"
+              placeholder="Enter SSH password"
+              autocomplete="current-password"
+            />
+          </label>
           <button class="btn-secondary" @click="addNode" :disabled="addingNode">
             {{ addingNode ? 'Adding...' : 'Add Node' }}
           </button>
@@ -1351,8 +1381,33 @@ onMounted(async () => {
 }
 
 .form-row input,
-.form-row select {
+.form-row select,
+.form-row > .field {
   flex: 1;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.field > input,
+.field > select {
+  width: 100%;
+}
+
+.field.full-width {
+  width: 100%;
+  margin-bottom: 0.75rem;
+}
+
+.field-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary, #a0a0a0);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 input,

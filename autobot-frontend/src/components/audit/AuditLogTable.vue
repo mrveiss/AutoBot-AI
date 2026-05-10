@@ -169,7 +169,11 @@
       <div class="modal-content" @click.stop>
         <div class="modal-header">
           <h3>{{ $t('audit.logTable.entryDetails') }}</h3>
-          <button class="btn btn-icon" @click="closeDetails">
+          <button
+            class="btn btn-icon"
+            :aria-label="$t('common.close')"
+            @click="closeDetails"
+          >
             <i class="fas fa-times"></i>
           </button>
         </div>

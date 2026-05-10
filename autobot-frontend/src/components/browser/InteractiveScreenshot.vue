@@ -216,7 +216,7 @@ function submitType() {
         @keydown.enter="submitType"
         @keydown.escape="showTypeOverlay = false"
       />
-      <button class="type-submit" @click="submitType">
+      <button class="type-submit" :aria-label="t('common.submit')" @click="submitType">
         <i class="fas fa-paper-plane" />
       </button>
     </div>
