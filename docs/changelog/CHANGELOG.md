@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] - 2026-05-10
+
+### Added
+
+- **System State Refresh** ([docs/system-state.md](../system-state.md))
+  - Q2 2026 update covering canonical type consolidation, schema domain split, security work, plugin SDK changes, and frontend probe-backed health composables.
+- **Plugin SDK `required_env` Reference** ([docs/developer/PLUGIN_SDK.md](../developer/PLUGIN_SDK.md))
+  - Documents declarative `required_env` field on `PluginManifest` (#6971, PR #7256).
+- **Archive of issue-#870 status file** ([docs/archives/IMPLEMENTATION_STATUS_issue_870.md](../archives/IMPLEMENTATION_STATUS_issue_870.md))
+  - Moved root-level `IMPLEMENTATION_STATUS.md` to archives; original file scoped to issue #870 only, no longer reflects platform state.
+
+### Changed
+
+- **Index navigation** ([docs/INDEX.md](../INDEX.md))
+  - Renamed "Roadmap 2025" link label to "Roadmap (2025–2026)" to reflect current scope.
+- **Unified Memory Manager docs** ([docs/developer/UNIFIED_MEMORY_MANAGER_IMPLEMENTATION.md](../developer/UNIFIED_MEMORY_MANAGER_IMPLEMENTATION.md))
+  - Migrated `TaskStatus` import examples to canonical `autobot_shared.status_enums.TaskStatus` (post-#6973).
+
+### Known Gaps (filed as discovery issues)
+
+- `useProbeBackedHealth` composable lacks dedicated doc page (PR #7277).
+- `make_async_redis()` / `patch_async_redis()` test fixtures undocumented (PR #7267).
+- `DateRangeParams` `Depends()` helper undocumented (PR #7110).
+- Codegen MANIFEST canonical-enum coverage undocumented (PR #7269).
+- Root `CHANGELOG.md` `[Unreleased]` section stale (git-cliff has not run for current issue range) — needs release workflow audit.
+
+---
+
 ## [1.3.0] - 2025-12-21
 
 ### Added

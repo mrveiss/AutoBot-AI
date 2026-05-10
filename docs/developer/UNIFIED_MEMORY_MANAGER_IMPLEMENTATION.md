@@ -82,8 +82,10 @@ Successfully consolidated **5 memory manager implementations** (2,831 total line
 ### Enums
 
 ```python
-class TaskStatus(Enum):
-    PENDING, IN_PROGRESS, COMPLETED, FAILED, CANCELLED, RETRYING
+# TaskStatus is the canonical cross-domain enum — re-exported here for convenience.
+# Source of truth: autobot_shared.status_enums (see #6973).
+from autobot_shared.status_enums import TaskStatus
+# TaskStatus members: PENDING, IN_PROGRESS, COMPLETED, FAILED, CANCELLED, RETRYING
 
 class TaskPriority(Enum):
     LOW, MEDIUM, HIGH, CRITICAL
@@ -299,15 +301,16 @@ cleanup_counts = await manager.adaptive_cleanup(memory_threshold=0.8)
 - `autobot-backend/api/enhanced_memory.py`
 
 ```python
-# Old code (still works)
+# Old code (still works via legacy re-export)
 from src.enhanced_memory_manager import EnhancedMemoryManager, TaskStatus
 
 manager = EnhancedMemoryManager()
 record = TaskExecutionRecord(...)
 manager.log_task_execution(record)  # Sync method
 
-# New code (redirects to unified manager)
-from src.unified_memory_manager import EnhancedMemoryManager, TaskStatus
+# New code (preferred — uses canonical TaskStatus from autobot_shared)
+from src.unified_memory_manager import EnhancedMemoryManager
+from autobot_shared.status_enums import TaskStatus  # canonical source (#6973)
 
 manager = EnhancedMemoryManager()  # Actually creates UnifiedMemoryManager
 record = TaskExecutionRecord(...)

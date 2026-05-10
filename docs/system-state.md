@@ -4,11 +4,81 @@
 
 This document tracks all system fixes, improvements, and status updates for the AutoBot platform.
 
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-05-10
 
 ---
 
-## ✅ RECENT UPDATES (2026-03-28)
+## ✅ RECENT UPDATES (2026-05-10)
+
+### Canonical Type Consolidation (Q2 2026)
+
+**Status:** Complete (2026-04 → 2026-05)
+
+Cross-domain enum duplication eliminated by routing all status/severity/risk types through `autobot_shared`:
+
+- **#6973 — TaskStatus consolidation** (PR #7266): Workflow/Job `*Status` enums now alias canonical `autobot_shared.status_enums.TaskStatus`. Added lint rule to prevent reintroduction.
+- **#6689 — Severity/Risk/Level consolidation** (PR #7261): 11 duplicate enums consolidated onto canonical `autobot_shared.status_enums.Severity`.
+- **#6534 — Marketplace enum migration**: Test imports repointed past the migration (PR #7250).
+- **#7226 — Codegen MANIFEST extension** (PR #7269): Codegen now covers `WorkflowStepStatus` and `RiskLevel`.
+
+**Canonical source:** `autobot_shared/status_enums.py:26` (`TaskStatus`), with `JobStatus`/`WorkflowStatus` as aliases.
+
+---
+
+### Schema Domain Split (#5799 — Resolved)
+
+**Status:** Complete
+
+`schemas_common.py` reduced to 5 cross-domain classes. Domain schemas now live in:
+
+- `schemas_terminal.py`, `schemas_analytics.py`, `schemas_knowledge.py`
+- `schemas_agent.py`, `schemas_system.py`, `schemas_workflows.py`, `schemas_code.py`
+
+New response schemas go in the matching domain file. Parallel batches targeting different domain files can now run concurrently without conflicts.
+
+---
+
+### Security & API (Q2 2026)
+
+- **#6588 — `/v1/chat/completions` rate limiting** (PR #7263): P1 security — Redis sorted-set rate limit on chat completions endpoint.
+- **#7110 — DateRangeParams Depends() helper** (PR #7254): Wired DateRangeParams as FastAPI `Depends()` helper; `/timeline` endpoint migrated.
+
+---
+
+### Infrastructure & Deployment (Q2 2026)
+
+- **#6701 — Redis TLS conditional** (PR #7259): TLS configuration lines now conditional on certificate existence.
+- **#6580 — Celery beat dependency loosened** (PR #7252): Resolves brittle deploy coupling.
+- **#7272 — Ansible TLS helper** (PR #7278): Extracted reusable `stat_tls_certs.yml`.
+
+---
+
+### Plugin SDK (#6971 — PR #7256)
+
+**Status:** Complete
+
+Declarative `required_env` field added to `PluginManifest`. Plugins now declare required environment variables in their manifest rather than asserting in code at runtime.
+
+---
+
+### Frontend & Tests (Q2 2026)
+
+- **#7247, #7248 — Probe-backed health composable** (PR #7277): Extracted reusable `useProbeBackedHealth` composable + `ProbeResponse` type.
+- **#7264 — Canonical async-redis fixtures** (PR #7267): `make_async_redis()` and `patch_async_redis()` test fixtures replace ad-hoc mocks across the suite.
+- **#7215 followup — Consumer-namespace patching** (PR #7279): Patches `get_async_redis_client` at the consumer namespace with `AsyncMock` wrap.
+- **#7227 — vue-tsc baseline** (PR #7276): Baseline updated 248 → 250 to match `Dev_new_gui` state.
+
+---
+
+### Build & Tooling
+
+- **#7249 — Format wrapper** (PR #7262): `scripts/format.sh` wrapper + make targets; Python 3.12 settings pinned.
+- **#7225 — CI startup smoke** (PR #7243): `pydantic[email]` added to CI framework requirements to unblock startup-import-smoke.
+- **#7128b — Audit script worktree path fix** (PR #7244): Skip entry-point runners; correct worktree-relative path check.
+
+---
+
+## PREVIOUS UPDATES (2026-03-28)
 
 ### Issue #2671: Migrate Hardcoded Values to SSOT Config
 

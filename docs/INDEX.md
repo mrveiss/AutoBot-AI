@@ -27,7 +27,7 @@ cssclasses:
 | [Glossary](GLOSSARY.md) | Terminology reference |
 | [Changelog](../changelog/_index.md) | Per-version release notes and unreleased fragments |
 | [Dependencies](DEPENDENCIES.md) | Dependency reference |
-| [Roadmap 2025](ROADMAP_2025.md) | Product roadmap |
+| [Roadmap (2025–2026)](ROADMAP_2025.md) | Product roadmap |
 
 ---
 
