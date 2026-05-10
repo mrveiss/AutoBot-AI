@@ -11,7 +11,8 @@ Render decision tree (RenderMode.AUTO):
   2. BS4 raw HTML fetch (~300ms).    Same success criteria.
   3. Playwright fallback.             Always renders JS, waits for networkidle.
 
-SSRF guards are delegated to media.link.pipeline (_is_public_url_async).
+SSRF guards delegate to ``autobot_shared.url_safety.is_public_url_async``
+(extracted in #7477 to break the ``pipeline.py`` ↔ ``fetcher.py`` cycle).
 Jina circuit breaker from media.link.pipeline is reused via _try_jina / _record_*.
 """
 
@@ -197,14 +198,15 @@ async def _fetch_playwright(url: str, timeout: float) -> Optional[str]:
 
 
 async def _is_public_url(url: str) -> bool:
-    """Delegate SSRF guard to media.link.pipeline."""
-    try:
-        from media.link.pipeline import LinkPipeline
+    """SSRF guard — delegates to ``autobot_shared.url_safety.is_public_url_async``.
 
-        pipeline = LinkPipeline.__new__(LinkPipeline)
-        return await pipeline._is_public_url_async(url)
-    except Exception:
-        return False
+    Direct import (no ``LinkPipeline.__new__`` hack, no try/except fallback)
+    after #7477 extracted the guard out of ``media/link/pipeline.py`` into
+    a neutral shared module that doesn't depend on ``web_fetch.fetcher``.
+    """
+    from autobot_shared.url_safety import is_public_url_async
+
+    return await is_public_url_async(url)
 
 
 class WebFetcher:

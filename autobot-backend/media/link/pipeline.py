@@ -35,7 +35,6 @@ import asyncio
 import ipaddress
 import logging
 import re
-import socket
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
@@ -69,13 +68,9 @@ _MAX_CONTENT_LENGTH = 1_000_000  # 1 MB cap on HTML download
 _USER_AGENT = "AutoBot/1.0 (media-pipeline)"
 _JINA_BASE_URL = "https://r.jina.ai/"
 
-# TLDs that are never public — rejected before DNS resolution.
-_PRIVATE_TLDS = (".onion", ".internal", ".local", ".localhost", ".lan", ".home", ".corp")
-# IPv6 Unique Local Address block — ipaddress.is_private already covers this,
-# but we declare it explicitly for documentation.
-_IPV6_ULA = ipaddress.ip_network("fc00::/7")
-# Short DNS timeout to prevent the SSRF check itself from becoming a DoS vector.
-_DNS_TIMEOUT_SECONDS = 2.0
+# SSRF guard constants moved with the implementation to
+# ``autobot_shared.url_safety`` (#7477): _PRIVATE_TLDS, _IPV6_ULA,
+# _DNS_TIMEOUT_SECONDS.
 
 # Jina Reader circuit breaker: open after N failures in a rolling window,
 # stay open for _JINA_COOLDOWN_SECONDS, then retry. Prevents paying the
@@ -135,75 +130,28 @@ class LinkPipeline(BasePipeline):
     # HTTP fetch
     # ------------------------------------------------------------------
 
+    # SSRF guard moved to ``autobot_shared.url_safety`` (#7477) so
+    # ``web_fetch.fetcher`` can call it directly instead of reaching into
+    # ``LinkPipeline`` via a ``__new__`` hack + lazy import (which was
+    # the last leg of the ``pipeline.py`` ↔ ``fetcher.py`` cycle). The
+    # methods below are preserved as thin wrappers so existing callers
+    # (this class + ``pipeline_test.py``) keep working unchanged.
+
     @staticmethod
     def _ip_is_public(ip: ipaddress._BaseAddress) -> bool:
-        """Return True only if an IP address is routable on the public internet."""
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_multicast
-            or ip.is_reserved
-            or ip.is_unspecified
-        ):
-            return False
-        # IPv6 Unique Local Addresses (fc00::/7) — redundant with is_private on
-        # modern Python but kept explicit as defence-in-depth.
-        if isinstance(ip, ipaddress.IPv6Address) and ip in _IPV6_ULA:
-            return False
-        return True
+        from autobot_shared.url_safety import _ip_is_public as _shared
+
+        return _shared(ip)
 
     def _is_public_url(self, url: str) -> bool:
-        """Return True only for public HTTP/HTTPS URLs.
+        from autobot_shared.url_safety import is_public_url
 
-        Resolves the hostname via DNS and rejects if *any* resolved address is
-        private, loopback, link-local, multicast, reserved, or unspecified.
-        This closes the SSRF hole where an internal hostname like
-        ``intranet-db.company`` or a DNS-rebinding label like
-        ``10-0-0-1.my-domain.com`` would otherwise be proxied via Jina Reader.
-
-        Note: this performs a blocking DNS lookup; callers on the async path
-        must use :meth:`_is_public_url_async` instead.
-        """
-        try:
-            parsed = urlparse(url)
-            if parsed.scheme not in ("http", "https"):
-                return False
-            host = (parsed.hostname or "").lower()
-            if not host:
-                return False
-            # Reject bare private names and private TLDs outright — no DNS needed.
-            if host in ("localhost",) or any(host.endswith(tld) for tld in _PRIVATE_TLDS):
-                return False
-            # If host is a literal IP, check directly without DNS.
-            try:
-                return self._ip_is_public(ipaddress.ip_address(host))
-            except ValueError:
-                pass
-            # Resolve hostname and reject if *any* A/AAAA record is non-public.
-            prev_timeout = socket.getdefaulttimeout()
-            socket.setdefaulttimeout(_DNS_TIMEOUT_SECONDS)
-            try:
-                infos = socket.getaddrinfo(host, None)
-            finally:
-                socket.setdefaulttimeout(prev_timeout)
-            if not infos:
-                return False
-            for info in infos:
-                addr = info[4][0]
-                # Strip IPv6 scope id (e.g. "fe80::1%eth0") before parsing.
-                addr = addr.split("%", 1)[0]
-                if not self._ip_is_public(ipaddress.ip_address(addr)):
-                    return False
-            return True
-        except (socket.gaierror, socket.timeout, ValueError, OSError):
-            # Fail closed — any failure to verify means "not public".
-            return False
+        return is_public_url(url)
 
     async def _is_public_url_async(self, url: str) -> bool:
-        """Async wrapper: run the blocking DNS check in the default executor."""
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._is_public_url, url)
+        from autobot_shared.url_safety import is_public_url_async
+
+        return await is_public_url_async(url)
 
     async def _try_jina(self, url: str) -> str | None:
         """Attempt to fetch URL via Jina Reader. Returns text content or None on failure.
