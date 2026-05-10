@@ -28,6 +28,7 @@ from autobot_shared.error_boundaries import (
     with_error_boundary,
 )
 from constants.threshold_constants import TimingConstants  # noqa: E402
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -296,4 +297,4 @@ if __name__ == "__main__":
     CustomRecoveryHandler()
 
     # Run examples
-    asyncio.run(run_examples())
+    run_or_schedule(run_examples())

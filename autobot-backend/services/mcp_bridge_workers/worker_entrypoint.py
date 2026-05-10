@@ -34,6 +34,7 @@ import os
 import resource
 import sys
 from typing import Any, Dict
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger("mcp_worker")
 
@@ -178,7 +179,7 @@ def main() -> None:
         print("usage: worker_entrypoint.py <bridge_module>", file=sys.stderr)
         sys.exit(2)
     _apply_rlimits()
-    asyncio.run(_serve(sys.argv[1]))
+    run_or_schedule(_serve(sys.argv[1]))
 
 
 if __name__ == "__main__":

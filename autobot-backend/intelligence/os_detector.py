@@ -496,6 +496,7 @@ class OSDetector:
 
 
 from autobot_shared.singleton_factory import async_lazy_singleton
+from autobot_shared.async_compat import run_or_schedule
 
 get_os_detector = async_lazy_singleton(OSDetector)
 
@@ -551,4 +552,4 @@ if __name__ == "__main__":
                 if len(tools) > 5:
                     logger.info("  ... and {len(tools) - 5} more")
 
-    asyncio.run(test_detector())
+    run_or_schedule(test_detector())

@@ -37,6 +37,7 @@ class GoalCategory(Enum):
 
 
 from autobot_shared.status_enums import RiskLevel  # noqa: E402  # #6689 consolidation
+from autobot_shared.async_compat import run_or_schedule
 
 
 @dataclass
@@ -604,4 +605,4 @@ if __name__ == "__main__":
         for suggestion in similar:
             print(f"- {suggestion.explanation} " f"(confidence: {suggestion.confidence:.2f})")  # noqa: print
 
-    asyncio.run(test_processor())
+    run_or_schedule(test_processor())

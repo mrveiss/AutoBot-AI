@@ -16,7 +16,7 @@ Usage:
 
     # From setup.py
     from pki.cli import run_pki_setup
-    asyncio.run(run_pki_setup())
+    run_or_schedule(run_pki_setup())
 """
 
 import argparse
@@ -32,6 +32,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from pki.manager import PKIManager, setup_pki
+from autobot_shared.async_compat import run_or_schedule
 
 logging.basicConfig(
     level=logging.INFO,

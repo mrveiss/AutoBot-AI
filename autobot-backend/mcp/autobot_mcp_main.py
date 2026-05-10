@@ -19,6 +19,7 @@ import asyncio
 import sys
 
 from mcp.autobot_server import AutoBotMCPServer
+from autobot_shared.async_compat import run_or_schedule
 
 
 async def main() -> None:
@@ -37,4 +38,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

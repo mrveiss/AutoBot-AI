@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 # Import the centralized ConfigManager
 from config import config as global_config_manager
 from secure_command_executor import CommandRisk, SecureCommandExecutor, SecurityPolicy
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -599,4 +600,4 @@ if __name__ == "__main__":
             if "command" in entry.get("details", {}):
                 logger.info(f"  Command: {entry['details']['command']}")
 
-    asyncio.run(test_security())
+    run_or_schedule(test_security())

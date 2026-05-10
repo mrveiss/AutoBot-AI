@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from autobot_shared.singleton_factory import lazy_singleton
 from constants import CircuitBreakerDefaults
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -612,4 +613,4 @@ if __name__ == "__main__":
         print(f"Success rate: {cb_state['recent_performance'].get('success_rate', 0):.1%}")  # noqa: print
 
     # Run example
-    asyncio.run(example_usage())
+    run_or_schedule(example_usage())

@@ -634,6 +634,7 @@ You should be aware of your current capabilities and limitations based on the sy
 
 # Global instance (thread-safe)
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.async_compat import run_or_schedule
 
 _llm_self_awareness = lazy_singleton(LLMSelfAwareness)
 
@@ -669,4 +670,4 @@ if __name__ == "__main__":
         print("\n--- Phase-Aware Response ---")  # noqa: print
         print(json.dumps(response, indent=2))  # noqa: print
 
-    asyncio.run(main())
+    run_or_schedule(main())

@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from autobot_shared.async_compat import run_or_schedule
 
 # Issue #542: Handle imports for both standalone execution and backend import
 _project_root = Path(__file__).resolve().parents[3]
@@ -865,4 +866,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

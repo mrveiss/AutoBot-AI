@@ -18,6 +18,7 @@ import asyncio
 import logging
 
 from type_defs.common import Metadata
+from autobot_shared.async_compat import run_or_schedule
 
 # Import network constants
 
@@ -308,4 +309,4 @@ if __name__ == "__main__":
 
         logger.info(json.dumps(result, indent=2))
 
-    asyncio.run(main())
+    run_or_schedule(main())

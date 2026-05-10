@@ -15,6 +15,7 @@ import time
 from typing import Any, Dict, List
 
 from llm_interface_pkg.cache import CachedResponse, LLMResponseCache
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -114,4 +115,4 @@ async def run_benchmark(num_entries: int = 100, num_reads: int = 1000) -> Dict[s
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    asyncio.run(run_benchmark())
+    run_or_schedule(run_benchmark())

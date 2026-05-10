@@ -37,6 +37,7 @@ from .long_running_operations_framework import (
     OperationType,
 )
 from .operation_timeout_integration import operation_integration_manager
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -1015,4 +1016,4 @@ if __name__ == "__main__":
             print("Operation integration manager not available")  # noqa: print
 
     # Run demonstration
-    asyncio.run(demonstration())
+    run_or_schedule(demonstration())

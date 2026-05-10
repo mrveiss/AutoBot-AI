@@ -626,6 +626,7 @@ class ManPageKnowledgeIntegrator:
 
 # Global integrator instance (thread-safe)
 import asyncio as _asyncio_lock
+from autobot_shared.async_compat import run_or_schedule
 
 _integrator_instance: Optional[ManPageKnowledgeIntegrator] = None
 _integrator_lock = _asyncio_lock.Lock()
@@ -690,4 +691,4 @@ if __name__ == "__main__":
         if successful_commands:
             print(f"  Sample successful commands: {', '.join(successful_commands)}")  # noqa: print  # noqa: print
 
-    asyncio.run(test_integration())
+    run_or_schedule(test_integration())

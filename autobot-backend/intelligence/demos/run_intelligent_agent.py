@@ -38,6 +38,7 @@ from tests.fixtures.mocks import (  # noqa: E402
     MockLLMService,
     MockWorkerNode,
 )
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger("intelligence.demos.run_intelligent_agent")
 
@@ -77,7 +78,7 @@ async def _demo() -> None:
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    asyncio.run(_demo())
+    run_or_schedule(_demo())
     return 0
 
 

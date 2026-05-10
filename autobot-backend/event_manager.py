@@ -10,6 +10,7 @@ import yaml
 
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.path_constants import PATH
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -124,4 +125,4 @@ if __name__ == "__main__":
         # Test debug publish
         await get_event_manager().debug_publish("debug_info", {"message": "This is a debug message."})
 
-    asyncio.run(main())
+    run_or_schedule(main())

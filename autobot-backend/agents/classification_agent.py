@@ -26,6 +26,7 @@ from workflow_classifier import WorkflowClassifier
 
 from .base_agent import AgentRequest
 from .standardized_agent import StandardizedAgent
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -540,4 +541,4 @@ if __name__ == "__main__":
         else:
             print("Usage: python3 classification_agent.py 'message' or --interactive")  # noqa: print  # noqa: print
 
-    asyncio.run(main())
+    run_or_schedule(main())
