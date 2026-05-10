@@ -1353,24 +1353,17 @@ async def _init_plugin_manager(app: FastAPI) -> None:
 
     Issue #3278 - Plugin and extension system for third-party integrations.
     Non-critical: failures are logged and do not block startup.
+
+    Updated for #6970: uses the get_plugin_manager() singleton so the SAME
+    PluginManager is shared with Celery worker_init dispatch.
     """
     try:
-        from pathlib import Path
+        from plugin_manager import get_plugin_manager
 
-        from autobot_shared.ssot_config import config as ssot_config
-        from plugin_sdk.plugin_manager import PluginManager
-
-        plugins_root = ssot_config.path.plugins_path
-        plugin_dirs = [
-            plugins_root / "core-plugins",
-            plugins_root / "community-plugins",
-            # Development fallback
-            Path("plugins/core-plugins"),
-            Path("plugins/community-plugins"),
-        ]
-
-        plugin_manager = PluginManager(plugin_dirs)
-        await plugin_manager.startup()
+        plugin_manager = get_plugin_manager()
+        if not plugin_manager.is_started:
+            await plugin_manager.startup()
+        # Backwards-compat: keep app.state reference for existing readers.
         app.state.plugin_manager = plugin_manager
         logger.info("PluginManager started — %s", plugin_manager.get_plugin_status())
     except Exception as pm_err:

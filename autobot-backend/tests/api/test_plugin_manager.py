@@ -16,6 +16,16 @@ from fastapi import HTTPException
 from plugin_manager import get_plugin_env_status
 
 
+@pytest.fixture(autouse=True)
+def _reset_plugin_manager_singleton():
+    """Reset the get_plugin_manager singleton between tests to prevent leakage."""
+    from plugin_manager import reset_plugin_manager_for_tests
+
+    reset_plugin_manager_for_tests()
+    yield
+    reset_plugin_manager_for_tests()
+
+
 @pytest.mark.asyncio
 async def test_env_status_endpoint_returns_status_for_loaded_plugin():
     fake_loader = MagicMock()
@@ -163,3 +173,13 @@ def test_get_plugin_manager_returns_plugin_manager_instance():
 
     pm = get_plugin_manager()
     assert isinstance(pm, PluginManager)
+
+
+def test_get_plugin_manager_uses_ssot_plugin_dirs():
+    """The accessor builds with real plugin_dirs from SSOT config, not empty."""
+    from plugin_manager import get_plugin_manager
+
+    pm = get_plugin_manager()
+    # plugin_dirs is a list (PluginManager keeps the list as self._loader.plugin_dirs)
+    # We verify it's non-empty (would be [] if our fix isn't applied)
+    assert pm._loader.plugin_dirs, "Expected non-empty plugin_dirs from SSOT config"

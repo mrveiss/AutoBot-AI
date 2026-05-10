@@ -56,17 +56,40 @@ _plugin_manager_singleton: Optional["PluginManager"] = None
 def get_plugin_manager() -> "PluginManager":
     """Return the shared PluginManager singleton.
 
-    Mirrors the get_plugin_loader pattern. Used by FastAPI lifespan and
-    Celery worker_init to dispatch extension-point hooks.
+    Resolves plugin_dirs from autobot_shared.ssot_config.path.plugins_path
+    (with development fallbacks) so the singleton is consistent regardless
+    of caller (FastAPI lifespan, Celery worker_init, scripts, tests).
+
+    First call constructs the manager; subsequent calls return the cache.
+    Caller is responsible for invoking .startup() to discover plugins.
 
     Issue #6970.
     """
+    from pathlib import Path
+
+    from autobot_shared.ssot_config import config as ssot_config
     from plugin_sdk.plugin_manager import PluginManager
 
     global _plugin_manager_singleton
     if _plugin_manager_singleton is None:
-        _plugin_manager_singleton = PluginManager(plugin_dirs=[])
+        plugins_root = ssot_config.path.plugins_path
+        plugin_dirs = [
+            plugins_root / "core-plugins",
+            plugins_root / "community-plugins",
+            Path("plugins/core-plugins"),
+            Path("plugins/community-plugins"),
+        ]
+        _plugin_manager_singleton = PluginManager(plugin_dirs)
     return _plugin_manager_singleton
+
+
+def reset_plugin_manager_for_tests() -> None:
+    """Test-only — clear the singleton so the next get_plugin_manager() is fresh.
+
+    Issue #6970.
+    """
+    global _plugin_manager_singleton
+    _plugin_manager_singleton = None
 
 
 class PluginConfigUpdate(BaseModel):
