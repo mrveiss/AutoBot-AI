@@ -28,10 +28,11 @@ const meta = {
       description: 'Error description shown in tooltip when status is failed',
     },
   },
-} satisfies Meta<typeof MessageStatus>;
+} as Meta<typeof MessageStatus>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const Sending: Story = {
   args: {

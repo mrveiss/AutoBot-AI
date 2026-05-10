@@ -28,10 +28,11 @@ const meta = {
       description: 'Show icon',
     },
   },
-} satisfies Meta<typeof BaseAlert>;
+} as Meta<typeof BaseAlert>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const Success: Story = {
   args: {

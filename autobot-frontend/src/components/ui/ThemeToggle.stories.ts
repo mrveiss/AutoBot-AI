@@ -20,10 +20,11 @@ const meta = {
       description: 'Show the "Theme" label',
     },
   },
-} satisfies Meta<typeof ThemeToggle>;
+} as Meta<typeof ThemeToggle>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const Dropdown: Story = {
   args: {

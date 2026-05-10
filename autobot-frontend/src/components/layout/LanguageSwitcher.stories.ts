@@ -21,10 +21,11 @@ const meta = {
         'Render the inline mobile variant (globe icon + native `<select>`) instead of the desktop dropdown trigger.',
     },
   },
-} satisfies Meta<typeof LanguageSwitcher>;
+} as Meta<typeof LanguageSwitcher>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const Desktop: Story = {
   args: {
@@ -38,7 +39,7 @@ export const Desktop: Story = {
       },
     },
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { LanguageSwitcher },
     setup() {
       return { args };
@@ -63,7 +64,7 @@ export const Mobile: Story = {
       },
     },
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { LanguageSwitcher },
     setup() {
       return { args };

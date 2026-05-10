@@ -19,16 +19,17 @@ const meta = {
       description: 'Start in collapsed state',
     },
   },
-} satisfies Meta<typeof BasePanel>;
+} as Meta<typeof BasePanel>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const Default: Story = {
   args: {
     title: 'Panel Title',
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { BasePanel },
     setup() {
       return { args };
@@ -46,7 +47,7 @@ export const Collapsible: Story = {
     title: 'Collapsible Panel',
     collapsible: true,
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { BasePanel },
     setup() {
       return { args };
@@ -66,7 +67,7 @@ export const StartCollapsed: Story = {
     collapsible: true,
     collapsed: true,
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { BasePanel },
     setup() {
       return { args };
@@ -84,7 +85,7 @@ export const WithComplexContent: Story = {
     title: 'Settings Panel',
     collapsible: true,
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { BasePanel },
     setup() {
       return { args };

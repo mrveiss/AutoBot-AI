@@ -19,17 +19,18 @@ const meta = {
       description: 'Show retry button',
     },
   },
-} satisfies Meta<typeof ErrorBoundary>;
+} as Meta<typeof ErrorBoundary>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const Default: Story = {
   args: {
     title: 'Something went wrong',
     message: 'An unexpected error occurred. Please try again.',
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { ErrorBoundary },
     setup() {
       return { args };
@@ -50,7 +51,7 @@ export const Retryable: Story = {
     message: 'The data could not be loaded. Click retry to try again.',
     retryable: true,
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { ErrorBoundary },
     setup() {
       return { args };
