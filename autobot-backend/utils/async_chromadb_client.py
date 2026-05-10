@@ -96,7 +96,29 @@ class AsyncChromaCollection:
             embeddings: Optional list of embedding vectors
             metadatas: Optional list of metadata dicts
             documents: Optional list of document strings
+
+        #6514: if the collection metadata declares an embedding-provenance
+        tag (model_name + dim), this guard rejects writes whose vector
+        dim doesn't match. Stops silent cross-model contamination at the
+        chokepoint instead of letting it land in the index and
+        corrupt cosine-distance recall at query time.
+
+        Untagged (legacy) collections fall through unchanged — the guard
+        only fires when a writer-side caller has tagged the collection.
         """
+        if embeddings is not None:
+            from autobot_shared.embedding_provenance import (
+                provenance_from_metadata,
+                validate_vectors_against_provenance,
+            )
+
+            provenance = provenance_from_metadata(self._collection.metadata)
+            if provenance is not None:
+                # Raises EmbeddingMismatchError (subclass of ValueError) on
+                # cross-model write attempts. Caller catches the type or
+                # the existing `except ValueError:` block degrades it.
+                validate_vectors_against_provenance(embeddings, provenance)
+
         await asyncio.to_thread(
             self._collection.add,
             ids=ids,
