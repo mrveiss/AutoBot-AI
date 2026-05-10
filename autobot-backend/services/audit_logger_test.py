@@ -13,6 +13,8 @@ import sys
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from tests.fixtures import make_async_redis, make_redis_pipeline
+
 import pytest
 
 # Stub heavy/optional imports that are pulled in by the models package on collection.
@@ -77,21 +79,16 @@ from services.audit_logger import (  # noqa: E402
 
 
 def _make_pipeline_mock():
-    """Return a mock that supports async pipeline context manager + zadd/expire/delete."""
-    pipe = AsyncMock()
-    pipe.__aenter__ = AsyncMock(return_value=pipe)
-    pipe.__aexit__ = AsyncMock(return_value=False)
-    pipe.execute = AsyncMock(return_value=[])
-    return pipe
+    # Migrated to canonical ``make_redis_pipeline()`` (#7280 round 7, post-#7339).
+    return make_redis_pipeline()
 
 
 def _make_redis_mock(pipeline=None):
-    """Return a minimal async Redis mock with pipeline support."""
-    redis = AsyncMock()
-    redis.pipeline = MagicMock(return_value=pipeline or _make_pipeline_mock())
-    redis.zrange = AsyncMock(return_value=[])
-    redis.zcard = AsyncMock(return_value=0)
-    return redis
+    # Migrated to canonical ``make_async_redis(pipeline=...)`` (#7280 round 7).
+    return make_async_redis(
+        pipeline=pipeline or _make_pipeline_mock(),
+        zrange_returns=[],
+    )
 
 
 # ---------------------------------------------------------------------------
