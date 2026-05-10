@@ -26,7 +26,6 @@ from chat_workflow.tool_handler import (
 )
 from web_fetch.types import ERR_ROBOTS_BLOCKED, FetchResult, RenderMode
 
-
 # ---------------------------------------------------------------------------
 # Schema validation
 # ---------------------------------------------------------------------------
@@ -136,14 +135,16 @@ class TestFetchPagesConcurrent:
         """One URL with HTTP 500 must not prevent other URLs from being fetched."""
         entries = [
             {"title": "Good 1", "url": "https://good1.com", "snippet": ""},
-            {"title": "Bad",    "url": "https://bad.com",   "snippet": ""},
+            {"title": "Bad", "url": "https://bad.com", "snippet": ""},
             {"title": "Good 2", "url": "https://good2.com", "snippet": ""},
         ]
 
         async def fake_fetch_side_effect(url, render):
             if "bad" in url:
                 return FetchResult(url=url, success=False, error_code="http_error", status_code=500)
-            return FetchResult(url=url, success=True, markdown=f"Content for {url}", render_mode=RenderMode.AUTO, source="jina")
+            return FetchResult(
+                url=url, success=True, markdown=f"Content for {url}", render_mode=RenderMode.AUTO, source="jina"
+            )
 
         with patch("web_fetch.fetcher.WebFetcher.fetch", side_effect=fake_fetch_side_effect):
             results = await _fetch_pages_concurrent(entries, max_pages=3)
@@ -173,21 +174,39 @@ class TestFetchPagesConcurrent:
 
 class TestFormatFullSearchResults:
     def test_includes_title_and_url(self) -> None:
-        entries = [{"title": "Example", "url": "https://example.com", "snippet": "desc", "markdown": "# Hello", "fetch_error": None}]
+        entries = [
+            {
+                "title": "Example",
+                "url": "https://example.com",
+                "snippet": "desc",
+                "markdown": "# Hello",
+                "fetch_error": None,
+            }
+        ]
         output = _format_full_search_results("test query", entries)
         assert "Example" in output
         assert "https://example.com" in output
         assert "# Hello" in output
 
     def test_failed_entry_shows_fetch_error(self) -> None:
-        entries = [{"title": "Blocked", "url": "https://blocked.com", "snippet": "", "markdown": None, "fetch_error": "robots_blocked"}]
+        entries = [
+            {
+                "title": "Blocked",
+                "url": "https://blocked.com",
+                "snippet": "",
+                "markdown": None,
+                "fetch_error": "robots_blocked",
+            }
+        ]
         output = _format_full_search_results("test query", entries)
         assert "robots_blocked" in output
         assert "[Page fetch failed:" in output
 
     def test_markdown_truncated_at_4000_chars(self) -> None:
         long_md = "x" * 5000
-        entries = [{"title": "Long", "url": "https://long.com", "snippet": "", "markdown": long_md, "fetch_error": None}]
+        entries = [
+            {"title": "Long", "url": "https://long.com", "snippet": "", "markdown": long_md, "fetch_error": None}
+        ]
         output = _format_full_search_results("q", entries)
         # 4000 x's should appear, but not all 5000
         assert "x" * 4000 in output
@@ -210,7 +229,9 @@ class TestExecuteWebSearchFull:
             {"title": "Page A", "url": "https://a.com", "snippet": "Snippet A"},
             {"title": "Page B", "url": "https://b.com", "snippet": "Snippet B"},
         ]
-        ok_result = FetchResult(url="x", success=True, markdown="Full content here.", render_mode=RenderMode.AUTO, source="jina")
+        ok_result = FetchResult(
+            url="x", success=True, markdown="Full content here.", render_mode=RenderMode.AUTO, source="jina"
+        )
 
         with (
             patch.object(mixin, "_web_search_structured_entries", return_value=fake_entries),
@@ -246,7 +267,9 @@ class TestExecuteWebSearchFull:
 
         mixin = ToolHandlerMixin.__new__(ToolHandlerMixin)
 
-        with patch.object(mixin, "_web_search_via_playwright", return_value='Web search results for "q":\n\n1. Example'):
+        with patch.object(
+            mixin, "_web_search_via_playwright", return_value='Web search results for "q":\n\n1. Example'
+        ):
             result = await mixin._execute_web_search("q")
 
         assert "Web search results" in result
