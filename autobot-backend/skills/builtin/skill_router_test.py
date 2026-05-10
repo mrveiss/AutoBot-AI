@@ -112,9 +112,12 @@ async def test_llm_rerank_parses_json_response():
         },
     ]
 
-    with patch("skills.builtin.skill_router.LLMInterface") as MockLLM:
-        instance = MockLLM.return_value
-        instance.chat_completion = AsyncMock(return_value=mock_response)
+    # #7398: production uses `get_llm_service()` (factory) not `LLMInterface` directly.
+    with patch("skills.builtin.skill_router.get_llm_service") as mock_get_llm:
+        instance = MagicMock()
+        # #7398: production calls `llm.chat(...)` (not `chat_completion`).
+        instance.chat = AsyncMock(return_value=mock_response)
+        mock_get_llm.return_value = instance
 
         skill = SkillRouterSkill()
         name, reason = await skill._llm_rerank("analyze this pdf", candidates)
@@ -134,9 +137,12 @@ async def test_llm_rerank_handles_markdown_code_block():
         {"name": "code-review", "description": "Review code", "tags": [], "tools": []},
     ]
 
-    with patch("skills.builtin.skill_router.LLMInterface") as MockLLM:
-        instance = MockLLM.return_value
-        instance.chat_completion = AsyncMock(return_value=mock_response)
+    # #7398: production uses `get_llm_service()` (factory) not `LLMInterface` directly.
+    with patch("skills.builtin.skill_router.get_llm_service") as mock_get_llm:
+        instance = MagicMock()
+        # #7398: production calls `llm.chat(...)` (not `chat_completion`).
+        instance.chat = AsyncMock(return_value=mock_response)
+        mock_get_llm.return_value = instance
 
         skill = SkillRouterSkill()
         name, reason = await skill._llm_rerank("review my code", candidates)
@@ -166,10 +172,12 @@ async def test_find_skill_enables_best_match_via_llm():
 
     with (
         patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry),
-        patch("skills.builtin.skill_router.LLMInterface") as MockLLM,
+        patch("skills.builtin.skill_router.get_llm_service") as mock_get_llm,
     ):
-        instance = MockLLM.return_value
-        instance.chat_completion = AsyncMock(return_value=mock_llm_response)
+        # #7398: production uses `get_llm_service()` factory; mock returns instance.
+        instance = MagicMock()
+        mock_get_llm.return_value = instance
+        instance.chat = AsyncMock(return_value=mock_llm_response)
 
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
@@ -200,10 +208,12 @@ async def test_find_skill_falls_back_to_keyword_on_llm_error():
 
     with (
         patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry),
-        patch("skills.builtin.skill_router.LLMInterface") as MockLLM,
+        patch("skills.builtin.skill_router.get_llm_service") as mock_get_llm,
     ):
-        instance = MockLLM.return_value
-        instance.chat_completion = AsyncMock(side_effect=Exception("LLM timeout"))
+        # #7398: production uses `get_llm_service()` factory; mock returns instance.
+        instance = MagicMock()
+        mock_get_llm.return_value = instance
+        instance.chat = AsyncMock(side_effect=Exception("LLM timeout"))
 
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
@@ -233,10 +243,12 @@ async def test_find_skill_dry_run_does_not_enable():
 
     with (
         patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry),
-        patch("skills.builtin.skill_router.LLMInterface") as MockLLM,
+        patch("skills.builtin.skill_router.get_llm_service") as mock_get_llm,
     ):
-        instance = MockLLM.return_value
-        instance.chat_completion = AsyncMock(return_value=mock_llm_response)
+        # #7398: production uses `get_llm_service()` factory; mock returns instance.
+        instance = MagicMock()
+        mock_get_llm.return_value = instance
+        instance.chat = AsyncMock(return_value=mock_llm_response)
 
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
