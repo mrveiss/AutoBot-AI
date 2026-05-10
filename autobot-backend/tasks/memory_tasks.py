@@ -14,15 +14,17 @@ Design decisions:
 - acks_late=True on all tasks — message is only removed from queue after
   successful completion, preventing data loss on worker crash.
 - max_retries + retry(countdown=N) — all tasks are idempotent so safe retry.
-- asyncio.run() — Celery workers are synchronous; async calls use asyncio.run().
+- run_or_schedule() — Celery workers are synchronous; the shared helper from
+  ``autobot_shared.async_compat`` defends against re-entrancy if a worker
+  ever runs inside an already-active event loop (#7469).
 - Deferred imports inside task bodies to avoid circular-import issues at
   module load time (Celery autodiscovers this module before the app is fully
   initialised).
 """
 
-import asyncio
 import logging
 
+from autobot_shared.async_compat import run_or_schedule
 from celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -200,7 +202,7 @@ def write_verbatim_task(
         Dict with ``chunk_id`` and ``status``.
     """
     try:
-        chunk_id = asyncio.run(_async_write_verbatim(session_id, turn, role, text, timestamp, user_id))
+        chunk_id = run_or_schedule(_async_write_verbatim(session_id, turn, role, text, timestamp, user_id))
         logger.debug(
             "memory.write_verbatim: stored chunk %s (session=%s turn=%d role=%s)",
             chunk_id,
@@ -247,7 +249,7 @@ def extract_facts_task(
         Dict with ``status`` and ``facts_count``.
     """
     try:
-        facts_count = asyncio.run(_async_extract_facts(session_id, conversation_text, user_id))
+        facts_count = run_or_schedule(_async_extract_facts(session_id, conversation_text, user_id))
         logger.info(
             "memory.extract_facts: extracted %d facts (session=%s)",
             facts_count,
@@ -292,7 +294,7 @@ def update_graph_task(
         Dict with ``status``, ``entities_written``, ``relations_written``.
     """
     try:
-        result = asyncio.run(_async_update_graph(session_id, entities, relations))
+        result = run_or_schedule(_async_update_graph(session_id, entities, relations))
         logger.info(
             "memory.update_graph: wrote %d entities, %d relations (session=%s)",
             result.get("entities_written", 0),
@@ -337,7 +339,7 @@ def compact_snapshot_task(
         Dict with ``status`` and ``session_id``.
     """
     try:
-        asyncio.run(_async_compact_snapshot(session_id, conversation_snapshot, user_id))
+        run_or_schedule(_async_compact_snapshot(session_id, conversation_snapshot, user_id))
         logger.info(
             "memory.compact_snapshot: saved snapshot for session=%s (%d chars)",
             session_id,
