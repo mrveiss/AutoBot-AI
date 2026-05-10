@@ -125,9 +125,7 @@ class StrategyPlanner:
             logger.debug("skill_router unavailable for plan-time binding: %s", exc)
             return None
 
-    async def _bind_skill_to_task(
-        self, task: "AgentTask", task_data: Dict[str, Any], goal: str
-    ) -> None:
+    async def _bind_skill_to_task(self, task: "AgentTask", task_data: Dict[str, Any], goal: str) -> None:
         """Resolve a concrete skill for this task via skill_router (#7268 Phase 1).
 
         Uses ``dry_run=True`` so the registry is not mutated at plan time
@@ -145,11 +143,7 @@ class StrategyPlanner:
         if router is None:
             return
 
-        task_desc = (
-            task_data.get("task")
-            or task_data.get("explanation")
-            or f"{task.action} (in workflow: {goal})"
-        )
+        task_desc = task_data.get("task") or task_data.get("explanation") or f"{task.action} (in workflow: {goal})"
         try:
             result = await router.execute(
                 "find_skill",

@@ -39,6 +39,8 @@ def _parse_jina_markdown(jina_text: str) -> tuple:
         return _parse_jina_output(jina_text)
     except Exception:
         return "", jina_text
+
+
 from web_fetch.types import (
     ERR_CIRCUIT_OPEN,
     ERR_CONNECTION,
@@ -187,7 +189,9 @@ async def _fetch_playwright(url: str, timeout: float) -> Optional[str]:
         from services.playwright_service import get_playwright_service
 
         svc = await get_playwright_service()
-        result = await svc._post_and_parse("render", {"url": url, "wait": "networkidle", "timeout": int(timeout * 1000)})
+        result = await svc._post_and_parse(
+            "render", {"url": url, "wait": "networkidle", "timeout": int(timeout * 1000)}
+        )
         return result.get("html") or result.get("content")
     except Exception as exc:
         logger.debug("Playwright fetch failed for %s: %s", url, exc)
@@ -295,7 +299,9 @@ class WebFetcher:
         if jina_text:
             title, md = _parse_jina_markdown(jina_text)
             if len(md.strip()) >= _MIN_CONTENT_CHARS and not is_spa_content(md):
-                return FetchResult(url=url, success=True, markdown=md, title=title, render_mode=RenderMode.AUTO, source="jina")
+                return FetchResult(
+                    url=url, success=True, markdown=md, title=title, render_mode=RenderMode.AUTO, source="jina"
+                )
 
         # Step 2: BS4 — success requires HTTP 2xx and no SPA markers (any length).
         async with _get_fast_sem():
@@ -305,7 +311,15 @@ class WebFetcher:
         elif html is not None and status is not None and status < 400:
             title, md = extract_markdown(html)
             if not is_spa_content(md, html):
-                return FetchResult(url=url, success=True, markdown=md, title=title, render_mode=RenderMode.AUTO, source="bs4", status_code=status)
+                return FetchResult(
+                    url=url,
+                    success=True,
+                    markdown=md,
+                    title=title,
+                    render_mode=RenderMode.AUTO,
+                    source="bs4",
+                    status_code=status,
+                )
         elif status is not None and status >= 400:
             return _fail(url, ERR_HTTP_ERROR, status=status)
 
@@ -319,13 +333,23 @@ class WebFetcher:
         if jina_text:
             title, md = _parse_jina_markdown(jina_text)
             if len(md.strip()) >= _MIN_CONTENT_CHARS and not is_spa_content(md):
-                return FetchResult(url=url, success=True, markdown=md, title=title, render_mode=RenderMode.FAST, source="jina")
+                return FetchResult(
+                    url=url, success=True, markdown=md, title=title, render_mode=RenderMode.FAST, source="jina"
+                )
 
         async with _get_fast_sem():
             html, status = await _fetch_bs4(url, min(timeout, 15.0))
         if html is not None and status is not None and status < 400:
             title, md = extract_markdown(html)
-            return FetchResult(url=url, success=True, markdown=md, title=title, render_mode=RenderMode.FAST, source="bs4", status_code=status)
+            return FetchResult(
+                url=url,
+                success=True,
+                markdown=md,
+                title=title,
+                render_mode=RenderMode.FAST,
+                source="bs4",
+                status_code=status,
+            )
         if status is not None and status >= 400:
             return _fail(url, ERR_HTTP_ERROR, retryable=False, status=status)
         return _fail(url, ERR_CONNECTION, retryable=True)
@@ -340,7 +364,9 @@ class WebFetcher:
         if html is None:
             return _fail(url, ERR_UNKNOWN, retryable=True)
         title, md = extract_markdown(html)
-        return FetchResult(url=url, success=True, markdown=md, title=title, render_mode=RenderMode.PLAYWRIGHT, source="playwright")
+        return FetchResult(
+            url=url, success=True, markdown=md, title=title, render_mode=RenderMode.PLAYWRIGHT, source="playwright"
+        )
 
     async def _cache(self, url: str, render: RenderMode, result: FetchResult) -> None:
         """Persist successful result to Redis cache."""

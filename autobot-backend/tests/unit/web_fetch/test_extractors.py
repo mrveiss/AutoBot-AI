@@ -53,21 +53,25 @@ _BOILERPLATE_HTML = """<html><body>
 class TestExtractTitle:
     def test_og_title_takes_priority(self) -> None:
         from bs4 import BeautifulSoup
+
         soup = BeautifulSoup(_OG_TITLE_HTML, "html.parser")
         assert _extract_title(soup) == "OG Title Value"
 
     def test_falls_back_to_title_tag(self) -> None:
         from bs4 import BeautifulSoup
+
         soup = BeautifulSoup(_SIMPLE_HTML, "html.parser")
         assert _extract_title(soup) == "My Page"
 
     def test_empty_when_no_title(self) -> None:
         from bs4 import BeautifulSoup
+
         soup = BeautifulSoup("<html><body>no title here</body></html>", "html.parser")
         assert _extract_title(soup) == ""
 
     def test_truncates_long_title(self) -> None:
         from bs4 import BeautifulSoup
+
         long_title = "A" * 400
         html = f"<html><head><title>{long_title}</title></head></html>"
         soup = BeautifulSoup(html, "html.parser")
@@ -78,6 +82,7 @@ class TestExtractTitle:
 class TestStripBoilerplate:
     def test_removes_nav_footer_header(self) -> None:
         from bs4 import BeautifulSoup
+
         soup = BeautifulSoup(_BOILERPLATE_HTML, "html.parser")
         _strip_boilerplate(soup)
         assert soup.find("nav") is None
@@ -87,6 +92,7 @@ class TestStripBoilerplate:
 
     def test_keeps_main_content(self) -> None:
         from bs4 import BeautifulSoup
+
         soup = BeautifulSoup(_BOILERPLATE_HTML, "html.parser")
         _strip_boilerplate(soup)
         assert soup.find("main") is not None
