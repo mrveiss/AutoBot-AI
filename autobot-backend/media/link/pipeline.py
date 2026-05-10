@@ -548,54 +548,10 @@ def _record_jina_success() -> None:
     _jina_failures_in_window.clear()
 
 
-def _parse_jina_output(content: str) -> Tuple[str, str]:
-    """Parse Jina Reader output into (title, body).
-
-    Jina Reader output format::
-
-        Title: Actual Page Title Here
-        URL Source: https://...
-
-        Markdown body starts here...
-
-    We scan the first ~10 lines for a ``Title:`` prefix, then strip the
-    metadata header (everything up to and including the first blank line
-    after the metadata block) from the body. If no ``Title:`` prefix is
-    found, title falls back to the first non-empty line of the body and
-    no header is stripped.
-    """
-    if not content:
-        return "", ""
-
-    lines = content.splitlines()
-    title = ""
-    metadata_end_idx = -1  # index of the blank line after metadata block
-
-    # Scan up to the first 10 lines for a Title: prefix and the metadata block end.
-    scan_limit = min(len(lines), 10)
-    for idx in range(scan_limit):
-        line = lines[idx]
-        stripped = line.strip()
-        if not stripped and title:
-            # Blank line AFTER a Title line — end of metadata header.
-            metadata_end_idx = idx
-            break
-        match = re.match(r"^([A-Za-z][A-Za-z0-9 _-]*):\s*(.+)$", stripped)
-        if match:
-            key = match.group(1).strip().lower()
-            if key == "title" and not title:
-                title = match.group(2).strip()[:200]
-            # Continue scanning — could be Title, URL Source, etc.
-
-    if title and metadata_end_idx >= 0:
-        # Strip metadata header (header lines + the blank separator).
-        body = "\n".join(lines[metadata_end_idx + 1 :]).lstrip("\n")
-        return title, body
-
-    if title:
-        # Title found but no blank-line separator — return title + full content.
-        return title, content
-
-    # Fallback: no Title: prefix. Use first non-empty line as title.
-    first_nonempty = next((ln.strip() for ln in lines if ln.strip()), "")
-    return first_nonempty[:200], content
+# Extracted to ``autobot_shared.jina_parser.parse_jina_output`` (#7460) so
+# that ``web_fetch/extractors.py`` and other consumers can import it
+# without triggering this module's heavy import chain
+# (``knowledge.query_sanitizer`` + further deps). Re-exported here under
+# the original ``_parse_jina_output`` name to preserve the existing 4
+# test imports in ``pipeline_test.py``.
+from autobot_shared.jina_parser import parse_jina_output as _parse_jina_output

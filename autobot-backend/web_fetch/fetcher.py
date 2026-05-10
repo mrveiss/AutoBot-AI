@@ -30,15 +30,14 @@ from web_fetch.extractors import _MIN_CONTENT_CHARS, extract_markdown, is_spa_co
 def _parse_jina_markdown(jina_text: str) -> tuple:
     """Extract (title, markdown) from Jina Reader response.
 
-    Delegates to media.link.pipeline._parse_jina_output when available,
-    falling back to using the raw text as markdown.
+    Delegates to ``autobot_shared.jina_parser.parse_jina_output``. #7460
+    extracted the parser from ``media.link.pipeline`` so it imports
+    cleanly without the prior try/except fallback (which masked real
+    import errors and silently returned ``("", jina_text)``).
     """
-    try:
-        from media.link.pipeline import _parse_jina_output
+    from autobot_shared.jina_parser import parse_jina_output
 
-        return _parse_jina_output(jina_text)
-    except Exception:
-        return "", jina_text
+    return parse_jina_output(jina_text)
 
 
 from web_fetch.types import (
