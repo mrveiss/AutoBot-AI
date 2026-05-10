@@ -22,7 +22,10 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from services.knowledge.sync_queue import SyncQueueEntry, SyncReason  # noqa: F401
 
 from autobot_shared.ssot_config import get_ollama_url
 from constants.path_constants import PATH

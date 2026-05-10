@@ -12,7 +12,7 @@ Covers:
 
 import json
 from dataclasses import asdict
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pydantic import ValidationError

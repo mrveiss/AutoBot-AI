@@ -11,18 +11,14 @@ Tests verification of claims via KB RAG and research agent escalation.
 import asyncio
 import json
 import time
-from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from services.claim_verifier import (
     ClaimVerifier,
-    RAGResult,
-    ResearchResult,
     ResearchStatus,
     VerificationStatus,
-    VerifiedClaim,
 )
 from services.knowledge_grounding_models import (
     Claim,
@@ -835,7 +831,7 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_empty_claim_text(self, claim_verifier):
         """Should handle claim with empty text."""
-        claim = Claim("", ClaimType.FACTUAL, KBStatus.UNKNOWN, 0.0)
+        Claim("", ClaimType.FACTUAL, KBStatus.UNKNOWN, 0.0)
 
         result = await claim_verifier.kb_rag_search("")
 

@@ -34,8 +34,6 @@ if __name__ == "__main__":
     raise SystemExit(2)
 
 from autobot_shared.ssot_config import config as _ssot_config
-from constants.network_constants import NetworkConstants
-from services.llm_service import get_llm_service  # Phase 2D #3185
 from utils.command_validator import CommandValidator
 
 logger = logging.getLogger(__name__)

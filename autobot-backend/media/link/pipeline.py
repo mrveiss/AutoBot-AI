@@ -189,8 +189,6 @@ class LinkPipeline(BasePipeline):
         the circuit opens for _JINA_COOLDOWN_SECONDS and all calls short-
         circuit to None immediately.
         """
-        global _jina_cooldown_until
-
         # Circuit open? Skip the call entirely.
         if time.monotonic() < _jina_cooldown_until:
             return None

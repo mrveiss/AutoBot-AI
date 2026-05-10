@@ -45,7 +45,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List
 from uuid import uuid4
 
 from fastapi import HTTPException

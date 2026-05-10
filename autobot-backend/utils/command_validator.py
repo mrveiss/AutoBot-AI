@@ -288,7 +288,7 @@ class CommandValidator:
         """Parse command string safely. Returns (command_parts, error_result or None)."""
         try:
             command_parts = shlex.split(command_string.strip())
-        except ValueError as e:
+        except ValueError:
             return [], self._invalid_result("Command parsing failed")
         if not command_parts:
             return [], self._invalid_result("Empty command")

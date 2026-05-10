@@ -11,17 +11,15 @@ scoring and alternative actions.
 Issue #2154: Enhanced error handling with root-cause analysis and recovery planning.
 """
 
-import asyncio
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
-from constants.ttl_constants import TTL_7_DAYS, TTL_30_DAYS
+from constants.ttl_constants import TTL_30_DAYS
 from orchestration.causal_error_analyzer import CausalErrorAnalysis
 
 logger = logging.getLogger(__name__)
@@ -428,7 +426,6 @@ class CausalErrorRecovery:
 
             # Record resolution (which action actually worked)
             if success:
-                resolution_key = f"{FAILURE_PATTERN_RESOLUTION_PREFIX}{pattern_hash}" f":{action_taken.value}"
                 resolution_data = {
                     "action": action_taken.value,
                     "outcome": outcome or "success",

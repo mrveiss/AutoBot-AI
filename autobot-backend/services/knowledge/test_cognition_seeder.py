@@ -12,20 +12,15 @@ Tests cover:
 - Cold-start recovery: priority boost lifts seeded docs above unseeded ones
 """
 
-import asyncio
-import os
 import textwrap
-from pathlib import Path
-from typing import Any, Dict, List
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any, Dict
+from unittest.mock import MagicMock
 
 import pytest
 
 from services.knowledge.cognition_seeder import (
-    COGNITION_COLLECTION,
     SEED_PRIORITY_BOOST,
     CognitionSeeder,
-    SeedStatus,
     _chunk_id,
     _chunk_text,
     _load_manifest,
@@ -175,7 +170,7 @@ async def test_seed_from_manifest_processes_sources(tmp_path):
 
     manifest = tmp_path / "cognition_seed.yaml"
     manifest.write_text(
-        textwrap.dedent(f"""\
+        textwrap.dedent("""\
             collections:
               - name: cognition_store
                 sources:

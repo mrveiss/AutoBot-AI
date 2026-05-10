@@ -357,7 +357,7 @@ class TestSSOTTemplateVarInjection:
         import prompt_manager
 
         # Force import of autobot_shared.ssot_config to fail at lookup time
-        original = prompt_manager._get_ssot_template_vars
+        prompt_manager._get_ssot_template_vars
 
         def failing_lookup() -> dict:
             try:

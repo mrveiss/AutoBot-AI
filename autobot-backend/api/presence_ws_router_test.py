@@ -10,7 +10,6 @@ in the feature routers configuration.
 
 import pytest
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
 from api.presence_ws import router
 
@@ -89,7 +88,6 @@ class TestPresenceWSConfiguration:
 
         # Test the import path directly
         module_path = "api.presence_ws"
-        name = "presence_ws"
 
         try:
             module = importlib.import_module(module_path)

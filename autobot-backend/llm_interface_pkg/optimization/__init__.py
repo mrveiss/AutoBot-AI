@@ -13,7 +13,7 @@ Issue #717: Efficient Inference Design implementation.
 
 # Expose submodules as package attributes so @patch("...optimization.<submodule>.X")
 # resolves correctly under pytest --import-mode=importlib (#5728)
-from . import (  # noqa: E402
+from . import (  # noqa: E402,F401  # intentional re-export
     attention_backend,
     flash_attention,
     hf_quantizer,

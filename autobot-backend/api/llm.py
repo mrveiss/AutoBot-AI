@@ -581,7 +581,6 @@ async def get_quick_llm_status(
     Issue #620: Refactored to use helper functions.
     Issue #744: Requires authenticated user.
     """
-    from datetime import datetime, timezone
 
     try:
         llm_config = ConfigService.get_llm_config()
@@ -600,7 +599,6 @@ async def get_quick_llm_status(
 
     except Exception as e:
         logger.error("Failed to get quick LLM status: %s", e)
-        from datetime import datetime, timezone
 
         return JSONResponse(
             status_code=200,
@@ -655,7 +653,6 @@ async def get_all_providers_health():
     Returns:
         JSON with health status for all providers (ollama, openai, anthropic, google)
     """
-    from datetime import datetime, timezone
 
     from services.provider_health import ProviderHealthManager
 
@@ -711,7 +708,6 @@ async def get_provider_health(provider_name: str, use_cache: bool = True):
     Returns:
         JSON with health status for the specific provider
     """
-    from datetime import datetime, timezone
 
     from services.provider_health import ProviderHealthManager
 

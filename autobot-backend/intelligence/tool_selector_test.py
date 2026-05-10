@@ -27,9 +27,6 @@ from __future__ import annotations
 import dataclasses
 import sys
 from pathlib import Path
-from typing import Dict
-
-import pytest
 
 # Ensure autobot-backend is on path so bare `intelligence.*` imports resolve
 _BACKEND = Path(__file__).resolve().parent.parent

@@ -48,7 +48,6 @@ from knowledge_base import KnowledgeBase
 from reasoning.causal_reasoning import CAUSAL_REASONING_SNIPPET
 
 # Import existing AutoBot components
-from services.llm_service import get_llm_service  # Phase 2D #3185
 from utils.command_validator import CommandValidator
 from worker_node import WorkerNode
 

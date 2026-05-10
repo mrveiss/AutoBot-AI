@@ -18,14 +18,13 @@ Endpoints:
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_common import DataResponse
 from api.schemas_system import (
     AuditCleanupRequest,
-    AuditQueryRequest,
     AuditQueryResponse,
     AuditStatisticsResponse,
 )

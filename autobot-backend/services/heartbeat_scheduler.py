@@ -15,7 +15,6 @@ cold-starting across heartbeat runs.
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy import select

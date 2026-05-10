@@ -8,8 +8,7 @@ Tests cover local, Docker, SSH, and Modal execution backends.
 Validates task routing, health checks, and result capture.
 """
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

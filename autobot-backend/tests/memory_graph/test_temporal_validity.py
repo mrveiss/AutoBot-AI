@@ -8,12 +8,11 @@ and relations.
 Issue #3790.
 """
 
-import asyncio
 import sys
 import types
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 

@@ -3870,7 +3870,7 @@ class TestScanForUnimportedFilesEndpoint:
 
         # Should preserve directory validation
         assert "if not scan_path.exists():" in source
-        assert ERR_DIRECTORY_NOT_FOUND in source
+        assert "ERR_DIRECTORY_NOT_FOUND" in source
         assert "status_code=404" in source
 
     def test_scan_for_unimported_files_preserves_import_tracker(self):
@@ -16133,7 +16133,7 @@ class TestBatch94AdvancedControlStreamingAndTakeoverCRUD(unittest.TestCase):
         # Should preserve 404 HTTPException for business logic
         self.assertIn("HTTPException", source)
         self.assertIn("status_code=404", source)
-        self.assertIn(ERR_SESSION_NOT_FOUND, source)
+        self.assertIn("ERR_SESSION_NOT_FOUND", source)
 
     def test_batch_94_list_streaming_sessions_has_decorator(self):
         """Verify list_streaming_sessions has @with_error_handling decorator"""
@@ -16398,7 +16398,7 @@ class TestBatch95AdvancedControlTakeoverManagement(unittest.TestCase):
         # Should preserve 404 HTTPException for business logic
         self.assertIn("HTTPException", source)
         self.assertIn("status_code=404", source)
-        self.assertIn(ERR_SESSION_NOT_FOUND, source)
+        self.assertIn("ERR_SESSION_NOT_FOUND", source)
         # Should NOT have outer try-catch wrapper
         try_count = source.count("try:")
         self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)")
@@ -16848,7 +16848,7 @@ class TestBatch97SchedulerWorkflowCRUD(unittest.TestCase):
         # Should preserve 404 HTTPException
         self.assertIn("HTTPException", source)
         self.assertIn("status_code=404", source)
-        self.assertIn(ERR_WORKFLOW_NOT_FOUND, source)
+        self.assertIn("ERR_WORKFLOW_NOT_FOUND", source)
         # Should have NO try-catch blocks (Mixed Pattern with direct checks)
         try_count = source.count("try:")
         self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)")

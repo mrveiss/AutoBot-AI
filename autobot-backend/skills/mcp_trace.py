@@ -17,7 +17,6 @@ The write is fire-and-forget (``asyncio.create_task``).  Redis errors are
 swallowed and logged at DEBUG level so tracing never disrupts tool calls.
 """
 
-import asyncio
 import json
 import logging
 import time

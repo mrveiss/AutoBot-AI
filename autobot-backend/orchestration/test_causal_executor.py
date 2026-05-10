@@ -15,14 +15,12 @@ from orchestration.causal_models import (
     CausalEffect,
     CausalEffectType,
     CausalMetadata,
-    DependencyType,
 )
-from orchestration.causal_validator import CausalValidator, ValidationIssue
+from orchestration.causal_validator import CausalValidator
 from orchestration.dag_executor import (
     DAGExecutionContext,
     DAGExecutor,
     DAGNode,
-    NodeType,
     WorkflowDAG,
 )
 
@@ -230,7 +228,7 @@ class TestCausalExecutor:
         executor = DAGExecutor(_noop_executor)
         causal_executor = CausalExecutor(executor)
 
-        ctx = await causal_executor.execute(dag, "workflow_2", validate_causal=False)
+        await causal_executor.execute(dag, "workflow_2", validate_causal=False)
 
         assert causal_executor.effect_trace is not None
         assert "a" in causal_executor.effect_trace.step_outputs
@@ -287,7 +285,7 @@ class TestCausalExecutor:
         executor = DAGExecutor(_noop_executor)
         causal_executor = CausalExecutor(executor)
 
-        ctx = await causal_executor.execute(dag, "workflow_4", validate_causal=True)
+        await causal_executor.execute(dag, "workflow_4", validate_causal=True)
 
         assert causal_executor.validation_result is not None
         assert causal_executor.validation_result.valid
@@ -448,7 +446,7 @@ class TestEdgeCases:
     def test_empty_metadata_map(self):
         """Should handle empty metadata gracefully."""
         nodes = _make_step_nodes("a")
-        dag = WorkflowDAG(nodes, [])
+        WorkflowDAG(nodes, [])
 
         executor = DAGExecutor(_noop_executor)
         causal_executor = CausalExecutor(executor, {})

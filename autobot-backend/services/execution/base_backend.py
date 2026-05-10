@@ -8,8 +8,6 @@ Base interface for pluggable execution backends supporting local, Docker, SSH, a
 Provides unified API for task execution with resource limits, health checks, and result capture.
 """
 
-import asyncio
-import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
@@ -130,7 +128,6 @@ class ExecutionBackend(ABC):
         Raises:
             RuntimeError: If backend is unhealthy or execution fails
         """
-        pass
 
     @abstractmethod
     async def health_check(self) -> bool:
@@ -139,7 +136,6 @@ class ExecutionBackend(ABC):
         Returns:
             True if backend is operational, False otherwise
         """
-        pass
 
     @abstractmethod
     async def cleanup(self) -> None:
@@ -147,7 +143,6 @@ class ExecutionBackend(ABC):
 
         Should be called during shutdown.
         """
-        pass
 
     async def is_healthy(self) -> bool:
         """Check cached health status with periodic refresh.

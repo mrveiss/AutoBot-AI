@@ -125,7 +125,7 @@ class PerformanceOptimizedDiagnostics:
                         "memory_usage_percent": round((int(gpu_data[2]) / int(gpu_data[1])) * 100, 1),
                     }
             return {"status": "nvidia-smi not available or no GPU detected"}
-        except Exception as e:
+        except Exception:
             return {"status": "GPU detection error"}
 
     async def _publish_permission_request(self, task_id: str, report: Dict[str, Any], attempt: int) -> asyncio.Future:

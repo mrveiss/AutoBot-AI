@@ -16,8 +16,6 @@ Three defects in the pre-fix ``_remote_plugin_to_entry`` adapter:
 
 import logging
 
-import pytest
-
 from api.marketplace import (
     _coerce_list,
     _coerce_str,

@@ -15,7 +15,7 @@ Verifies that:
 
 import json
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -25,7 +25,7 @@ from context_aware_decision.models import (
     DecisionContext,
     InterventionOutcome,
 )
-from context_aware_decision.types import ConfidenceLevel, ContextType, DecisionType
+from context_aware_decision.types import ContextType, DecisionType
 
 # =============================================================================
 # Fixtures

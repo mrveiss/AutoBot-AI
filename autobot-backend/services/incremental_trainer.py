@@ -8,7 +8,7 @@ Lightweight model updates based on feedback without full retraining.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 
 from sqlalchemy import create_engine

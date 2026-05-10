@@ -310,7 +310,7 @@ async def test_evaluate_patch_adds_to_archive(tmp_path):
         ),
     ):
         (tmp_path / "tmp.py").touch()
-        result = await harness.evaluate_patch(patch, archive)
+        await harness.evaluate_patch(patch, archive)
 
     assert archive.size == 1
     entry = archive.best

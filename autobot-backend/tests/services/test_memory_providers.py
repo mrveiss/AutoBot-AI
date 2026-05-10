@@ -14,15 +14,12 @@ Tests the provider-based memory architecture including:
 Issue #4344: Provider-based memory architecture with external provider support
 """
 
-import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from services.memory import (
-    ExternalProviderFactory,
     PostgresMemoryProvider,
-    ProviderType,
     RedisMemoryProvider,
 )
 from services.memory.memory_manager import MemoryManager

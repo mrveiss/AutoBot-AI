@@ -8,10 +8,6 @@ Tests for GitHub issue #4103: Background task for documentation indexing.
 Ensures populate_autobot_docs returns immediately with task_id.
 """
 
-from datetime import datetime
-
-import pytest
-
 
 def test_task_status_dataclass_initialization():
     """Test TaskStatusRecord dataclass initialization with default values."""

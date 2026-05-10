@@ -21,9 +21,11 @@ Usage:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 from types import MappingProxyType
-from typing import Any, Dict, List, Mapping, Optional, Type
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Type
+
+if TYPE_CHECKING:
+    from .base import AbstractConnector  # noqa: F401  # forward-ref for string annotations
 
 from autobot_shared.time_utils import now_utc
 from knowledge.connectors.models import ConnectorConfig

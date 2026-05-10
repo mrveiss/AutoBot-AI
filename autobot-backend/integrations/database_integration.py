@@ -12,7 +12,6 @@ and executing read-only queries.
 import logging
 import re
 import time
-from datetime import datetime
 from typing import Any, Dict, List
 
 from integrations.base import (

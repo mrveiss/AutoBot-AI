@@ -4729,7 +4729,7 @@ class RagFeedbackRequest(BaseModel):
     source_url: str
     title: str = ""
     query: str
-    decision: _Literal["accepted", "rejected"]
+    decision: _Literal["accepted", "rejected"]  # noqa: F821  # Literal alias false-positive
     user_id: Optional[str] = None
 
 

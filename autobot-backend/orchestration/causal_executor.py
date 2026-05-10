@@ -23,11 +23,10 @@ Usage::
 
 import logging
 import time
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional
 
 from orchestration.causal_models import (
     CascadeReport,
-    CausalEffectType,
     CausalMetadata,
     EffectTrace,
     StateFrame,
@@ -251,7 +250,7 @@ class CausalExecutor:
         )
 
         # Trace which steps depend on the failed step's outputs
-        failed_mutations = self.effect_trace.get_mutations_by_step(failed_step_id)
+        self.effect_trace.get_mutations_by_step(failed_step_id)
 
         for step_id, result in execution_ctx.step_results.items():
             if step_id == failed_step_id or not isinstance(result, dict):
@@ -311,7 +310,7 @@ class CausalExecutor:
         affected_steps = set(report.directly_affected + report.indirectly_affected)
         if len(affected_steps) > 0:
             suggestions.append(
-                f"Add error_config with SKIP or FALLBACK action to affected steps " f"to prevent cascading failures."
+                "Add error_config with SKIP or FALLBACK action to affected steps to prevent cascading failures."
             )
 
         if not suggestions:

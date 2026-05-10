@@ -8,9 +8,8 @@ Routes tasks to appropriate backends based on characteristics.
 Handles health checks, resource management, and routing decisions.
 """
 
-import asyncio
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from services.execution.base_backend import (
     BackendType,
@@ -19,10 +18,6 @@ from services.execution.base_backend import (
     ExecutionStatus,
     ExecutionTask,
 )
-from services.execution.docker_backend import DockerBackend
-from services.execution.local_backend import LocalBackend
-from services.execution.modal_backend import ModalBackend
-from services.execution.ssh_backend import SSHBackend
 
 logger = logging.getLogger(__name__)
 

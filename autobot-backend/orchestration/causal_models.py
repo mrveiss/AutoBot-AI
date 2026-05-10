@@ -22,7 +22,7 @@ This module provides:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 
 class CausalEffectType(str, Enum):
@@ -181,7 +181,10 @@ class EffectTrace:
         return self.mutation_map.get(key, [])
 
     def __str__(self) -> str:
-        return f"EffectTrace({self.workflow_id}, {len(self.execution_frames)} frames, {len(self.mutation_map)} mutated keys)"
+        return (
+            f"EffectTrace({self.workflow_id}, {len(self.execution_frames)} frames, "
+            f"{len(self.mutation_map)} mutated keys)"
+        )
 
 
 @dataclass

@@ -25,8 +25,6 @@ logger = logging.getLogger(__name__)
 class SkillProposalError(Exception):
     """Error proposing skill to SLM."""
 
-    pass
-
 
 class SkillProposer:
     """Proposes extracted skills to SLM for validation and activation."""

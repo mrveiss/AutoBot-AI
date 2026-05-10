@@ -14,7 +14,7 @@ import asyncio
 # Add autobot-slm-backend to path so api.code_sync imports resolve.
 import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 from unittest.mock import patch
 
 import pytest

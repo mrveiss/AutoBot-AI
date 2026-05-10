@@ -959,8 +959,6 @@ async def _autonomous_loop_runner(llm_service: Any) -> None:
     library to avoid adding a new dependency.  Checks ``autonomous_loop_enabled``
     on every tick so the feature can be toggled at runtime without restart.
     """
-    import re
-    from datetime import timedelta
 
     from services.knowledge.autonomous_loop import run_scheduled_loop
     from services.rag_config import get_rag_config

@@ -29,8 +29,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
-from uuid import UUID
+from typing import List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
 from context_aware_decision.counterfactual_reasoner import CounterfactualReasoner

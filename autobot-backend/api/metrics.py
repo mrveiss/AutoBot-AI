@@ -7,7 +7,7 @@ Metrics API endpoints for workflow performance monitoring
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi import APIRouter, HTTPException, Query
 

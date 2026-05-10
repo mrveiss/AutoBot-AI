@@ -14,7 +14,6 @@ import json
 import logging
 import os
 import sqlite3
-from datetime import datetime
 from typing import List, Optional, Tuple
 
 from autobot_shared.time_utils import parse_utc_iso

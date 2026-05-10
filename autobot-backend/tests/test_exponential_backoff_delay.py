@@ -8,8 +8,6 @@ Issue #3565: Verify that exponential_backoff_delay applies a cap and produces
 correct base-2 values.
 """
 
-import pytest
-
 from constants.threshold_constants import RetryConfig, exponential_backoff_delay
 
 

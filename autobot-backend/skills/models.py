@@ -4,7 +4,6 @@
 """Skills System DB Models"""
 
 import uuid
-from datetime import datetime, timezone
 from enum import Enum
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text

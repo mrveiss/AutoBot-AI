@@ -4,9 +4,7 @@ Both helpers ship as production code with implicit format invariants;
 these tests pin the invariants so future format changes fail loudly.
 """
 
-import time
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
 
 from autobot_shared.time_utils import (
     now_utc,

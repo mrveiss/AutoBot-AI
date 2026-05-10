@@ -14,9 +14,8 @@ construction path is mocked at the class level.
 
 from __future__ import annotations
 
-import asyncio
 import inspect
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

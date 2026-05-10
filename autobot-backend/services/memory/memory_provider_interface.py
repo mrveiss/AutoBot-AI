@@ -33,12 +33,10 @@ class MemoryProvider(ABC):
     @abstractmethod
     async def initialize(self) -> None:
         """Initialize the provider connection and resources."""
-        pass
 
     @abstractmethod
     async def close(self) -> None:
         """Clean up provider resources."""
-        pass
 
     @abstractmethod
     async def prefetch(self, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -51,7 +49,6 @@ class MemoryProvider(ABC):
         Returns:
             Dictionary of pre-loaded memories with relevance metadata
         """
-        pass
 
     @abstractmethod
     async def sync(self, turn: Dict[str, Any]) -> None:
@@ -64,7 +61,6 @@ class MemoryProvider(ABC):
                 - relation_updates: List of relationship changes
                 - timestamp: When the turn occurred
         """
-        pass
 
     @abstractmethod
     async def search(
@@ -81,24 +77,19 @@ class MemoryProvider(ABC):
         Returns:
             List of matching memories with scores and metadata
         """
-        pass
 
     @abstractmethod
     async def get_entity(self, entity_id: str) -> Optional[Dict[str, Any]]:
         """Get a specific entity by ID."""
-        pass
 
     @abstractmethod
     async def update_entity(self, entity_id: str, updates: Dict[str, Any]) -> None:
         """Update a specific entity."""
-        pass
 
     @abstractmethod
     async def delete_entity(self, entity_id: str) -> None:
         """Delete a specific entity."""
-        pass
 
     @abstractmethod
     async def health_check(self) -> bool:
         """Check if the provider is healthy and accessible."""
-        pass

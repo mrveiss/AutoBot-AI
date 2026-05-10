@@ -28,7 +28,6 @@ from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from llm_interface_pkg.models import LLMRequest, LLMResponse
-from llm_interface_pkg.types import ProviderType
 
 from .base_provider import BaseProvider
 

@@ -21,7 +21,7 @@ Boundary with ProcessAdapterService (#1751):
 import asyncio
 import logging
 import sys
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from fastapi import (
     APIRouter,

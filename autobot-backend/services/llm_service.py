@@ -43,7 +43,7 @@ from autobot_shared.tracing import get_tracer
 from llm_interface_pkg.cache import CachedResponse, get_llm_cache
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.tiered_routing import TierConfig, TieredModelRouter
-from llm_interface_pkg.types import LLMType, ProviderType
+from llm_interface_pkg.types import LLMType
 from llm_providers.provider_registry import ProviderRegistry, get_provider_registry
 
 try:
@@ -288,7 +288,6 @@ class LLMService:
 
         Returns a dict of ``{provider_name: [model_id, …]}``.
         """
-        import asyncio as _asyncio
 
         target_names = [provider_name] if provider_name else list(self._registry._providers.keys())
         results: Dict[str, List[str]] = {}

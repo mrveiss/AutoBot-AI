@@ -701,7 +701,8 @@ _JS_COLLECT_REGIONS = """
     let node = el;
     while (node && node !== document.body) {
       const tag = node.tagName.toLowerCase();
-      const idx = Array.from(node.parentElement?.children || []).filter(c => c.tagName === node.tagName).indexOf(node) + 1;
+      const idx = Array.from(node.parentElement?.children || [])
+        .filter(c => c.tagName === node.tagName).indexOf(node) + 1;
       xpath = `/${tag}[${idx}]${xpath}`;
       node = node.parentElement;
     }

@@ -418,7 +418,7 @@ class DevLoggingFixer:
 
             return False
 
-        except Exception as e:
+        except Exception:
             self.report["errors"].append(
                 {
                     "file": str(file_path.relative_to(self.project_root)),

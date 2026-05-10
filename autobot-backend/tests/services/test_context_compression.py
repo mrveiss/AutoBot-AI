@@ -250,7 +250,7 @@ class TestCompressionThresholdValidation:
     """Ensure invalid configs (threshold > context_window) fail fast at load time."""
 
     def _write_yaml(self, tmp_path, models_block: str) -> "Path":
-        from pathlib import Path
+        pass
 
         content = f"models:\n{models_block}\ntoken_estimation:\n  chars_per_token: 4\n  safety_margin: 0.9\n"
         p = tmp_path / "context_windows.yaml"

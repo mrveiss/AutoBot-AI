@@ -15,8 +15,6 @@ import hmac
 import time
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from autobot_shared.http_client import sign_request
 
 
@@ -74,7 +72,6 @@ class TestSignRequestHelper:
         assert all(c in "0123456789abcdef" for c in sig)
 
     def test_different_methods_produce_different_signatures(self):
-        args = ("svc", "key", "/path", 1700000000)
         get_sig = sign_request(*("svc", "key", "GET", "/path", 1700000000))["X-Service-Signature"]
         post_sig = sign_request(*("svc", "key", "POST", "/path", 1700000000))["X-Service-Signature"]
         assert get_sig != post_sig
@@ -124,7 +121,7 @@ class TestServiceHTTPClientSignRequest:
         url = "http://10.0.0.5:8080/api/inference"
 
         with patch("utils.service_client._sign_request", wraps=sign_request) as mock_helper:
-            headers = client._sign_request("POST", url)
+            client._sign_request("POST", url)
 
         mock_helper.assert_called_once()
         call_args = mock_helper.call_args

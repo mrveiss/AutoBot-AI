@@ -313,7 +313,7 @@ class TestRAGPipelineBenchmarks:
         def simulate_rag_pipeline():
             # 1. Query embedding (simulated)
             query = "What is the best approach for performance optimization?"
-            _query_embedding = [hash(query + str(i)) % 1000 / 1000.0 for i in range(384)]
+            [hash(query + str(i)) % 1000 / 1000.0 for i in range(384)]
 
             # 2. Vector search (simulated - quick sleep for realism)
             time.sleep(0.001)  # Simulate 1ms DB query
@@ -517,7 +517,7 @@ def _deterministic_embed(text: str, dim: int = 128) -> list:
     vocab = (_VOCAB + [""] * dim)[:dim]
 
     text_lower = text.lower()
-    words = set(text_lower.split())
+    set(text_lower.split())
 
     vec = []
     for term in vocab:

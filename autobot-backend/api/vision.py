@@ -12,7 +12,7 @@ Author: mrveiss
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.system_health import register_singleton_probe
 from auth_middleware import get_current_user

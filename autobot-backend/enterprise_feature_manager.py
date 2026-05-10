@@ -950,7 +950,6 @@ class EnterpriseFeatureManager:
 
 
 # Singleton instance (thread-safe)
-from autobot_shared.singleton_factory import lazy_singleton
 
 _enterprise_manager: Optional[EnterpriseFeatureManager] = None
 

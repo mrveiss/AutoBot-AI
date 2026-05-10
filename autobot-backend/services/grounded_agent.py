@@ -30,7 +30,6 @@ Data flow:
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -40,7 +39,7 @@ from autobot_shared.redis_client import get_async_redis_client
 from knowledge_factory import get_or_create_knowledge_base
 from llm_interface_pkg.types import LLMType
 from services.ai_stack_client import get_ai_stack_client
-from services.causal_inference_engine import CausalAnalysisReport, CausalInferenceEngine
+from services.causal_inference_engine import CausalInferenceEngine
 
 logger = logging.getLogger(__name__)
 

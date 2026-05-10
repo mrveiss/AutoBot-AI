@@ -5,7 +5,6 @@
 """Version Control System integrations for GitLab and Bitbucket."""
 
 import logging
-from datetime import datetime
 from typing import Any, Dict, List
 
 import aiohttp

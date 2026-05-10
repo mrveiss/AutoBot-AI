@@ -36,7 +36,6 @@ from api.monitoring_utils import (
     _convert_metrics_to_csv,
     _identify_bottlenecks,
 )
-from api.schemas_common import DataResponse
 from api.schemas_system import (
     AlertCheckResponse,
     AlertManagerResponse,

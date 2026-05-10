@@ -13,7 +13,6 @@ Provides async, non-blocking activity recording with secret usage detection.
 import logging
 import re
 import uuid
-from datetime import datetime
 from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession

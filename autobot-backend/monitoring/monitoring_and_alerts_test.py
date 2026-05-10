@@ -222,7 +222,7 @@ class MonitoringAndAlertingTester:
                     message = f"Health endpoint returned HTTP {response.status_code}"
                     details = {"status_code": response.status_code}
 
-            except Exception as e:
+            except Exception:
                 response_time = time.time() - start_time
                 status = "FAIL"
                 message = "Health endpoint error"
@@ -305,7 +305,7 @@ class MonitoringAndAlertingTester:
                     message = f"Metrics endpoint returned HTTP {response.status_code}"
                     details = {"status_code": response.status_code}
 
-            except Exception as e:
+            except Exception:
                 response_time = time.time() - start_time
                 status = "FAIL"
                 message = "Metrics collection error"
@@ -378,7 +378,7 @@ class MonitoringAndAlertingTester:
                     "alert_triggered": alert_triggered,
                 }
 
-            except Exception as e:
+            except Exception:
                 response_time = time.time() - start_time
                 status = "FAIL"
                 message = "Alert threshold test error"
@@ -587,7 +587,7 @@ class MonitoringAndAlertingTester:
                     message = f"Dashboard not accessible (HTTP {response.status_code})"
                     severity = "critical"
 
-            except Exception as e:
+            except Exception:
                 response_time = time.time() - start_time
                 dashboard_result = DashboardValidation(
                     dashboard_name=dashboard_name,
@@ -732,7 +732,7 @@ class MonitoringAndAlertingTester:
 
                 response_time = time.time() - start_time
 
-            except Exception as e:
+            except Exception:
                 response_time = time.time() - start_time
                 status = "FAIL"
                 message = "Log analysis error"
@@ -816,7 +816,7 @@ class MonitoringAndAlertingTester:
                     "response_initiated": (response_initiated if incident_triggered else None),
                 }
 
-            except Exception as e:
+            except Exception:
                 response_time = time.time() - start_time
                 status = "FAIL"
                 message = "Incident response test error"

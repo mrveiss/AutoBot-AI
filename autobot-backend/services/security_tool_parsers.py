@@ -15,7 +15,6 @@ import re
 import xml.etree.ElementTree as ET  # nosec B405 - parsing trusted nmap output
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any, Optional
 
 from autobot_shared.singleton_factory import lazy_singleton

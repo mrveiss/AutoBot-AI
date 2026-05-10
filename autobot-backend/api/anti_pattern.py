@@ -12,7 +12,6 @@ Issue: #221
 """
 
 import logging
-from typing import List
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse

@@ -57,8 +57,6 @@ class TimestampMixin:
     imports/references (#4300).
     """
 
-    pass
-
 
 class TenantMixin:
     """

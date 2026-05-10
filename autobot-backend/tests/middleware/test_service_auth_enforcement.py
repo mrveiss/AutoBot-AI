@@ -271,7 +271,7 @@ class TestEnforceServiceAuth:
         """Paths that are neither exempt nor service-only pass without auth check."""
         call_next = AsyncMock(return_value="ok-response")
         req = _make_request("/api/unknown")
-        result = await enforce_service_auth(req, call_next)
+        await enforce_service_auth(req, call_next)
         call_next.assert_awaited_once_with(req)
 
     @pytest.mark.asyncio
@@ -343,7 +343,7 @@ class TestEnforceServiceAuth:
             ),
         ):
             req = _make_request("/api/internal/sync")
-            result = await enforce_service_auth(req, call_next)
+            await enforce_service_auth(req, call_next)
 
         call_next.assert_awaited_once_with(req)
 
@@ -373,7 +373,7 @@ class TestEnforceServiceAuth:
             req.headers = {"X-Override-Token": "emergency-token"}
             req.headers.get = lambda k, d=None: {"X-Override-Token": "emergency-token"}.get(k, d)
 
-            result = await enforce_service_auth(req, call_next)
+            await enforce_service_auth(req, call_next)
 
         call_next.assert_awaited_once_with(req)
 

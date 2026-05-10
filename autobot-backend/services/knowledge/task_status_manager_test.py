@@ -5,8 +5,7 @@
 Tests for task status manager Redis-backed tracking.
 """
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

@@ -560,8 +560,8 @@ class TestGetMatchingPatternUCB1:
 
         # Both patterns match the same complexity-only key — we wire exact key → high,
         # complexity-only key → low so both qualify for comparison.
-        exact_hash = _compute_pattern_hash("simple", [])
-        complexity_hash = _compute_pattern_hash("simple", [])
+        _compute_pattern_hash("simple", [])
+        _compute_pattern_hash("simple", [])
         # exact_hash == complexity_hash when categories=[] → only one lookup happens
         # so instead we use categories to split them.
         exact_hash_with_cat = _compute_pattern_hash("simple", ["cat"])
@@ -682,7 +682,7 @@ class TestBenchmarkFeedbackRoundTrip:
     async def test_publish_feedback_events_writes_correct_schema(self):
         """Each published entry must include all fields expected by RetrievalLearner."""
         import json
-        from unittest.mock import AsyncMock, call
+        from unittest.mock import AsyncMock
 
         from knowledge.rag_benchmarks import BenchmarkResult, publish_feedback_events
 
@@ -735,7 +735,6 @@ class TestBenchmarkFeedbackRoundTrip:
     @pytest.mark.asyncio
     async def test_learner_processes_benchmark_generated_events(self):
         """RetrievalLearner.consume_feedback_stream() processes benchmark events and writes pattern."""
-        import json
 
         from knowledge.rag_benchmarks import _BENCHMARK_USER
 

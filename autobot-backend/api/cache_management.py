@@ -13,7 +13,6 @@ import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel
 
 from api.schemas_system import (
     CacheClearTypeResponse,

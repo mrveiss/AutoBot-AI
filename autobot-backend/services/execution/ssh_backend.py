@@ -9,10 +9,7 @@ Supports key-based and password authentication.
 """
 
 import asyncio
-import io
 import logging
-import sys
-from datetime import datetime
 from typing import Optional, Tuple
 
 from autobot_shared.time_utils import now_utc

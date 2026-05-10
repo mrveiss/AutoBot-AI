@@ -101,12 +101,12 @@ class URLValidator:
             except socket.gaierror:
                 # If hostname doesn't resolve, it might be invalid
                 return False, f"Cannot resolve hostname: {hostname}"
-            except Exception as e:
+            except Exception:
                 return False, "Error validating hostname"
 
             return True, ""
 
-        except Exception as e:
+        except Exception:
             return False, "Invalid URL"
 
     def sanitize_url(self, url: str) -> Optional[str]:

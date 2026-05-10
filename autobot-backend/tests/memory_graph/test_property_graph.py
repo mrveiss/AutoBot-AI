@@ -12,7 +12,7 @@ an in-memory AsyncMock that delegates to a simple dict/set store.
 
 import sys
 import types
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

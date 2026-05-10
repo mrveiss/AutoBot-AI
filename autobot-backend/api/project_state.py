@@ -8,9 +8,8 @@ Exposes project development phase information and validation status
 """
 
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 
 from api.schemas_common import DataResponse
 from api.schemas_system import (

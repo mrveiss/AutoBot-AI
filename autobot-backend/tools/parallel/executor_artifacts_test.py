@@ -9,8 +9,6 @@ import pytest
 
 from events.types import ArtifactType, build_artifact
 from tools.parallel.executor import (
-    _FILE_MODIFYING_TOOLS,
-    _TEST_RUNNER_TOOLS,
     ParallelToolExecutor,
     _ArtifactCapture,
 )

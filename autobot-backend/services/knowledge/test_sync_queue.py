@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from typing import List
 from unittest.mock import patch
 
 import pytest
@@ -328,7 +329,7 @@ class TestWorkerLoop:
 
     @pytest.mark.asyncio
     async def test_process_one_records_failure_and_requeues(self, queue: DocumentSyncQueue) -> None:
-        entry = await queue.enqueue_sync("a.md", SyncReason.CONTENT_CHANGED)
+        await queue.enqueue_sync("a.md", SyncReason.CONTENT_CHANGED)
 
         async def processor(_: SyncQueueEntry) -> None:
             raise RuntimeError("embedding model offline")

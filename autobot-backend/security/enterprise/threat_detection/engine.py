@@ -15,7 +15,7 @@ import logging
 import pickle  # nosec B403 - internal profile storage only
 import threading
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 

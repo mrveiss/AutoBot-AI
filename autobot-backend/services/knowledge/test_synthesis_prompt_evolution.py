@@ -10,10 +10,9 @@ Covers:
 
 from __future__ import annotations
 
-import math
 import sys
-from typing import Any, List
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import List
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 

@@ -8,7 +8,7 @@ Supports TOTP-based 2FA with backup codes.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 

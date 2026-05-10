@@ -9,7 +9,6 @@ circuit breaker activation are properly recorded.
 
 from __future__ import annotations
 
-import pytest
 from prometheus_client import CollectorRegistry
 
 from autobot_shared.monitoring.metrics.mcp_worker import MCPWorkerMetricsRecorder

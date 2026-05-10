@@ -25,7 +25,6 @@ Usage:
 
 import logging
 from contextlib import asynccontextmanager
-from typing import Dict
 
 import aiohttp
 from opentelemetry import trace

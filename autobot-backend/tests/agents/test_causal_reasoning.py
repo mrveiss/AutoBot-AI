@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agent_loop.think_tool import ThinkTool, think_causally
+from agent_loop.think_tool import ThinkTool
 from agent_loop.types import ThinkCategory, ThinkResult
 from orchestration.causal_error_analyzer import (
     CausalErrorAnalysis,

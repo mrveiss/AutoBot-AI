@@ -11,7 +11,7 @@ from VM4 (uses NetworkConstants.AI_STACK_VM_IP) with the main AutoBot backend.
 import logging
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
 from api.schemas_agent import (

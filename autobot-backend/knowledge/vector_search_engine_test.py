@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import sys
 import types
-from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -72,7 +71,6 @@ sys.modules.setdefault("services.npu_client", _npu_client_mod)
 # ---------------------------------------------------------------------------
 
 # Reset module-level singleton and FAISS flags before import
-import importlib
 
 if "knowledge.vector_search_engine" in sys.modules:
     del sys.modules["knowledge.vector_search_engine"]

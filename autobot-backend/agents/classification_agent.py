@@ -10,7 +10,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from agents.json_formatter_agent import CLASSIFICATION_SCHEMA, json_formatter
 from agents.llm_failsafe_agent import get_robust_llm_response

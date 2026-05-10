@@ -11,7 +11,6 @@ authentication, and role assignment.
 import logging
 import secrets
 import uuid
-from datetime import datetime, timezone
 from typing import List, Optional
 
 import bcrypt

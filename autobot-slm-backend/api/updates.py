@@ -612,7 +612,7 @@ async def _run_discover_job(
         job["completed_at"] = datetime.now(timezone.utc).isoformat()
         await _broadcast_job_update(job_id, job["status"], 100, job["message"])
 
-    except Exception as e:
+    except Exception:
         logger.exception("Discover job failed: %s", job_id)
         job["status"] = "failed"
         job["message"] = "Discover job failed"

@@ -12,7 +12,7 @@ without affecting core functionality.
 import asyncio
 import functools
 import logging
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, TypeVar
 
 logger = logging.getLogger(__name__)
 

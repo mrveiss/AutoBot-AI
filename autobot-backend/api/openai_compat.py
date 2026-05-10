@@ -19,9 +19,8 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-import os
 import time
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
@@ -34,11 +33,9 @@ from api.schemas_code import (
     OAIChoice,
     OAIChoiceMessage,
     OAIDeltaMessage,
-    OAIMessage,
     OAIModelCard,
     OAIModelListResponse,
     OAIStreamChoice,
-    OAIStreamOptions,
     OAIUsage,
 )
 from auth_middleware import get_current_user

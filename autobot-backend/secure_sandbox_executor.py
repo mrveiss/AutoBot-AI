@@ -31,7 +31,7 @@ try:
     from docker.errors import DockerException, ImageNotFound
 
     DOCKER_SDK_AVAILABLE = True
-except ImportError as _docker_import_error:
+except ImportError:
     DOCKER_SDK_AVAILABLE = False
     docker = None  # type: ignore[assignment]
 

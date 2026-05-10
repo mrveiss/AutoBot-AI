@@ -199,7 +199,7 @@ class MultiAgentWorkflowValidator:
                     "response_time": response.elapsed.total_seconds(),
                     "success": 200 <= response.status_code < 400,
                 }
-            except Exception as e:
+            except Exception:
                 return {
                     "endpoint": endpoint,
                     "error": "Request failed",

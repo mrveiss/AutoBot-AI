@@ -13,11 +13,10 @@ Covers:
   - label format: {connector_type}:{name}
 """
 
-import asyncio
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest.mock import AsyncMock
 
 import pytest

@@ -19,7 +19,6 @@ Covers:
   - SLACK_APPROVALS_CHANNEL falls back to SLACK_NOTIFICATIONS_CHANNEL
 """
 
-import importlib
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 

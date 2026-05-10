@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from constants.path_constants import PATH
 from constants.threshold_constants import QueryDefaults
-from constants.ttl_constants import TIMEOUT_TASK_ANALYSIS
+from constants.ttl_constants import TIMEOUT_TASK_ANALYSIS, TTL_24_HOURS
 from utils.background_task_manager import BackgroundTaskManager
 
 logger = logging.getLogger(__name__)

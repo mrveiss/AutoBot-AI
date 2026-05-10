@@ -19,7 +19,7 @@ from agents.development_speedup_agent import (
     get_development_speedup_agent,
 )
 from api.schemas_code import DevelopmentSpeedupAnalysisRequest
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.singleton_factory import lazy_singleton
 

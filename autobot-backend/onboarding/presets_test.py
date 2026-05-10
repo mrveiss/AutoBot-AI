@@ -5,8 +5,6 @@
 Unit tests for onboarding preset loader (Issue #5061).
 """
 
-import pytest
-
 from onboarding.presets import get_all_presets, get_preset
 
 REQUIRED_FIELDS = {"name", "title", "description", "agents", "skills", "connectors", "system_prompt", "llm_tier"}

@@ -33,7 +33,7 @@ import logging
 import os
 import resource
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 logger = logging.getLogger("mcp_worker")
 

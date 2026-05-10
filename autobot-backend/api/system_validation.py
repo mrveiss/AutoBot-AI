@@ -7,9 +7,8 @@ System Validation API endpoints for AutoBot optimization suite
 """
 
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from api.schemas_workflows import (
     SystemValidationBenchmarkResponse,

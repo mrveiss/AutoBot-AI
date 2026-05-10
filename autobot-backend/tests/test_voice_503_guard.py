@@ -8,7 +8,6 @@ Verifies that /api/voice/listen and /api/voice/speak return HTTP 503
 (not AttributeError / 500) when app.state.voice_interface is not initialized.
 """
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

@@ -9,7 +9,7 @@ Endpoints for managing per-node and global configuration.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status

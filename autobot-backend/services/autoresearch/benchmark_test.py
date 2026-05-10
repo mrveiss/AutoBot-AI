@@ -19,7 +19,6 @@ import pytest
 from services.autoresearch.prompt_optimizer import (
     PromptOptimizer,
     PromptOptTarget,
-    PromptVariant,
 )
 from services.autoresearch.scorers import (
     HumanReviewScorer,

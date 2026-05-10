@@ -7,7 +7,6 @@ Unit tests for branch health metrics (Issue #4112).
 Tests branch divergence calculation, health scoring, and metrics collection.
 """
 
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest

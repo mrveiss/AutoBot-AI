@@ -15,14 +15,11 @@ Issue: Extend DAG executor with causal validation and effect tracing.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional
 
 from orchestration.causal_models import (
-    CausalEffect,
     CausalEffectType,
     CausalMetadata,
-    Dependency,
-    DependencyType,
 )
 from orchestration.dag_executor import WorkflowDAG
 
@@ -127,7 +124,7 @@ class CausalValidator:
             result.add_issue(ValidationIssue("error", "topology", "DAG contains a cycle (detected by executor)"))
             return result
 
-        step_ids = set(dag.nodes.keys())
+        set(dag.nodes.keys())
 
         # 1. Check all referenced steps exist
         self._validate_step_existence(dag, metadata_map, result)
@@ -326,7 +323,6 @@ class CausalValidator:
         """Suggest workflow optimizations based on causal metadata."""
         # Detect parallelizable steps (no causal dependencies between them)
         # and suggest which can_run_parallel_with
-        pass
 
     # -----------------------------------------------------------------------
     # Helpers

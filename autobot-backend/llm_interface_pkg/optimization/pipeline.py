@@ -29,7 +29,7 @@ from .attention_backend import (
     AttentionBackendSelector,
 )
 from .attention_backend import ModelConfig as AttentionModelConfig
-from .hf_quantizer import HfQuantizerWrapper, QuantizationType, QuantizerConfig
+from .hf_quantizer import HfQuantizerWrapper
 from .kv_cache import KVCacheConfig, KVCacheManager, LayerKVCache
 from .layer_inference import LayerInferenceConfig, LayerInferenceEngine
 from .meta_eviction import MetaDeviceEvictionManager, clean_memory

@@ -13,7 +13,7 @@ graph (chat_workflow/graph.py).
 
 import asyncio
 import logging
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends
 

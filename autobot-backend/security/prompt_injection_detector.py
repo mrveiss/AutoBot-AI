@@ -15,7 +15,6 @@ This module provides comprehensive prompt injection detection for:
 
 import logging
 import re
-import unicodedata
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List

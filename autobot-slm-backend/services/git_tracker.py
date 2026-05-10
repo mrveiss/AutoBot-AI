@@ -10,7 +10,7 @@ Tracks git repository version and checks for updates from remote.
 import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Tuple
 
 from sqlalchemy import select

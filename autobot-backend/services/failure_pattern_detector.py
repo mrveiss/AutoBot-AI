@@ -15,12 +15,11 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
-from constants.ttl_constants import TTL_7_DAYS, TTL_30_DAYS
+from constants.ttl_constants import TTL_30_DAYS
 
 logger = logging.getLogger(__name__)
 

@@ -320,7 +320,6 @@ class ConversationRateLimiter:
 
 
 # Global instance for easy access (thread-safe)
-import threading
 
 from autobot_shared.singleton_factory import lazy_singleton
 

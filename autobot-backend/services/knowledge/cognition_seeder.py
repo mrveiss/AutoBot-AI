@@ -26,7 +26,7 @@ import yaml
 from constants.path_constants import PATH
 
 if TYPE_CHECKING:
-    from knowledge.backends import BaseClient, BaseCollection
+    from knowledge.backends import BaseClient
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@ Causal Edge Model - Causal relationship representation for ECL pipeline.
 Issue #3395: RAG semantic chunking, fact extraction, entity resolution.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Literal, Optional
 from uuid import UUID, uuid4
 

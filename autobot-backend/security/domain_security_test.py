@@ -23,8 +23,6 @@ Test matrix:
 import logging
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from security.domain_security import DomainSecurityConfig, DomainSecurityManager
 
 logger = logging.getLogger(__name__)
