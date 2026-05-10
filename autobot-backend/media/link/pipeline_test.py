@@ -27,7 +27,7 @@ def _mock_getaddrinfo(ip: str):
     family = socket.AF_INET6 if ":" in ip else socket.AF_INET
     sockaddr = (ip, 0, 0, 0) if family == socket.AF_INET6 else (ip, 0)
     return patch(
-        "media.link.pipeline.socket.getaddrinfo",
+        "autobot_shared.url_safety.socket.getaddrinfo",
         return_value=[(family, socket.SOCK_STREAM, 0, "", sockaddr)],
     )
 
@@ -450,14 +450,14 @@ class TestLinkPipelineJina:
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0)),
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", 0)),
         ]
-        with patch("media.link.pipeline.socket.getaddrinfo", return_value=infos):
+        with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=infos):
             assert not pipe._is_public_url("https://multi-answer.attacker.example/")
 
     def test_is_public_url_rejects_onion(self):
         pipe = LinkPipeline()
         # Must not resolve DNS; rejected by TLD alone.
         with patch(
-            "media.link.pipeline.socket.getaddrinfo",
+            "autobot_shared.url_safety.socket.getaddrinfo",
             side_effect=AssertionError("DNS should not be called for .onion"),
         ):
             assert not pipe._is_public_url("http://example.onion/page")
@@ -465,7 +465,7 @@ class TestLinkPipelineJina:
     def test_is_public_url_rejects_internal_tld(self):
         pipe = LinkPipeline()
         with patch(
-            "media.link.pipeline.socket.getaddrinfo",
+            "autobot_shared.url_safety.socket.getaddrinfo",
             side_effect=AssertionError("DNS should not be called for .internal"),
         ):
             assert not pipe._is_public_url("https://service.internal/")
@@ -478,7 +478,7 @@ class TestLinkPipelineJina:
         """DNS lookup failure must return False (fail closed)."""
         pipe = LinkPipeline()
         with patch(
-            "media.link.pipeline.socket.getaddrinfo",
+            "autobot_shared.url_safety.socket.getaddrinfo",
             side_effect=socket.gaierror("Name or service not known"),
         ):
             assert not pipe._is_public_url("https://nonexistent-host.example/")
@@ -486,7 +486,7 @@ class TestLinkPipelineJina:
     def test_is_public_url_fails_closed_on_dns_timeout(self):
         pipe = LinkPipeline()
         with patch(
-            "media.link.pipeline.socket.getaddrinfo",
+            "autobot_shared.url_safety.socket.getaddrinfo",
             side_effect=socket.timeout(),
         ):
             assert not pipe._is_public_url("https://slow-dns.example/")
@@ -501,7 +501,7 @@ class TestLinkPipelineJina:
         """Literal public IP short-circuits DNS."""
         pipe = LinkPipeline()
         with patch(
-            "media.link.pipeline.socket.getaddrinfo",
+            "autobot_shared.url_safety.socket.getaddrinfo",
             side_effect=AssertionError("DNS should not be called for literal IP"),
         ):
             assert pipe._is_public_url("http://8.8.8.8/")
