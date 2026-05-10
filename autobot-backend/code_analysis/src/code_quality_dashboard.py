@@ -21,6 +21,7 @@ from security_analyzer import SecurityAnalyzer
 from testing_coverage_analyzer import TestingCoverageAnalyzer
 
 from constants.ttl_constants import TTL_30_DAYS
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -829,4 +830,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

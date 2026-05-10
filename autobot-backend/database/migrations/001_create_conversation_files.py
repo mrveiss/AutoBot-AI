@@ -14,6 +14,7 @@ from typing import Optional
 
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -511,8 +512,8 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) > 1 and sys.argv[1] == "down":
-        exit_code = asyncio.run(rollback_migration())
+        exit_code = run_or_schedule(rollback_migration())
     else:
-        exit_code = asyncio.run(run_migration())
+        exit_code = run_or_schedule(run_migration())
 
     sys.exit(exit_code)

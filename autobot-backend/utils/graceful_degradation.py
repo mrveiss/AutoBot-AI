@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 
 from constants.threshold_constants import TimingConstants
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -699,4 +700,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

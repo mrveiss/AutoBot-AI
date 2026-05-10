@@ -843,6 +843,7 @@ class ToolPatternAnalyzer:
 
 # Global analyzer instance (thread-safe)
 import threading
+from autobot_shared.async_compat import run_or_schedule
 
 _global_analyzer: Optional[ToolPatternAnalyzer] = None
 _global_analyzer_lock = threading.Lock()
@@ -912,4 +913,4 @@ if __name__ == "__main__":
         insights = await get_optimization_insights()
         print(json.dumps(insights, indent=2, default=str))  # noqa: print
 
-    asyncio.run(example())
+    run_or_schedule(example())

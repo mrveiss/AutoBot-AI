@@ -17,6 +17,7 @@ from typing import Dict, List, Optional, Tuple
 
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_24_HOURS
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -406,7 +407,7 @@ def _mark_task_completed(
         loop.create_task(_invalidate_quality_cache())
     except RuntimeError:
         # No running loop (called from a sync context); run a one-shot
-        asyncio.run(_invalidate_quality_cache())
+        run_or_schedule(_invalidate_quality_cache())
 
 
 def _mark_task_failed(task_id: str, error: Exception, indexing_tasks: Dict) -> None:

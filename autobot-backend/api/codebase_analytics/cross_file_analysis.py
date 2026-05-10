@@ -22,6 +22,7 @@ import asyncio
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional  # noqa: F401  (List used in pub API)
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +154,6 @@ def schedule_cross_file_analysis(
         loop.create_task(run_cross_file_analysis(root_path, source_id))
     except RuntimeError:
         try:
-            asyncio.run(run_cross_file_analysis(root_path, source_id))
+            run_or_schedule(run_cross_file_analysis(root_path, source_id))
         except Exception as exc:  # pragma: no cover
             logger.warning("[#6747] Cross-file analysis scheduling failed: %s", exc)

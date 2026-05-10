@@ -44,6 +44,7 @@ from project_state_tracking import (  # Types and enums; Models; Database; Main 
     track_system_error,
     track_user_action,
 )
+from autobot_shared.async_compat import run_or_schedule
 
 __all__ = [
     # Types
@@ -106,4 +107,4 @@ if __name__ == "__main__":
             print(f"Unknown command: {command}")  # noqa: print
             print("Available commands: snapshot, summary, report, metrics, test-tracking, export")  # noqa: print
 
-    asyncio.run(main())
+    run_or_schedule(main())

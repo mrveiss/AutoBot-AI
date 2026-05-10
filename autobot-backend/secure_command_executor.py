@@ -27,6 +27,7 @@ from security.command_patterns import (
 )
 from services.tool_output_filter import get_tool_output_filter
 from utils.command_utils import execute_shell_command
+from autobot_shared.async_compat import run_or_schedule
 
 # Permission system imports (lazy to avoid circular imports)
 if TYPE_CHECKING:
@@ -1224,4 +1225,4 @@ if __name__ == "__main__":
                 f"executed: {entry['executed']})"
             )
 
-    asyncio.run(test_commands())
+    run_or_schedule(test_commands())

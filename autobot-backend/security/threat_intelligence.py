@@ -28,6 +28,7 @@ from urllib.parse import urlparse
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -785,4 +786,4 @@ if __name__ == "__main__":
             if result.urlvoid_score is not None:
                 logger.info("    URLVoid: {result.urlvoid_score:.2f}")
 
-    asyncio.run(test_threat_intel())
+    run_or_schedule(test_threat_intel())

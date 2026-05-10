@@ -21,6 +21,7 @@ import psutil
 
 # Import existing monitoring infrastructure
 from constants.api_constants import PATH_API_HEALTH
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -1525,4 +1526,4 @@ if __name__ == "__main__":
         print(f"Optimization recommendations: {json.dumps(recommendations, indent=2)}")  # noqa: print  # noqa: print
 
     # Run test
-    asyncio.run(test_phase9_monitoring())
+    run_or_schedule(test_phase9_monitoring())

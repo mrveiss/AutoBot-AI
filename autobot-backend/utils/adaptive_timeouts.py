@@ -11,6 +11,7 @@ import logging
 import time
 from enum import Enum
 from typing import Any, Callable, Dict, Optional
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -435,4 +436,4 @@ if __name__ == "__main__":
         log_adaptive_timeout_metrics(300, 60, "command_execution")
 
     # Run test
-    asyncio.run(test_timeout_optimization())
+    run_or_schedule(test_timeout_optimization())

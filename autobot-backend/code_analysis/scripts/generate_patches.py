@@ -10,6 +10,7 @@ from pathlib import Path
 
 from automated_fix_generator import AutomatedFixGenerator
 from code_quality_dashboard import CodeQualityDashboard
+from autobot_shared.async_compat import run_or_schedule
 
 
 def _print_fix_summary_stats(fix_results: dict) -> None:
@@ -321,4 +322,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

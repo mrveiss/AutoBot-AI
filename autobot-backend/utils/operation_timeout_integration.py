@@ -40,6 +40,7 @@ from .long_running_operations_framework import (
     execute_codebase_indexing,
     execute_comprehensive_test_suite,
 )
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -724,4 +725,4 @@ if __name__ == "__main__":
             await operation_integration_manager.shutdown()
 
     # Run example
-    asyncio.run(example_integration())
+    run_or_schedule(example_integration())

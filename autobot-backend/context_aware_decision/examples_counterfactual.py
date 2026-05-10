@@ -17,6 +17,7 @@ from .counterfactual_reasoner import CounterfactualReasoner
 from .decision_engine import DecisionEngine
 from .models import ContextElement, DecisionContext
 from .types import ContextType, DecisionType
+from autobot_shared.async_compat import run_or_schedule
 
 # =============================================================================
 # Example 1: Network Timeout Scenario
@@ -360,4 +361,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

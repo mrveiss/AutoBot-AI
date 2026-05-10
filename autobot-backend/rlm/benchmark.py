@@ -30,6 +30,7 @@ from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 from autobot_shared.ssot_config import config as _ssot_config
 from rlm.evaluator import ResponseQualityEvaluator
 from rlm.types import RLMConfig
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -355,4 +356,4 @@ if __name__ == "__main__":
         else:
             logger.info(output)
 
-    asyncio.run(_main())
+    run_or_schedule(_main())

@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from autobot_shared.status_enums import Severity  # #7253: consolidated onto canonical (#6689)
+from autobot_shared.async_compat import run_or_schedule
 
 # Anti-pattern severity → 0-100 integer score. Kept as a module-level helper
 # rather than an enum method so the canonical `Severity` enum stays clean
@@ -1716,4 +1717,4 @@ if __name__ == "__main__":
                 print(f"  {ap.description}")  # noqa: print
                 print(f"  Suggestion: {ap.suggestion}")  # noqa: print
 
-    asyncio.run(main())
+    run_or_schedule(main())

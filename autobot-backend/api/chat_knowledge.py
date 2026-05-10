@@ -68,6 +68,7 @@ from chat_history import ChatHistoryManager
 from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
 from type_defs.common import Metadata
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -1028,4 +1029,4 @@ if __name__ == "__main__":
 
         logger.info("Demo completed!")
 
-    asyncio.run(demo())
+    run_or_schedule(demo())

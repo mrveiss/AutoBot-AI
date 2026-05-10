@@ -24,6 +24,7 @@ from user_management.config import get_deployment_config
 
 # Import models to register with SQLAlchemy
 from user_management.models import Base
+from autobot_shared.async_compat import run_or_schedule
 
 # this is the Alembic Config object
 config = context.config
@@ -114,7 +115,7 @@ async def run_async_migrations() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    asyncio.run(run_async_migrations())
+    run_or_schedule(run_async_migrations())
 
 
 if context.is_offline_mode():

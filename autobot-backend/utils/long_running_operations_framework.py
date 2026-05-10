@@ -54,6 +54,7 @@ from utils.long_running_operations import (  # Types and dataclasses; Managers
     OperationStatus,
     OperationType,
 )
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -508,4 +509,4 @@ if __name__ == "__main__":
             await manager.stop_background_processor()
 
     # Run example
-    asyncio.run(example_usage())
+    run_or_schedule(example_usage())

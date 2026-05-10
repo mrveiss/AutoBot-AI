@@ -10,6 +10,7 @@ from pathlib import Path
 from env_analyzer import EnvironmentAnalyzer
 
 from constants.network_constants import NetworkConstants
+from autobot_shared.async_compat import run_or_schedule
 
 
 def _print_analysis_summary(results: dict) -> None:
@@ -197,4 +198,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

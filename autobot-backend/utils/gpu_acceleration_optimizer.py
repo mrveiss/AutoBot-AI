@@ -46,6 +46,7 @@ from utils.gpu_optimization import (  # noqa: F401
     run_comprehensive_benchmark,
 )
 from utils.performance_monitor import performance_monitor
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -409,4 +410,4 @@ if __name__ == "__main__":
         optimization = await optimize_gpu_for_multimodal()
         print(f"Optimization Result: " f"{json.dumps(asdict(optimization), indent=2, default=str)}")  # noqa: print
 
-    asyncio.run(test_gpu_optimization())
+    run_or_schedule(test_gpu_optimization())

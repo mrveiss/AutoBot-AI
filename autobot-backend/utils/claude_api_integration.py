@@ -24,6 +24,7 @@ from .request_batcher import (
     RequestPriority,
     create_batcher,
 )
+from autobot_shared.async_compat import run_or_schedule
 
 # Import our components
 
@@ -582,4 +583,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

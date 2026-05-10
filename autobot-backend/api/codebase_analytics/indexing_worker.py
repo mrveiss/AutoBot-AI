@@ -27,6 +27,7 @@ for _p in [str(_BACKEND_ROOT.parent), str(_SHARED_ROOT), str(_BACKEND_ROOT)]:
         sys.path.insert(0, _p)
 
 from api.codebase_analytics.scanner import do_indexing_with_progress  # noqa: E402
+from autobot_shared.async_compat import run_or_schedule
 
 logging.basicConfig(
     level=logging.INFO,
@@ -58,7 +59,7 @@ def main() -> None:
         root_path,
         source_id,
     )
-    asyncio.run(do_indexing_with_progress(task_id, root_path, source_id=source_id))
+    run_or_schedule(do_indexing_with_progress(task_id, root_path, source_id=source_id))
     logger.info("[Worker] Indexing task=%s finished", task_id)
 
 

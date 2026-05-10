@@ -55,6 +55,7 @@ def _parse_priority(priority: Any) -> "MessagePriority":
 
 # noqa: E402
 from autobot_shared.redis_client import get_redis_client  # noqa: E402
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -796,6 +797,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.test:
-        asyncio.run(test_communication_protocol())
+        run_or_schedule(test_communication_protocol())
     else:
         logger.info("Use --test to run the communication protocol test")

@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 from performance_analyzer import PerformanceAnalyzer
+from autobot_shared.async_compat import run_or_schedule
 
 
 def _print_perf_summary(results: dict) -> None:
@@ -219,4 +220,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())
