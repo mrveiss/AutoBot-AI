@@ -217,7 +217,16 @@ class TestConsumeFeedbackStream:
 
     @pytest.mark.asyncio
     async def test_neutral_event_not_distilled(self):
-        """Identical retrieved and ranked IDs → not successful → no hset call."""
+        """Identical retrieved and ranked IDs → not successful → no PATTERN hset.
+
+        #7386: production legitimately calls ``redis.hset(_CURSOR_HASH_KEY, ...)``
+        after processing any event — cursor advance is required for correctness
+        so the next ``consume_feedback_stream`` call doesn't re-process the
+        same events. The original assertion ``not redis.hset.called`` was too
+        coarse — it caught the cursor-save call as well as the (absent)
+        pattern hset. Assert specifically that no hset hit the
+        ``rag:retrieval:pattern:*`` namespace.
+        """
         redis = _make_redis_mock()
         ids = ["a", "b", "c"]
         fields = _make_feedback_fields(retrieved=ids, ranked=ids, complexity="simple")
@@ -226,7 +235,17 @@ class TestConsumeFeedbackStream:
         learner = _make_learner(redis)
         await learner.consume_feedback_stream("2026-01-01")
 
-        assert not redis.hset.called
+        # Cursor save (`rag:rl:cursors`) is allowed; pattern persistence
+        # (`rag:retrieval:pattern:*`) is what neutral events MUST NOT trigger.
+        pattern_hset_calls = [
+            call
+            for call in redis.hset.call_args_list
+            if call.args and isinstance(call.args[0], str) and call.args[0].startswith("rag:retrieval:pattern:")
+        ]
+        assert not pattern_hset_calls, (
+            f"#7386: neutral event triggered pattern persistence — "
+            f"unexpected hset calls to pattern keys: {pattern_hset_calls}"
+        )
 
     @pytest.mark.asyncio
     async def test_cursor_advances_after_processing(self):
