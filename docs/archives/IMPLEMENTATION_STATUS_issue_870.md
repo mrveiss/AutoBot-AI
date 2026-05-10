@@ -1,5 +1,7 @@
 # Issue #870 Implementation Status
 
+> **Archived 2026-05-10.** Original scope limited to issue #870 (Phase 1-2 user/secrets work). The repository has since advanced through 7,000+ issues; this file is preserved as a historical record. For current platform state see [`docs/system-state.md`](../system-state.md).
+
 **Backend User Entity & Secrets Ownership Model (#608 Phase 1-2)**
 
 ## Completed Components
