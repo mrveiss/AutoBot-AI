@@ -279,6 +279,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["knowledge-site-map"],
         "knowledge_site_map",
     ),
+    # Issue #7405: Schema-driven structured data extraction from a URL via LLM
+    (
+        "api.knowledge_extract",
+        "/knowledge",
+        ["knowledge-extract"],
+        "knowledge_extract",
+    ),
     # Issue #1256: Observable Research Panel — live browser WS stream
     (
         "api.knowledge_research_ws",
