@@ -11,7 +11,7 @@ Tests cover:
 """
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -22,6 +22,7 @@ from services.audit.audit_log import (
     query_audit_log,
     record_event,
 )
+from tests.fixtures import make_async_redis, make_redis_pipeline
 
 # ---------------------------------------------------------------------------
 # Module-level stubs — keep import chain clean without a full backend venv
@@ -34,20 +35,16 @@ from services.audit.audit_log import (
 
 
 def _make_pipeline_mock():
-    """Return an async pipeline mock that supports context manager + execute."""
-    pipe = AsyncMock()
-    pipe.__aenter__ = AsyncMock(return_value=pipe)
-    pipe.__aexit__ = AsyncMock(return_value=False)
-    pipe.execute = AsyncMock(return_value=[1, 1, 1, 1, 1])
-    return pipe
+    # Migrated to canonical ``make_redis_pipeline()`` (#7280 round 6, post-#7339).
+    return make_redis_pipeline(execute_returns=[1, 1, 1, 1, 1])
 
 
 def _make_redis_mock(pipeline=None):
-    """Return a minimal async Redis mock with pipeline and zrangebyscore."""
-    redis_mock = AsyncMock()
-    redis_mock.pipeline = MagicMock(return_value=pipeline or _make_pipeline_mock())
-    redis_mock.zrangebyscore = AsyncMock(return_value=[])
-    return redis_mock
+    # Migrated to canonical ``make_async_redis(pipeline=...)`` (#7280 round 6).
+    return make_async_redis(
+        pipeline=pipeline or _make_pipeline_mock(),
+        zrangebyscore_returns=[],
+    )
 
 
 # ---------------------------------------------------------------------------
