@@ -26,6 +26,24 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from autobot_shared.status_enums import Severity  # #7253: consolidated onto canonical (#6689)
+
+# Anti-pattern severity → 0-100 integer score. Kept as a module-level helper
+# rather than an enum method so the canonical `Severity` enum stays clean
+# (canonical `to_score()` returns 0.0–0.9 floats, a different scale).
+_ANTI_PATTERN_SCORES: Dict[Severity, int] = {
+    Severity.CRITICAL: 100,
+    Severity.HIGH: 75,
+    Severity.MEDIUM: 50,
+    Severity.LOW: 25,
+}
+
+
+def anti_pattern_score(severity: Severity) -> int:
+    """Numeric anti-pattern score for `severity` (higher = worse, 0-100 scale)."""
+    return _ANTI_PATTERN_SCORES[severity]
+
+
 # Initialize configuration
 logger = logging.getLogger(__name__)
 
@@ -55,25 +73,6 @@ _ENTRY_POINT_SUFFIXES = (
     "API",
     "Router",
 )
-
-
-class Severity(Enum):
-    """Anti-pattern severity levels"""
-
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-
-    def score(self) -> int:
-        """Numeric score for severity (higher = worse)"""
-        scores = {
-            Severity.CRITICAL: 100,
-            Severity.HIGH: 75,
-            Severity.MEDIUM: 50,
-            Severity.LOW: 25,
-        }
-        return scores[self]
 
 
 class AntiPatternType(Enum):
@@ -119,7 +118,7 @@ class AntiPatternInstance:
         return {
             "pattern_type": self.pattern_type.value,
             "severity": self.severity.value,
-            "severity_score": self.severity.score(),
+            "severity_score": anti_pattern_score(self.severity),
             "file_path": self.file_path,
             "line_number": self.line_number,
             "entity_name": self.entity_name,
@@ -1709,7 +1708,7 @@ if __name__ == "__main__":
             print(f"\n{'='*60}")  # noqa: print
             print("TOP ISSUES (by severity)")  # noqa: print
             print(f"{'='*60}")  # noqa: print
-            sorted_patterns = sorted(report.anti_patterns, key=lambda x: x.severity.score(), reverse=True)
+            sorted_patterns = sorted(report.anti_patterns, key=lambda x: anti_pattern_score(x.severity), reverse=True)
             for ap in sorted_patterns[:10]:
                 print(f"\n[{ap.severity.value.upper()}] {ap.pattern_type.value}")  # noqa: print
                 print(f"  Entity: {ap.entity_name}")  # noqa: print
