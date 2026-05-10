@@ -128,7 +128,18 @@ class PluginManager:
 
         Issue #6970.
         """
-        handlers = self._hook_registry._hooks.get(hook.value, [])
+        from plugin_sdk.hooks import EXTENSION_POINT_HOOKS
+
+        if hook not in EXTENSION_POINT_HOOKS:
+            raise ValueError(
+                f"dispatch_extension_point requires an extension-point hook, "
+                f"got {hook.value}. Use HookRegistry.call_hook for event-style hooks."
+            )
+
+        # Defensive copy: a handler that mutates _hooks during dispatch
+        # (e.g., by registering another handler) would otherwise cause
+        # "list changed size during iteration" or skipped/duplicate calls.
+        handlers = list(self._hook_registry._hooks.get(hook.value, []))
         for cb_info in handlers:
             cb = cb_info["callback"]
             plugin_name = cb_info["plugin_name"]

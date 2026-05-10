@@ -926,3 +926,55 @@ async def test_dispatch_extension_point_forwards_args_and_kwargs():
 
     await pm.dispatch_extension_point(Hook.API_ROUTER_REGISTER, 1, 2, c=3)
     assert received == {"a": 1, "b": 2, "c": 3}
+
+
+@pytest.mark.asyncio
+async def test_dispatch_extension_point_rejects_event_style_hook():
+    """ValueError if caller passes an event-style hook (e.g. ON_STARTUP)."""
+    from plugin_sdk.hooks import Hook, HookRegistry
+
+    HookRegistry().clear()
+    PluginRegistry().clear()
+    pm = PluginManager(plugin_dirs=[])
+
+    with pytest.raises(ValueError) as exc_info:
+        await pm.dispatch_extension_point(Hook.ON_STARTUP)
+    assert "extension-point hook" in str(exc_info.value)
+    assert "on_startup" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_dispatch_extension_point_safe_under_handler_mutation():
+    """Defensive copy: a handler that registers a NEW handler during dispatch
+    does not cause list-changed-size or skipped/duplicate calls."""
+    from plugin_sdk.hooks import Hook, HookRegistry
+
+    HookRegistry().clear()
+    PluginRegistry().clear()
+    pm = PluginManager(plugin_dirs=[])
+
+    plugin = _ConcretePlugin(_make_manifest(name="mut-test"))
+    PluginRegistry().register(plugin)
+
+    invoked = []
+
+    async def added_during_dispatch():
+        invoked.append("added")
+
+    async def first_handler():
+        invoked.append("first")
+        # Register a second handler mid-dispatch (does NOT fire this round
+        # because we operate on a defensive copy of the original handler list)
+        HookRegistry().register_hook(
+            Hook.API_ROUTER_REGISTER.value,
+            added_during_dispatch,
+            plugin_name="mut-test",
+        )
+
+    HookRegistry().register_hook(
+        Hook.API_ROUTER_REGISTER.value, first_handler, plugin_name="mut-test"
+    )
+
+    await pm.dispatch_extension_point(Hook.API_ROUTER_REGISTER)
+    # Only the first handler ran during this dispatch
+    assert invoked == ["first"]
