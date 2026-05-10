@@ -21,26 +21,21 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from tests.fixtures import make_async_redis
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Patch paths
 # ---------------------------------------------------------------------------
 
+# These patch the canonical source (``autobot_shared.redis_client``) rather
+# than a consumer namespace because ``KnowledgeBase._init_redis_connections``
+# imports ``get_async_redis_client`` lazily inside the method body
+# (``knowledge/base.py:322``) — there is no module-top binding to patch in
+# the consumer namespace at patch time.
 _SYNC_CLIENT_PATH = "autobot_shared.redis_client.get_redis_client"
 _ASYNC_CLIENT_PATH = "autobot_shared.redis_client.get_async_redis_client"
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_mock_redis() -> AsyncMock:
-    """Return an AsyncMock that behaves like redis.asyncio.Redis."""
-    client = AsyncMock()
-    client.ping = AsyncMock(return_value=True)
-    return client
 
 
 # ---------------------------------------------------------------------------
@@ -50,7 +45,11 @@ def _make_mock_redis() -> AsyncMock:
 
 @pytest.fixture
 def mock_async_redis():
-    return _make_mock_redis()
+    # Migrated to canonical ``make_async_redis()`` (#7280 round 3).
+    # ``ping=True`` flows through ``**extra_methods`` to attach
+    # ``AsyncMock(return_value=True)`` — ``ping`` is not in the canonical
+    # fixture's core defaults.
+    return make_async_redis(ping=True)
 
 
 # ---------------------------------------------------------------------------
