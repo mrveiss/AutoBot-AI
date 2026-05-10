@@ -189,3 +189,138 @@ def test_factory_re_exported_from_fixtures_package() -> None:
     assert "patch_async_redis" in fixtures.__all__
     assert callable(fixtures.make_async_redis)
     assert callable(fixtures.patch_async_redis)
+
+
+# ---------------------------------------------------------------------------
+# make_redis_pipeline + pipeline= kwarg (#7339)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_pipeline_async_context_manager_pattern() -> None:
+    """``async with redis.pipeline() as pipe: ... await pipe.execute()`` —
+    the most common pipeline usage in production async-redis code."""
+    from tests.fixtures import make_redis_pipeline
+
+    pipe = make_redis_pipeline(execute_returns=[1, 1, 1])
+    redis = make_async_redis(pipeline=pipe)
+
+    # Production code shape: redis.pipeline() is SYNC, returns a context manager.
+    p = redis.pipeline()
+    assert p is pipe  # not an awaitable — sync call
+
+    async with p as inner:
+        assert inner is pipe  # __aenter__ returns the pipe itself
+        # Buffered ops — pipe.X(...) is a coroutine; in real redis-py these
+        # don't need await but AsyncMock auto-awaits via the parent's child-
+        # spawning behavior. Both shapes (await/no-await) work for tests.
+        await inner.xadd("stream", {"k": "v"})
+        result = await inner.execute()
+
+    assert result == [1, 1, 1]
+
+
+@pytest.mark.asyncio
+async def test_pipeline_direct_caller_pattern() -> None:
+    """``pipe = redis.pipeline(); pipe.X(...); await pipe.execute()`` —
+    no async-with, just direct call + await on execute."""
+    from tests.fixtures import make_redis_pipeline
+
+    pipe = make_redis_pipeline(execute_returns=["xadd-id-1", 1])
+    redis = make_async_redis(pipeline=pipe)
+
+    p = redis.pipeline()
+    await p.xadd("rag:stream", {"data": "x"})
+    await p.hset("rag:meta:1", mapping={"k": "v"})
+    result = await p.execute()
+
+    assert result == ["xadd-id-1", 1]
+
+
+@pytest.mark.asyncio
+async def test_pipeline_execute_default_empty_list() -> None:
+    """Default ``execute_returns=None`` → empty list (matches the
+    "no buffered writes / nothing to report" common case)."""
+    from tests.fixtures import make_redis_pipeline
+
+    pipe = make_redis_pipeline()
+    redis = make_async_redis(pipeline=pipe)
+
+    result = await redis.pipeline().execute()
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_redis_without_pipeline_kwarg_has_default_async_pipeline() -> None:
+    """When no ``pipeline=`` is passed, ``redis.pipeline`` is the default
+    AsyncMock-spawned attribute. Production that doesn't use pipeline
+    won't trip; production that does use it gets a no-op AsyncMock that
+    won't error on access patterns."""
+    redis = make_async_redis()
+    # No assertion that pipeline is callable — just that accessing it
+    # doesn't raise. Real pipeline usage requires the explicit kwarg.
+    assert redis.pipeline is not None
+
+
+def test_make_redis_pipeline_re_exported() -> None:
+    """Documented import path: ``from tests.fixtures import make_redis_pipeline``."""
+    import tests.fixtures as fixtures
+
+    assert "make_redis_pipeline" in fixtures.__all__
+    assert callable(fixtures.make_redis_pipeline)
+
+
+# ---------------------------------------------------------------------------
+# scan_iter_keys (#7339)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_scan_iter_yields_provided_keys() -> None:
+    """``scan_iter_keys=[…]`` attaches a real async-generator returning
+    those keys. Production: ``async for key in redis.scan_iter(match=…): ...``."""
+    redis = make_async_redis(scan_iter_keys=[b"key:1", b"key:2", b"key:3"])
+
+    collected = []
+    async for k in redis.scan_iter(match="key:*"):
+        collected.append(k)
+
+    assert collected == [b"key:1", b"key:2", b"key:3"]
+
+
+@pytest.mark.asyncio
+async def test_scan_iter_accepts_arbitrary_kwargs() -> None:
+    """Real ``redis.scan_iter`` takes ``match=``, ``count=``, ``_type=``.
+    The fixture must accept any kwargs without TypeError."""
+    redis = make_async_redis(scan_iter_keys=[b"a"])
+
+    # Production may call with various kwarg combinations.
+    async for _ in redis.scan_iter(match="a:*", count=100, _type="string"):
+        pass
+
+
+@pytest.mark.asyncio
+async def test_scan_iter_empty_list_yields_nothing() -> None:
+    """``scan_iter_keys=[]`` → empty stream (the no-keys-match case)."""
+    redis = make_async_redis(scan_iter_keys=[])
+
+    collected = []
+    async for k in redis.scan_iter():
+        collected.append(k)
+    assert collected == []
+
+
+@pytest.mark.asyncio
+async def test_scan_iter_snapshot_is_independent_of_caller_mutation() -> None:
+    """Mutating the input list after fixture creation must NOT affect the
+    yielded keys — the fixture takes a snapshot."""
+    keys = [b"a", b"b"]
+    redis = make_async_redis(scan_iter_keys=keys)
+
+    keys.append(b"c")  # mutate after fixture creation
+    keys.clear()  # then clear
+
+    collected = []
+    async for k in redis.scan_iter():
+        collected.append(k)
+    assert collected == [b"a", b"b"]  # original snapshot, not mutated list
