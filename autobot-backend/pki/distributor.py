@@ -314,8 +314,10 @@ class CertificateDistributor:
         mode: str = "644",
     ):
         """Copy a file to remote host and set permissions."""
-        # Read local file
-        content = local_path.read_bytes()
+        # Read local file. #7467: was sync `local_path.read_bytes()` —
+        # blocks the event loop on disk I/O during PKI distribution
+        # which runs concurrently across N VMs.
+        content = await asyncio.to_thread(local_path.read_bytes)
 
         # Write to temporary location
         temp_path = f"/tmp/{local_path.name}"  # nosec B108 - remote VM temp dir

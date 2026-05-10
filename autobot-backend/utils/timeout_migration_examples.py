@@ -729,7 +729,8 @@ class ExistingOperationMigrator:
         await asyncio.sleep(TimingConstants.POLL_INTERVAL)  # Simulate processing time
 
         try:
-            content = file_path.read_text(encoding="utf-8", errors="ignore")
+            # #7467: was sync `file_path.read_text` blocking the event loop.
+            content = await asyncio.to_thread(file_path.read_text, encoding="utf-8", errors="ignore")
             return {
                 "path": str(file_path),
                 "size": len(content),
@@ -831,7 +832,8 @@ class ExistingOperationMigrator:
         vulnerabilities: List[Dict[str, Any]] = []
 
         try:
-            content = file_path.read_text(encoding="utf-8", errors="ignore")
+            # #7467: was sync `file_path.read_text` blocking the event loop.
+            content = await asyncio.to_thread(file_path.read_text, encoding="utf-8", errors="ignore")
 
             if "vulnerability" in scan_types:
                 self._check_vulnerability_patterns(content, vulnerabilities)

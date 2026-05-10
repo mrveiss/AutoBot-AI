@@ -349,7 +349,8 @@ async def create_command_utils_library():
     Issue #1183: library content extracted to module-level constant to reduce function length.
     """
     lib_path = Path("src/utils/command_utils_consolidated.py")
-    lib_path.write_text(_COMMAND_UTILS_LIBRARY_CONTENT, encoding="utf-8")
+    # #7467: was sync `lib_path.write_text` blocking the event loop.
+    await asyncio.to_thread(lib_path.write_text, _COMMAND_UTILS_LIBRARY_CONTENT, encoding="utf-8")
     logger.info(f"Created consolidated command utilities at: {lib_path}")
 
 

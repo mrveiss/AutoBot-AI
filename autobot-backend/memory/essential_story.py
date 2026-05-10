@@ -8,6 +8,7 @@ model tier) that is prepended to every LLM system prompt so every model
 has persistent top-memories without requiring a RAG retrieval round-trip.
 """
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -53,7 +54,8 @@ class EssentialStoryGenerator:
     async def _get_token_budget(self, model_name: str) -> int:
         """Read essential_story_tokens from context_windows.yaml for model."""
         try:
-            text = _YAML_PATH.read_text(encoding="utf-8")
+            # #7467: was sync `_YAML_PATH.read_text` blocking the event loop.
+            text = await asyncio.to_thread(_YAML_PATH.read_text, encoding="utf-8")
             data: Dict[str, Any] = yaml.safe_load(text)
             models: Dict[str, Any] = data.get("models", {})
             entry = models.get(model_name) or {}

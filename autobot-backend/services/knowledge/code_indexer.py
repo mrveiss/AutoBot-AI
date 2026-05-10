@@ -314,7 +314,9 @@ class CodeIndexer:
                 return result
 
         try:
-            content = Path(file_path).read_bytes()
+            # #7467: was sync `Path(file_path).read_bytes()` blocking the event loop
+            # during code indexing of potentially-large source files.
+            content = await asyncio.to_thread(Path(file_path).read_bytes)
         except OSError as e:
             result.failed += 1
             result.errors.append(str(e))

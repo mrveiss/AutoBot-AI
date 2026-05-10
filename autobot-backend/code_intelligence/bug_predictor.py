@@ -26,6 +26,7 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 - Historical bug pattern learning via embeddings
 """
 
+import asyncio
 import logging
 import re
 import subprocess  # nosec B404 - required for git operations
@@ -1148,7 +1149,8 @@ class BugPredictor(_BaseClass):
 
         path = Path(file_path)
         try:
-            content = path.read_text(encoding="utf-8", errors="ignore")
+            # #7467: was sync `path.read_text` blocking the event loop.
+            content = await asyncio.to_thread(path.read_text, encoding="utf-8", errors="ignore")
             content_sample = content[:1000]
 
             embedding = await self._get_embedding(content_sample)

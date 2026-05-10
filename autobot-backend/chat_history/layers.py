@@ -26,6 +26,7 @@ Usage::
     )
 """
 
+import asyncio
 import logging
 import os
 import re
@@ -114,7 +115,9 @@ class Layer1EssentialStory:
             import yaml
 
             yaml_path = Path(__file__).parent.parent / "config" / "context_windows.yaml"
-            data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+            # #7467: was sync `yaml_path.read_text` blocking the event loop.
+            content = await asyncio.to_thread(yaml_path.read_text, encoding="utf-8")
+            data = yaml.safe_load(content)
             model_name = context.get("model_name", "default")
             entry = (data.get("models") or {}).get(model_name) or {}
             if "essential_story_tokens" in entry:
