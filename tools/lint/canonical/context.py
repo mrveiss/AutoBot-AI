@@ -47,7 +47,11 @@ def _walk(base: Path, suffixes: set[str]) -> Iterator[Path]:
             continue
         if path.suffix not in suffixes:
             continue
-        if any(part in _EXCLUDED_DIRS for part in path.parts):
+        try:
+            rel = path.relative_to(base)
+        except ValueError:
+            continue
+        if any(part in _EXCLUDED_DIRS for part in rel.parts):
             continue
         yield path
 

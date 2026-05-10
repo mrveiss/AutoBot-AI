@@ -65,3 +65,18 @@ def test_iter_targets_skips_excluded_dirs(tmp_path: Path) -> None:
     files = list(ctx.iter_targets(["autobot-backend"], suffixes={".py"}))
     assert len(files) == 1
     assert "__pycache__" not in str(files[0])
+
+
+def test_iter_targets_does_not_exclude_via_parent_path(tmp_path: Path) -> None:
+    """Regression: _EXCLUDED_DIRS matched against the absolute path's parts
+    used to filter out every file when the audit ran from inside an excluded
+    parent dir (e.g. .worktrees/issue-XXXX/). The check must be relative to
+    the target's base, not the absolute path."""
+    parent = tmp_path / ".worktrees" / "issue-9999"
+    target = parent / "autobot-backend"
+    target.mkdir(parents=True)
+    (target / "a.py").write_text("x = 1\n", encoding="utf-8")
+    ctx = Context(repo_root=parent)
+    files = list(ctx.iter_targets(["autobot-backend"], suffixes={".py"}))
+    assert len(files) == 1
+    assert files[0].name == "a.py"
