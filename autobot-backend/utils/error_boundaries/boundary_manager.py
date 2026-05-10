@@ -428,8 +428,15 @@ class ErrorBoundaryManager:
         try:
             yield context
         except Exception as e:
-            # Handle synchronous errors
-            asyncio.run(self.handle_error(e, context))
+            # Handle synchronous errors.
+            # #7469: defensive run_or_schedule because this sync ctxmgr can
+            # be entered from an already-running event loop via a sync
+            # caller dispatched from async — bare asyncio.run() would
+            # raise "asyncio.run() cannot be called from a running event
+            # loop" and the original exception would be lost.
+            from autobot_shared.async_compat import run_or_schedule
+
+            run_or_schedule(self.handle_error(e, context))
             # Re-raise the handled exception
             raise
 
