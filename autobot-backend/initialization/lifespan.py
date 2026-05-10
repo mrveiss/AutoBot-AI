@@ -1372,6 +1372,35 @@ async def _init_plugin_manager(app: FastAPI) -> None:
         )
 
 
+async def _dispatch_api_router_register(app: FastAPI) -> None:
+    """Dispatch the API_ROUTER_REGISTER extension-point hook (Issue #6970).
+
+    Plugins that registered an async handler for this hook get a chance to
+    mount their FastAPI routers on the live app. Failures are logged and
+    isolated per-plugin (failing plugin marked status=ERROR; others still
+    fire). Non-critical: dispatch errors do not block startup.
+    """
+    try:
+        from plugin_manager import get_plugin_manager
+        from plugin_sdk.hooks import Hook
+
+        plugin_manager = get_plugin_manager()
+        await plugin_manager.dispatch_extension_point(
+            Hook.API_ROUTER_REGISTER, app
+        )
+        logger.info(
+            "API_ROUTER_REGISTER dispatch complete: %d plugin(s) considered",
+            len(plugin_manager.plugin_registry.get_all_plugins()),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "API_ROUTER_REGISTER dispatch failed: %s",
+            exc,
+            exc_info=True,
+        )
+        # Don't abort startup — plugins are optional.
+
+
 async def initialize_background_services(app: FastAPI):
     """
     Phase 2: Initialize background services (NON-BLOCKING).
@@ -1417,6 +1446,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_voice_interface(app)
         await _init_web_researcher(app)
         await _init_plugin_manager(app)
+        await _dispatch_api_router_register(app)
         await _init_backup_scheduler(app)
         await _start_autonomous_loop(app)
         await _start_community_clustering_loop(app)
