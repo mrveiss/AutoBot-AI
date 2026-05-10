@@ -151,16 +151,35 @@ class VisionProcessor(BaseModalProcessor):
             self.logger.debug("GPU cleanup skipped: %s", e)
 
     async def process(self, input_data: MultiModalInput) -> ProcessingResult:
-        """Process visual input (images, screenshots, video)"""
+        """Process visual input (images, screenshots, video).
+
+        #6755 LSP exception contract: parent ``BaseModalProcessor.process``
+        only declares ``NotImplementedError``; subclasses must NOT raise
+        arbitrary exceptions to callers. Unsupported modality is now
+        returned as a failure ``ProcessingResult`` (the same shape the
+        outer ``except`` clause already produces), which keeps the
+        return-type contract intact and matches the #6658 fix pattern.
+        """
         start_time = time.time()
+
+        if input_data.modality_type not in (ModalityType.IMAGE, ModalityType.VIDEO):
+            return ProcessingResult(
+                result_id=f"vision_{input_data.input_id}",
+                input_id=input_data.input_id,
+                modality_type=input_data.modality_type,
+                intent=input_data.intent,
+                success=False,
+                confidence=0.0,
+                result_data=None,
+                processing_time=time.time() - start_time,
+                error_message=f"Unsupported modality: {input_data.modality_type}",
+            )
 
         try:
             if input_data.modality_type == ModalityType.IMAGE:
                 result = await self._process_image(input_data)
-            elif input_data.modality_type == ModalityType.VIDEO:
-                result = await self._process_video(input_data)
             else:
-                raise ValueError(f"Unsupported modality: {input_data.modality_type}")
+                result = await self._process_video(input_data)
 
             processing_time = time.time() - start_time
             confidence = self.calculate_confidence(result)

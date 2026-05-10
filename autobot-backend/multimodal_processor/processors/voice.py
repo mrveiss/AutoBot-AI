@@ -139,7 +139,22 @@ class VoiceProcessor(BaseModalProcessor):
             if input_data.modality_type == ModalityType.AUDIO:
                 result = await self._process_audio(input_data)
             else:
-                raise ValueError(f"Unsupported modality: {input_data.modality_type}")
+                # #6755 LSP exception contract: don't raise — parent
+                # `BaseModalProcessor.process` only declares NotImplementedError;
+                # subclasses must return a failure ProcessingResult, not propagate
+                # ValueError. Same fix pattern as #6658 / VisionProcessor.
+                processing_time = time.time() - start_time
+                return ProcessingResult(
+                    result_id=f"voice_{input_data.input_id}",
+                    input_id=input_data.input_id,
+                    modality_type=input_data.modality_type,
+                    intent=input_data.intent,
+                    success=False,
+                    confidence=0.0,
+                    result_data=None,
+                    processing_time=processing_time,
+                    error_message=f"Unsupported modality: {input_data.modality_type}",
+                )
 
             processing_time = time.time() - start_time
             confidence = self.calculate_confidence(result)
