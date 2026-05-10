@@ -112,6 +112,19 @@ WEB_SEARCH_SCHEMA: dict = {
     "type": "object",
     "properties": {
         "query": {"type": "string"},
+        "fetch_full": {
+            "type": "boolean",
+            "description": (
+                "When true, fetches the full markdown of each result page "
+                "in addition to returning search snippets. Default false."
+            ),
+        },
+        "max_pages": {
+            "type": "integer",
+            "description": "Maximum number of result pages to fetch when fetch_full=true. Default 5.",
+            "minimum": 1,
+            "maximum": 10,
+        },
     },
     "required": ["query"],
 }
@@ -618,6 +631,66 @@ async def _try_mcp_dispatch(
             exc_info=True,
         )
         raise
+
+
+async def _fetch_single_page(entry: dict) -> dict:
+    """Fetch full markdown for one search result entry. Issue #7404.
+
+    Attaches ``markdown`` and ``fetch_error`` fields to the entry dict.
+    On robots-policy block: markdown=None, fetch_error="robots_blocked".
+    On any other failure: markdown=None, fetch_error=<error_code>.
+    On success: markdown=<str>, fetch_error=None.
+    Never raises — per-URL failures must not abort the whole fan-out.
+    """
+    from web_fetch import RenderMode, WebFetcher
+
+    url = entry.get("url", "")
+    if not url:
+        return {**entry, "markdown": None, "fetch_error": "no_url"}
+    try:
+        result = await WebFetcher.fetch(url, render=RenderMode.AUTO)
+        if result.success:
+            return {**entry, "markdown": result.markdown, "fetch_error": None}
+        error_code = result.error_code or "unknown"
+        logger.debug("[Issue #7404] Fetch failed for %s: %s", url, error_code)
+        return {**entry, "markdown": None, "fetch_error": error_code}
+    except Exception as exc:
+        logger.warning("[Issue #7404] Unexpected fetch error for %s: %s", url, exc)
+        return {**entry, "markdown": None, "fetch_error": "unknown"}
+
+
+async def _fetch_pages_concurrent(entries: list[dict], max_pages: int) -> list[dict]:
+    """Fan out _fetch_single_page for up to max_pages entries. Issue #7404.
+
+    Uses asyncio.gather so all fetches run concurrently. Individual failures
+    are captured inside _fetch_single_page — this function always returns a
+    full list of the same length as entries[:max_pages].
+    """
+    capped = entries[:max_pages]
+    return list(await asyncio.gather(*(_fetch_single_page(e) for e in capped)))
+
+
+def _format_full_search_results(query: str, entries: list[dict]) -> str:
+    """Format enriched search entries (with markdown) into a human-readable string.
+
+    Issue #7404. Entries that failed to fetch include a fetch_error note instead
+    of the markdown body. The overall call always succeeds (partial failures OK).
+    """
+    lines = [f'Web search results for "{query}" (full page content):\n']
+    for i, entry in enumerate(entries, 1):
+        title = entry.get("title", "No title")
+        url = entry.get("url", "")
+        snippet = entry.get("snippet", entry.get("description", ""))
+        lines.append(f"{i}. **{title}**\n   {url}\n   {snippet}")
+        markdown = entry.get("markdown")
+        fetch_error = entry.get("fetch_error")
+        if markdown:
+            lines.append(f"\n   --- Full page ---\n{markdown[:4000]}\n   --- End ---\n")
+        elif fetch_error:
+            lines.append(f"\n   [Page fetch failed: {fetch_error}]\n")
+        else:
+            lines.append("")
+    return "\n".join(lines)
 
 
 class ToolHandlerMixin:
@@ -1763,6 +1836,8 @@ class ToolHandlerMixin:
         """
         params = tool_call.get("params", {})
         query = params.get("query", "").strip()
+        fetch_full: bool = bool(params.get("fetch_full", False))
+        max_pages: int = min(max(int(params.get("max_pages", 5)), 1), 10)
         description = tool_call.get("description", f"Web search: {query}")
 
         if not query:
@@ -1775,7 +1850,7 @@ class ToolHandlerMixin:
             )
             return
 
-        logger.info("[Issue #2306] Web search: query=%s", query)
+        logger.info("[Issue #2306] Web search: query=%s fetch_full=%s max_pages=%d", query, fetch_full, max_pages)
 
         yield WorkflowMessage(
             type="tool_execution",
@@ -1795,7 +1870,10 @@ class ToolHandlerMixin:
             return
 
         try:
-            results = await self._execute_web_search(query)
+            if fetch_full:
+                results = await self._execute_web_search_full(query, max_pages)
+            else:
+                results = await self._execute_web_search(query)
 
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for web_search
             results = await _emit_after_tool_execute("web_search", results, session_id, {})
@@ -1808,6 +1886,7 @@ class ToolHandlerMixin:
                     "tool": "web_search",
                     "query": query,
                     "status": "success",
+                    "fetch_full": fetch_full,
                 },
             )
         except Exception as e:
@@ -1837,6 +1916,37 @@ class ToolHandlerMixin:
 
         # Fallback: browser VM with DuckDuckGo HTML
         return await self._web_search_via_browser_vm(query)
+
+    async def _execute_web_search_full(self, query: str, max_pages: int) -> str:
+        """Search + full-page fetch mode. Issue #7404.
+
+        Gets structured entries from Playwright, fans out WebFetcher.fetch
+        concurrently for each URL, attaches markdown (or fetch_error) per entry.
+        Always returns 200 — per-URL failures are surfaced in fetch_error field.
+        """
+        entries = await self._web_search_structured_entries(query, max_pages)
+        if not entries:
+            return await self._execute_web_search(query)
+        enriched = await _fetch_pages_concurrent(entries, max_pages)
+        return _format_full_search_results(query, enriched)
+
+    async def _web_search_structured_entries(self, query: str, max_pages: int) -> list[dict]:
+        """Return raw search result entries [{title, url, snippet}]. Issue #7404.
+
+        Delegates to the Playwright search backend (the same backend used by
+        _web_search_via_playwright) and returns up to max_pages raw dicts.
+        Returns [] when the Playwright service is unavailable.
+        """
+        try:
+            from services.playwright_service import search_web_embedded
+
+            result = await search_web_embedded(query, max_results=max_pages)
+            if not result.get("success", False):
+                return []
+            return result.get("results", [])[:max_pages]
+        except Exception as exc:
+            logger.debug("[Issue #7404] Playwright structured search unavailable: %s", exc)
+            return []
 
     async def _web_search_via_playwright(self, query: str) -> str:
         """Search via Playwright service. Returns formatted text or empty string. Issue #2306."""
