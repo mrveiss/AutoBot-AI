@@ -10,7 +10,7 @@
 #   - SLM GUI: https://${AUTOBOT_SLM_HOST}/orchestration
 #   - systemctl commands directly
 
-set -e
+set -euo pipefail
 
 # Colors
 RED='\033[0;31m'
@@ -186,19 +186,19 @@ open_gui() {
 # Main
 case "${1:-}" in
     start)
-        start_services "$2"
+        start_services "${2:-}"
         ;;
     stop)
-        stop_services "$2"
+        stop_services "${2:-}"
         ;;
     restart)
-        restart_services "$2"
+        restart_services "${2:-}"
         ;;
     status)
-        show_status "$2"
+        show_status "${2:-}"
         ;;
     logs)
-        show_logs "$2"
+        show_logs "${2:-}"
         ;;
     gui)
         open_gui
