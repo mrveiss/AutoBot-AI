@@ -209,6 +209,40 @@ def _create_qa_chain_tool() -> McpToolsResponse:
     )
 
 
+def _create_extract_tool() -> McpToolsResponse:
+    """Create MCP tool descriptor for POST /knowledge/extract.
+
+    Issue #7405: Schema-driven structured data extraction.
+    """
+    return McpToolsResponse(
+        name="extract_structured_data",
+        description=(
+            "Fetch a URL and extract structured data matching a JSON Schema via LLM. "
+            "Strips <script> blocks before prompting (prompt-injection guard). "
+            "Returns validated JSON matching the caller-supplied schema."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Absolute URL to fetch"},
+                "schema": {"type": "object", "description": "JSON Schema (draft 2020-12) for the output"},
+                "render": {
+                    "type": "string",
+                    "enum": ["auto", "fast", "playwright"],
+                    "default": "auto",
+                    "description": "Render mode",
+                },
+                "ingest": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Index raw page markdown into ChromaDB",
+                },
+            },
+            "required": ["url", "schema"],
+        },
+    )
+
+
 def _get_knowledge_search_tools() -> List[McpToolsResponse]:
     """
     Get MCP tools for knowledge base search and retrieval operations.
@@ -216,6 +250,7 @@ def _get_knowledge_search_tools() -> List[McpToolsResponse]:
     Issue #281: Extracted from get_mcp_tools to reduce function length
     and improve maintainability of tool definitions by category.
     Issue #665: Further refactored to reduce from 102 lines to below 20 lines.
+    Issue #7405: Added extract_structured_data tool.
 
     Returns:
         List of McpToolsResponse definitions for search/retrieval operations
@@ -225,6 +260,7 @@ def _get_knowledge_search_tools() -> List[McpToolsResponse]:
         _create_add_document_tool(),
         _create_vector_search_tool(),
         _create_qa_chain_tool(),
+        _create_extract_tool(),
     ]
 
 
@@ -599,6 +635,44 @@ async def mcp_langchain_qa_chain(
     except Exception as e:
         logger.error("Error in LangChain QA chain: %s", e)
         return {"success": False, "error": "Internal server error", "answer": ""}
+
+
+@router.post("/mcp/extract_structured_data")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_extract_structured_data",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def mcp_extract_structured_data(
+    request: Metadata,
+    current_user: dict = Depends(get_current_user),
+):
+    """MCP tool: Extract structured data from a URL using JSON Schema + LLM.
+
+    Issue #7405: Delegates to POST /knowledge/extract logic via extract_url().
+    """
+    url = request.get("url")
+    schema = request.get("schema")
+    render = request.get("render", "auto")
+    ingest = request.get("ingest", False)
+
+    if not url or not schema:
+        return {"success": False, "error": "url and schema are required"}
+
+    try:
+        from web_fetch.extractors import extract_url
+
+        result = await extract_url(url=url, schema=schema, render=render)
+        return {"success": True, **result}
+    except RuntimeError as exc:
+        logger.warning("mcp_extract_structured_data fetch failed for %s: %s", url, exc)
+        return {"success": False, "error_code": "fetch_failed", "details": str(exc)}
+    except ValueError as exc:
+        logger.warning("mcp_extract_structured_data schema invalid for %s: %s", url, exc)
+        return {"success": False, "error_code": "schema_invalid", "details": str(exc)}
+    except Exception as exc:
+        logger.error("mcp_extract_structured_data unexpected error: %s", exc)
+        return {"success": False, "error": "Internal server error"}
 
 
 async def _vector_op_info(kb, redis_mgr, params: dict) -> dict:

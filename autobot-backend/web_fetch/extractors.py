@@ -2,9 +2,10 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-web_fetch.extractors — HTML-to-Markdown conversion helpers.
+web_fetch.extractors — HTML-to-Markdown conversion helpers and schema-driven extraction.
 
 Issue #7400: Foundation package for unified web search/scrape/crawl.
+Issue #7405: Schema-driven structured data extraction via LLM.
 
 Delegates to existing markdownify/BS4 patterns.  Never re-implements SSRF
 guards or Jina logic — those live in media/link/pipeline.py.
@@ -12,9 +13,10 @@ guards or Jina logic — those live in media/link/pipeline.py.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
-from typing import Tuple
+from typing import Any, Dict, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -131,3 +133,102 @@ def _is_noscript_dominated(html: str) -> bool:
         return len(noscript_text) > len(body_text) * 0.5
     except Exception:
         return False
+
+
+# ---------------------------------------------------------------------------
+# Issue #7405 — Schema-driven structured data extraction
+# ---------------------------------------------------------------------------
+
+_SCRIPT_BLOCK_RE = re.compile(r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL)
+
+
+def _strip_script_blocks(markdown: str) -> str:
+    """Remove <script>...</script> blocks from markdown (prompt-injection guard)."""
+    return _SCRIPT_BLOCK_RE.sub("", markdown).strip()
+
+
+def _build_extraction_prompt(markdown: str, schema: Dict[str, Any]) -> str:
+    """Build the LLM prompt for schema-driven extraction.
+
+    The schema dict is JSON-serialised — never interpolated as raw string —
+    to prevent schema-injection attacks.
+    """
+    schema_json = json.dumps(schema, ensure_ascii=False)
+    return (
+        "Extract structured data from the following web page content.\n"
+        "Return ONLY a valid JSON object that conforms to this JSON Schema:\n\n"
+        f"```json\n{schema_json}\n```\n\n"
+        "Page content:\n\n"
+        f"{markdown}\n\n"
+        "Respond with only the JSON object, no explanation or markdown fences."
+    )
+
+
+async def _call_llm_for_extraction(prompt: str) -> str:
+    """Call the LLM gateway with structured-output mode and return raw content."""
+    from llm_interface_pkg.types import LLMType
+    from services.llm_service import get_llm_service
+
+    svc = get_llm_service()
+    response = await svc.chat(
+        messages=[{"role": "user", "content": prompt}],
+        llm_type=LLMType.EXTRACTION,
+        structured_output=True,
+    )
+    if response.error:
+        raise RuntimeError(f"LLM extraction failed: {response.error}")
+    return response.content
+
+
+def _validate_against_schema(data: Dict[str, Any], schema: Dict[str, Any]) -> None:
+    """Validate *data* against *schema* using Draft202012Validator.
+
+    Raises jsonschema.ValidationError on failure.
+    """
+    import jsonschema
+
+    validator = jsonschema.Draft202012Validator(schema)
+    validator.validate(data)
+
+
+async def extract_url(
+    url: str,
+    schema: Dict[str, Any],
+    render: str = "auto",
+) -> Dict[str, Any]:
+    """Fetch *url*, strip script blocks, call LLM to extract structured data.
+
+    Args:
+        url:    Absolute URL to fetch.
+        schema: JSON Schema (draft 2020-12) dict describing the desired output.
+        render: Render mode — "auto" | "fast" | "playwright".
+
+    Returns:
+        ``{"url": str, "data": dict, "schema_valid": True}``
+
+    Raises:
+        RuntimeError:  Fetch failed (caller maps to 502).
+        ValueError:    LLM returned invalid JSON or data fails schema (caller maps to 422).
+    """
+    from web_fetch import FetchResult, RenderMode, WebFetcher
+
+    render_mode = RenderMode(render)
+    result: FetchResult = await WebFetcher.fetch(url, render=render_mode)
+    if not result.success:
+        raise RuntimeError(result.error_code or "fetch_failed")
+
+    safe_markdown = _strip_script_blocks(result.markdown or "")
+    prompt = _build_extraction_prompt(safe_markdown, schema)
+    raw = await _call_llm_for_extraction(prompt)
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"LLM returned non-JSON output: {exc}") from exc
+
+    try:
+        _validate_against_schema(data, schema)
+    except Exception as exc:
+        raise ValueError(str(exc)) from exc
+
+    return {"url": result.url, "data": data, "schema_valid": True}
