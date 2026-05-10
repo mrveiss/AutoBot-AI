@@ -121,7 +121,11 @@ WEB_SEARCH_SCHEMA: dict = {
         },
         "max_pages": {
             "type": "integer",
-            "description": "Maximum number of result pages to fetch when fetch_full=true. Default 5.",
+            "description": (
+                "Maximum number of search results to return. Applies to both "
+                "snippet mode (fetch_full=false) and full-fetch mode "
+                "(fetch_full=true). Default 5 (#7479)."
+            ),
             "minimum": 1,
             "maximum": 10,
         },
@@ -1873,7 +1877,10 @@ class ToolHandlerMixin:
             if fetch_full:
                 results = await self._execute_web_search_full(query, max_pages)
             else:
-                results = await self._execute_web_search(query)
+                # #7479: snippet path now honors max_pages too (was hardcoded
+                # to 5, ignoring caller's choice — confusingly inconsistent
+                # with fetch_full mode).
+                results = await self._execute_web_search(query, max_pages)
 
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for web_search
             results = await _emit_after_tool_execute("web_search", results, session_id, {})
@@ -1900,15 +1907,19 @@ class ToolHandlerMixin:
                 metadata={"tool": "web_search", "error": True},
             )
 
-    async def _execute_web_search(self, query: str) -> str:
+    async def _execute_web_search(self, query: str, max_pages: int = 5) -> str:
         """Run a web search and return formatted results. Issue #2306.
 
         Tries the existing Playwright search service first (structured results),
         then falls back to browser VM DuckDuckGo navigation.
+
+        ``max_pages`` (#7479) — caller-requested result count. Threaded into
+        ``_web_search_via_playwright`` so the snippet path returns the same
+        number of results that the fetch_full path would.
         """
         # Primary: use existing search_web_embedded (Rule 2: reuse existing code)
         try:
-            result = await self._web_search_via_playwright(query)
+            result = await self._web_search_via_playwright(query, max_results=max_pages)
             if result:
                 return result
         except Exception as e:
@@ -1955,11 +1966,16 @@ class ToolHandlerMixin:
             logger.debug("[Issue #7404] Playwright structured search unavailable: %s", exc)
             return []
 
-    async def _web_search_via_playwright(self, query: str) -> str:
-        """Search via Playwright service. Returns formatted text or empty string. Issue #2306."""
+    async def _web_search_via_playwright(self, query: str, max_results: int = 5) -> str:
+        """Search via Playwright service. Returns formatted text or empty string. Issue #2306.
+
+        ``max_results`` (#7479): caller-requested result count, threaded into
+        ``search_web_embedded`` and the post-fetch slice. Default 5 preserves
+        the historical behavior for any callers that don't pass it.
+        """
         from services.playwright_service import search_web_embedded
 
-        result = await search_web_embedded(query, max_results=5)
+        result = await search_web_embedded(query, max_results=max_results)
         if not result.get("success", False):
             return ""
 
@@ -1968,7 +1984,7 @@ class ToolHandlerMixin:
             return ""
 
         lines = [f'Web search results for "{query}":\n']
-        for i, entry in enumerate(entries[:5], 1):
+        for i, entry in enumerate(entries[:max_results], 1):
             title = entry.get("title", "No title")
             url = entry.get("url", "")
             snippet = entry.get("snippet", entry.get("description", ""))
