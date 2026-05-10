@@ -265,6 +265,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "validation_dashboard",
     ),
     # Knowledge and conversation
+    # Issue #7401: Unified scrape endpoint (Jina/BS4/Playwright, optional KB ingest)
+    (
+        "api.knowledge_scrape",
+        "/knowledge",
+        ["knowledge-scrape"],
+        "knowledge_scrape",
+    ),
     # Issue #1256: Observable Research Panel — live browser WS stream
     (
         "api.knowledge_research_ws",

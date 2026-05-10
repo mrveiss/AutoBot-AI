@@ -131,6 +131,7 @@ class TestSetCachedResult:
 class TestMaxBytesResolver:
     def test_default_max_bytes(self) -> None:
         from web_fetch.cache import _resolve_max_bytes, _DEFAULT_MAX_BYTES
+
         with patch.dict(os.environ, {}, clear=False):
             env = {k: v for k, v in os.environ.items() if k != "AUTOBOT_WEB_FETCH_MAX_BYTES"}
             with patch.dict(os.environ, env, clear=True):
@@ -139,12 +140,14 @@ class TestMaxBytesResolver:
 
     def test_env_override(self) -> None:
         from web_fetch.cache import _resolve_max_bytes
+
         with patch.dict(os.environ, {"AUTOBOT_WEB_FETCH_MAX_BYTES": "5242880"}):
             result = _resolve_max_bytes()
         assert result == 5242880
 
     def test_invalid_falls_back(self) -> None:
         from web_fetch.cache import _resolve_max_bytes, _DEFAULT_MAX_BYTES
+
         with patch.dict(os.environ, {"AUTOBOT_WEB_FETCH_MAX_BYTES": "nope"}):
             result = _resolve_max_bytes()
         assert result == _DEFAULT_MAX_BYTES
@@ -154,6 +157,7 @@ class TestGetCachedResultStringValue:
     @pytest.mark.asyncio
     async def test_string_value_decoded(self) -> None:
         import json
+
         payload = {"url": "https://example.com", "success": True, "markdown": "# Test"}
         redis = AsyncMock()
         # Return string (not bytes) to exercise the non-bytes decode path
