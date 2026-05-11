@@ -279,6 +279,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["knowledge-site-map"],
         "knowledge_site_map",
     ),
+    # Issue #7508: BFS web crawl with optional KB ingest
+    (
+        "api.knowledge_crawl",
+        "/knowledge",
+        ["knowledge-crawl"],
+        "knowledge_crawl",
+    ),
     # Issue #7405: Schema-driven structured data extraction from a URL via LLM
     (
         "api.knowledge_extract",
