@@ -100,8 +100,8 @@ export function useAIDocument() {
         const response = await apiClient.get<{ documents: AIDocument[]; total: number }>(
           `${_base()}?limit=${limit}&offset=${offset}`
         )
-        documents.value = response.data.documents
-        total.value = response.data.total
+        documents.value = response.documents
+        total.value = response.total
       } catch (err) {
         await _handleError('fetchDocuments', err)
       }
@@ -114,8 +114,8 @@ export function useAIDocument() {
     return wrap(async () => {
       try {
         const response = await apiClient.get<AIDocument>(`${_base()}/${docId}`)
-        currentDocument.value = response.data
-        return response.data
+        currentDocument.value = response
+        return response
       } catch (err) {
         return await _handleError('fetchDocument', err)
       }
@@ -128,7 +128,7 @@ export function useAIDocument() {
     return wrapSaving(async () => {
       try {
         const response = await apiClient.post<AIDocument>(_base(), payload)
-        const created = response.data
+        const created = response
         documents.value.unshift(created)
         total.value += 1
         logger.info(`Created document ${created.id}: ${created.title}`)
@@ -148,7 +148,7 @@ export function useAIDocument() {
     return wrapSaving(async () => {
       try {
         const response = await apiClient.put<AIDocument>(`${_base()}/${docId}`, payload)
-        const updated = response.data
+        const updated = response
         // Sync local list
         const idx = documents.value.findIndex((d) => d.id === docId)
         if (idx !== -1) {
@@ -192,7 +192,7 @@ export function useAIDocument() {
           `${_base()}/${docId}/refine`,
           payload
         )
-        const refined = response.data
+        const refined = response
         const idx = documents.value.findIndex((d) => d.id === docId)
         if (idx !== -1) {
           documents.value[idx] = refined

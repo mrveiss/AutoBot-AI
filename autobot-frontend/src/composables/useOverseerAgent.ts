@@ -238,11 +238,16 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
     currentStep.value = stepNumber
     status.value = 'executing'
 
+    // #7275: content is `string | OverseerPlanContent | StreamChunk`; for step-start
+    // events it carries StreamChunk-like fields. Cast at boundary; type-narrow guards
+    // would be cleaner but add 4x lines for the same runtime behavior.
+    const content = update.content as Record<string, any> | undefined
+
     // Update step status
     const step = steps.value.find(s => s.step_number === stepNumber)
     if (step) {
       step.status = 'running'
-      step.command = update.content?.command
+      step.command = content?.command
       onStepUpdate?.(step)
     }
   }
@@ -277,7 +282,8 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
    */
   const handleStepComplete = (update: OverseerUpdate): void => {
     const stepNumber = update.step_number || 0
-    const content = update.content
+    // #7275: same boundary cast as handleStepStart (see note above)
+    const content = update.content as Record<string, any> | undefined
 
     // Update step with final results
     const step = steps.value.find(s => s.step_number === stepNumber)
@@ -314,7 +320,9 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
    * Handle error update
    */
   const handleError = (update: OverseerUpdate): void => {
-    const errorMsg = update.content?.error || 'Unknown error'
+    // #7275: content union narrowed at boundary (same pattern as other handlers)
+    const content = update.content as Record<string, any> | undefined
+    const errorMsg = content?.error || 'Unknown error'
     error.value = errorMsg
     status.value = 'error'
     isProcessing.value = false
