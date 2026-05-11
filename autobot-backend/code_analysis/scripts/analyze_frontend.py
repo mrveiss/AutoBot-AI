@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from frontend_analyzer import FrontendAnalyzer
+
 from autobot_shared.async_compat import run_or_schedule
 
 

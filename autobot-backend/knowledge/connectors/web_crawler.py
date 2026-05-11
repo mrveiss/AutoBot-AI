@@ -25,7 +25,7 @@ from knowledge.connectors.models import (
     SyncResult,
 )
 from knowledge.connectors.registry import ConnectorRegistry
-from web_fetch import ERR_CONNECTION, FetchResult, Frontier, RobotsCache, RenderMode, WebFetcher
+from web_fetch import ERR_CONNECTION, FetchResult, Frontier, RenderMode, RobotsCache, WebFetcher
 from web_fetch.extractors import extract_markdown
 from web_fetch.frontier import extract_links
 

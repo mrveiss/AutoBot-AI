@@ -17,9 +17,9 @@ from functools import wraps
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional
 
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.singleton_factory import lazy_singleton
 from constants import CircuitBreakerDefaults
-from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 

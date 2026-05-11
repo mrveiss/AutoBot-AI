@@ -15,6 +15,8 @@ Original file: 1,505 lines → Package with focused modules
 import asyncio
 import sys
 
+from autobot_shared.async_compat import run_or_schedule
+
 # Re-export all public APIs from the package
 from project_state_tracking import (  # Types and enums; Models; Database; Main tracker; Convenience functions; CLI handlers; Backward compatibility aliases for sync functions
     COMMAND_HANDLERS,
@@ -44,7 +46,6 @@ from project_state_tracking import (  # Types and enums; Models; Database; Main 
     track_system_error,
     track_user_action,
 )
-from autobot_shared.async_compat import run_or_schedule
 
 __all__ = [
     # Types

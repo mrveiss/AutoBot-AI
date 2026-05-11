@@ -15,6 +15,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
+from autobot_shared.async_compat import run_or_schedule
 from constants.network_constants import NetworkConstants
 from security.command_patterns import (
     FORBIDDEN_COMMANDS,
@@ -27,7 +28,6 @@ from security.command_patterns import (
 )
 from services.tool_output_filter import get_tool_output_filter
 from utils.command_utils import execute_shell_command
-from autobot_shared.async_compat import run_or_schedule
 
 # Permission system imports (lazy to avoid circular imports)
 if TYPE_CHECKING:

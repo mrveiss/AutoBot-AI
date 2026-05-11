@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 
 from architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
+
 from autobot_shared.async_compat import run_or_schedule
 
 

@@ -23,6 +23,8 @@ import time
 from dataclasses import asdict
 from typing import Any, Dict, List
 
+from autobot_shared.async_compat import run_or_schedule
+
 # Re-export benchmarking functions for backward compatibility (used by external code)
 # Re-export all public API from the package for backward compatibility
 from utils.gpu_optimization import (  # noqa: F401
@@ -46,7 +48,6 @@ from utils.gpu_optimization import (  # noqa: F401
     run_comprehensive_benchmark,
 )
 from utils.performance_monitor import performance_monitor
-from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 

@@ -20,8 +20,8 @@ from performance_analyzer import PerformanceAnalyzer
 from security_analyzer import SecurityAnalyzer
 from testing_coverage_analyzer import TestingCoverageAnalyzer
 
-from constants.ttl_constants import TTL_30_DAYS
 from autobot_shared.async_compat import run_or_schedule
+from constants.ttl_constants import TTL_30_DAYS
 
 logger = logging.getLogger(__name__)
 

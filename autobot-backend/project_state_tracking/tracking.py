@@ -157,8 +157,9 @@ def _run_error_tracking(error: Exception, context: Dict[str, Any]) -> None:
     run_or_schedule helper handles both sync and in-loop contexts.
     """
     # Import here to avoid circular imports.
-    from . import track_system_error
     from autobot_shared.async_compat import run_or_schedule
+
+    from . import track_system_error
 
     run_or_schedule(track_system_error(error, context))
 
