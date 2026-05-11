@@ -6,7 +6,7 @@
  */
 
 import { ref, computed } from 'vue'
-import { useApi } from './useApi'
+import { useApiClient } from '@/plugins/api'
 import { useBatchSelection } from './useBatchSelection'
 import { createLogger } from '@/utils/debugUtils'
 import { extractApiErrorMessage } from '@/utils/errorExtract'
