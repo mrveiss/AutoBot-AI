@@ -33,7 +33,7 @@ opentelemetry-exporter-otlp==1.41.1
 opentelemetry-exporter-otlp-proto-grpc==1.41.1
 opentelemetry-exporter-otlp-proto-http==1.41.1
 opentelemetry-proto==1.41.1
-opentelemetry-instrumentation-fastapi>=0.61b0
+opentelemetry-instrumentation-fastapi>=0.62b1
 opentelemetry-propagator-b3==1.41.1
 # Issue #697: Additional instrumentation for comprehensive tracing
 opentelemetry-instrumentation-redis>=0.61b0
