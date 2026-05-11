@@ -410,6 +410,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["admin", "feature-flags"],
         "feature_flags",
     ),
+    # Issue #6590: Virtual LLM API keys with per-key budgets
+    (
+        "api.llm_keys",
+        "/llm-keys",
+        ["llm-keys", "admin", "security"],
+        "llm_keys",
+    ),
     # Issue #4203: External tool integrations consolidated into integration_routers.py
     # Skills repo management and governance MUST be registered before the base skills
     # router so their static path prefixes take precedence over skills' /{name} param.

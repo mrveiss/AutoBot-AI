@@ -21,7 +21,7 @@ import inspect
 import json
 import logging
 import time
-from typing import Any, AsyncIterator, Dict, List
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
@@ -40,6 +40,7 @@ from api.schemas_code import (
     OAIUsage,
 )
 from auth_middleware import get_current_user
+from services.llm_api_key_service import LLMApiKeyRecord, get_llm_api_key_service
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from llm_interface_pkg.models import LLMRequest
 from llm_interface_pkg.tiered_routing.tier_router import get_tiered_router
@@ -103,6 +104,32 @@ def _get_user(request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
+def _extract_bearer(request: Request) -> Optional[str]:
+    """Return the raw Bearer token string, or None if absent/malformed."""
+    header = request.headers.get("authorization", "")
+    if header.lower().startswith("bearer "):
+        return header[7:].strip()
+    return None
+
+
+async def _resolve_auth(request: Request) -> Tuple[Optional[Dict[str, Any]], Optional[LLMApiKeyRecord]]:
+    """Dual-auth: accept either a platform JWT or a virtual sk-... API key.
+
+    Returns (user_dict, api_key_record). Exactly one of them will be non-None.
+    Raises HTTPException 401 if neither form of auth succeeds.
+    """
+    bearer = _extract_bearer(request)
+    if bearer and bearer.startswith("sk-"):
+        svc = get_llm_api_key_service()
+        record = await svc.authenticate_key(bearer)
+        if record is None:
+            raise HTTPException(status_code=401, detail="Invalid or revoked API key")
+        return None, record
+    # Fall back to platform JWT
+    user = _get_user(request)
+    return user, None
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -162,6 +189,7 @@ async def _stream_generator(
     *,
     include_usage: bool = False,
     prompt_text: str = "",
+    api_key_record: Optional[LLMApiKeyRecord] = None,
 ) -> AsyncIterator[str]:
     """Yield SSE lines for a streaming completion."""
     created = int(time.time())
@@ -242,6 +270,14 @@ async def _stream_generator(
 
     yield "data: [DONE]\n\n"
 
+    # Record per-key spend and publish usage event after stream completes (#6590)
+    if api_key_record is not None:
+        svc = get_llm_api_key_service()
+        await svc.record_spend(api_key_record, cost_usd)
+        await svc.publish_usage_event(
+            api_key_record, model_name, prompt_tokens, completion_tokens, cost_usd
+        )
+
 
 # ---------------------------------------------------------------------------
 # Endpoints
@@ -260,11 +296,31 @@ async def chat_completions(
 ) -> Any:
     """OpenAI-compatible chat completions endpoint (#4447).
 
-    Accepts Bearer token auth, delegates to ProviderRegistry, returns
-    OpenAI-format response (streaming or non-streaming).
+    Accepts Bearer token auth (platform JWT or virtual sk-... key), delegates
+    to ProviderRegistry, returns OpenAI-format response (streaming or non-streaming).
+    Virtual keys enforce per-key monthly budget and model whitelist (#6590).
     """
-    _get_user(request)
+    _user, api_key_record = await _resolve_auth(request)
     await _oai_limiter.check_or_429(_remote_addr(request))
+
+    # Virtual key enforcement: model whitelist + budget (#6590)
+    if api_key_record is not None:
+        from services.llm_api_key_service import LLMApiKeyService
+
+        if body.model not in _AUTO_MODEL_NAMES and body.model != "autobot-default":
+            if not LLMApiKeyService.model_allowed(api_key_record, body.model):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Model not permitted for this API key",
+                    headers={"x-llm-key-allowed-models": ",".join(api_key_record.allowed_models)},
+                )
+        allowed, remaining = await get_llm_api_key_service().check_budget(api_key_record)
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail="Monthly budget exhausted",
+                headers={"x-llm-budget-remaining": "0"},
+            )
 
     # Resolve auto-* model aliases to concrete model names via tiered routing (#6592)
     if body.model in _AUTO_MODEL_NAMES:
@@ -305,6 +361,7 @@ async def chat_completions(
                 resolved_model,
                 include_usage=include_usage,
                 prompt_text=prompt_text,
+                api_key_record=api_key_record,
             ),
             media_type="text/event-stream",
             headers={
@@ -355,6 +412,19 @@ async def chat_completions(
     # Extract cost from hidden params and add as header
     response_cost = llm_response.hidden_params.get("response_cost", 0)
     headers = {"x-llm-cost": str(response_cost)} if response_cost > 0 else {}
+
+    # Record per-key spend and publish usage event (#6590)
+    if api_key_record is not None:
+        svc = get_llm_api_key_service()
+        await svc.record_spend(api_key_record, cost_usd)
+        await svc.publish_usage_event(
+            api_key_record,
+            resolved_model,
+            usage.prompt_tokens,
+            usage.completion_tokens,
+            cost_usd,
+        )
+
     return JSONResponse(
         content=response.model_dump(),
         headers=headers,
@@ -372,7 +442,7 @@ async def list_models(request: Request) -> OAIModelListResponse:
 
     Returns all models available across registered providers.
     """
-    _get_user(request)
+    await _resolve_auth(request)
 
     registry = get_provider_registry()
     created = int(time.time())

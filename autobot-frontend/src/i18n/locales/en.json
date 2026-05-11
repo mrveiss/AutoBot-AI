@@ -17,6 +17,7 @@
     "clear": "Clear",
     "reset": "Reset",
     "copy": "Copy",
+    "saving": "Saving...",
     "share": "Share",
     "export": "Export",
     "import": "Import",
@@ -6659,6 +6660,42 @@
       "unknown": "Unknown"
     }
   },
+  "llmKeys": {
+    "title": "LLM API Keys",
+    "issueKey": "Issue Key",
+    "revoke": "Revoke",
+    "rotate": "Rotate",
+    "unlimited": "Unlimited",
+    "empty": "No API keys found.",
+    "rawKeyWarning": "Copy this key now — it will not be shown again.",
+    "col": {
+      "prefix": "Key Prefix",
+      "team": "Team",
+      "label": "Label",
+      "budget": "Monthly Budget",
+      "spend": "Spend (MTD)",
+      "models": "Allowed Models",
+      "status": "Status",
+      "expires": "Expires"
+    },
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked"
+    },
+    "form": {
+      "teamId": "Team ID",
+      "label": "Label",
+      "budget": "Monthly Budget (USD)",
+      "budgetHint": "Set to 0 for unlimited.",
+      "models": "Allowed Models (JSON array)",
+      "modelsHint": "E.g. [\"gpt-4\", \"claude-*\"]. Leave blank to allow all.",
+      "expiresAt": "Expires At (optional)"
+    },
+    "revokeConfirm": {
+      "title": "Revoke API Key",
+      "body": "Are you sure you want to revoke key {id}? This cannot be undone."
+    }
+  },
   "featureFlags": {
     "accessMetrics": {
       "title": "Access Control Metrics",
@@ -7069,6 +7106,7 @@
     "agentRegistry": "Agents",
     "agentActivity": "Agent Activity",
     "experiments": "Experiments",
+    "llmApiKeys": "LLM API Keys",
     "slmAdmin": "SLM Admin",
     "slmAdminTitle": "Open SLM Admin Panel",
     "profileSettings": "Profile Settings",
