@@ -173,7 +173,6 @@ async def add_alert_callback(callback):
 # =============================================================================
 
 if __name__ == "__main__":
-    import asyncio
     import json
 
     async def test_monitoring():

@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import List, Optional
+from typing import Optional
 from urllib.parse import urlparse
 
 from web_fetch.cache import WEB_FETCH_MAX_BYTES, get_cached_result, set_cached_result
@@ -48,7 +48,6 @@ from web_fetch.types import (
     ERR_ROBOTS_BLOCKED,
     ERR_SSRF_BLOCKED,
     ERR_TIMEOUT,
-    ERR_TOO_LARGE,
     ERR_UNKNOWN,
     FetchResult,
     RenderMode,

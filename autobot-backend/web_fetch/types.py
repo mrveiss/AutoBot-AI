@@ -10,7 +10,7 @@ Issue #7400: Foundation package for unified web search/scrape/crawl.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 

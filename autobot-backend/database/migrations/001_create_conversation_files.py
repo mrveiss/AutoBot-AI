@@ -5,7 +5,6 @@ Created: 2025-09-30
 Description: Initial migration to create conversation-specific file management database
 """
 
-import asyncio
 import logging
 import sqlite3
 from datetime import datetime, timezone

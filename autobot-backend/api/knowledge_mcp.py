@@ -654,7 +654,6 @@ async def mcp_extract_structured_data(
     url = request.get("url")
     schema = request.get("schema")
     render = request.get("render", "auto")
-    ingest = request.get("ingest", False)
 
     if not url or not schema:
         return {"success": False, "error": "url and schema are required"}

@@ -19,7 +19,6 @@ Usage (programmatic):
     results = await run_benchmark()
 """
 
-import asyncio
 import json
 import logging
 import time
