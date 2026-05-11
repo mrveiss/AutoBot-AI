@@ -12,7 +12,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 from services.mcp_isolation_config import BridgePolicy, IsolationMode, policy_for
@@ -152,16 +152,33 @@ class IsolatedBridgeClient:
             raise EOFError("bridge " + self._bridge + " closed stdout")
         return json.loads(raw.decode("utf-8"))
 
-    async def call_tool(self, tool_name: str, arguments: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
-        """Invoke a tool on the isolated bridge."""
+    async def call_tool(
+        self,
+        tool_name: str,
+        arguments: Dict[str, Any],
+        timeout: float = 30.0,
+        run_jwt: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Invoke a tool on the isolated bridge.
+
+        Args:
+            tool_name: MCP tool to invoke.
+            arguments: Tool arguments dict.
+            timeout: Per-request timeout in seconds.
+            run_jwt: Optional run-scoped JWT (minted by ``services.run_jwt``).
+                When provided, it is forwarded in the RPC params so the worker
+                can validate it before dispatching the tool.  Workers that have
+                JWT enforcement enabled will reject calls with an invalid or
+                missing token.
+        """
         async with self._lock:
             await self._ensure_alive()
+            params: Dict[str, Any] = {"tool": tool_name, "arguments": arguments}
+            if run_jwt:
+                params["run_jwt"] = run_jwt
             try:
                 resp = await self._raw_request(
-                    {
-                        "method": "call",
-                        "params": {"tool": tool_name, "arguments": arguments},
-                    },
+                    {"method": "call", "params": params},
                     timeout=timeout,
                 )
             except (TimeoutError, EOFError) as exc:

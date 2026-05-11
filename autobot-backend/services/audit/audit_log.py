@@ -49,6 +49,8 @@ class AuditAction(str, Enum):
     USER_DELETE = "user.delete"
     CONFIG_CHANGE = "config.change"
     ADMIN_ACTION = "admin.action"
+    RUN_JWT_MINT = "run_jwt.mint"
+    RUN_JWT_REVOKE = "run_jwt.revoke"
 
 
 async def record_event(
