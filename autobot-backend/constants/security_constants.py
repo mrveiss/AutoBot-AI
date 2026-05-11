@@ -37,9 +37,29 @@ class SecurityConstants:
         "240.0.0.0/4",  # RFC 1112 - Reserved addresses
     ]
 
+    # IPv6 blocked ranges (SSRF prevention — mirrors autobot_shared.url_safety)
+    BLOCKED_IPV6_RANGES: List[str] = [
+        "::1/128",         # RFC 4291 - Loopback
+        "fc00::/7",        # RFC 4193 - Unique Local Addresses (ULA)
+        "fe80::/10",       # RFC 4291 - Link-local
+        "ff00::/8",        # RFC 4291 - Multicast
+        "::ffff:0:0/96",   # RFC 4291 - IPv4-mapped IPv6 (e.g. ::ffff:10.0.0.1)
+    ]
+
+    # Private TLDs blocked without DNS resolution (SSRF prevention)
+    BLOCKED_PRIVATE_TLDS: List[str] = [
+        ".onion",
+        ".internal",
+        ".local",
+        ".localhost",
+        ".lan",
+        ".home",
+        ".corp",
+    ]
+
     # Cloud metadata service IPs (used for SSRF prevention)
     CLOUD_METADATA_IPS: List[str] = [
-        "169.254.169.254",  # AWS, Azure, GCP metadata service
+        "169.254.169.254",  # AWS, Azure, GCP metadata service (covered by link-local)
         "169.254.169.253",  # AWS link-local
         "100.100.100.200",  # Alibaba Cloud metadata
         "192.0.0.192",  # Reserved (sometimes used by cloud providers)

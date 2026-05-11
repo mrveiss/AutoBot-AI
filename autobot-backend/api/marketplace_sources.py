@@ -10,7 +10,6 @@ catalog URLs alongside the built-in AutoBot marketplace.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import re
@@ -32,7 +31,7 @@ from api.schemas_workflows import (
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_async_redis_client
-from services.url_validator import URLValidator
+from autobot_shared.url_safety import resolve_safe_ip_async
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +210,7 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
     # carries the original hostname for TLS SNI / virtual hosting; the
     # connector resolution map prevents DNS rebinding between resolve and connect.
     try:
-        safe_ip = await URLValidator.resolve_safe_ip(host)
+        safe_ip = await resolve_safe_ip_async(host)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
