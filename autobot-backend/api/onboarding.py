@@ -35,7 +35,9 @@ router = APIRouter(tags=["onboarding"])
 # ---------------------------------------------------------------------------
 
 
-@router.get("/presets", response_model=DataResponse, dependencies=[Depends(get_current_user)])
+@router.get(
+    "/presets", response_model=DataResponse, dependencies=[Depends(get_current_user)]
+)
 async def list_presets() -> DataResponse:
     """Return all curated starter presets.
 
@@ -47,7 +49,9 @@ async def list_presets() -> DataResponse:
     return DataResponse(data=presets)
 
 
-@router.get("/doctor", response_model=DataResponse, dependencies=[Depends(get_current_user)])
+@router.get(
+    "/doctor", response_model=DataResponse, dependencies=[Depends(get_current_user)]
+)
 async def doctor_report() -> DataResponse:
     """
     Run onboarding doctor scan.
@@ -59,61 +63,90 @@ async def doctor_report() -> DataResponse:
     return DataResponse(data=report)
 
 
-@router.post("/apply", response_model=DataResponse, dependencies=[Depends(check_admin_permission)])
+@router.post(
+    "/apply",
+    response_model=DataResponse,
+    dependencies=[Depends(check_admin_permission)],
+)
 async def apply_preset(body: ApplyPresetRequest) -> DataResponse:
     """
     Atomically apply a starter preset.
 
-    Enables agents, activates skills, and persists config.
-    Rolls back on any partial failure.
+    All Redis key writes are issued inside a single MULTI/EXEC pipeline
+    (``transaction=True``), so a partial failure leaves no half-written
+    state in Redis (#6577). In-memory skill state is rolled back via
+    compensating actions if the Redis transaction fails.
     """
     preset = get_preset(body.preset_name)
     if preset is None:
-        raise HTTPException(status_code=404, detail=f"Preset '{body.preset_name}' not found")
-
-    applied: dict[str, Any] = {}
-    rollback_stack: list[tuple] = []
-
-    try:
-        # Merge overrides into the preset config
-        merged = {**preset, **body.overrides}
-
-        # --- Agents ---
-        applied["agents"] = await _enable_agents(merged.get("agents", []), rollback_stack)
-
-        # --- Skills ---
-        applied["skills"] = await _activate_skills(merged.get("skills", []), rollback_stack)
-
-        # --- System prompt + LLM tier (config store) ---
-        applied["config"] = await _persist_config(
-            system_prompt=merged.get("system_prompt", ""),
-            llm_tier=merged.get("llm_tier", "balanced"),
-            rollback_stack=rollback_stack,
+        raise HTTPException(
+            status_code=404, detail=f"Preset '{body.preset_name}' not found"
         )
 
-        logger.info("Onboarding preset '%s' applied successfully", body.preset_name)
+    merged = {**preset, **body.overrides}
+    agent_ids: list[str] = merged.get("agents", [])
+    skill_names: list[str] = merged.get("skills", [])
+    system_prompt: str = merged.get("system_prompt", "")
+    llm_tier: str = merged.get("llm_tier", "balanced")
 
-        # Persist preset_applied flag — used by frontend onboarding redirect (#6452)
-        try:
-            from autobot_shared.redis_client import get_async_redis_client
-
-            redis = await get_async_redis_client(database="main")
-            if redis:
-                await redis.set("onboarding:preset_applied", "1")
-                await redis.set("onboarding:preset_name", body.preset_name)
-        except Exception as flag_exc:
-            # Don't fail the apply if flag persistence has trouble — preset is already applied
-            logger.warning("Could not persist preset_applied flag: %s", flag_exc)
-
-        return DataResponse(data={"preset": merged, "applied": applied})
-
+    # --- Skills first (in-memory state; compensating rollback needed on failure) ---
+    skill_rollback: list[tuple[Any, ...]] = []
+    try:
+        activated_skills = await _activate_skills(skill_names, skill_rollback)
     except Exception as exc:
-        logger.error("Preset apply failed for '%s': %s — rolling back", body.preset_name, exc)
-        await _rollback(rollback_stack)
+        logger.error("Skill activation failed for '%s': %s", body.preset_name, exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to activate skills for preset '{body.preset_name}': {exc}",
+        ) from exc
+
+    # --- Collect every Redis write in one dict (nothing written yet) ---
+    redis_writes: dict[str, str] = {
+        **{f"agents:enabled:{a}": "1" for a in agent_ids},
+        "onboarding:config:system_prompt": system_prompt,
+        "onboarding:config:llm_tier": llm_tier,
+        "onboarding:preset_applied": "1",
+        "onboarding:preset_name": body.preset_name,
+    }
+
+    # --- Execute all writes atomically in a single MULTI/EXEC transaction ---
+    try:
+        from autobot_shared.redis_client import get_async_redis_client
+
+        redis = await get_async_redis_client(database="main")
+        if redis:
+            pipe = redis.pipeline(transaction=True)
+            for key, value in redis_writes.items():
+                pipe.set(key, value)
+            await pipe.execute()
+        else:
+            logger.warning(
+                "Redis unavailable — skipping config persistence for preset '%s'",
+                body.preset_name,
+            )
+    except Exception as exc:
+        logger.error(
+            "Redis transaction failed for preset '%s': %s — rolling back skills",
+            body.preset_name,
+            exc,
+        )
+        await _rollback_skills(skill_rollback)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to apply preset '{body.preset_name}': {exc}",
         ) from exc
+
+    logger.info("Onboarding preset '%s' applied successfully", body.preset_name)
+    return DataResponse(
+        data={
+            "preset": merged,
+            "applied": {
+                "agents": agent_ids,
+                "skills": activated_skills,
+                "config": {"system_prompt": "applied", "llm_tier": llm_tier},
+            },
+        }
+    )
 
 
 @router.get("/status", response_model=OnboardingStatus)
@@ -146,30 +179,8 @@ async def onboarding_status() -> OnboardingStatus:
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers (each pushes a compensating action to rollback_stack)
+# Internal helpers
 # ---------------------------------------------------------------------------
-
-
-async def _enable_agents(agent_ids: list[str], rollback_stack: list) -> list[str]:
-    """Enable each agent in the registry; register rollback for each."""
-    from autobot_shared.redis_client import get_async_redis_client
-
-    redis = await get_async_redis_client(database="main")
-    enabled: list[str] = []
-
-    for agent_id in agent_ids:
-        try:
-            if redis:
-                key = f"agents:enabled:{agent_id}"
-                was_enabled = await redis.get(key)
-                await redis.set(key, "1")
-                rollback_stack.append(("redis_set", key, was_enabled))
-            enabled.append(agent_id)
-            logger.debug("Enabled agent: %s", agent_id)
-        except Exception as exc:
-            logger.warning("Could not enable agent '%s': %s (continuing)", agent_id, exc)
-
-    return enabled
 
 
 async def _activate_skills(skill_names: list[str], rollback_stack: list) -> list[str]:
@@ -190,67 +201,30 @@ async def _activate_skills(skill_names: list[str], rollback_stack: list) -> list
             if skill:
                 prev_state = skill.enabled
                 skill.enabled = True
-                rollback_stack.append(("skill_enabled", manager, skill_name, prev_state))
+                rollback_stack.append(
+                    ("skill_enabled", manager, skill_name, prev_state)
+                )
                 activated.append(skill_name)
                 logger.debug("Activated skill: %s", skill_name)
             else:
                 logger.debug("Skill '%s' not found in registry — skipping", skill_name)
         except Exception as exc:
-            logger.warning("Could not activate skill '%s': %s (continuing)", skill_name, exc)
+            logger.warning(
+                "Could not activate skill '%s': %s (continuing)", skill_name, exc
+            )
 
     return activated
 
 
-async def _persist_config(
-    system_prompt: str,
-    llm_tier: str,
-    rollback_stack: list,
-) -> dict[str, str]:
-    """Persist system_prompt and llm_tier to Redis config store."""
-    from autobot_shared.redis_client import get_async_redis_client
-
-    redis = await get_async_redis_client(database="main")
-    if not redis:
-        logger.warning("Redis unavailable — skipping config persistence")
-        return {"system_prompt": "skipped", "llm_tier": "skipped"}
-
-    sp_key = "onboarding:config:system_prompt"
-    tier_key = "onboarding:config:llm_tier"
-
-    prev_sp = await redis.get(sp_key)
-    prev_tier = await redis.get(tier_key)
-
-    await redis.set(sp_key, system_prompt)
-    await redis.set(tier_key, llm_tier)
-
-    rollback_stack.append(("redis_set", sp_key, prev_sp))
-    rollback_stack.append(("redis_set", tier_key, prev_tier))
-
-    return {"system_prompt": "applied", "llm_tier": llm_tier}
-
-
-async def _rollback(rollback_stack: list) -> None:
-    """Execute compensating actions in reverse order."""
-    from autobot_shared.redis_client import get_async_redis_client
-
-    redis = None
-
+async def _rollback_skills(rollback_stack: list) -> None:
+    """Restore in-memory skill state via compensating actions."""
     for entry in reversed(rollback_stack):
         action = entry[0]
         try:
-            if action == "redis_set":
-                _, key, prev_value = entry
-                if redis is None:
-                    redis = await get_async_redis_client(database="main")
-                if redis:
-                    if prev_value is None:
-                        await redis.delete(key)
-                    else:
-                        await redis.set(key, prev_value)
-            elif action == "skill_enabled":
+            if action == "skill_enabled":
                 _, manager, skill_name, prev_state = entry
                 skill = manager.registry.get(skill_name)
                 if skill:
                     skill.enabled = prev_state
         except Exception as exc:
-            logger.error("Rollback step failed (%s): %s", action, exc)
+            logger.error("Skill rollback step failed (%s): %s", action, exc)
