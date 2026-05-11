@@ -111,7 +111,7 @@ Revoked tokens are rejected by `validate_run_jwt()` even if signature is valid. 
 
 | Property | Guarantee |
 |----------|-----------|
-| **Expiry** | Tokens expire within 5 minutes (configurable via `AUTOBOT_RUN_JWT_TTL_SECONDS`) |
+| **Expiry** | Tokens expire within 5 minutes (configurable via `RUN_JWT_TTL_SECONDS`) |
 | **Revocation** | Immediate via Redis denylist (within milliseconds) |
 | **Signature** | HS256 signed with `AUTOBOT_JWT_SECRET` |
 | **Scope Binding** | Scopes are claims in the token, validated at each use |

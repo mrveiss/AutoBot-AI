@@ -9,7 +9,10 @@ Tests:
   - validate_run_jwt() accepts valid tokens
   - validate_run_jwt() rejects expired tokens
   - revoke_run_jwt_async() adds JTI to denylist
-  - validate_run_jwt() rejects denylined tokens (after revocation)
+  - validate_run_jwt() rejects denylisted tokens (after revocation, mock Redis)
+  - validate_run_jwt() fail-open path when Redis unavailable
+  - mint_run_jwt() rejects unknown scopes
+  - mint_run_jwt() accepts all VALID_SCOPES
 """
 
 import asyncio
@@ -87,10 +90,50 @@ async def test_validate_run_jwt_rejects_expired_token(jwt_secret, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_revoke_then_validate_rejects(jwt_secret, monkeypatch):
-    """Verify revoke_run_jwt_async() adds JTI to denylist and validate rejects it."""
-    # Enable fail-open mode so test can run without Redis
+async def test_denylist_rejection_with_mock_redis(jwt_secret, monkeypatch):
+    """Verify validate_run_jwt() raises JWTDecodeError after revocation via Redis denylist."""
+    from autobot_shared.auth.jwt_core import JWTDecodeError
+
+    denylist: dict[str, str] = {}
+
+    class FakeRedis:
+        async def set(self, key, value, ex=None):
+            denylist[key] = value
+
+        async def exists(self, key):
+            return 1 if key in denylist else 0
+
+    async def fake_get_redis(*args, **kwargs):
+        return FakeRedis()
+
+    monkeypatch.setattr("services.run_jwt.get_async_redis_client", fake_get_redis)
+
+    run_id = str(uuid.uuid4())
+    token = mint_run_jwt(run_id, "task-1", "agent-1", "tenant-1", ["task:read"])
+
+    # Pre-condition: token validates before revocation
+    claims = await validate_run_jwt(token)
+    assert claims["run_id"] == run_id
+
+    # Revoke the token — JTI should land in denylist
+    await revoke_run_jwt_async(token, agent_id="agent-1")
+
+    # Validation must now raise JWTDecodeError (denylist hit)
+    with pytest.raises(JWTDecodeError):
+        await validate_run_jwt(token)
+
+
+@pytest.mark.asyncio
+async def test_revoke_fail_open_no_rejection(jwt_secret, monkeypatch):
+    """Verify fail-open mode skips denylist check when Redis is unavailable.
+
+    RUN_JWT_REDIS_FAIL_OPEN=1 means a revoked token still validates when Redis is down —
+    fail-open trades revocation guarantee for availability. Tested by simulating Redis
+    unavailability (get_async_redis_client returns None).
+    """
     monkeypatch.setenv("RUN_JWT_REDIS_FAIL_OPEN", "1")
+    # Simulate Redis unavailability so the denylist path is skipped
+    monkeypatch.setattr("services.run_jwt.get_async_redis_client", lambda *a, **kw: _return_none())
 
     run_id = str(uuid.uuid4())
     task_id = "task-1"
@@ -103,12 +146,16 @@ async def test_revoke_then_validate_rejects(jwt_secret, monkeypatch):
     claims = await validate_run_jwt(token)
     assert claims is not None
 
-    # Revoke the token (in fail-open mode, revoke is a no-op, but we test the path)
+    # Revoke path must not raise even when Redis is unavailable
     await revoke_run_jwt_async(token, agent_id=agent_id)
 
-    # Note: With fail-open mode enabled, the denylist check is skipped, so
-    # revoked tokens still validate. This is acceptable for dev/test environments
-    # but production should have working Redis to guarantee revocation enforcement.
+    # With fail-open + no Redis, the revoked token still validates (no denylist to hit)
+    claims_after = await validate_run_jwt(token)
+    assert claims_after is not None
+
+
+async def _return_none():
+    return None
 
 
 def test_mint_run_jwt_rejects_invalid_scope(jwt_secret):
