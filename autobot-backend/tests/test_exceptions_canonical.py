@@ -14,7 +14,6 @@ import pytest
 import exceptions as exc
 import utils.chat_exceptions as chat_exc
 
-
 # ---------------------------------------------------------------------------
 # Canonical module exports
 # ---------------------------------------------------------------------------

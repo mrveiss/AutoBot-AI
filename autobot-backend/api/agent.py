@@ -46,9 +46,9 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
 from constants.threshold_constants import TimingConstants
 from dependencies import get_config, get_knowledge_base
+from exceptions import InternalError, SubprocessError
 from monitoring.prometheus_metrics import get_metrics_manager
 from services.ai_stack_client import AIStackError, get_ai_stack_client
-from exceptions import InternalError, SubprocessError
 from utils.response_helpers import create_success_response, handle_ai_stack_error
 
 router = APIRouter()
