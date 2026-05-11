@@ -94,6 +94,7 @@
 
         state: present
         update_cache: true
+        cache_valid_time: 3600
       retries: 3
       delay: 10
 
