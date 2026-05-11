@@ -161,7 +161,7 @@ async def fetch_safe_url(
         connector=connector,
         headers=headers or {},
     ) as session:
-        async with session.get(url, allow_redirects=False) as response:
+        async with session.get(url, allow_redirects=False) as response:  # codeql[py/full-ssrf] SSRF mitigated: scheme validated, host resolved to public IP via resolve_safe_ip(), connector uses pinned resolver defeating DNS-rebind, redirects disabled (#6533)
             status = response.status
             content_type = response.headers.get("Content-Type", "")
             body = await response.content.read(max_bytes + 1)
