@@ -65,7 +65,7 @@ aiosqlite>=0.22.1
 redis>=7.4.0
 
 # Optional: ONNX Runtime for model optimization
-onnxruntime>=1.24.4
+onnxruntime>=1.26.0
 
 # vLLM for high-performance HuggingFace model serving (optional)
 # vllm>=0.7.0
