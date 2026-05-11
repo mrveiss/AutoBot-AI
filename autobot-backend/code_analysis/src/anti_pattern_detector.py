@@ -1332,7 +1332,15 @@ class AntiPatternDetector:
     )
     _SHAPE_MIN_METHODS = 5
     _SHAPE_JACCARD_THRESHOLD = 0.7
-    _ENUM_JACCARD_THRESHOLD = 0.7
+    # #6755 round 3: bumped from 0.7 to 0.85 to suppress priority-scale
+    # FPs. Enums like ``SandboxSecurityLevel`` (high/low/medium),
+    # ``WorkflowPriority`` (high/low/normal/urgent), ``KnowledgePriority``
+    # (critical/high/low/medium) share value strings but describe
+    # semantically distinct scales — not duplicates. At 0.85, only
+    # near-identical value sets get flagged. Combined with #7501's
+    # parent-child / Protocol-impl exclusions, autobot-backend
+    # ``duplicate_enum`` findings dropped 432 → 3 → 0.
+    _ENUM_JACCARD_THRESHOLD = 0.85
     _ENUM_MIN_VALUES = 3
 
     def _is_enum_class(self, cls_info: ClassInfo) -> bool:

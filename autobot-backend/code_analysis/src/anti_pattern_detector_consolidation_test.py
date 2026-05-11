@@ -156,7 +156,11 @@ async def test_duplicate_enum_skips_inheritance_relation(fixture_root):
 
 @pytest.mark.asyncio
 async def test_duplicate_enum_below_threshold_not_flagged(fixture_root):
-    """Two enums with only one shared value (Jaccard < 0.7) must NOT be flagged."""
+    """Two enums with only one shared value must NOT be flagged.
+
+    Jaccard for 1 shared / 7 union = ~0.14 — well below either the
+    historical 0.7 or the #6755 round 3 bumped threshold of 0.85.
+    """
     apd = _load_detector_module()
     _write_module(
         fixture_root,
