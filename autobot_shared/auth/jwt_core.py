@@ -113,6 +113,35 @@ def decode_jwt(token: str, secret: str) -> Dict[str, Any]:
         raise JWTDecodeError(f"JWT token is invalid: {exc}") from exc
 
 
+def decode_jwt_no_verify_exp(token: str, secret: str) -> Dict[str, Any]:
+    """Decode a JWT without verifying expiry — for use in refresh-token flows only.
+
+    Callers MUST perform their own grace-period check on the ``exp`` claim.
+    This function still validates the signature and algorithm so a tampered
+    token is rejected.
+
+    Args:
+        token: JWT string.
+        secret: HMAC signing secret.
+
+    Returns:
+        Decoded claims dict (expiry not enforced).
+
+    Raises:
+        JWTDecodeError: The token is structurally invalid or the signature does
+            not match.
+    """
+    try:
+        return jwt.decode(
+            token,
+            secret,
+            algorithms=[_ALGORITHM],
+            options={"verify_exp": False},
+        )
+    except InvalidTokenError as exc:
+        raise JWTDecodeError(f"JWT token is invalid: {exc}") from exc
+
+
 def decode_jwt_or_none(token: str, secret: str) -> Optional[Dict[str, Any]]:
     """Decode a JWT, returning ``None`` on any failure instead of raising.
 

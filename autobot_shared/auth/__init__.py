@@ -17,18 +17,24 @@ from autobot_shared.auth.jwt_core import (
     JWTDecodeError,
     JWTExpiredError,
     decode_jwt,
+    decode_jwt_no_verify_exp,
+    decode_jwt_or_none,
     encode_jwt,
     hash_password,
     verify_password,
 )
 from autobot_shared.auth.permissions import (
     ROLE_PERMISSIONS,
+    SYSTEM_PERMISSIONS,
+    SYSTEM_ROLES,
     Permission,
     Role,
 )
 
 __all__ = [
     "decode_jwt",
+    "decode_jwt_no_verify_exp",
+    "decode_jwt_or_none",
     "encode_jwt",
     "hash_password",
     "verify_password",
@@ -37,4 +43,6 @@ __all__ = [
     "Permission",
     "Role",
     "ROLE_PERMISSIONS",
+    "SYSTEM_PERMISSIONS",
+    "SYSTEM_ROLES",
 ]
