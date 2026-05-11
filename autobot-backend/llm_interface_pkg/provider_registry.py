@@ -15,7 +15,7 @@ available at runtime.  It supports:
 
 Usage:
 
-    from llm_providers.provider_registry import get_provider_registry
+    from llm_interface_pkg import get_provider_registry
 
     registry = get_provider_registry()
     provider = await registry.get_provider_for_request(
