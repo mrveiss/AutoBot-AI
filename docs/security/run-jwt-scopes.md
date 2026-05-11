@@ -18,35 +18,35 @@ Scopes use the format `<domain>:<action>` for clarity and extensibility.
 | Scope | Action | Use Case |
 |-------|--------|----------|
 | `mcp:knowledge` | Read KB embeddings, search documents | RAG queries during planning |
-| `mcp:file` | Read/write execution workspace files | Code scaffolding, artifact storage |
+| `mcp:filesystem` | Read/write execution workspace files | Code scaffolding, artifact storage |
 
 ### Task Management
 
 | Scope | Action | Use Case |
 |-------|--------|----------|
 | `task:read` | Read task state, comments, decisions | Status checks, context gathering |
-| `task:update` | Update task status, post comments | Progress tracking, blockers |
+| `task:write` | Update task status, post comments | Progress tracking, blockers |
 
-### Execution
+### Agent Invocation
 
 | Scope | Action | Use Case |
 |-------|--------|----------|
-| `workspace:manage` | Create/manage execution workspaces | Browser QA, preview servers |
+| `agent:invoke` | Call sub-agents | Delegated work, orchestration |
 
 ## Default Scopes
 
 When `mint_run_jwt()` is called without explicit scopes, the agent receives:
 
 ```python
-["task:read", "workspace:manage"]
+["task:read", "task:write"]
 ```
 
 This allows agents to:
 - Read task details (requirements, acceptance criteria)
-- Manage their own execution workspace (preview servers, QA browsers)
+- Update task status and post comments
 
 But NOT:
-- Directly update task status (requires explicit grant or code review path)
+- Call sub-agents (requires explicit `agent:invoke` grant)
 - Access knowledge base (requires explicit grant for RAG)
 
 ## Granting Additional Scopes
@@ -54,23 +54,25 @@ But NOT:
 When a specific run requires additional access:
 
 ```python
-token = await mint_run_jwt(
+token = mint_run_jwt(
     run_id,
+    task_id,
     agent_id,
-    scopes=["task:read", "task:update", "mcp:knowledge", "workspace:manage"]
+    tenant_id,
+    scope=["task:read", "task:write", "mcp:knowledge", "agent:invoke"],
 )
 ```
 
 Examples:
-- **Code review agents**: add `task:update` to post decisions
+- **Code review agents**: add `task:write` to post decisions
 - **Research agents**: add `mcp:knowledge` for KB access
-- **File-manipulation agents**: add `mcp:file` for workspace I/O
+- **File-manipulation agents**: add `mcp:filesystem` for workspace I/O
 
 ## Implementation Checklist
 
 - [x] `mint_run_jwt()` encodes scopes into JWT payload
-- [x] MCP bridges validate scopes before fulfilling requests
-- [x] Agent code checks scopes before taking actions
+- [ ] MCP bridges validate scopes before fulfilling requests (deferred)
+- [ ] Agent code checks scopes before taking actions (deferred)
 - [x] Scope validation is DEFENSIVE: reject if scope missing, don't assume
 - [ ] Agent execution path docs include required scopes per agent type
 - [ ] Logging includes scope grants and scope-denied events
@@ -82,13 +84,11 @@ When implementing scope checks in agent code:
 
 ```python
 async def some_task_mutation(token: str, operation: str):
-    claims = await validate_run_jwt(token)
-    if not claims:
-        raise PermissionError("Invalid or expired run JWT")
-    
-    if "task:update" not in claims.get("scopes", "").split(","):
-        raise PermissionError(f"Scope 'task:update' required for {operation}")
-    
+    claims = await validate_run_jwt(token)  # raises JWTDecodeError/JWTExpiredError on failure
+
+    if "task:write" not in claims.get("scope", []):
+        raise PermissionError(f"Scope 'task:write' required for {operation}")
+
     # Proceed with operation
 ```
 
@@ -97,7 +97,11 @@ async def some_task_mutation(token: str, operation: str):
 When a run completes or is cancelled, its JWT is immediately revoked by adding its JTI (JWT ID) to the Redis denylist:
 
 ```python
-await revoke_run_jwt(token)  # Adds JTI to denylist, TTL = remaining JWT lifetime
+# fire-and-forget (end-of-run cleanup):
+revoke_run_jwt(token)
+
+# await confirmed write (breach-response / async contexts):
+await revoke_run_jwt_async(token)
 ```
 
 Revoked tokens are rejected by `validate_run_jwt()` even if signature is valid. The denylist is Redis-backed for high-throughput rejection checks.
@@ -106,9 +110,9 @@ Revoked tokens are rejected by `validate_run_jwt()` even if signature is valid. 
 
 | Property | Guarantee |
 |----------|-----------|
-| **Expiry** | Tokens expire within 5 minutes (configurable via `AUTOBOT_RUN_JWT_TTL_SECONDS`) |
+| **Expiry** | Tokens expire within 5 minutes (configurable via `RUN_JWT_TTL_SECONDS`) |
 | **Revocation** | Immediate via Redis denylist (within milliseconds) |
-| **Signature** | HS256 signed with `AUTOBOT_JWT_SECRET` |
+| **Signature** | HS256 signed with `RUN_JWT_SECRET` (fallback: `AUTOBOT_JWT_SECRET`) |
 | **Scope Binding** | Scopes are claims in the token, validated at each use |
 | **Audit Trail** | Every mint/revoke logged with run_id, agent_id, scopes |
 
