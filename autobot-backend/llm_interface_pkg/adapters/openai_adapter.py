@@ -16,6 +16,7 @@ import time
 from typing import List, Optional
 
 from ..models import LLMRequest, LLMResponse
+from ..base_provider import BaseProvider
 from .base import (
     AdapterBase,
     AdapterConfig,

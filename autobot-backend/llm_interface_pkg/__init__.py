@@ -52,6 +52,11 @@ from .streaming import StreamingManager
 # Types
 from .types import LLMType, ProviderType
 
+# Provider registry and base (canonical imports for MVA-62 consolidation)
+# These were in llm_providers/ but are now consolidated in llm_interface_pkg
+from .base_provider import BaseProvider
+from .provider_registry import ProviderRegistry, get_provider_registry
+
 __all__ = [
     # Types
     "ProviderType",
@@ -84,4 +89,8 @@ __all__ = [
     "AdapterBase",
     "AdapterRegistry",
     "get_adapter_registry",
+    # Provider registry and base (MVA-62 consolidation)
+    "BaseProvider",
+    "ProviderRegistry",
+    "get_provider_registry",
 ]

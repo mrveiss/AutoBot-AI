@@ -15,7 +15,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from llm_interface_pkg.models import LLMRequest, LLMResponse
+from .models import LLMRequest, LLMResponse
 
 logger = logging.getLogger(__name__)
 

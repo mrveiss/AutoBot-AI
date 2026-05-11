@@ -125,7 +125,7 @@ async def _fetch_from_providers() -> Dict[str, Any]:
     """Query every registered provider and aggregate results."""
     import asyncio
 
-    from llm_providers.provider_registry import get_provider_registry
+    from llm_interface_pkg import get_provider_registry
 
     registry = get_provider_registry()
     providers_info = registry.list_providers()

@@ -76,8 +76,8 @@ async def _stream_single_model(
     Resolves the provider via ProviderRegistry and calls stream_completion() so
     chunks arrive from the LLM as they are generated, not as a post-hoc slice.
     """
+    from llm_interface_pkg import get_provider_registry
     from llm_interface_pkg.models import LLMRequest
-    from llm_providers.provider_registry import get_provider_registry
 
     provider_name, model_name = _parse_provider_model(model_spec)
     try:

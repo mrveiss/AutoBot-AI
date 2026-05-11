@@ -40,11 +40,11 @@ import uuid
 from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
 from autobot_shared.tracing import get_tracer
+from llm_interface_pkg import ProviderRegistry, get_provider_registry
 from llm_interface_pkg.cache import CachedResponse, get_llm_cache
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.tiered_routing import TierConfig, TieredModelRouter
 from llm_interface_pkg.types import LLMType
-from llm_providers.provider_registry import ProviderRegistry, get_provider_registry
 
 try:
     from services.provider_health import ProviderHealthManager, ProviderStatus

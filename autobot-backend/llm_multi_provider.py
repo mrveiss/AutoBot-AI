@@ -27,11 +27,11 @@ from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import LLMType, ProviderType
 
 # ---------------------------------------------------------------------------
-# Re-export the plugin registry
+# Re-export the plugin registry and base classes from canonical location
 # ---------------------------------------------------------------------------
+from llm_interface_pkg import BaseProvider, ProviderRegistry, get_provider_registry
 from llm_providers import (
     AnthropicProvider,
-    BaseProvider,
     CustomOpenAIProvider,
     GroqProvider,
     HuggingFaceProvider,
@@ -39,9 +39,7 @@ from llm_providers import (
     OllamaProvider,
     OpenAIProvider,
     OpenRouterProvider,
-    ProviderRegistry,
     VLLMProvider,
-    get_provider_registry,
 )
 
 logger = logging.getLogger(__name__)
