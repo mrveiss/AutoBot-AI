@@ -3,23 +3,27 @@
 # Author: mrveiss
 """
 URL validation service for preventing SSRF attacks
+
+Delegates SSRF DNS-resolution checks to autobot_shared.url_safety for
+consistency across the codebase per #6533.
 """
 
-import asyncio
-import ipaddress
-import socket
 from typing import List, Optional
 from urllib.parse import urlparse
 
 from constants.network_constants import NetworkConstants
-from constants.security_constants import SecurityConstants
+from autobot_shared.url_safety import is_public_url
 
 # Issue #380: Module-level tuple for URL scheme validation
 _VALID_URL_SCHEMES = ("http://", "https://")
 
 
 class URLValidator:
-    """Validates URLs to prevent SSRF attacks"""
+    """Validates URLs to prevent SSRF attacks.
+
+    Delegates DNS-resolving SSRF checks to autobot_shared.url_safety for
+    consistency per #6533. This class preserves backward compatibility.
+    """
 
     ALLOWED_SCHEMES = ["http", "https"]
     FORBIDDEN_HOSTS = [
@@ -27,14 +31,7 @@ class URLValidator:
         NetworkConstants.LOCALHOST_IP,
         NetworkConstants.BIND_ALL_INTERFACES,
         NetworkConstants.LOCALHOST_IPV6,
-        SecurityConstants.CLOUD_METADATA_IPS[0],  # AWS metadata endpoint
-        "metadata.google.internal",  # GCP metadata endpoint
-    ]
-
-    # Private IP ranges - converted from SecurityConstants.BLOCKED_IP_RANGES
-    PRIVATE_IP_RANGES = [ipaddress.ip_network(cidr) for cidr in SecurityConstants.BLOCKED_IP_RANGES] + [
-        ipaddress.ip_network("fc00::/7"),  # IPv6 unique local
-        ipaddress.ip_network("fe80::/10"),  # IPv6 link local
+        "metadata.google.internal",  # GCP metadata endpoint (also caught by is_public_url)
     ]
 
     def __init__(self, allowed_domains: Optional[List[str]] = None):
@@ -81,34 +78,14 @@ class URLValidator:
                 if not any(hostname.endswith(domain) for domain in self.allowed_domains):
                     return False, f"Domain {hostname} not in allowed list"
 
-            # Resolve hostname to IP and check if it's private
-            try:
-                # Get IP address
-                ip_addr = socket.gethostbyname(hostname)
-                ip_obj = ipaddress.ip_address(ip_addr)
-
-                # Check if IP is private or loopback
-                if ip_obj.is_private or ip_obj.is_loopback:
-                    return False, f"Private/loopback IP address: {ip_addr}"
-
-                # Check against private IP ranges
-                for private_range in self.PRIVATE_IP_RANGES:
-                    if ip_obj in private_range:
-                        return (
-                            False,
-                            f"IP {ip_addr} is in private range {private_range}",
-                        )
-
-            except socket.gaierror:
-                # If hostname doesn't resolve, it might be invalid
-                return False, f"Cannot resolve hostname: {hostname}"
-            except Exception:
-                return False, "Error validating hostname"
+            # Delegate SSRF check to shared implementation
+            if not is_public_url(url):
+                return False, f"URL resolves to a non-public address: {hostname}"
 
             return True, ""
 
-        except Exception:
-            return False, "Invalid URL"
+        except Exception as exc:
+            return False, f"Error validating URL: {exc}"
 
     def sanitize_url(self, url: str) -> Optional[str]:
         """

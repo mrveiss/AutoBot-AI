@@ -8,6 +8,10 @@ Extracted from ``autobot-backend/media/link/pipeline.py`` (#7477) so that
 into ``LinkPipeline`` via a ``__new__`` hack + lazy import (which was the
 last leg of the ``pipeline.py ↔ fetcher.py`` circular dependency).
 
+Consolidated per #6533: ``marketplace_sources._resolve_safe_ip`` and
+``services/url_validator.URLValidator.is_safe_url`` both reimplemented the
+same RFC-range checks; they now delegate here.
+
 The functions here are pure-Python — only stdlib (``ipaddress``, ``socket``,
 ``asyncio``, ``urllib.parse``) — and have zero autobot-* dependencies, so
 they're safely importable from any layer.
@@ -17,6 +21,9 @@ Public API
 - :func:`is_public_url` — sync DNS-resolving check
 - :func:`is_public_url_async` — async wrapper that runs the blocking
   ``getaddrinfo`` in the default executor
+- :func:`resolve_safe_ip_async` — async DNS resolution that *returns* the
+  safe IP literal, enabling callers to connect directly to the resolved
+  address (defeats DNS-rebind TOCTOU attacks)
 
 The ``LinkPipeline._is_public_url`` / ``_is_public_url_async`` methods are
 preserved as backward-compat thin wrappers that delegate here.
@@ -107,4 +114,43 @@ async def is_public_url_async(url: str) -> bool:
     return await loop.run_in_executor(None, is_public_url, url)
 
 
-__all__ = ["is_public_url", "is_public_url_async"]
+async def resolve_safe_ip_async(host: str, *, timeout: float = _DNS_TIMEOUT_SECONDS) -> str:
+    """Resolve *host* and return the first globally-routable IP literal.
+
+    Raises ``ValueError`` if the hostname resolves to any private, loopback,
+    link-local, multicast, reserved, or unspecified address, or if DNS
+    resolution fails. Callers should connect to the returned IP directly
+    (bypassing DNS on the actual connection) to defeat DNS-rebind TOCTOU
+    attacks.
+
+    Parameters
+    ----------
+    host:
+        Raw hostname or IP literal — not a full URL.
+    timeout:
+        DNS resolution timeout in seconds (default 2.0).
+    """
+    loop = asyncio.get_running_loop()
+    try:
+        infos = await loop.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+    except (socket.gaierror, OSError) as exc:
+        raise ValueError(f"Could not resolve host '{host}': {exc}") from exc
+
+    safe_ip: str | None = None
+    for info in infos:
+        ip_str = info[4][0].split("%", 1)[0]  # strip IPv6 scope id
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+        if not _ip_is_public(ip):
+            raise ValueError(f"Host '{host}' resolves to a non-public address: {ip_str}")
+        if safe_ip is None:
+            safe_ip = ip_str
+
+    if safe_ip is None:
+        raise ValueError(f"Host '{host}' has no usable public IP address")
+    return safe_ip
+
+
+__all__ = ["is_public_url", "is_public_url_async", "resolve_safe_ip_async"]
