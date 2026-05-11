@@ -107,8 +107,7 @@ async def on_pre_compact(
     usage = estimate_context_usage(messages, model_name)
     if usage < CONTEXT_LIMIT_THRESHOLD:
         logger.debug(
-            "compact_hook.on_pre_compact: usage=%.2f < threshold=%.2f — skipping "
-            "(session=%s)",
+            "compact_hook.on_pre_compact: usage=%.2f < threshold=%.2f — skipping " "(session=%s)",
             usage,
             CONTEXT_LIMIT_THRESHOLD,
             session_id,
@@ -116,8 +115,7 @@ async def on_pre_compact(
         return
 
     logger.info(
-        "compact_hook.on_pre_compact: usage=%.2f >= threshold=%.2f — snapshotting "
-        "(session=%s model=%s)",
+        "compact_hook.on_pre_compact: usage=%.2f >= threshold=%.2f — snapshotting " "(session=%s model=%s)",
         usage,
         CONTEXT_LIMIT_THRESHOLD,
         session_id,
@@ -142,16 +140,14 @@ async def on_pre_compact(
 
         _cs_task.delay(session_id, snapshot, user_id)
         logger.debug(
-            "compact_hook.on_pre_compact: enqueued compact_snapshot_task "
-            "(session=%s chars=%d)",
+            "compact_hook.on_pre_compact: enqueued compact_snapshot_task " "(session=%s chars=%d)",
             session_id,
             len(snapshot),
         )
     except Exception as exc:
         # Never raise from a fire-and-forget hook — log and continue.
         logger.warning(
-            "compact_hook.on_pre_compact failed to enqueue task "
-            "(session=%s): %s",
+            "compact_hook.on_pre_compact failed to enqueue task " "(session=%s): %s",
             session_id,
             exc,
         )

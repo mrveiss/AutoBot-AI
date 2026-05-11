@@ -62,10 +62,7 @@ class CommandExplanationService:
             logger.error("Failed to get Ollama endpoint: %s", e)
             from autobot_shared.ssot_config import config as _ssot
 
-            return (
-                f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}"
-                + PATH_OLLAMA_GENERATE
-            )
+            return f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}" + PATH_OLLAMA_GENERATE
 
     def _get_model(self) -> str:
         """Get LLM model from config."""
@@ -128,9 +125,7 @@ class CommandExplanationService:
                 ],
             )
 
-    async def explain_output(
-        self, command: str, output: str, return_code: int = 0
-    ) -> OutputExplanation:
+    async def explain_output(self, command: str, output: str, return_code: int = 0) -> OutputExplanation:
         """
         Generate Part 2 explanation: What the output shows.
 
@@ -196,9 +191,7 @@ Rules:
 - Note any potentially dangerous operations in security_notes
 - Response must be valid JSON only, no other text"""
 
-    def _build_output_explanation_prompt(
-        self, command: str, output: str, return_code: int
-    ) -> str:
+    def _build_output_explanation_prompt(self, command: str, output: str, return_code: int) -> str:
         """Build prompt for output explanation."""
         truncated = get_tool_output_filter().filter(command, output, exit_code=return_code)
         truncation_note = (
@@ -258,9 +251,7 @@ Rules:
 
         return response.get("response", "")
 
-    def _parse_command_explanation(
-        self, response: str, command: str
-    ) -> CommandExplanation:
+    def _parse_command_explanation(self, response: str, command: str) -> CommandExplanation:
         """Parse LLM response into CommandExplanation."""
         try:
             # Try to extract JSON from response
@@ -273,12 +264,7 @@ Rules:
 
             return CommandExplanation(
                 summary=data.get("summary", f"Executes {command.split()[0]}"),
-                breakdown=breakdown
-                or [
-                    CommandBreakdownPart(
-                        part=command.split()[0], explanation="Main command"
-                    )
-                ],
+                breakdown=breakdown or [CommandBreakdownPart(part=command.split()[0], explanation="Main command")],
                 security_notes=data.get("security_notes"),
             )
 
@@ -288,13 +274,8 @@ Rules:
             parts = command.split()
             return CommandExplanation(
                 summary=f"Executes the {parts[0]} command",
-                breakdown=[
-                    CommandBreakdownPart(part=parts[0], explanation="Command name")
-                ]
-                + [
-                    CommandBreakdownPart(part=p, explanation="Argument/flag")
-                    for p in parts[1:3]
-                ],
+                breakdown=[CommandBreakdownPart(part=parts[0], explanation="Command name")]
+                + [CommandBreakdownPart(part=p, explanation="Argument/flag") for p in parts[1:3]],
             )
 
     def _parse_output_explanation(self, response: str) -> OutputExplanation:

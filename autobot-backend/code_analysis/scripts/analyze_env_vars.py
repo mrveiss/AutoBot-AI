@@ -3,12 +3,12 @@
 Analyze AutoBot codebase for hardcoded environment variables and generate config recommendations
 """
 
-import asyncio
 import json
 from pathlib import Path
 
 from env_analyzer import EnvironmentAnalyzer
 
+from autobot_shared.async_compat import run_or_schedule
 from constants.network_constants import NetworkConstants
 
 
@@ -16,17 +16,11 @@ def _print_analysis_summary(results: dict) -> None:
     """Print analysis summary and category breakdown. Issue #1183."""
     print("\n=== Environment Variable Analysis Results ===\n")  # noqa: print
     print("📊 **Analysis Summary:**")  # noqa: print
-    print(
-        f"   - Total hardcoded values: {results['total_hardcoded_values']}"
-    )  # noqa: print
+    print(f"   - Total hardcoded values: {results['total_hardcoded_values']}")  # noqa: print
     print(f"   - High priority issues: {results['high_priority_count']}")  # noqa: print
-    print(
-        f"   - Configuration recommendations: {results['recommendations_count']}"
-    )  # noqa: print
+    print(f"   - Configuration recommendations: {results['recommendations_count']}")  # noqa: print
     print(f"   - Files affected: {results['metrics']['files_affected']}")  # noqa: print
-    print(
-        f"   - Analysis time: {results['analysis_time_seconds']:.2f}s\n"
-    )  # noqa: print
+    print(f"   - Analysis time: {results['analysis_time_seconds']:.2f}s\n")  # noqa: print
     print("🏷️  **Categories Found:**")  # noqa: print
     for category, count in results["categories"].items():
         print(f"   - {category}: {count} instances")  # noqa: print
@@ -39,9 +33,7 @@ def _print_high_priority_issues(high_priority: list) -> None:
         return
     print("🚨 **High Priority Issues (Security/Infrastructure):**")  # noqa: print
     for item in high_priority[:10]:  # Show top 10
-        print(
-            f"   - {item['file']}:{item['line']} - {item['type']}: '{item['value']}'"
-        )  # noqa: print
+        print(f"   - {item['file']}:{item['line']} - {item['type']}: '{item['value']}'")  # noqa: print
         print(f"     → Suggested env var: {item['suggested_env_var']}")  # noqa: print
     print()  # noqa: print
 
@@ -59,12 +51,8 @@ def _print_config_recs(high_priority_recs: list, medium_priority_recs: list) -> 
     if medium_priority_recs:
         print("⚙️  **Medium Priority Configuration Recommendations:**")  # noqa: print
         for rec in medium_priority_recs[:5]:  # Show top 5
-            print(
-                f"   - {rec['env_var_name']}: '{rec['default_value']}'"
-            )  # noqa: print
-            print(
-                f"     Category: {rec['category']}, Files: {len(rec['affected_files'])}"
-            )  # noqa: print
+            print(f"   - {rec['env_var_name']}: '{rec['default_value']}'")  # noqa: print
+            print(f"     Category: {rec['category']}, Files: {len(rec['affected_files'])}")  # noqa: print
         print()  # noqa: print
 
 
@@ -82,9 +70,7 @@ async def analyze_environment_variables():
         ],
     )
     _print_analysis_summary(results)
-    high_priority = [
-        item for item in results["hardcoded_details"] if item["severity"] == "high"
-    ]
+    high_priority = [item for item in results["hardcoded_details"] if item["severity"] == "high"]
     _print_high_priority_issues(high_priority)
     recommendations = results["configuration_recommendations"]
     _print_config_recs(
@@ -114,9 +100,7 @@ def _print_config_py_section(by_category: dict) -> None:
             elif default.lower() in ["true", "false"]:
                 config_line = f'        "{env_var.lower()}": os.getenv("{env_var}", "{default}").lower() == "true",'
             else:
-                config_line = (
-                    f'        "{env_var.lower()}": os.getenv("{env_var}", "{default}"),'
-                )
+                config_line = f'        "{env_var.lower()}": os.getenv("{env_var}", "{default}"),'
             print(f"        # {rec['description']}")  # noqa: print
             print(config_line)  # noqa: print
     print("```\n")  # noqa: print
@@ -206,13 +190,11 @@ async def main():
     print("\n=== Analysis Complete ===")  # noqa: print
     print("Next steps:")  # noqa: print
     print("1. Review env_analysis_report.json for detailed findings")  # noqa: print
-    print(
-        "2. Update src/config.py with high-priority environment variables"
-    )  # noqa: print
+    print("2. Update src/config.py with high-priority environment variables")  # noqa: print
     print("3. Create/update .env file with new variables")  # noqa: print
     print("4. Refactor hardcoded values to use config system")  # noqa: print
     print("5. Test configuration changes in different environments")  # noqa: print
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

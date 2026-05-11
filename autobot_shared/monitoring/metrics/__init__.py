@@ -38,12 +38,12 @@ from .github import GitHubMetricsRecorder
 # Issue #1956: Inference profiler metrics recorder
 from .inference_profiler import InferenceProfilerMetricsRecorder
 
-# Issue #4109: MCP worker restart budget exhaustion metrics
-from .mcp_worker import MCPWorkerMetricsRecorder
-
 # Issue #470: New domain-specific recorders
 from .knowledge_base import KnowledgeBaseMetricsRecorder
 from .llm_provider import LLMProviderMetricsRecorder
+
+# Issue #4109: MCP worker restart budget exhaustion metrics
+from .mcp_worker import MCPWorkerMetricsRecorder
 from .performance import PerformanceMetricsRecorder
 from .redis import RedisMetricsRecorder
 from .service_health import ServiceHealthMetricsRecorder

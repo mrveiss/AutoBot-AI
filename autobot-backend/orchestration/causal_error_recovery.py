@@ -11,17 +11,15 @@ scoring and alternative actions.
 Issue #2154: Enhanced error handling with root-cause analysis and recovery planning.
 """
 
-import asyncio
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
-from constants.ttl_constants import TTL_7_DAYS, TTL_30_DAYS
+from constants.ttl_constants import TTL_30_DAYS
 from orchestration.causal_error_analyzer import CausalErrorAnalysis
 
 logger = logging.getLogger(__name__)
@@ -87,9 +85,7 @@ class RecoveryPlan:
 
     # Metadata
     confidence: float = 0.0  # Overall confidence in this plan
-    timestamp: str = field(
-        default_factory=lambda: now_utc().isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: now_utc().isoformat())
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dict for JSON storage."""
@@ -181,9 +177,7 @@ class CausalErrorRecovery:
         pattern_frequency, is_known = self._check_pattern(pattern_hash)
 
         # Generate recovery actions based on error type and context
-        recovery_actions = self._generate_recovery_actions(
-            error, error_type, causal_analysis, execution_context
-        )
+        recovery_actions = self._generate_recovery_actions(error, error_type, causal_analysis, execution_context)
 
         # Score and rank actions
         recovery_actions.sort(key=lambda a: a.score, reverse=True)
@@ -214,16 +208,12 @@ class CausalErrorRecovery:
 
         return plan
 
-    def _is_leaf_error(
-        self, error_type: str, causal_analysis: CausalErrorAnalysis
-    ) -> bool:
+    def _is_leaf_error(self, error_type: str, causal_analysis: CausalErrorAnalysis) -> bool:
         """Determine if error is immediate (leaf) or downstream (cascading)."""
         # If causal chain has arrows indicating multiple steps, it's downstream
         if "→" in causal_analysis.causal_chain or "->" in causal_analysis.causal_chain:
             # Count arrow count; if > 1, likely cascading
-            arrow_count = causal_analysis.causal_chain.count(
-                "→"
-            ) + causal_analysis.causal_chain.count("->")
+            arrow_count = causal_analysis.causal_chain.count("→") + causal_analysis.causal_chain.count("->")
             return arrow_count <= 1
 
         # Confounders suggest downstream effect
@@ -239,9 +229,7 @@ class CausalErrorRecovery:
         """Check if a pattern is known and return frequency."""
         try:
             redis = self._get_redis()
-            count_key = (
-                f"{FAILURE_PATTERN_PREFIX}{pattern_hash}{FAILURE_PATTERN_COUNT_SUFFIX}"
-            )
+            count_key = f"{FAILURE_PATTERN_PREFIX}{pattern_hash}{FAILURE_PATTERN_COUNT_SUFFIX}"
             count = redis.get(count_key)
             if count:
                 frequency = int(count)
@@ -265,10 +253,7 @@ class CausalErrorRecovery:
         root_lower = causal_analysis.root_cause.lower()
 
         # Network/timeout errors → retry with backoff
-        if any(
-            x in error_type.lower()
-            for x in ["timeout", "connection", "networkio", "timeout_error"]
-        ):
+        if any(x in error_type.lower() for x in ["timeout", "connection", "networkio", "timeout_error"]):
             actions.append(
                 RecoveryAction_(
                     action=RecoveryAction.RETRY_WITH_BACKOFF,
@@ -293,10 +278,7 @@ class CausalErrorRecovery:
             )
 
         # Resource exhaustion → scale or wait
-        if any(
-            x in root_lower
-            for x in ["pool", "resource", "capacity", "memory", "connection"]
-        ):
+        if any(x in root_lower for x in ["pool", "resource", "capacity", "memory", "connection"]):
             actions.append(
                 RecoveryAction_(
                     action=RecoveryAction.WAIT_FOR_DEPENDENCY,
@@ -356,10 +338,7 @@ class CausalErrorRecovery:
             )
 
         # Permission/access errors → escalate
-        if any(
-            x in error_type.lower()
-            for x in ["permission", "forbidden", "auth", "unauthorized", "access"]
-        ):
+        if any(x in error_type.lower() for x in ["permission", "forbidden", "auth", "unauthorized", "access"]):
             actions.append(
                 RecoveryAction_(
                     action=RecoveryAction.ESCALATE,
@@ -437,24 +416,16 @@ class CausalErrorRecovery:
             redis = self._get_redis()
 
             # Increment pattern count
-            count_key = (
-                f"{FAILURE_PATTERN_PREFIX}{pattern_hash}{FAILURE_PATTERN_COUNT_SUFFIX}"
-            )
+            count_key = f"{FAILURE_PATTERN_PREFIX}{pattern_hash}{FAILURE_PATTERN_COUNT_SUFFIX}"
             redis.incr(count_key)
             redis.expire(count_key, TTL_30_DAYS)
 
             # Store causal chain
-            chain_key = (
-                f"{FAILURE_PATTERN_PREFIX}{pattern_hash}{FAILURE_PATTERN_CHAIN_SUFFIX}"
-            )
+            chain_key = f"{FAILURE_PATTERN_PREFIX}{pattern_hash}{FAILURE_PATTERN_CHAIN_SUFFIX}"
             redis.set(chain_key, recovery_plan.causal_chain, ex=TTL_30_DAYS)
 
             # Record resolution (which action actually worked)
             if success:
-                resolution_key = (
-                    f"{FAILURE_PATTERN_RESOLUTION_PREFIX}{pattern_hash}"
-                    f":{action_taken.value}"
-                )
                 resolution_data = {
                     "action": action_taken.value,
                     "outcome": outcome or "success",

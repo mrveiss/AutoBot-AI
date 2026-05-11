@@ -15,16 +15,20 @@ from typing import TYPE_CHECKING, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
 from api.system_health import ComponentHealth, register_health_probe
-
 from auth_middleware import check_admin_permission, get_current_user
 
 if TYPE_CHECKING:
     from intelligence.intelligent_agent import IntelligentAgent
 
+from api.schemas_agent import (
+    AgentReloadResponse,
+    AgentSystemCapabilitiesResponse,
+    GoalRequest,
+    GoalResponse,
+    HealthResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from monitoring.prometheus_metrics import get_metrics_manager
-from api.schemas_agent import AgentReloadResponse, AgentSystemCapabilitiesResponse, GoalRequest, GoalResponse, HealthResponse
-from api.schemas_common import DataResponse
 
 # CRITICAL FIX: Use lazy loading to prevent startup deadlock
 logger = logging.getLogger(__name__)
@@ -34,9 +38,7 @@ prometheus_metrics = get_metrics_manager()
 
 # Global agent instance with module-level lock to prevent race condition on lock initialization
 _agent_instance = None
-_agent_initialization_lock = (
-    asyncio.Lock()
-)  # Issue #395: Initialize at module level to prevent race
+_agent_initialization_lock = asyncio.Lock()  # Issue #395: Initialize at module level to prevent race
 
 
 def get_lazy_dependencies():
@@ -57,9 +59,7 @@ def get_lazy_dependencies():
         )
     except ImportError as e:
         logger.error("Failed to import intelligent agent dependencies: %s", e)
-        raise HTTPException(
-            status_code=503, detail="Intelligent agent dependencies not available"
-        )
+        raise HTTPException(status_code=503, detail="Intelligent agent dependencies not available")
 
 
 async def get_agent() -> "IntelligentAgent":
@@ -87,16 +87,10 @@ async def get_agent() -> "IntelligentAgent":
                 WorkerNode,
             ) = get_lazy_dependencies()
 
-            logger.info(
-                "Initializing intelligent agent with lazy-loaded dependencies..."
-            ),
-            _agent_instance = IntelligentAgent(
-                get_llm_service(), KnowledgeBase(), WorkerNode(), CommandValidator()
-            )
+            logger.info("Initializing intelligent agent with lazy-loaded dependencies..."),
+            _agent_instance = IntelligentAgent(get_llm_service(), KnowledgeBase(), WorkerNode(), CommandValidator())
             await _agent_instance.initialize()
-            logger.info(
-                "✅ Intelligent agent initialized successfully with lazy loading"
-            )
+            logger.info("✅ Intelligent agent initialized successfully with lazy loading")
             return _agent_instance
 
         except Exception as e:
@@ -141,9 +135,7 @@ async def process_natural_language_goal(
     result_chunks = []
     metadata = {}
 
-    async for chunk in agent.process_natural_language_goal(
-        request.goal, context=request.context
-    ):
+    async for chunk in agent.process_natural_language_goal(request.goal, context=request.context):
         result_chunks.append(f"[{chunk.chunk_type}] {chunk.content}")
 
         # Collect metadata from chunks
@@ -322,16 +314,12 @@ async def websocket_stream(websocket: WebSocket):
             context = data.get("context", {})
 
             if not goal:
-                await websocket.send_json(
-                    {"type": "error", "content": "No goal provided"}
-                )
+                await websocket.send_json({"type": "error", "content": "No goal provided"})
                 continue
             logger.info("Processing WebSocket goal: %s", goal)
             try:
                 # Stream chunks back to client
-                async for chunk in agent.process_natural_language_goal(
-                    goal, context=context
-                ):
+                async for chunk in agent.process_natural_language_goal(goal, context=context):
                     await websocket.send_json(
                         {
                             "type": chunk.chunk_type,
@@ -340,14 +328,10 @@ async def websocket_stream(websocket: WebSocket):
                         }
                     )
                 # Send completion signal
-                await websocket.send_json(
-                    {"type": "complete", "content": "Goal processing completed"}
-                )
+                await websocket.send_json({"type": "complete", "content": "Goal processing completed"})
             except Exception as e:
                 logger.error("Error processing WebSocket goal: %s", e)
-                await websocket.send_json(
-                    {"type": "error", "content": "Error processing goal"}
-                )
+                await websocket.send_json({"type": "error", "content": "Error processing goal"})
     except WebSocketDisconnect:
         logger.info("WebSocket connection closed")
     except Exception as e:

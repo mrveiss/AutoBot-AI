@@ -142,9 +142,7 @@ class ASTNormalizer(ast.NodeTransformer):
             col_offset=node.col_offset,
         )
 
-    def visit_AsyncFunctionDef(
-        self, node: ast.AsyncFunctionDef
-    ) -> ast.AsyncFunctionDef:
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AsyncFunctionDef:
         """
         Normalize async function names.
 
@@ -201,18 +199,10 @@ class ASTNormalizer(ast.NodeTransformer):
         return ast.arguments(
             posonlyargs=[],
             args=new_args,
-            vararg=(
-                ast.arg(arg=self._get_placeholder(args.vararg.arg, "VAR"))
-                if args.vararg
-                else None
-            ),
+            vararg=(ast.arg(arg=self._get_placeholder(args.vararg.arg, "VAR")) if args.vararg else None),
             kwonlyargs=new_kwonlyargs,
             kw_defaults=[self.visit(d) if d else None for d in args.kw_defaults],
-            kwarg=(
-                ast.arg(arg=self._get_placeholder(args.kwarg.arg, "VAR"))
-                if args.kwarg
-                else None
-            ),
+            kwarg=(ast.arg(arg=self._get_placeholder(args.kwarg.arg, "VAR")) if args.kwarg else None),
             defaults=[self.visit(d) for d in args.defaults],
         )
 

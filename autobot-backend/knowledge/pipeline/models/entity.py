@@ -7,11 +7,12 @@ Entity Model - Extracted entity representation for ECL pipeline.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
+
 from autobot_shared.time_utils import now_utc
 
 EntityType = Literal[
@@ -45,28 +46,16 @@ class Entity(BaseModel):
 
     id: UUID = Field(default_factory=uuid4, description="Unique entity ID")
     name: str = Field(..., description="Entity name as mentioned in text")
-    canonical_name: str = Field(
-        ..., description="Normalized/standardized name for deduplication"
-    )
+    canonical_name: str = Field(..., description="Normalized/standardized name for deduplication")
     entity_type: EntityType = Field(..., description="Entity classification type")
     description: str = Field(default="", description="Entity description or summary")
     properties: Dict[str, Any] = Field(
         default_factory=dict,
         description="Additional entity properties (role, title, etc.)",
     )
-    source_chunk_ids: List[UUID] = Field(
-        default_factory=list, description="Chunks where entity was mentioned"
-    )
+    source_chunk_ids: List[UUID] = Field(default_factory=list, description="Chunks where entity was mentioned")
     source_document_id: UUID = Field(..., description="Primary source document ID")
-    confidence: float = Field(
-        default=1.0, ge=0.0, le=1.0, description="Extraction confidence score"
-    )
-    extraction_count: int = Field(
-        default=1, description="Number of times entity was extracted"
-    )
-    created_at: datetime = Field(
-        default_factory=_utcnow, description="Entity creation timestamp"
-    )
-    updated_at: datetime = Field(
-        default_factory=_utcnow, description="Last update timestamp"
-    )
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Extraction confidence score")
+    extraction_count: int = Field(default=1, description="Number of times entity was extracted")
+    created_at: datetime = Field(default_factory=_utcnow, description="Entity creation timestamp")
+    updated_at: datetime = Field(default_factory=_utcnow, description="Last update timestamp")

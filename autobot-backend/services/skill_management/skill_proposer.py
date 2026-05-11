@@ -25,8 +25,6 @@ logger = logging.getLogger(__name__)
 class SkillProposalError(Exception):
     """Error proposing skill to SLM."""
 
-    pass
-
 
 class SkillProposer:
     """Proposes extracted skills to SLM for validation and activation."""
@@ -62,9 +60,7 @@ class SkillProposer:
         proposed = []
         for skill in skills:
             try:
-                success = await self._propose_single_skill(
-                    skill, session_id, conversation_id
-                )
+                success = await self._propose_single_skill(skill, session_id, conversation_id)
                 if success:
                     proposed.append(skill.name)
                     logger.info("Proposed skill: %s", skill.name)
@@ -143,9 +139,7 @@ class SkillProposer:
 
         try:
             # Call SLM endpoint: POST /api/skills/propose
-            slm_url = self.slm_client._ws_url.replace("ws://", "http://").replace(
-                "wss://", "https://"
-            )
+            slm_url = self.slm_client._ws_url.replace("ws://", "http://").replace("wss://", "https://")
             proposal_url = f"{slm_url}/api/skills/propose"
 
             async with self.http_client.post(
@@ -156,9 +150,7 @@ class SkillProposer:
             ) as response:
                 if response.status != 200:
                     text = await response.text()
-                    raise SkillProposalError(
-                        f"SLM returned {response.status}: {text}"
-                    )
+                    raise SkillProposalError(f"SLM returned {response.status}: {text}")
 
                 return await response.json()
 
@@ -180,9 +172,7 @@ class SkillProposer:
             ) as response:
                 if response.status != 200:
                     text = await response.text()
-                    raise SkillProposalError(
-                        f"SLM returned {response.status}: {text}"
-                    )
+                    raise SkillProposalError(f"SLM returned {response.status}: {text}")
 
                 return await response.json()
 

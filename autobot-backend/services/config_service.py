@@ -62,9 +62,7 @@ class ConfigService:
         if ConfigService._cache_timestamp is None:
             return True
 
-        return (
-            time.time() - ConfigService._cache_timestamp
-        ) > ConfigService.CACHE_DURATION
+        return (time.time() - ConfigService._cache_timestamp) > ConfigService.CACHE_DURATION
 
     @staticmethod
     def clear_cache():
@@ -103,29 +101,17 @@ class ConfigService:
             Backend configuration dict
         """
         # Use SSOT for default backend URL
-        default_api_endpoint = (
-            _ssot.backend_url
-            if _ssot
-            else f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}"
-        )
+        default_api_endpoint = _ssot.backend_url if _ssot else f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}"
         default_port = _ssot.port.backend if _ssot else BACKEND_PORT
 
         return {
             "api_endpoint": get("backend.api_endpoint", default_api_endpoint),
-            "server_host": get(
-                "backend.server_host", NetworkConstants.BIND_ALL_INTERFACES
-            ),
+            "server_host": get("backend.server_host", NetworkConstants.BIND_ALL_INTERFACES),
             "server_port": get("backend.server_port", default_port),
             "chat_data_dir": get("backend.chat_data_dir", "data/chats"),
-            "chat_history_file": get(
-                "backend.chat_history_file", "data/chat_history.json"
-            ),
-            "knowledge_base_db": get(
-                "backend.knowledge_base_db", "data/knowledge_base.db"
-            ),
-            "reliability_stats_file": get(
-                "backend.reliability_stats_file", "data/reliability_stats.json"
-            ),
+            "chat_history_file": get("backend.chat_history_file", "data/chat_history.json"),
+            "knowledge_base_db": get("backend.knowledge_base_db", "data/knowledge_base.db"),
+            "reliability_stats_file": get("backend.reliability_stats_file", "data/reliability_stats.json"),
             "audit_log_file": get("backend.audit_log_file", "data/audit.log"),
             "cors_origins": get("backend.cors_origins", []),
             "timeout": get("backend.timeout", 60),
@@ -165,16 +151,12 @@ class ConfigService:
             },
             "vector_storage": {
                 "enabled": get("memory.vector_storage.enabled", True),
-                "update_frequency_days": get(
-                    "memory.vector_storage.update_frequency_days", 7
-                ),
+                "update_frequency_days": get("memory.vector_storage.update_frequency_days", 7),
             },
             "chromadb": {
                 "enabled": get("memory.chromadb.enabled", True),
                 "path": get("memory.chromadb.path", "data/chromadb"),
-                "collection_name": get(
-                    "memory.chromadb.collection_name", "autobot_memory"
-                ),
+                "collection_name": get("memory.chromadb.collection_name", "autobot_memory"),
             },
             "redis": {
                 "enabled": get("memory.redis.enabled", False),
@@ -335,9 +317,7 @@ class ConfigService:
 
             ConfigService._cached_config = config_data
             ConfigService._cache_timestamp = time.time()
-            logger.debug(
-                f"Configuration cached for {ConfigService.CACHE_DURATION} seconds"
-            )
+            logger.debug(f"Configuration cached for {ConfigService.CACHE_DURATION} seconds")
 
             return config_data
         except Exception as e:
@@ -388,24 +368,18 @@ class ConfigService:
     def update_llm_config(config_data: Metadata) -> Dict[str, str]:
         """Update LLM configuration using unified config system"""
         try:
-            logger.info(
-                f"UNIFIED CONFIG SERVICE: Updating LLM configuration with: {config_data}"
-            )
+            logger.info(f"UNIFIED CONFIG SERVICE: Updating LLM configuration with: {config_data}")
 
             # Handle Ollama model updates through unified config
             if "ollama" in config_data and "model" in config_data["ollama"]:
                 model_name = config_data["ollama"]["model"]
-                logger.info(
-                    f"UNIFIED CONFIG SERVICE: Updating Ollama model to: {model_name}"
-                )
+                logger.info(f"UNIFIED CONFIG SERVICE: Updating Ollama model to: {model_name}")
                 unified_config_manager.update_llm_model(model_name)
 
             # Handle other LLM configuration updates
             if "local" in config_data and "selected_model" in config_data["local"]:
                 model_name = config_data["local"]["selected_model"]
-                logger.info(
-                    f"UNIFIED CONFIG SERVICE: Updating local model to: {model_name}"
-                )
+                logger.info(f"UNIFIED CONFIG SERVICE: Updating local model to: {model_name}")
                 unified_config_manager.update_llm_model(model_name)
 
             # Handle legacy format updates (Issue #380: use module-level frozenset)
@@ -419,14 +393,10 @@ class ConfigService:
             # Clear cache to force fresh load on next access
             ConfigService.clear_cache()
 
-            logger.info(
-                "UNIFIED CONFIG SERVICE: LLM configuration updated successfully and cache cleared"
-            )
+            logger.info("UNIFIED CONFIG SERVICE: LLM configuration updated successfully and cache cleared")
             return {
                 "status": "success",
-                "message": (
-                    "LLM configuration updated successfully using unified config system"
-                ),
+                "message": ("LLM configuration updated successfully using unified config system"),
             }
         except Exception as e:
             logger.error("Error updating LLM config: %s", str(e))
@@ -497,10 +467,7 @@ class ConfigService:
             # Remove prompts section - prompts are managed separately
             # in prompts/ directory
             if "prompts" in filtered_config:
-                logger.info(
-                    "Removing prompts section from config - "
-                    "prompts are managed in prompts/ directory"
-                )
+                logger.info("Removing prompts section from config - " "prompts are managed in prompts/ directory")
                 del filtered_config["prompts"]
 
             # Issue #594: Normalize logging field names from frontend to config format
@@ -534,9 +501,7 @@ class ConfigService:
             # Clear cache to force fresh load on next access
             ConfigService.clear_cache()
 
-            logger.info(
-                "Full configuration saved and reloaded successfully (prompts excluded)"
-            )
+            logger.info("Full configuration saved and reloaded successfully (prompts excluded)")
             return {
                 "status": "success",
                 "message": "Configuration saved and reloaded successfully",

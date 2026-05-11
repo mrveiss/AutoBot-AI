@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
+from tests.fixtures import make_async_redis
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -25,18 +26,30 @@ _STREAM_KEY = "kb:synthesis:log"
 def _make_redis_mock(xadd_result=b"1-1", xrevrange_result=None):
     """Return an async Redis mock with xadd / xrevrange stubbed.
 
-    pipeline() returns a synchronous MagicMock whose xadd/hset are tracked
-    and whose execute() is an AsyncMock (pipeline.execute is awaited).
+    Pipeline shape is hand-built (NOT via canonical ``make_redis_pipeline()``)
+    because production code here uses **buffered-pipeline semantics**:
+    ``pipe.xadd(...)`` and ``pipe.hset(...)`` are SYNC ``MagicMock`` calls
+    (no ``await``) that just queue the op locally; only ``pipe.execute()``
+    is async. The canonical ``make_redis_pipeline()`` builds an AsyncMock-
+    based pipe whose ``xadd``/``hset`` auto-spawn AsyncMock children — that
+    works for tests that ``await pipe.xadd(...)``, but here production
+    calls them sync, so the queue ops would be coroutine leaks.
+
+    ``mock._pipe`` is exposed for ``assert_called_once`` assertions on the
+    buffered ops.
     """
-    mock = AsyncMock()
-    # xrevrange is still called directly on the redis client
-    mock.xrevrange = AsyncMock(return_value=xrevrange_result or [])
     # pipeline() is a sync call — return a MagicMock with async execute
     pipe_mock = MagicMock()
     pipe_mock.xadd = MagicMock(return_value=None)
     pipe_mock.hset = MagicMock(return_value=None)
     pipe_mock.execute = AsyncMock(return_value=[xadd_result, 1])
-    mock.pipeline = MagicMock(return_value=pipe_mock)
+
+    # Migrated to canonical ``make_async_redis(pipeline=…)`` (#7280 round 10)
+    # for the redis surface; pipe shape kept hand-built per docstring above.
+    mock = make_async_redis(
+        pipeline=pipe_mock,
+        xrevrange=xrevrange_result or [],
+    )
     mock._pipe = pipe_mock  # expose for assertions
     return mock
 
@@ -408,9 +421,7 @@ class TestGetBestRunIdForCollection:
             svc = SynthesisProvenanceLog()
             result = await svc.get_best_run_id_for_collection("kb_synthesis")
         assert result == "run-best"
-        mock_redis.zrevrange.assert_called_once_with(
-            "kb:synthesis:best:kb_synthesis", 0, 0
-        )
+        mock_redis.zrevrange.assert_called_once_with("kb:synthesis:best:kb_synthesis", 0, 0)
 
     @pytest.mark.asyncio
     async def test_returns_none_on_redis_error(self):
@@ -448,9 +459,7 @@ class TestLogRunCollectionIndex:
                 collection_name="kb_synthesis",
                 score=0.75,
             )
-        mock_redis._pipe.zadd.assert_called_once_with(
-            "kb:synthesis:best:kb_synthesis", {"run-1": 0.75}
-        )
+        mock_redis._pipe.zadd.assert_called_once_with("kb:synthesis:best:kb_synthesis", {"run-1": 0.75})
 
     @pytest.mark.asyncio
     async def test_zadd_not_called_when_no_collection_name(self):

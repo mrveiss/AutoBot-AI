@@ -188,11 +188,7 @@ Please evaluate this step on the following dimensions (score 0.0 to 1.0):
         Related:
             Issue #665: Extract helper methods from _init_metrics functions.
         """
-        alternatives_text = (
-            json.dumps(alternatives, indent=2)
-            if alternatives
-            else "No alternatives provided"
-        )
+        alternatives_text = json.dumps(alternatives, indent=2) if alternatives else "No alternatives provided"
         return f"""ALTERNATIVES TO CONSIDER:
 {alternatives_text}
 
@@ -240,19 +236,13 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
         user_context = context.get("user_context", {})
         risk_tolerance = context.get("risk_tolerance", "medium")
 
-        context_section = self._build_judgment_context(
-            subject, workflow_context, user_context, risk_tolerance
-        )
+        context_section = self._build_judgment_context(subject, workflow_context, user_context, risk_tolerance)
         criteria_section = self._build_judgment_criteria()
-        instructions_section = self._format_judgment_instructions(
-            context, risk_tolerance, alternatives
-        )
+        instructions_section = self._format_judgment_instructions(context, risk_tolerance, alternatives)
 
         return f"{context_section}\n\n{criteria_section}\n\n{instructions_section}"
 
-    def _extract_dimension_score(
-        self, judgment: JudgmentResult, dimension: JudgmentDimension
-    ) -> float:
+    def _extract_dimension_score(self, judgment: JudgmentResult, dimension: JudgmentDimension) -> float:
         """
         Extract score for a specific dimension from judgment result.
 
@@ -270,9 +260,7 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
             0.0,
         )
 
-    def _check_threshold_violation(
-        self, score: float, threshold: float, score_name: str
-    ) -> Optional[tuple[bool, str]]:
+    def _check_threshold_violation(self, score: float, threshold: float, score_name: str) -> Optional[tuple[bool, str]]:
         """
         Check if a score violates its threshold.
 
@@ -306,9 +294,7 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
             tuple: (should_approve: bool, reason: str)
         """
         try:
-            judgment = await self.evaluate_workflow_step(
-                step_data, workflow_context, user_context
-            )
+            judgment = await self.evaluate_workflow_step(step_data, workflow_context, user_context)
 
             # Fail-open: if LLM judge errored, approve with warning
             # instead of silently rejecting all steps (#1464)
@@ -319,22 +305,14 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
                 )
                 return True, f"Approved (judge unavailable): {judgment.reasoning}"
 
-            safety_score = self._extract_dimension_score(
-                judgment, JudgmentDimension.SAFETY
-            )
-            quality_score = self._extract_dimension_score(
-                judgment, JudgmentDimension.QUALITY
-            )
+            safety_score = self._extract_dimension_score(judgment, JudgmentDimension.SAFETY)
+            quality_score = self._extract_dimension_score(judgment, JudgmentDimension.QUALITY)
 
-            safety_violation = self._check_threshold_violation(
-                safety_score, self.safety_threshold, "Safety"
-            )
+            safety_violation = self._check_threshold_violation(safety_score, self.safety_threshold, "Safety")
             if safety_violation:
                 return safety_violation
 
-            quality_violation = self._check_threshold_violation(
-                quality_score, self.quality_threshold, "Quality"
-            )
+            quality_violation = self._check_threshold_violation(quality_score, self.quality_threshold, "Quality")
             if quality_violation:
                 return quality_violation
 
@@ -359,9 +337,7 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
             List of specific improvement suggestions
         """
         try:
-            judgment = await self.evaluate_workflow_step(
-                step_data, workflow_context, user_context
-            )
+            judgment = await self.evaluate_workflow_step(step_data, workflow_context, user_context)
             return judgment.improvement_suggestions
 
         except Exception as e:
@@ -378,25 +354,17 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
         """Evaluate each alternative step against the primary. Issue #620."""
         evaluations = []
         for i, alt_step in enumerate(alternatives):
-            alt_eval = await self.evaluate_workflow_step(
-                alt_step, workflow_context, user_context, [primary_step]
-            )
-            evaluations.append(
-                {"step": alt_step, "evaluation": alt_eval, "type": f"alternative_{i+1}"}
-            )
+            alt_eval = await self.evaluate_workflow_step(alt_step, workflow_context, user_context, [primary_step])
+            evaluations.append({"step": alt_step, "evaluation": alt_eval, "type": f"alternative_{i+1}"})
         return evaluations
 
-    def _build_comparison_result(
-        self, evaluations: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    def _build_comparison_result(self, evaluations: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Build ranked comparison result from evaluations. Issue #620."""
         evaluations.sort(key=lambda x: x["evaluation"].overall_score, reverse=True)
         return {
             "best_option": evaluations[0],
             "all_evaluations": evaluations,
-            "ranking_rationale": (
-                "Ranked by overall score considering safety, quality, and efficiency"
-            ),
+            "ranking_rationale": ("Ranked by overall score considering safety, quality, and efficiency"),
             "recommendation": evaluations[0]["evaluation"].recommendation,
         }
 
@@ -415,12 +383,8 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
         """
         try:
             # Evaluate primary step
-            primary_eval = await self.evaluate_workflow_step(
-                primary_step, workflow_context, user_context, alternatives
-            )
-            evaluations = [
-                {"step": primary_step, "evaluation": primary_eval, "type": "primary"}
-            ]
+            primary_eval = await self.evaluate_workflow_step(primary_step, workflow_context, user_context, alternatives)
+            evaluations = [{"step": primary_step, "evaluation": primary_eval, "type": "primary"}]
 
             # Evaluate alternatives and build result
             alt_evals = await self._evaluate_alternative_steps(

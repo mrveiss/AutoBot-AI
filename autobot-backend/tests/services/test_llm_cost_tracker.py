@@ -238,9 +238,11 @@ class TestUnknownModelFallback:
 
 def _make_async_iter(items):
     """Return an async generator that yields items — used to mock scan_iter."""
+
     async def _gen():
         for item in items:
             yield item
+
     return _gen()
 
 
@@ -260,13 +262,16 @@ class TestScanIterUsage:
         # scan_iter returns an async generator; keys() is NOT called
         user_key = b"cost:user_totals:alice"
         redis_mock.scan_iter = MagicMock(return_value=_make_async_iter([user_key]))
-        redis_mock.pipeline = MagicMock(return_value=MagicMock(
-            hgetall=MagicMock(),
-            execute=AsyncMock(return_value=[
-                {b"cost_usd": b"1.5", b"input_tokens": b"100",
-                 b"output_tokens": b"200", b"call_count": b"3"}
-            ])
-        ))
+        redis_mock.pipeline = MagicMock(
+            return_value=MagicMock(
+                hgetall=MagicMock(),
+                execute=AsyncMock(
+                    return_value=[
+                        {b"cost_usd": b"1.5", b"input_tokens": b"100", b"output_tokens": b"200", b"call_count": b"3"}
+                    ]
+                ),
+            )
+        )
         with patch.object(tracker, "get_redis", AsyncMock(return_value=redis_mock)):
             result = await tracker.get_all_user_costs()
 
@@ -283,13 +288,16 @@ class TestScanIterUsage:
         redis_mock = MagicMock()
         keys = [b"cost:user_totals:alice", b"cost:user_totals:alice:daily:2026-04-15"]
         redis_mock.scan_iter = MagicMock(return_value=_make_async_iter(keys))
-        redis_mock.pipeline = MagicMock(return_value=MagicMock(
-            hgetall=MagicMock(),
-            execute=AsyncMock(return_value=[
-                {b"cost_usd": b"2.0", b"input_tokens": b"50",
-                 b"output_tokens": b"50", b"call_count": b"1"}
-            ])
-        ))
+        redis_mock.pipeline = MagicMock(
+            return_value=MagicMock(
+                hgetall=MagicMock(),
+                execute=AsyncMock(
+                    return_value=[
+                        {b"cost_usd": b"2.0", b"input_tokens": b"50", b"output_tokens": b"50", b"call_count": b"1"}
+                    ]
+                ),
+            )
+        )
         with patch.object(tracker, "get_redis", AsyncMock(return_value=redis_mock)):
             result = await tracker.get_all_user_costs()
 
@@ -314,13 +322,16 @@ class TestScanIterUsage:
         redis_mock = MagicMock()
         agent_key = b"cost:agent_totals:bot1"
         redis_mock.scan_iter = MagicMock(return_value=_make_async_iter([agent_key]))
-        redis_mock.pipeline = MagicMock(return_value=MagicMock(
-            hgetall=MagicMock(),
-            execute=AsyncMock(return_value=[
-                {b"cost_usd": b"0.75", b"input_tokens": b"80",
-                 b"output_tokens": b"120", b"call_count": b"2"}
-            ])
-        ))
+        redis_mock.pipeline = MagicMock(
+            return_value=MagicMock(
+                hgetall=MagicMock(),
+                execute=AsyncMock(
+                    return_value=[
+                        {b"cost_usd": b"0.75", b"input_tokens": b"80", b"output_tokens": b"120", b"call_count": b"2"}
+                    ]
+                ),
+            )
+        )
         with patch.object(tracker, "get_redis", AsyncMock(return_value=redis_mock)):
             result = await tracker.get_all_agent_costs()
 
@@ -336,13 +347,16 @@ class TestScanIterUsage:
         redis_mock = MagicMock()
         model_key = b"cost:model_totals:gpt-4o"
         redis_mock.scan_iter = MagicMock(return_value=_make_async_iter([model_key]))
-        redis_mock.pipeline = MagicMock(return_value=MagicMock(
-            hgetall=MagicMock(),
-            execute=AsyncMock(return_value=[
-                {b"cost_usd": b"3.0", b"input_tokens": b"200",
-                 b"output_tokens": b"300", b"call_count": b"5"}
-            ])
-        ))
+        redis_mock.pipeline = MagicMock(
+            return_value=MagicMock(
+                hgetall=MagicMock(),
+                execute=AsyncMock(
+                    return_value=[
+                        {b"cost_usd": b"3.0", b"input_tokens": b"200", b"output_tokens": b"300", b"call_count": b"5"}
+                    ]
+                ),
+            )
+        )
         result = await tracker._fetch_model_costs(redis_mock)
 
         redis_mock.scan_iter.assert_called_once()

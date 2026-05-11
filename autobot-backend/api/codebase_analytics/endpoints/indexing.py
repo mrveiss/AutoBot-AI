@@ -53,9 +53,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-async def _check_existing_task_and_queue(
-    source_id: Optional[str], root_path_for_queue: str
-) -> Optional[JSONResponse]:
+async def _check_existing_task_and_queue(source_id: Optional[str], root_path_for_queue: str) -> Optional[JSONResponse]:
     """If a job is running, enqueue the request and return a queued response.
 
     Returns None when no job is running (caller should start a new job).
@@ -236,9 +234,7 @@ async def index_codebase(request: Optional[IndexCodebaseRequest] = None):
 
         task_id = str(uuid.uuid4())
         _current_indexing_task_id = task_id
-        task = asyncio.create_task(
-            _run_indexing_subprocess(task_id, root_path, source_id=source_id)
-        )
+        task = asyncio.create_task(_run_indexing_subprocess(task_id, root_path, source_id=source_id))
         _active_tasks[task_id] = task
 
     task.add_done_callback(_create_cleanup_callback(task_id))

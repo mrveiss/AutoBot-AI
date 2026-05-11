@@ -14,7 +14,6 @@ the next person to add an integration can't silently re-introduce the
 violation.
 """
 
-import inspect
 import re
 from pathlib import Path
 
@@ -60,13 +59,10 @@ def test_no_subclass_raises_value_error_on_unknown_action(src_file, class_name):
     AsanaIntegration / NotionIntegration which already did).
     """
     text = src_file.read_text(encoding="utf-8")
-    forbidden = re.compile(
-        r'raise ValueError\(f"(Unknown|Unsupported) action: \{action\}"\)'
-    )
+    forbidden = re.compile(r'raise ValueError\(f"(Unknown|Unsupported) action: \{action\}"\)')
     matches = forbidden.findall(text)
     assert not matches, (
-        f"{src_file.name} still raises ValueError on unknown action "
-        f"(violates BaseIntegration contract — see #6658)"
+        f"{src_file.name} still raises ValueError on unknown action " f"(violates BaseIntegration contract — see #6658)"
     )
 
 
@@ -77,8 +73,8 @@ async def test_github_integration_returns_error_dict_for_unknown_action():
     in #6658. The fix must produce a dict {"error": ...} for unknown actions.
     """
     try:
-        from integrations.github_integration import GitHubIntegration
         from integrations.base import IntegrationConfig
+        from integrations.github_integration import GitHubIntegration
     except Exception as exc:  # pragma: no cover — env-dependent
         pytest.skip(f"GitHub dep chain unavailable: {exc}")
 

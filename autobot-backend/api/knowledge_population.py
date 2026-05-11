@@ -218,9 +218,7 @@ def _get_container_commands() -> list:
     return [
         {
             "command": "docker",
-            "description": (
-                "Container platform for building, running and managing applications"
-            ),
+            "description": ("Container platform for building, running and managing applications"),
             "usage": "docker [options] COMMAND",
             "examples": [
                 "docker run -it ubuntu bash",
@@ -522,9 +520,7 @@ async def _store_man_page(kb_to_use, command: str, content: str) -> bool:
     metadata = _get_man_page_metadata(command)
     try:
         if hasattr(kb_to_use, "store_fact"):
-            store_result = await kb_to_use.store_fact(
-                content=content, metadata=metadata
-            )
+            store_result = await kb_to_use.store_fact(content=content, metadata=metadata)
         else:
             store_result = await kb_to_use.store_fact(text=content, metadata=metadata)
 
@@ -616,9 +612,7 @@ async def _populate_man_pages_background(kb_to_use):
             # Batch processing delay
             await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
-        logger.info(
-            "Manual pages population completed. Added %s man pages.", items_added
-        )
+        logger.info("Manual pages population completed. Added %s man pages.", items_added)
         return items_added
 
     except Exception as e:
@@ -632,9 +626,7 @@ async def _populate_man_pages_background(kb_to_use):
     operation="populate_man_pages",
     error_code_prefix="KNOWLEDGE_POPULATION",
 )
-async def populate_man_pages(
-    request: dict, req: Request, background_tasks: BackgroundTasks
-):
+async def populate_man_pages(request: dict, req: Request, background_tasks: BackgroundTasks):
     """Populate knowledge base with common manual pages (runs in background)"""
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
@@ -742,9 +734,7 @@ async def get_job_status(task_id: str, req: Request):
         response["message"] = task_result.info.get("status", "In progress...")
     elif task_result.state == "SUCCESS":
         response["result"] = task_result.result
-        response["message"] = task_result.result.get(
-            "message", "Task completed successfully"
-        )
+        response["message"] = task_result.result.get("message", "Task completed successfully")
     elif task_result.state == "FAILURE":
         response["error"] = str(task_result.info)
         response["message"] = f"Task failed: {str(task_result.info)}"
@@ -797,18 +787,14 @@ def _get_doc_metadata(doc_file: str, file_path, category: str) -> dict:
     }
 
 
-async def _store_doc_file(
-    kb_to_use, doc_file: str, file_path, content: str, category: str
-) -> dict | None:
+async def _store_doc_file(kb_to_use, doc_file: str, file_path, content: str, category: str) -> dict | None:
     """Store a documentation file in knowledge base, returns result or None."""
     structured_content = _format_doc_content(doc_file, file_path, content, category)
     metadata = _get_doc_metadata(doc_file, file_path, category)
 
     try:
         if hasattr(kb_to_use, "store_fact"):
-            return await kb_to_use.store_fact(
-                content=structured_content, metadata=metadata
-            )
+            return await kb_to_use.store_fact(content=structured_content, metadata=metadata)
         return await kb_to_use.store_fact(text=structured_content, metadata=metadata)
     except Exception as e:
         logger.error("Error storing doc %s: %s", doc_file, e)
@@ -837,9 +823,7 @@ async def _read_doc_file_content(file_path) -> str | None:
         return None
 
 
-async def _process_doc_file(
-    kb_to_use, tracker, autobot_base_path, doc_file: str
-) -> tuple[int, int, int]:
+async def _process_doc_file(kb_to_use, tracker, autobot_base_path, doc_file: str) -> tuple[int, int, int]:
     """
     Process a single documentation file.
 
@@ -936,9 +920,7 @@ async def _store_system_config(kb_to_use) -> bool:
         return False
 
 
-async def _scan_doc_files(
-    autobot_base_path: PathLib, tracker, force_reindex: bool
-) -> tuple[list[str], int]:
+async def _scan_doc_files(autobot_base_path: PathLib, tracker, force_reindex: bool) -> tuple[list[str], int]:
     """
     Scan for documentation files that need processing.
 
@@ -994,9 +976,7 @@ async def _process_all_doc_files(
 
     for doc_file in doc_files:
         try:
-            added, skipped, failed = await _process_doc_file(
-                kb_to_use, tracker, autobot_base_path, doc_file
-            )
+            added, skipped, failed = await _process_doc_file(kb_to_use, tracker, autobot_base_path, doc_file)
             items_added += added
             items_skipped += skipped
             items_failed += failed
@@ -1027,7 +1007,6 @@ async def populate_autobot_docs(background_tasks: BackgroundTasks, request: dict
     """
     import uuid
 
-    from services.knowledge.doc_indexer import get_doc_indexer_service
     from services.knowledge.task_status_manager import TaskStatusManager
 
     task_id = str(uuid.uuid4())
@@ -1050,7 +1029,7 @@ async def populate_autobot_docs(background_tasks: BackgroundTasks, request: dict
         "status": "queued",
         "task_id": task_id,
         "message": "Documentation indexing started in background",
-        "status_url": f"/api/knowledge_base/populate_autobot_docs/status/{task_id}"
+        "status_url": f"/api/knowledge_base/populate_autobot_docs/status/{task_id}",
     }
 
 
@@ -1109,7 +1088,11 @@ async def _index_autobot_docs_background(task_id: str, force_reindex: bool):
 
         logger.info(
             "[%s] Indexing completed: %d success, %d skipped, %d failed (%.1fs)",
-            task_id, result.success, result.skipped, result.failed, elapsed
+            task_id,
+            result.success,
+            result.skipped,
+            result.failed,
+            elapsed,
         )
     except Exception as e:
         elapsed = time.time() - start_time
@@ -1163,79 +1146,6 @@ async def get_populate_status(task_id: str):
 # =========================================================================
 
 
-async def _index_code_background(task_id: str, root_dir: str, force: bool) -> None:
-    """Background task: index source files via AST-based CodeIndexer (#4912)."""
-    import time
-
-    from services.knowledge.code_indexer import CodeIndexer
-    from services.knowledge.doc_indexer import get_doc_indexer_service
-    from services.knowledge.task_status_manager import TaskStatusManager
-
-    start_time = time.time()
-
-    try:
-        logger.info("[%s] Starting background code indexing: root=%s force=%s", task_id, root_dir, force)
-
-        await TaskStatusManager.update_task(
-            task_id=task_id,
-            status="running",
-            message="Initializing indexer...",
-            progress_percent=5,
-        )
-
-        doc_svc = get_doc_indexer_service()
-        if not await doc_svc.initialize():
-            logger.error("[%s] Indexer initialization failed", task_id)
-            await TaskStatusManager.fail_task(
-                task_id=task_id,
-                error_message="Failed to initialize ChromaDB / embed model",
-            )
-            return
-
-        await TaskStatusManager.update_task(
-            task_id=task_id,
-            status="running",
-            message="Scanning and indexing source files...",
-            progress_percent=10,
-        )
-
-        code_indexer = CodeIndexer(
-            collection=doc_svc._collection,
-            embed_model=doc_svc._embed_model,
-        )
-
-        result = await code_indexer.index_directory(root_dir, force)
-        elapsed = time.time() - start_time
-
-        await TaskStatusManager.complete_task(
-            task_id=task_id,
-            message=(
-                f"Successfully indexed {result.success} files "
-                f"({result.skipped} skipped, {result.failed} failed)"
-            ),
-            items_processed=result.success,
-            elapsed_seconds=elapsed,
-        )
-
-        logger.info(
-            "[%s] Code indexing completed: success=%d skipped=%d failed=%d (%.1fs)",
-            task_id, result.success, result.skipped, result.failed, elapsed,
-        )
-    except Exception as e:
-        elapsed = time.time() - start_time
-        logger.error("[%s] Background code indexing failed: %s", task_id, e)
-        await TaskStatusManager.fail_task(
-            task_id=task_id,
-            error_message=str(e),
-        )
-
-
-@router.post("/index/code", response_model=TaskQueuedResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="index_code",
-    error_code_prefix="KNOWLEDGE_POPULATION",
-)
 async def index_code(request: dict = None):
     """Index source files in *root_dir* via AST-based CodeIndexer (#4835).
 
@@ -1375,7 +1285,12 @@ async def _index_code_background(task_id: str, root_dir: str, force: bool):
 
         logger.info(
             "[%s] Code indexing completed: root=%s success=%d failed=%d skipped=%d (%.1fs)",
-            task_id, root_dir, result.success, result.failed, result.skipped, elapsed,
+            task_id,
+            root_dir,
+            result.success,
+            result.failed,
+            result.skipped,
+            elapsed,
         )
     except Exception as e:
         elapsed = time.time() - start_time
@@ -1423,9 +1338,7 @@ async def _store_man_pages_batch(kb_to_use, man_pages: list) -> tuple[int, int]:
     return items_added, items_failed
 
 
-def _build_man_scan_result(
-    items_added: int, items_failed: int, total: int, machine_id: str
-) -> dict:
+def _build_man_scan_result(items_added: int, items_failed: int, total: int, machine_id: str) -> dict:
     """Build result dict for man page scan (Issue #398: extracted)."""
     return {
         "status": "success",
@@ -1474,12 +1387,8 @@ async def _scan_and_store_man_pages(
             }
 
         items_added, items_failed = await _store_man_pages_batch(kb_to_use, man_pages)
-        logger.info(
-            "Man page scan complete: %s added, %s failed", items_added, items_failed
-        )
-        return _build_man_scan_result(
-            items_added, items_failed, len(man_pages), machine_id
-        )
+        logger.info("Man page scan complete: %s added, %s failed", items_added, items_failed)
+        return _build_man_scan_result(items_added, items_failed, len(man_pages), machine_id)
 
     except Exception as e:
         logger.error("Man page scan failed: %s", e)
@@ -1540,13 +1449,15 @@ async def scan_man_pages(
 
     if run_background:
         # Use asyncio.create_task() for async functions (BackgroundTasks is for sync only)
-        asyncio.create_task(_scan_and_store_man_pages(
-            kb_to_use,
-            machine_id,
-            limit,
-            sections,
-            system_context,
-        ))
+        asyncio.create_task(
+            _scan_and_store_man_pages(
+                kb_to_use,
+                machine_id,
+                limit,
+                sections,
+                system_context,
+            )
+        )
         return {
             "status": "success",
             "message": "Man page scan started in background",
@@ -1556,9 +1467,7 @@ async def scan_man_pages(
             "sections": sections,
         }
 
-    result = await _scan_and_store_man_pages(
-        kb_to_use, machine_id, limit, sections, system_context
-    )
+    result = await _scan_and_store_man_pages(kb_to_use, machine_id, limit, sections, system_context)
     result["background"] = False
     return result
 
@@ -1615,9 +1524,7 @@ async def scan_man_pages_changes(
         system_context=system_context,
     )
 
-    items_added = await _store_parsed_man_pages(
-        kb_to_use, scan_result.get("parsed_content", [])
-    )
+    items_added = await _store_parsed_man_pages(kb_to_use, scan_result.get("parsed_content", []))
 
     return {
         "status": "success",

@@ -28,10 +28,11 @@ const meta = {
       description: 'Reserve min-height to prevent layout shift',
     },
   },
-} satisfies Meta<typeof StableLoadingState>;
+} as Meta<typeof StableLoadingState>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const Loading: Story = {
   args: {

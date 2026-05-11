@@ -14,10 +14,7 @@ Tests recovery recommendations for various error scenarios:
 Issue #2154.
 """
 
-import asyncio
-import json
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -399,7 +396,7 @@ class TestCausalErrorRecoveryIntegration:
     async def test_error_analysis_to_recovery_pipeline(self):
         """Test full pipeline: error → causal analysis → recovery plan."""
         # Mock the causal analyzer
-        analyzer = CausalErrorAnalyzer()
+        CausalErrorAnalyzer()
         recovery_sys = CausalErrorRecovery()
 
         # Simulate a timeout error

@@ -27,9 +27,9 @@ for _p in (_BACKEND, _REPO_ROOT):
         sys.path.insert(0, _ps)
 # ---------------------------------------------------------------------------
 
-import asyncio  # noqa: E402  (must follow sys.path bootstrap)
 import logging  # noqa: E402
 
+from autobot_shared.async_compat import run_or_schedule
 from intelligence.intelligent_agent import IntelligentAgent  # noqa: E402
 from intelligence.streaming_executor import ChunkType  # noqa: E402
 from tests.fixtures.mocks import (  # noqa: E402
@@ -77,7 +77,7 @@ async def _demo() -> None:
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    asyncio.run(_demo())
+    run_or_schedule(_demo())
     return 0
 
 

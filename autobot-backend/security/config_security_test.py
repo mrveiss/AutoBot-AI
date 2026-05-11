@@ -32,9 +32,7 @@ class TestConfigurationSecurity:
 
             # Should fall back to default config if file doesn't exist or is invalid
             default_llm = config_manager.get("llm.orchestrator_llm")
-            assert (
-                default_llm == "ollama"
-            )  # Should use default, not load malicious file
+            assert default_llm == "ollama"  # Should use default, not load malicious file
 
     def test_environment_variable_injection_protection(self):
         """Test protection against environment variable injection"""
@@ -59,9 +57,7 @@ class TestConfigurationSecurity:
             # Values should be retrieved but not interpreted as commands
             assert dangerous_cmd == "rm -rf /"  # Raw value, not executed
             assert script_injection == "$(malicious_command)"  # Not evaluated
-            assert (
-                xss_attempt == '<script>alert("xss")</script>'
-            )  # Not sanitized at config level
+            assert xss_attempt == '<script>alert("xss")</script>'  # Not sanitized at config level
             assert shell_injection == "default"  # Should use default if not found
 
     def test_yaml_deserialization_safety(self):
@@ -85,9 +81,7 @@ args: [["echo", "exploit"]]
         ]
 
         for malicious_yaml in malicious_yamls:
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".yaml", delete=False
-            ) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
                 f.write(malicious_yaml)
                 malicious_file = f.name
 
@@ -316,9 +310,7 @@ section_b:
                 "True",
             ]  # Might be parsed as bool or kept as string
             assert fake_int == "123abc"  # Should remain string due to letters
-            assert (
-                fake_float == "3.14.159"
-            )  # Should remain string due to invalid format
+            assert fake_float == "3.14.159"  # Should remain string due to invalid format
             assert isinstance(fake_list, (list, str))  # Should handle trailing comma
 
     def test_config_backup_and_recovery_security(self):
@@ -352,10 +344,7 @@ section_b:
 
             # Verify sensitive data was preserved
             assert backup_config_manager.get("sensitive.api_key") == "very_secret_key"
-            assert (
-                backup_config_manager.get("sensitive.database_password")
-                == "super_secret_db_pass"
-            )
+            assert backup_config_manager.get("sensitive.database_password") == "super_secret_db_pass"
 
         finally:
             if os.path.exists(backup_file):
@@ -412,15 +401,11 @@ class TestSecretsHandlingInConfig:
 
         # Test JSON serialization
         json_str = json.dumps(all_config)
-        assert (
-            "secret_key_value" in json_str
-        )  # Should be there (caller's responsibility to handle)
+        assert "secret_key_value" in json_str  # Should be there (caller's responsibility to handle)
 
         # Test YAML serialization
         yaml_str = yaml.dump(all_config)
-        assert (
-            "secret_key_value" in yaml_str
-        )  # Should be there (caller's responsibility to handle)
+        assert "secret_key_value" in yaml_str  # Should be there (caller's responsibility to handle)
 
 
 if __name__ == "__main__":

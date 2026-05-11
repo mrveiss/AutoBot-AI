@@ -14,7 +14,6 @@ import json
 import logging
 import os
 import sqlite3
-from datetime import datetime
 from typing import List, Optional, Tuple
 
 from autobot_shared.time_utils import parse_utc_iso
@@ -262,9 +261,7 @@ def load_snapshots_from_db(db_path: str, limit: int = 100) -> List[StateSnapshot
                 timestamp=parse_utc_iso(row[0]),
                 phase_states=json.loads(row[1]),
                 active_capabilities=set(json.loads(row[2])),
-                system_metrics={
-                    TrackingMetric(k): v for k, v in json.loads(row[3]).items()
-                },
+                system_metrics={TrackingMetric(k): v for k, v in json.loads(row[3]).items()},
                 configuration=json.loads(row[4]),
                 validation_results=json.loads(row[5]),
                 metadata=json.loads(row[6]) if row[6] else {},

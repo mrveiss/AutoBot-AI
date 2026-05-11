@@ -221,9 +221,7 @@ class Gateway:
         # Get session
         session = await self.session_manager.get_session(message.session_id)
         if not session:
-            logger.warning(
-                "Cannot send message: session %s not found", message.session_id
-            )
+            logger.warning("Cannot send message: session %s not found", message.session_id)
             return False
 
         # Get channel adapter

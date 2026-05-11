@@ -12,7 +12,7 @@ Updated for Issue #850 - Complete orchestration consolidation.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status

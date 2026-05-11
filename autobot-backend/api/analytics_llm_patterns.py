@@ -25,7 +25,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query
+from redis.exceptions import RedisError
 
 from api.schemas_agent import (
     LLMPatternsAnalyzeResponse,
@@ -44,8 +45,6 @@ from api.schemas_analytics import (
     PromptCategory,
     UsageRecordRequest,
 )
-from redis.exceptions import RedisError
-
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.model_constants import (
@@ -231,9 +230,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
 
         return PromptCategory.UNKNOWN
 
-    def _calculate_cost(
-        self, model: str, input_tokens: int, output_tokens: int
-    ) -> float:
+    def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """Calculate cost for a request"""
         # Find matching model pricing
         model_lower = model.lower()
@@ -259,9 +256,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             return prompt
         return prompt[: max_length - 3] + "..."
 
-    def _check_prompt_length(
-        self, token_estimate: float, issues: List, recommendations: List
-    ) -> None:
+    def _check_prompt_length(self, token_estimate: float, issues: List, recommendations: List) -> None:
         """
         Check if prompt is too long and add issues/recommendations.
 
@@ -299,9 +294,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
                 }
             )
 
-    async def _check_cache_potential(
-        self, prompt_hash: str, recommendations: List
-    ) -> bool:
+    async def _check_cache_potential(self, prompt_hash: str, recommendations: List) -> bool:
         """
         Check if prompt has caching potential.
 
@@ -318,8 +311,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             if cached:
                 cache_data = json.loads(cached)
                 recommendations.append(
-                    f"This prompt has been used {cache_data.get('count', 1)} times. "
-                    "Consider caching the response."
+                    f"This prompt has been used {cache_data.get('count', 1)} times. " "Consider caching the response."
                 )
                 return True
         except RedisError as e:
@@ -327,9 +319,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
 
         return False
 
-    def _check_model_efficiency(
-        self, model: str, category: PromptCategory, recommendations: List
-    ) -> None:
+    def _check_model_efficiency(self, model: str, category: PromptCategory, recommendations: List) -> None:
         """
         Check if a smaller model could be used.
 
@@ -337,13 +327,9 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
         """
         if EXPENSIVE_MODEL_MARKER_OPUS in model.lower() or EXPENSIVE_MODEL_MARKER_GPT4 in model.lower():
             if category in SIMPLE_PROMPT_CATEGORIES:  # O(1) lookup (Issue #326)
-                recommendations.append(
-                    "Consider using a smaller model (Haiku/GPT-3.5) for this task type"
-                )
+                recommendations.append("Consider using a smaller model (Haiku/GPT-3.5) for this task type")
 
-    async def analyze_prompt(
-        self, prompt: str, model: Optional[str] = None
-    ) -> Dict[str, Any]:
+    async def analyze_prompt(self, prompt: str, model: Optional[str] = None) -> Dict[str, Any]:
         """
         Analyze a single prompt for optimization opportunities.
 
@@ -379,9 +365,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
         """Record an LLM usage event (Issue #372 - uses model methods)."""
         prompt_hash = self._hash_prompt(request.prompt)
         category = self._categorize_prompt(request.prompt)
-        cost = self._calculate_cost(
-            request.model, request.input_tokens, request.output_tokens
-        )
+        cost = self._calculate_cost(request.model, request.input_tokens, request.output_tokens)
 
         # Issue #372: Use model method to reduce feature envy
         record = request.to_record_dict(
@@ -460,9 +444,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
         except RedisError as e:
             logger.warning("Failed to update LLM stats: %s", e)
 
-    def _aggregate_day_stats(
-        self, date: str, day_stats: dict, stats: Dict[str, Any]
-    ) -> None:
+    def _aggregate_day_stats(self, date: str, day_stats: dict, stats: Dict[str, Any]) -> None:
         """Aggregate statistics for a single day. (Issue #315 - extracted)"""
         if not day_stats:
             return
@@ -480,11 +462,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
                 "date": date,
                 "requests": day_requests,
                 "cost": round(day_cost, 4),
-                "success_rate": (
-                    round(day_success / day_requests * 100, 1)
-                    if day_requests > 0
-                    else 0
-                ),
+                "success_rate": (round(day_success / day_requests * 100, 1) if day_requests > 0 else 0),
             }
         )
 
@@ -512,10 +490,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             redis = await self._get_redis()
 
             # Build date keys and fetch all at once using pipeline - eliminates N+1 queries
-            dates = [
-                (datetime.now(tz=timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
-                for i in range(days)
-            ]
+            dates = [(datetime.now(tz=timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
             stats_keys = [f"{self._stats_key}:{date}" for date in dates]
 
             async with redis.pipeline() as pipe:
@@ -529,12 +504,8 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
 
             # Calculate averages
             if stats["total_requests"] > 0:
-                stats["avg_cost_per_request"] = round(
-                    stats["total_cost"] / stats["total_requests"], 6
-                )
-                stats["success_rate"] = round(
-                    stats["successful_requests"] / stats["total_requests"] * 100, 1
-                )
+                stats["avg_cost_per_request"] = round(stats["total_cost"] / stats["total_requests"], 6)
+                stats["success_rate"] = round(stats["successful_requests"] / stats["total_requests"] * 100, 1)
             else:
                 stats["avg_cost_per_request"] = 0
                 stats["success_rate"] = 100
@@ -546,9 +517,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             logger.error("Failed to get usage stats: %s", e)
             raise RuntimeError(f"Failed to get usage stats: {e}")
 
-    def _parse_cache_opportunity(
-        self, key: str, data: str, min_occurrences: int
-    ) -> Optional[Dict[str, Any]]:
+    def _parse_cache_opportunity(self, key: str, data: str, min_occurrences: int) -> Optional[Dict[str, Any]]:
         """Parse a cache opportunity from Redis data. (Issue #315 - extracted)"""
         if not data:
             return None
@@ -565,9 +534,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             "last_seen": cache_info.get("last_seen"),
         }
 
-    async def identify_cache_opportunities(
-        self, min_occurrences: int = 3
-    ) -> List[Dict[str, Any]]:
+    async def identify_cache_opportunities(self, min_occurrences: int = 3) -> List[Dict[str, Any]]:
         """Identify prompts that could benefit from caching"""
         opportunities = []
 
@@ -576,17 +543,12 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             cursor = 0
 
             while True:
-                cursor, keys = await redis.scan(
-                    cursor, match=f"{self._cache_key}:*", count=100
-                )
+                cursor, keys = await redis.scan(cursor, match=f"{self._cache_key}:*", count=100)
 
                 # Batch fetch and parse (Issue #315 - use list comp to reduce depth)
                 if keys:
                     all_data = await redis.mget(keys)
-                    parsed = [
-                        self._parse_cache_opportunity(k, d, min_occurrences)
-                        for k, d in zip(keys, all_data)
-                    ]
+                    parsed = [self._parse_cache_opportunity(k, d, min_occurrences) for k, d in zip(keys, all_data)]
                     opportunities.extend(o for o in parsed if o)
 
                 if cursor == 0:
@@ -598,9 +560,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             logger.error("Failed to identify cache opportunities: %s", e)
             raise RuntimeError(f"Failed to identify cache opportunities: {e}")
 
-    def _build_caching_recommendation(
-        self, cache_opportunities: List[Dict]
-    ) -> Optional[Dict[str, Any]]:
+    def _build_caching_recommendation(self, cache_opportunities: List[Dict]) -> Optional[Dict[str, Any]]:
         """Build caching recommendation if applicable (Issue #665: extracted helper)."""
         if not cache_opportunities:
             return None
@@ -620,15 +580,9 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             ],
         }
 
-    def _build_model_downgrade_recommendation(
-        self, stats: Dict, model_usage: Dict
-    ) -> Optional[Dict[str, Any]]:
+    def _build_model_downgrade_recommendation(self, stats: Dict, model_usage: Dict) -> Optional[Dict[str, Any]]:
         """Build model downgrade recommendation if applicable (Issue #665: extracted helper)."""
-        expensive_models = [
-            m
-            for m in model_usage
-            if any(keyword in m.lower() for keyword in EXPENSIVE_MODELS)
-        ]
+        expensive_models = [m for m in model_usage if any(keyword in m.lower() for keyword in EXPENSIVE_MODELS)]
         if not expensive_models:
             return None
         return {
@@ -646,9 +600,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             ],
         }
 
-    def _build_batch_processing_recommendation(
-        self, stats: Dict
-    ) -> Optional[Dict[str, Any]]:
+    def _build_batch_processing_recommendation(self, stats: Dict) -> Optional[Dict[str, Any]]:
         """Build batch processing recommendation if applicable (Issue #665: extracted helper)."""
         if stats["total_requests"] <= 100:
             return None
@@ -728,10 +680,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
         Returns:
             List of record lists from Redis pipeline
         """
-        dates = [
-            (datetime.now(tz=timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
-            for i in range(days)
-        ]
+        dates = [(datetime.now(tz=timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
         usage_keys = [f"{self._usage_key}:{date}" for date in dates]
 
         async with redis.pipeline() as pipe:
@@ -739,9 +688,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
                 await pipe.lrange(key, 0, -1)
             return await pipe.execute()
 
-    def _aggregate_model_usage_data(
-        self, all_records_lists: List[List]
-    ) -> Dict[str, Dict[str, Any]]:
+    def _aggregate_model_usage_data(self, all_records_lists: List[List]) -> Dict[str, Dict[str, Any]]:
         """
         Aggregate usage records into per-model statistics.
 
@@ -774,13 +721,9 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
 
                     models[model]["request_count"] += 1
                     models[model]["total_input_tokens"] += record.get("input_tokens", 0)
-                    models[model]["total_output_tokens"] += record.get(
-                        "output_tokens", 0
-                    )
+                    models[model]["total_output_tokens"] += record.get("output_tokens", 0)
                     models[model]["total_cost"] += record.get("cost", 0)
-                    models[model]["total_response_time"] += record.get(
-                        "response_time", 0
-                    )
+                    models[model]["total_response_time"] += record.get("response_time", 0)
 
                     if record.get("success", True):
                         models[model]["success_count"] += 1
@@ -790,9 +733,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
 
         return models
 
-    def _build_model_comparison_result(
-        self, models: Dict[str, Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _build_model_comparison_result(self, models: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Build comparison result list with calculated averages.
 
@@ -812,20 +753,11 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
                     {
                         "model": model_data["model"],
                         "request_count": count,
-                        "total_tokens": (
-                            model_data["total_input_tokens"]
-                            + model_data["total_output_tokens"]
-                        ),
+                        "total_tokens": (model_data["total_input_tokens"] + model_data["total_output_tokens"]),
                         "total_cost": round(model_data["total_cost"], 4),
-                        "avg_cost_per_request": round(
-                            model_data["total_cost"] / count, 6
-                        ),
-                        "avg_response_time": round(
-                            model_data["total_response_time"] / count, 2
-                        ),
-                        "success_rate": round(
-                            model_data["success_count"] / count * 100, 1
-                        ),
+                        "avg_cost_per_request": round(model_data["total_cost"] / count, 6),
+                        "avg_response_time": round(model_data["total_response_time"] / count, 2),
+                        "success_rate": round(model_data["success_count"] / count * 100, 1),
                     }
                 )
 
@@ -859,9 +791,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
         categories = defaultdict(lambda: {"count": 0, "cost": 0.0})
 
         # Aggregate from last 7 days - batch fetch all lists using pipeline
-        dates = [
-            (datetime.now(tz=timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)
-        ]
+        dates = [(datetime.now(tz=timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
         usage_keys = [f"{self._usage_key}:{date}" for date in dates]
 
         async with redis.pipeline() as pipe:
@@ -889,17 +819,9 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
                 {
                     "category": cat,
                     "count": data["count"],
-                    "percentage": (
-                        round(data["count"] / total_count * 100, 1)
-                        if total_count > 0
-                        else 0
-                    ),
+                    "percentage": (round(data["count"] / total_count * 100, 1) if total_count > 0 else 0),
                     "cost": round(data["cost"], 4),
-                    "cost_percentage": (
-                        round(data["cost"] / total_cost * 100, 1)
-                        if total_cost > 0
-                        else 0
-                    ),
+                    "cost_percentage": (round(data["cost"] / total_cost * 100, 1) if total_cost > 0 else 0),
                 }
             )
 
@@ -917,6 +839,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
 # =============================================================================
 
 import threading
+
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 _analyzer: Optional[LLMPatternAnalyzer] = None
@@ -939,8 +862,6 @@ def get_pattern_analyzer() -> LLMPatternAnalyzer:
 # =============================================================================
 
 
-
-
 @router.get("/health", response_model=LLMPatternsHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -954,8 +875,7 @@ async def get_health():
     This per-module endpoint will be removed in a future release. (#3333)
     """
     logger.warning(
-        "Deprecated health endpoint called: /api/llm-patterns/health — "
-        "use /api/system/health instead (#3333)"
+        "Deprecated health endpoint called: /api/llm-patterns/health — " "use /api/system/health instead (#3333)"
     )
     return {
         "status": "healthy",
@@ -1028,9 +948,7 @@ async def get_usage_stats(days: int = Query(default=7, ge=1, le=30)):
     operation="get_cache_opportunities",
     error_code_prefix="ANALYTICS_LLM_PATTERNS",
 )
-async def get_cache_opportunities(
-    min_occurrences: int = Query(default=3, ge=2, le=100)
-):
+async def get_cache_opportunities(min_occurrences: int = Query(default=3, ge=2, le=100)):
     """
     Identify prompts that could benefit from caching.
 

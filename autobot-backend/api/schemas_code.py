@@ -11,23 +11,22 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from autobot_shared.ssot_config import PROJECT_ROOT, config as _ssot_config
+from api.schemas_common import SuccessMessageResponse
+from autobot_shared.ssot_config import PROJECT_ROOT
+from autobot_shared.ssot_config import config as _ssot_config
 from constants.threshold_constants import QueryDefaults
 from type_defs.common import JSONObject
-
-from api.schemas_common import SuccessMessageResponse
-
 
 # ---------------------------------------------------------------------------
 # Code schemas
 # ---------------------------------------------------------------------------
+
 
 class TemplatesRootResponse(BaseModel):
     """Response for GET / (templates root)."""
 
     message: str
     endpoints: Dict[str, str]
-
 
 
 class TemplateListResponse(BaseModel):
@@ -38,13 +37,11 @@ class TemplateListResponse(BaseModel):
     total: int
 
 
-
 class TemplateSecretsUsageResponse(BaseModel):
     """Response for GET /templates/secrets-usage."""
 
     success: bool
     secrets_usage: Dict[str, Any]
-
 
 
 class TemplateSearchResponse(BaseModel):
@@ -56,13 +53,11 @@ class TemplateSearchResponse(BaseModel):
     total: int
 
 
-
 class TemplateCategoriesResponse(BaseModel):
     """Response for GET /templates/categories."""
 
     success: bool
     categories: List[Any]
-
 
 
 class TemplateStatsResponse(BaseModel):
@@ -72,13 +67,11 @@ class TemplateStatsResponse(BaseModel):
     statistics: Dict[str, Any]
 
 
-
 class TemplateDetailResponse(BaseModel):
     """Response for GET /templates/{template_id}."""
 
     success: bool
     template: Dict[str, Any]
-
 
 
 class TemplatePreviewResponse(BaseModel):
@@ -96,14 +89,12 @@ class TemplatePreviewResponse(BaseModel):
     approval_required_steps: int
 
 
-
 class TemplateValidationResponse(BaseModel):
     """Response for POST /templates/{template_id}/validate."""
 
     success: bool
     template_id: str
     validation: Dict[str, Any]
-
 
 
 class TemplateCreateWorkflowResponse(BaseModel):
@@ -118,7 +109,6 @@ class TemplateCreateWorkflowResponse(BaseModel):
     success: bool
 
 
-
 class TemplateExecuteResponse(SuccessMessageResponse):
     """Response for POST /templates/{template_id}/execute."""
 
@@ -129,7 +119,6 @@ class TemplateExecuteResponse(SuccessMessageResponse):
 # ---------------------------------------------------------------------------
 # state_tracking.py schemas
 # ---------------------------------------------------------------------------
-
 
 
 class CodeReviewAnalyzeResponse(BaseModel):
@@ -144,7 +133,6 @@ class CodeReviewAnalyzeResponse(BaseModel):
     status: str
 
 
-
 class CodeReviewReviewByIdResponse(BaseModel):
     """Response for GET /review/{review_id}.
 
@@ -152,7 +140,6 @@ class CodeReviewReviewByIdResponse(BaseModel):
     """
 
     model_config = {"extra": "allow"}
-
 
 
 class CodeReviewFileResponse(BaseModel):
@@ -167,7 +154,6 @@ class CodeReviewFileResponse(BaseModel):
     summary: Dict[str, Any]
 
 
-
 class CodeReviewHistoryResponse(BaseModel):
     """Response for GET /history.
 
@@ -180,7 +166,6 @@ class CodeReviewHistoryResponse(BaseModel):
     status: str
 
 
-
 class CodeReviewMetricsResponse(BaseModel):
     """Response for GET /metrics — no-data envelope."""
 
@@ -189,13 +174,11 @@ class CodeReviewMetricsResponse(BaseModel):
     status: str
 
 
-
 class CodeReviewFeedbackResponse(BaseModel):
     """Response for POST /feedback."""
 
     status: str
     feedback: Dict[str, Any]
-
 
 
 class CodeReviewSummaryResponse(BaseModel):
@@ -206,14 +189,12 @@ class CodeReviewSummaryResponse(BaseModel):
     status: str
 
 
-
 class CodeReviewPatternToggleResponse(BaseModel):
     """Response for POST /patterns/toggle."""
 
     status: str
     pattern_id: str
     enabled: bool
-
 
 
 class CodeReviewPatternPreferencesResponse(BaseModel):
@@ -227,14 +208,12 @@ class CodeReviewPatternPreferencesResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class LogSourcesResponse(BaseModel):
     """Response for GET /logs/sources."""
 
     file_logs: List[Any]
     container_logs: List[Any]
     total_sources: int
-
 
 
 class LogRecentResponse(BaseModel):
@@ -247,7 +226,6 @@ class LogRecentResponse(BaseModel):
     error: Optional[str] = None
 
 
-
 class LogReadResponse(BaseModel):
     """Response for GET /logs/read/{filename}."""
 
@@ -256,7 +234,6 @@ class LogReadResponse(BaseModel):
     total_lines: int
     offset: int
     count: int
-
 
 
 class LogContainerResponse(BaseModel):
@@ -269,14 +246,12 @@ class LogContainerResponse(BaseModel):
     source_type: str
 
 
-
 class LogUnifiedResponse(BaseModel):
     """Response for GET /logs/unified."""
 
     logs: List[Any]
     total_count: int
     sources_included: List[str]
-
 
 
 class LogSearchResponse(BaseModel):
@@ -291,7 +266,6 @@ class LogSearchResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # git_mcp.py schemas  (Issue #5317)
 # ---------------------------------------------------------------------------
-
 
 
 class GitMCPOperationResponse(BaseModel):
@@ -310,7 +284,6 @@ class GitMCPOperationResponse(BaseModel):
     errors: Optional[str] = None
 
 
-
 class GitMCPInfoResponse(BaseModel):
     """Response for GET /git/mcp/info."""
 
@@ -318,7 +291,6 @@ class GitMCPInfoResponse(BaseModel):
     repositories: List[Any]
     repository_count: int
     timestamp: str
-
 
 
 class GitMCPServiceStatusResponse(BaseModel):
@@ -336,13 +308,11 @@ class GitMCPServiceStatusResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class VoiceListenResponse(BaseModel):
     """Response for POST /voice/listen (success path)."""
 
     message: str
     text: str
-
 
 
 class VoiceSpeakResponse(BaseModel):
@@ -351,12 +321,10 @@ class VoiceSpeakResponse(BaseModel):
     message: str
 
 
-
 class VoiceDeleteResponse(BaseModel):
     """Response for DELETE /voice/voices/{voice_id} (success path)."""
 
     deleted: str
-
 
 
 class VoiceTranscribeResponse(BaseModel):
@@ -370,7 +338,6 @@ class VoiceTranscribeResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # skills_governance.py schemas  (Issue #5317)
 # ---------------------------------------------------------------------------
-
 
 
 class SkillsGapResponse(BaseModel):
@@ -387,7 +354,6 @@ class SkillsGapResponse(BaseModel):
     tools_found: Optional[List[str]] = None
 
 
-
 class SkillsDraftListItem(BaseModel):
     """Single draft entry in the list response."""
 
@@ -399,7 +365,6 @@ class SkillsDraftListItem(BaseModel):
     trust_level: Optional[Any] = None
 
 
-
 class SkillsDraftTestResponse(BaseModel):
     """Response for POST /skills-governance/drafts/{skill_id}/test."""
 
@@ -408,14 +373,12 @@ class SkillsDraftTestResponse(BaseModel):
     tools_found: List[str]
 
 
-
 class SkillsDraftPromoteResponse(BaseModel):
     """Response for POST /skills-governance/drafts/{skill_id}/promote."""
 
     promoted: bool
     path: str
     name: str
-
 
 
 class SkillsApprovalItem(BaseModel):
@@ -429,13 +392,11 @@ class SkillsApprovalItem(BaseModel):
     status: str
 
 
-
 class SkillsApprovalDecisionResponse(BaseModel):
     """Response for POST /skills-governance/approvals/{approval_id}."""
 
     approval_id: str
     status: str
-
 
 
 class SkillsGovernanceConfigResponse(BaseModel):
@@ -449,18 +410,15 @@ class SkillsGovernanceConfigResponse(BaseModel):
     mode: Any
 
 
-
 class SkillsGovernanceUpdateResponse(BaseModel):
     """Response for PUT /skills-governance/."""
 
     mode: Any
 
 
-
 # ---------------------------------------------------------------------------
 # mcp_registry.py schemas  (Issue #5317)
 # ---------------------------------------------------------------------------
-
 
 
 class MCPRegistryToolsResponse(BaseModel):
@@ -475,7 +433,6 @@ class MCPRegistryToolsResponse(BaseModel):
     cached: bool
 
 
-
 class MCPRegistryBridgesResponse(BaseModel):
     """Response for GET /bridges — bridge health and metadata."""
 
@@ -487,7 +444,6 @@ class MCPRegistryBridgesResponse(BaseModel):
     cached: bool
 
 
-
 class MCPRegistryCacheInvalidateResponse(BaseModel):
     """Response for POST /cache/invalidate."""
 
@@ -495,7 +451,6 @@ class MCPRegistryCacheInvalidateResponse(BaseModel):
     message: str
     timestamp: str
     cache_stats: Dict[str, Any]
-
 
 
 class MCPRegistryCacheStatsResponse(BaseModel):
@@ -506,13 +461,11 @@ class MCPRegistryCacheStatsResponse(BaseModel):
     timestamp: str
 
 
-
 class MCPRegistryToolDetailResponse(BaseModel):
     """Response for GET /tools/{bridge_name}/{tool_name}."""
 
     status: str
     tool: Dict[str, Any]
-
 
 
 class MCPRegistryHealthResponse(BaseModel):
@@ -526,7 +479,6 @@ class MCPRegistryHealthResponse(BaseModel):
     timestamp: str
 
 
-
 class MCPRegistryStatsResponse(BaseModel):
     """Response for GET /stats."""
 
@@ -537,7 +489,6 @@ class MCPRegistryStatsResponse(BaseModel):
     available_features: List[str]
     cache: Dict[str, Any]
     timestamp: str
-
 
 
 class MCPRegistryInfoResponse(BaseModel):
@@ -557,13 +508,11 @@ class MCPRegistryInfoResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class AccessControlMetricsResponse(BaseModel):
     """Response for GET /access-control/metrics."""
 
     success: bool
     data: Optional[Dict[str, Any]] = None
-
 
 
 class AccessControlEndpointMetricsResponse(BaseModel):
@@ -573,13 +522,11 @@ class AccessControlEndpointMetricsResponse(BaseModel):
     data: Optional[Any] = None
 
 
-
 class AccessControlUserMetricsResponse(BaseModel):
     """Response for GET /access-control/user/{username}."""
 
     success: bool
     data: Optional[Any] = None
-
 
 
 class AccessControlCleanupResponse(SuccessMessageResponse):
@@ -591,7 +538,6 @@ class AccessControlCleanupResponse(SuccessMessageResponse):
 # ---------------------------------------------------------------------------
 
 
-
 class HTTPClientMCPStatusResponse(BaseModel):
     """Response for GET /mcp/status — HTTP client service status."""
 
@@ -600,7 +546,6 @@ class HTTPClientMCPStatusResponse(BaseModel):
     rate_limit: Dict[str, Any]
     configuration: Dict[str, Any]
     timestamp: str
-
 
 
 class HTTPRequestResultResponse(BaseModel):
@@ -625,7 +570,6 @@ class HTTPRequestResultResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class DatabaseQueryResponse(BaseModel):
     """Response for POST /mcp/query."""
 
@@ -638,7 +582,6 @@ class DatabaseQueryResponse(BaseModel):
     timestamp: str
 
 
-
 class DatabaseExecuteResponse(BaseModel):
     """Response for POST /mcp/execute."""
 
@@ -647,7 +590,6 @@ class DatabaseExecuteResponse(BaseModel):
     statement: str
     rows_affected: int
     timestamp: str
-
 
 
 class DatabaseListTablesResponse(BaseModel):
@@ -660,7 +602,6 @@ class DatabaseListTablesResponse(BaseModel):
     timestamp: str
 
 
-
 class DatabaseDescribeSchemaResponse(BaseModel):
     """Response for POST /mcp/describe_schema."""
 
@@ -669,7 +610,6 @@ class DatabaseDescribeSchemaResponse(BaseModel):
     table_count: int
     schemas: Dict[str, Any]
     timestamp: str
-
 
 
 class DatabaseListDatabasesResponse(BaseModel):
@@ -681,7 +621,6 @@ class DatabaseListDatabasesResponse(BaseModel):
     timestamp: str
 
 
-
 class DatabaseStatisticsResponse(BaseModel):
     """Response for POST /mcp/statistics."""
 
@@ -689,7 +628,6 @@ class DatabaseStatisticsResponse(BaseModel):
     database: str
     statistics: Dict[str, Any]
     timestamp: str
-
 
 
 class DatabaseMCPStatusResponse(BaseModel):
@@ -708,26 +646,54 @@ class DatabaseMCPStatusResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Sandbox-scoped file API response models — DEFERRED WIRE-IN to #7409
+# ---------------------------------------------------------------------------
+#
+# The 7 ``FileSandbox*`` classes below describe the response shape for
+# endpoints under ``/api/sandbox/files/*`` that don't yet exist. They were
+# orphaned by the #6042 migration and tracked under #6676.
+#
+# Disposition (#6676 closure): deferred-wire-in per CLAUDE.md — these are
+# scaffolding for a planned third file-API surface (sandbox-scoped CRUD,
+# distinct from ``api/files.py``'s workspace scope and ``api/sandbox.py``'s
+# code-execution scope). The wire-in plan lives at #7409: add
+# ``api/sandbox_files.py`` + register in ``feature_routers.py``, give each
+# class ≥1 production caller, surface a ``useSandboxFiles`` composable.
+#
+# Until #7409 lands, these classes are intentionally caller-less. The
+# closure-gate audit (``audit-unwired-trackers.py``) will keep flagging
+# them; that's expected — the cure is implementing #7409, not deleting.
+# ---------------------------------------------------------------------------
+
 
 class FileSandboxViewResponse(BaseModel):
-    """Response for GET /files/view/{path}."""
+    """Response for GET /api/sandbox/files/view/{path}.
+
+    Wire-in deferred to #7409 (the endpoint hosting this response model
+    is part of the planned ``/api/sandbox/files/*`` surface).
+    """
 
     file_info: Any
     content: Optional[str] = None
     is_text: bool
 
 
-
 class FileSandboxRenameResponse(BaseModel):
-    """Response for POST /files/rename."""
+    """Response for POST /api/sandbox/files/rename.
+
+    Wire-in deferred to #7409.
+    """
 
     message: str
     item_info: Any
 
 
-
 class FileSandboxPreviewResponse(BaseModel):
-    """Response for GET /files/preview."""
+    """Response for GET /api/sandbox/files/preview.
+
+    Wire-in deferred to #7409.
+    """
 
     type: str
     url: str
@@ -737,32 +703,40 @@ class FileSandboxPreviewResponse(BaseModel):
     name: str
 
 
-
 class FileSandboxDeleteResponse(BaseModel):
-    """Response for DELETE /files/delete."""
+    """Response for DELETE /api/sandbox/files/delete.
+
+    Wire-in deferred to #7409.
+    """
 
     message: str
 
 
-
 class FileSandboxCreateDirResponse(BaseModel):
-    """Response for POST /files/create_directory."""
+    """Response for POST /api/sandbox/files/create_directory.
+
+    Wire-in deferred to #7409.
+    """
 
     message: str
     directory_info: Any
 
 
-
 class FileSandboxTreeResponse(BaseModel):
-    """Response for GET /files/tree."""
+    """Response for GET /api/sandbox/files/tree.
+
+    Wire-in deferred to #7409.
+    """
 
     path: str
     tree: List[Any]
 
 
-
 class FileSandboxStatsResponse(BaseModel):
-    """Response for GET /files/stats."""
+    """Response for GET /api/sandbox/files/stats.
+
+    Wire-in deferred to #7409.
+    """
 
     sandbox_root: str
     total_files: int
@@ -776,7 +750,6 @@ class FileSandboxStatsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # playwright.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
-
 
 
 class PlaywrightStatusResponse(BaseModel):
@@ -866,7 +839,6 @@ class SnapshotWithRegionsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # research_browser.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
-
 
 
 class ResearchBrowserHealthResponse(BaseModel):
@@ -1201,11 +1173,10 @@ class PrometheusMCPToolItem(BaseModel):
     input_schema: Any
 
 
-
 class PrometheusMCPExecuteResponse(BaseModel):
     """Response for POST /prometheus/mcp/{tool_name}.
 
-    Shape varies by tool and includes dynamic metrics data; extra fields allowed.    """
+    Shape varies by tool and includes dynamic metrics data; extra fields allowed."""
 
     model_config = {"extra": "allow"}
 
@@ -1516,9 +1487,7 @@ class EditFileRequest(BaseModel):
     """Request model for editing files."""
 
     path: str = Field(..., description="Absolute path to file")
-    edits: List[Dict[str, str]] = Field(
-        ..., description="List of {old_text, new_text} edits"
-    )
+    edits: List[Dict[str, str]] = Field(..., description="List of {old_text, new_text} edits")
     dry_run: Optional[bool] = Field(False, description="Preview changes without applying")
 
 
@@ -1729,7 +1698,6 @@ class IDEHealthResponse(BaseModel):
     rules_loaded: int
     disabled_rules: int
     cache_size: int
-
 
 
 # ---------------------------------------------------------------------------
@@ -2041,7 +2009,9 @@ class RedisAnalysisRequest(BaseModel):
 
     path: str = Field(..., description="Directory or file path to analyze for Redis optimizations")
     exclude_patterns: Optional[list] = Field(default=None, description="Glob patterns to exclude from analysis")
-    min_severity: Optional[str] = Field(default=None, description="Minimum severity level to include (info, low, medium, high, critical)")
+    min_severity: Optional[str] = Field(
+        default=None, description="Minimum severity level to include (info, low, medium, high, critical)"
+    )
 
 
 class RedisFileScanRequest(BaseModel):
@@ -2054,8 +2024,12 @@ class SecurityAnalysisRequest(BaseModel):
     """Request model for security analysis."""
 
     path: str = Field(..., description="Directory path to analyze for security vulnerabilities")
-    exclude_patterns: Optional[list] = Field(default=None, description="Patterns to exclude from analysis (e.g., ['test_*', 'venv'])")
-    min_severity: Optional[str] = Field(default=None, description="Minimum severity level to include (info, low, medium, high, critical)")
+    exclude_patterns: Optional[list] = Field(
+        default=None, description="Patterns to exclude from analysis (e.g., ['test_*', 'venv'])"
+    )
+    min_severity: Optional[str] = Field(
+        default=None, description="Minimum severity level to include (info, low, medium, high, critical)"
+    )
 
 
 class SecurityFileScanRequest(BaseModel):
@@ -2112,9 +2086,7 @@ class SQLQueryRequest(BaseModel):
     def validate_query_is_select(cls, v):
         normalized = v.strip().upper()
         if not normalized.startswith("SELECT"):
-            raise ValueError(
-                "Only SELECT queries allowed. Use execute_sql for modifications."
-            )
+            raise ValueError("Only SELECT queries allowed. Use execute_sql for modifications.")
         return v
 
 
@@ -2130,9 +2102,7 @@ class SQLExecuteRequest(BaseModel):
     def validate_statement_type(cls, v):
         normalized = v.strip().upper()
         if not any(normalized.startswith(op) for op in _DB_MCP_ALLOWED_DML_OPERATIONS):
-            raise ValueError(
-                f"Only {', '.join(_DB_MCP_ALLOWED_DML_OPERATIONS)} statements allowed"
-            )
+            raise ValueError(f"Only {', '.join(_DB_MCP_ALLOWED_DML_OPERATIONS)} statements allowed")
         return v
 
 

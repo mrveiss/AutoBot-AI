@@ -115,31 +115,23 @@ class EdgeLearner:
         try:
             raw_weights = await self.redis.hgetall(self.EWC_REFERENCE_WEIGHTS_KEY)
             if raw_weights:
-                self._reference_weights.update(
-                    {k: float(v) for k, v in raw_weights.items()}
-                )
+                self._reference_weights.update({k: float(v) for k, v in raw_weights.items()})
                 logger.info(
                     "EdgeLearner: loaded %d persisted EWC reference weights from Redis",
                     len(raw_weights),
                 )
         except Exception:
-            logger.warning(
-                "EdgeLearner: failed to load EWC reference weights, starting empty"
-            )
+            logger.warning("EdgeLearner: failed to load EWC reference weights, starting empty")
         try:
             raw_importance = await self.redis.hgetall(self.EWC_IMPORTANCE_KEY)
             if raw_importance:
-                self._importance.update(
-                    {k: float(v) for k, v in raw_importance.items()}
-                )
+                self._importance.update({k: float(v) for k, v in raw_importance.items()})
                 logger.info(
                     "EdgeLearner: loaded %d persisted EWC importance scores from Redis",
                     len(raw_importance),
                 )
         except Exception:
-            logger.warning(
-                "EdgeLearner: failed to load EWC importance scores, starting empty"
-            )
+            logger.warning("EdgeLearner: failed to load EWC importance scores, starting empty")
         self._ewc_state_loaded = True
 
     async def _save_ewc_state(self) -> None:
@@ -205,9 +197,7 @@ class EdgeLearner:
         importance = self._importance.get(edge_id, 0.0)
         return self.ewc_lambda * importance * (proposed_weight - ref) ** 2
 
-    def _apply_ewc_dampening(
-        self, edge_id: str, current_weight: float, proposed_weight: float
-    ) -> float:
+    def _apply_ewc_dampening(self, edge_id: str, current_weight: float, proposed_weight: float) -> float:
         """Dampen weight update proportionally to EWC penalty (#2097).
 
         High penalty (high-importance edge) → dampening factor near 0 → minimal change.
@@ -248,9 +238,7 @@ class EdgeLearner:
     async def _update_existing_edge(self, edge: dict) -> None:
         """Apply EMA weight update with EWC++ dampening and increment co_access_count (#2097, #2546)."""
         proposed_weight = edge["weight"] * self.ema_decay + 1.0 * (1 - self.ema_decay)
-        final_weight = self._apply_ewc_dampening(
-            edge["id"], edge["weight"], proposed_weight
-        )
+        final_weight = self._apply_ewc_dampening(edge["id"], edge["weight"], proposed_weight)
         await self.db.update_edge(
             edge["id"],
             weight=final_weight,
@@ -327,9 +315,7 @@ class EdgeLearner:
             await self._save_cursor(stream_key, resume_id)
 
         if processed:
-            logger.info(
-                "EdgeLearner: consumed %d new events from %s", processed, stream_key
-            )
+            logger.info("EdgeLearner: consumed %d new events from %s", processed, stream_key)
         else:
             logger.debug("EdgeLearner: no new events in %s", stream_key)
         return processed

@@ -84,9 +84,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-async def track_system_error(
-    error: Exception, context: Optional[Dict[str, Any]] = None
-):
+async def track_system_error(error: Exception, context: Optional[Dict[str, Any]] = None):
     """Convenience function to track system errors from anywhere in the codebase."""
     try:
         tracker = get_state_tracker()
@@ -95,9 +93,7 @@ async def track_system_error(
         logger.error("Failed to track system error: %s", e)
 
 
-async def track_api_request(
-    endpoint: str, method: str = "GET", status_code: Optional[int] = None
-):
+async def track_api_request(endpoint: str, method: str = "GET", status_code: Optional[int] = None):
     """Convenience function to track API requests from middleware or endpoints."""
     try:
         tracker = get_state_tracker()
@@ -135,9 +131,7 @@ async def _handle_snapshot_command(tracker):
     _cli_output("Capturing state snapshot...")
     snapshot = await tracker.capture_state_snapshot()
     _cli_output(f"Snapshot captured at {snapshot.timestamp}")
-    _cli_output(
-        f"System maturity: {snapshot.system_metrics[TrackingMetric.SYSTEM_MATURITY]}%"
-    )
+    _cli_output(f"System maturity: {snapshot.system_metrics[TrackingMetric.SYSTEM_MATURITY]}%")
 
 
 async def _handle_summary_command(tracker):
@@ -169,9 +163,7 @@ async def _handle_test_tracking_command(tracker):
     await tracker.track_api_call("/api/test", "POST", 200)
     _cli_output("✅ API call tracking tested")
 
-    await tracker.track_user_interaction(
-        "test_interaction", "test_user", {"test": True}
-    )
+    await tracker.track_user_interaction("test_interaction", "test_user", {"test": True})
     _cli_output("✅ User interaction tracking tested")
 
     metrics = await tracker.get_metrics_summary()

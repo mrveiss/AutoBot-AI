@@ -44,9 +44,7 @@ def get_pattern_collection():
         chroma_path = _PROJECT_ROOT / "data" / "chromadb"
         chroma_path.mkdir(parents=True, exist_ok=True)
 
-        chroma_client = get_default_client(
-            db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
-        )
+        chroma_client = get_default_client(db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False)
 
         collection = chroma_client.get_or_create_collection(
             name=CODE_PATTERNS_COLLECTION,
@@ -150,9 +148,7 @@ def sanitize_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
     return sanitized
 
 
-def _build_single_pattern_data(
-    pattern_type: str, code_content: str, metadata: Dict[str, Any]
-) -> Dict[str, Any]:
+def _build_single_pattern_data(pattern_type: str, code_content: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
     """Build pattern data dict for single pattern ID generation. Issue #620.
 
     Args:
@@ -171,9 +167,7 @@ def _build_single_pattern_data(
     }
 
 
-def _build_single_pattern_metadata(
-    pattern_type: str, code_content: str, metadata: Dict[str, Any]
-) -> Dict[str, Any]:
+def _build_single_pattern_metadata(pattern_type: str, code_content: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
     """Build and sanitize metadata for single pattern storage. Issue #620.
 
     Args:
@@ -220,9 +214,7 @@ async def store_pattern(
 
         pattern_data = _build_single_pattern_data(pattern_type, code_content, metadata)
         pattern_id = generate_pattern_id(pattern_data)
-        sanitized_metadata = _build_single_pattern_metadata(
-            pattern_type, code_content, metadata
-        )
+        sanitized_metadata = _build_single_pattern_metadata(pattern_type, code_content, metadata)
 
         await collection.add(
             ids=[pattern_id],
@@ -308,9 +300,7 @@ async def store_patterns_batch(
             documents.append(pattern["code_content"][:10000])
             metadatas.append(_prepare_pattern_metadata(pattern))
 
-        await collection.add(
-            ids=ids, embeddings=embeddings, documents=documents, metadatas=metadatas
-        )
+        await collection.add(ids=ids, embeddings=embeddings, documents=documents, metadatas=metadatas)
 
         logger.info("Stored %d patterns in batch", len(patterns))
         return len(patterns)
@@ -320,9 +310,7 @@ async def store_patterns_batch(
         return 0
 
 
-def _process_search_results(
-    results: Dict[str, Any], min_similarity: float
-) -> List[Dict[str, Any]]:
+def _process_search_results(results: Dict[str, Any], min_similarity: float) -> List[Dict[str, Any]]:
     """Process ChromaDB query results into pattern list. Issue #620.
 
     Args:
@@ -345,12 +333,8 @@ def _process_search_results(
                 {
                     "id": pattern_id,
                     "similarity": similarity,
-                    "document": (
-                        results["documents"][0][i] if results.get("documents") else ""
-                    ),
-                    "metadata": (
-                        results["metadatas"][0][i] if results.get("metadatas") else {}
-                    ),
+                    "document": (results["documents"][0][i] if results.get("documents") else ""),
+                    "metadata": (results["metadatas"][0][i] if results.get("metadatas") else {}),
                 }
             )
 

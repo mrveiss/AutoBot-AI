@@ -8,18 +8,16 @@ Issue #381: Extracted from error_boundaries.py god class refactoring.
 Contains the central error boundary management system.
 """
 
-import asyncio
 import json
 import logging
 import threading
 import time
-
-from autobot_shared.singleton_factory import lazy_singleton
 import traceback
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import RetryConfig
 from constants.ttl_constants import TTL_24_HOURS
 
@@ -429,8 +427,15 @@ class ErrorBoundaryManager:
         try:
             yield context
         except Exception as e:
-            # Handle synchronous errors
-            asyncio.run(self.handle_error(e, context))
+            # Handle synchronous errors.
+            # #7469: defensive run_or_schedule because this sync ctxmgr can
+            # be entered from an already-running event loop via a sync
+            # caller dispatched from async — bare asyncio.run() would
+            # raise "asyncio.run() cannot be called from a running event
+            # loop" and the original exception would be lost.
+            from autobot_shared.async_compat import run_or_schedule
+
+            run_or_schedule(self.handle_error(e, context))
             # Re-raise the handled exception
             raise
 

@@ -147,9 +147,7 @@ class DispensableDetector:
     # Lazy Class Detection
     # =========================================================================
 
-    def _count_class_members(
-        self, node: ast.ClassDef
-    ) -> tuple[list[ast.AST], list[ast.AST]]:
+    def _count_class_members(self, node: ast.ClassDef) -> tuple[list[ast.AST], list[ast.AST]]:
         """Count methods and attributes in a class definition. Issue #620.
 
         Args:
@@ -161,12 +159,9 @@ class DispensableDetector:
         methods = [
             n
             for n in node.body
-            if isinstance(n, _FUNCTION_DEF_TYPES)
-            and not (n.name.startswith("__") and n.name.endswith("__"))
+            if isinstance(n, _FUNCTION_DEF_TYPES) and not (n.name.startswith("__") and n.name.endswith("__"))
         ]
-        attributes = [
-            n for n in node.body if isinstance(n, (ast.Assign, ast.AnnAssign))
-        ]
+        attributes = [n for n in node.body if isinstance(n, (ast.Assign, ast.AnnAssign))]
         return methods, attributes
 
     def detect_lazy_class(
@@ -196,13 +191,9 @@ class DispensableDetector:
                     line_number=node.lineno,
                     entity_name=node.name,
                     description=(
-                        f"Class '{node.name}' has only {len(methods)} methods "
-                        f"and {len(attributes)} attributes"
+                        f"Class '{node.name}' has only {len(methods)} methods " f"and {len(attributes)} attributes"
                     ),
-                    suggestion=(
-                        "Consider inlining into calling code or using a "
-                        "function/data structure instead"
-                    ),
+                    suggestion=("Consider inlining into calling code or using a " "function/data structure instead"),
                     metrics={
                         "method_count": len(methods),
                         "attribute_count": len(attributes),
@@ -360,9 +351,7 @@ class DispensableDetector:
                         existing_methods,
                         _,
                     ) in class_signatures.items():
-                        result = self._check_class_overlap(
-                            node, methods, existing_name, existing_methods, file_path
-                        )
+                        result = self._check_class_overlap(node, methods, existing_name, existing_methods, file_path)
                         if result:
                             patterns.append(result)
 
@@ -385,8 +374,7 @@ class DispensableDetector:
         return frozenset(
             n.name
             for n in node.body
-            if isinstance(n, _FUNCTION_DEF_TYPES)
-            and not (n.name.startswith("__") and n.name.endswith("__"))
+            if isinstance(n, _FUNCTION_DEF_TYPES) and not (n.name.startswith("__") and n.name.endswith("__"))
         )
 
     def _check_class_overlap(
@@ -424,13 +412,9 @@ class DispensableDetector:
             line_number=node.lineno,
             entity_name=f"{node.name}, {existing_name}",
             description=(
-                f"Classes '{node.name}' and '{existing_name}' "
-                f"have {len(overlap)}/{len(union)} overlapping methods"
+                f"Classes '{node.name}' and '{existing_name}' " f"have {len(overlap)}/{len(union)} overlapping methods"
             ),
-            suggestion=(
-                "Consider extracting common functionality "
-                "into a base class or shared module"
-            ),
+            suggestion=("Consider extracting common functionality " "into a base class or shared module"),
             metrics={
                 "overlap_count": len(overlap),
                 "overlap_methods": list(overlap)[:5],

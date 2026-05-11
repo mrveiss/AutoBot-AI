@@ -6,13 +6,13 @@ Redis Compatibility Layer for AutoBot
 Provides backward compatibility for existing code while transitioning to async Redis manager
 """
 
-import asyncio
 import threading
 import warnings
 from typing import Optional, Union
 
 from redis.exceptions import RedisError
 
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 
 from .async_redis_manager import get_redis_manager
@@ -467,4 +467,4 @@ async def migrate_sync_to_async_example():
 
 if __name__ == "__main__":
     # Run migration example (logging configured via centralized logging_manager)
-    asyncio.run(migrate_sync_to_async_example())
+    run_or_schedule(migrate_sync_to_async_example())

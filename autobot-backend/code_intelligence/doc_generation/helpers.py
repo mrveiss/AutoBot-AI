@@ -126,10 +126,7 @@ def get_node_value(node: Optional[ast.AST]) -> str:
     if isinstance(node, ast.List):
         return f"[{', '.join(get_node_value(e) for e in node.elts)}]"
     if isinstance(node, ast.Dict):
-        items = [
-            f"{get_node_value(k)}: {get_node_value(v)}"
-            for k, v in zip(node.keys, node.values)
-        ]
+        items = [f"{get_node_value(k)}: {get_node_value(v)}" for k, v in zip(node.keys, node.values)]
         return "{" + ", ".join(items) + "}"
     if isinstance(node, ast.Tuple):
         return f"({', '.join(get_node_value(e) for e in node.elts)})"
@@ -235,11 +232,7 @@ def extract_all_values(value_node: ast.AST) -> List[str]:
     """
     if not isinstance(value_node, SEQUENCE_TYPES):
         return []
-    return [
-        e.value
-        for e in value_node.elts
-        if isinstance(e, ast.Constant) and isinstance(e.value, str)
-    ]
+    return [e.value for e in value_node.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
 
 
 def extract_all_exports(tree: ast.Module) -> List[str]:

@@ -3,12 +3,12 @@
 Focused analysis for critical hardcoded environment variables
 """
 
-import asyncio
 import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, List
 
+from autobot_shared.async_compat import run_or_schedule
 from constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
@@ -207,9 +207,7 @@ def _print_category_results(results: dict) -> None:
     """
     for category, matches in results.items():
         if matches:
-            print(  # noqa: print
-                f"🏷️  **{category.replace('_', ' ').title()} ({len(matches)} found):**"
-            )
+            print(f"🏷️  **{category.replace('_', ' ').title()} ({len(matches)} found):**")  # noqa: print
 
             # Group by suggested environment variable
             # Issue #616: Use setdefault for O(1) grouping instead of explicit check
@@ -220,9 +218,7 @@ def _print_category_results(results: dict) -> None:
             for env_var, env_matches in by_env_var.items():
                 print(f"   → {env_var}:")  # noqa: print
                 for match in env_matches[:5]:  # Show first 5
-                    print(  # noqa: print
-                        f"     • {match['file']}:{match['line']} = '{match['value']}'"
-                    )
+                    print(f"     • {match['file']}:{match['line']} = '{match['value']}'")  # noqa: print
                     print(f"       Context: {match['context']}")  # noqa: print
                 if len(env_matches) > 5:
                     print(f"     ... and {len(env_matches) - 5} more")  # noqa: print
@@ -245,13 +241,9 @@ def _print_config_recommendations(high_priority: list) -> None:
         config_key = env_var.lower().replace("autobot_", "").replace("_", ".")
         print(f"# {description}")  # noqa: print
         if default.isdigit():
-            print(
-                f'        "{config_key}": int(os.getenv("{env_var}", {default})),'
-            )  # noqa: print
+            print(f'        "{config_key}": int(os.getenv("{env_var}", {default})),')  # noqa: print
         else:
-            print(
-                f'        "{config_key}": os.getenv("{env_var}", "{default}"),'
-            )  # noqa: print
+            print(f'        "{config_key}": os.getenv("{env_var}", "{default}"),')  # noqa: print
     print("```\n")  # noqa: print
 
     print("🌍 **Add to .env file:**")  # noqa: print
@@ -282,9 +274,7 @@ def _print_example_refactoring(results: dict) -> None:
                         "title": "Database Path Configuration",
                         "file": match["file"],
                         "before": match["context"],
-                        "after": match["context"].replace(
-                            f'"{match["value"]}"', 'config.get("database.path")'
-                        ),
+                        "after": match["context"].replace(f'"{match["value"]}"', 'config.get("database.path")'),
                         "env_var": "AUTOBOT_DATABASE_PATH=data/knowledge_base.db",
                     }
                 )
@@ -298,9 +288,7 @@ def _print_example_refactoring(results: dict) -> None:
                         "title": "Backend Port Configuration",
                         "file": match["file"],
                         "before": match["context"],
-                        "after": match["context"].replace(
-                            match["value"], 'config.get("backend.port")'
-                        ),
+                        "after": match["context"].replace(match["value"], 'config.get("backend.port")'),
                         "env_var": "AUTOBOT_BACKEND_PORT=8001",
                     }
                 )
@@ -356,4 +344,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

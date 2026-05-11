@@ -18,7 +18,6 @@ import pytest
 
 from mcp.autobot_server import AutoBotMCPServer
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -75,9 +74,7 @@ async def test_scoped_token_restricts_tools():
 async def test_kb_list_categories():
     server = make_server()
     fake_kb = AsyncMock()
-    fake_kb.get_category_tree = AsyncMock(
-        return_value={"tree": [{"id": "cat1", "name": "General"}]}
-    )
+    fake_kb.get_category_tree = AsyncMock(return_value={"tree": [{"id": "cat1", "name": "General"}]})
 
     with patch(
         "mcp.autobot_server.AutoBotMCPServer._kb_list_categories",

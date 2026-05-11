@@ -47,17 +47,13 @@ async def _try_initialize_existing_kb(kb):
     Returns:
         Initialized kb on success, None on failure
     """
-    logger.info(
-        "Knowledge base exists but not initialized, initializing existing instance..."
-    )
+    logger.info("Knowledge base exists but not initialized, initializing existing instance...")
     try:
         await kb.initialize()
         logger.info("✅ Successfully initialized existing knowledge base instance")
         return kb
     except Exception as init_error:
-        logger.warning(
-            f"Failed to initialize existing instance: {init_error}, will create new instance"
-        )
+        logger.warning(f"Failed to initialize existing instance: {init_error}, will create new instance")
         return None
 
 
@@ -85,9 +81,7 @@ async def _create_new_knowledge_base(app: FastAPI):
         if result:
             _last_kb_init_failure = 0.0  # Reset cooldown on success
             app.state.knowledge_base = kb
-            logger.info(
-                "✅ Knowledge base created and initialized (unified KnowledgeBase with ChromaDB)"
-            )
+            logger.info("✅ Knowledge base created and initialized (unified KnowledgeBase with ChromaDB)")
             return kb
 
         logger.error("❌ KnowledgeBase initialization returned False")
@@ -118,9 +112,7 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
     try:
         # Check for existing initialized knowledge base
         has_existing = (
-            hasattr(app.state, "knowledge_base")
-            and app.state.knowledge_base is not None
-            and not force_refresh
+            hasattr(app.state, "knowledge_base") and app.state.knowledge_base is not None and not force_refresh
         )
 
         if has_existing:
@@ -172,10 +164,7 @@ async def get_knowledge_base_async() -> Optional["KnowledgeBase"]:  # noqa: F821
     try:
         # Return existing instance if already initialized
         if _knowledge_base_instance is not None:
-            if (
-                hasattr(_knowledge_base_instance, "initialized")
-                and _knowledge_base_instance.initialized
-            ):
+            if hasattr(_knowledge_base_instance, "initialized") and _knowledge_base_instance.initialized:
                 logger.debug("Using existing knowledge base singleton")
                 return _knowledge_base_instance
 
@@ -183,10 +172,7 @@ async def get_knowledge_base_async() -> Optional["KnowledgeBase"]:  # noqa: F821
         async with _knowledge_base_lock:
             # Double-check after acquiring lock
             if _knowledge_base_instance is not None:
-                if (
-                    hasattr(_knowledge_base_instance, "initialized")
-                    and _knowledge_base_instance.initialized
-                ):
+                if hasattr(_knowledge_base_instance, "initialized") and _knowledge_base_instance.initialized:
                     logger.debug("Using existing knowledge base singleton (after lock)")
                     return _knowledge_base_instance
 

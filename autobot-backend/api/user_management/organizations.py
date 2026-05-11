@@ -13,6 +13,7 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+
 from api.schemas_agent import (
     OrganizationCreate,
     OrganizationCreatedResponse,
@@ -22,7 +23,6 @@ from api.schemas_agent import (
     OrganizationStatsResponse,
     OrganizationUpdate,
 )
-
 from api.user_management.dependencies import (
     get_organization_service,
     require_platform_admin,

@@ -153,12 +153,8 @@ def get_slack_hook() -> Any:
         _hook = _NullSlackHook()
         return _hook
 
-    notifications_channel = os.getenv(
-        "SLACK_NOTIFICATIONS_CHANNEL", _SLACK_NOTIFICATIONS_CHANNEL_DEFAULT
-    ).strip()
-    approvals_channel = os.getenv(
-        "SLACK_APPROVALS_CHANNEL", notifications_channel
-    ).strip()
+    notifications_channel = os.getenv("SLACK_NOTIFICATIONS_CHANNEL", _SLACK_NOTIFICATIONS_CHANNEL_DEFAULT).strip()
+    approvals_channel = os.getenv("SLACK_APPROVALS_CHANNEL", notifications_channel).strip()
 
     logger.info(
         "Slack notifications enabled (channel=%s, approvals=%s)",

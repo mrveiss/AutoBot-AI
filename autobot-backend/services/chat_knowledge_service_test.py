@@ -81,9 +81,7 @@ def sample_search_results():
 
 
 @pytest.mark.asyncio
-async def test_retrieve_relevant_knowledge_success(
-    mock_rag_service, sample_search_results
-):
+async def test_retrieve_relevant_knowledge_success(mock_rag_service, sample_search_results):
     """Test successful knowledge retrieval with filtering."""
     # Setup
     mock_rag_service.advanced_search.return_value = (
@@ -119,9 +117,7 @@ async def test_retrieve_relevant_knowledge_empty_results(mock_rag_service):
     service = ChatKnowledgeService(mock_rag_service)
 
     # Execute
-    context, citations = await service.retrieve_relevant_knowledge(
-        query="Nonexistent topic"
-    )
+    context, citations = await service.retrieve_relevant_knowledge(query="Nonexistent topic")
 
     # Verify
     assert context == ""
@@ -388,9 +384,7 @@ class TestQueryIntentDetector:
 
 
 @pytest.mark.asyncio
-async def test_smart_retrieve_knowledge_skips_for_commands(
-    mock_rag_service, sample_search_results
-):
+async def test_smart_retrieve_knowledge_skips_for_commands(mock_rag_service, sample_search_results):
     """Test that smart retrieval skips RAG for command requests."""
     mock_rag_service.advanced_search.return_value = (
         sample_search_results,
@@ -414,9 +408,7 @@ async def test_smart_retrieve_knowledge_skips_for_commands(
 
 
 @pytest.mark.asyncio
-async def test_smart_retrieve_knowledge_retrieves_for_questions(
-    mock_rag_service, sample_search_results
-):
+async def test_smart_retrieve_knowledge_retrieves_for_questions(mock_rag_service, sample_search_results):
     """Test that smart retrieval performs RAG for knowledge queries."""
     mock_rag_service.advanced_search.return_value = (
         sample_search_results,
@@ -440,9 +432,7 @@ async def test_smart_retrieve_knowledge_retrieves_for_questions(
 
 
 @pytest.mark.asyncio
-async def test_smart_retrieve_knowledge_force_retrieval(
-    mock_rag_service, sample_search_results
-):
+async def test_smart_retrieve_knowledge_force_retrieval(mock_rag_service, sample_search_results):
     """Test that force_retrieval bypasses intent detection."""
     mock_rag_service.advanced_search.return_value = (
         sample_search_results,
@@ -465,9 +455,7 @@ async def test_smart_retrieve_knowledge_force_retrieval(
 
 
 @pytest.mark.asyncio
-async def test_smart_retrieve_knowledge_skips_for_greetings(
-    mock_rag_service, sample_search_results
-):
+async def test_smart_retrieve_knowledge_skips_for_greetings(mock_rag_service, sample_search_results):
     """Test that smart retrieval skips RAG for conversational messages."""
     service = ChatKnowledgeService(mock_rag_service)
 
@@ -514,9 +502,7 @@ def sample_conversation_history():
 class TestConversationContextEnhancer:
     """Tests for ConversationContextEnhancer (Issue #249 Phase 3)."""
 
-    def test_enhance_query_with_pronoun(
-        self, context_enhancer, sample_conversation_history
-    ):
+    def test_enhance_query_with_pronoun(self, context_enhancer, sample_conversation_history):
         """Test that queries with pronouns get enhanced with context."""
         result = context_enhancer.enhance_query(
             query="How do I restart it?",
@@ -553,18 +539,14 @@ class TestConversationContextEnhancer:
         assert result.enhancement_applied is False
         assert result.enhanced_query == "Tell me more about it"
 
-    def test_extract_entities_from_history(
-        self, context_enhancer, sample_conversation_history
-    ):
+    def test_extract_entities_from_history(self, context_enhancer, sample_conversation_history):
         """Test entity extraction from conversation history."""
         entities = context_enhancer._extract_entities(sample_conversation_history)
 
         assert "Redis" in entities
         # Should find technical entities
 
-    def test_short_query_enhancement(
-        self, context_enhancer, sample_conversation_history
-    ):
+    def test_short_query_enhancement(self, context_enhancer, sample_conversation_history):
         """Test that very short queries get context added."""
         result = context_enhancer.enhance_query(
             query="and?",
@@ -575,9 +557,7 @@ class TestConversationContextEnhancer:
         assert result.enhancement_applied is True
         assert len(result.enhanced_query) > len(result.original_query)
 
-    def test_elaborate_query_enhancement(
-        self, context_enhancer, sample_conversation_history
-    ):
+    def test_elaborate_query_enhancement(self, context_enhancer, sample_conversation_history):
         """Test that 'tell me more' queries include prior context."""
         result = context_enhancer.enhance_query(
             query="Tell me more about that",
@@ -596,9 +576,7 @@ class TestConversationContextEnhancer:
 
         # Should not need enhancement (explicit, no pronouns)
         assert (
-            context_enhancer._needs_context_enhancement(
-                "What is the best way to configure Redis connection pooling?"
-            )
+            context_enhancer._needs_context_enhancement("What is the best way to configure Redis connection pooling?")
             is False
         )
 
@@ -610,9 +588,7 @@ class TestConversationContextEnhancer:
 
 
 @pytest.mark.asyncio
-async def test_conversation_aware_retrieve_with_context(
-    mock_rag_service, sample_search_results
-):
+async def test_conversation_aware_retrieve_with_context(mock_rag_service, sample_search_results):
     """Test conversation-aware retrieval with context enhancement."""
     mock_rag_service.advanced_search.return_value = (
         sample_search_results,
@@ -642,9 +618,7 @@ async def test_conversation_aware_retrieve_with_context(
 
 
 @pytest.mark.asyncio
-async def test_conversation_aware_retrieve_skips_commands(
-    mock_rag_service, sample_search_results
-):
+async def test_conversation_aware_retrieve_skips_commands(mock_rag_service, sample_search_results):
     """Test that conversation-aware retrieval still skips commands."""
     service = ChatKnowledgeService(mock_rag_service)
 
@@ -672,9 +646,7 @@ async def test_conversation_aware_retrieve_skips_commands(
 
 
 @pytest.mark.asyncio
-async def test_conversation_aware_retrieve_force_retrieval(
-    mock_rag_service, sample_search_results
-):
+async def test_conversation_aware_retrieve_force_retrieval(mock_rag_service, sample_search_results):
     """Test that force_retrieval bypasses intent detection."""
     mock_rag_service.advanced_search.return_value = (
         sample_search_results,
@@ -698,9 +670,7 @@ async def test_conversation_aware_retrieve_force_retrieval(
 
 
 @pytest.mark.asyncio
-async def test_conversation_aware_retrieve_without_enhancement(
-    mock_rag_service, sample_search_results
-):
+async def test_conversation_aware_retrieve_without_enhancement(mock_rag_service, sample_search_results):
     """Test retrieval when query doesn't need enhancement."""
     mock_rag_service.advanced_search.return_value = (
         sample_search_results,

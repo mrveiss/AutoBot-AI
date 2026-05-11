@@ -25,9 +25,7 @@ from utils.command_utils import execute_command
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level frozenset for common command line starters
-_COMMON_COMMAND_STARTERS: FrozenSet[str] = frozenset(
-    {"ls", "cat", "grep", "find", "awk", "sed"}
-)
+_COMMON_COMMAND_STARTERS: FrozenSet[str] = frozenset({"ls", "cat", "grep", "find", "awk", "sed"})
 
 
 @dataclass
@@ -55,17 +53,13 @@ class ManPageParser:
         self.section_patterns = {
             "name": re.compile(r"^NAME\s*$", re.IGNORECASE | re.MULTILINE),
             "synopsis": re.compile(r"^SYNOPSIS\s*$", re.IGNORECASE | re.MULTILINE),
-            "description": re.compile(
-                r"^DESCRIPTION\s*$", re.IGNORECASE | re.MULTILINE
-            ),
+            "description": re.compile(r"^DESCRIPTION\s*$", re.IGNORECASE | re.MULTILINE),
             "options": re.compile(r"^OPTIONS\s*$", re.IGNORECASE | re.MULTILINE),
             "examples": re.compile(r"^EXAMPLES?\s*$", re.IGNORECASE | re.MULTILINE),
             "see_also": re.compile(r"^SEE ALSO\s*$", re.IGNORECASE | re.MULTILINE),
         }
 
-    def parse_man_page(
-        self, content: str, command: str, section: int = 1
-    ) -> ManPageInfo:
+    def parse_man_page(self, content: str, command: str, section: int = 1) -> ManPageInfo:
         """Parse man page content into structured data"""
         sections = self._split_into_sections(content)
 
@@ -138,9 +132,7 @@ class ManPageParser:
             return "", ""
 
         # Look for pattern: command - description
-        match = re.search(
-            r"^(\w+(?:\s*,\s*\w+)*)\s*[-–]\s*(.+)$", content.strip(), re.MULTILINE
-        )
+        match = re.search(r"^(\w+(?:\s*,\s*\w+)*)\s*[-–]\s*(.+)$", content.strip(), re.MULTILINE)
         if match:
             title = match.group(1).strip()
             description = match.group(2).strip()
@@ -157,8 +149,7 @@ class ManPageParser:
 
         # Look for option patterns like: -f, --flag
         option_pattern = re.compile(
-            r"^\s*(-\w+(?:,\s*--[\w][\w-]{0,50}){0,10}|\s*--[\w][\w-]{0,50})"
-            r"\s+(.*?)(?=^\s*-|\Z)",
+            r"^\s*(-\w+(?:,\s*--[\w][\w-]{0,50}){0,10}|\s*--[\w][\w-]{0,50})" r"\s+(.*?)(?=^\s*-|\Z)",
             re.MULTILINE | re.DOTALL,
         )
 
@@ -168,9 +159,7 @@ class ManPageParser:
             options.append(
                 {
                     "flag": option_text.strip(),
-                    "description": " ".join(
-                        description.split()
-                    ),  # Normalize whitespace
+                    "description": " ".join(description.split()),  # Normalize whitespace
                 }
             )
 
@@ -184,9 +173,7 @@ class ManPageParser:
         examples = []
 
         # Split by common example indicators
-        example_blocks = re.split(
-            r"\n\s*\n|\n\s*Example\s*\d*[:.]\s*|\n\s*•\s*", content
-        )
+        example_blocks = re.split(r"\n\s*\n|\n\s*Example\s*\d*[:.]\s*|\n\s*•\s*", content)
 
         for block in example_blocks:
             block = block.strip()
@@ -202,9 +189,7 @@ class ManPageParser:
                 line = line.strip()
                 if line.startswith("$") or line.startswith("# "):
                     command_line = line.lstrip("$# ").strip()
-                elif command_line is None and any(
-                    line.startswith(cmd) for cmd in _COMMON_COMMAND_STARTERS
-                ):
+                elif command_line is None and any(line.startswith(cmd) for cmd in _COMMON_COMMAND_STARTERS):
                     command_line = line
                 else:
                     description_lines.append(line)
@@ -213,9 +198,7 @@ class ManPageParser:
                 examples.append(
                     {
                         "command": command_line,
-                        "description": (
-                            " ".join(description_lines).strip() or "Example usage"
-                        ),
+                        "description": (" ".join(description_lines).strip() or "Example usage"),
                     }
                 )
 
@@ -367,9 +350,7 @@ class ManPageKnowledgeIntegrator:
         result = await execute_command(["man", "-w", command], timeout=5.0)
         return result.return_code == 0
 
-    async def extract_man_page(
-        self, command: str, section: int = 1
-    ) -> Optional[ManPageInfo]:
+    async def extract_man_page(self, command: str, section: int = 1) -> Optional[ManPageInfo]:
         """Extract and parse man page for a command.
 
         Issue #751: Uses centralized execute_command from command_utils.
@@ -429,9 +410,7 @@ class ManPageKnowledgeIntegrator:
             logger.error("Failed to cache man page to %s: %s", cache_file, e)
         return cache_file
 
-    async def load_cached_man_page(
-        self, command: str, section: int = 1
-    ) -> Optional[ManPageInfo]:
+    async def load_cached_man_page(self, command: str, section: int = 1) -> Optional[ManPageInfo]:
         """Load cached man page data from disk"""
         cache_file = self.man_cache_dir / f"{command}_{section}.json"
 
@@ -486,17 +465,9 @@ class ManPageKnowledgeIntegrator:
             "type": "command_line_tool",
             "purpose": man_info.description,
             "installation": {"system": "Pre-installed on most Linux systems"},
-            "usage": {
-                "basic": (
-                    man_info.synopsis
-                    if man_info.synopsis
-                    else f"{man_info.command} [options]"
-                )
-            },
+            "usage": {"basic": (man_info.synopsis if man_info.synopsis else f"{man_info.command} [options]")},
             "common_examples": common_examples,
-            "options": [
-                f"{opt['flag']}: {opt['description']}" for opt in man_info.options
-            ],
+            "options": [f"{opt['flag']}: {opt['description']}" for opt in man_info.options],
             "related_tools": man_info.see_also,
             "man_page_section": man_info.section,
             "last_updated": man_info.last_updated,
@@ -518,9 +489,7 @@ class ManPageKnowledgeIntegrator:
 
         return knowledge_data
 
-    async def _process_single_command(
-        self, command: str, results: Dict[str, Any]
-    ) -> None:
+    async def _process_single_command(self, command: str, results: Dict[str, Any]) -> None:
         """Process single command integration (Issue #398: extracted)."""
         results["processed"] += 1
         try:
@@ -552,9 +521,7 @@ class ManPageKnowledgeIntegrator:
         """Extract and integrate man pages (Issue #398: refactored)."""
         logger.info("Starting man page integration for priority commands...")
         available_commands = await self.get_available_commands()
-        commands_to_process = [
-            cmd for cmd in self.priority_commands if cmd in available_commands
-        ]
+        commands_to_process = [cmd for cmd in self.priority_commands if cmd in available_commands]
         logger.info(
             "Processing %d priority commands available on this machine",
             len(commands_to_process),
@@ -579,9 +546,7 @@ class ManPageKnowledgeIntegrator:
     async def _save_as_knowledge_yaml(self, man_info: ManPageInfo):
         """Save man page as knowledge YAML file"""
         # Determine the appropriate knowledge directory
-        machine_dir = (
-            self.knowledge_base_dir / "machines" / (man_info.machine_id or "default")
-        )
+        machine_dir = self.knowledge_base_dir / "machines" / (man_info.machine_id or "default")
         man_knowledge_dir = machine_dir / "man_pages"
         # Issue #358 - avoid blocking
         await asyncio.to_thread(man_knowledge_dir.mkdir, parents=True, exist_ok=True)
@@ -593,12 +558,8 @@ class ManPageKnowledgeIntegrator:
         yaml_file = man_knowledge_dir / f"{man_info.command}.yaml"
         try:
             async with aiofiles.open(yaml_file, "w", encoding="utf-8") as f:
-                await f.write(
-                    yaml.dump(knowledge_data, default_flow_style=False, indent=2)
-                )
-            logger.info(
-                f"Saved man page knowledge for {man_info.command} to {yaml_file}"
-            )
+                await f.write(yaml.dump(knowledge_data, default_flow_style=False, indent=2))
+            logger.info(f"Saved man page knowledge for {man_info.command} to {yaml_file}")
         except OSError as e:
             logger.error(f"Failed to save man page knowledge to {yaml_file}: {e}")
 
@@ -608,9 +569,7 @@ class ManPageKnowledgeIntegrator:
 
         # Search through cached man pages
         # Issue #358 - avoid blocking with lambda for proper glob() execution in thread
-        cache_files = await asyncio.to_thread(
-            lambda: list(self.man_cache_dir.glob("*.json"))
-        )
+        cache_files = await asyncio.to_thread(lambda: list(self.man_cache_dir.glob("*.json")))
         for cache_file in cache_files:
             man_info = await self.load_cached_man_page(
                 cache_file.stem.split("_")[0], int(cache_file.stem.split("_")[1])
@@ -625,9 +584,7 @@ class ManPageKnowledgeIntegrator:
                 man_info.title.lower(),
                 man_info.description.lower(),
             ]
-            searchable_parts.extend(
-                opt["description"].lower() for opt in man_info.options
-            )
+            searchable_parts.extend(opt["description"].lower() for opt in man_info.options)
             searchable_text = " ".join(searchable_parts)
 
             if query.lower() in searchable_text:
@@ -645,9 +602,7 @@ class ManPageKnowledgeIntegrator:
         updated_count = 0
 
         # Issue #358 - avoid blocking with lambda for proper glob() execution in thread
-        cache_files = await asyncio.to_thread(
-            lambda: list(self.man_cache_dir.glob("*.json"))
-        )
+        cache_files = await asyncio.to_thread(lambda: list(self.man_cache_dir.glob("*.json")))
         for cache_file in cache_files:
             # Check file age
             # Issue #358 - avoid blocking stat()
@@ -671,6 +626,8 @@ class ManPageKnowledgeIntegrator:
 
 # Global integrator instance (thread-safe)
 import asyncio as _asyncio_lock
+
+from autobot_shared.async_compat import run_or_schedule
 
 _integrator_instance: Optional[ManPageKnowledgeIntegrator] = None
 _integrator_lock = _asyncio_lock.Lock()
@@ -731,12 +688,8 @@ if __name__ == "__main__":
         print(f"  Cached: {results['cached']}")  # noqa: print
 
         # Show some successful commands
-        successful_commands = [
-            cmd for cmd, status in results["commands"].items() if status == "success"
-        ][:5]
+        successful_commands = [cmd for cmd, status in results["commands"].items() if status == "success"][:5]
         if successful_commands:
-            print(  # noqa: print
-                f"  Sample successful commands: {', '.join(successful_commands)}"
-            )  # noqa: print
+            print(f"  Sample successful commands: {', '.join(successful_commands)}")  # noqa: print  # noqa: print
 
-    asyncio.run(test_integration())
+    run_or_schedule(test_integration())

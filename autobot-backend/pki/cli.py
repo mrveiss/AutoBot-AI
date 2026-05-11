@@ -16,11 +16,10 @@ Usage:
 
     # From setup.py
     from pki.cli import run_pki_setup
-    asyncio.run(run_pki_setup())
+    run_or_schedule(run_pki_setup())
 """
 
 import argparse
-import asyncio
 import logging
 import sys
 from pathlib import Path
@@ -111,24 +110,16 @@ Examples:
 
     # Setup command
     setup_parser = subparsers.add_parser("setup", help="Run PKI setup")
-    setup_parser.add_argument(
-        "--force", "-f", action="store_true", help="Force certificate regeneration"
-    )
-    setup_parser.add_argument(
-        "--no-dist", action="store_true", help="Skip certificate distribution"
-    )
-    setup_parser.add_argument(
-        "--no-config", action="store_true", help="Skip service configuration"
-    )
+    setup_parser.add_argument("--force", "-f", action="store_true", help="Force certificate regeneration")
+    setup_parser.add_argument("--no-dist", action="store_true", help="Skip certificate distribution")
+    setup_parser.add_argument("--no-config", action="store_true", help="Skip service configuration")
 
     # Status command
     subparsers.add_parser("status", help="Show certificate status")
 
     # Renew command
     renew_parser = subparsers.add_parser("renew", help="Renew certificates")
-    renew_parser.add_argument(
-        "certificates", nargs="*", help="Specific certificates to renew (optional)"
-    )
+    renew_parser.add_argument("certificates", nargs="*", help="Specific certificates to renew (optional)")
 
     # Verify command
     subparsers.add_parser("verify", help="Verify certificate distribution")
@@ -141,13 +132,20 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser) 
     Execute the CLI command based on parsed arguments.
 
     Issue #620.
+    #7469: bare ``asyncio.run`` replaced with ``run_or_schedule`` for
+    defense-in-depth. CLI is a sync entrypoint, but the helper costs
+    nothing in that path (only goes through threadpool when a loop is
+    already running) and survives if a future caller imports
+    ``_execute_command`` from async code.
 
     Args:
         args: Parsed command line arguments
         parser: The argument parser (for help display)
     """
+    from autobot_shared.async_compat import run_or_schedule
+
     if args.command == "setup":
-        success = asyncio.run(
+        success = run_or_schedule(
             run_pki_setup(
                 force=args.force,
                 distribute=not args.no_dist,
@@ -157,14 +155,14 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser) 
         sys.exit(0 if success else 1)
 
     elif args.command == "status":
-        asyncio.run(run_status())
+        run_or_schedule(run_status())
 
     elif args.command == "renew":
-        success = asyncio.run(run_renew(args.certificates or None))
+        success = run_or_schedule(run_renew(args.certificates or None))
         sys.exit(0 if success else 1)
 
     elif args.command == "verify":
-        asyncio.run(run_verify())
+        run_or_schedule(run_verify())
 
     else:
         parser.print_help()

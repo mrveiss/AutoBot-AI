@@ -37,9 +37,9 @@ from api.schemas_system import (
     SessionScreenshotSaveResponse,
     SessionScreenshotsResponse,
     SpecialKeyRequest,
-    VNCOCRRequest,
     VncDesktopContextResponse,
     VncFindImageResponse,
+    VNCOCRRequest,
     VncOcrResponse,
     VncQualityMetricsResponse,
     VncRunningResponse,
@@ -64,7 +64,6 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import with_error_handling
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
-from autobot_shared.error_boundaries import ErrorCategory
 
 logger = logging.getLogger(__name__)
 
@@ -122,10 +121,7 @@ def start_vnc_server() -> Dict[str, str]:
         )
         return {
             "status": "error",
-            "message": (
-                "VNC passwd file not found. "
-                "Run `vncpasswd` to create it before starting the VNC server."
-            ),
+            "message": ("VNC passwd file not found. " "Run `vncpasswd` to create it before starting the VNC server."),
         }
 
     try:
@@ -294,9 +290,7 @@ def _run_xdotool_cmd(args: list[str], timeout: int = 5) -> Dict[str, str]:
     if not args or args[0] not in _XDOTOOL_ALLOWED_SUBCMDS:
         return {
             "status": "error",
-            "message": (
-                "Disallowed xdotool subcommand: " f"{args[0] if args else '(empty)'}"
-            ),
+            "message": ("Disallowed xdotool subcommand: " f"{args[0] if args else '(empty)'}"),
         }
     # Validate each argument against safe-character pattern (#1721)
     sanitized: list[str] = []
@@ -309,14 +303,16 @@ def _run_xdotool_cmd(args: list[str], timeout: int = 5) -> Dict[str, str]:
             }
         sanitized.append(s)
     try:
-        result = subprocess.run(  # nosec B603 B607  # lgtm[py/command-line-injection]  # codeql[py/command-line-injection]
-            ["/usr/bin/xdotool"] + sanitized,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=timeout,
-            shell=False,
-            env={"DISPLAY": ":1"},
+        result = (
+            subprocess.run(  # nosec B603 B607  # lgtm[py/command-line-injection]  # codeql[py/command-line-injection]
+                ["/usr/bin/xdotool"] + sanitized,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=timeout,
+                shell=False,
+                env={"DISPLAY": ":1"},
+            )
         )
         if result.returncode != 0:
             return {"status": "error", "message": result.stderr or "Command failed"}
@@ -356,9 +352,7 @@ async def vnc_mouse_click(
     delay = humanize_action_delay()
     await asyncio.sleep(delay)
 
-    return _run_xdotool_cmd(
-        ["mousemove", str(humanized_x), str(humanized_y), "click", button_num]
-    )
+    return _run_xdotool_cmd(["mousemove", str(humanized_x), str(humanized_y), "click", button_num])
 
 
 @router.post("/type", response_model=VncStatusMessageResponse)
@@ -478,9 +472,7 @@ async def vnc_mouse_drag(
     path_points = simulate_mouse_curve(request.x1, request.y1, request.x2, request.y2)
 
     # Move to start position and press mouse button
-    result = _run_xdotool_cmd(
-        ["mousemove", str(request.x1), str(request.y1), "mousedown", "1"]
-    )
+    result = _run_xdotool_cmd(["mousemove", str(request.x1), str(request.y1), "mousedown", "1"])
     if result["status"] == "error":
         return result
 
@@ -583,9 +575,7 @@ async def vnc_clipboard_sync(
             stderr=subprocess.PIPE,
             env={"DISPLAY": ":1"},
         )
-        stdout, stderr = proc.communicate(
-            input=request.content.encode("utf-8"), timeout=5
-        )
+        stdout, stderr = proc.communicate(input=request.content.encode("utf-8"), timeout=5)
 
         if proc.returncode != 0:
             return {"status": "error", "message": stderr.decode("utf-8")}
@@ -814,9 +804,7 @@ def _get_desktop_info() -> Dict[str, str]:
             env={"DISPLAY": ":1"},
         )
         if result.returncode == 0:
-            window_count = len(
-                [line for line in result.stdout.split("\n") if line.strip()]
-            )
+            window_count = len([line for line in result.stdout.split("\n") if line.strip()])
             info["window_count"] = str(window_count)
     except Exception as e:
         logger.debug("Failed to get window count (wmctrl may not be installed): %s", e)
@@ -913,9 +901,7 @@ _macros_lock = asyncio.Lock()
 
 @router.post("/macro/record/start", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_MACRO_START")
-async def start_macro_recording(
-    name: str, admin_check: bool = Depends(check_admin_permission)
-) -> Dict[str, str]:
+async def start_macro_recording(name: str, admin_check: bool = Depends(check_admin_permission)) -> Dict[str, str]:
     """
     Start recording a macro sequence.
     Issue #74 - Area 5: Automation Features.
@@ -938,9 +924,7 @@ async def start_macro_recording(
 
 @router.post("/macro/record/stop", response_model=MacroStopResponse)
 @with_error_handling(error_code_prefix="VNC_MACRO_STOP")
-async def stop_macro_recording(
-    name: str, admin_check: bool = Depends(check_admin_permission)
-) -> Dict[str, str]:
+async def stop_macro_recording(name: str, admin_check: bool = Depends(check_admin_permission)) -> Dict[str, str]:
     """
     Stop recording a macro and save it.
     Issue #74 - Area 5: Automation Features.
@@ -957,9 +941,7 @@ async def stop_macro_recording(
 
         macro = _recording_session.pop(name)
         _macros[name] = macro
-        logger.info(
-            "Stopped recording macro: %s (%d actions)", name, len(macro.actions)
-        )
+        logger.info("Stopped recording macro: %s (%d actions)", name, len(macro.actions))
 
     return {
         "status": "success",
@@ -995,9 +977,7 @@ async def list_macros(
 
 @router.post("/macro/playback", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_MACRO_PLAY")
-async def playback_macro(
-    name: str, admin_check: bool = Depends(check_admin_permission)
-) -> Dict[str, str]:
+async def playback_macro(name: str, admin_check: bool = Depends(check_admin_permission)) -> Dict[str, str]:
     """
     Play back a recorded macro.
     Issue #74 - Area 5: Automation Features.
@@ -1053,9 +1033,7 @@ async def playback_macro(
 
 @router.delete("/macro/{name}", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_MACRO_DELETE")
-async def delete_macro(
-    name: str, admin_check: bool = Depends(check_admin_permission)
-) -> Dict[str, str]:
+async def delete_macro(name: str, admin_check: bool = Depends(check_admin_permission)) -> Dict[str, str]:
     """
     Delete a saved macro.
     Issue #74 - Area 5: Automation Features.
@@ -1121,9 +1099,7 @@ async def vnc_ocr_text(
         image = Image.open(tmp_path, encoding="utf-8")
 
         # Crop to region if specified
-        if request.region and all(
-            k in request.region for k in ["x", "y", "width", "height"]
-        ):
+        if request.region and all(k in request.region for k in ["x", "y", "width", "height"]):
             box = (
                 request.region["x"],
                 request.region["y"],
@@ -1174,9 +1150,7 @@ def _decode_images_for_matching(screen_b64: str, template_b64: str) -> tuple:
     return screen_img, template_img
 
 
-def _build_match_result(
-    max_val: float, max_loc: tuple, template_img, threshold: float
-) -> Dict[str, object]:
+def _build_match_result(max_val: float, max_loc: tuple, template_img, threshold: float) -> Dict[str, object]:
     """Helper for vnc_find_image. Ref: #1088.
 
     Build found/not-found response dict from template matching values.
@@ -1246,9 +1220,7 @@ async def vnc_find_image(
         if screenshot_result["status"] != "success":
             return {"status": "error", "found": False, "message": "Screenshot failed"}
 
-        screen_img, template_img = _decode_images_for_matching(
-            screenshot_result["image_data"], request.template_data
-        )
+        screen_img, template_img = _decode_images_for_matching(screenshot_result["image_data"], request.template_data)
 
         if screen_img is None or template_img is None:
             return {"status": "error", "found": False, "message": "Invalid image data"}
@@ -1336,9 +1308,7 @@ async def vnc_wait_for_image(
     while (datetime.now(tz=timezone.utc) - start_time).total_seconds() < request.timeout_seconds:
         # Find image
         find_result = await vnc_find_image(
-            FindImageRequest(
-                template_data=request.template_data, threshold=request.threshold
-            )
+            FindImageRequest(template_data=request.template_data, threshold=request.threshold)
         )
 
         if find_result["status"] == "success" and find_result["found"]:
@@ -1401,9 +1371,7 @@ async def save_session_desktop_state(
 
         # Save running apps (from processes)
         if "processes" in context:
-            state.active_applications = [
-                proc["command"] for proc in context["processes"]
-            ]
+            state.active_applications = [proc["command"] for proc in context["processes"]]
 
         # Update timestamp
         state.last_updated = datetime.now(tz=timezone.utc).isoformat()
@@ -1555,9 +1523,7 @@ async def save_session_screenshot(
     screenshot_dir.mkdir(parents=True, exist_ok=True)  # codeql[py/path-injection]
 
     timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
-    screenshot_path = validate_relative_path(
-        f"screenshot_{timestamp}.png", screenshot_dir
-    )
+    screenshot_path = validate_relative_path(f"screenshot_{timestamp}.png", screenshot_dir)
 
     # Decode and save
     image_data = base64.b64decode(screenshot_result["image_data"])

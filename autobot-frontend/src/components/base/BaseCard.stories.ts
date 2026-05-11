@@ -21,17 +21,18 @@ const meta = {
       description: 'Enable hover effects',
     },
   },
-} satisfies Meta<typeof BaseCard>;
+} as Meta<typeof BaseCard>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const Default: Story = {
   args: {
     variant: 'default',
     padding: 'md',
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { BaseCard },
     setup() {
       return { args };
@@ -50,7 +51,7 @@ export const Elevated: Story = {
     variant: 'elevated',
     padding: 'md',
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { BaseCard },
     setup() {
       return { args };
@@ -69,7 +70,7 @@ export const Outline: Story = {
     variant: 'outline',
     padding: 'md',
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { BaseCard },
     setup() {
       return { args };
@@ -89,7 +90,7 @@ export const Hoverable: Story = {
     padding: 'md',
     hoverable: true,
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { BaseCard },
     setup() {
       return { args };
@@ -108,7 +109,7 @@ export const NoPadding: Story = {
     variant: 'default',
     padding: 'none',
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { BaseCard },
     setup() {
       return { args };

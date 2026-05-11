@@ -19,6 +19,7 @@ from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResul
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_30_DAYS
+from events.event_types import RAG_RETRIEVAL
 from knowledge.search_components.query_classifier import get_query_classifier
 from knowledge.search_components.retrieval_learner import GLOBAL_USER, get_retrieval_learner
 from live_event_manager import publish_live_event
@@ -26,13 +27,12 @@ from services.context_sufficiency import (
     SufficiencyVerdict,
     get_context_sufficiency_evaluator,
 )
-from services.neural_mesh_retriever import NeuralMeshRetriever
 from services.knowledge_base_adapter import KnowledgeBaseAdapter
+from services.neural_mesh_retriever import NeuralMeshRetriever
 from services.rag_config import RAGConfig, get_rag_config
-from services.session_adaptive_reranker import get_session_adaptive_reranker
 from services.semantic_query_cache import get_semantic_query_cache
+from services.session_adaptive_reranker import get_session_adaptive_reranker
 from services.topic_retrieval_cache import CachedChunk, get_topic_retrieval_cache
-from events.event_types import RAG_RETRIEVAL
 from type_defs.common import Metadata
 
 logger = get_llm_logger("rag_service")
@@ -154,9 +154,7 @@ class RAGService:
                         **_shared_mesh_components,
                     )
                     self.config.mesh_retriever_enabled = True
-                    logger.debug(
-                        "Built per-instance NeuralMeshRetriever from shared components (#4765)"
-                    )
+                    logger.debug("Built per-instance NeuralMeshRetriever from shared components (#4765)")
                 except Exception as _mesh_err:
                     logger.warning(
                         "Per-instance NeuralMeshRetriever build failed (non-fatal): %s",
@@ -777,9 +775,7 @@ class RAGService:
                         combined = results + doc_results
                         combined.sort(key=lambda r: r.hybrid_score, reverse=True)
                         results = combined[:max_results]
-                        logger.debug(
-                            "autobot_docs merged %d result(s) into search", len(doc_results)
-                        )
+                        logger.debug("autobot_docs merged %d result(s) into search", len(doc_results))
             except Exception as _doc_exc:
                 logger.debug("autobot_docs search skipped: %s", _doc_exc)
 

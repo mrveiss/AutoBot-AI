@@ -19,6 +19,7 @@ from typing import Any, Dict, List
 # Add project root to path for imports  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.error_boundaries import ErrorContext  # noqa: E402
 from autobot_shared.error_boundaries import (
     RecoveryStrategy,
@@ -296,4 +297,4 @@ if __name__ == "__main__":
     CustomRecoveryHandler()
 
     # Run examples
-    asyncio.run(run_examples())
+    run_or_schedule(run_examples())

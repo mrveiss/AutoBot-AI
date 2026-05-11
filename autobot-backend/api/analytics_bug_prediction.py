@@ -19,11 +19,6 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
-from auth_middleware import check_admin_permission
-from autobot_shared.redis_client import get_redis_client
-from constants.threshold_constants import TimingConstants
-from constants.ttl_constants import TTL_5_MINUTES
-from utils.background_task_manager import BackgroundTaskManager
 from api.schemas_analytics import (
     BugPredictionAnalysisResponse,
     BugPredictionAnalyzeResponse,
@@ -40,7 +35,12 @@ from api.schemas_analytics import (
     RiskFactor,
     RiskLevel,
 )
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_redis_client
+from constants.threshold_constants import TimingConstants
+from constants.ttl_constants import TTL_5_MINUTES
+from utils.background_task_manager import BackgroundTaskManager
 
 logger = logging.getLogger(__name__)
 
@@ -76,9 +76,7 @@ def _get_bug_prediction_cache_key(path: str, include_pattern: str, limit: int) -
     return f"{BUG_PREDICTION_CACHE_PREFIX}:{param_hash}"
 
 
-async def _get_cached_bug_prediction(
-    path: str, include_pattern: str, limit: int
-) -> dict | None:
+async def _get_cached_bug_prediction(path: str, include_pattern: str, limit: int) -> dict | None:
     """
     Get cached bug prediction from Redis.
 
@@ -304,9 +302,7 @@ def get_suggested_tests(file_path: str, factors: dict[str, float]) -> list[str]:
         suggestions.append(f"Add regression tests for recent changes in {basename}")
 
     if factors.get("bug_history", 0) > 50:
-        suggestions.append(
-            f"Create tests covering previous bug scenarios in {basename}"
-        )
+        suggestions.append(f"Create tests covering previous bug scenarios in {basename}")
 
     if factors.get("test_coverage", 0) > 50:  # High means low coverage
         suggestions.append(f"Increase unit test coverage for {basename}")
@@ -335,9 +331,7 @@ async def get_git_bug_history() -> dict[str, Any]:
         )
 
         try:
-            stdout, _ = await asyncio.wait_for(
-                proc.communicate(), timeout=TimingConstants.SHORT_TIMEOUT
-            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
@@ -370,9 +364,7 @@ async def get_file_change_frequency() -> dict[str, int]:
         )
 
         try:
-            stdout, _ = await asyncio.wait_for(
-                proc.communicate(), timeout=TimingConstants.SHORT_TIMEOUT
-            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
@@ -430,9 +422,7 @@ def _calculate_max_indent(lines: list) -> int:
 
 def _calculate_conditional_density(lines: list, line_count: int) -> float:
     """Calculate conditional statement density (Issue #398: extracted)."""
-    conditionals = sum(
-        1 for line in lines if any(kw in line for kw in CONTROL_FLOW_KEYWORDS)
-    )
+    conditionals = sum(1 for line in lines if any(kw in line for kw in CONTROL_FLOW_KEYWORDS))
     return conditionals / max(line_count, 1) * 100
 
 
@@ -440,15 +430,9 @@ def _calculate_complexity_score(lines: list) -> int:
     """Calculate total complexity score from code lines (Issue #398: extracted)."""
     line_count = len(lines)
     score = _score_from_thresholds(line_count, [(500, 30), (300, 20), (100, 10)])
-    score += _score_from_thresholds(
-        _calculate_max_indent(lines), [(6, 25), (4, 15), (2, 5)]
-    )
-    score += _score_from_thresholds(
-        _calculate_conditional_density(lines, line_count), [(15, 25), (10, 15), (5, 5)]
-    )
-    func_count = sum(
-        1 for line in lines if line.strip().startswith(_FUNCTION_DEF_PREFIXES)
-    )
+    score += _score_from_thresholds(_calculate_max_indent(lines), [(6, 25), (4, 15), (2, 5)])
+    score += _score_from_thresholds(_calculate_conditional_density(lines, line_count), [(15, 25), (10, 15), (5, 5)])
+    func_count = sum(1 for line in lines if line.strip().startswith(_FUNCTION_DEF_PREFIXES))
     score += _score_from_thresholds(func_count, [(20, 20), (10, 10)])
     return min(100, score)
 
@@ -459,9 +443,7 @@ async def analyze_file_complexity(file_path: str) -> float:
         path = Path(file_path)
         if not await asyncio.to_thread(path.exists):
             return 30
-        content = await asyncio.to_thread(
-            path.read_text, encoding="utf-8", errors="ignore"
-        )
+        content = await asyncio.to_thread(path.read_text, encoding="utf-8", errors="ignore")
         return _calculate_complexity_score(content.split("\n"))
     except Exception as e:
         logger.warning("Failed to analyze complexity for %s: %s", file_path, e)
@@ -509,9 +491,7 @@ def _build_prediction_snapshot(
     }
 
 
-async def _persist_prediction_to_redis(
-    redis, snapshot: Dict[str, Any], timestamp_ms: int
-) -> None:
+async def _persist_prediction_to_redis(redis, snapshot: Dict[str, Any], timestamp_ms: int) -> None:
     """Helper for _store_prediction_history. Ref: #1088."""
     await asyncio.to_thread(
         redis.zadd,
@@ -675,9 +655,7 @@ def _calculate_trend_metrics(history: List[Dict[str, Any]]) -> Dict[str, Any]:
     avg_risk_scores = [h.get("average_risk_score", 0) for h in history]
     high_risk_counts = [h.get("high_risk_count", 0) for h in history]
     overall_avg = sum(avg_risk_scores) / len(avg_risk_scores) if avg_risk_scores else 0
-    avg_high_risk = (
-        sum(high_risk_counts) / len(high_risk_counts) if high_risk_counts else 0
-    )
+    avg_high_risk = sum(high_risk_counts) / len(high_risk_counts) if high_risk_counts else 0
 
     # Calculate trend direction using extracted helper
     trend_direction, risk_change_pct = _calculate_trend_direction(avg_risk_scores)
@@ -710,10 +688,7 @@ def _calculate_risk_level_trends(history: List[Dict[str, Any]]) -> Dict[str, Any
     trends = {}
 
     for level in risk_levels:
-        counts = [
-            h.get(f"{level}_count", h.get("risk_distribution", {}).get(level, 0))
-            for h in history
-        ]
+        counts = [h.get(f"{level}_count", h.get("risk_distribution", {}).get(level, 0)) for h in history]
         if counts:
             avg = sum(counts) / len(counts)
             latest = counts[-1] if counts else 0
@@ -797,9 +772,7 @@ async def _analyze_single_file(
     }
 
     risk_score = sum(
-        factors.get(factor.value, 0) * weight
-        for factor, weight in RISK_WEIGHTS.items()
-        if factor.value in factors
+        factors.get(factor.value, 0) * weight for factor, weight in RISK_WEIGHTS.items() if factor.value in factors
     )
 
     return _build_file_risk_dict(rel_path, risk_score, factors, bug_count)
@@ -825,14 +798,10 @@ async def _safe_store_prediction_history(
             analyzed_files=analyzed_files,
         )
     except Exception as e:
-        logger.error(
-            "Background prediction history storage failed: %s", e, exc_info=True
-        )
+        logger.error("Background prediction history storage failed: %s", e, exc_info=True)
 
 
-async def _run_bug_analysis(
-    path: str, include_pattern: str, limit: int
-) -> dict[str, Any]:
+async def _run_bug_analysis(path: str, include_pattern: str, limit: int) -> dict[str, Any]:
     """Run full bug prediction analysis pipeline.
 
     Issue #1341: Extracted from analyze_codebase to keep endpoint under
@@ -845,13 +814,9 @@ async def _run_bug_analysis(
     )
 
     if not files_to_analyze:
-        return _no_data_response(
-            f"No files matching '{include_pattern}' found in '{path}'"
-        )
+        return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
 
-    analyzed_files = await _analyze_files_parallel(
-        files_to_analyze, change_freq, bug_history
-    )
+    analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
     analyzed_files.sort(key=lambda x: x["risk_score"], reverse=True)
     high_risk = sum(1 for f in analyzed_files if f["risk_score"] >= 60)
 
@@ -908,9 +873,7 @@ async def analyze_codebase(
         response_data = await _run_bug_analysis(path, include_pattern, limit)
 
         if response_data.get("status") == "success":
-            await _set_cached_bug_prediction(
-                path, include_pattern, limit, response_data
-            )
+            await _set_cached_bug_prediction(path, include_pattern, limit, response_data)
 
         return response_data
 
@@ -961,9 +924,7 @@ async def _run_batched_bug_analysis(
         if not files_to_analyze:
             await _bg_manager.complete_task(
                 task_id,
-                _no_data_response(
-                    f"No files matching '{include_pattern}' found in '{path}'"
-                ),
+                _no_data_response(f"No files matching '{include_pattern}' found in '{path}'"),
             )
             return
 
@@ -976,9 +937,7 @@ async def _run_batched_bug_analysis(
             step = f"Analyzing files {batch_start + 1}-{batch_end} of {total}"
             pct = 10 + int((batch_start / total) * 85)
             await _bg_manager.update_progress(task_id, step, pct)
-            batch_results = await _analyze_files_parallel(
-                batch, change_freq, bug_history
-            )
+            batch_results = await _analyze_files_parallel(batch, change_freq, bug_history)
             analyzed_files.extend(batch_results)
 
         await _bg_manager.update_progress(task_id, "Finalizing results", 95)
@@ -1032,12 +991,8 @@ async def start_bug_analysis(
     limit: int = Query(10000, ge=1, le=100000, description="Maximum files to analyze"),
 ):
     """Start batched bug prediction analysis as background task (#1418)."""
-    task_id = await _bg_manager.create_task(
-        params={"path": path, "include_pattern": include_pattern, "limit": limit}
-    )
-    background_tasks.add_task(
-        _run_batched_bug_analysis, task_id, path, include_pattern, limit
-    )
+    task_id = await _bg_manager.create_task(params={"path": path, "include_pattern": include_pattern, "limit": limit})
+    background_tasks.add_task(_run_batched_bug_analysis, task_id, path, include_pattern, limit)
     return {"task_id": task_id, "status": "pending"}
 
 
@@ -1104,14 +1059,10 @@ async def get_high_risk_files(
         )
 
         if not files_to_analyze:
-            return _no_data_response(
-                f"No files matching '{include_pattern}' found in '{path}'"
-            )
+            return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
 
         # Issue #609: Analyze files in parallel
-        analyzed_files = await _analyze_files_parallel(
-            files_to_analyze, change_freq, bug_history
-        )
+        analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
 
         # Filter high-risk files
         high_risk_files = [f for f in analyzed_files if f["risk_score"] >= threshold]
@@ -1131,11 +1082,7 @@ async def get_high_risk_files(
 
 def _build_file_risk_response(file_path: str, factors: dict, bug_history: dict) -> dict:
     """Build file risk response from factors (Issue #398: extracted)."""
-    risk_score = sum(
-        factors.get(f.value, 0) * w
-        for f, w in RISK_WEIGHTS.items()
-        if f.value in factors
-    )
+    risk_score = sum(factors.get(f.value, 0) * w for f, w in RISK_WEIGHTS.items() if f.value in factors)
     return {
         "file_path": file_path,
         "risk_score": round(risk_score, 1),
@@ -1277,14 +1224,10 @@ async def get_risk_heatmap(
         )
 
         if not files_to_analyze:
-            return _no_data_response(
-                f"No files matching '{include_pattern}' found in '{path}'"
-            )
+            return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
 
         # Issue #609: Analyze files in parallel
-        analyzed_files = await _analyze_files_parallel(
-            files_to_analyze, change_freq, bug_history
-        )
+        analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
 
         # Generate heatmap data
         data = (
@@ -1388,9 +1331,7 @@ def _aggregate_risk_factors(analyzed_files: list) -> list[tuple[str, float]]:
     return sorted(factor_totals.items(), key=lambda x: x[1], reverse=True)
 
 
-def _generate_summary_recommendations(
-    risk_dist: dict[str, int], analyzed_files: list
-) -> list[str]:
+def _generate_summary_recommendations(risk_dist: dict[str, int], analyzed_files: list) -> list[str]:
     """
     Generate recommendations based on risk analysis. Issue #620.
 
@@ -1405,17 +1346,13 @@ def _generate_summary_recommendations(
     recommendations = []
 
     if high_risk_count > 0:
-        recommendations.append(
-            f"Focus testing efforts on {high_risk_count} high-risk files"
-        )
+        recommendations.append(f"Focus testing efforts on {high_risk_count} high-risk files")
 
     # Get top 3 highest risk files
     top_risky = sorted(analyzed_files, key=lambda x: x["risk_score"], reverse=True)[:3]
     for f in top_risky:
         if f["risk_score"] >= 60:
-            recommendations.append(
-                f"Review {f['file_path']} (risk score: {f['risk_score']:.1f})"
-            )
+            recommendations.append(f"Review {f['file_path']} (risk score: {f['risk_score']:.1f})")
 
     if not recommendations:
         recommendations.append("All files are within acceptable risk levels")
@@ -1451,14 +1388,10 @@ async def get_prediction_summary(
         )
 
         if not files_to_analyze:
-            return _no_data_response(
-                f"No files matching '{include_pattern}' found in '{path}'"
-            )
+            return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
 
         # Issue #609: Analyze files in parallel
-        analyzed_files = await _analyze_files_parallel(
-            files_to_analyze, change_freq, bug_history
-        )
+        analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
 
         # Issue #620: Extracted to helper methods
         risk_dist = _calculate_risk_distribution(analyzed_files)
@@ -1570,12 +1503,8 @@ async def record_bug(
                 "recorded_at": datetime.now(tz=timezone.utc).isoformat(),
             }
             # Issue #361 - avoid blocking
-            await asyncio.to_thread(
-                redis.lpush, "bug_prediction:recorded_bugs", json.dumps(bug_record)
-            )
-            await asyncio.to_thread(
-                redis.ltrim, "bug_prediction:recorded_bugs", 0, 999
-            )  # Keep last 1000
+            await asyncio.to_thread(redis.lpush, "bug_prediction:recorded_bugs", json.dumps(bug_record))
+            await asyncio.to_thread(redis.ltrim, "bug_prediction:recorded_bugs", 0, 999)  # Keep last 1000
 
             return {
                 "status": "recorded",

@@ -40,9 +40,7 @@ class WorkflowOptimizer:
 
         return optimized_steps
 
-    async def _optimize_parallel_execution(
-        self, steps: List[SmartWorkflowStep]
-    ) -> List[SmartWorkflowStep]:
+    async def _optimize_parallel_execution(self, steps: List[SmartWorkflowStep]) -> List[SmartWorkflowStep]:
         """Identify steps that can run in parallel"""
         for step in steps:
             if not step.dependencies and "install" not in step.command:
@@ -50,9 +48,7 @@ class WorkflowOptimizer:
 
         return steps
 
-    async def _eliminate_redundancies(
-        self, steps: List[SmartWorkflowStep]
-    ) -> List[SmartWorkflowStep]:
+    async def _eliminate_redundancies(self, steps: List[SmartWorkflowStep]) -> List[SmartWorkflowStep]:
         """Remove redundant steps"""
         seen_commands = set()
         optimized_steps = []
@@ -67,9 +63,7 @@ class WorkflowOptimizer:
 
         return optimized_steps
 
-    async def _consolidate_commands(
-        self, steps: List[SmartWorkflowStep]
-    ) -> List[SmartWorkflowStep]:
+    async def _consolidate_commands(self, steps: List[SmartWorkflowStep]) -> List[SmartWorkflowStep]:
         """Consolidate related commands for efficiency"""
         consolidated_steps = []
         apt_installs = []
@@ -106,9 +100,7 @@ class WorkflowOptimizer:
 
         return consolidated_steps
 
-    async def _apply_risk_reduction(
-        self, steps: List[SmartWorkflowStep]
-    ) -> List[SmartWorkflowStep]:
+    async def _apply_risk_reduction(self, steps: List[SmartWorkflowStep]) -> List[SmartWorkflowStep]:
         """Apply risk reduction strategies"""
         for step in steps:
             # Add backup steps for risky operations

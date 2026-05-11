@@ -283,9 +283,7 @@ class QuerySanitizer:
 
             count = len(matches)
             result.hits[rule.name] = count
-            _sanitizer_hits.labels(
-                rule=rule.name, source=source, action=rule.action.value
-            ).inc(count)
+            _sanitizer_hits.labels(rule=rule.name, source=source, action=rule.action.value).inc(count)
 
             if rule.action == SanitizerAction.LOG_ONLY:
                 # For LOG_ONLY rules include a truncated snippet of the first
@@ -318,9 +316,7 @@ class QuerySanitizer:
             if rule.action == SanitizerAction.STRIP:
                 sanitized = rule.pattern.sub("", sanitized)
             elif rule.action == SanitizerAction.ESCAPE:
-                sanitized = rule.pattern.sub(
-                    lambda m: f"[ESCAPED:{m.group(0)}]", sanitized
-                )
+                sanitized = rule.pattern.sub(lambda m: f"[ESCAPED:{m.group(0)}]", sanitized)
             # SanitizerAction.LOG_ONLY: leave sanitized unchanged.
 
         result.sanitized_text = sanitized

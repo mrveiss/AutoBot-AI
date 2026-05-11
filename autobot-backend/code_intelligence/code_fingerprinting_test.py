@@ -664,9 +664,7 @@ def test_function(x, y):
         report = detector.detect_clones(temp_codebase)
 
         # Should find at least one Type 1 clone group
-        type1_groups = [
-            g for g in report.clone_groups if g.clone_type == CloneType.TYPE_1
-        ]
+        type1_groups = [g for g in report.clone_groups if g.clone_type == CloneType.TYPE_1]
         assert len(type1_groups) >= 1
 
     def test_severity_calculation(self, detector):

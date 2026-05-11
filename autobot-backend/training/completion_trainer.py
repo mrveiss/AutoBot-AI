@@ -10,8 +10,6 @@ Training orchestration for code completion model.
 import json
 import logging
 import os
-from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -19,6 +17,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from autobot_shared.time_utils import now_utc
 from llm_interface_pkg.hardware import HardwareDetector
 from training.completion_model import CompletionModel
 from training.data_loader import create_dataloaders

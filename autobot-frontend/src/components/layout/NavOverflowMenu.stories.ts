@@ -59,16 +59,17 @@ const meta = {
         'Array of NavItem entries. Each item provides `to`, `labelKey` (i18n key), and an SVG path (`icon` or `iconPaths`). Stroke vs filled is controlled by `iconStroke`.',
     },
   },
-} satisfies Meta<typeof NavOverflowMenu>;
+} as Meta<typeof NavOverflowMenu>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const Default: Story = {
   args: {
     items: sampleItems,
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { NavOverflowMenu },
     setup() {
       return { args };
@@ -96,7 +97,7 @@ export const SingleItem: Story = {
       },
     },
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { NavOverflowMenu },
     setup() {
       return { args };
@@ -126,7 +127,7 @@ export const ManyItems: Story = {
       },
     },
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { NavOverflowMenu },
     setup() {
       return { args };
@@ -151,7 +152,7 @@ export const Empty: Story = {
       },
     },
   },
-  render: (args) => ({
+  render: (args: any) => ({
     components: { NavOverflowMenu },
     setup() {
       return { args };

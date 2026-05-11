@@ -14,6 +14,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
+
+from api.schemas_common import DataResponse
 from api.schemas_system import (
     AddFindingRequest,
     AddHostRequest,
@@ -24,7 +26,6 @@ from api.schemas_system import (
     ParseToolOutputRequest,
     RecoverErrorRequest,
 )
-
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.error_constants import ERR_ASSESSMENT_NOT_FOUND
@@ -39,7 +40,6 @@ from services.security_workflow_manager import (
 
 # Issue #756: Consolidated from src/utils/request_utils.py
 from utils.request_utils import generate_request_id
-from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 
@@ -354,9 +354,7 @@ async def advance_phase(
     )
 
     if not assessment:
-        raise HTTPException(
-            status_code=400, detail="Invalid phase transition or assessment not found"
-        )
+        raise HTTPException(status_code=400, detail="Invalid phase transition or assessment not found")
 
     return JSONResponse(
         status_code=200,
@@ -616,10 +614,7 @@ async def get_findings(
 
     if severity:
         findings = [
-            f
-            for f in findings
-            if f.get("data", {}).get("severity") == severity
-            or f.get("severity") == severity
+            f for f in findings if f.get("data", {}).get("severity") == severity or f.get("severity") == severity
         ]
 
     vulnerabilities = _collect_host_vulnerabilities(assessment, severity)
@@ -867,9 +862,7 @@ async def recover_from_error(
     )
 
     if not assessment:
-        raise HTTPException(
-            status_code=400, detail="Recovery failed or assessment not found"
-        )
+        raise HTTPException(status_code=400, detail="Recovery failed or assessment not found")
 
     return JSONResponse(
         status_code=200,
@@ -907,10 +900,7 @@ async def get_phase_definitions(
         content={
             "success": True,
             "data": {
-                "phases": {
-                    phase.value: PHASE_DESCRIPTIONS.get(phase.value, {})
-                    for phase in AssessmentPhase
-                },
+                "phases": {phase.value: PHASE_DESCRIPTIONS.get(phase.value, {}) for phase in AssessmentPhase},
                 "transitions": VALID_TRANSITIONS,
             },
         },

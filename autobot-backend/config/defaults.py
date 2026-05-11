@@ -16,9 +16,7 @@ from typing import Any, Dict
 from config.registry import ConfigRegistry
 
 
-def _get_backend_config(
-    llm_host: str, llm_port: int, bind_host: str, backend_port: int
-) -> Dict[str, Any]:
+def _get_backend_config(llm_host: str, llm_port: int, bind_host: str, backend_port: int) -> Dict[str, Any]:
     """Get backend LLM and server configuration.
 
     Args:
@@ -57,9 +55,7 @@ def _get_backend_config(
                         "endpoint": f"{llm_base_url}/api/embeddings",
                         "host": llm_base_url,
                         "models": [],
-                        "selected_model": os.getenv(
-                            "AUTOBOT_EMBEDDING_MODEL", "nomic-embed-text"
-                        ),
+                        "selected_model": os.getenv("AUTOBOT_EMBEDDING_MODEL", "nomic-embed-text"),
                     }
                 },
             },
@@ -84,14 +80,10 @@ def _get_memory_config(redis_host: str, redis_port: int) -> Dict[str, Any]:
         },
         "chromadb": {
             "path": os.getenv("AUTOBOT_CHROMADB_PATH", "data/chromadb"),
-            "collection_name": os.getenv(
-                "AUTOBOT_CHROMADB_COLLECTION", "autobot_memory"
-            ),
+            "collection_name": os.getenv("AUTOBOT_CHROMADB_COLLECTION", "autobot_memory"),
             "hnsw": {
                 "space": os.getenv("AUTOBOT_HNSW_SPACE", "cosine"),
-                "construction_ef": int(
-                    os.getenv("AUTOBOT_HNSW_CONSTRUCTION_EF", "300")
-                ),
+                "construction_ef": int(os.getenv("AUTOBOT_HNSW_CONSTRUCTION_EF", "300")),
                 "search_ef": int(os.getenv("AUTOBOT_HNSW_SEARCH_EF", "100")),
                 "M": int(os.getenv("AUTOBOT_HNSW_M", "32")),
             },
@@ -160,8 +152,7 @@ def _get_prompt_compression_config() -> Dict[str, Any]:
     Issue #620.
     """
     return {
-        "enabled": os.getenv("AUTOBOT_PROMPT_COMPRESSION_ENABLED", "true").lower()
-        == "true",
+        "enabled": os.getenv("AUTOBOT_PROMPT_COMPRESSION_ENABLED", "true").lower() == "true",
         "target_ratio": float(os.getenv("AUTOBOT_PROMPT_COMPRESSION_RATIO", "0.7")),
         "min_length": int(os.getenv("AUTOBOT_PROMPT_COMPRESSION_MIN_LENGTH", "100")),
         "preserve_code_blocks": True,
@@ -175,9 +166,7 @@ def _get_cloud_optimization_config() -> Dict[str, Any]:
     Issue #620.
     """
     return {
-        "connection_pool_size": int(
-            os.getenv("AUTOBOT_CLOUD_CONNECTION_POOL_SIZE", "100")
-        ),
+        "connection_pool_size": int(os.getenv("AUTOBOT_CLOUD_CONNECTION_POOL_SIZE", "100")),
         "batch_window_ms": int(os.getenv("AUTOBOT_CLOUD_BATCH_WINDOW_MS", "50")),
         "max_batch_size": int(os.getenv("AUTOBOT_CLOUD_MAX_BATCH_SIZE", "10")),
         "retry_max_attempts": int(os.getenv("AUTOBOT_CLOUD_RETRY_MAX_ATTEMPTS", "3")),
@@ -192,20 +181,14 @@ def _get_local_optimization_config() -> Dict[str, Any]:
     Issue #620.
     """
     return {
-        "speculation_enabled": os.getenv("AUTOBOT_SPECULATION_ENABLED", "false").lower()
-        == "true",
+        "speculation_enabled": os.getenv("AUTOBOT_SPECULATION_ENABLED", "false").lower() == "true",
         "speculation_draft_model": os.getenv("AUTOBOT_SPECULATION_DRAFT_MODEL", ""),
         "speculation_num_tokens": int(os.getenv("AUTOBOT_SPECULATION_NUM_TOKENS", "5")),
-        "speculation_use_ngram": os.getenv(
-            "AUTOBOT_SPECULATION_USE_NGRAM", "false"
-        ).lower()
-        == "true",
+        "speculation_use_ngram": os.getenv("AUTOBOT_SPECULATION_USE_NGRAM", "false").lower() == "true",
         "quantization_type": os.getenv("AUTOBOT_QUANTIZATION_TYPE", "none"),
         "vllm_multi_step": int(os.getenv("AUTOBOT_VLLM_MULTI_STEP", "8")),
-        "vllm_prefix_caching": os.getenv("AUTOBOT_VLLM_PREFIX_CACHING", "true").lower()
-        == "true",
-        "vllm_async_output": os.getenv("AUTOBOT_VLLM_ASYNC_OUTPUT", "true").lower()
-        == "true",
+        "vllm_prefix_caching": os.getenv("AUTOBOT_VLLM_PREFIX_CACHING", "true").lower() == "true",
+        "vllm_async_output": os.getenv("AUTOBOT_VLLM_ASYNC_OUTPUT", "true").lower() == "true",
     }
 
 
@@ -309,9 +292,7 @@ def _get_celery_config() -> Dict[str, Any]:
     Issue #620.
     """
     return {
-        "visibility_timeout": int(
-            os.getenv("AUTOBOT_CELERY_VISIBILITY_TIMEOUT", "43200")
-        ),
+        "visibility_timeout": int(os.getenv("AUTOBOT_CELERY_VISIBILITY_TIMEOUT", "43200")),
         "result_expires": int(os.getenv("AUTOBOT_CELERY_RESULT_EXPIRES", "86400")),
         "worker_prefetch_multiplier": 1,
         "worker_max_tasks_per_child": 100,

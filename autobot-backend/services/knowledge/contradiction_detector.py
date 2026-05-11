@@ -15,7 +15,7 @@ import logging
 import re
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from autobot_shared.redis_client import get_async_redis_client
@@ -35,10 +35,42 @@ _MIN_GROUP_SIZE = 2
 # Keyword stop-words (ignored when building topic groups)
 _STOPWORDS = frozenset(
     {
-        "the", "a", "an", "is", "are", "was", "were", "be", "been",
-        "and", "or", "but", "if", "in", "on", "at", "to", "for",
-        "of", "with", "by", "from", "as", "it", "its", "this", "that",
-        "which", "not", "no", "so", "do", "did", "have", "has", "had",
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "and",
+        "or",
+        "but",
+        "if",
+        "in",
+        "on",
+        "at",
+        "to",
+        "for",
+        "of",
+        "with",
+        "by",
+        "from",
+        "as",
+        "it",
+        "its",
+        "this",
+        "that",
+        "which",
+        "not",
+        "no",
+        "so",
+        "do",
+        "did",
+        "have",
+        "has",
+        "had",
     }
 )
 
@@ -171,9 +203,7 @@ class ContradictionDetector:
     def __init__(self, llm_interface=None) -> None:
         self._llm = llm_interface or get_llm_service()
 
-    async def _check_group(
-        self, texts: list[str]
-    ) -> tuple[list[ConflictPair], list[str]]:
+    async def _check_group(self, texts: list[str]) -> tuple[list[ConflictPair], list[str]]:
         """Run LLM contradiction check on a single group of texts."""
         prompt = _build_prompt(texts)
         response = await self._llm.chat(
@@ -200,9 +230,7 @@ class ContradictionDetector:
             ContradictionReport with all found contradictions and gaps.
         """
         groups = _group_chunks(chunks)
-        logger.info(
-            "Contradiction scan: %d chunks → %d groups", len(chunks), len(groups)
-        )
+        logger.info("Contradiction scan: %d chunks → %d groups", len(chunks), len(groups))
 
         all_conflicts: list[ConflictPair] = []
         all_gaps: list[str] = []

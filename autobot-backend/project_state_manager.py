@@ -19,8 +19,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PATH
 from utils.service_registry import get_service_url
@@ -104,9 +104,7 @@ class ProjectStateManager:
     def __init__(self, db_path: str = None):
         """Initialize project state manager with database and phase definitions."""
         if db_path is None:
-            db_path = os.getenv(
-                "AUTOBOT_PROJECT_STATE_DB_PATH", "data/project_state.db"
-            )
+            db_path = os.getenv("AUTOBOT_PROJECT_STATE_DB_PATH", "data/project_state.db")
         self.db_path = db_path
         # Use centralized PathConstants (Issue #380)
         self.project_root = PATH.PROJECT_ROOT
@@ -121,9 +119,7 @@ class ProjectStateManager:
         self._define_phases()
         self._load_state()
 
-        logger.info(
-            f"ProjectStateManager initialized. Current phase: {self.current_phase.value}"
-        )
+        logger.info(f"ProjectStateManager initialized. Current phase: {self.current_phase.value}")
 
     def _create_project_phases_table(self, cursor: sqlite3.Cursor) -> None:
         """Create project_phases table."""
@@ -272,11 +268,7 @@ class ProjectStateManager:
 
     def _get_phase4_capabilities(self) -> List[PhaseCapability]:
         """Get Phase 4 System Integration capabilities."""
-        ws_url = (
-            get_service_url("backend", "/ws")
-            .replace("http://", "ws://")
-            .replace("https://", "wss://")
-        )
+        ws_url = get_service_url("backend", "/ws").replace("http://", "ws://").replace("https://", "wss://")
         return [
             PhaseCapability(
                 "terminal_integration",
@@ -410,9 +402,7 @@ class ProjectStateManager:
 
     def _load_phase_status(self, cursor) -> None:
         """Load phase completion status (Issue #315 - extracted helper)."""
-        cursor.execute(
-            "SELECT phase_id, completion_percentage, is_active, is_completed FROM project_phases"
-        )
+        cursor.execute("SELECT phase_id, completion_percentage, is_active, is_completed FROM project_phases")
         for row in cursor.fetchall():
             phase_id, completion, is_active, is_completed = row
             try:
@@ -474,9 +464,7 @@ class ProjectStateManager:
         info: DevelopmentPhaseInfo,
     ) -> None:
         """Save a phase's capabilities to database."""
-        cursor.execute(
-            "DELETE FROM phase_capabilities WHERE phase_id = ?", (phase.value,)
-        )
+        cursor.execute("DELETE FROM phase_capabilities WHERE phase_id = ?", (phase.value,))
         for capability in info.capabilities:
             cursor.execute(
                 """
@@ -528,9 +516,7 @@ class ProjectStateManager:
         """
         return await asyncio.to_thread(self.validate_all_phases)
 
-    async def validate_phase_async(
-        self, phase: DevelopmentPhase
-    ) -> List[ValidationResult]:
+    async def validate_phase_async(self, phase: DevelopmentPhase) -> List[ValidationResult]:
         """Validate all capabilities in a phase asynchronously.
 
         Issue #357: Async wrapper for non-blocking validation operations.
@@ -565,17 +551,10 @@ class ProjectStateManager:
     def _validate_api_endpoint(self, capability: PhaseCapability) -> ValidationResult:
         """Validate API endpoint (Issue #315)."""
         # URGENT FIX: Prevent circular dependency deadlock for self-referential endpoints
-        backend_url = (
-            f"{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-        )
-        backend_localhost = (
-            f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
-        )
+        backend_url = f"{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+        backend_localhost = f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
 
-        if (
-            backend_url in capability.validation_target
-            or backend_localhost in capability.validation_target
-        ):
+        if backend_url in capability.validation_target or backend_localhost in capability.validation_target:
             return ValidationResult(
                 capability.name,
                 ValidationStatus.PASSED,
@@ -602,9 +581,7 @@ class ProjectStateManager:
                 f"API endpoint failed: {str(e)}",
             )
 
-    def _validate_websocket_endpoint(
-        self, capability: PhaseCapability
-    ) -> ValidationResult:
+    def _validate_websocket_endpoint(self, capability: PhaseCapability) -> ValidationResult:
         """Validate WebSocket endpoint (Issue #315)."""
         return ValidationResult(
             capability.name,
@@ -631,9 +608,7 @@ class ProjectStateManager:
             f"Function test '{capability.validation_target}' not implemented",
         )
 
-    def _validate_all_phases_test(
-        self, capability: PhaseCapability
-    ) -> ValidationResult:
+    def _validate_all_phases_test(self, capability: PhaseCapability) -> ValidationResult:
         """Self-referential validation test (Issue #315)."""
         return ValidationResult(
             capability.name,
@@ -642,24 +617,19 @@ class ProjectStateManager:
             "Phase validation system is operational",
         )
 
-    def _validate_phase_completion_test(
-        self, capability: PhaseCapability
-    ) -> ValidationResult:
+    def _validate_phase_completion_test(self, capability: PhaseCapability) -> ValidationResult:
         """Validate phase completion logic (Issue #315)."""
         try:
             test_results = []
             for test_phase in self.phases:
                 result = self.check_phase_completion(test_phase)
-                test_results.append(
-                    f"{test_phase.value}: {'Complete' if result else 'Incomplete'}"
-                )
+                test_results.append(f"{test_phase.value}: {'Complete' if result else 'Incomplete'}")
 
             return ValidationResult(
                 capability.name,
                 ValidationStatus.PASSED,
                 1.0,
-                "Automated phase progression logic operational"
-                f" - {len(test_results)} phases tested",
+                "Automated phase progression logic operational" f" - {len(test_results)} phases tested",
             )
         except Exception as e:
             return ValidationResult(
@@ -717,19 +687,13 @@ class ProjectStateManager:
             capability.last_validated = result.timestamp
             capability.validation_details = result.details
 
-            logger.debug(
-                f"  {capability.name}: {result.status.value} ({result.score:.1f})"
-            )
+            logger.debug(f"  {capability.name}: {result.status.value} ({result.score:.1f})")
 
         # Calculate completion percentage
         if phase_info.capabilities:
             total_score = sum(r.score for r in results)
-            phase_info.completion_percentage = total_score / len(
-                phase_info.capabilities
-            )
-            phase_info.is_completed = (
-                phase_info.completion_percentage >= 0.9
-            )  # 90% threshold
+            phase_info.completion_percentage = total_score / len(phase_info.capabilities)
+            phase_info.is_completed = phase_info.completion_percentage >= 0.9  # 90% threshold
 
         phase_info.validation_results = results
         phase_info.last_validated = datetime.now(tz=timezone.utc)
@@ -799,9 +763,7 @@ class ProjectStateManager:
 
         # Check if current phase should be marked as completed
         current_phase_info = self.phases[self.current_phase]
-        if not current_phase_info.is_completed and self.check_phase_completion(
-            self.current_phase
-        ):
+        if not current_phase_info.is_completed and self.check_phase_completion(self.current_phase):
             current_phase_info.is_completed = True
             changes_made = True
             progression_log.append(f"✅ Marked {current_phase_info.name} as completed")
@@ -841,17 +803,14 @@ class ProjectStateManager:
         current_time = time.time()
         if (
             _project_status_cache["data"]
-            and current_time - _project_status_cache["timestamp"]
-            < _project_status_cache["ttl"]
+            and current_time - _project_status_cache["timestamp"] < _project_status_cache["ttl"]
         ):
             return _project_status_cache["data"]
         return None
 
     def _get_last_validation_time(self) -> Optional[datetime]:
         """Get the most recent validation timestamp across all phases."""
-        validated_times = [
-            info.last_validated for info in self.phases.values() if info.last_validated
-        ]
+        validated_times = [info.last_validated for info in self.phases.values() if info.last_validated]
         return max(validated_times, default=None) if validated_times else None
 
     def _build_phase_details(self) -> Dict[str, Dict[str, Any]]:
@@ -863,9 +822,7 @@ class ProjectStateManager:
                 "is_active": info.is_active,
                 "is_completed": info.is_completed,
                 "capabilities": len(info.capabilities),
-                "implemented_capabilities": sum(
-                    1 for c in info.capabilities if c.implemented
-                ),
+                "implemented_capabilities": sum(1 for c in info.capabilities if c.implemented),
             }
             for phase, info in self.phases.items()
         }
@@ -881,14 +838,9 @@ class ProjectStateManager:
         status_data = {
             "current_phase": self.current_phase.value,
             "total_phases": total_phases,
-            "completed_phases": sum(
-                1 for info in self.phases.values() if info.is_completed
-            ),
+            "completed_phases": sum(1 for info in self.phases.values() if info.is_completed),
             "active_phases": sum(1 for info in self.phases.values() if info.is_active),
-            "overall_completion": sum(
-                info.completion_percentage for info in self.phases.values()
-            )
-            / total_phases,
+            "overall_completion": sum(info.completion_percentage for info in self.phases.values()) / total_phases,
             "next_suggested_phase": self.suggest_next_phase(),
             "last_validation": self._get_last_validation_time(),
             "phases": self._build_phase_details(),
@@ -907,8 +859,7 @@ class ProjectStateManager:
         current_time = time.time()
         if (
             _project_status_cache["data"]
-            and current_time - _project_status_cache["timestamp"]
-            < _project_status_cache["ttl"]
+            and current_time - _project_status_cache["timestamp"] < _project_status_cache["ttl"]
         ):
             return _project_status_cache["data"]
 
@@ -920,10 +871,7 @@ class ProjectStateManager:
         completed_phases = sum(1 for info in self.phases.values() if info.is_completed)
         active_phases = sum(1 for info in self.phases.values() if info.is_active)
         overall_completion = (
-            sum(info.completion_percentage for info in self.phases.values())
-            / total_phases
-            if total_phases > 0
-            else 0.0
+            sum(info.completion_percentage for info in self.phases.values()) / total_phases if total_phases > 0 else 0.0
         )
 
         return {
@@ -941,9 +889,7 @@ class ProjectStateManager:
                     "is_active": info.is_active,
                     "is_completed": info.is_completed,
                     "capabilities": len(info.capabilities),
-                    "implemented_capabilities": sum(
-                        1 for cap in info.capabilities if cap.implemented
-                    ),
+                    "implemented_capabilities": sum(1 for cap in info.capabilities if cap.implemented),
                 }
                 for phase, info in self.phases.items()
             },
@@ -959,13 +905,9 @@ class ProjectStateManager:
         report.append(f"Generated: {datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
         report.append("")
         report.append("## Overall Status")
-        report.append(
-            f"- Current Phase: **{status['current_phase'].replace('_', ' ').title()}**"
-        )
+        report.append(f"- Current Phase: **{status['current_phase'].replace('_', ' ').title()}**")
         report.append(f"- Overall Completion: **{status['overall_completion']:.1%}**")
-        report.append(
-            f"- Completed Phases: {status['completed_phases']}/{status['total_phases']}"
-        )
+        report.append(f"- Completed Phases: {status['completed_phases']}/{status['total_phases']}")
         report.append("")
 
         report.append("## Phase Details")
@@ -1008,16 +950,10 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="AutoBot Project State Manager")
-    parser.add_argument(
-        "--validate", action="store_true", help="Run validation on all phases"
-    )
+    parser.add_argument("--validate", action="store_true", help="Run validation on all phases")
     parser.add_argument("--status", action="store_true", help="Show project status")
-    parser.add_argument(
-        "--report", action="store_true", help="Generate validation report"
-    )
-    parser.add_argument(
-        "--auto-progress", action="store_true", help="Run automated phase progression"
-    )
+    parser.add_argument("--report", action="store_true", help="Generate validation report")
+    parser.add_argument("--auto-progress", action="store_true", help="Run automated phase progression")
 
     args = parser.parse_args()
 

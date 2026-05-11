@@ -51,9 +51,7 @@ class HybridSearcher:
     ) -> None:
         """Process results for RRF scoring. Issue #281: Extracted helper."""
         for rank, result in enumerate(results):
-            fact_id = result.get("metadata", {}).get("fact_id") or result.get(
-                "node_id", f"{prefix}_{rank}"
-            )
+            fact_id = result.get("metadata", {}).get("fact_id") or result.get("node_id", f"{prefix}_{rank}")
             rrf_scores[fact_id] = rrf_scores.get(fact_id, 0) + (1 / (k + rank + 1))
             if fact_id not in result_map:
                 result_map[fact_id] = result
@@ -65,9 +63,7 @@ class HybridSearcher:
         limit: int,
     ) -> List[Dict[str, Any]]:
         """Build final RRF-ranked results. Issue #281: Extracted helper."""
-        sorted_ids = sorted(
-            rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True
-        )
+        sorted_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
         max_rrf = max(rrf_scores.values()) if rrf_scores else 1
         results = []
         for fact_id in sorted_ids[:limit]:
@@ -120,29 +116,19 @@ class HybridSearcher:
                     mode="vector",
                 )
             )
-            keyword_task = asyncio.create_task(
-                self.keyword_search(query, limit, category)
-            )
-            semantic_results, keyword_results = await asyncio.gather(
-                semantic_task, keyword_task
-            )
+            keyword_task = asyncio.create_task(self.keyword_search(query, limit, category))
+            semantic_results, keyword_results = await asyncio.gather(semantic_task, keyword_task)
 
             # Reciprocal Rank Fusion
             rrf_scores: Dict[str, float] = {}
             result_map: Dict[str, Dict[str, Any]] = {}
 
-            self.process_rrf_results(
-                semantic_results, rrf_scores, result_map, self.RRF_K, "sem"
-            )
-            self.process_rrf_results(
-                keyword_results, rrf_scores, result_map, self.RRF_K, "kw"
-            )
+            self.process_rrf_results(semantic_results, rrf_scores, result_map, self.RRF_K, "sem")
+            self.process_rrf_results(keyword_results, rrf_scores, result_map, self.RRF_K, "kw")
 
             return self.build_rrf_results(rrf_scores, result_map, limit)
 
         except Exception as e:
             logger.error("Hybrid search failed: %s", e)
             # Fallback to semantic search
-            return await self.semantic_search(
-                query, top_k=limit, filters=semantic_filters, mode="vector"
-            )
+            return await self.semantic_search(query, top_k=limit, filters=semantic_filters, mode="vector")

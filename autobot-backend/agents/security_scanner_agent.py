@@ -49,9 +49,7 @@ class SecurityScannerAgent(StandardizedAgent):
         """Initialize security scanner agent (#3387: migrated to StandardizedAgent)."""
         super().__init__("security_scanner", DeploymentMode.LOCAL)
         self.name = "security_scanner"
-        self.description = (
-            "Performs defensive security scans and vulnerability assessments"
-        )
+        self.description = "Performs defensive security scans and vulnerability assessments"
         self.supported_scan_types = _SUPPORTED_SCAN_TYPES
 
         # Register action handlers for StandardizedAgent routing
@@ -106,15 +104,11 @@ class SecurityScannerAgent(StandardizedAgent):
 
     async def _handle_service_detection(self, request) -> Dict[str, Any]:
         """Handle service_detection action via StandardizedAgent routing."""
-        return await self._service_detection(
-            request.payload["target"], dict(request.payload)
-        )
+        return await self._service_detection(request.payload["target"], dict(request.payload))
 
     async def _handle_vulnerability_scan(self, request) -> Dict[str, Any]:
         """Handle vulnerability_scan action via StandardizedAgent routing."""
-        return await self._vulnerability_scan(
-            request.payload["target"], dict(request.payload)
-        )
+        return await self._vulnerability_scan(request.payload["target"], dict(request.payload))
 
     async def _handle_ssl_scan(self, request) -> Dict[str, Any]:
         """Handle ssl_scan action via StandardizedAgent routing."""
@@ -122,9 +116,7 @@ class SecurityScannerAgent(StandardizedAgent):
 
     async def _handle_dns_enum(self, request) -> Dict[str, Any]:
         """Handle dns_enum action via StandardizedAgent routing."""
-        return await self._dns_enumeration(
-            request.payload["target"], dict(request.payload)
-        )
+        return await self._dns_enumeration(request.payload["target"], dict(request.payload))
 
     async def _handle_web_scan(self, request) -> Dict[str, Any]:
         """Handle web_scan action via StandardizedAgent routing."""
@@ -251,9 +243,7 @@ class SecurityScannerAgent(StandardizedAgent):
             logger.error("Port scan failed: %s", e)
             return {"status": "error", "message": "Port scan failed"}
 
-    async def _service_detection(
-        self, target: str, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _service_detection(self, target: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Detect services running on open ports"""
         try:
             ports = context.get("ports", "1-1000")
@@ -280,9 +270,7 @@ class SecurityScannerAgent(StandardizedAgent):
             logger.error("Service detection failed: %s", e)
             return {"status": "error", "message": "Service detection failed"}
 
-    async def _vulnerability_scan(
-        self, target: str, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _vulnerability_scan(self, target: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Perform basic vulnerability scanning"""
         try:
             # For a real implementation, you might use:
@@ -294,9 +282,7 @@ class SecurityScannerAgent(StandardizedAgent):
             # Basic example using nmap vulnerability scripts
             cmd = ["nmap", "--script", "vuln", "-p-", target]
 
-            result = await run_agent_command(
-                cmd, timeout=TimingConstants.VERY_LONG_TIMEOUT
-            )  # 5 minute timeout
+            result = await run_agent_command(cmd, timeout=TimingConstants.VERY_LONG_TIMEOUT)  # 5 minute timeout
 
             if result["status"] == "success":
                 vulnerabilities = self._parse_vulnerabilities(result["output"])
@@ -347,9 +333,7 @@ class SecurityScannerAgent(StandardizedAgent):
             logger.error("SSL scan failed: %s", e)
             return {"status": "error", "message": "SSL scan failed"}
 
-    async def _dns_enumeration(
-        self, target: str, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _dns_enumeration(self, target: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Perform DNS enumeration"""
         try:
             # Use multiple tools for comprehensive enumeration
@@ -360,9 +344,7 @@ class SecurityScannerAgent(StandardizedAgent):
                 cmd = ["dig", "+short", record_type, target]
                 result = await run_agent_command(cmd)
                 if result["status"] == "success" and result["output"].strip():
-                    results["dns_records"][record_type] = (
-                        result["output"].strip().split("\n")
-                    )
+                    results["dns_records"][record_type] = result["output"].strip().split("\n")
 
             # Basic subdomain enumeration (Issue #380: use module constant)
             for subdomain in _COMMON_SUBDOMAINS:
@@ -370,9 +352,7 @@ class SecurityScannerAgent(StandardizedAgent):
                 cmd = ["dig", "+short", "A", full_domain]
                 result = await run_agent_command(cmd)
                 if result["status"] == "success" and result["output"].strip():
-                    results["subdomains"].append(
-                        {"subdomain": full_domain, "ip": result["output"].strip()}
-                    )
+                    results["subdomains"].append({"subdomain": full_domain, "ip": result["output"].strip()})
 
             return {
                 "status": "success",
@@ -385,9 +365,7 @@ class SecurityScannerAgent(StandardizedAgent):
             logger.error("DNS enumeration failed: %s", e)
             return {"status": "error", "message": "DNS enumeration failed"}
 
-    async def _check_robots_txt(
-        self, http_client, target: str, findings: List[Dict]
-    ) -> None:
+    async def _check_robots_txt(self, http_client, target: str, findings: List[Dict]) -> None:
         """Check for robots.txt (Issue #334 - extracted helper)."""
         try:
             async with await http_client.get(f"{target}/robots.txt") as response:
@@ -402,9 +380,7 @@ class SecurityScannerAgent(StandardizedAgent):
         except Exception as e:
             logger.debug("robots.txt not accessible: %s", e)
 
-    async def _check_admin_path(
-        self, http_client, target: str, path: str, findings: List[Dict]
-    ) -> None:
+    async def _check_admin_path(self, http_client, target: str, path: str, findings: List[Dict]) -> None:
         """Check single admin path (Issue #334 - extracted helper)."""
         try:
             async with await http_client.get(f"{target}{path}") as response:
@@ -430,9 +406,7 @@ class SecurityScannerAgent(StandardizedAgent):
 
             admin_paths = ["/admin", "/login", "/wp-admin", "/.git", "/.env"]
             for path in admin_paths:
-                await self._check_admin_path(
-                    http_client, target, path, results["findings"]
-                )
+                await self._check_admin_path(http_client, target, path, results["findings"])
 
             return {
                 "status": "success",
@@ -495,9 +469,7 @@ class SecurityScannerAgent(StandardizedAgent):
                         {
                             "vulnerability": lines[0].strip(),
                             "severity": "unknown",
-                            "description": (
-                                "\n".join(lines[1:3]) if len(lines) > 1 else ""
-                            ),
+                            "description": ("\n".join(lines[1:3]) if len(lines) > 1 else ""),
                         }
                     )
         return vulnerabilities

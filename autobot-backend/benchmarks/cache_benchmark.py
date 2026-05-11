@@ -8,12 +8,12 @@ Inspired by flash-moe's "Trust the OS" finding (removing custom cache = +38%).
 Usage: python -m benchmarks.cache_benchmark
 """
 
-import asyncio
 import logging
 import statistics
 import time
 from typing import Any, Dict, List
 
+from autobot_shared.async_compat import run_or_schedule
 from llm_interface_pkg.cache import CachedResponse, LLMResponseCache
 
 logger = logging.getLogger(__name__)
@@ -44,9 +44,7 @@ async def benchmark_l2_hit(cache: LLMResponseCache, keys: List[str]) -> List[flo
     return latencies
 
 
-async def run_benchmark(
-    num_entries: int = 100, num_reads: int = 1000
-) -> Dict[str, Any]:
+async def run_benchmark(num_entries: int = 100, num_reads: int = 1000) -> Dict[str, Any]:
     """Run the full L1 vs L2 benchmark."""
     cache = LLMResponseCache(memory_cache_max_size=num_entries * 2, redis_ttl=300)
 
@@ -116,4 +114,4 @@ async def run_benchmark(
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    asyncio.run(run_benchmark())
+    run_or_schedule(run_benchmark())

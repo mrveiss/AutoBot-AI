@@ -42,24 +42,14 @@ def upgrade() -> None:
     )
 
     # Create indexes for fast lookup
-    op.create_index(
-        "ix_pattern_lookup", "code_patterns", ["pattern_type", "language", "category"]
-    )
-    op.create_index(
-        "ix_pattern_frequency", "code_patterns", ["frequency", "acceptance_rate"]
-    )
-    op.create_index(
-        "ix_pattern_language_type", "code_patterns", ["language", "pattern_type"]
-    )
-    op.create_index(
-        op.f("ix_code_patterns_pattern_type"), "code_patterns", ["pattern_type"]
-    )
+    op.create_index("ix_pattern_lookup", "code_patterns", ["pattern_type", "language", "category"])
+    op.create_index("ix_pattern_frequency", "code_patterns", ["frequency", "acceptance_rate"])
+    op.create_index("ix_pattern_language_type", "code_patterns", ["language", "pattern_type"])
+    op.create_index(op.f("ix_code_patterns_pattern_type"), "code_patterns", ["pattern_type"])
     op.create_index(op.f("ix_code_patterns_language"), "code_patterns", ["language"])
     op.create_index(op.f("ix_code_patterns_category"), "code_patterns", ["category"])
     op.create_index(op.f("ix_code_patterns_frequency"), "code_patterns", ["frequency"])
-    op.create_index(
-        op.f("ix_code_patterns_acceptance_rate"), "code_patterns", ["acceptance_rate"]
-    )
+    op.create_index(op.f("ix_code_patterns_acceptance_rate"), "code_patterns", ["acceptance_rate"])
 
 
 def downgrade() -> None:

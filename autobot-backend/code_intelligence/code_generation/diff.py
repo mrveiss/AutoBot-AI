@@ -49,9 +49,7 @@ class DiffGenerator:
         return "".join(diff)
 
     @classmethod
-    def generate_side_by_side(
-        cls, original: str, modified: str, width: int = 80
-    ) -> str:
+    def generate_side_by_side(cls, original: str, modified: str, width: int = 80) -> str:
         """Generate side-by-side comparison."""
         original_lines = original.splitlines()
         modified_lines = modified.splitlines()

@@ -107,9 +107,13 @@ jobs:
       run: |
         echo "Running code quality checks..."
 
-        # Code formatting check (matches pre-commit black config)
+        # Code formatting check — must match project standard (pyproject.toml
+        # [tool.black] line-length=120). The previous --line-length=88 disagreed
+        # with the codebase and reported 1864 files "would be reformatted"
+        # because long lines that legitimately fit within 120 exceeded the
+        # stricter 88. (#7496)
         echo "Checking code formatting with black..."
-        black --check autobot-backend/ autobot-slm-backend/ autobot_shared/ --line-length=88
+        black --check autobot-backend/ autobot-slm-backend/ autobot_shared/ --line-length=120
 
         # Import sorting check — reads pyproject.toml for profile, src_paths, known_first_party (#2679)
         echo "Checking import sorting with isort..."

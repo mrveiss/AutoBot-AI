@@ -143,9 +143,7 @@ class PlaywrightSecurityFixer:
             logger.error("Failed to create backup: %s", e)
             return ""
 
-    def scan_for_xss_patterns(
-        self, content: str, file_path: str
-    ) -> List[Dict[str, Any]]:
+    def scan_for_xss_patterns(self, content: str, file_path: str) -> List[Dict[str, Any]]:
         """Scan for XSS vulnerability patterns."""
         vulnerabilities = []
 
@@ -229,15 +227,9 @@ class PlaywrightSecurityFixer:
         # Check if CSP already exists
         if "Content-Security-Policy" not in head_content:
             new_head_content = head_content + security_headers
-            new_content = content.replace(
-                head_match.group(), head_start + new_head_content + head_end
-            )
-            enhancements.append(
-                "Content Security Policy (CSP) injected - Playwright optimized"
-            )
-            enhancements.append(
-                "Security meta tags added (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection)"
-            )
+            new_content = content.replace(head_match.group(), head_start + new_head_content + head_end)
+            enhancements.append("Content Security Policy (CSP) injected - Playwright optimized")
+            enhancements.append("Security meta tags added (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection)")
             return new_content, enhancements
         else:
             enhancements.append("CSP already present - no injection needed")
@@ -258,24 +250,15 @@ class PlaywrightSecurityFixer:
             match = re.search(pattern, content, re.IGNORECASE)
             if match:
                 insert_pos = match.start()
-                new_content = (
-                    content[:insert_pos]
-                    + protection_script
-                    + "\n"
-                    + content[insert_pos:]
-                )
+                new_content = content[:insert_pos] + protection_script + "\n" + content[insert_pos:]
                 enhancements.append("Runtime XSS protection script injected")
                 return new_content, enhancements
 
         # Fallback: append before closing body
         body_end = content.rfind("</body>")
         if body_end != -1:
-            new_content = (
-                content[:body_end] + protection_script + "\n" + content[body_end:]
-            )
-            enhancements.append(
-                "Runtime XSS protection script injected (fallback position)"
-            )
+            new_content = content[:body_end] + protection_script + "\n" + content[body_end:]
+            enhancements.append("Runtime XSS protection script injected (fallback position)")
             return new_content, enhancements
 
         return content, enhancements
@@ -288,9 +271,7 @@ class PlaywrightSecurityFixer:
         """
         severity_counts: Dict[str, int] = {}
         for vuln in vulnerabilities:
-            severity_counts[vuln["severity"]] = (
-                severity_counts.get(vuln["severity"], 0) + 1
-            )
+            severity_counts[vuln["severity"]] = severity_counts.get(vuln["severity"], 0) + 1
         severity_icons = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}
         for severity, count in severity_counts.items():
             icon = severity_icons.get(severity, "⚪")
@@ -333,9 +314,7 @@ class PlaywrightSecurityFixer:
             original_hash = hashlib.sha256(original_content.encode()).hexdigest()
 
             vulnerabilities = self.scan_for_xss_patterns(original_content, file_path)
-            logger.info(
-                "Found %d potential XSS vulnerability patterns", len(vulnerabilities)
-            )
+            logger.info("Found %d potential XSS vulnerability patterns", len(vulnerabilities))
 
             # Issue #1183: Delegate severity logging to extracted helper
             self._log_vuln_severity_summary(vulnerabilities)
@@ -350,9 +329,7 @@ class PlaywrightSecurityFixer:
                     enhanced_content,
                     all_enhancements,
                     enhanced_hash,
-                ) = self._apply_and_write_html(
-                    original_content, original_size, file_path
-                )
+                ) = self._apply_and_write_html(original_content, original_size, file_path)
             except ValueError as ve:
                 logger.info("❌ Enhanced content appears corrupted")
                 return {"file": file_path, "status": "error", "error": str(ve)}
@@ -388,17 +365,11 @@ class PlaywrightSecurityFixer:
             "total_files": len(results),
             "enhanced_files": len([r for r in results if r["status"] == "enhanced"]),
             "error_files": len([r for r in results if r["status"] == "error"]),
-            "total_vulnerabilities": sum(
-                r.get("vulnerabilities_found", 0) for r in results
-            ),
-            "total_enhancements": sum(
-                r.get("enhancements_applied", 0) for r in results
-            ),
+            "total_vulnerabilities": sum(r.get("vulnerabilities_found", 0) for r in results),
+            "total_enhancements": sum(r.get("enhancements_applied", 0) for r in results),
         }
 
-    def _populate_report_data(
-        self, results: List[Dict[str, Any]], stats: Dict[str, int]
-    ) -> None:
+    def _populate_report_data(self, results: List[Dict[str, Any]], stats: Dict[str, int]) -> None:
         """
         Populate self.report with summary and detailed results.
         Issue #281: Extracted from generate_security_report to reduce function length.
@@ -414,9 +385,7 @@ class PlaywrightSecurityFixer:
         for result in results:
             if result["status"] == "enhanced":
                 self.report["vulnerabilities"].extend(result.get("vulnerabilities", []))
-                self.report["security_enhancements"].extend(
-                    result.get("enhancements", [])
-                )
+                self.report["security_enhancements"].extend(result.get("enhancements", []))
 
     def _build_vulnerability_analysis(self) -> str:
         """
@@ -472,12 +441,8 @@ class PlaywrightSecurityFixer:
             content += f"- **Status:** {result['status'].upper()}\n"
 
             if result["status"] == "enhanced":
-                content += (
-                    f"- **Vulnerabilities Found:** {result['vulnerabilities_found']}\n"
-                )
-                content += (
-                    f"- **Security Enhancements:** {result['enhancements_applied']}\n"
-                )
+                content += f"- **Vulnerabilities Found:** {result['vulnerabilities_found']}\n"
+                content += f"- **Security Enhancements:** {result['enhancements_applied']}\n"
                 content += f"- **Backup Location:** `{result['backup_path']}`\n"
                 content += f"- **File Size:** {result['original_size']:,} → {result['enhanced_size']:,} bytes\n"
 
@@ -589,9 +554,7 @@ class PlaywrightSecurityFixer:
         # Find HTML files to process
         html_files = []
 
-        if os.path.isfile(target_path) and target_path.lower().endswith(
-            _HTML_EXTENSIONS
-        ):
+        if os.path.isfile(target_path) and target_path.lower().endswith(_HTML_EXTENSIONS):
             html_files = [target_path]
         elif os.path.isdir(target_path):
             logger.info("Scanning directory: %s", target_path)
@@ -616,9 +579,7 @@ class PlaywrightSecurityFixer:
         logger.info("\n📊 Generating security report...")
         report_content = self.generate_security_report(results)
 
-        output_dir = (
-            os.path.dirname(target_path) if os.path.isfile(target_path) else target_path
-        )
+        output_dir = os.path.dirname(target_path) if os.path.isfile(target_path) else target_path
         report_path = self.save_report(report_content, output_dir)
 
         if report_path:
@@ -647,14 +608,10 @@ class PlaywrightSecurityFixer:
 def main():
     """Main entry point."""
     if len(sys.argv) != 2:
-        logger.info(
-            "Usage: python playwright_security_fixer.py <file_or_directory_path>"
-        )
+        logger.info("Usage: python playwright_security_fixer.py <file_or_directory_path>")
         logger.info("\nExamples:")
         logger.info("  python playwright_security_fixer.py tests/playwright-report/")
-        logger.info(
-            "  python playwright_security_fixer.py tests/playwright-report/index.html"
-        )
+        logger.info("  python playwright_security_fixer.py tests/playwright-report/index.html")
         sys.exit(1)
 
     target_path = sys.argv[1]

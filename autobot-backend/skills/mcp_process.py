@@ -15,11 +15,11 @@ import os
 import sys
 import tempfile
 import time
-from autobot_shared.singleton_factory import lazy_singleton
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.fire_and_forget import run_redis_write
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from skills.mcp_trace import MCPSpan, new_span, write_span
 

@@ -37,9 +37,7 @@ class TransformersProvider:
 
         try:
             # Use local LLM fallback for now
-            response = await local_llm.generate(
-                "\n".join([f"{m['role']}: {m['content']}" for m in request.messages])
-            )
+            response = await local_llm.generate("\n".join([f"{m['role']}: {m['content']}" for m in request.messages]))
 
             processing_time = time.time() - start_time
 

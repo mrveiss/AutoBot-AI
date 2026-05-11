@@ -29,7 +29,7 @@ from .attention_backend import (
     AttentionBackendSelector,
 )
 from .attention_backend import ModelConfig as AttentionModelConfig
-from .hf_quantizer import HfQuantizerWrapper, QuantizationType, QuantizerConfig
+from .hf_quantizer import HfQuantizerWrapper
 from .kv_cache import KVCacheConfig, KVCacheManager, LayerKVCache
 from .layer_inference import LayerInferenceConfig, LayerInferenceEngine
 from .meta_eviction import MetaDeviceEvictionManager, clean_memory
@@ -309,23 +309,14 @@ class LayerInferencePipeline:
 
         Issue #3140.
         """
-        num_layers = (
-            model_cfg.get("num_hidden_layers")
-            or model_cfg.get("n_layer")
-            or model_cfg.get("num_layers")
-            or 1
-        )
+        num_layers = model_cfg.get("num_hidden_layers") or model_cfg.get("n_layer") or model_cfg.get("num_layers") or 1
         num_heads = (
             model_cfg.get("num_key_value_heads")
             or model_cfg.get("num_attention_heads")
             or model_cfg.get("n_head")
             or _DEFAULT_NUM_HEADS
         )
-        hidden_size = (
-            model_cfg.get("hidden_size")
-            or model_cfg.get("n_embd")
-            or (_DEFAULT_HEAD_DIM * int(num_heads))
-        )
+        hidden_size = model_cfg.get("hidden_size") or model_cfg.get("n_embd") or (_DEFAULT_HEAD_DIM * int(num_heads))
         head_dim = int(hidden_size) // int(num_heads)
         return {
             "num_layers": int(num_layers),

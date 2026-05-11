@@ -81,9 +81,7 @@ class ConversationSafetyGuards:
 
         return violated
 
-    def _check_intent_rules(
-        self, classification: IntentClassification, context: ConversationContext
-    ) -> list[str]:
+    def _check_intent_rules(self, classification: IntentClassification, context: ConversationContext) -> list[str]:
         """
         Check intent-based safety rules.
 
@@ -127,11 +125,7 @@ class ConversationSafetyGuards:
         violated_rules.extend(self._check_intent_rules(classification, context))
 
         if violated_rules:
-            override_intent = (
-                ConversationIntent.CONTINUE
-                if classification.intent == ConversationIntent.END
-                else None
-            )
+            override_intent = ConversationIntent.CONTINUE if classification.intent == ConversationIntent.END else None
 
             return SafetyCheckResult(
                 is_safe_to_end=False,

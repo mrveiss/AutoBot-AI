@@ -21,6 +21,7 @@ import pytest
 
 def _make_shared_mock(return_path=None):
     """Build a fake api.codebase_analytics.endpoints.shared module."""
+
     async def fake_resolve(source_id):
         if source_id is None:
             return None
@@ -45,13 +46,7 @@ class TestParseDiff:
         """A single-file diff should produce one entry."""
         from api.analytics_code_review import parse_diff
 
-        diff = (
-            "diff --git a/foo.py b/foo.py\n"
-            "@@ -1,2 +1,3 @@\n"
-            " existing_line\n"
-            "+new_line\n"
-            "-removed_line\n"
-        )
+        diff = "diff --git a/foo.py b/foo.py\n" "@@ -1,2 +1,3 @@\n" " existing_line\n" "+new_line\n" "-removed_line\n"
         result = parse_diff(diff)
         assert len(result) == 1
         assert result[0]["path"] == "foo.py"

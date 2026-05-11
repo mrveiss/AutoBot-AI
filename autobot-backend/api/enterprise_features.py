@@ -10,9 +10,15 @@ import asyncio
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from api.schemas_common import DataResponse
+from api.schemas_workflows import (
+    BulkFeatureRequest,
+    FeatureEnableRequest,
+    PerformanceOptimizationRequest,
+)
 from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -21,20 +27,12 @@ from enterprise_feature_manager import (
     FeatureStatus,
     get_enterprise_manager,
 )
-from api.schemas_common import DataResponse
-from api.schemas_workflows import (
-    BulkFeatureRequest,
-    FeatureEnableRequest,
-    PerformanceOptimizationRequest,
-)
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = logging.getLogger(__name__)
 
 
-def _process_feature_health_result(
-    name: str, feature_health, health_status: dict, counters: dict
-) -> None:
+def _process_feature_health_result(name: str, feature_health, health_status: dict, counters: dict) -> None:
     """Process a single feature health result. (Issue #315 - extracted)"""
     if isinstance(feature_health, Exception):
         feature_health = {"status": "critical", "message": str(feature_health)}
@@ -43,14 +41,10 @@ def _process_feature_health_result(
 
     if feature_health.get("status") == "critical":
         counters["critical"] += 1
-        health_status["critical_issues"].append(
-            f"{name}: {feature_health.get('message', 'Critical issue')}"
-        )
+        health_status["critical_issues"].append(f"{name}: {feature_health.get('message', 'Critical issue')}")
     elif feature_health.get("status") == "warning":
         counters["warnings"] += 1
-        health_status["warnings"].append(
-            f"{name}: {feature_health.get('message', 'Warning')}"
-        )
+        health_status["warnings"].append(f"{name}: {feature_health.get('message', 'Warning')}")
 
 
 def _build_enterprise_feature_details(status: dict) -> dict:
@@ -139,18 +133,12 @@ def _build_enterprise_capabilities(enabled_features: list) -> dict:
     Issue #620.
     """
     return {
-        "web_research_orchestration": (
-            "web_research_orchestration" in enabled_features
-        ),
+        "web_research_orchestration": ("web_research_orchestration" in enabled_features),
         "cross_vm_load_balancing": ("cross_vm_load_balancing" in enabled_features),
         "intelligent_task_routing": ("intelligent_task_routing" in enabled_features),
-        "comprehensive_health_monitoring": (
-            "comprehensive_health_monitoring" in enabled_features
-        ),
+        "comprehensive_health_monitoring": ("comprehensive_health_monitoring" in enabled_features),
         "graceful_degradation": ("graceful_degradation" in enabled_features),
-        "enterprise_configuration": (
-            "enterprise_configuration_management" in enabled_features
-        ),
+        "enterprise_configuration": ("enterprise_configuration_management" in enabled_features),
         "zero_downtime_deployment": ("zero_downtime_deployment" in enabled_features),
     }
 
@@ -166,9 +154,7 @@ def _build_enable_all_response(result: dict, success_rate: float) -> dict:
         "phase": "Phase 4 Final",
         "result": result,
         "success_rate": f"{success_rate * 100:.1f}%",
-        "enterprise_capabilities": _build_enterprise_capabilities(
-            result["enabled_features"]
-        ),
+        "enterprise_capabilities": _build_enterprise_capabilities(result["enabled_features"]),
         "message": (
             f"Phase 4 enterprise features enablement completed: "
             f"{len(result['enabled_features'])}/{result['total_features']} features enabled"
@@ -177,8 +163,7 @@ def _build_enable_all_response(result: dict, success_rate: float) -> dict:
 
     if result["failed_features"]:
         response_data["warnings"] = [
-            f"Failed to enable: {f['feature']} - {f['error']}"
-            for f in result["failed_features"]
+            f"Failed to enable: {f['feature']} - {f['error']}" for f in result["failed_features"]
         ]
 
     return response_data
@@ -190,16 +175,10 @@ def _get_enabled_features_for_health_check(manager) -> list:
 
     Issue #620.
     """
-    return [
-        (name, feature)
-        for name, feature in manager.features.items()
-        if feature.status == FeatureStatus.ENABLED
-    ]
+    return [(name, feature) for name, feature in manager.features.items() if feature.status == FeatureStatus.ENABLED]
 
 
-def _check_features_in_error_state(
-    manager, health_status: dict, counters: dict
-) -> None:
+def _check_features_in_error_state(manager, health_status: dict, counters: dict) -> None:
     """
     Check for features in error state and update health status.
 
@@ -333,9 +312,7 @@ async def enable_enterprise_feature(request: FeatureEnableRequest):
                     "status": "success",
                     "feature": request.feature_name,
                     "result": result,
-                    "message": (
-                        f"Enterprise feature '{request.feature_name}' enabled successfully"
-                    ),
+                    "message": (f"Enterprise feature '{request.feature_name}' enabled successfully"),
                 },
             )
         else:
@@ -345,18 +322,14 @@ async def enable_enterprise_feature(request: FeatureEnableRequest):
                     "status": "error",
                     "feature": request.feature_name,
                     "result": result,
-                    "message": (
-                        f"Failed to enable enterprise feature: {result.get('message', 'Unknown error')}"
-                    ),
+                    "message": (f"Failed to enable enterprise feature: {result.get('message', 'Unknown error')}"),
                 },
             )
 
     except ValueError:
         raise HTTPException(status_code=400, detail="Internal server error")
     except Exception as e:
-        logger.error(
-            "Error enabling enterprise feature %s: %s", request.feature_name, e
-        )
+        logger.error("Error enabling enterprise feature %s: %s", request.feature_name, e)
         raise HTTPException(status_code=500, detail="Failed to enable feature")
 
 
@@ -391,9 +364,7 @@ async def enable_all_enterprise_features():
 
     except Exception as e:
         logger.error("Error enabling all enterprise features: %s", e)
-        raise HTTPException(
-            status_code=500, detail="Failed to enable enterprise features"
-        )
+        raise HTTPException(status_code=500, detail="Failed to enable enterprise features")
 
 
 @router.get("/features", response_model=DataResponse)
@@ -403,12 +374,8 @@ async def enable_all_enterprise_features():
     error_code_prefix="ENTERPRISE_FEATURES",
 )
 async def list_enterprise_features(
-    category: Optional[FeatureCategory] = Query(
-        None, description="Filter by feature category"
-    ),
-    status: Optional[FeatureStatus] = Query(
-        None, description="Filter by feature status"
-    ),
+    category: Optional[FeatureCategory] = Query(None, description="Filter by feature category"),
+    status: Optional[FeatureStatus] = Query(None, description="Filter by feature status"),
 ):
     """
     List all available enterprise features with filtering options.
@@ -431,9 +398,7 @@ async def list_enterprise_features(
                     "status": feature.status.value,
                     "description": feature.description,
                     "dependencies": feature.dependencies,
-                    "enabled_at": (
-                        feature.enabled_at.isoformat() if feature.enabled_at else None
-                    ),
+                    "enabled_at": (feature.enabled_at.isoformat() if feature.enabled_at else None),
                     "configuration": feature.configuration,
                 }
             )
@@ -472,15 +437,11 @@ async def bulk_enable_features(request: BulkFeatureRequest):
         for feature_name in request.features:
             try:
                 if feature_name not in manager.features:
-                    results["failed"].append(
-                        {"feature": feature_name, "error": "Feature not found"}
-                    )
+                    results["failed"].append({"feature": feature_name, "error": "Feature not found"})
                     continue
 
                 if manager.features[feature_name].status == FeatureStatus.ENABLED:
-                    results["skipped"].append(
-                        {"feature": feature_name, "reason": "Already enabled"}
-                    )
+                    results["skipped"].append({"feature": feature_name, "reason": "Already enabled"})
                     continue
 
                 result = await manager.enable_feature(feature_name)
@@ -488,14 +449,10 @@ async def bulk_enable_features(request: BulkFeatureRequest):
                 if result["status"] == "success":
                     results["enabled"].append(feature_name)
                 else:
-                    results["failed"].append(
-                        {"feature": feature_name, "error": result["message"]}
-                    )
+                    results["failed"].append({"feature": feature_name, "error": result["message"]})
 
             except Exception:
-                results["failed"].append(
-                    {"feature": feature_name, "error": "Internal server error"}
-                )
+                results["failed"].append({"feature": feature_name, "error": "Internal server error"})
 
         return JSONResponse(
             status_code=200,
@@ -549,9 +506,7 @@ async def get_enterprise_health():
                 return_exceptions=True,
             )
             for (name, _), feature_health in zip(enabled_features, health_results):
-                _process_feature_health_result(
-                    name, feature_health, health_status, counters
-                )
+                _process_feature_health_result(name, feature_health, health_status, counters)
 
         _check_features_in_error_state(manager, health_status, counters)
         health_status["overall_health"] = _determine_overall_health(counters)
@@ -632,9 +587,7 @@ async def get_infrastructure_status():
             "resource_pools": manager.resource_pools,
             "distributed_services": {
                 "total_vms": len(manager.vm_topology),
-                "service_distribution": _build_service_distribution(
-                    manager.vm_topology
-                ),
+                "service_distribution": _build_service_distribution(manager.vm_topology),
                 "load_balancing": manager._check_load_balancing_capabilities(),
                 "health_monitoring": manager._check_health_capabilities(),
                 "failover_enabled": manager._check_failover_capabilities(),
@@ -658,9 +611,7 @@ async def get_infrastructure_status():
 
     except Exception as e:
         logger.error("Error getting infrastructure status: %s", e)
-        raise HTTPException(
-            status_code=500, detail="Failed to get infrastructure status"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get infrastructure status")
 
 
 @router.post("/deployment/zero-downtime", response_model=DataResponse)
@@ -678,10 +629,7 @@ async def deploy_zero_downtime():
 
         # Check if zero-downtime deployment is enabled
         zero_downtime_feature = manager.features.get("zero_downtime_deployment")
-        if (
-            not zero_downtime_feature
-            or zero_downtime_feature.status != FeatureStatus.ENABLED
-        ):
+        if not zero_downtime_feature or zero_downtime_feature.status != FeatureStatus.ENABLED:
             raise HTTPException(
                 status_code=400,
                 detail="Zero-downtime deployment feature must be enabled first",
@@ -727,9 +675,7 @@ async def validate_phase4_completion():
         manager = get_enterprise_manager()
         status = await manager.get_enterprise_status()
 
-        enabled_count = len(
-            [f for f in status["features"].values() if f["status"] == "enabled"]
-        )
+        enabled_count = len([f for f in status["features"].values() if f["status"] == "enabled"])
         total_count = len(status["features"])
         completion_pct = (enabled_count / total_count) * 100
 

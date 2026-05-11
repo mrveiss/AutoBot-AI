@@ -224,9 +224,7 @@ class AgentLoop:
 
         return results
 
-    async def _create_task_plan(
-        self, task_description: str, initial_context: Optional[dict]
-    ) -> None:
+    async def _create_task_plan(self, task_description: str, initial_context: Optional[dict]) -> None:
         """Create execution plan if planner is available.
 
         Issue #620: Extracted from run_task to reduce function length.
@@ -363,9 +361,7 @@ class AgentLoop:
     # Iteration Logic
     # =========================================================================
 
-    async def _execute_iteration_phases(
-        self, result: IterationResult
-    ) -> IterationResult:
+    async def _execute_iteration_phases(self, result: IterationResult) -> IterationResult:
         """
         Execute all phases of an iteration.
 
@@ -389,9 +385,7 @@ class AgentLoop:
         if first_turn_note and self.config.first_turn_priming_enabled:
             task_content = events_context.get("task_description", "")
             events_context["task_description"] = (
-                task_content + "\n\n" + first_turn_note
-                if task_content
-                else first_turn_note
+                task_content + "\n\n" + first_turn_note if task_content else first_turn_note
             )
 
         # Phase 2: Select Tools
@@ -421,9 +415,7 @@ class AgentLoop:
             result.phase_completed = LoopPhase.ITERATE
             return result
 
-        result.tools_executed = [
-            t.get("tool_name", "unknown") for t in tools_to_execute
-        ]
+        result.tools_executed = [t.get("tool_name", "unknown") for t in tools_to_execute]
         result.tool_results = tool_results
 
         for tool_name in result.tools_executed:
@@ -440,9 +432,7 @@ class AgentLoop:
         self._consecutive_errors = 0
         return result
 
-    def _log_iteration_completion(
-        self, start_time: float, result: IterationResult
-    ) -> None:
+    def _log_iteration_completion(self, start_time: float, result: IterationResult) -> None:
         """
         Log iteration completion details if configured.
 
@@ -501,21 +491,15 @@ class AgentLoop:
             "events": [e.to_dict() for e in events],
             "event_count": len(events),
             "event_types": list(set(e.event_type.name for e in events)),
-            "recent_actions": [
-                e.content for e in events if e.event_type == EventType.ACTION
-            ][-5:],
-            "recent_observations": [
-                e.content for e in events if e.event_type == EventType.OBSERVATION
-            ][-5:],
+            "recent_actions": [e.content for e in events if e.event_type == EventType.ACTION][-5:],
+            "recent_observations": [e.content for e in events if e.event_type == EventType.OBSERVATION][-5:],
         }
 
         # Issue #4481: inject a first-turn context hint so the LLM knows no
         # prior tool results exist yet.  Only added on iteration 1 (the very
         # first call) when the feature is enabled.
         if self.config.first_turn_priming_enabled and self._iteration_count == 1:
-            context["first_turn_note"] = (
-                "Note: This is the first iteration — no tool results exist yet."
-            )
+            context["first_turn_note"] = "Note: This is the first iteration — no tool results exist yet."
 
         return context
 
@@ -596,9 +580,7 @@ class AgentLoop:
             tool_calls = create_tool_calls(tools)
             return await self.tool_executor.execute_batch(
                 tool_calls,
-                task_id=(
-                    self._current_context.task_id if self._current_context else None
-                ),
+                task_id=(self._current_context.task_id if self._current_context else None),
             )
 
         # Sequential execution (fallback)
@@ -643,11 +625,7 @@ class AgentLoop:
                 return False
 
         # Check if all tools succeeded
-        all_succeeded = all(
-            "error" not in result
-            for result in tool_results.values()
-            if isinstance(result, dict)
-        )
+        all_succeeded = all("error" not in result for result in tool_results.values() if isinstance(result, dict))
 
         return all_succeeded
 
@@ -729,21 +707,16 @@ class AgentLoop:
         # Check for git tools
         git_tools = {"git", "gh", "github"}
         has_git_tool = any(
-            tool.get("tool_name", "").lower() in git_tools
-            or "git" in tool.get("tool_name", "").lower()
+            tool.get("tool_name", "").lower() in git_tools or "git" in tool.get("tool_name", "").lower()
             for tool in tools
         )
 
         if has_git_tool and self.config.think_on_git:
-            context = (
-                f"About to execute git tools: {[t.get('tool_name') for t in tools]}"
-            )
+            context = f"About to execute git tools: {[t.get('tool_name') for t in tools]}"
             result = await self.think_tool.think(
                 ThinkCategory.GIT_DECISION,
                 context,
-                task_id=(
-                    self._current_context.task_id if self._current_context else None
-                ),
+                task_id=(self._current_context.task_id if self._current_context else None),
             )
             if self._current_context:
                 self._current_context.add_think(result)
@@ -793,9 +766,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             args = {"_raw": str(args), "_type": type(args).__name__}
         try:
             # Issue #3868: default=str handles datetime, bytes, custom objects
-            canonical = json.dumps(
-                {"n": tool_name, "a": args}, sort_keys=True, default=str
-            )
+            canonical = json.dumps({"n": tool_name, "a": args}, sort_keys=True, default=str)
         except Exception:
             # Absolute fallback — should never be reached with default=str
             canonical = repr({"n": tool_name, "a": args})
@@ -875,12 +846,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
                     approval_id,
                 )
                 return {
-                    tool_name: {
-                        "error": (
-                            f"Tool '{tool_name}' was denied by the user "
-                            f"(approval_id={approval_id})"
-                        )
-                    }
+                    tool_name: {"error": (f"Tool '{tool_name}' was denied by the user " f"(approval_id={approval_id})")}
                 }
         return {}
 
@@ -1016,9 +982,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             result = await self.think_tool.think(
                 ThinkCategory.ERROR_RECOVERY,
                 f"Error: {error}",
-                task_id=(
-                    self._current_context.task_id if self._current_context else None
-                ),
+                task_id=(self._current_context.task_id if self._current_context else None),
             )
             if self._current_context:
                 self._current_context.add_think(result)

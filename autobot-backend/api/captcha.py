@@ -17,19 +17,17 @@ Related: Issue #206
 """
 
 import logging
-from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Path, Request
+from fastapi import APIRouter, HTTPException, Path
 from fastapi.responses import JSONResponse
 
-from api.system_health import register_singleton_probe
-
+from api.schemas_common import DataResponse
 from api.schemas_workflows import CaptchaResolutionRequest, CaptchaResolutionResponse
+from api.system_health import register_singleton_probe
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
 from services.captcha_human_loop import CaptchaResolutionStatus, get_captcha_human_loop
-from api.schemas_common import DataResponse
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter(prefix="/captcha", tags=["captcha"])
 logger = logging.getLogger(__name__)

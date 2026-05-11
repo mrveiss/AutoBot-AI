@@ -45,12 +45,36 @@ _FINISHED_COMMAND_STATES = frozenset(
 
 
 class RiskLevel(Enum):
-    """Command risk assessment levels"""
+    """Command risk assessment levels.
+
+    #7258: Intentionally distinct from canonical
+    `autobot_shared.status_enums.RiskLevel` (= Severity). The wire format
+    here is uppercase ("LOW"/"MEDIUM"/"HIGH"/"CRITICAL") because legacy
+    Redis/SQLite records and 8+ producer call sites already serialize
+    that way; switching to canonical lowercase would require a data
+    migration of historical records.
+
+    Use `to_canonical()` to convert at boundaries (e.g. when emitting to
+    new APIs that expect canonical Severity).
+    """
 
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
     CRITICAL = "CRITICAL"
+
+    def to_canonical(self):
+        """Convert to canonical Severity (lowercase-valued, #6689).
+
+        Bridge for new APIs that expect the canonical
+        `autobot_shared.status_enums.RiskLevel` (= Severity). Returns the
+        member with the same NAME — e.g. RiskLevel.HIGH → Severity.HIGH,
+        whose `.value` is "high" (canonical lowercase).
+        """
+        # Lazy import to avoid circular dependency at module load time
+        from autobot_shared.status_enums import Severity
+
+        return Severity[self.name]
 
 
 @dataclass

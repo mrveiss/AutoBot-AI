@@ -12,18 +12,17 @@ Issue: #221
 """
 
 import logging
-from typing import List
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from api.schemas_code import (
     AnalysisResponse,
     AntiPatternAnalysisRequest,
     AntiPatternSummary,
     SeveritySummary,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -32,9 +31,7 @@ logger = logging.getLogger(__name__)
 REFACTORING_KEYWORDS = {"method", "parameter", "lazy", "clump"}
 
 # Issue #380: Module-level frozenset for code smell pattern types
-_CODE_SMELL_TYPES = frozenset(
-    {"long_method", "long_parameter_list", "lazy_class", "data_clump"}
-)
+_CODE_SMELL_TYPES = frozenset({"long_method", "long_parameter_list", "lazy_class", "data_clump"})
 
 # Issue #281: Anti-pattern type definitions extracted from list_anti_pattern_types
 # Tuple of 8 anti-pattern type definitions with thresholds and severity
@@ -111,6 +108,7 @@ ANTI_PATTERN_TYPE_DEFINITIONS = (
 
 # Lazy initialization for detector (thread-safe)
 import asyncio
+
 from api.schemas_common import DataResponse
 
 _detector_instance = None
@@ -132,9 +130,7 @@ async def _get_detector():
                     os.path.dirname(__file__),
                     "../../tools/code-analysis-suite/src/anti_pattern_detector.py",
                 )
-                spec = importlib.util.spec_from_file_location(
-                    "anti_pattern_detector", module_path
-                )
+                spec = importlib.util.spec_from_file_location("anti_pattern_detector", module_path)
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
 
@@ -235,9 +231,7 @@ async def get_cached_analysis():
         cached = await detector.get_cached_report()
 
         if cached:
-            return JSONResponse(
-                content={"success": True, "cached": True, "data": cached}
-            )
+            return JSONResponse(content={"success": True, "cached": True, "data": cached})
         else:
             return JSONResponse(
                 status_code=404,
@@ -279,11 +273,7 @@ async def detect_god_classes(request: AntiPatternAnalysisRequest):
         )
 
         # Filter to only god_class issues
-        god_classes = [
-            ap.to_dict()
-            for ap in report.anti_patterns
-            if ap.pattern_type.value == "god_class"
-        ]
+        god_classes = [ap.to_dict() for ap in report.anti_patterns if ap.pattern_type.value == "god_class"]
 
         return JSONResponse(
             content={
@@ -324,11 +314,7 @@ async def detect_circular_dependencies(request: AntiPatternAnalysisRequest):
         )
 
         # Filter to only circular_dependency issues
-        circular_deps = [
-            ap.to_dict()
-            for ap in report.anti_patterns
-            if ap.pattern_type.value == "circular_dependency"
-        ]
+        circular_deps = [ap.to_dict() for ap in report.anti_patterns if ap.pattern_type.value == "circular_dependency"]
 
         return JSONResponse(
             content={
@@ -370,11 +356,7 @@ async def detect_feature_envy(request: AntiPatternAnalysisRequest):
         )
 
         # Filter to only feature_envy issues
-        feature_envy = [
-            ap.to_dict()
-            for ap in report.anti_patterns
-            if ap.pattern_type.value == "feature_envy"
-        ]
+        feature_envy = [ap.to_dict() for ap in report.anti_patterns if ap.pattern_type.value == "feature_envy"]
 
         return JSONResponse(
             content={
@@ -382,8 +364,7 @@ async def detect_feature_envy(request: AntiPatternAnalysisRequest):
                 "count": len(feature_envy),
                 "feature_envy": feature_envy,
                 "recommendation": (
-                    "Move methods to the class they reference most, "
-                    "or extract shared logic into a common service."
+                    "Move methods to the class they reference most, " "or extract shared logic into a common service."
                 ),
             }
         )
@@ -418,11 +399,7 @@ async def detect_code_smells(request: AntiPatternAnalysisRequest):
         )
 
         # Filter to code smell types (Issue #380: use module-level constant)
-        code_smells = [
-            ap.to_dict()
-            for ap in report.anti_patterns
-            if ap.pattern_type.value in _CODE_SMELL_TYPES
-        ]
+        code_smells = [ap.to_dict() for ap in report.anti_patterns if ap.pattern_type.value in _CODE_SMELL_TYPES]
 
         # Group by type
         by_type = {}
@@ -438,9 +415,7 @@ async def detect_code_smells(request: AntiPatternAnalysisRequest):
                 "total_count": len(code_smells),
                 "by_type": by_type,
                 "recommendations": [
-                    rec
-                    for rec in report.recommendations
-                    if any(t in rec.lower() for t in REFACTORING_KEYWORDS)
+                    rec for rec in report.recommendations if any(t in rec.lower() for t in REFACTORING_KEYWORDS)
                 ],
             }
         )
@@ -472,11 +447,7 @@ async def detect_dead_code(request: AntiPatternAnalysisRequest):
         )
 
         # Filter to only dead_code issues
-        dead_code = [
-            ap.to_dict()
-            for ap in report.anti_patterns
-            if ap.pattern_type.value == "dead_code"
-        ]
+        dead_code = [ap.to_dict() for ap in report.anti_patterns if ap.pattern_type.value == "dead_code"]
 
         return JSONResponse(
             content={
@@ -562,6 +533,4 @@ async def list_anti_pattern_types():
 
     Returns descriptions and thresholds for each type.
     """
-    return JSONResponse(
-        content={"anti_pattern_types": list(ANTI_PATTERN_TYPE_DEFINITIONS)}
-    )
+    return JSONResponse(content={"anti_pattern_types": list(ANTI_PATTERN_TYPE_DEFINITIONS)})

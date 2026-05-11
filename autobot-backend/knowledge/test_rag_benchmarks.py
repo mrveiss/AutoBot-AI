@@ -10,7 +10,7 @@ Issue #5074 — verifies:
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -24,7 +24,6 @@ from knowledge.rag_benchmarks import (
     get_default_dataset,
     publish_feedback_events,
 )
-
 
 # ---------------------------------------------------------------------------
 # Dataset split correctness
@@ -80,9 +79,7 @@ def test_tune_allows_dev_access():
         out = []
         for qid in dataset.iter_split(BenchmarkSplit.DEV):
             dataset.expected(qid)  # should not raise
-            out.append(
-                BenchmarkResult(qid, [], [], 1.0, split_used=BenchmarkSplit.DEV.value)
-            )
+            out.append(BenchmarkResult(qid, [], [], 1.0, split_used=BenchmarkSplit.DEV.value))
         return out
 
     report = harness.tune(runner)
@@ -113,9 +110,7 @@ def test_score_allows_test_access():
         out = []
         for qid in dataset.iter_split(BenchmarkSplit.TEST):
             dataset.expected(qid)
-            out.append(
-                BenchmarkResult(qid, [], [], 1.0, split_used=BenchmarkSplit.TEST.value)
-            )
+            out.append(BenchmarkResult(qid, [], [], 1.0, split_used=BenchmarkSplit.TEST.value))
         return out
 
     report = harness.score(runner)
@@ -171,11 +166,7 @@ def test_run_test_is_held_out():
         out = []
         for q in dataset.iter_split(BenchmarkSplit.TEST):
             dataset.expected(q)  # Issue #5160: must access to mark held_out
-            out.append(
-                BenchmarkResult(
-                    q, [], [], 0.5, split_used=BenchmarkSplit.TEST.value
-                )
-            )
+            out.append(BenchmarkResult(q, [], [], 0.5, split_used=BenchmarkSplit.TEST.value))
         return out
 
     report = harness.run(runner, split=BenchmarkSplit.TEST)
@@ -235,8 +226,8 @@ async def test_publish_feedback_events_tags_split():
 
 def test_endpoint_response_shape_has_new_fields():
     """POST /rag/benchmark/run must return all Issue #5074 fields."""
-    from fastapi.testclient import TestClient
     from fastapi import FastAPI
+    from fastapi.testclient import TestClient
 
     from api.knowledge_rag import router
     from auth_middleware import check_admin_permission
@@ -271,8 +262,8 @@ def test_endpoint_response_shape_has_new_fields():
 
 
 def test_endpoint_rejects_invalid_split():
-    from fastapi.testclient import TestClient
     from fastapi import FastAPI
+    from fastapi.testclient import TestClient
 
     from api.knowledge_rag import router
     from auth_middleware import check_admin_permission
@@ -325,8 +316,8 @@ def test_held_out_score_requires_test_access():
 
 
 def test_endpoint_dev_split_is_not_held_out():
-    from fastapi.testclient import TestClient
     from fastapi import FastAPI
+    from fastapi.testclient import TestClient
 
     from api.knowledge_rag import router
     from auth_middleware import check_admin_permission

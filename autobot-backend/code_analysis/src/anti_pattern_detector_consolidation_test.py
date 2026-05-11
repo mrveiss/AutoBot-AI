@@ -86,11 +86,7 @@ async def test_duplicate_enum_string_values_overlap(fixture_root):
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    dup_enum = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "duplicate_enum"
-    ]
+    dup_enum = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_enum"]
     assert dup_enum, "expected DUPLICATE_ENUM finding for fully-overlapping enums"
     msg = dup_enum[0].description
     assert "TaskStatus" in msg or "StepStatus" in msg
@@ -122,11 +118,7 @@ async def test_duplicate_enum_ignores_non_enum_classes(fixture_root):
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    dup_enum = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "duplicate_enum"
-    ]
+    dup_enum = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_enum"]
     assert not dup_enum, "non-enum classes should not be flagged as DUPLICATE_ENUM"
 
 
@@ -156,11 +148,7 @@ async def test_duplicate_enum_skips_inheritance_relation(fixture_root):
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    dup_enum = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "duplicate_enum"
-    ]
+    dup_enum = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_enum"]
     # Note: Python actually disallows inheriting from a non-empty enum, but
     # the AST stage doesn't care.  Detector must skip parent/child pairs.
     assert not dup_enum, "parent/child enum pairs should be skipped"
@@ -196,11 +184,7 @@ async def test_duplicate_enum_below_threshold_not_flagged(fixture_root):
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    dup_enum = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "duplicate_enum"
-    ]
+    dup_enum = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_enum"]
     assert not dup_enum, "below-threshold overlap should not be flagged"
 
 
@@ -248,11 +232,7 @@ async def test_duplicate_class_shape_unrelated_classes_with_shared_methods(
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    dup_shape = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "duplicate_class_shape"
-    ]
+    dup_shape = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_class_shape"]
     assert dup_shape, "expected DUPLICATE_CLASS_SHAPE for two unrelated similar classes"
 
 
@@ -291,11 +271,7 @@ async def test_duplicate_class_shape_skips_shared_base(fixture_root):
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    dup_shape = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "duplicate_class_shape"
-    ]
+    dup_shape = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_class_shape"]
     assert not dup_shape, "shared base class makes this expected, not anti-pattern"
 
 
@@ -334,11 +310,7 @@ async def test_duplicate_class_shape_skips_pydantic_models(fixture_root):
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    dup_shape = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "duplicate_class_shape"
-    ]
+    dup_shape = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_class_shape"]
     # Pydantic models are excluded by base-class name; even though these
     # don't have actual methods, they also don't trigger detection by design.
     assert not dup_shape
@@ -368,9 +340,136 @@ async def test_duplicate_class_shape_below_method_threshold_skipped(fixture_root
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    dup_shape = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "duplicate_class_shape"
-    ]
+    dup_shape = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_class_shape"]
     assert not dup_shape, "small classes (< _SHAPE_MIN_METHODS) should be skipped"
+
+
+# ---------------------------------------------------------------------------
+# #7501: parent-child inheritance + Protocol-impl false positives
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_duplicate_class_shape_skips_parent_child_inheritance(fixture_root):
+    """#7501: ``Child(Parent)`` sharing method names is by construction
+    (subclass overrides), not a duplicate-class smell.
+
+    Real case: ``InMemoryEventStreamManager(EventStreamManager)`` from
+    autobot-backend/events/stream_manager.py was flagged Jaccard 1.00.
+    """
+    apd = _load_detector_module()
+    _write_module(
+        fixture_root,
+        "streamlib",
+        """
+        class EventStreamManager:
+            async def publish(self, e): pass
+            async def subscribe(self): pass
+            async def get_latest(self): pass
+            async def get_task_events(self): pass
+            async def get_event(self): pass
+            async def get_task_artifacts(self): pass
+            async def close(self): pass
+
+        class InMemoryEventStreamManager(EventStreamManager):
+            async def publish(self, e): pass
+            async def subscribe(self): pass
+            async def get_latest(self): pass
+            async def get_task_events(self): pass
+            async def get_event(self): pass
+            async def get_task_artifacts(self): pass
+            async def close(self): pass
+        """,
+    )
+
+    detector = apd.AntiPatternDetector()
+    report = await detector.analyze(
+        root_path=str(fixture_root),
+        patterns=["*.py"],
+        exclude_patterns=["__pycache__"],
+    )
+    dup_shape = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_class_shape"]
+    assert not dup_shape, "parent-child inheritance pair should NOT be flagged as duplicate"
+
+
+@pytest.mark.asyncio
+async def test_duplicate_class_shape_skips_protocol_impl_pair(fixture_root):
+    """#7501: ``Protocol`` + structural impl is the canonical PEP 544
+    pattern — must NOT be flagged.
+
+    Real case: ``ITaskStorage`` Protocol vs ``TaskStorage`` impl from
+    autobot-backend/memory/protocols.py + storage/task_storage.py.
+    """
+    apd = _load_detector_module()
+    _write_module(
+        fixture_root,
+        "memlib",
+        """
+        from typing import Protocol
+
+        class ITaskStorage(Protocol):
+            async def log_task(self): pass
+            async def update_task(self): pass
+            async def get_task(self): pass
+            async def get_task_history(self): pass
+            async def get_stats(self): pass
+
+        class TaskStorage:
+            async def log_task(self): pass
+            async def update_task(self): pass
+            async def get_task(self): pass
+            async def get_task_history(self): pass
+            async def get_stats(self): pass
+            async def initialize(self): pass
+        """,
+    )
+
+    detector = apd.AntiPatternDetector()
+    report = await detector.analyze(
+        root_path=str(fixture_root),
+        patterns=["*.py"],
+        exclude_patterns=["__pycache__"],
+    )
+    dup_shape = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_class_shape"]
+    assert not dup_shape, "Protocol + structural impl pair should NOT be flagged as duplicate"
+
+
+@pytest.mark.asyncio
+async def test_duplicate_class_shape_still_flags_unrelated_classes_after_protocol_change(
+    fixture_root,
+):
+    """#7501 regression guard: the parent-child + Protocol exclusions must
+    NOT mask genuine unrelated-shape duplicates. Pair the broader detection
+    case against the new exclusions to pin the positive path.
+    """
+    apd = _load_detector_module()
+    _write_module(
+        fixture_root,
+        "unrelated",
+        """
+        class FooHandler:
+            def parse(self): pass
+            def validate(self): pass
+            def transform(self): pass
+            def emit(self): pass
+            def reset(self): pass
+            def status(self): pass
+
+        class BarHandler:
+            def parse(self): pass
+            def validate(self): pass
+            def transform(self): pass
+            def emit(self): pass
+            def reset(self): pass
+            def status(self): pass
+        """,
+    )
+
+    detector = apd.AntiPatternDetector()
+    report = await detector.analyze(
+        root_path=str(fixture_root),
+        patterns=["*.py"],
+        exclude_patterns=["__pycache__"],
+    )
+    dup_shape = [ap for ap in report.anti_patterns if ap.pattern_type.value == "duplicate_class_shape"]
+    assert dup_shape, "unrelated classes with identical shape should still be flagged"

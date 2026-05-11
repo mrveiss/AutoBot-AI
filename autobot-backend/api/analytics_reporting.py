@@ -19,10 +19,10 @@ import aiohttp
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.time_utils import utc_timestamp
-from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 # Issue #3355: prefix moved to router registry (analytics_routers.py)
@@ -78,9 +78,7 @@ async def fetch_codebase_charts() -> Dict[str, Any]:
                 }
     except Exception as e:
         logger.warning("Failed to fetch codebase charts: %s", e)
-        return {
-            "chart_data": {"problem_types": [], "severity_counts": [], "top_files": []}
-        }
+        return {"chart_data": {"problem_types": [], "severity_counts": [], "top_files": []}}
 
 
 async def fetch_debt_summary() -> Dict[str, Any]:
@@ -173,9 +171,7 @@ def calculate_unified_health_score(
         perf_score = quality_data.get("breakdown", {}).get("performance", 70)
     perf_component = perf_score * 0.15
 
-    return round(
-        quality_component + issues_component + debt_component + perf_component, 1
-    )
+    return round(quality_component + issues_component + debt_component + perf_component, 1)
 
 
 def get_grade(score: float) -> str:
@@ -316,13 +312,9 @@ async def get_unified_report():
     )
 
     # Calculate unified health score
-    health_score = calculate_unified_health_score(
-        quality_data, charts_data, debt_data, performance_data
-    )
+    health_score = calculate_unified_health_score(quality_data, charts_data, debt_data, performance_data)
 
-    response = _build_unified_report_response(
-        health_score, quality_data, charts_data, debt_data, performance_data
-    )
+    response = _build_unified_report_response(health_score, quality_data, charts_data, debt_data, performance_data)
 
     return JSONResponse(content=response)
 
@@ -357,8 +349,7 @@ async def get_quick_summary():
             "health_score": quality_data.get("overall", 0),
             "grade": quality_data.get("grade", "N/A"),
             "total_issues": total_issues,
-            "high_priority": severity_totals.get("high", 0)
-            + severity_totals.get("critical", 0),
+            "high_priority": severity_totals.get("high", 0) + severity_totals.get("critical", 0),
             "timestamp": utc_timestamp(),
         }
     )

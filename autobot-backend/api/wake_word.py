@@ -10,9 +10,6 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from services.wake_word_service import WakeWordDetector, get_wake_word_detector
-from type_defs.common import Metadata
 from api.schemas_system import (
     AddWakeWordRequest,
     WakeWordCheckRequest,
@@ -30,6 +27,9 @@ from api.schemas_system import (
     WakeWordStatsResponse,
     WakeWordToggleResponse,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.wake_word_service import WakeWordDetector, get_wake_word_detector
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["wake_word", "voice"])
@@ -225,9 +225,7 @@ async def report_detection_feedback(request: WakeWordReportFeedbackRequest) -> M
 
     if request.is_correct:
         detector.report_true_positive()
-        message = (
-            "True positive reported - threshold may be adjusted for better convenience"
-        )
+        message = "True positive reported - threshold may be adjusted for better convenience"
     else:
         detector.report_false_positive()
         message = "False positive reported - threshold increased to reduce false alarms"

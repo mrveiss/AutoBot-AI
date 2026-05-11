@@ -44,10 +44,7 @@ _PRESETS: list[dict] = [
     {
         "name": "deep-research",
         "title": "Deep Research",
-        "description": (
-            "Web search, source evaluation, and multi-step summarisation "
-            "for in-depth research tasks."
-        ),
+        "description": ("Web search, source evaluation, and multi-step summarisation " "for in-depth research tasks."),
         "agents": ["orchestrator", "research-agent", "knowledge-agent"],
         "skills": ["web-search", "web-scraper", "knowledge-ingest"],
         "connectors": ["chromadb"],
@@ -79,8 +76,7 @@ _PRESETS: list[dict] = [
         "name": "knowledge-ingest",
         "title": "Knowledge Ingest",
         "description": (
-            "Bulk-import documents, wikis, and web pages into the knowledge "
-            "base for semantic search and RAG."
+            "Bulk-import documents, wikis, and web pages into the knowledge " "base for semantic search and RAG."
         ),
         "agents": ["orchestrator", "knowledge-agent"],
         "skills": ["knowledge-ingest", "web-scraper", "pdf-parser"],
@@ -96,8 +92,7 @@ _PRESETS: list[dict] = [
         "name": "scheduled-monitor",
         "title": "Scheduled Monitor",
         "description": (
-            "Cron-triggered health checks with alerting — monitor URLs, "
-            "services, or custom scripts on a schedule."
+            "Cron-triggered health checks with alerting — monitor URLs, " "services, or custom scripts on a schedule."
         ),
         "agents": ["orchestrator", "scheduler-agent", "terminal-agent"],
         "skills": ["http-probe", "bash-executor", "system-monitor"],
@@ -113,8 +108,7 @@ _PRESETS: list[dict] = [
         "name": "code-companion",
         "title": "Code Companion",
         "description": (
-            "AI pair-programmer: code review, refactoring suggestions, "
-            "test generation, and repo-wide search."
+            "AI pair-programmer: code review, refactoring suggestions, " "test generation, and repo-wide search."
         ),
         "agents": ["orchestrator", "code-agent", "terminal-agent"],
         "skills": ["code-search", "bash-executor", "file-scanner"],
@@ -136,9 +130,7 @@ _PRESETS: list[dict] = [
         "agents": ["orchestrator"],
         "skills": [],
         "connectors": [],
-        "system_prompt": (
-            "You are a helpful, concise, and friendly AI assistant."
-        ),
+        "system_prompt": ("You are a helpful, concise, and friendly AI assistant."),
         "llm_tier": "balanced",
     },
 ]

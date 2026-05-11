@@ -19,9 +19,7 @@ from .base import ThreatAnalyzer
 class APIAbuseAnalyzer(ThreatAnalyzer):
     """Analyzes events for API abuse patterns"""
 
-    def _check_endpoint_usage_threats(
-        self, event: SecurityEvent, context: AnalysisContext
-    ) -> List[str]:
+    def _check_endpoint_usage_threats(self, event: SecurityEvent, context: AnalysisContext) -> List[str]:
         """
         Check for unusual or excessive endpoint usage patterns.
 
@@ -32,9 +30,7 @@ class APIAbuseAnalyzer(ThreatAnalyzer):
 
         if user_profile and event.resource:
             normal_usage = user_profile.api_usage_patterns.get(event.resource, 0)
-            current_usage = context.get_recent_endpoint_usage(
-                event.user_id, event.resource
-            )
+            current_usage = context.get_recent_endpoint_usage(event.user_id, event.resource)
 
             if normal_usage == 0 and current_usage > 0:
                 threats.append("unusual_endpoint_access")
@@ -57,9 +53,7 @@ class APIAbuseAnalyzer(ThreatAnalyzer):
         (Issue #398: extracted helper)
         """
         confidence = min(1.0, len(threats) * 0.4 + 0.3)
-        threat_level = (
-            ThreatLevel.HIGH if "bulk_data_download" in threats else ThreatLevel.MEDIUM
-        )
+        threat_level = ThreatLevel.HIGH if "bulk_data_download" in threats else ThreatLevel.MEDIUM
         base_fields = event.get_threat_base_fields()
 
         return ThreatEvent(
@@ -83,9 +77,7 @@ class APIAbuseAnalyzer(ThreatAnalyzer):
             ],
         )
 
-    async def analyze(
-        self, event: SecurityEvent, context: AnalysisContext
-    ) -> Optional[ThreatEvent]:
+    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> Optional[ThreatEvent]:
         """
         Detect API abuse patterns.
 
@@ -94,12 +86,8 @@ class APIAbuseAnalyzer(ThreatAnalyzer):
         if not event.is_api_request():
             return None
 
-        rate_limit = context.config.get("thresholds", {}).get(
-            "api_rate_limit_per_minute", 100
-        )
-        recent_requests = context.count_recent_api_requests(
-            event.user_id, event.source_ip, 1
-        )
+        rate_limit = context.config.get("thresholds", {}).get("api_rate_limit_per_minute", 100)
+        recent_requests = context.count_recent_api_requests(event.user_id, event.source_ip, 1)
 
         threats = []
 
@@ -111,18 +99,12 @@ class APIAbuseAnalyzer(ThreatAnalyzer):
 
         # Check for bulk data operations
         response_size = event.get_response_size()
-        bulk_threshold = (
-            context.config.get("thresholds", {}).get("bulk_data_threshold_mb", 100)
-            * 1024
-            * 1024
-        )
+        bulk_threshold = context.config.get("thresholds", {}).get("bulk_data_threshold_mb", 100) * 1024 * 1024
 
         if response_size > bulk_threshold:
             threats.append("bulk_data_download")
 
         if threats:
-            return self._build_threat_event(
-                event, threats, recent_requests, rate_limit, response_size
-            )
+            return self._build_threat_event(event, threats, recent_requests, rate_limit, response_size)
 
         return None

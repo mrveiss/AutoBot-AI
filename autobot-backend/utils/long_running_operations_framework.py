@@ -38,6 +38,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.async_compat import run_or_schedule
 from constants.threshold_constants import TimingConstants
 
 # Re-export all public API from the package
@@ -508,4 +509,4 @@ if __name__ == "__main__":
             await manager.stop_background_processor()
 
     # Run example
-    asyncio.run(example_usage())
+    run_or_schedule(example_usage())

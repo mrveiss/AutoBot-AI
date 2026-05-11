@@ -24,8 +24,6 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-import aiohttp
-
 from autobot_shared.redis_client import get_async_redis_client
 from integrations.base import IntegrationAction
 from integrations.communication_integration import SlackIntegration
@@ -149,9 +147,7 @@ class SlackNotificationIntegration(SlackIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a named Slack action, including notification-specific actions."""
         notification_map = {
             "post_task_completion": self.post_task_completion,
@@ -164,9 +160,7 @@ class SlackNotificationIntegration(SlackIntegration):
             return await notification_map[action](params)
         return await super().execute_action(action, params)
 
-    async def post_task_completion(
-        self, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def post_task_completion(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Post a task completion summary using Block Kit formatting.
 
         Wraps the Slack API call with error handling for network failures,
@@ -181,15 +175,9 @@ class SlackNotificationIntegration(SlackIntegration):
         """
         try:
             status = params.get("status", "completed")
-            status_emoji = (
-                ":white_check_mark:" if status == "completed" else ":x:"
-            )
+            status_emoji = ":white_check_mark:" if status == "completed" else ":x:"
             duration = params.get("duration_seconds", 0)
-            duration_str = (
-                f"{duration:.1f}s"
-                if duration < 60
-                else f"{duration / 60:.1f}m"
-            )
+            duration_str = f"{duration:.1f}s" if duration < 60 else f"{duration / 60:.1f}m"
 
             blocks = [
                 {
@@ -255,9 +243,7 @@ class SlackNotificationIntegration(SlackIntegration):
                 "task_id": params.get("task_id"),
             }
 
-    async def request_approval(
-        self, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def request_approval(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Post an approval request with approve/reject action buttons.
 
         Wraps Slack API call and Redis storage with error handling.
@@ -307,10 +293,7 @@ class SlackNotificationIntegration(SlackIntegration):
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": (
-                            "Reply *approve* or *reject* in this thread, "
-                            "or use the buttons below."
-                        ),
+                        "text": ("Reply *approve* or *reject* in this thread, " "or use the buttons below."),
                     },
                 },
                 {
@@ -352,9 +335,7 @@ class SlackNotificationIntegration(SlackIntegration):
             result = await self._make_slack_request("POST", url, headers, payload)
 
             if result.get("ok") and result.get("ts"):
-                await self._store_approval_thread(
-                    approval_id, params["channel"], result["ts"]
-                )
+                await self._store_approval_thread(approval_id, params["channel"], result["ts"])
             return result
         except Exception as exc:
             logger.error(
@@ -369,9 +350,7 @@ class SlackNotificationIntegration(SlackIntegration):
                 "approval_id": params.get("approval_id"),
             }
 
-    async def post_agent_status(
-        self, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def post_agent_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Post a real-time agent status update.
 
         Wraps Slack API call with error handling for network failures,
@@ -394,9 +373,7 @@ class SlackNotificationIntegration(SlackIntegration):
                 "waiting": ":pause_button:",
                 "started": ":rocket:",
             }
-            emoji = status_emoji_map.get(
-                params.get("status", ""), ":information_source:"
-            )
+            emoji = status_emoji_map.get(params.get("status", ""), ":information_source:")
             text = (
                 f"{emoji} *{params['agent_name']}* — "
                 f"{params.get('status', 'update').capitalize()}: {params['message']}"
@@ -433,9 +410,7 @@ class SlackNotificationIntegration(SlackIntegration):
                 "agent_name": params.get("agent_name"),
             }
 
-    async def reply_in_thread(
-        self, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def reply_in_thread(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Post a reply in an existing Slack thread.
 
         Wraps Slack API call with error handling for network failures,
@@ -475,9 +450,7 @@ class SlackNotificationIntegration(SlackIntegration):
                 "thread_ts": params.get("thread_ts"),
             }
 
-    async def check_approval_response(
-        self, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def check_approval_response(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Poll a Slack thread for an approve/reject response.
 
         Wraps Slack API call and Redis lookup with error handling.
@@ -590,9 +563,7 @@ class SlackNotificationIntegration(SlackIntegration):
                 return False
 
             key = f"{_CHANNEL_MAPPING_KEY_PREFIX}{mapping.project_id}"
-            await client.set(
-                key, json.dumps(mapping.to_dict(), ensure_ascii=False)
-            )
+            await client.set(key, json.dumps(mapping.to_dict(), ensure_ascii=False))
             logger.debug(
                 "Saved channel mapping for project_id=%s",
                 mapping.project_id,
@@ -613,9 +584,7 @@ class SlackNotificationIntegration(SlackIntegration):
             )
             return False
 
-    async def load_channel_mapping(
-        self, project_id: str
-    ) -> Optional[SlackChannelMapping]:
+    async def load_channel_mapping(self, project_id: str) -> Optional[SlackChannelMapping]:
         """Load a channel mapping from Redis.
 
         Wraps Redis get operation with error handling.
@@ -666,9 +635,7 @@ class SlackNotificationIntegration(SlackIntegration):
             )
             return None
 
-    async def _store_approval_thread(
-        self, approval_id: str, channel: str, thread_ts: str
-    ) -> bool:
+    async def _store_approval_thread(self, approval_id: str, channel: str, thread_ts: str) -> bool:
         """Store channel + thread_ts for an approval in Redis.
 
         Wraps Redis set operation with error handling.
@@ -719,9 +686,7 @@ class SlackNotificationIntegration(SlackIntegration):
             )
             return False
 
-    async def _load_approval_thread(
-        self, approval_id: str
-    ) -> Optional[Dict[str, str]]:
+    async def _load_approval_thread(self, approval_id: str) -> Optional[Dict[str, str]]:
         """Load stored channel + thread_ts for an approval from Redis.
 
         Wraps Redis get operation with error handling.

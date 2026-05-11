@@ -15,17 +15,17 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import JSONResponse, PlainTextResponse
 
+from api.schemas_common import DataResponse
 from api.schemas_system import (
     SignalRequest,
     SpawnRequest,
     SpawnResponse,
 )
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
 from constants.threshold_constants import TimingConstants
 from services.process_adapter_service import ProcessAdapterService
-from api.schemas_common import DataResponse
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -43,9 +43,7 @@ def set_process_adapter_service(svc: ProcessAdapterService) -> None:
 def _get_service() -> ProcessAdapterService:
     """Return the active ProcessAdapterService or raise 503 (#1406)."""
     if _process_svc is None:
-        raise HTTPException(
-            status_code=503, detail="Process adapter service unavailable"
-        )
+        raise HTTPException(status_code=503, detail="Process adapter service unavailable")
     return _process_svc
 
 
@@ -160,9 +158,7 @@ async def list_agent_processes(
 ) -> JSONResponse:
     """List recent processes for an agent with optional status filter (#1406)."""
     svc = _get_service()
-    processes = await svc.get_agent_processes(
-        agent_id=agent_id, status_filter=status, limit=limit
-    )
+    processes = await svc.get_agent_processes(agent_id=agent_id, status_filter=status, limit=limit)
     return JSONResponse(
         status_code=200,
         content={"agent_id": agent_id, "processes": processes, "total": len(processes)},

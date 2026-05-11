@@ -11,6 +11,7 @@ Contains query preprocessing and expansion functionality.
 import logging
 import re
 from typing import List
+
 from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)

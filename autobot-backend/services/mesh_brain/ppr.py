@@ -76,15 +76,11 @@ class PersonalizedPageRank:
         top_k: int = 20,
     ) -> list[tuple[str, float]]:
         """Run PPR from seed nodes. Returns [(node_id, ppr_score), ...] sorted desc."""
-        subgraph = await self._load_subgraph(
-            seed_node_ids, max_hops=3, min_weight=min_weight
-        )
+        subgraph = await self._load_subgraph(seed_node_ids, max_hops=3, min_weight=min_weight)
         if not subgraph.nodes:
             return self._uniform_seed_scores(seed_node_ids)
         scores = self._init_scores(seed_node_ids, subgraph.nodes)
-        scores = self._power_iterate(
-            scores, subgraph, seed_node_ids, alpha, max_iterations
-        )
+        scores = self._power_iterate(scores, subgraph, seed_node_ids, alpha, max_iterations)
         return sorted(scores.items(), key=lambda x: -x[1])[:top_k]
 
     # ------------------------------------------------------------------
@@ -96,9 +92,7 @@ class PersonalizedPageRank:
         uniform = 1.0 / len(seed_node_ids)
         return [(nid, uniform) for nid in seed_node_ids]
 
-    def _init_scores(
-        self, seed_node_ids: list[str], all_nodes: set
-    ) -> dict[str, float]:
+    def _init_scores(self, seed_node_ids: list[str], all_nodes: set) -> dict[str, float]:
         """Initialise PPR score vector: 1/n for seeds, 0 for others."""
         n_seeds = len(seed_node_ids)
         seed_set = set(seed_node_ids)
@@ -116,9 +110,7 @@ class PersonalizedPageRank:
         n_seeds = len(seed_node_ids)
         seed_set = set(seed_node_ids)
         for _ in range(max_iterations):
-            new_scores = self._single_iteration(
-                scores, subgraph, seed_set, n_seeds, alpha
-            )
+            new_scores = self._single_iteration(scores, subgraph, seed_set, n_seeds, alpha)
             if self._converged(scores, new_scores):
                 return new_scores
             scores = new_scores
@@ -140,9 +132,7 @@ class PersonalizedPageRank:
             new_scores[node] = teleport + (1 - alpha) * propagation
         return new_scores
 
-    def _propagation_sum(
-        self, node: str, scores: dict[str, float], subgraph: Subgraph
-    ) -> float:
+    def _propagation_sum(self, node: str, scores: dict[str, float], subgraph: Subgraph) -> float:
         """Sum weighted contributions from in-edge neighbors for one node."""
         total = 0.0
         for neighbor, edge_weight in subgraph.in_edges(node):
@@ -151,18 +141,14 @@ class PersonalizedPageRank:
                 total += scores.get(neighbor, 0.0) * edge_weight / out_deg
         return total
 
-    async def _load_subgraph(
-        self, seed_ids: list[str], max_hops: int, min_weight: float
-    ) -> Subgraph:
+    async def _load_subgraph(self, seed_ids: list[str], max_hops: int, min_weight: float) -> Subgraph:
         """BFS from seed_ids up to max_hops; returns Subgraph of collected nodes/edges."""
         visited: set[str] = set(seed_ids)
         frontier: list[str] = list(seed_ids)
         edges: list[tuple[str, str, float]] = []
 
         for _ in range(max_hops):
-            frontier, new_edges = await self._expand_frontier(
-                frontier, visited, min_weight
-            )
+            frontier, new_edges = await self._expand_frontier(frontier, visited, min_weight)
             edges.extend(new_edges)
             if not frontier:
                 break
@@ -186,8 +172,6 @@ class PersonalizedPageRank:
         return next_frontier, new_edges
 
     @staticmethod
-    def _converged(
-        old: dict[str, float], new: dict[str, float], tol: float = 1e-6
-    ) -> bool:
+    def _converged(old: dict[str, float], new: dict[str, float], tol: float = 1e-6) -> bool:
         """Return True when L1 distance between score vectors is below tol."""
         return sum(abs(old.get(k, 0.0) - new.get(k, 0.0)) for k in new) < tol

@@ -241,9 +241,7 @@ class TestSecurityWorkflowManager:
     @pytest.mark.asyncio
     async def test_create_training_assessment(self, manager):
         """Test assessment with training mode enabled."""
-        assessment = await manager.create_assessment(
-            name="Training Scan", target="10.0.0.1", training_mode=True
-        )
+        assessment = await manager.create_assessment(name="Training Scan", target="10.0.0.1", training_mode=True)
 
         assert assessment.training_mode is True
 
@@ -259,9 +257,7 @@ class TestSecurityWorkflowManager:
         mock_redis.get = AsyncMock(return_value=json.dumps(assessment.to_dict()))
 
         # Advance to RECON
-        updated = await manager.advance_phase(
-            assessment.id, reason="Starting reconnaissance"
-        )
+        updated = await manager.advance_phase(assessment.id, reason="Starting reconnaissance")
 
         assert updated is not None
         assert updated.phase == AssessmentPhase.RECON
@@ -269,17 +265,13 @@ class TestSecurityWorkflowManager:
     @pytest.mark.asyncio
     async def test_add_host(self, manager, mock_redis):
         """Test adding a host to assessment."""
-        assessment = await manager.create_assessment(
-            name="Test", target="192.168.1.0/24"
-        )
+        assessment = await manager.create_assessment(name="Test", target="192.168.1.0/24")
 
         import json
 
         mock_redis.get = AsyncMock(return_value=json.dumps(assessment.to_dict()))
 
-        updated = await manager.add_host(
-            assessment.id, ip="192.168.1.10", hostname="web-server", status="up"
-        )
+        updated = await manager.add_host(assessment.id, ip="192.168.1.10", hostname="web-server", status="up")
 
         assert updated is not None
         assert len(updated.hosts) == 1
@@ -337,9 +329,7 @@ class TestSecurityWorkflowManager:
     async def test_exploitation_requires_training(self, manager, mock_redis):
         """Test that exploitation phase requires training mode."""
         # Create non-training assessment
-        assessment = await manager.create_assessment(
-            name="Safe Scan", target="192.168.1.1", training_mode=False
-        )
+        assessment = await manager.create_assessment(name="Safe Scan", target="192.168.1.1", training_mode=False)
 
         # Simulate being in VULN_ANALYSIS phase
         assessment.phase = AssessmentPhase.VULN_ANALYSIS
@@ -349,9 +339,7 @@ class TestSecurityWorkflowManager:
         mock_redis.get = AsyncMock(return_value=json.dumps(assessment.to_dict()))
 
         # Try to advance to EXPLOITATION - should skip to REPORTING
-        updated = await manager.advance_phase(
-            assessment.id, target_phase="EXPLOITATION"
-        )
+        updated = await manager.advance_phase(assessment.id, target_phase="EXPLOITATION")
 
         # Should skip exploitation and go to REPORTING
         assert updated.phase == AssessmentPhase.REPORTING
@@ -359,9 +347,7 @@ class TestSecurityWorkflowManager:
     @pytest.mark.asyncio
     async def test_training_mode_allows_exploitation(self, manager, mock_redis):
         """Test that training mode enables exploitation."""
-        assessment = await manager.create_assessment(
-            name="Training Scan", target="192.168.1.1", training_mode=True
-        )
+        assessment = await manager.create_assessment(name="Training Scan", target="192.168.1.1", training_mode=True)
 
         assessment.phase = AssessmentPhase.VULN_ANALYSIS
 
@@ -369,9 +355,7 @@ class TestSecurityWorkflowManager:
 
         mock_redis.get = AsyncMock(return_value=json.dumps(assessment.to_dict()))
 
-        updated = await manager.advance_phase(
-            assessment.id, target_phase="EXPLOITATION"
-        )
+        updated = await manager.advance_phase(assessment.id, target_phase="EXPLOITATION")
 
         assert updated.phase == AssessmentPhase.EXPLOITATION
 

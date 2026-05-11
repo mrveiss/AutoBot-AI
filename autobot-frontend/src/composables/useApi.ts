@@ -203,8 +203,7 @@ export function useChatApi() {
       return withErrorHandling(
         // Issue #156 Fix: ApiClient doesn't have resetChat(), use direct HTTP call
         async () => {
-          const response = await api.post(`${getApiBase()}/chat/reset`)
-          return await response.json()
+          return await api.post<any>(`${getApiBase()}/chat/reset`)
         },
         { errorMessage: 'Failed to reset chat' }
       )
@@ -261,8 +260,7 @@ export function useSettingsApi() {
       return withErrorHandling(
         // Issue #156 Fix: ApiClient doesn't have getBackendSettings(), use direct HTTP call
         async () => {
-          const response = await api.get(`${getApiBase()}/settings/backend`)
-          return await response.json()
+          return await api.get<any>(`${getApiBase()}/settings/backend`)
         },
         {
           errorMessage: 'Failed to load backend settings',
@@ -278,8 +276,7 @@ export function useSettingsApi() {
       return withErrorHandling(
         // Issue #156 Fix: ApiClient doesn't have saveBackendSettings(), use direct HTTP call
         async () => {
-          const response = await api.post(`${getApiBase()}/settings/backend`, settings)
-          return await response.json()
+          return await api.post<any>(`${getApiBase()}/settings/backend`, settings)
         },
         { errorMessage: 'Failed to update backend settings' }
       )
@@ -301,8 +298,7 @@ export function useKnowledgeApi() {
       return withErrorHandling(
         // Issue #156 Fix: ApiClient doesn't have searchKnowledge(), use direct HTTP call
         async () => {
-          const response = await api.get(`${getApiBase()}/knowledge/search?query=${encodeURIComponent(query)}&limit=${limit}`)
-          return await response.json()
+          return await api.get<any>(`${getApiBase()}/knowledge/search?query=${encodeURIComponent(query)}&limit=${limit}`)
         },
         {
           errorMessage: 'Failed to search knowledge base',
@@ -318,8 +314,7 @@ export function useKnowledgeApi() {
       return withErrorHandling(
         // Issue #549 Fix: Use correct path /api/knowledge_base/facts
         async () => {
-          const response = await api.post(`${getApiBase()}/knowledge_base/facts`, { content: text, title, source })
-          return await response.json()
+          return await api.post<any>(`${getApiBase()}/knowledge_base/facts`, { content: text, title, source })
         },
         { errorMessage: 'Failed to add text to knowledge base' }
       )
@@ -332,8 +327,7 @@ export function useKnowledgeApi() {
       return withErrorHandling(
         // Issue #549 Fix: Use correct path /api/knowledge_base/url
         async () => {
-          const response = await api.post(`${getApiBase()}/knowledge_base/url`, { url, method })
-          return await response.json()
+          return await api.post<any>(`${getApiBase()}/knowledge_base/url`, { url, method })
         },
         { errorMessage: 'Failed to add URL to knowledge base' }
       )
@@ -348,8 +342,7 @@ export function useKnowledgeApi() {
         async () => {
           const formData = new FormData()
           formData.append('file', file)
-          const response = await api.post(`${getApiBase()}/knowledge_base/upload`, formData)
-          return await response.json()
+          return await api.post<any>(`${getApiBase()}/knowledge_base/upload`, formData)
         },
         { errorMessage: 'Failed to add file to knowledge base' }
       )
@@ -423,8 +416,7 @@ export function useFileApi() {
       return withErrorHandling(
         // Issue #156 Fix: ApiClient doesn't have listFiles(), use direct HTTP call
         async () => {
-          const response = await api.get(`${getApiBase()}/files/list?path=${encodeURIComponent(path)}`)
-          return await response.json()
+          return await api.get<any>(`${getApiBase()}/files/list?path=${encodeURIComponent(path)}`)
         },
         {
           errorMessage: 'Failed to list files',
@@ -450,8 +442,7 @@ export function useFileApi() {
           formData.append('file', file)
           formData.append('path', path)
           formData.append('overwrite', String(overwrite))
-          const response = await api.post(`${getApiBase()}/files/upload`, formData)
-          return await response.json()
+          return await api.post<any>(`${getApiBase()}/files/upload`, formData)
         },
         { errorMessage: 'Failed to upload file' }
       )
@@ -464,8 +455,7 @@ export function useFileApi() {
       return withErrorHandling(
         // Issue #156 Fix: ApiClient doesn't have viewFile(), use direct HTTP call
         async () => {
-          const response = await api.get(`${getApiBase()}/files/view?path=${encodeURIComponent(path)}`)
-          return await response.json()
+          return await api.get<any>(`${getApiBase()}/files/view?path=${encodeURIComponent(path)}`)
         },
         { errorMessage: 'Failed to view file' }
       )
@@ -478,8 +468,7 @@ export function useFileApi() {
       return withErrorHandling(
         // Issue #156 Fix: ApiClient doesn't have deleteFile(), use direct HTTP call
         async () => {
-          const response = await api.delete(`${getApiBase()}/files?path=${encodeURIComponent(path)}`)
-          return await response.json()
+          return await api.delete<any>(`${getApiBase()}/files?path=${encodeURIComponent(path)}`)
         },
         { errorMessage: 'Failed to delete file' }
       )
@@ -491,8 +480,9 @@ export function useFileApi() {
     async downloadFile(path: string) {
       return withErrorHandling(
         // Issue #552: Fixed path - backend uses path param /download/{path}, not query param
+        // #7274: file downloads need raw Response (.blob()), bypass JSON-parsing convenience
         async () => {
-          const response = await api.get(`${getApiBase()}/files/download/${encodeURIComponent(path)}`)
+          const response = await api.rawRequest(`${getApiBase()}/files/download/${encodeURIComponent(path)}`, { method: 'GET' })
           return await response.blob()
         },
         { errorMessage: 'Failed to download file' }
@@ -509,8 +499,7 @@ export function useFileApi() {
           const formData = new FormData()
           formData.append('path', path)
           formData.append('name', name)
-          const response = await api.post(`${getApiBase()}/files/create_directory`, formData)
-          return await response.json()
+          return await api.post<any>(`${getApiBase()}/files/create_directory`, formData)
         },
         { errorMessage: 'Failed to create directory' }
       )
@@ -523,8 +512,7 @@ export function useFileApi() {
       return withErrorHandling(
         // Issue #156 Fix: ApiClient doesn't have getFileStats(), use direct HTTP call
         async () => {
-          const response = await api.get(`${getApiBase()}/files/stats`)
-          return await response.json()
+          return await api.get<any>(`${getApiBase()}/files/stats`)
         },
         {
           errorMessage: 'Failed to get file statistics',

@@ -63,16 +63,12 @@ class AgentOrgService:
 
     async def get_node(self, agent_id: str) -> Optional[AgentOrgNode]:
         """Return the org node for agent_id or None if not registered."""
-        result = await self.session.execute(
-            select(AgentOrgNode).where(AgentOrgNode.agent_id == agent_id)
-        )
+        result = await self.session.execute(select(AgentOrgNode).where(AgentOrgNode.agent_id == agent_id))
         return result.scalar_one_or_none()
 
     # -- Tree / hierarchy --------------------------------------------------
 
-    def _build_tree(
-        self, nodes: List[AgentOrgNode], parent_id: Optional[str]
-    ) -> List[Dict[str, Any]]:
+    def _build_tree(self, nodes: List[AgentOrgNode], parent_id: Optional[str]) -> List[Dict[str, Any]]:
         """Recursively build tree from flat node list. Helper (#1405)."""
         children = [n for n in nodes if n.reports_to == parent_id]
         return [
@@ -82,9 +78,7 @@ class AgentOrgService:
                 "org_role": node.org_role,
                 "title": node.title,
                 "capabilities": node.capabilities,
-                "direct_reports_count": sum(
-                    1 for n in nodes if n.reports_to == node.agent_id
-                ),
+                "direct_reports_count": sum(1 for n in nodes if n.reports_to == node.agent_id),
                 "children": self._build_tree(nodes, node.agent_id),
             }
             for node in children
@@ -138,9 +132,7 @@ class AgentOrgService:
 
     async def get_direct_reports(self, agent_id: str) -> List[Dict[str, Any]]:
         """Return agents whose reports_to equals agent_id (#1405)."""
-        result = await self.session.execute(
-            select(AgentOrgNode).where(AgentOrgNode.reports_to == agent_id)
-        )
+        result = await self.session.execute(select(AgentOrgNode).where(AgentOrgNode.reports_to == agent_id))
         nodes = result.scalars().all()
         return [
             {
@@ -198,9 +190,7 @@ class AgentOrgService:
 
         if new_manager_id is not None and new_manager_id != node.reports_to:
             if await self.detect_cycle(agent_id, new_manager_id):
-                raise ValueError(
-                    f"Setting manager to {new_manager_id!r} " f"would create a cycle"
-                )
+                raise ValueError(f"Setting manager to {new_manager_id!r} " f"would create a cycle")
             node.reports_to = new_manager_id
         elif new_manager_id is None:
             node.reports_to = None

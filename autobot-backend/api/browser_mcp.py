@@ -33,12 +33,7 @@ from urllib.parse import urlparse
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException
-from auth_middleware import check_admin_permission
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.http_client import get_http_client
-from autobot_shared.time_utils import now_utc
-from constants.network_constants import NetworkConstants
-from type_defs.common import Metadata
+
 from api.schemas_code import MCPTool
 from api.schemas_system import (
     BrowserClickRequest,
@@ -63,6 +58,12 @@ from api.schemas_system import (
     BrowserWaitForSelectorRequest,
     BrowserWaitForSelectorResponse,
 )
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_client import get_http_client
+from autobot_shared.time_utils import now_utc
+from constants.network_constants import NetworkConstants
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -74,9 +75,7 @@ router = APIRouter(
 ALLOWED_URL_SCHEMES = {"http", "https"}
 
 # Security Configuration
-BROWSER_VM_URL = (
-    f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
-)
+BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
 
 # URL Whitelist - Only these domains are allowed
 ALLOWED_URL_PATTERNS = [
@@ -185,14 +184,11 @@ async def check_rate_limit() -> bool:
             request_counter["reset_time"] = now
 
         if request_counter["count"] >= MAX_REQUESTS_PER_MINUTE:
-            logger.warning(
-                f"Rate limit exceeded: {request_counter['count']} requests/min"
-            )
+            logger.warning(f"Rate limit exceeded: {request_counter['count']} requests/min")
             return False
 
         request_counter["count"] += 1
         return True
-
 
 
 def _get_browser_navigation_tools() -> List[MCPTool]:
@@ -633,9 +629,7 @@ async def screenshot_mcp(request: BrowserScreenshotRequest) -> Metadata:
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-    logger.info(
-        f"Browser screenshot: selector={request.selector}, full_page={request.full_page}"
-    )
+    logger.info(f"Browser screenshot: selector={request.selector}, full_page={request.full_page}")
 
     result = await send_to_browser_vm(
         "screenshot",

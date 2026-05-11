@@ -47,9 +47,7 @@ class ContextAnalyzer:
         file_path: str,
     ) -> CompletionContext:
         """Helper for analyze. Ref: #1088."""
-        context = CompletionContext(
-            context_id=context_id, file_path=file_path, language="python"
-        )
+        context = CompletionContext(context_id=context_id, file_path=file_path, language="python")
         self._analyze_file_level(tree, file_content, context)
         self._analyze_function_level(tree, cursor_line, context)
         self._analyze_block_level(tree, cursor_line, context)
@@ -78,9 +76,7 @@ class ContextAnalyzer:
         Returns:
             CompletionContext with all levels analyzed
         """
-        context_id = self._generate_context_id(
-            file_content, cursor_line, cursor_position
-        )
+        context_id = self._generate_context_id(file_content, cursor_line, cursor_position)
 
         cached = self._get_cached_context(context_id)
         if cached:
@@ -91,17 +87,11 @@ class ContextAnalyzer:
             tree = ast.parse(file_content)
         except SyntaxError as e:
             logger.warning(f"Syntax error in file: {e}")
-            return self._create_minimal_context(
-                context_id, file_content, cursor_line, cursor_position, file_path
-            )
+            return self._create_minimal_context(context_id, file_content, cursor_line, cursor_position, file_path)
 
-        return self._build_full_context(
-            tree, context_id, file_content, cursor_line, cursor_position, file_path
-        )
+        return self._build_full_context(tree, context_id, file_content, cursor_line, cursor_position, file_path)
 
-    def _analyze_file_level(
-        self, tree: ast.AST, file_content: str, context: CompletionContext
-    ):
+    def _analyze_file_level(self, tree: ast.AST, file_content: str, context: CompletionContext):
         """
         Extract file-level context.
 
@@ -126,9 +116,7 @@ class ContextAnalyzer:
         ):
             context.module_docstring = tree.body[0].value.value
 
-    def _analyze_function_level(
-        self, tree: ast.AST, cursor_line: int, context: CompletionContext
-    ):
+    def _analyze_function_level(self, tree: ast.AST, cursor_line: int, context: CompletionContext):
         """
         Extract function-level context.
 
@@ -143,25 +131,18 @@ class ContextAnalyzer:
 
                         # Extract decorators
                         context.decorators = [
-                            d.id if isinstance(d, ast.Name) else "decorator"
-                            for d in node.decorator_list
+                            d.id if isinstance(d, ast.Name) else "decorator" for d in node.decorator_list
                         ]
 
                         # Extract parameters with types
-                        context.function_params = (
-                            self.type_inferencer.extract_function_params(node)
-                        )
+                        context.function_params = self.type_inferencer.extract_function_params(node)
 
                         # Extract return type
-                        context.function_return_type = (
-                            self.type_inferencer.infer_function_return_type(node)
-                        )
+                        context.function_return_type = self.type_inferencer.infer_function_return_type(node)
 
                         break
 
-    def _analyze_block_level(
-        self, tree: ast.AST, cursor_line: int, context: CompletionContext
-    ):
+    def _analyze_block_level(self, tree: ast.AST, cursor_line: int, context: CompletionContext):
         """
         Extract block-level context.
 
@@ -193,9 +174,7 @@ class ContextAnalyzer:
                             ast.Module,
                         ),
                     ):
-                        context.variables_in_scope = self.type_inferencer.analyze_scope(
-                            tree, node
-                        )
+                        context.variables_in_scope = self.type_inferencer.analyze_scope(tree, node)
 
     def _analyze_line_level(
         self,
@@ -220,29 +199,21 @@ class ContextAnalyzer:
             context.partial_statement = context.cursor_line[:cursor_position]
 
             # Indent level
-            context.indent_level = len(context.cursor_line) - len(
-                context.cursor_line.lstrip()
-            )
+            context.indent_level = len(context.cursor_line) - len(context.cursor_line.lstrip())
 
         # Preceding lines (context)
         context.preceding_lines = lines[max(0, cursor_line - 10) : cursor_line]
 
         # Following lines (lookahead)
-        context.following_lines = lines[
-            cursor_line + 1 : min(len(lines), cursor_line + 6)
-        ]
+        context.following_lines = lines[cursor_line + 1 : min(len(lines), cursor_line + 6)]
 
-    def _analyze_semantic_context(
-        self, tree: ast.AST, file_content: str, context: CompletionContext
-    ):
+    def _analyze_semantic_context(self, tree: ast.AST, file_content: str, context: CompletionContext):
         """
         Extract semantic context.
 
         Helper for analyze (Issue #907).
         """
-        semantic = self.semantic_analyzer.analyze_semantic_context(
-            file_content, context.imports, tree
-        )
+        semantic = self.semantic_analyzer.analyze_semantic_context(file_content, context.imports, tree)
 
         context.detected_frameworks = semantic["detected_frameworks"]
         context.coding_style = semantic["coding_style"]
@@ -261,9 +232,7 @@ class ContextAnalyzer:
         context.used_imports = set(deps["used_imports"])
         context.missing_imports = deps["missing_imports"]
 
-    def _generate_context_id(
-        self, file_content: str, cursor_line: int, cursor_position: int
-    ):
+    def _generate_context_id(self, file_content: str, cursor_line: int, cursor_position: int):
         """
         Generate unique context ID.
 

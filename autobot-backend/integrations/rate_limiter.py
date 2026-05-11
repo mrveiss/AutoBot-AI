@@ -61,7 +61,7 @@ class RateLimitState:
         self._prune(now)
 
         minute_window = now - 60.0
-        hour_window = now - 3600.0
+        now - 3600.0
         minute_count = sum(1 for t in self.history if t > minute_window)
         hour_count = len(self.history)
 

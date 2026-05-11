@@ -21,11 +21,6 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from api.system_health import ComponentHealth, register_health_probe
-from auth_middleware import get_current_user
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.models.pagination import PaginationParams
-from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from api.schemas_workflows import (
     APIBatchRequest,
     APIBatchResponse,
@@ -34,9 +29,9 @@ from api.schemas_workflows import (
     BatchJobCreate,
     BatchJobDeleteResponse,
     BatchJobList,
+    BatchJobsHealthResponse,
     BatchJobStatus,
     BatchJobType,
-    BatchJobsHealthResponse,
     BatchLoadResponse,
     BatchLogEntry,
     BatchSchedule,
@@ -45,6 +40,11 @@ from api.schemas_workflows import (
     BatchTemplate,
     BatchTemplateDeleteResponse,
 )
+from api.system_health import ComponentHealth, register_health_probe
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.models.pagination import PaginationParams
+from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["batch-jobs", "management"])
@@ -682,9 +682,7 @@ def _process_session_file(filename: str, chats_directory: str):
         stat = os.stat(chat_path)
         return {
             "id": chat_id,
-            "title": (
-                f"Chat {chat_id[-8:]}" if len(chat_id) > 8 else f"Chat {chat_id}"
-            ),
+            "title": (f"Chat {chat_id[-8:]}" if len(chat_id) > 8 else f"Chat {chat_id}"),
             "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
             "updated_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
             "message_count": 0,
@@ -793,19 +791,9 @@ async def batch_chat_initialization():
             return_exceptions=True,
         )
 
-        chat_sessions = (
-            results[0] if not isinstance(results[0], Exception) else {"sessions": []}
-        )
-        system_health = (
-            results[1]
-            if not isinstance(results[1], Exception)
-            else {"status": "unknown"}
-        )
-        service_health = (
-            results[2]
-            if not isinstance(results[2], Exception)
-            else {"status": "unknown"}
-        )
+        chat_sessions = results[0] if not isinstance(results[0], Exception) else {"sessions": []}
+        system_health = results[1] if not isinstance(results[1], Exception) else {"status": "unknown"}
+        service_health = results[2] if not isinstance(results[2], Exception) else {"status": "unknown"}
         settings = results[3] if not isinstance(results[3], Exception) else {}
 
         response = {

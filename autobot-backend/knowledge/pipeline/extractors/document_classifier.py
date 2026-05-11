@@ -31,9 +31,7 @@ class DocumentClassifier(BaseExtractor):
         self.code_threshold = kwargs.get("code_threshold", 0.2)
         self.data_threshold = kwargs.get("data_threshold", 0.15)
 
-    async def process(
-        self, input_data: Any, context: PipelineContext
-    ) -> AsyncIterator[Dict[str, Any]]:
+    async def process(self, input_data: Any, context: PipelineContext) -> AsyncIterator[Dict[str, Any]]:
         """
         Classify document and yield classification metadata.
 
@@ -102,11 +100,7 @@ class DocumentClassifier(BaseExtractor):
             r"^\s*//|^\s*/\*|^\s*#",
         ]
 
-        code_lines = sum(
-            1
-            for line in lines
-            if any(re.search(pattern, line) for pattern in code_patterns)
-        )
+        code_lines = sum(1 for line in lines if any(re.search(pattern, line) for pattern in code_patterns))
 
         return code_lines / len(lines)
 
@@ -131,11 +125,7 @@ class DocumentClassifier(BaseExtractor):
         if not lines:
             return 0.0
 
-        data_lines = sum(
-            1
-            for line in lines
-            if any(re.search(pattern, line) for pattern in data_patterns)
-        )
+        data_lines = sum(1 for line in lines if any(re.search(pattern, line) for pattern in data_patterns))
 
         return data_lines / len(lines)
 
@@ -147,9 +137,7 @@ class DocumentClassifier(BaseExtractor):
             r"```",
             r"^\s*#+\s+",
         ]
-        return any(
-            re.search(marker, text, re.IGNORECASE) for marker in technical_markers
-        )
+        return any(re.search(marker, text, re.IGNORECASE) for marker in technical_markers)
 
     def _has_narrative_markers(self, text: str) -> bool:
         """Check for narrative document markers. Helper (Issue #665)."""
@@ -158,6 +146,4 @@ class DocumentClassifier(BaseExtractor):
             r'[""].*?[""]',
             r"^\s*Chapter\s+\d+",
         ]
-        return any(
-            re.search(marker, text, re.IGNORECASE) for marker in narrative_markers
-        )
+        return any(re.search(marker, text, re.IGNORECASE) for marker in narrative_markers)

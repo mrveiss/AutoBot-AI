@@ -12,14 +12,10 @@ Issue #1803 - Plugin and agent marketplace: package, share, and install extensio
 import json
 import logging
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from auth_middleware import get_current_user
-
-from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.ssot_config import config
 from api.marketplace_sources import BUILTIN_SOURCE_ID
 from api.schemas_workflows import (
     InstallRequest,
@@ -29,7 +25,10 @@ from api.schemas_workflows import (
     MarketplaceInstalledResponse,
     MarketplacePluginActionResponse,
 )
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_config import config
 
 
 class CatalogCategory(str, Enum):
@@ -53,6 +52,7 @@ class CatalogSort(str, Enum):
     RATING = "rating"
     NAME = "name"
     NEWEST = "newest"
+
 
 logger = logging.getLogger(__name__)
 
@@ -155,25 +155,88 @@ _BUILTIN_CATALOG: list[dict[str, Any]] = [
     },
 ]
 
+
+def _coerce_str(value: Any, fallback: str = "") -> str:
+    """Return ``value`` if it's a string, otherwise ``fallback``.
+
+    #6525: untrusted external catalogs may emit ``None`` or non-string types
+    where strings are expected. ``dict.get(key, default)`` only fires the
+    default when the key is *missing* — present-but-null returns the stored
+    ``None`` and downstream ``.replace``/``.title`` calls crash. This coercion
+    keeps the response shape strict-string regardless of remote sloppiness.
+    """
+    return value if isinstance(value, str) else fallback
+
+
+def _coerce_list(value: Any) -> list:
+    """Return ``value`` if it's a list, else an empty list. (#6525)"""
+    return value if isinstance(value, list) else []
+
+
 def _remote_plugin_to_entry(plugin: dict[str, Any], source_name: str) -> dict[str, Any]:
     """Issue #6481: shape an external CatalogPlugin dict to look like a
     MarketplaceEntry. Missing fields get safe defaults so the existing
-    response model and frontend continue to work."""
+    response model and frontend continue to work.
+
+    #6525: hardened against three failure modes:
+      1. ``dict.get(key, default)`` does NOT fire ``default`` when the key
+         exists with value ``None``. ``_coerce_str`` / ``_coerce_list``
+         enforce the type contract regardless of remote payload shape.
+      2. ``str.title()`` butchers acronyms (``"GIT-tools"`` → ``"Git Tools"``)
+         and apostrophes (``"don't"`` → ``"Don'T"``). Prefer an
+         upstream-provided ``display_name`` when present; fall back to the
+         raw ``name`` (untransformed) only when no display_name is supplied.
+      3. (Caller side) one bad entry must not 500 the whole catalog —
+         see ``_safe_remote_plugin_to_entry`` wrapper.
+    """
+    raw_name = _coerce_str(plugin.get("name"))
+    raw_display = _coerce_str(plugin.get("display_name"))
     return {
-        "name": plugin.get("name", ""),
-        "version": plugin.get("version", ""),
-        "display_name": plugin.get("name", "").replace("-", " ").title(),
-        "description": plugin.get("description", ""),
-        "author": plugin.get("author", source_name),
-        "category": plugin.get("category", CatalogCategory.OTHER.value),
-        "tags": plugin.get("tags", []),
+        "name": raw_name,
+        "version": _coerce_str(plugin.get("version")),
+        # #6525: prefer upstream display_name; fall back to raw name (no
+        # destructive .title() transform). Keeps acronyms + apostrophes
+        # + non-Latin scripts intact.
+        "display_name": raw_display or raw_name,
+        "description": _coerce_str(plugin.get("description")),
+        "author": _coerce_str(plugin.get("author"), fallback=source_name),
+        "category": _coerce_str(plugin.get("category"), fallback=CatalogCategory.OTHER.value),
+        "tags": _coerce_list(plugin.get("tags")),
         "entry_point": "",
         "dependencies": [],
         "hooks": [],
         "downloads": 0,
         "rating": 0.0,
-        "source_url": plugin.get("git_url", ""),
+        "source_url": _coerce_str(plugin.get("git_url")),
     }
+
+
+def _safe_remote_plugin_to_entry(plugin: Any, source_name: str) -> Optional[dict[str, Any]]:
+    """Per-item wrapper that turns one bad plugin into a logged skip.
+
+    #6525: pre-fix, ``[_remote_plugin_to_entry(p, ...) for p in remote_plugins]``
+    let any single malformed entry from a user-added remote marketplace
+    raise mid-comprehension and 500 the entire ``/catalog?source_id=...``
+    response — trivial DoS surface. Now per-item: bad entries are logged
+    and skipped; good entries flow through.
+    """
+    if not isinstance(plugin, dict):
+        logger.warning("Skipping non-dict catalog entry from %r: %r", source_name, type(plugin).__name__)
+        return None
+    try:
+        return _remote_plugin_to_entry(plugin, source_name)
+    except Exception as exc:
+        # Defensive: even with the type coercions above, a future field
+        # added in the remote schema could still raise something we
+        # didn't anticipate. Log identifiable context, drop the entry.
+        identifier = plugin.get("name") if isinstance(plugin.get("name"), str) else "<unknown>"
+        logger.warning(
+            "Skipping malformed catalog entry %r from %r: %s",
+            identifier,
+            source_name,
+            exc,
+        )
+        return None
 
 
 async def _get_catalog() -> list[dict[str, Any]]:
@@ -194,6 +257,48 @@ async def _get_catalog() -> list[dict[str, Any]]:
         logger.warning("Marketplace Redis seed failed: %s", exc)
 
     return _BUILTIN_CATALOG
+
+
+async def _resolve_catalog(source_id: str) -> list[dict[str, Any]]:
+    """#6524: shared catalog resolver used by list/detail/install endpoints.
+
+    For ``source_id == BUILTIN_SOURCE_ID`` returns the cached built-in catalog
+    (Redis-cached, seeded from ``_BUILTIN_CATALOG``). Otherwise looks up the
+    user-added source by id, fetches its remote catalog, and wraps each entry
+    via ``_safe_remote_plugin_to_entry`` to drop malformed payloads (#6525).
+
+    Raises ``HTTPException(404)`` for unknown source_id and ``HTTPException(422)``
+    for sources missing a catalog URL — preserves the same error semantics
+    that ``list_catalog`` already surfaced (#6527 contract).
+    """
+    if source_id == BUILTIN_SOURCE_ID:
+        return await _get_catalog()
+
+    from api.marketplace_sources import (  # local import: avoid cycle
+        fetch_remote_catalog,
+        get_source_by_id,
+    )
+
+    source = await get_source_by_id(source_id)
+    if source is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Marketplace source '{source_id}' not found",
+        )
+    if not source.url:
+        # Issue #6527: do NOT silently substitute the built-in catalog —
+        # surface the misconfiguration so the operator can fix the source.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Marketplace source '{source.name}' has no catalog URL configured",
+        )
+    remote_plugins = await fetch_remote_catalog(source.url)
+    # #6525: per-item wrapper drops malformed entries instead of failing
+    # the whole catalog. One bad apple from a user-added remote
+    # marketplace no longer 500s the response.
+    return [
+        entry for p in remote_plugins for entry in (_safe_remote_plugin_to_entry(p, source.name),) if entry is not None
+    ]
 
 
 @router.get("/catalog", response_model=MarketplaceCatalogResponse)
@@ -223,29 +328,7 @@ async def list_catalog(
     Issue #6481: ?source_id= selects which marketplace catalog to query.
     Issue #6534: category/sort_by validated by Pydantic via CatalogCategory/CatalogSort enums.
     """
-    if source_id == BUILTIN_SOURCE_ID:
-        catalog = await _get_catalog()
-    else:
-        from api.marketplace_sources import (  # local import: avoid cycle
-            fetch_remote_catalog,
-            get_source_by_id,
-        )
-
-        source = await get_source_by_id(source_id)
-        if source is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Marketplace source '{source_id}' not found",
-            )
-        if not source.url:
-            # Issue #6527: do NOT silently substitute the built-in catalog —
-            # surface the misconfiguration so the operator can fix the source.
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Marketplace source '{source.name}' has no catalog URL configured",
-            )
-        remote_plugins = await fetch_remote_catalog(source.url)
-        catalog = [_remote_plugin_to_entry(p, source.name) for p in remote_plugins]
+    catalog = await _resolve_catalog(source_id)
 
     # Filter by category
     if category != CatalogCategory.ALL:
@@ -255,7 +338,8 @@ async def list_catalog(
     if search:
         q = search.lower()
         catalog = [
-            e for e in catalog
+            e
+            for e in catalog
             if q in e.get("name", "").lower()
             or q in e.get("description", "").lower()
             or any(q in t.lower() for t in e.get("tags", []))
@@ -294,13 +378,24 @@ async def list_catalog(
     operation="get_catalog_entry",
     error_code_prefix="MARKETPLACE",
 )
-async def get_catalog_entry(plugin_name: str) -> MarketplaceEntry:
+async def get_catalog_entry(
+    plugin_name: str,
+    source_id: str = Query(
+        default=BUILTIN_SOURCE_ID,
+        description=f"Marketplace source id; '{BUILTIN_SOURCE_ID}' or a user-added source UUID (#6481, #6524)",
+    ),
+    # #6524: align auth posture with list_catalog — non-builtin source_id
+    # triggers a server-side fetch of arbitrary URLs (SSRF surface).
+    user: dict = Depends(get_current_user),
+) -> MarketplaceEntry:
     """
     Get a single marketplace catalog entry by name.
 
     Issue #1803: Plugin and agent marketplace.
+    Issue #6524: ?source_id= selects which marketplace catalog to query —
+    detail endpoint must agree with list_catalog and install_plugin.
     """
-    catalog = await _get_catalog()
+    catalog = await _resolve_catalog(source_id)
     entry = next((e for e in catalog if e.get("name") == plugin_name), None)
 
     if not entry:
@@ -336,8 +431,6 @@ async def list_categories() -> dict[str, list[str]]:
 # ---------------------------------------------------------------------------
 
 
-
-
 async def _get_installed() -> set[str]:
     """Return the set of installed plugin names from Redis."""
     try:
@@ -371,16 +464,23 @@ async def list_installed() -> dict[str, list[str]]:
     operation="install_plugin",
     error_code_prefix="MARKETPLACE",
 )
-async def install_plugin(body: InstallRequest) -> dict[str, str]:
+async def install_plugin(
+    body: InstallRequest,
+    user: dict = Depends(get_current_user),
+) -> dict[str, str]:
     """
     Mark a catalog plugin as installed.
 
-    Validates the plugin exists in the catalog then records it in the
-    installed set in Redis so the UI can reflect installation state.
+    Validates the plugin exists in the resolved catalog (built-in or the
+    user-added marketplace identified by ``body.source_id``) then records
+    it in the installed set in Redis so the UI can reflect installation state.
 
     Issue #1803: Plugin and agent marketplace.
+    Issue #6524: source_id required so install resolves against the same
+    catalog the user was browsing — fixes the headline 404 on every
+    custom-marketplace install.
     """
-    catalog = await _get_catalog()
+    catalog = await _resolve_catalog(body.source_id)
     entry = next((e for e in catalog if e.get("name") == body.plugin_name), None)
     if not entry:
         raise HTTPException(
@@ -391,14 +491,14 @@ async def install_plugin(body: InstallRequest) -> dict[str, str]:
     try:
         redis = await get_async_redis_client(database="main")
         await redis.sadd(_INSTALLED_KEY, body.plugin_name)
-        # Bump download counter in cached catalog
-        updated = [
-            {**e, "downloads": e.get("downloads", 0) + 1}
-            if e.get("name") == body.plugin_name
-            else e
-            for e in catalog
-        ]
-        await redis.set(_CATALOG_KEY, json.dumps(updated), ex=_CATALOG_TTL)
+        # Bump download counter in cached catalog — only meaningful for the
+        # built-in catalog (remote catalogs are read-only). Skip otherwise.
+        if body.source_id == BUILTIN_SOURCE_ID:
+            updated = [
+                {**e, "downloads": e.get("downloads", 0) + 1} if e.get("name") == body.plugin_name else e
+                for e in catalog
+            ]
+            await redis.set(_CATALOG_KEY, json.dumps(updated), ex=_CATALOG_TTL)
     except Exception as exc:
         logger.error("Marketplace: install failed for %s: %s", body.plugin_name, exc)
         raise HTTPException(
@@ -406,7 +506,11 @@ async def install_plugin(body: InstallRequest) -> dict[str, str]:
             detail="Failed to record plugin installation",
         ) from exc
 
-    logger.info("Marketplace: installed plugin %s", body.plugin_name)
+    logger.info(
+        "Marketplace: installed plugin %s from source %s",
+        body.plugin_name,
+        body.source_id,
+    )
     return {"status": "installed", "plugin": body.plugin_name}
 
 

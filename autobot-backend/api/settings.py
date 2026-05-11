@@ -15,6 +15,7 @@ import aiofiles
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.schemas_system import (
     ClearCacheResponse,
     ConfigSyncRequest,
@@ -29,7 +30,6 @@ from api.schemas_system import (
     UpdateStatusResponse,
     WorkerStatusResponse,
 )
-
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -50,7 +50,6 @@ logger = logging.getLogger(__name__)
 
 # Issue #687: RBAC marker path constant
 RBAC_MARKER_PATH = Path("/etc/autobot/rbac-initialized")
-
 
 
 @router.get("/", response_model=dict)
@@ -81,10 +80,7 @@ async def get_settings_explicit():
     This endpoint remains for backward compatibility but will be removed in a
     future release.
     """
-    logger.warning(
-        "Deprecated endpoint called: GET /api/settings/settings. "
-        "Use GET /api/settings/ instead. (#3334)"
-    )
+    logger.warning("Deprecated endpoint called: GET /api/settings/settings. " "Use GET /api/settings/ instead. (#3334)")
     try:
         return ConfigService.get_full_config()
     except Exception as e:
@@ -143,8 +139,7 @@ async def save_settings_explicit(
     future release.
     """
     logger.warning(
-        "Deprecated endpoint called: POST /api/settings/settings. "
-        "Use POST /api/settings/ instead. (#3334)"
+        "Deprecated endpoint called: POST /api/settings/settings. " "Use POST /api/settings/ instead. (#3334)"
     )
     try:
         if not settings_data:
@@ -272,9 +267,7 @@ async def clear_cache():
 
         return {
             "status": "success",
-            "message": (
-                "Configuration cache cleared. Settings will be reloaded on next request."
-            ),
+            "message": ("Configuration cache cleared. Settings will be reloaded on next request."),
             "available_endpoints": {
                 "clear_all_redis": "/api/cache/redis/clear/all",
                 "clear_specific_redis": "/api/cache/redis/clear/{database_name}",
@@ -409,11 +402,7 @@ async def get_rbac_status(
 
         return {
             "initialized": marker_exists,
-            "message": (
-                "RBAC system is initialized"
-                if marker_exists
-                else "RBAC system has not been initialized"
-            ),
+            "message": ("RBAC system is initialized" if marker_exists else "RBAC system has not been initialized"),
         }
 
     except Exception as e:
@@ -425,7 +414,6 @@ async def get_rbac_status(
 
 # Issue #544: System update marker path constant
 UPDATES_MARKER_PATH = Path("/etc/autobot/last-update")
-
 
 
 @router.post("/updates/run", response_model=SettingsTaskQueuedResponse)
@@ -689,11 +677,7 @@ async def get_update_status(
         return {
             "last_update": last_update,
             "marker_exists": marker_exists,
-            "message": (
-                f"Last update: {last_update}"
-                if marker_exists
-                else "No update history found"
-            ),
+            "message": (f"Last update: {last_update}" if marker_exists else "No update history found"),
         }
 
     except Exception as e:
@@ -747,7 +731,6 @@ def _exceeds_depth(obj: Any, current_depth: int = 0) -> bool:
     return False
 
 
-
 def _compute_flat_diff(before: dict, after: dict, prefix: str = "") -> dict:
     """Return a flat dict of keys whose values changed between *before* and *after*.
 
@@ -773,9 +756,7 @@ async def _atomic_write_json(target: Path, data: dict) -> None:
     write or rename fails so no partial file is left on disk.
     """
     target.parent.mkdir(parents=True, exist_ok=True)
-    tmp_fd, tmp_path = tempfile.mkstemp(
-        dir=str(target.parent), suffix=".tmp", prefix=target.stem + "_"
-    )
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=str(target.parent), suffix=".tmp", prefix=target.stem + "_")
     os.close(tmp_fd)  # aiofiles will reopen by path
     try:
         async with aiofiles.open(tmp_path, "w", encoding="utf-8") as fh:
@@ -835,10 +816,7 @@ async def sync_config(
     if raw_size > _SYNC_MAX_PAYLOAD_BYTES:
         raise HTTPException(
             status_code=400,
-            detail=(
-                f"settings payload is too large ({raw_size} bytes); "
-                f"limit is {_SYNC_MAX_PAYLOAD_BYTES} bytes"
-            ),
+            detail=(f"settings payload is too large ({raw_size} bytes); " f"limit is {_SYNC_MAX_PAYLOAD_BYTES} bytes"),
         )
 
     # Issue #3881: Reject unknown top-level keys to block arbitrary key injection.
@@ -853,9 +831,7 @@ async def sync_config(
     if _exceeds_depth(request.settings):
         raise HTTPException(
             status_code=400,
-            detail=(
-                f"settings payload exceeds maximum nesting depth of {_SYNC_MAX_DEPTH}"
-            ),
+            detail=(f"settings payload exceeds maximum nesting depth of {_SYNC_MAX_DEPTH}"),
         )
 
     before_config: dict = ConfigService.get_full_config()
@@ -941,9 +917,7 @@ async def update_hardware_priority(
     hw_manager.update_priorities(request.priority_order)
 
     # Read back the actually-applied order (filtered to available devices)
-    applied_order = [
-        t.value for t in hw_manager.current_config["priority_order"]
-    ]
+    applied_order = [t.value for t in hw_manager.current_config["priority_order"]]
 
     changed = _compute_flat_diff(before_config, merged_config)
 

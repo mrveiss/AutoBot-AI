@@ -50,18 +50,14 @@ class SimilarityCalculator:
             return self._text_similarity(fragment1.source_code, fragment2.source_code)
 
         # Calculate multiple similarity metrics
-        structural_sim = self._structural_similarity(
-            fragment1.ast_node, fragment2.ast_node
-        )
+        structural_sim = self._structural_similarity(fragment1.ast_node, fragment2.ast_node)
         token_sim = self._token_similarity(fragment1.source_code, fragment2.source_code)
         feature_sim = self._feature_similarity(fragment1.ast_node, fragment2.ast_node)
 
         # Weighted average
         weights = {"structural": 0.5, "token": 0.3, "feature": 0.2}
         similarity = (
-            weights["structural"] * structural_sim
-            + weights["token"] * token_sim
-            + weights["feature"] * feature_sim
+            weights["structural"] * structural_sim + weights["token"] * token_sim + weights["feature"] * feature_sim
         )
 
         return min(1.0, max(0.0, similarity))
@@ -81,9 +77,9 @@ class SimilarityCalculator:
         features2 = self.ast_hasher.extract_features(node2)
 
         # Compare node counts
-        node_count_sim = 1.0 - abs(
-            features1["node_count"] - features2["node_count"]
-        ) / max(features1["node_count"], features2["node_count"], 1)
+        node_count_sim = 1.0 - abs(features1["node_count"] - features2["node_count"]) / max(
+            features1["node_count"], features2["node_count"], 1
+        )
 
         # Compare node type sets
         types1 = set(features1["node_types"])

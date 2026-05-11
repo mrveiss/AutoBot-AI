@@ -13,6 +13,7 @@ import logging
 import re
 from enum import Enum
 from typing import List, Tuple
+
 from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)

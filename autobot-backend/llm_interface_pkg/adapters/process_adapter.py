@@ -39,19 +39,14 @@ class ProcessAdapter(AdapterBase):
 
     def __init__(self, config: Optional[AdapterConfig] = None):
         super().__init__("process", config)
-        self._tools: Dict[str, Dict[str, Any]] = self.config.settings.get(
-            "tools", DEFAULT_ALLOWED_TOOLS
-        )
+        self._tools: Dict[str, Dict[str, Any]] = self.config.settings.get("tools", DEFAULT_ALLOWED_TOOLS)
         self._timeout = self.config.settings.get("timeout", 120)
 
     def _get_tool_config(self, tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Get configuration for a specific tool."""
         name = tool_name or next(iter(self._tools), None)
         if not name or name not in self._tools:
-            raise ValueError(
-                f"Unknown process tool: {tool_name}. "
-                f"Available: {list(self._tools.keys())}"
-            )
+            raise ValueError(f"Unknown process tool: {tool_name}. " f"Available: {list(self._tools.keys())}")
         return self._tools[name]
 
     def _build_prompt(self, messages: list) -> str:
@@ -122,9 +117,7 @@ class ProcessAdapter(AdapterBase):
         prompt = self._build_prompt(request.messages)
         binary = tool_config["binary"]
         args = list(tool_config.get("args", []))
-        return await self._run_subprocess(
-            binary, args, prompt, tool_name, request.request_id
-        )
+        return await self._run_subprocess(binary, args, prompt, tool_name, request.request_id)
 
     async def test_environment(self) -> EnvironmentTestResult:
         """Test that configured CLI tools are available."""

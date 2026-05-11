@@ -21,12 +21,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from api.schemas_knowledge import (
     CompareVersionsRequest,
     CreateMetadataTemplateRequest,
-    RevertToVersionRequest,
-    SearchByMetadataRequest,
-    UpdateMetadataTemplateRequest,
-    ValidateMetadataRequest,
-)
-from api.schemas_knowledge import (
     KnowledgeFactRevertResponse,
     KnowledgeFactVersionCompareResponse,
     KnowledgeFactVersionDetailResponse,
@@ -38,11 +32,15 @@ from api.schemas_knowledge import (
     KnowledgeMetadataTemplateListResponse,
     KnowledgeMetadataTemplateResponse,
     KnowledgeMetadataValidateResponse,
+    RevertToVersionRequest,
+    SearchByMetadataRequest,
+    UpdateMetadataTemplateRequest,
+    ValidateMetadataRequest,
 )
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.error_constants import ERR_TEMPLATE_NOT_FOUND
 from knowledge import get_knowledge_base
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -174,9 +172,7 @@ async def get_metadata_template(template_id: str):
     operation="update_metadata_template",
     error_code_prefix="KNOWLEDGE_METADATA",
 )
-async def update_metadata_template(
-    template_id: str, request: UpdateMetadataTemplateRequest
-):
+async def update_metadata_template(template_id: str, request: UpdateMetadataTemplateRequest):
     """Update an existing metadata template."""
     try:
         kb = await get_knowledge_base()
@@ -440,9 +436,7 @@ async def revert_to_version(fact_id: str, request: RevertToVersionRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            "Failed to revert %s to version %d: %s", fact_id, request.version, e
-        )
+        logger.error("Failed to revert %s to version %d: %s", fact_id, request.version, e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

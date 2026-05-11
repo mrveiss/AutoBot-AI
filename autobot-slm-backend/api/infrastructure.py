@@ -20,8 +20,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from typing_extensions import Annotated
 
-from services.auth import get_current_user
 from services.ansible_utils import _extract_failure_summary
+from services.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/infrastructure", tags=["infrastructure"])
@@ -651,7 +651,7 @@ async def _run_playbook(
             execution.error = _summary or f"Playbook failed with exit code {process.returncode}"
             execution.output.append(f"[FAILED] Exit code: {process.returncode}")
 
-    except Exception as e:
+    except Exception:
         execution.status = PlaybookStatus.FAILED
         execution.error = "Internal server error"
         execution.output.append("[ERROR] Playbook execution failed")

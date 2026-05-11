@@ -17,8 +17,8 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from constants.threshold_constants import LLMDefaults
-from services.llm_service import get_llm_service
 from prompt_manager import get_language_instruction, resolve_language
+from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
@@ -87,9 +87,7 @@ class ChatAgent(StandardizedAgent):
         """Return list of capabilities this agent supports."""
         return self.capabilities.copy()
 
-    def _build_chat_payload(
-        self, response_text: str, response: Any
-    ) -> Dict[str, Any]:
+    def _build_chat_payload(self, response_text: str, response: Any) -> Dict[str, Any]:
         """
         Build the chat-specific payload dict.
 
@@ -127,10 +125,7 @@ class ChatAgent(StandardizedAgent):
         """
         return {
             "status": "error",
-            "response_text": (
-                "I'm having trouble processing your message right now. "
-                "Could you try rephrasing it?"
-            ),
+            "response_text": ("I'm having trouble processing your message right now. " "Could you try rephrasing it?"),
             "error": str(error),
             "agent_type": "chat",
             "model_used": self.model_name,
@@ -162,11 +157,7 @@ class ChatAgent(StandardizedAgent):
             # Prepare chat-optimized system prompt with language (#1327) and MCP tools (#2596)
             lang_code = resolve_language()
             mcp_section = await self._get_mcp_tools_prompt()
-            system_prompt = (
-                self._get_chat_system_prompt()
-                + mcp_section
-                + get_language_instruction(lang_code)
-            )
+            system_prompt = self._get_chat_system_prompt() + mcp_section + get_language_instruction(lang_code)
 
             # Build conversation context
             messages = [{"role": "system", "content": system_prompt}]
@@ -216,9 +207,7 @@ You specialize in:
 For complex technical tasks, analysis, or system commands, you should "
         "indicate that specialized agents can handle those better."""
 
-    def _build_history_messages(
-        self, chat_history: List[Dict[str, Any]]
-    ) -> List[Dict[str, str]]:
+    def _build_history_messages(self, chat_history: List[Dict[str, Any]]) -> List[Dict[str, str]]:
         """Build message list from chat history (Issue #334 - extracted helper)."""
         messages = []
         recent_history = chat_history[-6:] if len(chat_history) > 6 else chat_history

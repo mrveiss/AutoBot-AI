@@ -11,12 +11,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from api.schemas_common import DataResponse
+from api.schemas_system import HotReloadHealthResponse, ReloadRequest, ReloadResponse
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
-from api.schemas_common import DataResponse
-from api.schemas_system import HotReloadHealthResponse, ReloadRequest, ReloadResponse
 
 logger = logging.getLogger(__name__)
 
@@ -47,12 +47,8 @@ async def reload_chat_workflow():
         reload_results = await hot_reload_manager.reload_chat_workflow()
 
         # Process results
-        successful_reloads = [
-            module for module, success in reload_results.items() if success
-        ]
-        failed_reloads = [
-            module for module, success in reload_results.items() if not success
-        ]
+        successful_reloads = [module for module, success in reload_results.items() if success]
+        failed_reloads = [module for module, success in reload_results.items() if not success]
 
         overall_success = len(successful_reloads) > 0
 
@@ -159,9 +155,7 @@ async def start_hot_reload():
 
         return {
             "success": True,
-            "message": (
-                "Hot reload manager started and chat workflow modules registered"
-            ),
+            "message": ("Hot reload manager started and chat workflow modules registered"),
         }
 
     except Exception as e:

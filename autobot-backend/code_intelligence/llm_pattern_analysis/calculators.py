@@ -203,9 +203,7 @@ class CostCalculator:
         Issue #620.
         """
         daily_prompt_cost = (daily_calls * avg_prompt / 1000) * pricing["prompt"]
-        daily_completion_cost = (daily_calls * avg_completion / 1000) * pricing[
-            "completion"
-        ]
+        daily_completion_cost = (daily_calls * avg_completion / 1000) * pricing["completion"]
         daily_cost = daily_prompt_cost + daily_completion_cost
 
         return CostEstimate(
@@ -247,15 +245,11 @@ class CostCalculator:
             model_patterns[model].append(pattern)
 
         for model, model_pats in model_patterns.items():
-            pricing = cls.MODEL_PRICING.get(
-                model, cls.MODEL_PRICING.get(OPENAI_GPT35_TURBO)
-            )
+            pricing = cls.MODEL_PRICING.get(model, cls.MODEL_PRICING.get(OPENAI_GPT35_TURBO))
             daily_calls = len(model_pats) * daily_call_multiplier
             avg_prompt, avg_completion = cls._estimate_avg_tokens(model_pats)
 
-            estimate = cls._create_cost_estimate(
-                model, daily_calls, avg_prompt, avg_completion, pricing
-            )
+            estimate = cls._create_cost_estimate(model, daily_calls, avg_prompt, avg_completion, pricing)
             estimates.append(estimate)
 
         return estimates

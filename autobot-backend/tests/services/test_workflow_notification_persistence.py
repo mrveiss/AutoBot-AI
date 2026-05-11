@@ -12,7 +12,7 @@ Covers:
 
 import json
 from dataclasses import asdict
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -23,6 +23,7 @@ from services.workflow_automation.persistence import (
     load_notification_config,
     save_notification_config,
 )
+from tests.fixtures import make_async_redis, patch_async_redis
 
 # ===========================================================================
 # Helpers
@@ -45,12 +46,12 @@ def _make_config(**kwargs) -> NotificationConfig:
     return NotificationConfig(**defaults)
 
 
-def _make_redis(get_return=None):
-    mock = AsyncMock()
-    mock.set = AsyncMock(return_value=True)
-    mock.get = AsyncMock(return_value=get_return)
-    mock.delete = AsyncMock(return_value=1)
-    return mock
+# Migrated to canonical ``make_async_redis()`` / ``patch_async_redis()``
+# from ``tests.fixtures`` (#7280 round 2). Local ``_make_redis()`` removed.
+# Critical fix surfaced by migration: production imports
+# ``get_async_redis_client`` (async) but tests patched ``get_redis_client``
+# (sync, doesn't exist in the consumer namespace) — patches AttributeError'd
+# at runtime, all 7 affected tests were broken pre-migration.
 
 
 # ===========================================================================
@@ -61,10 +62,10 @@ def _make_redis(get_return=None):
 @pytest.mark.asyncio
 async def test_save_persists_json_to_redis():
     config = _make_config()
-    redis_mock = _make_redis()
-    with patch(
-        "services.workflow_automation.persistence.get_redis_client",
-        return_value=redis_mock,
+    redis_mock = make_async_redis()
+    with patch_async_redis(
+        "services.workflow_automation.persistence.get_async_redis_client",
+        redis=redis_mock,
     ):
         await save_notification_config(_WF_ID, config)
 
@@ -80,10 +81,10 @@ async def test_save_persists_json_to_redis():
 
 @pytest.mark.asyncio
 async def test_save_none_deletes_key():
-    redis_mock = _make_redis()
-    with patch(
-        "services.workflow_automation.persistence.get_redis_client",
-        return_value=redis_mock,
+    redis_mock = make_async_redis()
+    with patch_async_redis(
+        "services.workflow_automation.persistence.get_async_redis_client",
+        redis=redis_mock,
     ):
         await save_notification_config(_WF_ID, None)
 
@@ -94,8 +95,8 @@ async def test_save_none_deletes_key():
 @pytest.mark.asyncio
 async def test_save_graceful_when_redis_unavailable():
     with patch(
-        "services.workflow_automation.persistence.get_redis_client",
-        return_value=None,
+        "services.workflow_automation.persistence.get_async_redis_client",
+        new=AsyncMock(return_value=None),
     ):
         await save_notification_config(_WF_ID, _make_config())
 
@@ -109,10 +110,10 @@ async def test_save_graceful_when_redis_unavailable():
 async def test_load_returns_config_from_redis():
     config = _make_config()
     raw_json = json.dumps(asdict(config)).encode("utf-8")
-    redis_mock = _make_redis(get_return=raw_json)
-    with patch(
-        "services.workflow_automation.persistence.get_redis_client",
-        return_value=redis_mock,
+    redis_mock = make_async_redis(get_returns=raw_json)
+    with patch_async_redis(
+        "services.workflow_automation.persistence.get_async_redis_client",
+        redis=redis_mock,
     ):
         result = await load_notification_config(_WF_ID)
 
@@ -124,10 +125,10 @@ async def test_load_returns_config_from_redis():
 
 @pytest.mark.asyncio
 async def test_load_returns_none_when_key_missing():
-    redis_mock = _make_redis(get_return=None)
-    with patch(
-        "services.workflow_automation.persistence.get_redis_client",
-        return_value=redis_mock,
+    redis_mock = make_async_redis(get_returns=None)
+    with patch_async_redis(
+        "services.workflow_automation.persistence.get_async_redis_client",
+        redis=redis_mock,
     ):
         result = await load_notification_config(_WF_ID)
 
@@ -137,8 +138,8 @@ async def test_load_returns_none_when_key_missing():
 @pytest.mark.asyncio
 async def test_load_returns_none_when_redis_unavailable():
     with patch(
-        "services.workflow_automation.persistence.get_redis_client",
-        return_value=None,
+        "services.workflow_automation.persistence.get_async_redis_client",
+        new=AsyncMock(return_value=None),
     ):
         result = await load_notification_config(_WF_ID)
 
@@ -147,10 +148,10 @@ async def test_load_returns_none_when_redis_unavailable():
 
 @pytest.mark.asyncio
 async def test_load_returns_none_on_malformed_json():
-    redis_mock = _make_redis(get_return=b"not-valid-json")
-    with patch(
-        "services.workflow_automation.persistence.get_redis_client",
-        return_value=redis_mock,
+    redis_mock = make_async_redis(get_returns=b"not-valid-json")
+    with patch_async_redis(
+        "services.workflow_automation.persistence.get_async_redis_client",
+        redis=redis_mock,
     ):
         result = await load_notification_config(_WF_ID)
 

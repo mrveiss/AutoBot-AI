@@ -180,7 +180,7 @@ class TestStalenessProvenanceInteraction:
 
         staleness_map = {
             "stale-extracted": 0.8,  # penalty_factor = 0.2
-            "fresh-inferred": 0.0,   # penalty_factor = 1.0
+            "fresh-inferred": 0.0,  # penalty_factor = 1.0
         }
 
         reranker._apply_rerank_scores(
@@ -265,6 +265,4 @@ class TestStalenessProvenanceInteraction:
         results = [stale_extracted, fresh_inferred]
         reranker._apply_rerank_scores(results, scores=[0.0, 0.0], weights=weights, staleness_map=staleness_map)
 
-        assert results[0] is fresh_inferred, (
-            "fresh-inferred should be first (highest rerank_score) after sorting"
-        )
+        assert results[0] is fresh_inferred, "fresh-inferred should be first (highest rerank_score) after sorting"

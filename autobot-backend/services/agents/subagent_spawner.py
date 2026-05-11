@@ -70,13 +70,9 @@ class SubagentSpawner:
         """
         # Validate constraints
         if len(tasks) > MAX_SUBAGENTS_PER_PARENT:
-            raise ValueError(
-                f"Cannot spawn {len(tasks)} subagents: max {MAX_SUBAGENTS_PER_PARENT}"
-            )
+            raise ValueError(f"Cannot spawn {len(tasks)} subagents: max {MAX_SUBAGENTS_PER_PARENT}")
         if parent_depth >= MAX_SUBAGENT_DEPTH:
-            raise ValueError(
-                f"Cannot spawn subagents at depth {parent_depth}: max {MAX_SUBAGENT_DEPTH}"
-            )
+            raise ValueError(f"Cannot spawn subagents at depth {parent_depth}: max {MAX_SUBAGENT_DEPTH}")
 
         logger.info(
             "Spawning %d subagents for parent task %s (depth %d)",
@@ -93,9 +89,7 @@ class SubagentSpawner:
                 context=task_dict.get("context", {}),
                 constraints=task_dict.get("constraints", {}),
                 timeout_seconds=task_dict.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS),
-                priority=TaskPriority(
-                    task_dict.get("priority", TaskPriority.NORMAL.value)
-                ),
+                priority=TaskPriority(task_dict.get("priority", TaskPriority.NORMAL.value)),
                 parent_task_id=parent_task_id,
                 depth=parent_depth + 1,
                 metadata=task_dict.get("metadata", {}),
@@ -122,13 +116,9 @@ class SubagentSpawner:
             }
 
         # Wait for all subagents to complete
-        overall_timeout = timeout_seconds or (
-            max(t.timeout_seconds for t in subagent_tasks) + 30
-        )
+        overall_timeout = timeout_seconds or (max(t.timeout_seconds for t in subagent_tasks) + 30)
         try:
-            results = await self._wait_for_completion(
-                parent_task_id, subagent_tasks, overall_timeout
-            )
+            results = await self._wait_for_completion(parent_task_id, subagent_tasks, overall_timeout)
             return {
                 "parent_task_id": parent_task_id,
                 "subagent_ids": task_ids,
@@ -159,9 +149,7 @@ class SubagentSpawner:
         """Cancel a running subagent task."""
         logger.info("Cancelling subagent task %s", task_id)
         if self.redis:
-            await self.redis.set(
-                f"subagent:cancelled:{task_id}", "true", ex=TTL_1_HOUR
-            )
+            await self.redis.set(f"subagent:cancelled:{task_id}", "true", ex=TTL_1_HOUR)
         return True
 
     async def _wait_for_completion(
@@ -223,9 +211,7 @@ class SubagentSpawner:
 
             await asyncio.sleep(poll_interval)
 
-    async def _persist_tasks(
-        self, parent_task_id: str, tasks: List[SubagentTask]
-    ) -> None:
+    async def _persist_tasks(self, parent_task_id: str, tasks: List[SubagentTask]) -> None:
         """Persist tasks to Redis for durability."""
         if not self.redis:
             return
@@ -238,9 +224,7 @@ class SubagentSpawner:
                 ex=TTL_1_HOUR,
             )
             # Track parent-child relationship
-            await self.redis.lpush(
-                f"subagent:children:{parent_task_id}", task.task_id
-            )
+            await self.redis.lpush(f"subagent:children:{parent_task_id}", task.task_id)
 
     async def aggregate_results(
         self,
@@ -351,12 +335,8 @@ class SubagentSpawner:
         # Apply resolution strategy
         if strategy == "consensus":
             # Try to reach consensus
-            majority_output = max(
-                output_str_set, key=lambda o: sum(1 for x in outputs if str(x) == o)
-            )
+            majority_output = max(output_str_set, key=lambda o: sum(1 for x in outputs if str(x) == o))
             conflict.resolved_output = majority_output
-            conflict.confidence = (
-                sum(1 for o in outputs if str(o) == majority_output) / len(outputs)
-            )
+            conflict.confidence = sum(1 for o in outputs if str(o) == majority_output) / len(outputs)
 
         return conflict

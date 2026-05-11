@@ -3,7 +3,6 @@
 Analyze frontend code for JavaScript, TypeScript, Vue, React, Angular, and other frontend technologies
 """
 
-import asyncio
 import json
 import sys
 from pathlib import Path
@@ -13,6 +12,8 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from frontend_analyzer import FrontendAnalyzer
 
+from autobot_shared.async_compat import run_or_schedule
+
 
 def _print_analysis_summary(results: dict) -> None:
     """
@@ -21,19 +22,11 @@ def _print_analysis_summary(results: dict) -> None:
     Issue #281: Extracted from analyze_frontend_code to reduce function length.
     """
     print(f"📊 **Analysis Summary:**")  # noqa: print
-    print(
-        f"   • Total components analyzed: {results['total_components']}"
-    )  # noqa: print
+    print(f"   • Total components analyzed: {results['total_components']}")  # noqa: print
     print(f"   • Total issues found: {results['total_issues']}")  # noqa: print
-    print(
-        f"   • Frameworks detected: {', '.join(results['frameworks_detected'])}"
-    )  # noqa: print
-    print(
-        f"   • Overall quality score: {results['quality_score']:.1f}/100"
-    )  # noqa: print
-    print(
-        f"   • Analysis time: {results['analysis_time_seconds']:.2f} seconds"
-    )  # noqa: print
+    print(f"   • Frameworks detected: {', '.join(results['frameworks_detected'])}")  # noqa: print
+    print(f"   • Overall quality score: {results['quality_score']:.1f}/100")  # noqa: print
+    print(f"   • Analysis time: {results['analysis_time_seconds']:.2f} seconds")  # noqa: print
     print()  # noqa: print
 
 
@@ -49,9 +42,7 @@ def _print_framework_usage(results: dict) -> None:
     print("🏗️ **Framework Usage:**")  # noqa: print
     for framework, usage in results["framework_usage"].items():
         framework_name = framework.title()
-        print(  # noqa: print
-            f"   • {framework_name}: {usage['count']} components ({usage['percentage']:.1f}%)"
-        )
+        print(f"   • {framework_name}: {usage['count']} components ({usage['percentage']:.1f}%)")  # noqa: print
 
         if usage.get("lifecycle_hooks"):
             hooks = ", ".join(usage["lifecycle_hooks"][:5])
@@ -73,11 +64,7 @@ def _print_component_analysis(results: dict) -> None:
     print("🧩 **Component Analysis:**")  # noqa: print
 
     components_with_tests = len([c for c in results["components"] if c["has_tests"]])
-    test_coverage = (
-        (components_with_tests / len(results["components"]) * 100)
-        if results["components"]
-        else 0
-    )
+    test_coverage = (components_with_tests / len(results["components"]) * 100) if results["components"] else 0
 
     print(  # noqa: print
         f"   • Components with tests: {components_with_tests}/{len(results['components'])} ({test_coverage:.1f}%)"
@@ -94,9 +81,7 @@ def _print_component_analysis(results: dict) -> None:
         print("   • Most complex components:")  # noqa: print
         for comp in complex_components:
             complexity = len(comp["methods"]) + len(comp["props"])
-            print(  # noqa: print
-                f"     - {comp['name']} ({comp['component_type']}): {complexity} methods+props"
-            )
+            print(f"     - {comp['name']} ({comp['component_type']}): {complexity} methods+props")  # noqa: print
     print()  # noqa: print
 
 
@@ -108,23 +93,13 @@ def _print_security_analysis(results: dict) -> None:
     """
     security_analysis = results["security_analysis"]
     print(f"🛡️ **Security Analysis:**")  # noqa: print
-    print(
-        f"   • Total security issues: {security_analysis['total_security_issues']}"
-    )  # noqa: print
-    print(
-        f"   • Critical issues: {security_analysis['critical_issues']}"
-    )  # noqa: print
-    print(
-        f"   • High priority issues: {security_analysis['high_priority_issues']}"
-    )  # noqa: print
-    print(
-        f"   • Security score: {security_analysis['security_score']:.1f}/100"
-    )  # noqa: print
+    print(f"   • Total security issues: {security_analysis['total_security_issues']}")  # noqa: print
+    print(f"   • Critical issues: {security_analysis['critical_issues']}")  # noqa: print
+    print(f"   • High priority issues: {security_analysis['high_priority_issues']}")  # noqa: print
+    print(f"   • Security score: {security_analysis['security_score']:.1f}/100")  # noqa: print
 
     if security_analysis["total_security_issues"] > 0:
-        security_issues = [
-            i for i in results["issues"] if i["issue_type"] == "security"
-        ]
+        security_issues = [i for i in results["issues"] if i["issue_type"] == "security"]
         print("   • Top security issues:")  # noqa: print
         for issue in security_issues[:3]:
             severity_emoji = {
@@ -134,9 +109,7 @@ def _print_security_analysis(results: dict) -> None:
                 "low": "🟢",
             }
             emoji = severity_emoji.get(issue["severity"], "⚪")
-            print(  # noqa: print
-                f"     {emoji} {issue['description']} ({issue['file_path']}:{issue['line_number']})"
-            )
+            print(f"     {emoji} {issue['description']} ({issue['file_path']}:{issue['line_number']})")  # noqa: print
     print()  # noqa: print
 
 
@@ -149,30 +122,20 @@ def _print_performance_accessibility(results: dict) -> None:
     # Performance analysis
     performance_analysis = results["performance_analysis"]
     print(f"⚡ **Performance Analysis:**")  # noqa: print
-    print(  # noqa: print
-        f"   • Total performance issues: {performance_analysis['total_performance_issues']}"
-    )
-    print(  # noqa: print
-        f"   • Components with issues: {performance_analysis['components_with_issues']}"
-    )
+    print(f"   • Total performance issues: {performance_analysis['total_performance_issues']}")  # noqa: print
+    print(f"   • Components with issues: {performance_analysis['components_with_issues']}")  # noqa: print
 
     if performance_analysis["issues_by_type"]:
         print("   • Issue breakdown:")  # noqa: print
-        for issue_desc, count in list(performance_analysis["issues_by_type"].items())[
-            :5
-        ]:
+        for issue_desc, count in list(performance_analysis["issues_by_type"].items())[:5]:
             print(f"     - {issue_desc}: {count}")  # noqa: print
     print()  # noqa: print
 
     # Accessibility analysis
     accessibility_analysis = results["accessibility_analysis"]
     print(f"♿ **Accessibility Analysis:**")  # noqa: print
-    print(  # noqa: print
-        f"   • Total accessibility issues: {accessibility_analysis['total_accessibility_issues']}"
-    )
-    print(  # noqa: print
-        f"   • WCAG compliance score: {accessibility_analysis['wcag_compliance_score']:.1f}/100"
-    )
+    print(f"   • Total accessibility issues: {accessibility_analysis['total_accessibility_issues']}")  # noqa: print
+    print(f"   • WCAG compliance score: {accessibility_analysis['wcag_compliance_score']:.1f}/100")  # noqa: print
 
     if accessibility_analysis.get("issues_by_severity"):
         print("   • Issues by severity:")  # noqa: print
@@ -212,9 +175,7 @@ def _print_detailed_issues(results: dict) -> None:
         # Show top issues by severity
         sorted_issues = sorted(
             type_issues,
-            key=lambda x: {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(
-                x["severity"], 0
-            ),
+            key=lambda x: {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(x["severity"], 0),
             reverse=True,
         )
 
@@ -228,9 +189,7 @@ def _print_detailed_issues(results: dict) -> None:
             emoji = severity_emoji.get(issue["severity"], "⚪")
 
             print(f"   {emoji} {issue['description']}")  # noqa: print
-            print(  # noqa: print
-                f"      📄 {issue['file_path']}:{issue['line_number']} ({issue['framework']})"
-            )
+            print(f"      📄 {issue['file_path']}:{issue['line_number']} ({issue['framework']})")  # noqa: print
             print(f"      💡 Suggestion: {issue['suggestion']}")  # noqa: print
 
 
@@ -255,9 +214,7 @@ def _print_framework_recommendations(results: dict) -> None:
         print(f"\n🔧 **React Best Practices:**")  # noqa: print
         print("   • Use React Hooks instead of class components")  # noqa: print
         print("   • Avoid deprecated lifecycle methods")  # noqa: print
-        print(
-            "   • Sanitize content before using dangerouslySetInnerHTML"
-        )  # noqa: print
+        print("   • Sanitize content before using dangerouslySetInnerHTML")  # noqa: print
         print("   • Use proper keys for list items")  # noqa: print
 
     if "javascript" in results["frameworks_detected"]:
@@ -276,9 +233,7 @@ async def analyze_frontend_code():
     function length from 186 to ~50 lines.
     """
     print("🎨 Starting frontend code analysis...")  # noqa: print
-    print(  # noqa: print
-        "Analyzing JavaScript, TypeScript, Vue, React, Angular, and other frontend files..."
-    )
+    print("Analyzing JavaScript, TypeScript, Vue, React, Angular, and other frontend files...")  # noqa: print
     print()  # noqa: print
 
     analyzer = FrontendAnalyzer()
@@ -320,15 +275,11 @@ async def analyze_frontend_code():
     critical_issues = [i for i in results["issues"] if i["severity"] == "critical"]
     if critical_issues:
         print(f"\n🚨 **CRITICAL ISSUES - IMMEDIATE ACTION REQUIRED:**")  # noqa: print
-        print(  # noqa: print
-            f"Found {len(critical_issues)} critical issues that need immediate attention:"
-        )
+        print(f"Found {len(critical_issues)} critical issues that need immediate attention:")  # noqa: print
 
         for issue in critical_issues:
             print(f"\n🔴 **{issue['description']}**")  # noqa: print
-            print(
-                f"   📄 File: {issue['file_path']}:{issue['line_number']}"
-            )  # noqa: print
+            print(f"   📄 File: {issue['file_path']}:{issue['line_number']}")  # noqa: print
             print(f"   🏗️ Framework: {issue['framework'].title()}")  # noqa: print
             print(f"   💡 Fix: {issue['suggestion']}")  # noqa: print
 
@@ -351,9 +302,7 @@ def _print_examples_xss_perf_a11y() -> None:
     print("```javascript")  # noqa: print
     print("// ❌ Inefficient - DOM query in loop")  # noqa: print
     print("for (let i = 0; i < items.length; i++) {")  # noqa: print
-    print(
-        "    document.querySelector('.container').appendChild(items[i]);"
-    )  # noqa: print
+    print("    document.querySelector('.container').appendChild(items[i]);")  # noqa: print
     print("}")  # noqa: print
     print()  # noqa: print
     print("// ✅ Efficient - Cache DOM query")  # noqa: print
@@ -368,9 +317,7 @@ def _print_examples_xss_perf_a11y() -> None:
     print('<img src="chart.png">')  # noqa: print
     print()  # noqa: print
     print("<!-- ✅ Descriptive alt text -->")  # noqa: print
-    print(
-        '<img src="chart.png" alt="Sales chart showing 25% growth in Q3 2024">'
-    )  # noqa: print
+    print('<img src="chart.png" alt="Sales chart showing 25% growth in Q3 2024">')  # noqa: print
     print("```\n")  # noqa: print
 
 
@@ -388,18 +335,14 @@ def _print_examples_vue_react_events() -> None:
     print("```jsx")  # noqa: print
     print("// ❌ Dangerous - Unsanitized content")  # noqa: print
     print("function Component({ userContent }) {")  # noqa: print
-    print(
-        "    return <div dangerouslySetInnerHTML={{__html: userContent}} />;"
-    )  # noqa: print
+    print("    return <div dangerouslySetInnerHTML={{__html: userContent}} />;")  # noqa: print
     print("}")  # noqa: print
     print()  # noqa: print
     print("// ✅ Safe - Sanitized content")  # noqa: print
     print("import DOMPurify from 'dompurify';")  # noqa: print
     print("function Component({ userContent }) {")  # noqa: print
     print("    const sanitized = DOMPurify.sanitize(userContent);")  # noqa: print
-    print(
-        "    return <div dangerouslySetInnerHTML={{__html: sanitized}} />;"
-    )  # noqa: print
+    print("    return <div dangerouslySetInnerHTML={{__html: sanitized}} />;")  # noqa: print
     print("}")  # noqa: print
     print("```\n")  # noqa: print
     print("**6. Event Listener Cleanup:**")  # noqa: print
@@ -426,12 +369,8 @@ async def main():
 
     # Check if we're in the right directory
     if not Path("src").exists():
-        print(
-            "❌ Please run this script from the code-analysis-suite directory"
-        )  # noqa: print
-        print(
-            "Usage: cd code-analysis-suite && python scripts/analyze_frontend.py"
-        )  # noqa: print
+        print("❌ Please run this script from the code-analysis-suite directory")  # noqa: print
+        print("Usage: cd code-analysis-suite && python scripts/analyze_frontend.py")  # noqa: print
         return
 
     # Run analysis
@@ -442,9 +381,7 @@ async def main():
 
     print("\n=== 🎯 Frontend Analysis Complete ===")  # noqa: print
     print("Next steps:")  # noqa: print
-    print(
-        "1. Review frontend_analysis_report.json for detailed findings"
-    )  # noqa: print
+    print("1. Review frontend_analysis_report.json for detailed findings")  # noqa: print
     print("2. Address critical security issues immediately")  # noqa: print
     print("3. Fix performance issues affecting user experience")  # noqa: print
     print("4. Improve accessibility for better inclusion")  # noqa: print
@@ -453,4 +390,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

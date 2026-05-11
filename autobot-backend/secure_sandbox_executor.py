@@ -16,9 +16,10 @@ import tempfile
 import time
 import uuid
 from dataclasses import dataclass
-from services.tool_output_filter import _dedup_consecutive, _strip_ansi
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+from services.tool_output_filter import _dedup_consecutive, _strip_ansi
 
 try:
     # docker SDK is an optional runtime dep; required for the sandbox
@@ -30,7 +31,7 @@ try:
     from docker.errors import DockerException, ImageNotFound
 
     DOCKER_SDK_AVAILABLE = True
-except ImportError as _docker_import_error:
+except ImportError:
     DOCKER_SDK_AVAILABLE = False
     docker = None  # type: ignore[assignment]
 
@@ -39,6 +40,7 @@ except ImportError as _docker_import_error:
 
     class ImageNotFound(DockerException):  # type: ignore[no-redef]
         """Stub raised when docker SDK is not installed."""
+
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_optional_singleton
@@ -117,8 +119,7 @@ class SecureSandboxExecutor:
         # Docker client — fail informatively if SDK is missing (#6667)
         if not DOCKER_SDK_AVAILABLE:
             raise DockerException(
-                "docker SDK not installed; install with `pip install docker` to enable "
-                "the secure sandbox executor."
+                "docker SDK not installed; install with `pip install docker` to enable " "the secure sandbox executor."
             )
 
         try:
@@ -160,9 +161,7 @@ class SecureSandboxExecutor:
                 self.logger.error("Failed to pull fallback image: %s", e)
                 raise
 
-    def _create_validation_failure_result(
-        self, command: Union[str, List[str]], container_id: str
-    ) -> SandboxResult:
+    def _create_validation_failure_result(self, command: Union[str, List[str]], container_id: str) -> SandboxResult:
         """
         Create a SandboxResult for command validation failure.
 
@@ -193,9 +192,7 @@ class SecureSandboxExecutor:
             metadata={"validation_failed": True},
         )
 
-    def _create_execution_error_result(
-        self, error: Exception, start_time: float, container_id: str
-    ) -> SandboxResult:
+    def _create_execution_error_result(self, error: Exception, start_time: float, container_id: str) -> SandboxResult:
         """
         Create a SandboxResult for execution errors.
 
@@ -221,9 +218,7 @@ class SecureSandboxExecutor:
             metadata={"error": str(error)},
         )
 
-    def _execute_container_with_timeout(
-        self, container, config: SandboxConfig
-    ) -> Tuple[int, str, str, Dict[str, Any]]:
+    def _execute_container_with_timeout(self, container, config: SandboxConfig) -> Tuple[int, str, str, Dict[str, Any]]:
         """
         Execute container and collect raw output data. Issue #620.
 
@@ -369,9 +364,7 @@ class SecureSandboxExecutor:
             self.active_containers[container_id] = container.id
 
             # Issue #281: uses helper
-            return await self._run_container_and_collect_results(
-                container, container_id, config, start_time
-            )
+            return await self._run_container_and_collect_results(container, container_id, config, start_time)
 
         except Exception as e:
             self.logger.error("Sandbox execution error: %s", e)
@@ -431,13 +424,9 @@ class SecureSandboxExecutor:
             try:
                 await asyncio.to_thread(os.unlink, script_path)
             except Exception as e:
-                self.logger.debug(
-                    "Failed to cleanup script file %s: %s", script_path, e
-                )
+                self.logger.debug("Failed to cleanup script file %s: %s", script_path, e)
 
-    def _validate_command(
-        self, command: Union[str, List[str]], config: SandboxConfig
-    ) -> bool:
+    def _validate_command(self, command: Union[str, List[str]], config: SandboxConfig) -> bool:
         """Validate command against security policies."""
         command_parts = command.split() if isinstance(command, str) else command
 
@@ -505,9 +494,7 @@ class SecureSandboxExecutor:
             return False
         return True
 
-    def _apply_security_level_config(
-        self, container_config: Dict[str, Any], config: SandboxConfig
-    ) -> None:
+    def _apply_security_level_config(self, container_config: Dict[str, Any], config: SandboxConfig) -> None:
         """
         Apply security level specific settings to container configuration.
 
@@ -533,9 +520,7 @@ class SecureSandboxExecutor:
                 "SETGID",
             ]
 
-    def _apply_volume_config(
-        self, container_config: Dict[str, Any], config: SandboxConfig
-    ) -> None:
+    def _apply_volume_config(self, container_config: Dict[str, Any], config: SandboxConfig) -> None:
         """
         Apply volume configuration to container.
 
@@ -554,9 +539,7 @@ class SecureSandboxExecutor:
                 "/sandbox/tmp": "size=50M,mode=1777",
             }
 
-    def _prepare_container_config(
-        self, command: Union[str, List[str]], config: SandboxConfig
-    ) -> Dict[str, Any]:
+    def _prepare_container_config(self, command: Union[str, List[str]], config: SandboxConfig) -> Dict[str, Any]:
         """Prepare Docker container configuration"""
         container_config = {
             "image": "autobot/secure-sandbox:latest",
@@ -605,12 +588,12 @@ class SecureSandboxExecutor:
             memory_stats = stats.get("memory_stats", {})
 
             # Calculate CPU usage percentage
-            cpu_delta = cpu_stats.get("cpu_usage", {}).get(
-                "total_usage", 0
-            ) - stats.get("precpu_stats", {}).get("cpu_usage", {}).get("total_usage", 0)
-            system_delta = cpu_stats.get("system_cpu_usage", 0) - stats.get(
-                "precpu_stats", {}
-            ).get("system_cpu_usage", 0)
+            cpu_delta = cpu_stats.get("cpu_usage", {}).get("total_usage", 0) - stats.get("precpu_stats", {}).get(
+                "cpu_usage", {}
+            ).get("total_usage", 0)
+            system_delta = cpu_stats.get("system_cpu_usage", 0) - stats.get("precpu_stats", {}).get(
+                "system_cpu_usage", 0
+            )
 
             cpu_percent = 0.0
             if system_delta > 0:
@@ -620,9 +603,7 @@ class SecureSandboxExecutor:
                 "cpu_percent": cpu_percent,
                 "memory_used": memory_stats.get("usage", 0),
                 "memory_limit": memory_stats.get("limit", 0),
-                "memory_percent": (
-                    (memory_stats.get("usage", 0) / memory_stats.get("limit", 1)) * 100
-                ),
+                "memory_percent": ((memory_stats.get("usage", 0) / memory_stats.get("limit", 1)) * 100),
             }
         except Exception as e:
             self.logger.error("Failed to parse resource usage: %s", e)
@@ -666,9 +647,7 @@ class SecureSandboxExecutor:
                                 )
                             )
 
-                            self.logger.warning(
-                                f"Security event in {sandbox_id}: {event_type}"
-                            )
+                            self.logger.warning(f"Security event in {sandbox_id}: {event_type}")
 
                 except Exception as e:
                     self.logger.error("Error processing container log: %s", e)
@@ -683,9 +662,7 @@ class SecureSandboxExecutor:
             events = []
 
             # Get all events from Redis (Issue #361 - avoid blocking)
-            raw_events = await asyncio.to_thread(
-                self.redis_client.lrange, event_key, 0, -1
-            )
+            raw_events = await asyncio.to_thread(self.redis_client.lrange, event_key, 0, -1)
 
             for raw_event in raw_events:
                 try:
@@ -752,17 +729,13 @@ class SecureSandboxExecutor:
         """Get sandbox execution statistics"""
         try:
             # Issue #361 - avoid blocking
-            stats = await asyncio.to_thread(
-                self.redis_client.hgetall, "autobot:sandbox:stats"
-            )
+            stats = await asyncio.to_thread(self.redis_client.hgetall, "autobot:sandbox:stats")
 
             return {
                 "successful_executions": int(stats.get(b"successful_executions", 0)),
                 "failed_executions": int(stats.get(b"failed_executions", 0)),
                 "active_containers": len(self.active_containers),
-                "security_levels_available": [
-                    level.value for level in SandboxSecurityLevel
-                ],
+                "security_levels_available": [level.value for level in SandboxSecurityLevel],
             }
 
         except Exception as e:
@@ -839,8 +812,6 @@ async def execute_in_sandbox(
             metadata={"error": "sandbox_unavailable"},
         )
 
-    config = SandboxConfig(
-        security_level=SandboxSecurityLevel(security_level), timeout=timeout, **kwargs
-    )
+    config = SandboxConfig(security_level=SandboxSecurityLevel(security_level), timeout=timeout, **kwargs)
 
     return await sandbox.execute_command(command, config)

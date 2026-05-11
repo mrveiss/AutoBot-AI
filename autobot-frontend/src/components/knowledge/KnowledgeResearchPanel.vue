@@ -108,7 +108,7 @@ const sources = ref<SourceCard[]>([])
 
 async function checkBrowserStatus(): Promise<void> {
   try {
-    const data = await ApiClient.get(`${getApiBase()}/playwright/worker-status`) as Record<string, unknown>
+    const data = await ApiClient.get<any>(`${getApiBase()}/playwright/worker-status`) as Record<string, unknown>
     browserConnected.value = data.status === 'connected' || data.browser_connected === true
   } catch (e) {
     logger.warn('Browser status check failed:', e)
@@ -121,7 +121,7 @@ const { start: _startScreenshotPolling, stop: stopScreenshotPolling } = usePolli
     if (screenshotLoading.value) return
     screenshotLoading.value = true
     try {
-      const data = await ApiClient.post(`${getApiBase()}/playwright/worker-screenshot`, {}) as Record<string, unknown>
+      const data = await ApiClient.post<any>(`${getApiBase()}/playwright/worker-screenshot`, {}) as Record<string, unknown>
       if (data.screenshot) {
         screenshot.value = data.screenshot as string
         browserConnected.value = true
@@ -141,7 +141,7 @@ async function fetchScreenshot(): Promise<void> {
   if (screenshotLoading.value) return
   screenshotLoading.value = true
   try {
-    const data = await ApiClient.post(`${getApiBase()}/playwright/worker-screenshot`, {}) as Record<string, unknown>
+    const data = await ApiClient.post<any>(`${getApiBase()}/playwright/worker-screenshot`, {}) as Record<string, unknown>
     if (data.screenshot) {
       screenshot.value = data.screenshot as string
       browserConnected.value = true
@@ -281,7 +281,7 @@ async function _emitAnnotationFeedback(
 ): Promise<void> {
   const userId = userStore.currentUser?.id ?? null
   try {
-    await ApiClient.post(`${getApiBase()}/knowledge_base/rag-feedback`, {
+    await ApiClient.post<any>(`${getApiBase()}/knowledge_base/rag-feedback`, {
       source_url: card.url,
       title: card.title,
       query: query.value,
@@ -296,7 +296,7 @@ async function _emitAnnotationFeedback(
 async function acceptSource(card: SourceCard): Promise<void> {
   card.decision = 'accepted'
   try {
-    await ApiClient.post(`${getApiBase()}/knowledge/verification/approve`, {
+    await ApiClient.post<any>(`${getApiBase()}/knowledge/verification/approve`, {
       source_url: card.url,
       title: card.title,
     })
@@ -317,7 +317,7 @@ async function handleInteract(payload: { action: string; params: Record<string, 
   if (screenshotLoading.value) return
   screenshotLoading.value = true
   try {
-    const result = await ApiClient.post(`${getApiBase()}/playwright/interact`, {
+    const result = await ApiClient.post<any>(`${getApiBase()}/playwright/interact`, {
       action: payload.action,
       ...payload.params,
     }) as Record<string, unknown>
@@ -333,7 +333,7 @@ async function handleInteract(payload: { action: string; params: Record<string, 
 
 async function fetchBoards(): Promise<void> {
   try {
-    const data = await ApiClient.get(`${getApiBase()}/knowledge_base/boards`) as { boards?: Board[] }
+    const data = await ApiClient.get<any>(`${getApiBase()}/knowledge_base/boards`) as { boards?: Board[] }
     if (Array.isArray(data.boards)) {
       boards.value = data.boards
     }

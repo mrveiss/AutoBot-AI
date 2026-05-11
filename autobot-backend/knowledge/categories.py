@@ -14,7 +14,6 @@ parent-child relationships and path-based lookups.
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
@@ -52,9 +51,7 @@ class CategoriesMixin:
     # CATEGORY CRUD OPERATIONS (Issue #411)
     # =========================================================================
 
-    async def _build_category_path(
-        self, name: str, parent_id: Optional[str]
-    ) -> tuple[Optional[str], Optional[str]]:
+    async def _build_category_path(self, name: str, parent_id: Optional[str]) -> tuple[Optional[str], Optional[str]]:
         """Build category path from name and parent (Issue #398: extracted).
 
         Returns: (path, error_message) - error_message is None if successful
@@ -66,21 +63,13 @@ class CategoriesMixin:
             return f"{parent_data.get('path', '')}/{name}", None
         return name, None
 
-    async def _store_category(
-        self, category_id: str, category_data: Dict[str, Any], parent_id: Optional[str]
-    ) -> None:
+    async def _store_category(self, category_id: str, category_data: Dict[str, Any], parent_id: Optional[str]) -> None:
         """Store category in Redis (Issue #398: extracted)."""
-        await self.redis().hset(
-            f"category:{category_id}", mapping=category_data
-        )
-        await self.redis().set(
-            f"category:path:{category_data['path']}", category_id
-        )
+        await self.redis().hset(f"category:{category_id}", mapping=category_data)
+        await self.redis().set(f"category:path:{category_data['path']}", category_id)
 
         if parent_id:
-            await self.redis().sadd(
-                f"category:children:{parent_id}", category_id
-            )
+            await self.redis().sadd(f"category:children:{parent_id}", category_id)
         else:
             await self.redis().sadd("category:root", category_id)
 
@@ -150,14 +139,10 @@ class CategoriesMixin:
                 }
 
             category_id = str(uuid.uuid4())
-            category_data = self._build_category_data(
-                category_id, name, path, parent_id, description, icon, color
-            )
+            category_data = self._build_category_data(category_id, name, path, parent_id, description, icon, color)
 
             await self._store_category(category_id, category_data, parent_id)
-            logger.info(
-                "Created category '%s' (path: %s, id: %s)", name, path, category_id
-            )
+            logger.info("Created category '%s' (path: %s, id: %s)", name, path, category_id)
 
             return {
                 "success": True,
@@ -294,14 +279,10 @@ class CategoriesMixin:
                     "message": f"Category not found: {category_id}",
                 }
 
-            updates: Dict[str, Any] = {
-                "updated_at": now_utc().isoformat()
-            }
+            updates: Dict[str, Any] = {"updated_at": now_utc().isoformat()}
 
             if name and name != current["name"]:
-                error = await self._handle_category_rename(
-                    category_id, current, name, updates
-                )
+                error = await self._handle_category_rename(category_id, current, name, updates)
                 if error:
                     return {"success": False, "message": error}
 
@@ -321,9 +302,7 @@ class CategoriesMixin:
             logger.error("Failed to update category '%s': %s", category_id, e)
             return {"success": False, "message": "Category operation failed"}
 
-    async def _reassign_category_facts(
-        self, categories: List[str], reassign_to: Optional[str]
-    ) -> int:
+    async def _reassign_category_facts(self, categories: List[str], reassign_to: Optional[str]) -> int:
         """Reassign facts from categories being deleted (Issue #398: extracted)."""
         count = 0
         for cat_id in categories:
@@ -370,9 +349,7 @@ class CategoriesMixin:
             Tuple of (categories_to_delete, error_response)
             error_response is None if successful
         """
-        children = await self.redis().smembers(
-            f"category:children:{category_id}"
-        )
+        children = await self.redis().smembers(f"category:children:{category_id}")
         if children and not recursive:
             return [], {
                 "success": False,
@@ -403,15 +380,11 @@ class CategoriesMixin:
                     "message": f"Category not found: {category_id}",
                 }
 
-            categories_to_delete, error = await self._build_deletion_list(
-                category_id, recursive
-            )
+            categories_to_delete, error = await self._build_deletion_list(category_id, recursive)
             if error:
                 return error
 
-            facts_reassigned = await self._reassign_category_facts(
-                categories_to_delete, reassign_to
-            )
+            facts_reassigned = await self._reassign_category_facts(categories_to_delete, reassign_to)
 
             for cat_id in categories_to_delete:
                 await self._delete_category_records(cat_id)
@@ -437,9 +410,7 @@ class CategoriesMixin:
     # CATEGORY TREE OPERATIONS (Issue #411)
     # =========================================================================
 
-    async def _build_full_tree(
-        self, max_depth: int, include_fact_counts: bool
-    ) -> Dict[str, Any]:
+    async def _build_full_tree(self, max_depth: int, include_fact_counts: bool) -> Dict[str, Any]:
         """Build full tree from all roots (Issue #398: extracted)."""
         root_ids = await self.redis().smembers("category:root")
         tree = []
@@ -474,9 +445,7 @@ class CategoriesMixin:
                         "success": False,
                         "message": f"Category not found: {root_id}",
                     }
-                tree = await self._build_tree_node(
-                    root_id, 0, max_depth, include_fact_counts
-                )
+                tree = await self._build_tree_node(root_id, 0, max_depth, include_fact_counts)
                 return {"success": True, "tree": [tree], "total_categories": 1}
 
             return await self._build_full_tree(max_depth, include_fact_counts)
@@ -508,9 +477,7 @@ class CategoriesMixin:
                         "message": f"Category not found: {category_id}",
                     }
 
-            child_ids = await self.redis().smembers(
-                f"category:children:{category_id}"
-            )
+            child_ids = await self.redis().smembers(f"category:children:{category_id}")
             children = []
 
             for cid in child_ids:
@@ -581,9 +548,7 @@ class CategoriesMixin:
     # CATEGORY-FACT OPERATIONS (Issue #411)
     # =========================================================================
 
-    async def _validate_fact_and_category(
-        self, fact_id: str, category_id: str
-    ) -> tuple[Optional[Dict], Optional[str]]:
+    async def _validate_fact_and_category(self, fact_id: str, category_id: str) -> tuple[Optional[Dict], Optional[str]]:
         """Validate fact and category exist (Issue #398: extracted).
 
         Returns: (category_data, error_message)
@@ -598,26 +563,20 @@ class CategoriesMixin:
 
         return category, None
 
-    async def _remove_from_old_category(
-        self, fact_id: str, new_category_id: str
-    ) -> None:
+    async def _remove_from_old_category(self, fact_id: str, new_category_id: str) -> None:
         """Remove fact from old category if reassigning (Issue #398: extracted)."""
         old_category = await self._get_fact_category_id(fact_id)
         if old_category and old_category != new_category_id:
             await self.redis().srem(f"category:facts:{old_category}", fact_id)
             await self._decrement_category_count(old_category)
 
-    async def assign_fact_to_category(
-        self, fact_id: str, category_id: str
-    ) -> Dict[str, Any]:
+    async def assign_fact_to_category(self, fact_id: str, category_id: str) -> Dict[str, Any]:
         """Assign a fact to a category (Issue #398: refactored)."""
         if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
-            category, error = await self._validate_fact_and_category(
-                fact_id, category_id
-            )
+            category, error = await self._validate_fact_and_category(fact_id, category_id)
             if error:
                 return {"success": False, "message": error}
 
@@ -720,9 +679,7 @@ class CategoriesMixin:
             return f"category:path:{pattern}"
         return f"category:path:{pattern}*"
 
-    async def _collect_matching_keys(
-        self, redis_pattern: str, max_keys: int
-    ) -> List[str]:
+    async def _collect_matching_keys(self, redis_pattern: str, max_keys: int) -> List[str]:
         """Collect Redis keys matching pattern. Issue #620.
 
         Args:
@@ -740,9 +697,7 @@ class CategoriesMixin:
                 break
         return keys
 
-    async def _batch_fetch_category_data(
-        self, category_ids: List[str], limit: int
-    ) -> List[Dict[str, Any]]:
+    async def _batch_fetch_category_data(self, category_ids: List[str], limit: int) -> List[Dict[str, Any]]:
         """Batch fetch and decode category data. Issue #620.
 
         Args:
@@ -767,9 +722,7 @@ class CategoriesMixin:
                 break
         return matching
 
-    async def _scan_matching_categories(
-        self, redis_pattern: str, limit: int
-    ) -> List[Dict[str, Any]]:
+    async def _scan_matching_categories(self, redis_pattern: str, limit: int) -> List[Dict[str, Any]]:
         """Scan Redis for categories matching pattern (Issue #398: extracted)."""
         keys = await self._collect_matching_keys(redis_pattern, limit * 2)
         if not keys:
@@ -811,18 +764,14 @@ class CategoriesMixin:
             result[key] = val
         return result
 
-    async def search_categories_by_path(
-        self, path_pattern: str, limit: int = 50
-    ) -> Dict[str, Any]:
+    async def search_categories_by_path(self, path_pattern: str, limit: int = 50) -> Dict[str, Any]:
         """Search categories by path pattern (Issue #398: refactored)."""
         if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
             redis_pattern = self._build_redis_path_pattern(path_pattern)
-            matching_categories = await self._scan_matching_categories(
-                redis_pattern, limit
-            )
+            matching_categories = await self._scan_matching_categories(redis_pattern, limit)
 
             return {
                 "success": True,
@@ -831,9 +780,7 @@ class CategoriesMixin:
                 "count": len(matching_categories),
             }
         except Exception as e:
-            logger.error(
-                "Failed to search categories by path '%s': %s", path_pattern, e
-            )
+            logger.error("Failed to search categories by path '%s': %s", path_pattern, e)
             return {"success": False, "message": "Category operation failed"}
 
     # =========================================================================
@@ -861,9 +808,7 @@ class CategoriesMixin:
 
         return result
 
-    def _build_node_base(
-        self, data: Dict[str, Any], include_fact_counts: bool
-    ) -> Dict[str, Any]:
+    def _build_node_base(self, data: Dict[str, Any], include_fact_counts: bool) -> Dict[str, Any]:
         """Build base node structure from category data. Issue #620.
 
         Args:
@@ -903,29 +848,18 @@ class CategoriesMixin:
         Returns:
             List of child node dictionaries
         """
-        child_ids = await self.redis().smembers(
-            f"category:children:{category_id}"
-        )
+        child_ids = await self.redis().smembers(f"category:children:{category_id}")
         if not child_ids:
             return []
 
-        decoded_ids = [
-            cid.decode("utf-8") if isinstance(cid, bytes) else cid for cid in child_ids
-        ]
+        decoded_ids = [cid.decode("utf-8") if isinstance(cid, bytes) else cid for cid in child_ids]
 
         child_tasks = [
-            self._build_tree_node(
-                cid, current_depth + 1, max_depth, include_fact_counts
-            )
-            for cid in decoded_ids
+            self._build_tree_node(cid, current_depth + 1, max_depth, include_fact_counts) for cid in decoded_ids
         ]
         child_results = await asyncio.gather(*child_tasks, return_exceptions=True)
 
-        children = [
-            result
-            for result in child_results
-            if result is not None and not isinstance(result, Exception)
-        ]
+        children = [result for result in child_results if result is not None and not isinstance(result, Exception)]
         children.sort(key=lambda x: x.get("name", ""))
         return children
 
@@ -959,17 +893,13 @@ class CategoriesMixin:
 
     async def _get_all_descendants(self, category_id: str) -> List[str]:
         """Get all descendant category IDs recursively."""
-        child_ids = await self.redis().smembers(
-            f"category:children:{category_id}"
-        )
+        child_ids = await self.redis().smembers(f"category:children:{category_id}")
 
         if not child_ids:
             return []
 
         # Decode child IDs
-        decoded_ids = [
-            cid.decode("utf-8") if isinstance(cid, bytes) else cid for cid in child_ids
-        ]
+        decoded_ids = [cid.decode("utf-8") if isinstance(cid, bytes) else cid for cid in child_ids]
 
         # Issue #614: Fix N+1 pattern - fetch all sub-descendants in parallel
         sub_tasks = [self._get_all_descendants(cid) for cid in decoded_ids]
@@ -983,9 +913,7 @@ class CategoriesMixin:
 
         return descendants
 
-    async def _update_category_path(
-        self, category_id: str, old_path: str, new_path: str
-    ) -> None:
+    async def _update_category_path(self, category_id: str, old_path: str, new_path: str) -> None:
         """Update category path and all descendant paths."""
         # Delete old path lookup
         await self.redis().delete(f"category:path:{old_path}")
@@ -994,9 +922,7 @@ class CategoriesMixin:
         await self.redis().set(f"category:path:{new_path}", category_id)
 
         # Update descendants
-        child_ids = await self.redis().smembers(
-            f"category:children:{category_id}"
-        )
+        child_ids = await self.redis().smembers(f"category:children:{category_id}")
 
         for cid in child_ids:
             if isinstance(cid, bytes):
@@ -1005,9 +931,7 @@ class CategoriesMixin:
             if child_data:
                 child_old_path = child_data.get("path", "")
                 child_new_path = child_old_path.replace(old_path, new_path, 1)
-                await self.redis().hset(
-                    f"category:{cid}", "path", child_new_path
-                )
+                await self.redis().hset(f"category:{cid}", "path", child_new_path)
                 await self._update_category_path(cid, child_old_path, child_new_path)
 
     async def _assign_fact_to_category(self, fact_id: str, category_id: str) -> None:
@@ -1034,14 +958,8 @@ class CategoriesMixin:
 
     async def _decrement_category_count(self, category_id: str) -> None:
         """Decrement fact count for a category."""
-        current = await self.redis().hget(
-            f"category:{category_id}", "fact_count"
-        )
+        current = await self.redis().hget(f"category:{category_id}", "fact_count")
         if current:
-            count = int(
-                current.decode("utf-8") if isinstance(current, bytes) else current
-            )
+            count = int(current.decode("utf-8") if isinstance(current, bytes) else current)
             if count > 0:
-                await self.redis().hset(
-                    f"category:{category_id}", "fact_count", count - 1
-                )
+                await self.redis().hset(f"category:{category_id}", "fact_count", count - 1)

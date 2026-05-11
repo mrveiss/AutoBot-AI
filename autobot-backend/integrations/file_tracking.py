@@ -55,10 +55,7 @@ async def _call_track_file_activity(
             file_type=file_type,
             size_bytes=size_bytes,
         )
-        logger.info(
-            f"File activity tracked: user={user_id}, "
-            f"operation={operation}, path={path[:50]}"
-        )
+        logger.info(f"File activity tracked: user={user_id}, " f"operation={operation}, path={path[:50]}")
         return activity_id
     except Exception as e:
         logger.error(
@@ -155,9 +152,7 @@ async def track_file_upload(
         metadata=metadata,
     )
 
-    logger.info(
-        f"File upload tracked: user={user_id}, " f"path={path[:50]}, size={size_bytes}"
-    )
+    logger.info(f"File upload tracked: user={user_id}, " f"path={path[:50]}, size={size_bytes}")
 
     return activity_id
 

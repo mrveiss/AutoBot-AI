@@ -48,9 +48,7 @@ def _json_default(obj: Any) -> Any:
     pydantic_v1_dict = getattr(obj, "dict", None)
     if callable(pydantic_v1_dict) and getattr(obj, "__fields__", None) is not None:
         return pydantic_v1_dict()
-    raise TypeError(
-        f"Object of type {type(obj).__name__} is not JSON serializable"
-    )
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
 class RedisCache:

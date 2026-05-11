@@ -55,16 +55,12 @@ _TIME_PATTERNS: Dict[str, Any] = {
         "end": datetime.now(tz=timezone.utc).date() - timedelta(days=1),
     },
     r"\bthis week\b": lambda: {
-        "start": datetime.now(tz=timezone.utc).date()
-        - timedelta(days=datetime.now(tz=timezone.utc).weekday())
+        "start": datetime.now(tz=timezone.utc).date() - timedelta(days=datetime.now(tz=timezone.utc).weekday())
     },
     r"\blast (\d+) days?\b": lambda m: {
-        "start": datetime.now(tz=timezone.utc).date()
-        - timedelta(days=int(m.group(1)))
+        "start": datetime.now(tz=timezone.utc).date() - timedelta(days=int(m.group(1)))
     },
-    r"\bthis month\b": lambda: {
-        "start": datetime.now(tz=timezone.utc).date().replace(day=1)
-    },
+    r"\bthis month\b": lambda: {"start": datetime.now(tz=timezone.utc).date().replace(day=1)},
 }
 
 _STATUS_PATTERNS: Dict[str, List[str]] = {
@@ -152,9 +148,7 @@ class HybridScorer:
                 continue
             idf = math.log(1 + (1.0 / (tf + 0.5)))
             numerator = tf * (self._BM25_K1 + 1)
-            denominator = tf + self._BM25_K1 * (
-                1 - self._BM25_B + self._BM25_B * doc_len / max(avg_doc_len, 1)
-            )
+            denominator = tf + self._BM25_K1 * (1 - self._BM25_B + self._BM25_B * doc_len / max(avg_doc_len, 1))
             score += idf * (numerator / denominator)
 
         return score
@@ -184,10 +178,7 @@ class HybridScorer:
         keyword_score: float,
     ) -> float:
         """Return weighted combination of semantic and keyword scores."""
-        return (
-            self._SEMANTIC_WEIGHT * semantic_score
-            + self._KEYWORD_WEIGHT * keyword_score
-        )
+        return self._SEMANTIC_WEIGHT * semantic_score + self._KEYWORD_WEIGHT * keyword_score
 
 
 # ---------------------------------------------------------------------------
@@ -224,9 +215,7 @@ class MemoryGraphQueryProcessor:
             self._embedding_model = embedding_model
         else:
             # ssot_config is a Pydantic model; use getattr with fallback
-            self._embedding_model = getattr(
-                ssot_config, "embedding_model", "nomic-embed-text"
-            )
+            self._embedding_model = getattr(ssot_config, "embedding_model", "nomic-embed-text")
 
     # ------------------------------------------------------------------
     # Public API
@@ -269,9 +258,7 @@ class MemoryGraphQueryProcessor:
         )
 
         results = self._score_and_rank(candidates, query_embedding, intent, limit)
-        logger.info(
-            "process_query returned %d results for query %r", len(results), query
-        )
+        logger.info("process_query returned %d results for query %r", len(results), query)
         return results
 
     # ------------------------------------------------------------------
@@ -319,13 +306,64 @@ class MemoryGraphQueryProcessor:
     @staticmethod
     def _extract_keywords(query: str) -> List[str]:
         _STOP = {
-            "a", "an", "the", "and", "or", "but", "in", "on", "at", "to",
-            "for", "of", "with", "by", "from", "up", "about", "into",
-            "through", "during", "is", "are", "was", "were", "be", "been",
-            "being", "have", "has", "had", "do", "does", "did", "will",
-            "would", "could", "should", "may", "might", "can", "what",
-            "which", "who", "when", "where", "why", "how", "all", "both",
-            "we", "i", "you", "it", "me", "my", "our", "your", "its",
+            "a",
+            "an",
+            "the",
+            "and",
+            "or",
+            "but",
+            "in",
+            "on",
+            "at",
+            "to",
+            "for",
+            "of",
+            "with",
+            "by",
+            "from",
+            "up",
+            "about",
+            "into",
+            "through",
+            "during",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "can",
+            "what",
+            "which",
+            "who",
+            "when",
+            "where",
+            "why",
+            "how",
+            "all",
+            "both",
+            "we",
+            "i",
+            "you",
+            "it",
+            "me",
+            "my",
+            "our",
+            "your",
+            "its",
         }
         words = re.findall(r"[a-z0-9_]+", query.lower())
         return [w for w in words if w not in _STOP and len(w) > 2]
@@ -352,20 +390,12 @@ class MemoryGraphQueryProcessor:
             end = intent.time_range.get("end")
             if start:
                 start_ms = int(
-                    datetime.combine(start, datetime.min.time())
-                    .replace(tzinfo=timezone.utc)
-                    .timestamp()
-                    * 1000
+                    datetime.combine(start, datetime.min.time()).replace(tzinfo=timezone.utc).timestamp() * 1000
                 )
                 end_ms = "+inf"
                 if end:
                     end_ms = str(
-                        int(
-                            datetime.combine(end, datetime.max.time())
-                            .replace(tzinfo=timezone.utc)
-                            .timestamp()
-                            * 1000
-                        )
+                        int(datetime.combine(end, datetime.max.time()).replace(tzinfo=timezone.utc).timestamp() * 1000)
                     )
                 parts.append(f"@created_at:[{start_ms} {end_ms}]")
 
@@ -389,18 +419,14 @@ class MemoryGraphQueryProcessor:
             return []
         from services.npu_client import generate_embedding_with_fallback
 
-        embedding = await generate_embedding_with_fallback(
-            text, model_name=self._embedding_model
-        )
+        embedding = await generate_embedding_with_fallback(text, model_name=self._embedding_model)
         return embedding or []
 
     # ------------------------------------------------------------------
     # Stage 4 — Redis candidate retrieval
     # ------------------------------------------------------------------
 
-    async def _redis_search(
-        self, redis_query: str, limit: int
-    ) -> List[Dict[str, Any]]:
+    async def _redis_search(self, redis_query: str, limit: int) -> List[Dict[str, Any]]:
         """Execute FT.SEARCH on memory_entity_idx and return entity dicts."""
         try:
             raw = await self._redis.execute_command(
@@ -454,9 +480,7 @@ class MemoryGraphQueryProcessor:
 
         return await self._fetch_entities_by_keys(keys)
 
-    async def _fetch_entities_by_keys(
-        self, keys: List[str]
-    ) -> List[Dict[str, Any]]:
+    async def _fetch_entities_by_keys(self, keys: List[str]) -> List[Dict[str, Any]]:
         """Batch-fetch JSON entities from Redis."""
         if not keys:
             return []
@@ -496,16 +520,12 @@ class MemoryGraphQueryProcessor:
 
             entity_emb = entity.get("_embedding", [])
             sem_score = (
-                self._scorer.cosine_similarity(query_embedding, entity_emb)
-                if query_embedding and entity_emb
-                else 0.0
+                self._scorer.cosine_similarity(query_embedding, entity_emb) if query_embedding and entity_emb else 0.0
             )
 
             combined = self._scorer.combined_score(sem_score, kw_score)
 
-            matched = [
-                t for t in query_terms if t in entity_text_terms
-            ]
+            matched = [t for t in query_terms if t in entity_text_terms]
 
             explanation = (
                 f"combined={combined:.3f} "

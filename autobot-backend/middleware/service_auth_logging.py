@@ -88,9 +88,7 @@ class ServiceAuthLoggingMiddleware(BaseHTTPMiddleware):
                         if request.headers.get("X-Service-Signature")
                         else "missing"
                     ),
-                    "X-Service-Timestamp": request.headers.get(
-                        "X-Service-Timestamp", "missing"
-                    ),
+                    "X-Service-Timestamp": request.headers.get("X-Service-Timestamp", "missing"),
                 },
                 mode="logging_only",
             )
@@ -109,9 +107,7 @@ class ServiceAuthLoggingMiddleware(BaseHTTPMiddleware):
         # Skip authentication for health check, documentation, and frontend endpoints
         # Service auth is for service-to-service calls only, not browser-to-backend
         if self._is_exempt_path(request):
-            logger.debug(
-                f"Skipping auth check for {request.url.path} (matched exemption)"
-            )
+            logger.debug(f"Skipping auth check for {request.url.path} (matched exemption)")
             return await call_next(request)
 
         await self._log_auth_result(request)

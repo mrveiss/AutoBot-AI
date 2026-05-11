@@ -220,9 +220,7 @@ class DocumentationWatcherService:
             change_type: Type of change
         """
         try:
-            logger.info(
-                "Processing documentation change: %s (%s)", file_path.name, change_type
-            )
+            logger.info("Processing documentation change: %s (%s)", file_path.name, change_type)
 
             if change_type == "deleted":
                 await self._handle_deletion(file_path)
@@ -262,9 +260,7 @@ class DocumentationWatcherService:
                 logger.error("DocIndexerService not available for reindexing")
                 return
 
-            await indexer.enqueue_reindex(
-                str(file_path), reason=SyncReason.CONTENT_CHANGED
-            )
+            await indexer.enqueue_reindex(str(file_path), reason=SyncReason.CONTENT_CHANGED)
             logger.info("Enqueued re-index for documentation: %s", file_path.name)
             doc_id = str(file_path.relative_to(PROJECT_ROOT))
             await self._propagate_staleness_for_doc(doc_id)

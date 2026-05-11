@@ -135,9 +135,7 @@ def _build_search_response(
 # =============================================================================
 
 
-async def _execute_kb_search(
-    kb_to_use, query: str, search_limit: int, mode: str
-) -> list:
+async def _execute_kb_search(kb_to_use, query: str, search_limit: int, mode: str) -> list:
     """Execute search on knowledge base via VectorSearchEngine (Issue #3828).
 
     Routes through the canonical VectorSearchEngine for unified hardware
@@ -173,9 +171,7 @@ async def _execute_kb_search(
     kb_class_name = kb_to_use.__class__.__name__
     if kb_class_name == "KnowledgeBaseV2":
         return await kb_to_use.search(query=query, top_k=search_limit)
-    return await kb_to_use.search(
-        query=query, similarity_top_k=search_limit, mode=mode
-    )
+    return await kb_to_use.search(query=query, similarity_top_k=search_limit, mode=mode)
 
 
 async def _apply_reranking(query: str, results: list, kb_to_use) -> dict | None:
@@ -205,9 +201,7 @@ async def _apply_reranking(query: str, results: list, kb_to_use) -> dict | None:
         return None
 
 
-async def _apply_rag_enhancement(
-    query: str, results: list, kb_class_name: str
-) -> dict | None:
+async def _apply_rag_enhancement(query: str, results: list, kb_class_name: str) -> dict | None:
     """Apply RAG enhancement if available (Issue #398: extracted).
 
     Returns response dict if successful, None if RAG failed.
@@ -254,9 +248,7 @@ def _build_no_results_response(query: str, reformulated_queries: List[str]) -> M
         "results": [],
         "total_results": 0,
         "original_query": query,
-        "reformulated_queries": (
-            reformulated_queries[1:] if len(reformulated_queries) > 1 else []
-        ),
+        "reformulated_queries": (reformulated_queries[1:] if len(reformulated_queries) > 1 else []),
         "rag_enhanced": True,
     }
 
@@ -285,9 +277,7 @@ async def _check_empty_kb_for_rag(kb_to_use, query: str) -> Metadata | None:
         fact_count = stats.get("total_facts", 0)
 
         if fact_count == 0:
-            logger.info(
-                "Knowledge base is empty - " "returning empty RAG results immediately"
-            )
+            logger.info("Knowledge base is empty - " "returning empty RAG results immediately")
             return {
                 "status": "success",
                 "synthesized_response": (
@@ -311,9 +301,7 @@ async def _check_empty_kb_for_rag(kb_to_use, query: str) -> Metadata | None:
     return None
 
 
-async def _reformulate_query_if_requested(
-    query: str, reformulate_query: bool
-) -> List[str]:
+async def _reformulate_query_if_requested(query: str, reformulate_query: bool) -> List[str]:
     """Reformulate query using RAG agent if requested (Issue #281: extracted)."""
     reformulated_queries = [query]
 
@@ -323,12 +311,8 @@ async def _reformulate_query_if_requested(
             reformulation_result = await rag_agent.reformulate_query(query)
 
             if reformulation_result.get("status") == "success":
-                additional_queries = reformulation_result.get(
-                    "reformulated_queries", []
-                )
-                reformulated_queries.extend(
-                    additional_queries[:3]
-                )  # Limit to avoid too many queries
+                additional_queries = reformulation_result.get("reformulated_queries", [])
+                reformulated_queries.extend(additional_queries[:3])  # Limit to avoid too many queries
 
         except Exception as e:
             logger.warning("Query reformulation failed: %s", e)
@@ -336,9 +320,7 @@ async def _reformulate_query_if_requested(
     return reformulated_queries
 
 
-async def _search_with_all_queries(
-    kb_to_use, reformulated_queries: List[str], search_limit: int
-) -> List[Metadata]:
+async def _search_with_all_queries(kb_to_use, reformulated_queries: List[str], search_limit: int) -> List[Metadata]:
     """Search with all reformulated queries and deduplicate (Issue #281: extracted)."""
     all_results = []
     seen_content = set()
@@ -348,13 +330,9 @@ async def _search_with_all_queries(
             kb_class_name = kb_to_use.__class__.__name__
 
             if kb_class_name == "KnowledgeBaseV2":
-                query_results = await kb_to_use.search(
-                    query=search_query, top_k=search_limit
-                )
+                query_results = await kb_to_use.search(query=search_query, top_k=search_limit)
             else:
-                query_results = await kb_to_use.search(
-                    query=search_query, similarity_top_k=search_limit
-                )
+                query_results = await kb_to_use.search(query=search_query, similarity_top_k=search_limit)
 
             # Deduplicate results
             for result in query_results:
@@ -370,9 +348,7 @@ async def _search_with_all_queries(
     return all_results[:search_limit]
 
 
-def _convert_results_to_documents(
-    results: List[Metadata], original_query: str
-) -> List[Metadata]:
+def _convert_results_to_documents(results: List[Metadata], original_query: str) -> List[Metadata]:
     """Convert search results to RAG-compatible document format (Issue #281: extracted)."""
     documents = []
     for result in results:
@@ -381,9 +357,7 @@ def _convert_results_to_documents(
                 "content": result.get("content", ""),
                 "metadata": {
                     "filename": (result.get("metadata", {}).get("title", "Unknown")),
-                    "source": (
-                        result.get("metadata", {}).get("source", "knowledge_base")
-                    ),
+                    "source": (result.get("metadata", {}).get("source", "knowledge_base")),
                     "category": (result.get("metadata", {}).get("category", "general")),
                     "score": result.get("score", 0.0),
                     "source_query": result.get("source_query", original_query),
@@ -439,9 +413,7 @@ async def _process_with_rag_agent(
             "results": all_results,
             "total_results": len(all_results),
             "original_query": original_query,
-            "reformulated_queries": (
-                reformulated_queries[1:] if len(reformulated_queries) > 1 else []
-            ),
+            "reformulated_queries": (reformulated_queries[1:] if len(reformulated_queries) > 1 else []),
             "kb_implementation": kb_to_use.__class__.__name__,
             "agent_metadata": rag_result.get("metadata", {}),
             "rag_enhanced": True,
@@ -451,15 +423,11 @@ async def _process_with_rag_agent(
         logger.error("RAG processing failed: %s", e)
         return {
             "status": "partial_success",
-            "synthesized_response": (
-                f"Found {len(all_results)} relevant documents" " but synthesis failed"
-            ),
+            "synthesized_response": (f"Found {len(all_results)} relevant documents" " but synthesis failed"),
             "results": all_results,
             "total_results": len(all_results),
             "original_query": original_query,
-            "reformulated_queries": (
-                reformulated_queries[1:] if len(reformulated_queries) > 1 else []
-            ),
+            "reformulated_queries": (reformulated_queries[1:] if len(reformulated_queries) > 1 else []),
             "error": "Internal server error",
             "rag_enhanced": False,
         }
@@ -516,8 +484,7 @@ async def _check_empty_kb_for_search(kb_to_use, query: str, mode: str) -> dict |
                 query=query,
                 mode=mode,
                 kb_implementation=kb_to_use.__class__.__name__,
-                message="Knowledge base is empty - no documents to search. "
-                "Add documents in the Manage tab.",
+                message="Knowledge base is empty - no documents to search. " "Add documents in the Manage tab.",
             )
     except Exception as stats_err:
         logger.warning("Could not check KB stats: %s", stats_err)
@@ -525,9 +492,7 @@ async def _check_empty_kb_for_search(kb_to_use, query: str, mode: str) -> dict |
     return None
 
 
-async def _execute_basic_search_with_reranking(
-    request: ConsolidatedSearchRequest, kb_to_use, query: str
-) -> dict:
+async def _execute_basic_search_with_reranking(request: ConsolidatedSearchRequest, kb_to_use, query: str) -> dict:
     """
     Execute basic search with optional reranking.
 
@@ -627,9 +592,7 @@ async def consolidated_search(request: ConsolidatedSearchRequest, req: Request):
     return await _execute_basic_search_with_reranking(request, kb_to_use, query)
 
 
-async def _consolidated_enhanced_search(
-    request: ConsolidatedSearchRequest, kb_to_use
-) -> dict:
+async def _consolidated_enhanced_search(request: ConsolidatedSearchRequest, kb_to_use) -> dict:
     """
     Handle enhanced search path for consolidated endpoint (Issue #555).
 
@@ -643,9 +606,7 @@ async def _consolidated_enhanced_search(
         return result
 
     # Fallback: basic search with post-filtering
-    results = await _execute_kb_search(
-        kb_to_use, request.query, request.top_k, request.mode
-    )
+    results = await _execute_kb_search(kb_to_use, request.query, request.top_k, request.mode)
 
     # Apply min_score filter
     if request.min_score > 0:
@@ -665,9 +626,7 @@ async def _consolidated_enhanced_search(
     )
 
 
-async def _consolidated_rag_search(
-    request: ConsolidatedSearchRequest, kb_to_use
-) -> dict:
+async def _consolidated_rag_search(request: ConsolidatedSearchRequest, kb_to_use) -> dict:
     """
     Handle RAG-enhanced search path for consolidated endpoint (Issue #555).
 
@@ -682,14 +641,10 @@ async def _consolidated_rag_search(
         return empty_response
 
     # Query reformulation if requested
-    reformulated_queries = await _reformulate_query_if_requested(
-        query, request.reformulate_query
-    )
+    reformulated_queries = await _reformulate_query_if_requested(query, request.reformulate_query)
 
     # Search with all queries
-    all_results = await _search_with_all_queries(
-        kb_to_use, reformulated_queries, request.top_k
-    )
+    all_results = await _search_with_all_queries(kb_to_use, reformulated_queries, request.top_k)
 
     # Apply min_score filter
     if request.min_score > 0:
@@ -697,9 +652,7 @@ async def _consolidated_rag_search(
 
     # RAG processing for synthesis
     if all_results:
-        return await _process_with_rag_agent(
-            query, all_results, reformulated_queries, kb_to_use
-        )
+        return await _process_with_rag_agent(query, all_results, reformulated_queries, kb_to_use)
     else:
         return {
             "status": "success",
@@ -707,9 +660,7 @@ async def _consolidated_rag_search(
             "results": [],
             "total_results": 0,
             "original_query": query,
-            "reformulated_queries": (
-                reformulated_queries[1:] if len(reformulated_queries) > 1 else []
-            ),
+            "reformulated_queries": (reformulated_queries[1:] if len(reformulated_queries) > 1 else []),
             "rag_enhanced": True,
             "kb_implementation": kb_class_name,
         }
@@ -820,9 +771,7 @@ async def enhanced_search(request: EnhancedSearchRequest, req: Request):
     - reranking_applied: Whether reranking was applied
     """
     # Issue #555: Log deprecation warning
-    logger.warning(
-        "DEPRECATED: /enhanced_search called. Use /search with tags/mode/enable_reranking params instead."
-    )
+    logger.warning("DEPRECATED: /enhanced_search called. Use /search with tags/mode/enable_reranking params instead.")
     kb_to_use = await _get_kb_for_enhanced_search(req)
 
     if kb_to_use is None:
@@ -852,9 +801,7 @@ async def rag_enhanced_search(request: dict, req: Request):
     Issue #281: Refactored to use extracted helpers. #1088: param extraction.
     """
     # Issue #555: Log deprecation warning
-    logger.warning(
-        "DEPRECATED: /rag_search called. Use /search with enable_rag=true instead."
-    )
+    logger.warning("DEPRECATED: /rag_search called. Use /search with enable_rag=true instead.")
     if not RAG_AVAILABLE:
         raise HTTPException(
             status_code=503,
@@ -872,10 +819,7 @@ async def rag_enhanced_search(request: dict, req: Request):
     if not query:
         raise HTTPException(status_code=400, detail="Query is required")
 
-    logger.info(
-        f"RAG-enhanced search request: '{query}' "
-        f"(top_k={search_limit}, reformulate={reformulate_query})"
-    )
+    logger.info(f"RAG-enhanced search request: '{query}' " f"(top_k={search_limit}, reformulate={reformulate_query})")
 
     # Check if knowledge base is empty (Issue #281: uses helper)
     empty_response = await _check_empty_kb_for_rag(kb_to_use, query)
@@ -883,20 +827,14 @@ async def rag_enhanced_search(request: dict, req: Request):
         return empty_response
 
     # Step 1: Query reformulation (Issue #281: uses helper)
-    reformulated_queries = await _reformulate_query_if_requested(
-        query, reformulate_query
-    )
+    reformulated_queries = await _reformulate_query_if_requested(query, reformulate_query)
 
     # Step 2: Search with all queries (Issue #281: uses helper)
-    all_results = await _search_with_all_queries(
-        kb_to_use, reformulated_queries, search_limit
-    )
+    all_results = await _search_with_all_queries(kb_to_use, reformulated_queries, search_limit)
 
     # Step 3: RAG processing or empty response (Issue #665: uses helpers)
     if all_results:
-        return await _process_with_rag_agent(
-            query, all_results, reformulated_queries, kb_to_use
-        )
+        return await _process_with_rag_agent(query, all_results, reformulated_queries, kb_to_use)
     return _build_no_results_response(query, reformulated_queries)
 
 
@@ -916,9 +854,7 @@ async def similarity_search(request: dict, req: Request):
     - `enable_rag`: for RAG enhancement
     """
     # Issue #555: Log deprecation warning
-    logger.warning(
-        "DEPRECATED: /similarity_search called. Use /search with mode=semantic, min_score params instead."
-    )
+    logger.warning("DEPRECATED: /similarity_search called. Use /search with mode=semantic, min_score params instead.")
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
@@ -933,24 +869,17 @@ async def similarity_search(request: dict, req: Request):
     threshold = request.get("threshold", 0.7)
     use_rag = request.get("use_rag", False)
 
-    logger.info(
-        f"Similarity search request: '{query}' "
-        f"(top_k={top_k}, threshold={threshold}, use_rag={use_rag})"
-    )
+    logger.info(f"Similarity search request: '{query}' " f"(top_k={top_k}, threshold={threshold}, use_rag={use_rag})")
 
     # Execute search with appropriate parameters
     kb_class_name = kb_to_use.__class__.__name__
-    results = await _execute_similarity_kb_search(
-        kb_to_use, kb_class_name, query, top_k
-    )
+    results = await _execute_similarity_kb_search(kb_to_use, kb_class_name, query, top_k)
 
     # Filter by threshold if specified
     results = _filter_by_threshold(results, threshold)
 
     # Build response with optional RAG enhancement
-    return await _build_similarity_response(
-        query, results, threshold, kb_class_name, use_rag
-    )
+    return await _build_similarity_response(query, results, threshold, kb_class_name, use_rag)
 
 
 async def _execute_similarity_kb_search(
@@ -965,9 +894,7 @@ async def _execute_similarity_kb_search(
         return await kb_to_use.search(query=query, similarity_top_k=top_k)
 
 
-def _filter_by_threshold(
-    results: List[Dict[str, Any]], threshold: float
-) -> List[Dict[str, Any]]:
+def _filter_by_threshold(results: List[Dict[str, Any]], threshold: float) -> List[Dict[str, Any]]:
     """Filter results by score threshold (Issue #665: extracted helper)."""
     if threshold <= 0:
         return results
@@ -1076,9 +1003,7 @@ async def enhanced_search_v2(request: dict, req: Request):
     See API documentation for full parameter list.
     """
     # Issue #555: Log deprecation warning
-    logger.warning(
-        "DEPRECATED: /enhanced_search_v2 called. Use /search with extended params instead."
-    )
+    logger.warning("DEPRECATED: /enhanced_search_v2 called. Use /search with extended params instead.")
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
@@ -1248,9 +1173,7 @@ async def _enhance_search_with_rag(query: str, results: List[Metadata]) -> Metad
                     "content": result.get("content", ""),
                     "metadata": {
                         "filename": result.get("metadata", {}).get("title", "Unknown"),
-                        "source": (
-                            result.get("metadata", {}).get("source", "knowledge_base")
-                        ),
+                        "source": (result.get("metadata", {}).get("source", "knowledge_base")),
                         "score": result.get("score", 0.0),
                     },
                 }

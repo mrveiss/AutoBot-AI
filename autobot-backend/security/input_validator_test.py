@@ -56,16 +56,12 @@ class TestQueryValidation:
 
     def test_suspicious_keywords_single(self):
         validator = WebResearchInputValidator()
-        result = validator.validate_research_query(
-            "learn about sql injection prevention"
-        )
+        result = validator.validate_research_query("learn about sql injection prevention")
         assert result["risk_level"] in ["medium", "low"]
 
     def test_suspicious_keywords_multiple(self):
         validator = WebResearchInputValidator()
-        result = validator.validate_research_query(
-            "exploit vulnerability backdoor malware"
-        )
+        result = validator.validate_research_query("exploit vulnerability backdoor malware")
         assert result["safe"] is False
         assert result["risk_level"] == "high"
 
@@ -171,9 +167,7 @@ class TestContentSanitization:
 
     def test_unsafe_content_type(self):
         validator = WebResearchInputValidator()
-        result = validator.sanitize_web_content(
-            "<p>test</p>", "application/octet-stream"
-        )
+        result = validator.sanitize_web_content("<p>test</p>", "application/octet-stream")
         assert len(result["warnings"]) > 0
 
 

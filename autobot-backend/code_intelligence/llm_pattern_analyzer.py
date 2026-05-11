@@ -150,9 +150,7 @@ class LLMPatternAnalyzer:
         self.token_tracker = TokenTracker()
         self.analysis_history: List[AnalysisResult] = []
 
-    def _scan_files_for_patterns(
-        self, python_files: List[Path]
-    ) -> tuple[List[UsagePattern], List[RetryPattern]]:
+    def _scan_files_for_patterns(self, python_files: List[Path]) -> tuple[List[UsagePattern], List[RetryPattern]]:
         """Scan files and collect patterns (Issue #665: extracted helper)."""
         all_patterns: List[UsagePattern] = []
         all_retry_patterns: List[RetryPattern] = []
@@ -168,9 +166,7 @@ class LLMPatternAnalyzer:
         self, all_patterns: List[UsagePattern]
     ) -> tuple[List[CacheOpportunity], List[BatchingOpportunity], List[CostEstimate]]:
         """Detect optimization opportunities and calculate costs (Issue #665: extracted helper)."""
-        cache_opportunities = CacheOpportunityDetector.detect_opportunities(
-            all_patterns
-        )
+        cache_opportunities = CacheOpportunityDetector.detect_opportunities(all_patterns)
         batching_opportunities = BatchingAnalyzer.find_opportunities(all_patterns)
         cost_estimates = CostCalculator.estimate_costs(all_patterns)
         return cache_opportunities, batching_opportunities, cost_estimates
@@ -188,13 +184,10 @@ class LLMPatternAnalyzer:
         return {
             "analysis_time_seconds": time.time() - start_time,
             "total_patterns": len(all_patterns),
-            "total_opportunities": len(cache_opportunities)
-            + len(batching_opportunities),
+            "total_opportunities": len(cache_opportunities) + len(batching_opportunities),
             "total_recommendations": len(recommendations),
             "estimated_monthly_cost": sum(c.monthly_cost_usd for c in cost_estimates),
-            "estimated_optimized_cost": sum(
-                c.optimized_monthly_cost_usd for c in cost_estimates
-            ),
+            "estimated_optimized_cost": sum(c.optimized_monthly_cost_usd for c in cost_estimates),
         }
 
     def _get_default_directories_and_exclusions(
@@ -243,9 +236,7 @@ class LLMPatternAnalyzer:
         recommendations: List[OptimizationRecommendation],
     ) -> AnalysisResult:
         """Build the final AnalysisResult object from collected data. Issue #620."""
-        total_savings = sum(r.estimated_savings_percent for r in recommendations) / max(
-            len(recommendations), 1
-        )
+        total_savings = sum(r.estimated_savings_percent for r in recommendations) / max(len(recommendations), 1)
         return AnalysisResult(
             analysis_id=analysis_id,
             analysis_timestamp=datetime.now(tz=timezone.utc),
@@ -277,14 +268,10 @@ class LLMPatternAnalyzer:
         start_time = time.time()
         analysis_id = f"analysis_{int(start_time)}"
 
-        directories, exclude_patterns = self._get_default_directories_and_exclusions(
-            directories, exclude_patterns
-        )
+        directories, exclude_patterns = self._get_default_directories_and_exclusions(directories, exclude_patterns)
         python_files = self._collect_files(directories, exclude_patterns)
         all_patterns, all_retry_patterns = self._scan_files_for_patterns(python_files)
-        cache_opps, batch_opps, costs = self._detect_opportunities_and_costs(
-            all_patterns
-        )
+        cache_opps, batch_opps, costs = self._detect_opportunities_and_costs(all_patterns)
         recommendations = self._generate_recommendations(
             all_patterns, cache_opps, batch_opps, all_retry_patterns, costs
         )
@@ -352,24 +339,18 @@ class LLMPatternAnalyzer:
             "",
         ]
 
-    def _build_cost_analysis_section(
-        self, cost_estimates: List[CostEstimate]
-    ) -> List[str]:
+    def _build_cost_analysis_section(self, cost_estimates: List[CostEstimate]) -> List[str]:
         """Build the cost analysis section of the summary report. Issue #620."""
         lines = ["COST ANALYSIS", "-" * 40]
         for estimate in cost_estimates:
             lines.append(f"  Model: {estimate.model}")
             lines.append(f"    Daily Calls: {estimate.daily_calls}")
             lines.append(f"    Monthly Cost: ${estimate.monthly_cost_usd:.2f}")
-            lines.append(
-                f"    Optimized Cost: ${estimate.optimized_monthly_cost_usd:.2f}"
-            )
+            lines.append(f"    Optimized Cost: ${estimate.optimized_monthly_cost_usd:.2f}")
             lines.append("")
         return lines
 
-    def _build_recommendations_section(
-        self, recommendations: List[OptimizationRecommendation]
-    ) -> List[str]:
+    def _build_recommendations_section(self, recommendations: List[OptimizationRecommendation]) -> List[str]:
         """Build the top recommendations section of the summary report. Issue #620."""
         lines = ["TOP RECOMMENDATIONS", "-" * 40]
         for rec in recommendations[:5]:

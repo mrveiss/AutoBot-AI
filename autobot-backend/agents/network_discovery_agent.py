@@ -43,9 +43,7 @@ class NetworkDiscoveryAgent(StandardizedAgent):
         self.description = "Discovers network assets and creates network maps"
         self.supported_tasks = _SUPPORTED_DISCOVERY_TASKS
 
-        self.default_network = os.getenv(
-            "AUTOBOT_DEFAULT_SCAN_NETWORK", NetworkConstants.DEFAULT_SCAN_NETWORK
-        )
+        self.default_network = os.getenv("AUTOBOT_DEFAULT_SCAN_NETWORK", NetworkConstants.DEFAULT_SCAN_NETWORK)
 
         # Register action handlers for StandardizedAgent routing
         self.register_actions(
@@ -155,8 +153,7 @@ class NetworkDiscoveryAgent(StandardizedAgent):
                 return {
                     "status": "error",
                     "message": (
-                        "Network range not configured. "
-                        "Set NETWORK_SUBNET env var or pass 'network' in task context."
+                        "Network range not configured. " "Set NETWORK_SUBNET env var or pass 'network' in task context."
                     ),
                 }
             context = {**context, "network": network}
@@ -301,9 +298,7 @@ class NetworkDiscoveryAgent(StandardizedAgent):
             # Use traceroute command
             cmd = ["traceroute", "-m", str(max_hops), target]
 
-            result = await run_agent_command(
-                cmd, timeout=TimingConstants.STANDARD_TIMEOUT
-            )
+            result = await run_agent_command(cmd, timeout=TimingConstants.STANDARD_TIMEOUT)
 
             if result["status"] == "success":
                 hops = self._parse_traceroute(result["output"])
@@ -329,9 +324,7 @@ class NetworkDiscoveryAgent(StandardizedAgent):
             network = context.get("network", self.default_network)
 
             # First discover hosts
-            discovery_result = await self._host_discovery(
-                {"network": network, "methods": ["ping", "arp", "tcp"]}
-            )
+            discovery_result = await self._host_discovery({"network": network, "methods": ["ping", "arp", "tcp"]})
 
             if discovery_result["status"] != "success":
                 return discovery_result
@@ -401,9 +394,7 @@ class NetworkDiscoveryAgent(StandardizedAgent):
         # Quick port scan for common ports
         common_ports = "22,80,443,445,3389"
         port_cmd = ["nmap", "-p", common_ports, host["ip"], "-oX", "-"]
-        port_result = await run_agent_command(
-            port_cmd, timeout=TimingConstants.SHORT_TIMEOUT
-        )
+        port_result = await run_agent_command(port_cmd, timeout=TimingConstants.SHORT_TIMEOUT)
 
         if port_result["status"] == "success":
             open_ports = self._parse_nmap_output(port_result["output"])
@@ -427,16 +418,12 @@ class NetworkDiscoveryAgent(StandardizedAgent):
         try:
             network = context.get("network", self.default_network)
 
-            discovery_result = await self._host_discovery(
-                {"network": network, "methods": ["ping", "arp"]}
-            )
+            discovery_result = await self._host_discovery({"network": network, "methods": ["ping", "arp"]})
             if discovery_result["status"] != "success":
                 return discovery_result
 
             # Gather detailed info for each host
-            assets = [
-                await self._gather_host_info(host) for host in discovery_result["hosts"]
-            ]
+            assets = [await self._gather_host_info(host) for host in discovery_result["hosts"]]
 
             # Categorize assets
             categories = {

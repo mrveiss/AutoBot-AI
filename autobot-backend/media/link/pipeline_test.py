@@ -27,7 +27,7 @@ def _mock_getaddrinfo(ip: str):
     family = socket.AF_INET6 if ":" in ip else socket.AF_INET
     sockaddr = (ip, 0, 0, 0) if family == socket.AF_INET6 else (ip, 0)
     return patch(
-        "media.link.pipeline.socket.getaddrinfo",
+        "autobot_shared.url_safety.socket.getaddrinfo",
         return_value=[(family, socket.SOCK_STREAM, 0, "", sockaddr)],
     )
 
@@ -111,7 +111,9 @@ class TestLinkPipelineHtmlParsing:
         assert "https://example.com/abs" in urls
 
     def test_extract_links_skips_anchors_and_js(self):
-        html = '<html><body><a href="#">Anchor</a><a href="javascript:void">JS</a><a href="/real">Real</a></body></html>'
+        html = (
+            '<html><body><a href="#">Anchor</a><a href="javascript:void">JS</a><a href="/real">Real</a></body></html>'
+        )
         soup = self._soup(html)
         links = self.pipe._extract_links(soup, "https://test.com")
         assert len(links) == 1
@@ -124,9 +126,7 @@ class TestLinkPipelineHtmlParsing:
         assert og.get("description") == "OG description"
 
     def test_parse_html_full(self):
-        result = self.pipe._parse_html(
-            SAMPLE_HTML, "https://test.com/page", "text/html", {}
-        )
+        result = self.pipe._parse_html(SAMPLE_HTML, "https://test.com/page", "text/html", {})
         assert result["type"] == "link_fetch"
         assert result["title"] == "OG Title"
         assert result["description"] == "OG description"
@@ -139,9 +139,7 @@ class TestLinkPipelineErrorHandling:
 
     def test_unavailable_result(self):
         pipe = LinkPipeline()
-        result = pipe._unavailable_result(
-            "https://example.com", ["aiohttp", "beautifulsoup4"], {}
-        )
+        result = pipe._unavailable_result("https://example.com", ["aiohttp", "beautifulsoup4"], {})
         assert result["processing_status"] == "unavailable"
         assert result["confidence"] == 0.0
 
@@ -184,21 +182,19 @@ class TestLinkPipelineHttp:
         mock_session = self._make_mock_session("https://example.com")
         _parsed = {"type": "link_fetch", "confidence": 0.9, "url": "https://example.com"}
 
-        with patch("media.link.pipeline._AIOHTTP_AVAILABLE", True), patch(
-            "media.link.pipeline._BS4_AVAILABLE", True
-        ), patch(
-            "media.link.pipeline.aiohttp.ClientSession", return_value=mock_session
-        ), patch.object(pipe, "_parse_html", return_value=_parsed), patch.object(
-            pipe, "_try_jina", new=AsyncMock(return_value=None)
+        with (
+            patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
+            patch("media.link.pipeline._BS4_AVAILABLE", True),
+            patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session),
+            patch.object(pipe, "_parse_html", return_value=_parsed),
+            patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
         ):
             result = await pipe._fetch_and_parse("https://example.com", {})
 
         assert result["type"] == "link_fetch"
         assert result["confidence"] > 0
         # Default path must verify TLS certs (ssl=None, not ssl=False)
-        mock_session.get.assert_called_once_with(
-            "https://example.com", allow_redirects=True, ssl=None
-        )
+        mock_session.get.assert_called_once_with("https://example.com", allow_redirects=True, ssl=None)
 
     @pytest.mark.asyncio
     async def test_fetch_default_verifies_tls(self):
@@ -207,12 +203,12 @@ class TestLinkPipelineHttp:
         mock_session = self._make_mock_session("https://example.com")
         _parsed = {"type": "link_fetch", "confidence": 0.9}
 
-        with patch("media.link.pipeline._AIOHTTP_AVAILABLE", True), patch(
-            "media.link.pipeline._BS4_AVAILABLE", True
-        ), patch(
-            "media.link.pipeline.aiohttp.ClientSession", return_value=mock_session
-        ), patch.object(pipe, "_parse_html", return_value=_parsed), patch.object(
-            pipe, "_try_jina", new=AsyncMock(return_value=None)
+        with (
+            patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
+            patch("media.link.pipeline._BS4_AVAILABLE", True),
+            patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session),
+            patch.object(pipe, "_parse_html", return_value=_parsed),
+            patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
         ):
             await pipe._fetch_and_parse("https://example.com", {})
 
@@ -226,16 +222,14 @@ class TestLinkPipelineHttp:
         mock_session = self._make_mock_session("https://internal.example.com")
         _parsed = {"type": "link_fetch", "confidence": 0.9}
 
-        with patch("media.link.pipeline._AIOHTTP_AVAILABLE", True), patch(
-            "media.link.pipeline._BS4_AVAILABLE", True
-        ), patch(
-            "media.link.pipeline.aiohttp.ClientSession", return_value=mock_session
-        ), patch.object(pipe, "_parse_html", return_value=_parsed), patch.object(
-            pipe, "_try_jina", new=AsyncMock(return_value=None)
+        with (
+            patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
+            patch("media.link.pipeline._BS4_AVAILABLE", True),
+            patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session),
+            patch.object(pipe, "_parse_html", return_value=_parsed),
+            patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
         ):
-            await pipe._fetch_and_parse(
-                "https://internal.example.com", {"allow_self_signed": True}
-            )
+            await pipe._fetch_and_parse("https://internal.example.com", {"allow_self_signed": True})
 
         _call_kwargs = mock_session.get.call_args.kwargs
         assert _call_kwargs.get("ssl") is False, "allow_self_signed=True must set ssl=False"
@@ -257,11 +251,12 @@ class TestLinkPipelineHttp:
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("media.link.pipeline._AIOHTTP_AVAILABLE", True), patch(
-            "media.link.pipeline._BS4_AVAILABLE", True
-        ), patch(
-            "media.link.pipeline.aiohttp.ClientSession", return_value=mock_session
-        ), patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)):
+        with (
+            patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
+            patch("media.link.pipeline._BS4_AVAILABLE", True),
+            patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session),
+            patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
+        ):
             result = await pipe._fetch_and_parse("https://example.com/404", {})
 
         assert result["processing_status"] == "error"
@@ -316,8 +311,10 @@ class TestLinkPipelineJina:
         pipe = LinkPipeline()
         jina_content = "Article title\n\nArticle body text."
 
-        with patch.object(pipe, "_try_jina", new=AsyncMock(return_value=jina_content)), \
-             _mock_getaddrinfo("93.184.216.34"):
+        with (
+            patch.object(pipe, "_try_jina", new=AsyncMock(return_value=jina_content)),
+            _mock_getaddrinfo("93.184.216.34"),
+        ):
             result = await pipe._fetch_and_parse("https://example.com/article", {})
 
         assert result["source"] == "jina"
@@ -330,10 +327,12 @@ class TestLinkPipelineJina:
         bs4_result = {"type": "link_fetch", "confidence": 0.9, "url": "https://intranet.attacker/"}
         jina_mock = AsyncMock(return_value="should-not-be-called")
 
-        with patch.object(pipe, "_try_jina", new=jina_mock), \
-             patch.object(pipe, "_parse_html", return_value=bs4_result), \
-             patch("media.link.pipeline.aiohttp.ClientSession", return_value=self._make_mock_bs4_session()), \
-             _mock_getaddrinfo("10.0.0.5"):
+        with (
+            patch.object(pipe, "_try_jina", new=jina_mock),
+            patch.object(pipe, "_parse_html", return_value=bs4_result),
+            patch("media.link.pipeline.aiohttp.ClientSession", return_value=self._make_mock_bs4_session()),
+            _mock_getaddrinfo("10.0.0.5"),
+        ):
             result = await pipe._fetch_and_parse("https://intranet.attacker/", {})
 
         jina_mock.assert_not_called()
@@ -347,15 +346,19 @@ class TestLinkPipelineJina:
 
         bs4_result = {"type": "link_fetch", "confidence": 0.9, "url": "https://example.com"}
 
-        with patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session), \
-             patch.object(pipe, "_parse_html", return_value=bs4_result):
+        with (
+            patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session),
+            patch.object(pipe, "_parse_html", return_value=bs4_result),
+        ):
             # _try_jina returns None on non-200, triggering BS4 fallback
             jina_result = await pipe._try_jina("https://example.com")
             assert jina_result is None
 
-        with patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)), \
-             patch("media.link.pipeline.aiohttp.ClientSession", return_value=self._make_mock_bs4_session()), \
-             patch.object(pipe, "_parse_html", return_value=bs4_result):
+        with (
+            patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
+            patch("media.link.pipeline.aiohttp.ClientSession", return_value=self._make_mock_bs4_session()),
+            patch.object(pipe, "_parse_html", return_value=bs4_result),
+        ):
             result = await pipe._fetch_and_parse("https://example.com", {})
 
         assert result["type"] == "link_fetch"
@@ -372,9 +375,11 @@ class TestLinkPipelineJina:
         async def _raise_timeout(*args, **kwargs):
             raise _aiohttp.ServerTimeoutError()
 
-        with patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)), \
-             patch("media.link.pipeline.aiohttp.ClientSession", return_value=self._make_mock_bs4_session()), \
-             patch.object(pipe, "_parse_html", return_value=bs4_result):
+        with (
+            patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
+            patch("media.link.pipeline.aiohttp.ClientSession", return_value=self._make_mock_bs4_session()),
+            patch.object(pipe, "_parse_html", return_value=bs4_result),
+        ):
             result = await pipe._fetch_and_parse("https://example.com", {})
 
         assert result["type"] == "link_fetch"
@@ -445,16 +450,14 @@ class TestLinkPipelineJina:
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0)),
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", 0)),
         ]
-        with patch(
-            "media.link.pipeline.socket.getaddrinfo", return_value=infos
-        ):
+        with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=infos):
             assert not pipe._is_public_url("https://multi-answer.attacker.example/")
 
     def test_is_public_url_rejects_onion(self):
         pipe = LinkPipeline()
         # Must not resolve DNS; rejected by TLD alone.
         with patch(
-            "media.link.pipeline.socket.getaddrinfo",
+            "autobot_shared.url_safety.socket.getaddrinfo",
             side_effect=AssertionError("DNS should not be called for .onion"),
         ):
             assert not pipe._is_public_url("http://example.onion/page")
@@ -462,7 +465,7 @@ class TestLinkPipelineJina:
     def test_is_public_url_rejects_internal_tld(self):
         pipe = LinkPipeline()
         with patch(
-            "media.link.pipeline.socket.getaddrinfo",
+            "autobot_shared.url_safety.socket.getaddrinfo",
             side_effect=AssertionError("DNS should not be called for .internal"),
         ):
             assert not pipe._is_public_url("https://service.internal/")
@@ -475,7 +478,7 @@ class TestLinkPipelineJina:
         """DNS lookup failure must return False (fail closed)."""
         pipe = LinkPipeline()
         with patch(
-            "media.link.pipeline.socket.getaddrinfo",
+            "autobot_shared.url_safety.socket.getaddrinfo",
             side_effect=socket.gaierror("Name or service not known"),
         ):
             assert not pipe._is_public_url("https://nonexistent-host.example/")
@@ -483,7 +486,7 @@ class TestLinkPipelineJina:
     def test_is_public_url_fails_closed_on_dns_timeout(self):
         pipe = LinkPipeline()
         with patch(
-            "media.link.pipeline.socket.getaddrinfo",
+            "autobot_shared.url_safety.socket.getaddrinfo",
             side_effect=socket.timeout(),
         ):
             assert not pipe._is_public_url("https://slow-dns.example/")
@@ -498,7 +501,7 @@ class TestLinkPipelineJina:
         """Literal public IP short-circuits DNS."""
         pipe = LinkPipeline()
         with patch(
-            "media.link.pipeline.socket.getaddrinfo",
+            "autobot_shared.url_safety.socket.getaddrinfo",
             side_effect=AssertionError("DNS should not be called for literal IP"),
         ):
             assert pipe._is_public_url("http://8.8.8.8/")

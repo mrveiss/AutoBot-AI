@@ -12,6 +12,7 @@ import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+
 from api.schemas_agent import (
     MemberAddedResponse,
     MemberRemovedResponse,
@@ -24,7 +25,6 @@ from api.schemas_agent import (
     TeamResponse,
     TeamUpdate,
 )
-
 from api.user_management.dependencies import (
     get_team_service,
     require_org_context,
@@ -293,9 +293,7 @@ async def update_member_role(
 ):
     """Update member role."""
     try:
-        membership = await team_service.change_member_role(
-            team_id, user_id, update_data.role
-        )
+        membership = await team_service.change_member_role(team_id, user_id, update_data.role)
         return _membership_to_response(membership)
 
     except MembershipError:
@@ -339,11 +337,7 @@ async def get_my_teams(
 
 def _team_to_response(team) -> TeamResponse:
     """Convert Team model to TeamResponse schema."""
-    member_count = (
-        len(team.memberships)
-        if hasattr(team, "memberships") and team.memberships
-        else 0
-    )
+    member_count = len(team.memberships) if hasattr(team, "memberships") and team.memberships else 0
 
     return TeamResponse(
         id=team.id,

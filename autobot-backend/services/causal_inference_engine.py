@@ -21,7 +21,7 @@ Reports include:
 - Confounders (multi-factor contributors)
 - Interventions (ranked by likelihood × cost)
 - Recommendations (IMMEDIATE, SHORT_TERM, LONG_TERM)
-- Severity (CRITICAL, DEGRADED, WARNING)
+- CausalSeverity (CRITICAL, DEGRADED, WARNING)
 """
 
 import logging
@@ -29,8 +29,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
-from uuid import UUID
+from typing import List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
 from context_aware_decision.counterfactual_reasoner import CounterfactualReasoner
@@ -45,7 +44,7 @@ from services.root_cause_analyzer import (
 logger = logging.getLogger(__name__)
 
 
-class Severity(str, Enum):
+class CausalSeverity(str, Enum):
     """Error severity levels."""
 
     CRITICAL = "critical"  # Immediate action required
@@ -87,14 +86,12 @@ class CausalAnalysisReport:
     causal_chain: List[CausalEvent] = field(default_factory=list)
     confounders: List[CausalEvent] = field(default_factory=list)
     interventions: List[Intervention] = field(default_factory=list)
-    severity: Severity = Severity.WARNING
+    severity: CausalSeverity = CausalSeverity.WARNING
     confidence: float = 0.0
     chain_depth: int = 0
     confounding_strength: float = 0.0  # 0.0-1.0, how much confounders matter
     analysis_duration_ms: float = 0.0
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(tz=timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
     analysis_status: str = "success"  # success, partial, failed
     error_message: Optional[str] = None
     recommendations: List[str] = field(default_factory=list)
@@ -105,9 +102,7 @@ class CausalAnalysisReport:
             "task_id": self.task_id,
             "error_description": self.error_description,
             "severity": self.severity.value,
-            "root_cause": (
-                self._event_to_dict(self.root_cause) if self.root_cause else None
-            ),
+            "root_cause": (self._event_to_dict(self.root_cause) if self.root_cause else None),
             "causal_chain": [self._event_to_dict(e) for e in self.causal_chain],
             "confounders": [self._event_to_dict(c) for c in self.confounders],
             "confounding_strength": round(self.confounding_strength, 3),
@@ -189,9 +184,7 @@ class CausalInferenceEngine:
                 logger.error("Failed to initialize Redis client: %s", e)
                 raise
 
-    async def analyze_failure(
-        self, task_id: str, error_description: Optional[str] = None
-    ) -> CausalAnalysisReport:
+    async def analyze_failure(self, task_id: str, error_description: Optional[str] = None) -> CausalAnalysisReport:
         """
         Analyze a task failure and produce root-cause report with interventions.
 
@@ -235,9 +228,7 @@ class CausalInferenceEngine:
                 )
 
             # Steps 2-5: Analyze and synthesize report
-            return await self._synthesize_analysis(
-                task_id, error_description, base_report, start_time
-            )
+            return await self._synthesize_analysis(task_id, error_description, base_report, start_time)
 
         except Exception as e:
             logger.error("Causal analysis failed for task %s: %s", task_id, e)
@@ -273,24 +264,16 @@ class CausalInferenceEngine:
     ) -> CausalAnalysisReport:
         """Synthesize steps 2-5 of analysis pipeline."""
         confounding_strength = self._analyze_confounders(base_report)
-        interventions = await self._predict_interventions(
-            base_report.causal_chain, base_report.root_event
-        )
-        confidence = self._calculate_confidence(
-            base_report, confounding_strength, interventions
-        )
-        severity = self._assess_severity(
-            base_report, confounding_strength, interventions
-        )
+        interventions = await self._predict_interventions(base_report.causal_chain, base_report.root_event)
+        confidence = self._calculate_confidence(base_report, confounding_strength, interventions)
+        severity = self._assess_severity(base_report, confounding_strength, interventions)
         recommendations = self._generate_recommendations(interventions, severity)
         analysis_duration_ms = (time.time() - start_time) * 1000
 
         report = CausalAnalysisReport(
             task_id=task_id,
             error_description=(
-                error_description or base_report.explanations[0]
-                if base_report.explanations
-                else "Unknown error"
+                error_description or base_report.explanations[0] if base_report.explanations else "Unknown error"
             ),
             root_cause=base_report.root_event,
             causal_chain=base_report.causal_chain,
@@ -381,9 +364,7 @@ class CausalInferenceEngine:
             return sorted(
                 interventions,
                 key=lambda x: (
-                    x.predicted_success_rate
-                    * self._cost_multiplier(x.cost_level)
-                    * self._risk_multiplier(x.risk_level)
+                    x.predicted_success_rate * self._cost_multiplier(x.cost_level) * self._risk_multiplier(x.risk_level)
                 ),
                 reverse=True,
             )
@@ -392,9 +373,7 @@ class CausalInferenceEngine:
             logger.warning("Intervention prediction failed: %s", e)
             return interventions
 
-    async def _generate_event_interventions(
-        self, event: CausalEvent
-    ) -> List[Intervention]:
+    async def _generate_event_interventions(self, event: CausalEvent) -> List[Intervention]:
         """
         Generate intervention suggestions for a single causal event.
 
@@ -521,9 +500,7 @@ class CausalInferenceEngine:
             ),
         ]
 
-    def _generate_database_interventions(
-        self, event: CausalEvent
-    ) -> List[Intervention]:
+    def _generate_database_interventions(self, event: CausalEvent) -> List[Intervention]:
         """Generate database/query-specific interventions."""
         return [
             Intervention(
@@ -555,9 +532,7 @@ class CausalInferenceEngine:
             ),
         ]
 
-    def _generate_network_interventions(
-        self, event: CausalEvent
-    ) -> List[Intervention]:
+    def _generate_network_interventions(self, event: CausalEvent) -> List[Intervention]:
         """Generate network/connection-specific interventions."""
         return [
             Intervention(
@@ -589,9 +564,7 @@ class CausalInferenceEngine:
             ),
         ]
 
-    def _generate_generic_interventions(
-        self, event: CausalEvent
-    ) -> List[Intervention]:
+    def _generate_generic_interventions(self, event: CausalEvent) -> List[Intervention]:
         """Generate generic interventions for unknown event types."""
         return [
             Intervention(
@@ -641,15 +614,13 @@ class CausalInferenceEngine:
 
         # Event quality from individual confidences (max 0.3)
         event_scores = [e.confidence for e in report.causal_chain]
-        event_score = (
-            (sum(event_scores) / len(event_scores)) * 0.3 if event_scores else 0.0
-        )
+        event_score = (sum(event_scores) / len(event_scores)) * 0.3 if event_scores else 0.0
 
         # Intervention clarity: high-confidence interventions indicate good analysis (max 0.2)
         if interventions:
-            avg_intervention_confidence = sum(
-                i.confidence for i in interventions[:3]  # Top 3 interventions
-            ) / min(3, len(interventions))
+            avg_intervention_confidence = sum(i.confidence for i in interventions[:3]) / min(  # Top 3 interventions
+                3, len(interventions)
+            )
             intervention_score = avg_intervention_confidence * 0.2
         else:
             intervention_score = 0.0
@@ -658,9 +629,7 @@ class CausalInferenceEngine:
         confounder_penalty = -confounding_strength * 0.2
 
         # Combine all factors
-        total_confidence = max(
-            0.0, depth_score + event_score + intervention_score + confounder_penalty
-        )
+        total_confidence = max(0.0, depth_score + event_score + intervention_score + confounder_penalty)
 
         return min(1.0, total_confidence)
 
@@ -669,7 +638,7 @@ class CausalInferenceEngine:
         report: RootCauseReport,
         confounding_strength: float,
         interventions: List[Intervention],
-    ) -> Severity:
+    ) -> CausalSeverity:
         """
         Assess error severity based on analysis results.
 
@@ -683,35 +652,29 @@ class CausalInferenceEngine:
             interventions: Generated interventions
 
         Returns:
-            Severity level
+            CausalSeverity level
         """
         # Start with confidence-based baseline
         if report.chain_depth >= 3 and report.confidence >= 0.7:
-            base_severity = Severity.CRITICAL
+            base_severity = CausalSeverity.CRITICAL
         elif report.chain_depth >= 2 and report.confidence >= 0.5:
-            base_severity = Severity.DEGRADED
+            base_severity = CausalSeverity.DEGRADED
         else:
-            base_severity = Severity.WARNING
+            base_severity = CausalSeverity.WARNING
 
         # Upgrade to CRITICAL if multi-factor
-        if confounding_strength >= 0.5 and base_severity == Severity.DEGRADED:
-            base_severity = Severity.CRITICAL
+        if confounding_strength >= 0.5 and base_severity == CausalSeverity.DEGRADED:
+            base_severity = CausalSeverity.CRITICAL
 
         # Downgrade if high-confidence interventions exist
-        if (
-            interventions
-            and interventions[0].predicted_success_rate >= 0.8
-            and interventions[0].confidence >= 0.8
-        ):
+        if interventions and interventions[0].predicted_success_rate >= 0.8 and interventions[0].confidence >= 0.8:
             # High-confidence fix available, not critical
-            if base_severity == Severity.CRITICAL:
-                base_severity = Severity.DEGRADED
+            if base_severity == CausalSeverity.CRITICAL:
+                base_severity = CausalSeverity.DEGRADED
 
         return base_severity
 
-    def _generate_recommendations(
-        self, interventions: List[Intervention], severity: Severity
-    ) -> List[str]:
+    def _generate_recommendations(self, interventions: List[Intervention], severity: CausalSeverity) -> List[str]:
         """
         Generate human-readable recommendations ranked by priority.
 
@@ -730,32 +693,18 @@ class CausalInferenceEngine:
         recommendations: List[str] = []
 
         if not interventions:
-            return [
-                "No specific interventions identified. Manual investigation recommended."
-            ]
+            return ["No specific interventions identified. Manual investigation recommended."]
 
         # Group interventions by type
-        immediate = [
-            i
-            for i in interventions
-            if i.recommendation_type == RecommendationType.IMMEDIATE
-        ]
-        short_term = [
-            i
-            for i in interventions
-            if i.recommendation_type == RecommendationType.SHORT_TERM
-        ]
-        long_term = [
-            i
-            for i in interventions
-            if i.recommendation_type == RecommendationType.LONG_TERM
-        ]
+        immediate = [i for i in interventions if i.recommendation_type == RecommendationType.IMMEDIATE]
+        short_term = [i for i in interventions if i.recommendation_type == RecommendationType.SHORT_TERM]
+        long_term = [i for i in interventions if i.recommendation_type == RecommendationType.LONG_TERM]
 
         # Generate urgency prefix based on severity
         urgency = ""
-        if severity == Severity.CRITICAL:
+        if severity == CausalSeverity.CRITICAL:
             urgency = "[URGENT] "
-        elif severity == Severity.DEGRADED:
+        elif severity == CausalSeverity.DEGRADED:
             urgency = "[ACTION] "
 
         # Add immediate actions

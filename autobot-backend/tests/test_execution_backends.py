@@ -8,9 +8,9 @@ Tests cover local, Docker, SSH, and Modal execution backends.
 Validates task routing, health checks, and result capture.
 """
 
-import asyncio
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from services.execution.base_backend import (
     BackendType,
@@ -242,9 +242,7 @@ class TestDockerBackend:
 
     async def test_initialization_without_docker(self):
         """Test error when Docker is not available."""
-        with patch(
-            "services.execution.docker_backend.docker", None
-        ):
+        with patch("services.execution.docker_backend.docker", None):
             with pytest.raises(RuntimeError, match="docker"):
                 DockerBackend()
 

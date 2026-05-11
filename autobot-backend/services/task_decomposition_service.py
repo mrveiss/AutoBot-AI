@@ -70,9 +70,7 @@ class TaskDecompositionService:
                 session.add(td)
                 ids.append(str(td.id))
             await session.commit()
-        logger.info(
-            "Decomposed task %s into %s subtasks", parent_task_id, len(subtasks)
-        )
+        logger.info("Decomposed task %s into %s subtasks", parent_task_id, len(subtasks))
         return ids
 
     async def execute_decomposition(self, parent_task_id: str) -> None:
@@ -87,9 +85,7 @@ class TaskDecompositionService:
         completed: Dict[int, Any] = {}
         for td in subtasks:
             if not await self._deps_satisfied(td, completed):
-                logger.warning(
-                    "Subtask order=%s blocked by unmet deps, aborting", td.subtask_order
-                )
+                logger.warning("Subtask order=%s blocked by unmet deps, aborting", td.subtask_order)
                 await self._mark_td_status(td.id, ProcessRunStatus.CANCELLED.value)
                 continue
             ctx_in = _merge_context(td.context_in, td.depends_on, completed)
@@ -120,9 +116,7 @@ class TaskDecompositionService:
                 )
                 break
 
-    async def get_decomposition_status(
-        self, parent_task_id: str
-    ) -> List[Dict[str, Any]]:
+    async def get_decomposition_status(self, parent_task_id: str) -> List[Dict[str, Any]]:
         """Return status dicts for all subtasks of parent_task_id (#1406)."""
         subtasks = await self._load_subtasks(parent_task_id)
         return [
@@ -150,9 +144,7 @@ class TaskDecompositionService:
             )
             return list(result.scalars().all())
 
-    async def _create_stub_run(
-        self, session: AsyncSession, sub: Dict[str, Any]
-    ) -> uuid.UUID:
+    async def _create_stub_run(self, session: AsyncSession, sub: Dict[str, Any]) -> uuid.UUID:
         """Insert a QUEUED ProcessRun stub for a subtask (#1406)."""
         run_id = uuid.uuid4()
         session.add(
@@ -186,9 +178,7 @@ class TaskDecompositionService:
                 row.status = status
             await session.commit()
 
-    async def _update_context_in(
-        self, td_id: uuid.UUID, ctx_in: Optional[Dict[str, Any]]
-    ) -> None:
+    async def _update_context_in(self, td_id: uuid.UUID, ctx_in: Optional[Dict[str, Any]]) -> None:
         """Persist merged context_in before execution (#1406)."""
         async with self._session_factory() as session:
             row = await session.get(TaskDecomposition, td_id)
@@ -197,9 +187,7 @@ class TaskDecompositionService:
                 row.status = ProcessRunStatus.RUNNING.value
             await session.commit()
 
-    async def _save_context_out(
-        self, td_id: uuid.UUID, context_out: Dict[str, Any], status: str
-    ) -> None:
+    async def _save_context_out(self, td_id: uuid.UUID, context_out: Dict[str, Any], status: str) -> None:
         """Persist context_out after execution (#1406)."""
         async with self._session_factory() as session:
             row = await session.get(TaskDecomposition, td_id)

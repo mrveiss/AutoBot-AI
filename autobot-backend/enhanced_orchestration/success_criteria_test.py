@@ -106,17 +106,13 @@ class TestExitCodeCriteria:
 class TestOutputPatternCriteria:
     @pytest.mark.asyncio
     async def test_passes_when_pattern_found(self):
-        c = _make_criterion(
-            SuccessCriteriaType.OUTPUT_PATTERN, {"pattern": r"SUCCESS"}
-        )
+        c = _make_criterion(SuccessCriteriaType.OUTPUT_PATTERN, {"pattern": r"SUCCESS"})
         ev = await EVALUATOR.evaluate([c], {"output": "Build SUCCESS complete"})
         assert ev.results[0].passed is True
 
     @pytest.mark.asyncio
     async def test_fails_when_pattern_absent(self):
-        c = _make_criterion(
-            SuccessCriteriaType.OUTPUT_PATTERN, {"pattern": r"SUCCESS"}
-        )
+        c = _make_criterion(SuccessCriteriaType.OUTPUT_PATTERN, {"pattern": r"SUCCESS"})
         ev = await EVALUATOR.evaluate([c], {"output": "Build FAILED"})
         assert ev.results[0].passed is False
 
@@ -136,19 +132,13 @@ class TestOutputPatternCriteria:
 class TestResourceExistsCriteria:
     @pytest.mark.asyncio
     async def test_passes_when_key_present_and_truthy(self):
-        c = _make_criterion(
-            SuccessCriteriaType.RESOURCE_EXISTS, {"key": "artifact_url"}
-        )
-        ev = await EVALUATOR.evaluate(
-            [c], {"resources": {"artifact_url": "https://example.com/file.tar"}}
-        )
+        c = _make_criterion(SuccessCriteriaType.RESOURCE_EXISTS, {"key": "artifact_url"})
+        ev = await EVALUATOR.evaluate([c], {"resources": {"artifact_url": "https://example.com/file.tar"}})
         assert ev.results[0].passed is True
 
     @pytest.mark.asyncio
     async def test_fails_when_key_missing(self):
-        c = _make_criterion(
-            SuccessCriteriaType.RESOURCE_EXISTS, {"key": "artifact_url"}
-        )
+        c = _make_criterion(SuccessCriteriaType.RESOURCE_EXISTS, {"key": "artifact_url"})
         ev = await EVALUATOR.evaluate([c], {"resources": {}})
         assert ev.results[0].passed is False
 
@@ -200,42 +190,32 @@ class TestAggregate:
     @pytest.mark.asyncio
     async def test_full_when_all_pass(self):
         c1 = _make_criterion(SuccessCriteriaType.EXIT_CODE, {"expected": 0})
-        c2 = _make_criterion(
-            SuccessCriteriaType.OUTPUT_PATTERN, {"pattern": "ok"}
-        )
+        c2 = _make_criterion(SuccessCriteriaType.OUTPUT_PATTERN, {"pattern": "ok"})
         ev = await EVALUATOR.evaluate([c1, c2], {"exit_code": 0, "output": "ok"})
         assert ev.overall == "full"
         assert ev.score == pytest.approx(1.0)
 
     @pytest.mark.asyncio
     async def test_partial_when_optional_fails(self):
-        required = _make_criterion(
-            SuccessCriteriaType.EXIT_CODE, {"expected": 0}, required=True
-        )
+        required = _make_criterion(SuccessCriteriaType.EXIT_CODE, {"expected": 0}, required=True)
         optional = _make_criterion(
             SuccessCriteriaType.OUTPUT_PATTERN,
             {"pattern": "MISSING"},
             required=False,
         )
-        ev = await EVALUATOR.evaluate(
-            [required, optional], {"exit_code": 0, "output": "something else"}
-        )
+        ev = await EVALUATOR.evaluate([required, optional], {"exit_code": 0, "output": "something else"})
         assert ev.overall == "partial"
         assert 0.0 < ev.score < 1.0
 
     @pytest.mark.asyncio
     async def test_failed_when_required_fails(self):
-        required = _make_criterion(
-            SuccessCriteriaType.EXIT_CODE, {"expected": 0}, required=True
-        )
+        required = _make_criterion(SuccessCriteriaType.EXIT_CODE, {"expected": 0}, required=True)
         optional = _make_criterion(
             SuccessCriteriaType.OUTPUT_PATTERN,
             {"pattern": "ok"},
             required=False,
         )
-        ev = await EVALUATOR.evaluate(
-            [required, optional], {"exit_code": 1, "output": "ok"}
-        )
+        ev = await EVALUATOR.evaluate([required, optional], {"exit_code": 1, "output": "ok"})
         assert ev.overall == "failed"
 
     @pytest.mark.asyncio
@@ -258,9 +238,7 @@ class TestAggregate:
             weight=1.0,
             required=False,
         )
-        ev = await EVALUATOR.evaluate(
-            [heavy, light], {"exit_code": 0, "output": "no match"}
-        )
+        ev = await EVALUATOR.evaluate([heavy, light], {"exit_code": 0, "output": "no match"})
         # heavy passes (weight 3), light fails (weight 1) → 3/4 = 0.75
         assert ev.score == pytest.approx(0.75)
         assert ev.overall == "partial"

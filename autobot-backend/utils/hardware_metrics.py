@@ -19,6 +19,8 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import psutil
 
+from autobot_shared.async_compat import run_or_schedule
+
 # Import existing monitoring infrastructure
 from constants.api_constants import PATH_API_HEALTH
 
@@ -1525,4 +1527,4 @@ if __name__ == "__main__":
         print(f"Optimization recommendations: {json.dumps(recommendations, indent=2)}")  # noqa: print  # noqa: print
 
     # Run test
-    asyncio.run(test_phase9_monitoring())
+    run_or_schedule(test_phase9_monitoring())

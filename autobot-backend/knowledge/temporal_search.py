@@ -9,9 +9,10 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 
 import logging
 from datetime import datetime
-from autobot_shared.time_utils import parse_utc_iso
 from typing import List, Optional, Set
 from uuid import UUID
+
+from autobot_shared.time_utils import parse_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +73,7 @@ class TemporalSearchService:
 
                 if participants:
                     event_participants = set(event.get("participants", []))
-                    if not event_participants.intersection(
-                        {str(p) for p in participants}
-                    ):
+                    if not event_participants.intersection({str(p) for p in participants}):
                         continue
 
                 events.append(event)

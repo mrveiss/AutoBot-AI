@@ -26,6 +26,25 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.status_enums import Severity  # #7253: consolidated onto canonical (#6689)
+
+# Anti-pattern severity → 0-100 integer score. Kept as a module-level helper
+# rather than an enum method so the canonical `Severity` enum stays clean
+# (canonical `to_score()` returns 0.0–0.9 floats, a different scale).
+_ANTI_PATTERN_SCORES: Dict[Severity, int] = {
+    Severity.CRITICAL: 100,
+    Severity.HIGH: 75,
+    Severity.MEDIUM: 50,
+    Severity.LOW: 25,
+}
+
+
+def anti_pattern_score(severity: Severity) -> int:
+    """Numeric anti-pattern score for `severity` (higher = worse, 0-100 scale)."""
+    return _ANTI_PATTERN_SCORES[severity]
+
+
 # Initialize configuration
 logger = logging.getLogger(__name__)
 
@@ -55,25 +74,6 @@ _ENTRY_POINT_SUFFIXES = (
     "API",
     "Router",
 )
-
-
-class Severity(Enum):
-    """Anti-pattern severity levels"""
-
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-
-    def score(self) -> int:
-        """Numeric score for severity (higher = worse)"""
-        scores = {
-            Severity.CRITICAL: 100,
-            Severity.HIGH: 75,
-            Severity.MEDIUM: 50,
-            Severity.LOW: 25,
-        }
-        return scores[self]
 
 
 class AntiPatternType(Enum):
@@ -119,7 +119,7 @@ class AntiPatternInstance:
         return {
             "pattern_type": self.pattern_type.value,
             "severity": self.severity.value,
-            "severity_score": self.severity.score(),
+            "severity_score": anti_pattern_score(self.severity),
             "file_path": self.file_path,
             "line_number": self.line_number,
             "entity_name": self.entity_name,
@@ -388,9 +388,7 @@ class AntiPatternDetector:
         results.extend(await self._detect_duplicate_class_shapes())
         return results
 
-    async def _parse_codebase(
-        self, root_path: str, patterns: List[str], exclude_patterns: List[str]
-    ) -> None:
+    async def _parse_codebase(self, root_path: str, patterns: List[str], exclude_patterns: List[str]) -> None:
         """Parse all Python files and build indexes.
 
         Issue #510: Optimized O(n³) → O(n²) by converting exclude_patterns
@@ -408,17 +406,13 @@ class AntiPatternDetector:
 
         for pattern in patterns:
             for file_path in root.glob(pattern):
-                if file_path.is_file() and not self._should_skip(
-                    file_path, exclude_set
-                ):
+                if file_path.is_file() and not self._should_skip(file_path, exclude_set):
                     try:
                         module_info = await self._parse_file(str(file_path))
                         if module_info:
                             self.modules[module_info.name] = module_info
                             for cls_info in module_info.classes:
-                                self.classes[f"{module_info.name}.{cls_info.name}"] = (
-                                    cls_info
-                                )
+                                self.classes[f"{module_info.name}.{cls_info.name}"] = cls_info
                                 self.all_defined_names.add(cls_info.name)
                             self.all_defined_names.update(module_info.functions)
                     except Exception as e:
@@ -430,9 +424,7 @@ class AntiPatternDetector:
                 if imported in self.modules:
                     self.modules[imported].is_imported_by.add(module.name)
 
-    def _should_skip(
-        self, file_path: Path, exclude_patterns: "frozenset[str] | List[str]"
-    ) -> bool:
+    def _should_skip(self, file_path: Path, exclude_patterns: "frozenset[str] | List[str]") -> bool:
         """Check if file should be skipped.
 
         Issue #510: Accepts frozenset for O(1) membership check.
@@ -466,11 +458,7 @@ class AntiPatternDetector:
                         classes.append(cls_info)
 
             # Extract top-level functions
-            functions = [
-                node.name
-                for node in ast.iter_child_nodes(tree)
-                if isinstance(node, ast.FunctionDef)
-            ]
+            functions = [node.name for node in ast.iter_child_nodes(tree) if isinstance(node, ast.FunctionDef)]
 
             return ModuleInfo(
                 name=module_name,
@@ -488,7 +476,7 @@ class AntiPatternDetector:
 
     @staticmethod
     def _extract_method_call_data(
-        methods: List[ast.AST]  # ast.FunctionDef | ast.AsyncFunctionDef (#6661),
+        methods: List[ast.AST],  # ast.FunctionDef | ast.AsyncFunctionDef (#6661),
     ) -> Tuple[Dict[str, List[str]], Dict[str, int]]:
         """Extract method calls and external references from a list of AST methods.
 
@@ -505,27 +493,19 @@ class AntiPatternDetector:
                             calls.append(f"self.{child.attr}")
                         else:
                             ref_name = child.value.id
-                            external_references[ref_name] = (
-                                external_references.get(ref_name, 0) + 1
-                            )
+                            external_references[ref_name] = external_references.get(ref_name, 0) + 1
                             calls.append(f"{ref_name}.{child.attr}")
             method_calls[method.name] = calls
         return method_calls, external_references
 
-    def _analyze_class(
-        self, node: ast.ClassDef, file_path: str, content: str
-    ) -> Optional[ClassInfo]:
+    def _analyze_class(self, node: ast.ClassDef, file_path: str, content: str) -> Optional[ClassInfo]:
         """Analyze a class definition"""
         try:
             # Extract methods (#6661: include AsyncFunctionDef so the LSP
             # detector can catch sync/async signature mismatches between
             # parent and child overrides — previously async methods were
             # silently skipped by every existing detector too).
-            methods = [
-                n
-                for n in node.body
-                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
-            ]
+            methods = [n for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
 
             # Extract attributes (from __init__ and class body)
             attributes = set()
@@ -533,10 +513,7 @@ class AntiPatternDetector:
                 if method.name == "__init__":
                     for child in ast.walk(method):
                         if isinstance(child, ast.Attribute):
-                            if (
-                                isinstance(child.value, ast.Name)
-                                and child.value.id == "self"
-                            ):
+                            if isinstance(child.value, ast.Name) and child.value.id == "self":
                                 attributes.add(child.attr)
 
             # Extract base classes
@@ -629,21 +606,15 @@ class AntiPatternDetector:
 
         # Method count score - Issue #372: use property
         if cls_info.method_count > self.GOD_CLASS_METHOD_THRESHOLD:
-            score += min(
-                30, (cls_info.method_count - self.GOD_CLASS_METHOD_THRESHOLD) * 2
-            )
+            score += min(30, (cls_info.method_count - self.GOD_CLASS_METHOD_THRESHOLD) * 2)
 
         # Attribute count score - Issue #372: use property
         if cls_info.attribute_count > self.GOD_CLASS_ATTR_THRESHOLD:
-            score += min(
-                20, (cls_info.attribute_count - self.GOD_CLASS_ATTR_THRESHOLD) * 2
-            )
+            score += min(20, (cls_info.attribute_count - self.GOD_CLASS_ATTR_THRESHOLD) * 2)
 
         # Lines of code score
         if cls_info.lines_of_code > self.GOD_CLASS_LOC_THRESHOLD:
-            score += min(
-                30, (cls_info.lines_of_code - self.GOD_CLASS_LOC_THRESHOLD) // 50
-            )
+            score += min(30, (cls_info.lines_of_code - self.GOD_CLASS_LOC_THRESHOLD) // 50)
 
         # Complexity score
         if cls_info.complexity > 30:
@@ -688,14 +659,10 @@ class AntiPatternDetector:
 
         # Add specific suggestions based on analysis - Issue #372: use property
         if cls_info.attribute_count > 20:
-            suggestions.append(
-                "Group related attributes into data classes or value objects"
-            )
+            suggestions.append("Group related attributes into data classes or value objects")
 
         if cls_info.complexity > 50:
-            suggestions.append(
-                "Extract complex logic into strategy or command patterns"
-            )
+            suggestions.append("Extract complex logic into strategy or command patterns")
 
         return " | ".join(suggestions)
 
@@ -716,9 +683,7 @@ class AntiPatternDetector:
                     issues.append(
                         AntiPatternInstance(
                             pattern_type=AntiPatternType.FEATURE_ENVY,
-                            severity=(
-                                Severity.MEDIUM if external_refs < 10 else Severity.HIGH
-                            ),
+                            severity=(Severity.MEDIUM if external_refs < 10 else Severity.HIGH),
                             file_path=cls_info.file_path,
                             line_number=method.lineno,
                             entity_name=f"{cls_info.name}.{method.name}",
@@ -742,9 +707,7 @@ class AntiPatternDetector:
 
         return issues
 
-    def _analyze_feature_envy(
-        self, method: ast.FunctionDef, cls_info: ClassInfo
-    ) -> Optional[Tuple[str, int, int]]:
+    def _analyze_feature_envy(self, method: ast.FunctionDef, cls_info: ClassInfo) -> Optional[Tuple[str, int, int]]:
         """Analyze a method for feature envy"""
         self_refs = 0
         external_refs: Dict[str, int] = {}
@@ -778,9 +741,7 @@ class AntiPatternDetector:
         # Build dependency graph
         dep_graph: Dict[str, Set[str]] = {}
         for module in self.modules.values():
-            dep_graph[module.name] = set(
-                imp for imp in module.imports if imp in self.modules
-            )
+            dep_graph[module.name] = set(imp for imp in module.imports if imp in self.modules)
 
         # Find cycles using DFS
         cycles = self._find_all_cycles(dep_graph)
@@ -791,11 +752,7 @@ class AntiPatternDetector:
                 AntiPatternInstance(
                     pattern_type=AntiPatternType.CIRCULAR_DEPENDENCY,
                     severity=Severity.HIGH if len(cycle) > 2 else Severity.MEDIUM,
-                    file_path=(
-                        self.modules[cycle[0]].file_path
-                        if cycle[0] in self.modules
-                        else ""
-                    ),
+                    file_path=(self.modules[cycle[0]].file_path if cycle[0] in self.modules else ""),
                     line_number=1,
                     entity_name=cycle[0],
                     description=f"Circular dependency detected: {cycle_str}",
@@ -897,9 +854,7 @@ class AntiPatternDetector:
                     issues.append(
                         AntiPatternInstance(
                             pattern_type=AntiPatternType.LONG_PARAMETER_LIST,
-                            severity=(
-                                Severity.MEDIUM if param_count < 8 else Severity.HIGH
-                            ),
+                            severity=(Severity.MEDIUM if param_count < 8 else Severity.HIGH),
                             file_path=cls_info.file_path,
                             line_number=method.lineno,
                             entity_name=f"{cls_info.name}.{method.name}",
@@ -1038,13 +993,7 @@ class AntiPatternDetector:
 
         for full_name, cls_info in self.classes.items():
             for method in cls_info.methods:
-                params = tuple(
-                    sorted(
-                        arg.arg
-                        for arg in method.args.args
-                        if arg.arg not in ("self", "cls")
-                    )
-                )
+                params = tuple(sorted(arg.arg for arg in method.args.args if arg.arg not in ("self", "cls")))
 
                 if len(params) >= 3:  # Only consider groups of 3+
                     if params not in param_groups:
@@ -1058,16 +1007,10 @@ class AntiPatternDetector:
                     AntiPatternInstance(
                         pattern_type=AntiPatternType.DATA_CLUMP,
                         severity=Severity.MEDIUM if len(methods) > 5 else Severity.LOW,
-                        file_path=(
-                            self.classes[methods[0].split(".")[0]].file_path
-                            if methods
-                            else ""
-                        ),
+                        file_path=(self.classes[methods[0].split(".")[0]].file_path if methods else ""),
                         line_number=1,
                         entity_name=", ".join(params),
-                        description=(
-                            f"Parameter group ({', '.join(params)}) appears in {len(methods)} methods"
-                        ),
+                        description=(f"Parameter group ({', '.join(params)}) appears in {len(methods)} methods"),
                         metrics={
                             "parameter_count": len(params),
                             "occurrence_count": len(methods),
@@ -1088,9 +1031,7 @@ class AntiPatternDetector:
 
     # Names that look like ABC/Protocol stubs in the parent — children adding
     # behavior on top of these is the *purpose*, not an LSP violation.
-    _ABSTRACT_PARENT_NAMES = frozenset(
-        {"ABC", "ABCMeta", "Protocol", "RuntimeProtocol"}
-    )
+    _ABSTRACT_PARENT_NAMES = frozenset({"ABC", "ABCMeta", "Protocol", "RuntimeProtocol"})
     _MIXIN_SUFFIXES = ("Mixin", "Protocol", "ABC")
 
     def _is_async_method(self, method: ast.AST) -> bool:
@@ -1123,11 +1064,7 @@ class AntiPatternDetector:
     @staticmethod
     def _is_docstring_stmt(stmt: ast.stmt) -> bool:
         """True when the statement is a bare string literal (function docstring)."""
-        return (
-            isinstance(stmt, ast.Expr)
-            and isinstance(stmt.value, ast.Constant)
-            and isinstance(stmt.value.value, str)
-        )
+        return isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str)
 
     @staticmethod
     def _is_stub_statement(stmt: ast.stmt) -> bool:
@@ -1175,9 +1112,7 @@ class AntiPatternDetector:
 
         # Strip an optional leading docstring; the remaining body must be
         # either empty (docstring-only) or a single stub statement.
-        non_doc_body = (
-            body[1:] if self._is_docstring_stmt(body[0]) else list(body)
-        )
+        non_doc_body = body[1:] if self._is_docstring_stmt(body[0]) else list(body)
         if not non_doc_body:
             return True  # docstring-only stub
         if len(non_doc_body) == 1 and self._is_stub_statement(non_doc_body[0]):
@@ -1215,14 +1150,9 @@ class AntiPatternDetector:
         doc = ast.get_docstring(method) or ""
         return exc_name in doc
 
-    def _find_parent_method(
-        self, parent: ClassInfo, name: str
-    ) -> Optional[ast.AST]:
+    def _find_parent_method(self, parent: ClassInfo, name: str) -> Optional[ast.AST]:
         for m in parent.methods:
-            if (
-                isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and m.name == name
-            ):
+            if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)) and m.name == name:
                 return m
         return None
 
@@ -1259,9 +1189,7 @@ class AntiPatternDetector:
                 continue
 
             for child_method in child.methods:
-                if not isinstance(
-                    child_method, (ast.FunctionDef, ast.AsyncFunctionDef)
-                ):
+                if not isinstance(child_method, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     continue
                 parent_method = self._find_parent_method(parent, child_method.name)
                 if parent_method is None:
@@ -1270,9 +1198,7 @@ class AntiPatternDetector:
                     continue
 
                 # --- Signature: sync/async mismatch ---
-                if self._is_async_method(child_method) != self._is_async_method(
-                    parent_method
-                ):
+                if self._is_async_method(child_method) != self._is_async_method(parent_method):
                     issues.append(
                         AntiPatternInstance(
                             pattern_type=AntiPatternType.LSP_SIGNATURE_INCOMPATIBLE,
@@ -1355,11 +1281,7 @@ class AntiPatternDetector:
                 parent_excs = self._exception_types_raised(parent_method)
                 new_excs = child_excs - parent_excs
                 # Filter out exceptions the parent's docstring documents
-                undocumented = {
-                    e
-                    for e in new_excs
-                    if not self._docstring_mentions_raises(parent_method, e)
-                }
+                undocumented = {e for e in new_excs if not self._docstring_mentions_raises(parent_method, e)}
                 if undocumented:
                     issues.append(
                         AntiPatternInstance(
@@ -1394,13 +1316,11 @@ class AntiPatternDetector:
 
     # ========== Consolidation Opportunity Detection (Issue #6684) ==========
 
-    _ENUM_BASE_NAMES = frozenset(
-        {"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum"}
-    )
+    _ENUM_BASE_NAMES = frozenset({"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum"})
     # Class-shape rule: skip patterns where shared method names is by design
     _SHAPE_SKIP_BASE_NAMES = frozenset(
         {
-            "BaseModel",      # Pydantic — sharing field names is fine
+            "BaseModel",  # Pydantic — sharing field names is fine
             "Enum",
             "IntEnum",
             "StrEnum",
@@ -1444,17 +1364,12 @@ class AntiPatternDetector:
                     if isinstance(tgt, ast.Name):
                         target_name = tgt.id
                     value_node = stmt.value
-                elif isinstance(stmt, ast.AnnAssign) and isinstance(
-                    stmt.target, ast.Name
-                ):
+                elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
                     target_name = stmt.target.id
                     value_node = stmt.value
                 if target_name is None or target_name.startswith("_"):
                     continue
-                if (
-                    isinstance(value_node, ast.Constant)
-                    and isinstance(value_node.value, str)
-                ):
+                if isinstance(value_node, ast.Constant) and isinstance(value_node.value, str):
                     values.add(value_node.value.lower())
                 else:
                     # Fall back to the attribute name (lowered) — gives a
@@ -1475,6 +1390,37 @@ class AntiPatternDetector:
         if not a.base_classes or not b.base_classes:
             return False
         return bool(set(a.base_classes) & set(b.base_classes))
+
+    @staticmethod
+    def _is_parent_child_pair(a: ClassInfo, b: ClassInfo) -> bool:
+        """#7501: True when one class inherits from the other.
+
+        AST-resolution is local-only — we match by simple class name
+        against the other's ``base_classes`` list. That catches the
+        common direct-inheritance case (``class Child(Parent):``)
+        which is the bulk of the false positives in #6755.
+
+        Indirect inheritance (Parent → Mid → Child) and bases imported
+        under an alias are not caught here; those need cross-file
+        symbol resolution beyond what ``ClassInfo`` records today.
+        """
+        return a.name in b.base_classes or b.name in a.base_classes
+
+    @staticmethod
+    def _is_protocol_impl_pair(a: ClassInfo, b: ClassInfo) -> bool:
+        """#7501: True when one of the pair is a ``typing.Protocol``.
+
+        ``Protocol`` is structural-by-design — any class with matching
+        method names is intended to satisfy it (PEP 544). Flagging this
+        as ``duplicate_class_shape`` produces false positives (e.g.
+        ``ITaskStorage`` Protocol vs ``TaskStorage`` impl in #6755).
+
+        We match "Protocol" anywhere in either class's base_classes
+        list, which covers both the bare ``Protocol`` and the common
+        ``Protocol[T]`` parametrised form (parser drops the subscript
+        and records the bare name).
+        """
+        return "Protocol" in a.base_classes or "Protocol" in b.base_classes
 
     async def _detect_duplicate_enums(self) -> List[AntiPatternInstance]:
         """Cluster enum classes whose value sets overlap above threshold.
@@ -1566,8 +1512,7 @@ class AntiPatternDetector:
             method_names = {
                 m.name
                 for m in cls_info.methods
-                if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and not m.name.startswith("_")
+                if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)) and not m.name.startswith("_")
             }
             if len(method_names) < self._SHAPE_MIN_METHODS:
                 continue
@@ -1577,6 +1522,17 @@ class AntiPatternDetector:
         for i, (full_a, cls_a, names_a) in enumerate(candidates):
             for full_b, cls_b, names_b in candidates[i + 1 :]:
                 if self._shares_base_class(cls_a, cls_b):
+                    continue
+                # #7501: skip parent ↔ child inheritance pairs. Subclass
+                # method-name overlap with parent is by construction
+                # (override), not a missing-base-class smell.
+                if self._is_parent_child_pair(cls_a, cls_b):
+                    continue
+                # #7501: skip Protocol + structural-impl pairs. ``Protocol``
+                # is designed to be satisfied by structural matching (PEP 544);
+                # an impl class sharing the Protocol's method names is the
+                # intended relationship, not a duplicate.
+                if self._is_protocol_impl_pair(cls_a, cls_b):
                     continue
                 similarity = self._jaccard(names_a, names_b)
                 if similarity < self._SHAPE_JACCARD_THRESHOLD:
@@ -1626,15 +1582,11 @@ class AntiPatternDetector:
 
     # ========== Report Generation ==========
 
-    def _generate_report(
-        self, anti_patterns: List[AntiPatternInstance], analysis_time: float
-    ) -> AntiPatternReport:
+    def _generate_report(self, anti_patterns: List[AntiPatternInstance], analysis_time: float) -> AntiPatternReport:
         """Generate comprehensive anti-pattern report"""
 
         # Count by severity
-        critical_count = sum(
-            1 for ap in anti_patterns if ap.severity == Severity.CRITICAL
-        )
+        critical_count = sum(1 for ap in anti_patterns if ap.severity == Severity.CRITICAL)
         high_count = sum(1 for ap in anti_patterns if ap.severity == Severity.HIGH)
         medium_count = sum(1 for ap in anti_patterns if ap.severity == Severity.MEDIUM)
         low_count = sum(1 for ap in anti_patterns if ap.severity == Severity.LOW)
@@ -1647,9 +1599,7 @@ class AntiPatternDetector:
 
         # Calculate health score (0-100, higher is better)
         # Weighted penalty for each severity level
-        total_penalty = (
-            critical_count * 20 + high_count * 10 + medium_count * 5 + low_count * 2
-        )
+        total_penalty = critical_count * 20 + high_count * 10 + medium_count * 5 + low_count * 2
         health_score = max(0, 100 - total_penalty)
 
         # Generate recommendations
@@ -1674,46 +1624,38 @@ class AntiPatternDetector:
         # Priority 1: Critical issues
         (
             "god_class",
-            "🔴 CRITICAL: Refactor God Classes - Break down large classes "
-            "following Single Responsibility Principle",
+            "🔴 CRITICAL: Refactor God Classes - Break down large classes " "following Single Responsibility Principle",
         ),
         (
             "circular_dependency",
-            "🔴 CRITICAL: Resolve Circular Dependencies - "
-            "Use dependency injection or extract common code",
+            "🔴 CRITICAL: Resolve Circular Dependencies - " "Use dependency injection or extract common code",
         ),
         # Priority 2: High severity
         (
             "feature_envy",
-            "🟠 HIGH: Address Feature Envy - "
-            "Move methods to the classes they reference most",
+            "🟠 HIGH: Address Feature Envy - " "Move methods to the classes they reference most",
         ),
         (
             "long_method",
-            "🟠 HIGH: Extract Long Methods - "
-            "Break into smaller, single-purpose methods",
+            "🟠 HIGH: Extract Long Methods - " "Break into smaller, single-purpose methods",
         ),
         # Priority 3: Medium severity
         (
             "long_parameter_list",
-            "🟡 MEDIUM: Reduce Parameter Lists - "
-            "Introduce parameter objects or builder pattern",
+            "🟡 MEDIUM: Reduce Parameter Lists - " "Introduce parameter objects or builder pattern",
         ),
         (
             "data_clump",
-            "🟡 MEDIUM: Extract Data Clumps - "
-            "Group recurring parameters into data classes",
+            "🟡 MEDIUM: Extract Data Clumps - " "Group recurring parameters into data classes",
         ),
         # Priority 4: Low severity / housekeeping
         (
             "lazy_class",
-            "🟢 LOW: Review Lazy Classes - "
-            "Consider merging or converting to functions",
+            "🟢 LOW: Review Lazy Classes - " "Consider merging or converting to functions",
         ),
         (
             "dead_code",
-            "🟢 LOW: Remove Dead Code - "
-            "Delete verified unused classes and functions",
+            "🟢 LOW: Remove Dead Code - " "Delete verified unused classes and functions",
         ),
     ]
 
@@ -1734,13 +1676,9 @@ class AntiPatternDetector:
 
         # General recommendations
         if not recommendations:
-            recommendations.append(
-                "✅ Codebase looks healthy - no major anti-patterns detected"
-            )
+            recommendations.append("✅ Codebase looks healthy - no major anti-patterns detected")
         else:
-            recommendations.append(
-                "📋 General: Apply SOLID principles and consider adding architectural tests"
-            )
+            recommendations.append("📋 General: Apply SOLID principles and consider adding architectural tests")
 
         return recommendations
 
@@ -1779,14 +1717,12 @@ async def run_analysis(root_path: str = ".") -> AntiPatternReport:
 
 
 if __name__ == "__main__":
-    import asyncio
+    pass
 
     async def main():
         """Example usage"""
         detector = AntiPatternDetector()
-        report = await detector.analyze(
-            root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
-        )
+        report = await detector.analyze(root_path=".", patterns=["src/**/*.py", "backend/**/*.py"])
 
         print(f"\n{'='*60}")  # noqa: print
         print("ANTI-PATTERN ANALYSIS REPORT")  # noqa: print
@@ -1815,16 +1751,12 @@ if __name__ == "__main__":
             print(f"\n{'='*60}")  # noqa: print
             print("TOP ISSUES (by severity)")  # noqa: print
             print(f"{'='*60}")  # noqa: print
-            sorted_patterns = sorted(
-                report.anti_patterns, key=lambda x: x.severity.score(), reverse=True
-            )
+            sorted_patterns = sorted(report.anti_patterns, key=lambda x: anti_pattern_score(x.severity), reverse=True)
             for ap in sorted_patterns[:10]:
-                print(
-                    f"\n[{ap.severity.value.upper()}] {ap.pattern_type.value}"
-                )  # noqa: print
+                print(f"\n[{ap.severity.value.upper()}] {ap.pattern_type.value}")  # noqa: print
                 print(f"  Entity: {ap.entity_name}")  # noqa: print
                 print(f"  File: {ap.file_path}:{ap.line_number}")  # noqa: print
                 print(f"  {ap.description}")  # noqa: print
                 print(f"  Suggestion: {ap.suggestion}")  # noqa: print
 
-    asyncio.run(main())
+    run_or_schedule(main())

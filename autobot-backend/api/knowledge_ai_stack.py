@@ -16,6 +16,13 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
+from api.schemas_common import DataResponse
+from api.schemas_knowledge import (
+    AIStackEnhancedSearchRequest,
+    AIStackKnowledgeExtractionRequest,
+    AIStackRAGQueryRequest,
+    DocumentAnalysisRequest,
+)
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
@@ -26,14 +33,6 @@ from utils.response_helpers import (
     create_error_response,
     create_success_response,
     handle_ai_stack_error,
-)
-
-from api.schemas_common import DataResponse
-from api.schemas_knowledge import (
-    AIStackEnhancedSearchRequest,
-    AIStackKnowledgeExtractionRequest,
-    AIStackRAGQueryRequest,
-    DocumentAnalysisRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -86,16 +85,9 @@ async def _search_local_knowledge_base(
             local_results = await kb_to_use.search(query=query, top_k=max_results)
 
             # Filter by confidence threshold
-            filtered_local = [
-                result
-                for result in local_results
-                if result.get("score", 0) >= confidence_threshold
-            ]
+            filtered_local = [result for result in local_results if result.get("score", 0) >= confidence_threshold]
 
-            logger.info(
-                f"Local KB search: {len(local_results)} results, "
-                f"{len(filtered_local)} above threshold"
-            )
+            logger.info(f"Local KB search: {len(local_results)} results, " f"{len(filtered_local)} above threshold")
 
             return {
                 "results": filtered_local,
@@ -341,9 +333,7 @@ async def rag_search(
                     top_k=15,  # Get more documents for RAG context
                 )
                 documents = kb_results if isinstance(kb_results, list) else []
-                logger.info(
-                    f"Retrieved {len(documents)} documents from local KB for RAG"
-                )
+                logger.info(f"Retrieved {len(documents)} documents from local KB for RAG")
             except Exception as e:
                 logger.warning("Local KB document retrieval failed: %s", e)
                 documents = []
@@ -433,11 +423,7 @@ async def _store_extracted_facts(
     )
 
     # Filter successful results
-    stored_facts = [
-        result
-        for result in results
-        if isinstance(result, dict) and result.get("status") != "error"
-    ]
+    stored_facts = [result for result in results if isinstance(result, dict) and result.get("status") != "error"]
 
     logger.info("Stored %s extracted facts in knowledge base", len(stored_facts))
     return stored_facts
@@ -476,9 +462,7 @@ async def extract_knowledge(
         stored_facts = []
         if request_data.auto_store:
             try:
-                stored_facts = await _store_extracted_facts(
-                    req, extraction_result, request_data
-                )
+                stored_facts = await _store_extracted_facts(req, extraction_result, request_data)
             except Exception as e:
                 logger.warning("Auto-storage of extracted knowledge failed: %s", e)
 
@@ -517,9 +501,7 @@ async def analyze_documents(
         ai_client = await get_ai_stack_client()
 
         # Analyze documents using AI Stack
-        analysis_result = await ai_client.analyze_documents(
-            documents=request_data.documents
-        )
+        analysis_result = await ai_client.analyze_documents(documents=request_data.documents)
 
         return create_success_response(
             {
@@ -562,9 +544,7 @@ async def reformulate_query(
     try:
         ai_client = await get_ai_stack_client()
 
-        reformulation_result = await ai_client.reformulate_query(
-            query=query, context=context
-        )
+        reformulation_result = await ai_client.reformulate_query(query=query, context=context)
 
         return create_success_response(
             {
@@ -604,13 +584,9 @@ async def get_system_knowledge_insights(
     try:
         ai_client = await get_ai_stack_client()
 
-        insights = await ai_client.get_system_knowledge(
-            knowledge_category=knowledge_category
-        )
+        insights = await ai_client.get_system_knowledge(knowledge_category=knowledge_category)
 
-        return create_success_response(
-            {"knowledge_category": knowledge_category, "system_insights": insights}
-        )
+        return create_success_response({"knowledge_category": knowledge_category, "system_insights": insights})
 
     except AIStackError as e:
         await handle_ai_stack_error(e, "System knowledge insights")
@@ -710,9 +686,7 @@ async def enhanced_knowledge_health(
         if not overall_healthy:
             health_status["status"] = "degraded"
 
-        return JSONResponse(
-            status_code=200 if overall_healthy else 503, content=health_status
-        )
+        return JSONResponse(status_code=200 if overall_healthy else 503, content=health_status)
 
     except Exception as e:
         logger.error("Enhanced knowledge health check failed: %s", e)

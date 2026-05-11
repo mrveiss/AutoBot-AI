@@ -15,8 +15,6 @@ Issue #3186: Add test coverage for model_inspector.
 import time
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from llm_interface_pkg.optimization.model_inspector import (
     ModelInfo,
     _cache_put,
@@ -233,9 +231,7 @@ class TestCountParamsViaSkeleton:
         """Returns None when from_config raises, without propagating the error."""
         cfg = _make_config()
         transformers = MagicMock(name="transformers")
-        transformers.AutoModelForCausalLM.from_config.side_effect = RuntimeError(
-            "unsupported arch"
-        )
+        transformers.AutoModelForCausalLM.from_config.side_effect = RuntimeError("unsupported arch")
         accelerate = _make_accelerate_mock()
 
         result = _count_params_via_skeleton(cfg, transformers, accelerate)
@@ -371,9 +367,7 @@ class TestInspectModel:
         mock_transformers = MagicMock(name="transformers")
         mock_transformers.AutoConfig = MagicMock()
         mock_transformers.AutoConfig.from_pretrained.return_value = cfg
-        mock_transformers.AutoModelForCausalLM.from_config.side_effect = RuntimeError(
-            "no arch"
-        )
+        mock_transformers.AutoModelForCausalLM.from_config.side_effect = RuntimeError("no arch")
         mock_accelerate = _make_accelerate_mock()
 
         with (
@@ -420,9 +414,7 @@ class TestInspectModel:
     def test_returns_none_on_config_fetch_failure(self):
         """inspect_model returns None when AutoConfig.from_pretrained raises."""
         mock_transformers = MagicMock(name="transformers")
-        mock_transformers.AutoConfig.from_pretrained.side_effect = OSError(
-            "hub unavailable"
-        )
+        mock_transformers.AutoConfig.from_pretrained.side_effect = OSError("hub unavailable")
         mock_accelerate = _make_accelerate_mock()
 
         with (

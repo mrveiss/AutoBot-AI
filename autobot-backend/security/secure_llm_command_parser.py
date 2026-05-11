@@ -13,6 +13,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from enhanced_security_layer import EnhancedSecurityLayer
 from security.prompt_injection_detector import (
     InjectionRisk,
@@ -20,7 +21,6 @@ from security.prompt_injection_detector import (
     get_prompt_injection_detector,
 )
 from utils.command_validator import CommandValidator
-from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +62,7 @@ class SecureLLMCommandParser:
             command_validator: Command validator (creates default if None)
             strict_mode: Enable strict validation mode
         """
-        self.injection_detector = injection_detector or get_prompt_injection_detector(
-            strict_mode
-        )
+        self.injection_detector = injection_detector or get_prompt_injection_detector(strict_mode)
         self.command_validator = command_validator or CommandValidator()
         self.strict_mode = strict_mode
 
@@ -87,9 +85,7 @@ class SecureLLMCommandParser:
             self._security_layer = EnhancedSecurityLayer()
         return self._security_layer
 
-    def _check_response_injection(
-        self, llm_response: str, user_goal: str
-    ) -> Optional[List[ValidatedCommand]]:
+    def _check_response_injection(self, llm_response: str, user_goal: str) -> Optional[List[ValidatedCommand]]:
         """Check for injection attempts in LLM response and block if detected. Issue #620.
 
         Args:
@@ -99,9 +95,7 @@ class SecureLLMCommandParser:
         Returns:
             Empty list if blocked, None if safe to continue
         """
-        response_validation = self.injection_detector.detect_injection(
-            llm_response, context="llm_response"
-        )
+        response_validation = self.injection_detector.detect_injection(llm_response, context="llm_response")
 
         if response_validation.blocked:
             logger.error("BLOCKED: LLM response contains injection patterns")
@@ -144,9 +138,7 @@ class SecureLLMCommandParser:
 
         return validated_commands
 
-    def parse_commands(
-        self, llm_response: str, user_goal: str = ""
-    ) -> List[ValidatedCommand]:
+    def parse_commands(self, llm_response: str, user_goal: str = "") -> List[ValidatedCommand]:
         """Securely parse and validate commands from LLM response.
 
         Args:
@@ -170,12 +162,8 @@ class SecureLLMCommandParser:
 
         logger.debug("Found %s commands in response", len(raw_commands))
 
-        validated_commands = self._validate_and_collect_commands(
-            raw_commands, user_goal
-        )
-        logger.info(
-            "Validated %s/%s commands", len(validated_commands), len(raw_commands)
-        )
+        validated_commands = self._validate_and_collect_commands(raw_commands, user_goal)
+        logger.info("Validated %s/%s commands", len(validated_commands), len(raw_commands))
 
         return validated_commands
 
@@ -273,9 +261,7 @@ class SecureLLMCommandParser:
         Returns the command_validation result if all checks pass, None if blocked.
         Issue #620.
         """
-        command_validation = self.injection_detector.detect_injection(
-            command, context="extracted_command"
-        )
+        command_validation = self.injection_detector.detect_injection(command, context="extracted_command")
         if self._check_and_block_command(
             command,
             user_goal,
@@ -297,9 +283,7 @@ class SecureLLMCommandParser:
 
         return command_validation
 
-    def _validate_single_command(
-        self, command_dict: Dict[str, str], user_goal: str
-    ) -> Optional[ValidatedCommand]:
+    def _validate_single_command(self, command_dict: Dict[str, str], user_goal: str) -> Optional[ValidatedCommand]:
         """
         Validate a single command for security.
 
@@ -323,26 +307,20 @@ class SecureLLMCommandParser:
 
         self._check_explanation_for_injection(command, explanation)
 
-        return self._build_validated_command(
-            command, explanation, next_step, command_validation, user_goal
-        )
+        return self._build_validated_command(command, explanation, next_step, command_validation, user_goal)
 
     def _check_explanation_for_injection(self, command: str, explanation: str) -> None:
         """Log warning if explanation contains suspicious injection patterns. Issue #620."""
         if not explanation:
             return
 
-        explanation_validation = self.injection_detector.detect_injection(
-            explanation, context="command_explanation"
-        )
+        explanation_validation = self.injection_detector.detect_injection(explanation, context="command_explanation")
         if explanation_validation.risk_level in {
             InjectionRisk.HIGH,
             InjectionRisk.CRITICAL,
         }:
             logger.warning("Suspicious explanation detected for command: %s", command)
-            logger.warning(
-                "Explanation patterns: %s", explanation_validation.detected_patterns
-            )
+            logger.warning("Explanation patterns: %s", explanation_validation.detected_patterns)
 
     def _build_validated_command(
         self,

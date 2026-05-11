@@ -5,9 +5,11 @@
 Onboarding API (Issue #5061)
 
 Provides first-run UX endpoints:
-  GET  /api/onboarding/presets  — curated starter preset catalogue
-  GET  /api/onboarding/doctor   — hardware + service health report
-  POST /api/onboarding/apply    — atomically apply a preset
+  GET  /api/onboarding/presets  — curated starter preset catalogue (auth required)
+  GET  /api/onboarding/doctor   — hardware + service health report  (auth required)
+  POST /api/onboarding/apply    — atomically apply a preset         (admin required)
+  GET  /api/onboarding/status   — bootstrap probe — INTENTIONALLY unauthenticated
+                                  (frontend router guard calls before login; see #6568)
 """
 
 from __future__ import annotations
@@ -15,12 +17,13 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_common import DataResponse
 from api.schemas_system import ApplyPresetRequest, OnboardingStatus
-from onboarding.presets import get_all_presets, get_preset
+from auth_middleware import check_admin_permission, get_current_user
 from onboarding.doctor import run_doctor
+from onboarding.presets import get_all_presets, get_preset
 
 logger = logging.getLogger(__name__)
 
@@ -32,25 +35,31 @@ router = APIRouter(tags=["onboarding"])
 # ---------------------------------------------------------------------------
 
 
-@router.get("/presets", response_model=DataResponse)
+@router.get("/presets", response_model=DataResponse, dependencies=[Depends(get_current_user)])
 async def list_presets() -> DataResponse:
-    """Return all curated starter presets."""
+    """Return all curated starter presets.
+
+    Auth-gated (#6568): the preset catalogue exposes platform capability
+    info and should not be enumerable pre-login. ``single_user`` deployments
+    still pass through via the synthetic admin in ``get_current_user``.
+    """
     presets = get_all_presets()
     return DataResponse(data=presets)
 
 
-@router.get("/doctor", response_model=DataResponse)
+@router.get("/doctor", response_model=DataResponse, dependencies=[Depends(get_current_user)])
 async def doctor_report() -> DataResponse:
     """
     Run onboarding doctor scan.
 
     Returns hardware metrics, service reachability, and a provider recommendation.
+    Auth-gated (#6568) — hardware/service info must not leak pre-login.
     """
     report = await run_doctor()
     return DataResponse(data=report)
 
 
-@router.post("/apply", response_model=DataResponse)
+@router.post("/apply", response_model=DataResponse, dependencies=[Depends(check_admin_permission)])
 async def apply_preset(body: ApplyPresetRequest) -> DataResponse:
     """
     Atomically apply a starter preset.

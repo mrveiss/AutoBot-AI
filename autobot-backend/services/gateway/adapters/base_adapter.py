@@ -64,12 +64,9 @@ class BaseAdapter(ABC):
         Returns:
             UnifiedMessage in normalized format
         """
-        pass
 
     @abstractmethod
-    async def denormalize_response(
-        self, unified_response: NormalizedResponse
-    ) -> Dict[str, Any]:
+    async def denormalize_response(self, unified_response: NormalizedResponse) -> Dict[str, Any]:
         """
         Convert unified response back to platform-specific format.
 
@@ -79,7 +76,6 @@ class BaseAdapter(ABC):
         Returns:
             Platform-specific response ready to send
         """
-        pass
 
     @abstractmethod
     def get_rate_limit(self) -> Dict[str, int]:
@@ -89,7 +85,6 @@ class BaseAdapter(ABC):
         Returns:
             Dict with keys: requests_per_second (int), burst_size (int)
         """
-        pass
 
     async def validate_message(self, raw_message: Dict[str, Any]) -> bool:
         """

@@ -14,19 +14,18 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.schemas_analytics import CodeAnalysisRequest
+from api.schemas_analytics import (
+    AnalyticsCodeCommunicationChainsResponse,
+    AnalyticsCodeIndexResponse,
+    AnalyticsCodeQualityAssessmentResponse,
+    AnalyticsCodeQualityMetricsResponse,
+    AnalyticsCodeQualityScoreResponse,
+    AnalyticsCodeStatusResponse,
+    CodeAnalysisRequest,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
-from api.schemas_common import DataResponse
-from api.schemas_analytics import (
-    AnalyticsCodeIndexResponse,
-    AnalyticsCodeStatusResponse,
-    AnalyticsCodeQualityAssessmentResponse,
-    AnalyticsCodeQualityMetricsResponse,
-    AnalyticsCodeCommunicationChainsResponse,
-    AnalyticsCodeQualityScoreResponse,
-)
 
 # Import shared analytics controller from analytics module
 # This will be set after analytics.py is updated
@@ -192,9 +191,7 @@ async def get_code_quality_assessment(
             "fair": 65,
             "poor": 40,
         }
-        quality_assessment["maintainability"] = maintainability_scores.get(
-            maintainability, 80
-        )
+        quality_assessment["maintainability"] = maintainability_scores.get(maintainability, 80)
 
         # Overall score is average of all factors
         quality_assessment["overall_score"] = round(
@@ -260,9 +257,7 @@ async def get_code_quality_metrics(
             quality_metrics["recommendations"].append(
                 {
                     "type": "complexity",
-                    "message": (
-                        "High complexity detected. Consider refactoring complex functions."
-                    ),
+                    "message": ("High complexity detected. Consider refactoring complex functions."),
                     "priority": "medium",
                 }
             )
@@ -288,9 +283,7 @@ def _build_chain_correlation(static_endpoints: list, runtime_patterns: dict) -> 
             correlation[endpoint] = {
                 "static_detected": True,
                 "runtime_calls": runtime_patterns[endpoint],
-                "avg_response_time": (
-                    sum(response_times) / len(response_times) if response_times else 0
-                ),
+                "avg_response_time": (sum(response_times) / len(response_times) if response_times else 0),
             }
     return correlation
 
@@ -303,9 +296,7 @@ def _build_chain_insights(static_endpoints: list, runtime_patterns: dict) -> lis
         insights.append(
             {
                 "type": "unused_endpoints",
-                "message": (
-                    f"Found {len(unused)} endpoints that are defined but not used"
-                ),
+                "message": (f"Found {len(unused)} endpoints that are defined but not used"),
                 "details": unused[:5],
             }
         )
@@ -314,9 +305,7 @@ def _build_chain_insights(static_endpoints: list, runtime_patterns: dict) -> lis
         insights.append(
             {
                 "type": "undocumented_endpoints",
-                "message": (
-                    f"Found {len(runtime_only)} endpoints in use but not in static analysis"
-                ),
+                "message": (f"Found {len(runtime_only)} endpoints in use but not in static analysis"),
                 "details": runtime_only[:5],
             }
         )
@@ -343,9 +332,7 @@ async def get_communication_chains(
         return {
             "status": "no_analysis_available",
             "message": "No communication chain analysis found.",
-            "suggestion": (
-                "POST /api/analytics/code/index with analysis_type='communication_chains'"
-            ),
+            "suggestion": ("POST /api/analytics/code/index with analysis_type='communication_chains'"),
         }
 
     chains = cached_analysis["communication_chains"]
@@ -355,9 +342,7 @@ async def get_communication_chains(
     enhanced_chains = {
         "static_analysis": chains,
         "runtime_patterns": dict(analytics_controller.communication_chains),
-        "correlation_analysis": _build_chain_correlation(
-            static_endpoints, runtime_patterns
-        ),
+        "correlation_analysis": _build_chain_correlation(static_endpoints, runtime_patterns),
         "insights": _build_chain_insights(static_endpoints, runtime_patterns),
     }
 
@@ -389,11 +374,7 @@ def _build_endpoint_correlation_data(
             "static_detected": True,
             "runtime_calls": runtime_calls,
             "avg_response_time": sum(response_times) / max(len(response_times), 1),
-            "error_rate": (
-                analytics_controller.error_counts.get(endpoint, 0)
-                / max(runtime_calls, 1)
-                * 100
-            ),
+            "error_rate": (analytics_controller.error_counts.get(endpoint, 0) / max(runtime_calls, 1) * 100),
         }
     return correlation_data
 
@@ -419,11 +400,7 @@ def _generate_communication_chain_insights(
     insights = []
 
     # Find unused endpoints
-    unused_endpoints = [
-        ep
-        for ep in static_patterns.get("api_endpoints", [])
-        if ep not in runtime_patterns
-    ]
+    unused_endpoints = [ep for ep in static_patterns.get("api_endpoints", []) if ep not in runtime_patterns]
     if unused_endpoints:
         insights.append(
             {
@@ -435,9 +412,7 @@ def _generate_communication_chain_insights(
         )
 
     # Find high error rate endpoints
-    high_error_endpoints = [
-        ep for ep, data in correlation_data.items() if data["error_rate"] > 5.0
-    ]
+    high_error_endpoints = [ep for ep, data in correlation_data.items() if data["error_rate"] > 5.0]
     if high_error_endpoints:
         insights.append(
             {
@@ -466,9 +441,7 @@ async def analyze_communication_chains_detailed(
     Issue #744: Requires admin authentication.
     Issue #620: Refactored to use extracted helper methods.
     """
-    analysis_request = CodeAnalysisRequest(
-        analysis_type="communication_chains", include_metrics=True
-    )
+    analysis_request = CodeAnalysisRequest(analysis_type="communication_chains", include_metrics=True)
     results = await analytics_controller.perform_code_analysis(analysis_request)
 
     # Enhance with runtime correlation
@@ -477,9 +450,7 @@ async def analyze_communication_chains_detailed(
         static_patterns = results.get("communication_chains", {})
 
         # Build correlation data (Issue #620: uses helper)
-        correlation_data = _build_endpoint_correlation_data(
-            static_patterns, runtime_patterns
-        )
+        correlation_data = _build_endpoint_correlation_data(static_patterns, runtime_patterns)
         results["runtime_correlation"] = correlation_data
 
         # Generate insights (Issue #620: uses helper)
@@ -519,9 +490,7 @@ def _calculate_security_score(cached_analysis: dict) -> float:
         security_issue_count = len(security_results.get("metadatas", []))
 
         # Get total files from codebase_metrics
-        total_files = cached_analysis.get("codebase_metrics", {}).get(
-            "total_files", 100
-        )
+        total_files = cached_analysis.get("codebase_metrics", {}).get("total_files", 100)
 
         # Score: 100 - (issues per file * 100), min 0
         if total_files > 0:
@@ -615,9 +584,7 @@ async def get_code_quality_score(
     if not cached_analysis:
         # Trigger new analysis
         analysis_request = CodeAnalysisRequest(analysis_type="full")
-        cached_analysis = await analytics_controller.perform_code_analysis(
-            analysis_request
-        )
+        cached_analysis = await analytics_controller.perform_code_analysis(analysis_request)
 
     # Calculate quality factors (Issue #665: uses helper)
     quality_factors = _calculate_quality_factors(cached_analysis)

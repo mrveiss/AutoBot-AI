@@ -15,9 +15,7 @@ The knowledge-base singleton is monkey-patched on each request via
 """
 
 import json
-from unittest.mock import AsyncMock
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -27,9 +25,8 @@ from api.knowledge_boards import (
     GLOBAL_BOARD_ID,
 )
 from api.knowledge_boards import router as boards_router
-from tests.helpers.fake_redis import AsyncHashFakeRedis
 from tests.helpers.fake_kb import MinimalFakeKB
-
+from tests.helpers.fake_redis import AsyncHashFakeRedis
 
 # ---------------------------------------------------------------------------
 # Fake KB stub and app factory

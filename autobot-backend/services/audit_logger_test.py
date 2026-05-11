@@ -15,6 +15,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from tests.fixtures import make_async_redis, make_redis_pipeline
+
 # Stub heavy/optional imports that are pulled in by the models package on collection.
 # These are unavailable in the dev venv; the tests do not exercise SQLAlchemy code.
 for _stub in (
@@ -75,27 +77,24 @@ from services.audit_logger import (  # noqa: E402
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_pipeline_mock():
-    """Return a mock that supports async pipeline context manager + zadd/expire/delete."""
-    pipe = AsyncMock()
-    pipe.__aenter__ = AsyncMock(return_value=pipe)
-    pipe.__aexit__ = AsyncMock(return_value=False)
-    pipe.execute = AsyncMock(return_value=[])
-    return pipe
+    # Migrated to canonical ``make_redis_pipeline()`` (#7280 round 7, post-#7339).
+    return make_redis_pipeline()
 
 
 def _make_redis_mock(pipeline=None):
-    """Return a minimal async Redis mock with pipeline support."""
-    redis = AsyncMock()
-    redis.pipeline = MagicMock(return_value=pipeline or _make_pipeline_mock())
-    redis.zrange = AsyncMock(return_value=[])
-    redis.zcard = AsyncMock(return_value=0)
-    return redis
+    # Migrated to canonical ``make_async_redis(pipeline=...)`` (#7280 round 7).
+    return make_async_redis(
+        pipeline=pipeline or _make_pipeline_mock(),
+        zrange_returns=[],
+    )
 
 
 # ---------------------------------------------------------------------------
 # AuditEntry tests
 # ---------------------------------------------------------------------------
+
 
 class TestAuditEntry:
     def test_defaults(self):
@@ -148,9 +147,20 @@ class TestAuditEntry:
         entry = AuditEntry(operation="session.create", user_id="carol")
         d = entry.to_response_dict()
         expected_keys = {
-            "id", "timestamp", "date", "operation", "result",
-            "user_id", "session_id", "ip_address", "resource",
-            "vm_source", "vm_name", "user_role", "details", "performance_ms",
+            "id",
+            "timestamp",
+            "date",
+            "operation",
+            "result",
+            "user_id",
+            "session_id",
+            "ip_address",
+            "resource",
+            "vm_source",
+            "vm_name",
+            "user_role",
+            "details",
+            "performance_ms",
         }
         assert expected_keys == set(d.keys())
 
@@ -158,6 +168,7 @@ class TestAuditEntry:
 # ---------------------------------------------------------------------------
 # AuditLogger — log and batch flush
 # ---------------------------------------------------------------------------
+
 
 class TestAuditLoggerLog:
     @pytest.fixture
@@ -258,6 +269,7 @@ class TestAuditLoggerLog:
 # AuditLogger — query helpers
 # ---------------------------------------------------------------------------
 
+
 class TestAuditLoggerQuery:
     @pytest.mark.asyncio
     async def test_query_returns_empty_when_redis_unavailable(self, tmp_path):
@@ -304,15 +316,19 @@ class TestAuditLoggerQuery:
 # Singleton helpers
 # ---------------------------------------------------------------------------
 
+
 class TestSingletonHelpers:
     @pytest.mark.asyncio
     async def test_get_audit_logger_returns_same_instance(self, tmp_path):
-        with patch(
-            "services.audit_logger.get_async_redis_client",
-            new=AsyncMock(return_value=None),
-        ), patch(
-            "services.audit_logger.AuditLogger._initialize_impl",
-            new=AsyncMock(return_value=True),
+        with (
+            patch(
+                "services.audit_logger.get_async_redis_client",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "services.audit_logger.AuditLogger._initialize_impl",
+                new=AsyncMock(return_value=True),
+            ),
         ):
             import services.audit_logger as _mod
 
@@ -328,15 +344,19 @@ class TestSingletonHelpers:
         import services.audit_logger as _mod
 
         _mod._audit_logger = None
-        with patch(
-            "services.audit_logger.get_async_redis_client",
-            new=AsyncMock(return_value=None),
-        ), patch(
-            "services.audit_logger.AuditLogger._initialize_impl",
-            new=AsyncMock(return_value=True),
-        ), patch(
-            "services.audit_logger.AuditLogger.close",
-            new=AsyncMock(),
+        with (
+            patch(
+                "services.audit_logger.get_async_redis_client",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "services.audit_logger.AuditLogger._initialize_impl",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "services.audit_logger.AuditLogger.close",
+                new=AsyncMock(),
+            ),
         ):
             await get_audit_logger()
             assert _mod._audit_logger is not None
@@ -347,6 +367,7 @@ class TestSingletonHelpers:
 # ---------------------------------------------------------------------------
 # configure_audit middleware registration
 # ---------------------------------------------------------------------------
+
 
 class TestConfigureAudit:
     @staticmethod

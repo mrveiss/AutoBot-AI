@@ -168,9 +168,7 @@ class MeshDB:
         if origin is not None:
             updates.append("origin = :origin")
             params["origin"] = origin
-        sql = text(
-            f"UPDATE mesh_edges SET {', '.join(updates)} WHERE id = :edge_id::uuid"
-        )
+        sql = text(f"UPDATE mesh_edges SET {', '.join(updates)} WHERE id = :edge_id::uuid")
         async with self.engine.begin() as conn:
             await conn.execute(sql, params)
         logger.debug("Updated edge %s", edge_id)
@@ -194,9 +192,7 @@ class MeshDB:
             ORDER BY e.weight DESC
             """)
         async with self.engine.connect() as conn:
-            rows = await conn.execute(
-                sql, {"node_id": node_id, "min_weight": min_weight}
-            )
+            rows = await conn.execute(sql, {"node_id": node_id, "min_weight": min_weight})
             return [dict(r) for r in rows.mappings()]
 
     async def get_anchor_neighbors(self, seed_ids: list[str]) -> list[str]:
@@ -322,9 +318,7 @@ class MeshDB:
         sql = text("DELETE FROM mesh_edges WHERE weight <= :max_weight")
         async with self.engine.begin() as conn:
             result = await conn.execute(sql, {"max_weight": max_weight})
-        logger.debug(
-            "Deleted %d edges at or below weight=%.3f", result.rowcount, max_weight
-        )
+        logger.debug("Deleted %d edges at or below weight=%.3f", result.rowcount, max_weight)
         return result.rowcount
 
     async def archive_orphan_nodes(self, no_access_since: datetime) -> int:
@@ -389,9 +383,7 @@ class MeshDB:
     # NodePromoter operations
     # ------------------------------------------------------------------
 
-    async def get_promotion_candidates(
-        self, min_access: int, min_edges: int
-    ) -> list[dict]:
+    async def get_promotion_candidates(self, min_access: int, min_edges: int) -> list[dict]:
         """Return nodes with access_count >= min_access, edge_count >= min_edges, not anchor (#2178)."""
         sql = text("""
             SELECT n.id::text,
@@ -407,14 +399,10 @@ class MeshDB:
             HAVING COUNT(e.id) >= :min_edges
             """)
         async with self.engine.connect() as conn:
-            rows = await conn.execute(
-                sql, {"min_access": min_access, "min_edges": min_edges}
-            )
+            rows = await conn.execute(sql, {"min_access": min_access, "min_edges": min_edges})
             return [dict(r) for r in rows.mappings()]
 
-    async def get_stale_anchors(
-        self, max_access: int, inactive_days: int
-    ) -> list[dict]:
+    async def get_stale_anchors(self, max_access: int, inactive_days: int) -> list[dict]:
         """Return anchor nodes with access below threshold, inactive for N days (#2178)."""
         sql = text("""
             SELECT id::text, chunk_id, node_type, access_count, last_accessed
@@ -425,9 +413,7 @@ class MeshDB:
                    OR last_accessed < NOW() - make_interval(days => :inactive_days))
             """)
         async with self.engine.connect() as conn:
-            rows = await conn.execute(
-                sql, {"max_access": max_access, "inactive_days": inactive_days}
-            )
+            rows = await conn.execute(sql, {"max_access": max_access, "inactive_days": inactive_days})
             return [dict(r) for r in rows.mappings()]
 
     async def get_neighborhood(self, node_id: str, hops: int) -> list[dict]:
@@ -496,12 +482,8 @@ class MeshDB:
                 {
                     "event_type": event_type,
                     "entity_id": entity_id,
-                    "old_value": (
-                        json.dumps(old_value) if old_value is not None else None
-                    ),
-                    "new_value": (
-                        json.dumps(new_value) if new_value is not None else None
-                    ),
+                    "old_value": (json.dumps(old_value) if old_value is not None else None),
+                    "new_value": (json.dumps(new_value) if new_value is not None else None),
                     "actor": actor,
                 },
             )

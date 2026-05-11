@@ -14,7 +14,7 @@ import asyncio
 import hashlib
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
@@ -182,9 +182,7 @@ class CodeEmbeddingGenerator:
         content = f"codebert:{language}:{code}"
         return hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
 
-    async def generate_embedding(
-        self, code: str, language: str = "python"
-    ) -> CodeEmbeddingResult:
+    async def generate_embedding(self, code: str, language: str = "python") -> CodeEmbeddingResult:
         """
         Generate embedding for a code snippet.
 
@@ -223,9 +221,7 @@ class CodeEmbeddingGenerator:
             cache_hit=False,
         )
 
-    async def _compute_embedding(
-        self, code: str, language: str
-    ) -> Tuple[np.ndarray, str]:
+    async def _compute_embedding(self, code: str, language: str) -> Tuple[np.ndarray, str]:
         """Compute embedding using available hardware."""
         formatted_code = f"# {language}\n{code}"
 
@@ -320,9 +316,7 @@ class CodeEmbeddingGenerator:
         embedding = await asyncio.to_thread(_compute_sync)
         return embedding, "cpu"
 
-    async def _batch_compute_with_openvino(
-        self, formatted_snippets: List[str]
-    ) -> List[Tuple[np.ndarray, str]]:
+    async def _batch_compute_with_openvino(self, formatted_snippets: List[str]) -> List[Tuple[np.ndarray, str]]:
         """Batch-compute embeddings via OpenVINO for NPU/GPU efficiency.
 
         Issue #3290: Running a single batched inference on the NPU is
@@ -404,9 +398,7 @@ class CodeEmbeddingGenerator:
                         )
                     )
             else:
-                batch_results = await asyncio.gather(
-                    *[self.generate_embedding(code, lang) for code, lang in batch]
-                )
+                batch_results = await asyncio.gather(*[self.generate_embedding(code, lang) for code, lang in batch])
                 results.extend(batch_results)
 
         return results

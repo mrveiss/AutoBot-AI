@@ -17,6 +17,7 @@ This runs as part of the system startup to ensure configuration consistency.
 import asyncio
 import logging
 
+from autobot_shared.async_compat import run_or_schedule
 from type_defs.common import Metadata
 
 # Import network constants
@@ -308,4 +309,4 @@ if __name__ == "__main__":
 
         logger.info(json.dumps(result, indent=2))
 
-    asyncio.run(main())
+    run_or_schedule(main())

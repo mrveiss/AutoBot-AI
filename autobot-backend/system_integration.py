@@ -8,8 +8,6 @@ import platform
 import subprocess  # nosec B404 - required for system commands
 from typing import Any, Dict, List, Optional
 
-import aiohttp  # Import aiohttp for async web fetching
-
 # #7166: markdownify is an optional dependency. Hard-import made the whole
 # module unimportable in any environment that didn't install it (any module
 # that imports SystemIntegration inherited the requirement). Use the
@@ -21,7 +19,6 @@ from autobot_shared.missing_dep import optional_import
 globals().update(optional_import("markdownify", ["markdownify"]))
 md = markdownify  # type: ignore[name-defined]  # noqa: F821 — populated by optional_import
 
-from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -276,11 +273,14 @@ class SystemIntegration:
 
     def _manage_linux_service_elevated(self, service_name: str, action: str) -> Dict[str, Any]:
         """Manage Linux service with elevation (Issue #665: extracted helper)."""
-        import asyncio
-
+        from autobot_shared.async_compat import run_or_schedule
         from elevation_wrapper import execute_with_elevation
 
-        elevation_result = asyncio.run(
+        # #7469: was bare asyncio.run() — crashes if this sync helper is
+        # ever invoked from an async caller (e.g. via thread executor
+        # dispatched from an HTTP handler). run_or_schedule uses the
+        # threadpool detour in that case; behavior identical otherwise.
+        elevation_result = run_or_schedule(
             execute_with_elevation(
                 f"systemctl {action} {service_name}",
                 operation=f"Manage service: {service_name}",
@@ -412,30 +412,25 @@ class SystemIntegration:
             }
 
     async def web_fetch(self, url: str) -> Dict[str, Any]:
-        """
-        Fetches content from a specified URL and processes it into markdown.
-        """
-        try:
-            url = self._normalize_url(url)
-            http_client = get_http_client()
-            async with await http_client.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                response.raise_for_status()
-                content_type = response.headers.get("Content-Type", "").lower()
-                content = await response.text()
-                return self._process_web_content(url, content_type, content)
+        """Fetch content from a URL and return markdown.
 
-        except aiohttp.ClientError as e:
-            return {
-                "status": "error",
-                "message": f"Failed to fetch URL {url}: {e}",
-                "url": url,
-            }
-        except Exception as e:
-            return {
-                "status": "error",
-                "message": "An unexpected error occurred during " f"web fetch: {e}",
-                "url": url,
-            }
+        Delegator — all fetching logic lives in :mod:`web_fetch.WebFetcher`
+        (issue #7401 scrape-consolidation).  This method translates the
+        :class:`web_fetch.FetchResult` into the dict shape that all existing
+        callers (task_handlers/system_handlers.py, tools/tool_registry.py)
+        already expect, so no call-site changes are required.
+        """
+        url = self._normalize_url(url)
+        try:
+            from web_fetch import WebFetcher
+
+            result = await WebFetcher.fetch(url)
+        except Exception as exc:
+            return {"status": "error", "message": f"web_fetch error: {exc}", "url": url}
+
+        if result.success:
+            return {"status": "success", "url": result.url, "content_type": "text/markdown", "content": result.markdown}
+        return {"status": "error", "message": result.error_code or "fetch failed", "url": url}
 
 
 # Example Usage (for testing)

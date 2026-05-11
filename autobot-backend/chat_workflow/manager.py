@@ -21,23 +21,21 @@ from typing import Any, Dict, FrozenSet, List, Optional
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
-from constants.model_constants import ModelConfig, ModelConstants
+from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
+from services.tool_output_filter import get_tool_output_filter
 from slash_command_handler import get_slash_command_handler
 
 from .conversation import ConversationHandlerMixin
 from .llm_handler import LLMHandlerMixin, _emit_after_continuation, _emit_before_continuation
 from .models import LLMIterationContext, StreamingMessage, WorkflowSession
-from .session_handler import SessionHandlerMixin, _emit_approval_received, _emit_approval_required
+from .session_handler import SessionHandlerMixin
 from .tool_handler import ToolHandlerMixin
-from services.tool_output_filter import get_tool_output_filter
 
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level frozenset for terminal message types
-_TERMINAL_MESSAGE_TYPES: FrozenSet[str] = frozenset(
-    {"terminal_command", "terminal_output", "error"}
-)
+_TERMINAL_MESSAGE_TYPES: FrozenSet[str] = frozenset({"terminal_command", "terminal_output", "error"})
 
 # Issue #380: Module-level frozenset for block content types
 _BLOCK_CONTENT_TYPES: FrozenSet[str] = frozenset({"thought", "planning"})
@@ -57,9 +55,7 @@ _INTERNAL_PROMPT_PATTERNS = [
         r"\*\*CRITICAL MULTI-STEP TASK INSTRUCTIONS.*?\*\*YOUR RESPONSE:\*\*",
         re.DOTALL | re.IGNORECASE,
     ),
-    re.compile(
-        r"User is in the middle of a multi-step task\. \d+ step\(s\) have been completed\."
-    ),
+    re.compile(r"User is in the middle of a multi-step task\. \d+ step\(s\) have been completed\."),
     re.compile(r"\*\*ORIGINAL USER REQUEST \(analyze this.*?\)\:\*\*"),
     re.compile(
         r"\*\*DECISION PROCESS:\*\*.*?\*\*IF TASK IS COMPLETE\*\*.*?TOOL_CALL",
@@ -109,9 +105,7 @@ class ChatWorkflowManager(
     async def _init_redis_client(self) -> None:
         """Initialize Redis client for conversation history."""
         try:
-            self.redis_client = await get_redis_manager(
-                async_client=True, database="main"
-            )
+            self.redis_client = await get_redis_manager(async_client=True, database="main")
             logger.info("✅ Redis client initialized for conversation history")
         except Exception as redis_error:
             logger.warning(
@@ -223,8 +217,7 @@ class ChatWorkflowManager(
 
         if filtered != text:
             logger.debug(
-                "[Issue #716] Filtered internal prompts from LLM response "
-                "(original: %d chars, filtered: %d chars)",
+                "[Issue #716] Filtered internal prompts from LLM response " "(original: %d chars, filtered: %d chars)",
                 len(text),
                 len(filtered),
             )
@@ -329,9 +322,7 @@ class ChatWorkflowManager(
                 "streaming": True,
                 "terminal_session_id": terminal_session_id,
                 "used_knowledge": used_knowledge,
-                "citations": self._build_source_list(
-                    used_knowledge, rag_citations, selected_model
-                ),
+                "citations": self._build_source_list(used_knowledge, rag_citations, selected_model),
             },
         )
 
@@ -349,9 +340,7 @@ class ChatWorkflowManager(
         """
         sources: List[Dict[str, Any]] = []
         if used_knowledge and not rag_citations:
-            logger.warning(
-                "_build_source_list: used_knowledge=True but rag_citations is empty"
-            )
+            logger.warning("_build_source_list: used_knowledge=True but rag_citations is empty")
         if used_knowledge and rag_citations:
             for c in rag_citations:
                 sources.append({**c, "type": "knowledge_base", "reliability": "high"})
@@ -415,9 +404,7 @@ class ChatWorkflowManager(
                 new_type,
             )
             # Find content after the closing tag
-            new_segment_start = self._find_new_segment_start(
-                llm_response, new_type, previous_type=current_message_type
-            )
+            new_segment_start = self._find_new_segment_start(llm_response, new_type, previous_type=current_message_type)
             complete_msg = WorkflowMessage(
                 type="segment_complete",
                 content="",
@@ -432,16 +419,12 @@ class ChatWorkflowManager(
         elif new_type != current_message_type:
             # Type changed from response to thought/planning
             # Issue #680: Find the tag position to properly split content
-            new_segment_start = self._find_new_segment_start(
-                llm_response, new_type, previous_type=current_message_type
-            )
+            new_segment_start = self._find_new_segment_start(llm_response, new_type, previous_type=current_message_type)
             return (None, str(uuid.uuid4()), new_segment_start, new_type)
 
         return (None, current_message_id, None, current_message_type)
 
-    def _find_new_segment_start(
-        self, llm_response: str, new_type: str, previous_type: str = "response"
-    ) -> str:
+    def _find_new_segment_start(self, llm_response: str, new_type: str, previous_type: str = "response") -> str:
         """Find content after the relevant tag for the new segment type.
 
         Issue #680: When type changes, extract only the content AFTER the complete
@@ -515,9 +498,7 @@ class ChatWorkflowManager(
                 "streaming": True,
                 "terminal_session_id": terminal_session_id,
                 "used_knowledge": used_knowledge,
-                "citations": self._build_source_list(
-                    used_knowledge, rag_citations, selected_model
-                ),
+                "citations": self._build_source_list(used_knowledge, rag_citations, selected_model),
                 "message_id": current_message_id,
             },
         )
@@ -557,9 +538,7 @@ class ChatWorkflowManager(
                 "model": selected_model,
                 "terminal_session_id": terminal_session_id,
                 "used_knowledge": used_knowledge,
-                "citations": self._build_source_list(
-                    used_knowledge, rag_citations, selected_model
-                ),
+                "citations": self._build_source_list(used_knowledge, rag_citations, selected_model),
             }
         )
         return streaming_msg
@@ -628,9 +607,7 @@ class ChatWorkflowManager(
             return (streaming_msg, new_segment, new_type, True, new_segment)
         return (None, None, new_type, False, None)
 
-    def _check_tool_call_completion(
-        self, llm_response: str, tool_call_completed: bool
-    ) -> bool:
+    def _check_tool_call_completion(self, llm_response: str, tool_call_completed: bool) -> bool:
         """
         Check if tool call has completed in accumulated response.
 
@@ -835,9 +812,7 @@ class ChatWorkflowManager(
         Returns:
             Tuple of (done_result, should_break, tool_call_completed)
         """
-        tool_call_completed = self._check_tool_call_completion(
-            llm_response, tool_call_completed
-        )
+        tool_call_completed = self._check_tool_call_completion(llm_response, tool_call_completed)
         if tool_call_completed:
             done_result = self._handle_tool_call_done(chunk_data, llm_response)
             if done_result:
@@ -1079,16 +1054,12 @@ class ChatWorkflowManager(
             llm_response,
             current_segment,
             new_type,
-        ) = self._process_chunk_and_detect_type(
-            chunk_data, llm_response, current_segment, current_message_type
-        )
+        ) = self._process_chunk_and_detect_type(chunk_data, llm_response, current_segment, current_message_type)
         (
             done_result,
             should_break,
             tool_call_completed,
-        ) = self._handle_tool_call_completion_check(
-            chunk_data, llm_response, tool_call_completed
-        )
+        ) = self._handle_tool_call_completion_check(chunk_data, llm_response, tool_call_completed)
         return (
             chunk_text,
             llm_response,
@@ -1615,9 +1586,7 @@ class ChatWorkflowManager(
         rag_citations: List[Dict[str, Any]],
     ):
         """Stream LLM response chunks. Issue #620."""
-        state = self._initialize_stream_state(
-            selected_model, terminal_session_id, used_knowledge, rag_citations
-        )
+        state = self._initialize_stream_state(selected_model, terminal_session_id, used_knowledge, rag_citations)
         llm_response, current_segment, current_message_type = state[:3]
         tool_call_completed, streaming_msg = state[3:]
 
@@ -1777,10 +1746,7 @@ before summarizing.
         Issue #3784: system_prompt removed — sent via Ollama system field to avoid
         double-injection on continuation iterations.
         """
-        history_parts = [
-            self._format_execution_step(i, result)
-            for i, result in enumerate(execution_history, 1)
-        ]
+        history_parts = [self._format_execution_step(i, result) for i, result in enumerate(execution_history, 1)]
         history_text = "\n\n".join(history_parts)
         steps_completed = len(execution_history)
         instructions = self._get_continuation_instructions(
@@ -1795,9 +1761,7 @@ before summarizing.
 ---
 {instructions}"""
 
-    def _get_llm_request_payload(
-        self, selected_model: str, current_prompt: str, system_prompt: str = ""
-    ) -> dict:
+    def _get_llm_request_payload(self, selected_model: str, current_prompt: str, system_prompt: str = "") -> dict:
         """Build LLM request payload."""
         payload = {
             "model": selected_model,
@@ -1825,9 +1789,7 @@ before summarizing.
         from chat_workflow.llm_handler import _emit_before_tool_parse
 
         # Emit BEFORE_TOOL_PARSE hook to allow extensions to inspect/modify response
-        modified_response = await _emit_before_tool_parse(
-            llm_response, session_id, context or {}
-        )
+        modified_response = await _emit_before_tool_parse(llm_response, session_id, context or {})
 
         has_tool_call_tag = "<TOOL_CALL" in modified_response or "<tool_call" in modified_response
         logger.info(
@@ -1839,9 +1801,7 @@ before summarizing.
 
         # Issue #716: On first iteration, defer tool execution for plan-first
         is_first_iteration = iteration == 1
-        tool_calls = self._parse_tool_calls(
-            modified_response, is_first_iteration=is_first_iteration
-        )
+        tool_calls = self._parse_tool_calls(modified_response, is_first_iteration=is_first_iteration)
         logger.info(
             "[Issue #352] Iteration %d: Parsed %d tool calls",
             iteration,
@@ -1918,9 +1878,7 @@ before summarizing.
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=None, connect=TIMEOUT_HTTP_DEFAULT),
             ) as response:
-                logger.info(
-                    "[ChatWorkflowManager] Ollama response status: %s", response.status
-                )
+                logger.info("[ChatWorkflowManager] Ollama response status: %s", response.status)
                 if response.status != 200:
                     yield self._create_llm_service_error(response.status)
                     yield (None, None)
@@ -1946,9 +1904,7 @@ before summarizing.
         finally:
             await http_client.decrement_active()
 
-        tool_calls = await self._log_and_parse_tool_calls(
-            llm_response, iteration, terminal_session_id, {}
-        )
+        tool_calls = await self._log_and_parse_tool_calls(llm_response, iteration, terminal_session_id, {})
         yield (llm_response, tool_calls)
 
     def _handle_break_loop_tuple(self, tool_msg: Any) -> tuple:
@@ -1962,9 +1918,7 @@ before summarizing.
         if isinstance(tool_msg, tuple) and len(tool_msg) == 2:
             break_loop_requested, _ = tool_msg
             if break_loop_requested:
-                logger.info(
-                    "[Issue #654] break_loop=True signal received from respond tool"
-                )
+                logger.info("[Issue #654] break_loop=True signal received from respond tool")
             return (True, break_loop_requested)
         return (False, False)
 
@@ -1977,9 +1931,7 @@ before summarizing.
             True if valid, False if should skip
         """
         if tool_msg is None:
-            logger.warning(
-                "[Issue #680] Received None from _process_tool_calls - skipping"
-            )
+            logger.warning("[Issue #680] Received None from _process_tool_calls - skipping")
             return False
 
         if not hasattr(tool_msg, "type"):
@@ -2032,9 +1984,7 @@ before summarizing.
 
         if tool_msg.type == "command_approval_request":
             has_pending_approval = True
-            logger.info(
-                "[Issue #651] Command requires approval - will wait for resolution"
-            )
+            logger.info("[Issue #651] Command requires approval - will wait for resolution")
 
         if tool_msg.type in _TERMINAL_MESSAGE_TYPES:
             workflow_messages.append(tool_msg)
@@ -2087,9 +2037,7 @@ before summarizing.
             if not self._validate_tool_message(tool_msg):
                 continue
 
-            if self._handle_execution_summary(
-                tool_msg, new_execution_results, execution_history
-            ):
+            if self._handle_execution_summary(tool_msg, new_execution_results, execution_history):
                 continue
 
             pending, _ = self._handle_tool_message_types(tool_msg, workflow_messages)
@@ -2137,9 +2085,7 @@ before summarizing.
             else:
                 # Don't persist streaming chunks - they're for live display only
                 # The final complete response is persisted in _persist_workflow_messages
-                is_streaming_chunk = hasattr(item, "metadata") and item.metadata.get(
-                    "streaming", False
-                )
+                is_streaming_chunk = hasattr(item, "metadata") and item.metadata.get("streaming", False)
                 if not is_streaming_chunk:
                     ctx.workflow_messages.append(item)
                 yield item
@@ -2164,18 +2110,14 @@ before summarizing.
         llm_response = None
         tool_calls = None
 
-        async for item in self._collect_llm_iteration_response(
-            http_client, current_prompt, iteration, ctx
-        ):
+        async for item in self._collect_llm_iteration_response(http_client, current_prompt, iteration, ctx):
             if isinstance(item, tuple):
                 llm_response, tool_calls = item
             else:
                 yield item
 
         if llm_response is None:
-            logger.warning(
-                "[Issue #651] Iteration %d: No LLM response - stopping", iteration
-            )
+            logger.warning("[Issue #651] Iteration %d: No LLM response - stopping", iteration)
             yield (None, None, True)
             return
 
@@ -2320,9 +2262,7 @@ before summarizing.
         tool_calls = None
         should_stop = False
 
-        async for item in self._collect_and_validate_llm_response(
-            http_client, current_prompt, iteration, ctx
-        ):
+        async for item in self._collect_and_validate_llm_response(http_client, current_prompt, iteration, ctx):
             if isinstance(item, tuple) and len(item) == 3:
                 llm_response, tool_calls, should_stop = item
             else:
@@ -2346,9 +2286,7 @@ before summarizing.
         should_break = False
         break_loop_requested = False
 
-        async for item in self._collect_tool_execution_results(
-            tool_calls, iteration, ctx
-        ):
+        async for item in self._collect_tool_execution_results(tool_calls, iteration, ctx):
             if isinstance(item, tuple) and len(item) == 4:
                 (
                     new_results,
@@ -2392,9 +2330,7 @@ before summarizing.
         tool_calls = None
         should_stop = False
 
-        async for item in self._yield_llm_response_and_check_stop(
-            http_client, current_prompt, iteration, ctx
-        ):
+        async for item in self._yield_llm_response_and_check_stop(http_client, current_prompt, iteration, ctx):
             if isinstance(item, tuple) and len(item) == 3:
                 llm_response, tool_calls, should_stop = item
             else:
@@ -2405,9 +2341,7 @@ before summarizing.
             return
 
         should_continue = False
-        async for item in self._yield_tool_results_and_decide(
-            tool_calls, iteration, ctx
-        ):
+        async for item in self._yield_tool_results_and_decide(tool_calls, iteration, ctx):
             if isinstance(item, bool):
                 should_continue = item
             else:
@@ -2415,9 +2349,7 @@ before summarizing.
 
         yield (llm_response, tool_calls, should_continue)
 
-    def _create_llm_error_message(
-        self, error: Exception, workflow_messages: List[WorkflowMessage]
-    ) -> WorkflowMessage:
+    def _create_llm_error_message(self, error: Exception, workflow_messages: List[WorkflowMessage]) -> WorkflowMessage:
         """Create and log LLM error message."""
         logger.error("[ChatWorkflowManager] Direct LLM call failed: %s", error)
         error_msg = WorkflowMessage(
@@ -2449,9 +2381,7 @@ before summarizing.
         llm_response = None
         should_continue = False
 
-        async for item in self._run_continuation_iteration(
-            http_client, current_prompt, iteration, ctx
-        ):
+        async for item in self._run_continuation_iteration(http_client, current_prompt, iteration, ctx):
             if isinstance(item, tuple) and len(item) == 3:
                 llm_response, _, should_continue = item
             else:
@@ -2512,9 +2442,7 @@ before summarizing.
         if instructions_start > -1:
             logger.debug(
                 "[Issue #651] Continuation prompt instructions: %s",
-                current_prompt[instructions_start : instructions_start + 1500].replace(
-                    "\n", " | "
-                ),
+                current_prompt[instructions_start : instructions_start + 1500].replace("\n", " | "),
             )
         return current_prompt
 
@@ -2554,9 +2482,7 @@ before summarizing.
 
         for iteration in range(1, self.MAX_CONTINUATION_ITERATIONS + 1):
             # Issue #4264: Fire BEFORE_CONTINUATION hook before iteration starts
-            should_continue_iteration = await _emit_before_continuation(
-                iteration, ctx.session_id, ctx.context
-            )
+            should_continue_iteration = await _emit_before_continuation(iteration, ctx.session_id, ctx.context)
             if not should_continue_iteration:
                 logger.info(
                     "[Issue #4264] BEFORE_CONTINUATION hook cancelled iteration %d",
@@ -2566,27 +2492,21 @@ before summarizing.
 
             llm_response, should_continue = None, False
 
-            async for item in self._run_continuation_loop_iteration(
-                http_client, current_prompt, iteration, ctx
-            ):
+            async for item in self._run_continuation_loop_iteration(http_client, current_prompt, iteration, ctx):
                 if isinstance(item, tuple) and len(item) == 2:
                     llm_response, should_continue = item
                 else:
                     yield item
 
             if llm_response is None:
-                logger.warning(
-                    "[Issue #651] No LLM response in iteration %d - aborting", iteration
-                )
+                logger.warning("[Issue #651] No LLM response in iteration %d - aborting", iteration)
                 yield ([], [], None)
                 return
 
             all_llm_responses.append(llm_response)
 
             # Issue #4264: Fire AFTER_CONTINUATION hook after iteration completes
-            llm_response = await _emit_after_continuation(
-                iteration, llm_response, ctx.session_id, ctx.context
-            )
+            llm_response = await _emit_after_continuation(iteration, llm_response, ctx.session_id, ctx.context)
 
             self._log_iteration_complete(
                 iteration,
@@ -2599,9 +2519,7 @@ before summarizing.
                 self._log_task_complete(iteration, len(execution_history))
                 break
 
-            current_prompt = self._build_and_log_continuation_prompt(
-                ctx, execution_history
-            )
+            current_prompt = self._build_and_log_continuation_prompt(ctx, execution_history)
 
         self._log_max_iterations_warning(iteration)
         yield (all_llm_responses, execution_history, None)
@@ -2689,8 +2607,7 @@ before summarizing.
                 await chat_mgr.add_messages_batch(session_id, batch)
 
             logger.info(
-                "Persisted conversation to chat history: "
-                "session=%s, workflow_messages=%d",
+                "Persisted conversation to chat history: " "session=%s, workflow_messages=%d",
                 session_id,
                 len(batch),
             )
@@ -2714,17 +2631,11 @@ before summarizing.
                 message_type="default",
                 session_id=session_id,
             )
-            logger.debug(
-                "✅ Persisted user message immediately: session=%s", session_id
-            )
+            logger.debug("✅ Persisted user message immediately: session=%s", session_id)
         except Exception as persist_error:
-            logger.error(
-                "Failed to persist user message immediately: %s", persist_error
-            )
+            logger.error("Failed to persist user message immediately: %s", persist_error)
 
-    async def _handle_exit_intent(
-        self, session_id: str, workflow_messages: List[WorkflowMessage]
-    ):
+    async def _handle_exit_intent(self, session_id: str, workflow_messages: List[WorkflowMessage]):
         """Handle user exit intent. Yields exit message and persists."""
         from chat_history import ChatHistoryManager
 
@@ -2751,9 +2662,7 @@ before summarizing.
         except Exception as persist_error:
             logger.error("Failed to persist exit message: %s", persist_error)
 
-    async def _handle_slash_command(
-        self, session_id: str, message: str, workflow_messages: List[WorkflowMessage]
-    ):
+    async def _handle_slash_command(self, session_id: str, message: str, workflow_messages: List[WorkflowMessage]):
         """Handle slash command execution. Yields command response and persists."""
         from chat_history import ChatHistoryManager
 
@@ -2897,21 +2806,15 @@ before summarizing.
                 yield item
 
         combined_response = "\n\n".join(all_llm_responses)
-        await self._persist_conversation(
-            session_id, session, message, combined_response
-        )
-        await self._persist_workflow_messages(
-            session_id, workflow_messages, combined_response
-        )
+        await self._persist_conversation(session_id, session, message, combined_response)
+        await self._persist_workflow_messages(session_id, workflow_messages, combined_response)
 
         # Issue #5073: fire-and-forget memory tasks via stop hook (non-blocking).
         # Replaces the direct verbatim-store asyncio.create_task from #5070 with
         # a Celery-backed stop hook so writes are durable and off the hot path.
         user_id = context.get("user_id") if context else None
         turn = len([m for m in workflow_messages if m.type == "response"])
-        asyncio.create_task(
-            self._fire_stop_hook(session_id, message, combined_response, user_id, turn)
-        )
+        asyncio.create_task(self._fire_stop_hook(session_id, message, combined_response, user_id, turn))
 
     async def _fire_stop_hook(
         self,
@@ -2954,9 +2857,7 @@ before summarizing.
 
         # Convert WorkflowSession history dicts to the format expected by the hook.
         messages = [
-            {"role": "user", "content": entry.get("user", "")}
-            for entry in conversation_history
-            if entry.get("user")
+            {"role": "user", "content": entry.get("user", "")} for entry in conversation_history if entry.get("user")
         ] + [
             {"role": "assistant", "content": entry.get("assistant", "")}
             for entry in conversation_history
@@ -3003,9 +2904,7 @@ before summarizing.
 
         slash_handler = get_slash_command_handler()
         if slash_handler.is_slash_command(message):
-            async for msg in self._handle_slash_command(
-                session_id, message, workflow_messages
-            ):
+            async for msg in self._handle_slash_command(session_id, message, workflow_messages):
                 yield msg
             yield True
             return
@@ -3039,9 +2938,7 @@ before summarizing.
         workflow_messages.append(error_msg)
         return error_msg
 
-    async def process_message_stream(
-        self, session_id: str, message: str, context: Optional[Dict[str, Any]] = None
-    ):
+    async def process_message_stream(self, session_id: str, message: str, context: Optional[Dict[str, Any]] = None):
         """Process a message via LangGraph StateGraph.
 
         Issue #1043: Replaced hand-rolled async generator with LangGraph graph
@@ -3058,9 +2955,7 @@ before summarizing.
                 "LangGraph flow failed, falling back to legacy: %s",
                 graph_err,
             )
-            async for msg in self._process_message_stream_legacy(
-                session_id, message, context
-            ):
+            async for msg in self._process_message_stream_legacy(session_id, message, context):
                 yield msg
 
     async def _process_via_graph(
@@ -3098,9 +2993,7 @@ before summarizing.
             "context": context or {},
         }
 
-        graph_task = asyncio.create_task(
-            self._run_graph_task(graph, initial_state, config, queue)
-        )
+        graph_task = asyncio.create_task(self._run_graph_task(graph, initial_state, config, queue))
 
         while True:
             data = await queue.get()
@@ -3168,9 +3061,7 @@ before summarizing.
             ) = await self._initialize_chat_session(session_id, message)
             await self._persist_user_message(session_id, message)
 
-            async for item in self._process_special_intents(
-                session_id, message, user_wants_exit, workflow_messages
-            ):
+            async for item in self._process_special_intents(session_id, message, user_wants_exit, workflow_messages):
                 if isinstance(item, bool):
                     if item:
                         return
@@ -3188,9 +3079,7 @@ before summarizing.
                 yield msg
 
         except Exception as e:
-            yield self._create_processing_error_message(
-                session_id, e, workflow_messages
-            )
+            yield self._create_processing_error_message(session_id, e, workflow_messages)
 
     async def resume_graph(
         self,
@@ -3220,9 +3109,7 @@ before summarizing.
             }
         }
 
-        graph_task = asyncio.create_task(
-            self._run_graph_task(graph, Command(resume=decision), config, queue)
-        )
+        graph_task = asyncio.create_task(self._run_graph_task(graph, Command(resume=decision), config, queue))
 
         while True:
             data = await queue.get()

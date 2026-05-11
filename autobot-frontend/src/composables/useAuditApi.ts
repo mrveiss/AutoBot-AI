@@ -55,8 +55,7 @@ export function useAuditApi() {
 
           const queryString = searchParams.toString()
           const url = `${getApiBase()}/audit/logs${queryString ? `?${queryString}` : ''}`
-          const response = await api.get(url)
-          return await response.json()
+          return await api.get<any>(url)
         },
         {
           errorMessage: 'Failed to load audit logs',
@@ -77,8 +76,7 @@ export function useAuditApi() {
     async getStatistics(): Promise<AuditStatisticsResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get(`${getApiBase()}/audit/statistics`)
-          return await response.json()
+          return await api.get<any>(`${getApiBase()}/audit/statistics`)
         },
         {
           errorMessage: 'Failed to load audit statistics',
@@ -93,8 +91,7 @@ export function useAuditApi() {
     async getSessionAuditTrail(sessionId: string): Promise<AuditQueryResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get(`${getApiBase()}/audit/session/${sessionId}`)
-          return await response.json()
+          return await api.get<any>(`${getApiBase()}/audit/session/${sessionId}`)
         },
         {
           errorMessage: 'Failed to load session audit trail',
@@ -112,8 +109,7 @@ export function useAuditApi() {
     ): Promise<AuditQueryResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get(`${getApiBase()}/audit/user/${userId}?days=${days}`)
-          return await response.json()
+          return await api.get<any>(`${getApiBase()}/audit/user/${userId}?days=${days}`)
         },
         {
           errorMessage: 'Failed to load user audit trail',
@@ -131,7 +127,7 @@ export function useAuditApi() {
     ): Promise<AuditQueryResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get(
+          const response = await api.get<any>(
             `${getApiBase()}/audit/failures?hours=${hours}&result_filter=${resultFilter}`
           )
           return await response.json()
@@ -149,8 +145,7 @@ export function useAuditApi() {
     async cleanupLogs(request: AuditCleanupRequest): Promise<AuditCleanupResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.post(`${getApiBase()}/audit/cleanup`, request)
-          return await response.json()
+          return await api.post<any>(`${getApiBase()}/audit/cleanup`, request)
         },
         {
           errorMessage: 'Failed to cleanup audit logs'
@@ -164,8 +159,7 @@ export function useAuditApi() {
     async getOperationTypes(): Promise<AuditOperationsResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get(`${getApiBase()}/audit/operations`)
-          return await response.json()
+          return await api.get<any>(`${getApiBase()}/audit/operations`)
         },
         {
           errorMessage: 'Failed to load operation types',

@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.threshold_constants import TimingConstants
 
@@ -747,4 +748,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

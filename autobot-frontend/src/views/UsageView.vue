@@ -28,7 +28,7 @@
     <div v-if="error" class="error-banner">
       <Icon name="exclamation-circle" />
       <span>{{ error }}</span>
-      <button class="btn-dismiss" @click="error = null"><Icon name="times" /></button>
+      <button class="btn-dismiss" :aria-label="$t('common.dismiss')" @click="error = null"><Icon name="times" /></button>
     </div>
 
     <!-- Tabs -->

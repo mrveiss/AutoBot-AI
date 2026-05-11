@@ -59,9 +59,7 @@ class MockKnowledgeBase:
         """Mock get_tool_knowledge"""
         return self.data.get(f"tool:{tool_name}")
 
-    async def store_knowledge(
-        self, category: str, content_id: str, content: Dict[str, Any]
-    ):
+    async def store_knowledge(self, category: str, content_id: str, content: Dict[str, Any]):
         """Mock store_knowledge"""
         self.data[f"{category}:{content_id}"] = content
 
@@ -196,15 +194,11 @@ async def test_2_temporal_manager_features():
     print("\n[TEST 2] Temporal manager features...")  # noqa: print
 
     kb = MockKnowledgeBase()
-    manager = UnifiedKnowledgeManager(
-        knowledge_base=kb, enable_temporal=True, enable_machine_aware=False
-    )
+    manager = UnifiedKnowledgeManager(knowledge_base=kb, enable_temporal=True, enable_machine_aware=False)
 
     # Register content with temporal tracking
     content_hash = hashlib.md5(b"test content").hexdigest()
-    metadata = manager.register_content(
-        "tool:steghide", {"category": "tools"}, content_hash
-    )
+    metadata = manager.register_content("tool:steghide", {"category": "tools"}, content_hash)
 
     assert metadata is not None, "Failed to register content"
     assert metadata.content_id == "tool:steghide"
@@ -306,9 +300,7 @@ async def test_5_unified_operations():
     )
 
     # Create temp test file
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write("name: test\ndescription: test tool\n")
         temp_file = f.name
 
@@ -345,9 +337,7 @@ async def test_6_optional_components():
     kb = MockKnowledgeBase()
 
     # Test with temporal disabled
-    manager_no_temporal = UnifiedKnowledgeManager(
-        knowledge_base=kb, enable_temporal=False, enable_machine_aware=False
-    )
+    manager_no_temporal = UnifiedKnowledgeManager(knowledge_base=kb, enable_temporal=False, enable_machine_aware=False)
 
     metadata = manager_no_temporal.register_content("test", {"cat": "test"}, "a" * 32)
     assert metadata is None, "Should return None when temporal disabled"
@@ -405,9 +395,7 @@ async def test_8_singleton_pattern():
     kb = MockKnowledgeBase()
 
     # First call - should create instance
-    manager1 = get_unified_knowledge_manager(
-        knowledge_base=kb, enable_temporal=True, enable_machine_aware=False
-    )
+    manager1 = get_unified_knowledge_manager(knowledge_base=kb, enable_temporal=True, enable_machine_aware=False)
     assert manager1 is not None
 
     # Second call - should return same instance
@@ -524,9 +512,7 @@ async def test_11_integration():
 
     # Register content with temporal tracking
     content_hash = hashlib.md5(b"integrated content").hexdigest()
-    meta = manager.register_content(
-        "tool:integrated", {"category": "tools"}, content_hash
-    )
+    meta = manager.register_content("tool:integrated", {"category": "tools"}, content_hash)
     assert meta is not None
 
     # Get comprehensive status (all components)
@@ -590,9 +576,7 @@ async def test_13_background_processing():
     )
 
     # Test start with temporal disabled should fail
-    manager_no_temporal = UnifiedKnowledgeManager(
-        knowledge_base=kb, enable_temporal=False, enable_machine_aware=False
-    )
+    manager_no_temporal = UnifiedKnowledgeManager(knowledge_base=kb, enable_temporal=False, enable_machine_aware=False)
 
     try:
         await manager_no_temporal.start_temporal_background_processing()

@@ -14,16 +14,16 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from api.schemas_common import SuccessMessageResponse
 from autobot_shared.models.service_message import ServiceMessage
-from constants.path_constants import PATH
-from services.trigger_service import TriggerType
 from autobot_shared.time_utils import now_utc
+from constants.path_constants import PATH
 from models.approval import ApprovalType
+from services.trigger_service import TriggerType
 from type_defs.common import Metadata
-
 
 # ---------------------------------------------------------------------------
 # Workflows schemas
 # ---------------------------------------------------------------------------
+
 
 class ValidationDashboardStatusResponse(BaseModel):
     """Response for GET /status (healthy path; unavailable path uses JSONResponse)."""
@@ -36,14 +36,12 @@ class ValidationDashboardStatusResponse(BaseModel):
     timestamp: str
 
 
-
 class ValidationDashboardReportResponse(BaseModel):
     """Response for GET /report."""
 
     status: str
     report: Optional[Any] = None
     timestamp: str
-
 
 
 class ValidationDashboardGenerateResponse(BaseModel):
@@ -55,7 +53,6 @@ class ValidationDashboardGenerateResponse(BaseModel):
     timestamp: str
 
 
-
 class ValidationDashboardMetricsResponse(BaseModel):
     """Response for GET /metrics."""
 
@@ -64,14 +61,12 @@ class ValidationDashboardMetricsResponse(BaseModel):
     timestamp: str
 
 
-
 class ValidationDashboardTrendsResponse(BaseModel):
     """Response for GET /trends."""
 
     status: str
     trends: Optional[Any] = None
     timestamp: str
-
 
 
 class ValidationDashboardAlertsResponse(BaseModel):
@@ -83,7 +78,6 @@ class ValidationDashboardAlertsResponse(BaseModel):
     timestamp: str
 
 
-
 class ValidationDashboardRecommendationsResponse(BaseModel):
     """Response for GET /recommendations."""
 
@@ -93,14 +87,12 @@ class ValidationDashboardRecommendationsResponse(BaseModel):
     timestamp: str
 
 
-
 class ValidationJudgmentResponse(BaseModel):
     """Response for POST /judge_workflow_step and POST /judge_agent_response."""
 
     status: str
     judgment: Dict[str, Any]
     timestamp: str
-
 
 
 class ValidationJudgeStatusResponse(BaseModel):
@@ -113,11 +105,9 @@ class ValidationJudgeStatusResponse(BaseModel):
     timestamp: str
 
 
-
 # ---------------------------------------------------------------------------
 # templates.py schemas
 # ---------------------------------------------------------------------------
-
 
 
 class StateTrackingStatusResponse(BaseModel):
@@ -132,7 +122,6 @@ class StateTrackingStatusResponse(BaseModel):
     latest_snapshot: Optional[Any] = None
 
 
-
 class StateTrackingSummaryResponse(BaseModel):
     """Response for GET /summary."""
 
@@ -141,14 +130,12 @@ class StateTrackingSummaryResponse(BaseModel):
     timestamp: str
 
 
-
 class StateTrackingSnapshotResponse(BaseModel):
     """Response for POST /snapshot."""
 
     status: str
     message: str
     timestamp: str
-
 
 
 class StateTrackingChangeResponse(BaseModel):
@@ -163,7 +150,6 @@ class StateTrackingChangeResponse(BaseModel):
     timestamp: str
 
 
-
 class StateTrackingMilestonesResponse(BaseModel):
     """Response for GET /milestones."""
 
@@ -172,7 +158,6 @@ class StateTrackingMilestonesResponse(BaseModel):
     achieved_count: int
     total_count: int
     timestamp: str
-
 
 
 class StateTrackingTrendsResponse(BaseModel):
@@ -189,7 +174,6 @@ class StateTrackingTrendsResponse(BaseModel):
     timestamp: str
 
 
-
 class StateTrackingChangesResponse(BaseModel):
     """Response for GET /changes."""
 
@@ -200,7 +184,6 @@ class StateTrackingChangesResponse(BaseModel):
     timestamp: str
 
 
-
 class StateTrackingReportResponse(BaseModel):
     """Response for GET /report."""
 
@@ -208,7 +191,6 @@ class StateTrackingReportResponse(BaseModel):
     report: str
     format: str
     timestamp: str
-
 
 
 class StateTrackingExportResponse(BaseModel):
@@ -222,7 +204,6 @@ class StateTrackingExportResponse(BaseModel):
     timestamp: str
 
 
-
 class StateTrackingMetricsAllResponse(BaseModel):
     """Response for GET /metrics/all."""
 
@@ -230,7 +211,6 @@ class StateTrackingMetricsAllResponse(BaseModel):
     metrics: Dict[str, Any]
     available_metrics: List[str]
     timestamp: str
-
 
 
 class StateTrackingPhaseHistoryResponse(BaseModel):
@@ -256,13 +236,11 @@ class StateTrackingPhaseHistoryResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class WorkflowExportResponse(BaseModel):
     """Response for GET /export/{workflow_id}."""
 
     success: bool
     export: Dict[str, Any]
-
 
 
 class WorkflowValidateImportResponse(BaseModel):
@@ -273,13 +251,11 @@ class WorkflowValidateImportResponse(BaseModel):
     issues: List[Any]
 
 
-
 class WorkflowImportResponse(BaseModel):
     """Response for POST /import and POST /share/{share_id}/clone."""
 
     success: bool
     workflow_id: str
-
 
 
 class WorkflowShareResponse(BaseModel):
@@ -289,13 +265,11 @@ class WorkflowShareResponse(BaseModel):
     share_id: str
 
 
-
 class WorkflowUnshareResponse(BaseModel):
     """Response for DELETE /share/{share_id}."""
 
     success: bool
     share_id: str
-
 
 
 class WorkflowListSharesResponse(BaseModel):
@@ -311,14 +285,12 @@ class WorkflowListSharesResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class RUMConfigResponse(BaseModel):
     """Response for POST /rum/config."""
 
     status: str
     message: str
     config: Dict[str, Any]
-
 
 
 class RUMEventResponse(BaseModel):
@@ -332,13 +304,11 @@ class RUMEventResponse(BaseModel):
     session_event_count: Optional[int] = None
 
 
-
 class RUMDisableResponse(BaseModel):
     """Response for POST /rum/disable."""
 
     status: str
     message: str
-
 
 
 class RUMClearResponse(BaseModel):
@@ -350,13 +320,11 @@ class RUMClearResponse(BaseModel):
     sessions_cleared: int
 
 
-
 class RUMStatusResponse(BaseModel):
     """Response for GET /rum/status."""
 
     status: str
     rum_status: Dict[str, Any]
-
 
 
 class RUMMetricsResponse(BaseModel):
@@ -376,13 +344,11 @@ class RUMMetricsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class RegistryEndpointsResponse(BaseModel):
     """Response for GET /endpoints."""
 
     endpoints: List[Any]
     total: int
-
 
 
 class RegistryRouterDetailResponse(BaseModel):
@@ -394,12 +360,10 @@ class RegistryRouterDetailResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class RegistryTagsResponse(BaseModel):
     """Response for GET /tags."""
 
     tags: List[str]
-
 
 
 class RegistryTagRoutersResponse(BaseModel):
@@ -410,13 +374,11 @@ class RegistryTagRoutersResponse(BaseModel):
     count: int
 
 
-
 class RegistryValidateResponse(BaseModel):
     """Response for GET /validate."""
 
     valid: bool
     errors: Dict[str, Any]
-
 
 
 class RegistryHealthResponse(BaseModel):
@@ -433,12 +395,10 @@ class RegistryHealthResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class ElevationRequestResponse(SuccessMessageResponse):
     """Response for POST /elevation/request."""
 
     request_id: str
-
 
 
 class ElevationAuthorizeResponse(SuccessMessageResponse):
@@ -446,7 +406,6 @@ class ElevationAuthorizeResponse(SuccessMessageResponse):
 
     session_token: str
     expires_in: int
-
 
 
 class ElevationStatusResponse(BaseModel):
@@ -459,7 +418,6 @@ class ElevationStatusResponse(BaseModel):
     timestamp: Any  # datetime object serialised as string by FastAPI
 
 
-
 class ElevationExecuteResponse(BaseModel):
     """Response for POST /elevation/execute/{session_token}."""
 
@@ -469,14 +427,12 @@ class ElevationExecuteResponse(BaseModel):
     return_code: int
 
 
-
 class ElevationPendingResponse(BaseModel):
     """Response for GET /elevation/pending."""
 
     success: bool
     pending_requests: Dict[str, Any]
     count: int
-
 
 
 class ElevationHealthResponse(BaseModel):
@@ -494,13 +450,11 @@ class ElevationHealthResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class StructuredThinkingClearResponse(SuccessMessageResponse):
     """Response for POST /mcp/clear_history."""
 
     session_id: str
     thoughts_cleared: int
-
 
 
 class StructuredThinkingSessionsResponse(BaseModel):
@@ -515,13 +469,11 @@ class StructuredThinkingSessionsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class AdvancedControlStreamingTerminateResponse(BaseModel):
     """Response for DELETE /streaming/{session_id}."""
 
     success: bool
     session_id: str
-
 
 
 class AdvancedControlStreamingSessionsResponse(BaseModel):
@@ -531,13 +483,11 @@ class AdvancedControlStreamingSessionsResponse(BaseModel):
     count: int
 
 
-
 class AdvancedControlTakeoverRequestResponse(BaseModel):
     """Response for POST /takeover/request."""
 
     success: bool
     request_id: str
-
 
 
 class AdvancedControlTakeoverApproveResponse(BaseModel):
@@ -547,13 +497,11 @@ class AdvancedControlTakeoverApproveResponse(BaseModel):
     session_id: str
 
 
-
 class AdvancedControlTakeoverActionResponse(BaseModel):
     """Response for POST /takeover/sessions/{session_id}/action."""
 
     success: bool
     result: Any
-
 
 
 class AdvancedControlTakeoverSessionStatusResponse(BaseModel):
@@ -564,13 +512,11 @@ class AdvancedControlTakeoverSessionStatusResponse(BaseModel):
     status: str
 
 
-
 class AdvancedControlPendingTakeoversResponse(BaseModel):
     """Response for GET /takeover/pending."""
 
     pending_requests: List[Any]
     count: int
-
 
 
 class AdvancedControlActiveTakeoversResponse(BaseModel):
@@ -580,12 +526,10 @@ class AdvancedControlActiveTakeoversResponse(BaseModel):
     count: int
 
 
-
 class AdvancedControlEmergencyStopResponse(SuccessMessageResponse):
     """Response for POST /system/emergency-stop."""
 
     takeover_request_id: str
-
 
 
 class AdvancedControlSystemHealthResponse(BaseModel):
@@ -600,7 +544,6 @@ class AdvancedControlSystemHealthResponse(BaseModel):
     paused_tasks: int
 
 
-
 class AdvancedControlInfoResponse(BaseModel):
     """Response for GET /."""
 
@@ -613,7 +556,6 @@ class AdvancedControlInfoResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # skills.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
-
 
 
 class SkillsListResponse(BaseModel):
@@ -713,7 +655,6 @@ class SkillTracesResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # structured_thinking_mcp.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
-
 
 
 class StructuredThinkingSessionDetailResponse(BaseModel):
@@ -1224,7 +1165,6 @@ class SessionShareSecretResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class MarketplaceCategoriesResponse(BaseModel):
     """Response for GET /marketplace/categories."""
 
@@ -1232,12 +1172,10 @@ class MarketplaceCategoriesResponse(BaseModel):
     sort_options: List[str]
 
 
-
 class MarketplaceInstalledResponse(BaseModel):
     """Response for GET /marketplace/installed."""
 
     installed: List[str]
-
 
 
 class MarketplacePluginActionResponse(BaseModel):
@@ -1393,17 +1331,13 @@ class ImportWorkflowRequest(BaseModel):
         ...,
         description="WorkflowExportFormat.to_dict() payload produced by the export endpoint.",
     )
-    session_id: Optional[str] = Field(
-        default=None, description="Session to associate with the imported workflow."
-    )
+    session_id: Optional[str] = Field(default=None, description="Session to associate with the imported workflow.")
 
 
 class CloneWorkflowRequest(BaseModel):
     """Request body for cloning a shared workflow (#2165)."""
 
-    session_id: Optional[str] = Field(
-        default=None, description="Session to associate with the cloned workflow."
-    )
+    session_id: Optional[str] = Field(default=None, description="Session to associate with the cloned workflow.")
 
 
 # ---------------------------------------------------------------------------
@@ -1450,10 +1384,7 @@ _WORKFLOW_SECRET_NAME_RE = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 def _validate_workflow_secret_name(name: str) -> str:
     """Reject names containing characters outside the safe set. Issue #2153."""
     if not _WORKFLOW_SECRET_NAME_RE.match(name):
-        raise ValueError(
-            "Secret name must contain only alphanumeric characters, "
-            "underscores, hyphens, and dots"
-        )
+        raise ValueError("Secret name must contain only alphanumeric characters, " "underscores, hyphens, and dots")
     return name
 
 
@@ -1949,6 +1880,13 @@ class InstallRequest(BaseModel):
     """Request body for installing a marketplace plugin."""
 
     plugin_name: str = Field(..., description="Name of the plugin to install from catalog")
+    # #6524: source_id required so install resolves against the same catalog
+    # the user was browsing. Without it, custom marketplace plugins all
+    # 404'd because we'd resolve against the built-in catalog only.
+    source_id: str = Field(
+        default="builtin",
+        description="Marketplace source id; 'builtin' or a user-added source UUID (#6481)",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2104,6 +2042,7 @@ class MetricsQueryRequest(BaseModel):
     @classmethod
     def validate_from_time(cls, v: Optional[int]) -> Optional[int]:
         from datetime import datetime, timezone
+
         if v and v > int(datetime.now(tz=timezone.utc).timestamp()):
             raise ValueError("from_time cannot be in the future")
         return v
@@ -2361,9 +2300,7 @@ class VCSConnectionTestRequest(BaseModel):
 
     provider: str = Field(..., description="VCS provider (gitlab, bitbucket)")
     api_key: str = Field(..., description="API key or access token")
-    settings: Dict[str, Any] = Field(
-        default_factory=dict, description="Provider-specific settings"
-    )
+    settings: Dict[str, Any] = Field(default_factory=dict, description="Provider-specific settings")
 
 
 class VCSProviderInfo(BaseModel):
@@ -2377,12 +2314,8 @@ class VCSProviderInfo(BaseModel):
     id: str = Field(..., description="Provider identifier")
     name: str = Field(..., description="Provider display name")
     description: str = Field(..., description="Provider description")
-    required_settings: List[str] = Field(
-        default_factory=list, description="Required configuration settings"
-    )
-    optional_settings: List[str] = Field(
-        default_factory=list, description="Optional configuration settings"
-    )
+    required_settings: List[str] = Field(default_factory=list, description="Required configuration settings")
+    optional_settings: List[str] = Field(default_factory=list, description="Optional configuration settings")
 
 
 # ---------------------------------------------------------------------------
@@ -2423,33 +2356,19 @@ class SequentialThinkingRequest(BaseModel):
     """Request model for sequential thinking tool."""
 
     thought: str = Field(..., description="Current thinking step and analysis")
-    thought_number: int = Field(
-        ..., ge=1, description="Current thought number in sequence"
-    )
-    total_thoughts: int = Field(
-        ..., ge=1, description="Estimated total thoughts needed"
-    )
-    next_thought_needed: bool = Field(
-        ..., description="Whether another thought step is needed"
-    )
+    thought_number: int = Field(..., ge=1, description="Current thought number in sequence")
+    total_thoughts: int = Field(..., ge=1, description="Estimated total thoughts needed")
+    next_thought_needed: bool = Field(..., description="Whether another thought step is needed")
 
-    is_revision: Optional[bool] = Field(
-        False, description="Whether this revises previous thinking"
-    )
-    revises_thought: Optional[int] = Field(
-        None, ge=1, description="Which thought is being reconsidered"
-    )
-    branch_from_thought: Optional[int] = Field(
-        None, ge=1, description="Branching point thought number"
-    )
+    is_revision: Optional[bool] = Field(False, description="Whether this revises previous thinking")
+    revises_thought: Optional[int] = Field(None, ge=1, description="Which thought is being reconsidered")
+    branch_from_thought: Optional[int] = Field(None, ge=1, description="Branching point thought number")
     branch_id: Optional[str] = Field(None, description="Branch identifier")
     needs_more_thoughts: Optional[bool] = Field(
         False, description="If more thoughts are needed beyond initial estimate"
     )
 
-    session_id: Optional[str] = Field(
-        "default", description="Thinking session identifier"
-    )
+    session_id: Optional[str] = Field("default", description="Thinking session identifier")
 
     def to_thought_record(self) -> Metadata:
         """Convert to thought record for storage."""
@@ -2597,6 +2516,7 @@ class ResearchPreferences(BaseModel):
 # ---------------------------------------------------------------------------
 
 from pydantic import field_validator as _http_client_field_validator
+
 from type_defs.common import JSONObject as _HTTPClientJSONObject
 
 _HTTP_CLIENT_VALID_URL_SCHEMES = ("http://", "https://")
@@ -2617,9 +2537,7 @@ class HTTPRequestBase(BaseModel):
     """Base model for HTTP requests."""
 
     url: str = Field(..., description="Target URL for the request")
-    headers: Optional[Dict[str, str]] = Field(
-        default=None, description="Optional HTTP headers"
-    )
+    headers: Optional[Dict[str, str]] = Field(default=None, description="Optional HTTP headers")
     timeout: Optional[int] = Field(
         default=_HTTP_CLIENT_DEFAULT_TIMEOUT,
         ge=1,
@@ -2639,17 +2557,13 @@ class HTTPRequestBase(BaseModel):
 class HTTPGetRequest(HTTPRequestBase):
     """GET request model."""
 
-    params: Optional[Dict[str, str]] = Field(
-        default=None, description="Query parameters"
-    )
+    params: Optional[Dict[str, str]] = Field(default=None, description="Query parameters")
 
 
 class HTTPPostRequest(HTTPRequestBase):
     """POST request model."""
 
-    json_body: Optional[_HTTPClientJSONObject] = Field(
-        default=None, description="JSON request body"
-    )
+    json_body: Optional[_HTTPClientJSONObject] = Field(default=None, description="JSON request body")
     form_data: Optional[Dict[str, str]] = Field(
         default=None, description="Form data (mutually exclusive with json_body)"
     )
@@ -2658,17 +2572,13 @@ class HTTPPostRequest(HTTPRequestBase):
 class HTTPPutRequest(HTTPRequestBase):
     """PUT request model."""
 
-    json_body: Optional[_HTTPClientJSONObject] = Field(
-        default=None, description="JSON request body"
-    )
+    json_body: Optional[_HTTPClientJSONObject] = Field(default=None, description="JSON request body")
 
 
 class HTTPPatchRequest(HTTPRequestBase):
     """PATCH request model."""
 
-    json_body: Optional[_HTTPClientJSONObject] = Field(
-        default=None, description="JSON request body for partial update"
-    )
+    json_body: Optional[_HTTPClientJSONObject] = Field(default=None, description="JSON request body for partial update")
 
 
 class HTTPDeleteRequest(HTTPRequestBase):

@@ -94,17 +94,14 @@ _INJECTION_PATTERNS: Final[Sequence[tuple[str, re.Pattern[str]]]] = (
     (
         "command_injection",
         re.compile(
-            r"(?:;|\||&&|\$\(|`)"
-            r"\s*(?:rm|cat|ls|wget|curl|bash|sh|python|perl|nc|ncat|netcat|chmod|chown)"
-            r"\b",
+            r"(?:;|\||&&|\$\(|`)" r"\s*(?:rm|cat|ls|wget|curl|bash|sh|python|perl|nc|ncat|netcat|chmod|chown)" r"\b",
         ),
     ),
     # Path traversal — encoded or literal directory-traversal sequences
     (
         "path_traversal",
         re.compile(
-            r"(?:\.\./|\.\.\\|%2e%2e%2f|%2e%2e/|\.\.%2f|%252e%252e%252f"
-            r"|(?:\.\./){2,})",
+            r"(?:\.\./|\.\.\\|%2e%2e%2f|%2e%2e/|\.\.%2f|%252e%252e%252f" r"|(?:\.\./){2,})",
             re.IGNORECASE,
         ),
     ),
@@ -228,9 +225,7 @@ class ValidationMiddleware(BaseHTTPMiddleware):
                     status_code=413,
                     content={
                         "error": "PAYLOAD_TOO_LARGE",
-                        "details": (
-                            f"Request body exceeds the {self._max_body_bytes} byte limit."
-                        ),
+                        "details": (f"Request body exceeds the {self._max_body_bytes} byte limit."),
                     },
                 )
 

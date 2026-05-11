@@ -25,6 +25,7 @@ from typing import Optional, Union
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
 from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
@@ -47,10 +48,7 @@ class EncryptionService:
         """
         self.master_key = master_key or self._load_master_key()
         if not self.master_key:
-            raise ValueError(
-                "No encryption key provided. Set AUTOBOT_ENCRYPTION_KEY "
-                "environment variable."
-            )
+            raise ValueError("No encryption key provided. Set AUTOBOT_ENCRYPTION_KEY " "environment variable.")
 
         # Validate key strength
         if len(self.master_key) < 32:
@@ -67,10 +65,7 @@ class EncryptionService:
             key = os.getenv("ENCRYPTION_KEY") or os.getenv("MASTER_KEY")
 
         if not key:
-            logger.error(
-                "No encryption key found in environment variables. "
-                "Please set AUTOBOT_ENCRYPTION_KEY."
-            )
+            logger.error("No encryption key found in environment variables. " "Please set AUTOBOT_ENCRYPTION_KEY.")
             return None
 
         return key

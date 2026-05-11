@@ -25,16 +25,12 @@ class TestToolCallCompletionRegex:
 
     def test_lowercase_tag(self, pattern):
         """Test detection of lowercase </tool_call> tag."""
-        text = (
-            '<tool_call name="execute_command" params=\'{"command":"ls"}\'></tool_call>'
-        )
+        text = '<tool_call name="execute_command" params=\'{"command":"ls"}\'></tool_call>'
         assert pattern.search(text) is not None
 
     def test_uppercase_tag(self, pattern):
         """Test detection of uppercase </TOOL_CALL> tag."""
-        text = (
-            '<TOOL_CALL name="execute_command" params=\'{"command":"ls"}\'></TOOL_CALL>'
-        )
+        text = '<TOOL_CALL name="execute_command" params=\'{"command":"ls"}\'></TOOL_CALL>'
         assert pattern.search(text) is not None
 
     def test_mixed_case_tag(self, pattern):

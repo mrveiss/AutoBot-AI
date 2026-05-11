@@ -16,6 +16,7 @@ from typing import Callable
 
 from fastapi import HTTPException
 
+from autobot_shared.async_compat import run_or_schedule
 from constants.threshold_constants import RetryConfig, exponential_backoff_delay
 
 from .boundary_manager import get_error_boundary_manager
@@ -93,11 +94,15 @@ def _handle_sync_attempt(
         return (True, result)
     except Exception as e:
         if attempt == max_retries:
-            return (True, asyncio.run(manager.handle_error(e, context)))
+            # #7469: defensive sync/async-context handler. Bare asyncio.run()
+            # crashes when this sync wrapper is dispatched from a running
+            # event loop (e.g. via loop.run_in_executor with shared thread).
+            return (True, run_or_schedule(manager.handle_error(e, context)))
         if recovery_strategy == RecoveryStrategy.RETRY:
             time.sleep(exponential_backoff_delay(attempt))
             return (False, None)
-        return (True, asyncio.run(manager.handle_error(e, context)))
+        # #7469: same defensive pattern as the max-retries branch above.
+        return (True, run_or_schedule(manager.handle_error(e, context)))
 
 
 def _create_async_boundary_wrapper(

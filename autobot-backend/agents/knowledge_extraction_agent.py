@@ -25,8 +25,8 @@ from autobot_shared.ssot_config import (
 )
 from config.manager import get_config_manager as _get_config_manager
 from llm_interface_pkg.types import LLMType
-from services.llm_service import get_llm_service
 from models.atomic_fact import AtomicFact, FactExtractionResult, FactType, TemporalType
+from services.llm_service import get_llm_service
 
 from .base_agent import DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
@@ -73,15 +73,9 @@ class KnowledgeExtractionAgent(StandardizedAgent):
         self.llm_interface = llm_interface or get_llm_service()
 
         # Configuration
-        self.max_facts_per_chunk = config_manager.get(
-            "knowledge_extraction.max_facts_per_chunk", 20
-        )
-        self.confidence_threshold = config_manager.get(
-            "knowledge_extraction.confidence_threshold", 0.6
-        )
-        self.enable_entity_extraction = config_manager.get(
-            "knowledge_extraction.enable_entity_extraction", True
-        )
+        self.max_facts_per_chunk = config_manager.get("knowledge_extraction.max_facts_per_chunk", 20)
+        self.confidence_threshold = config_manager.get("knowledge_extraction.confidence_threshold", 0.6)
+        self.enable_entity_extraction = config_manager.get("knowledge_extraction.enable_entity_extraction", True)
         self.temporal_keywords = self._load_temporal_keywords()
 
         # Register action handlers for StandardizedAgent routing
@@ -137,9 +131,7 @@ class KnowledgeExtractionAgent(StandardizedAgent):
         source = request.payload["source"]
         context = request.payload.get("context")
         chunk_id = request.payload.get("chunk_id")
-        result = await self.extract_facts_from_text(
-            content, source, context=context, chunk_id=chunk_id
-        )
+        result = await self.extract_facts_from_text(content, source, context=context, chunk_id=chunk_id)
         return {
             "facts_count": len(result.facts),
             "processing_time": result.processing_time,
@@ -161,10 +153,7 @@ class KnowledgeExtractionAgent(StandardizedAgent):
 
     async def _handle_filter_facts(self, request) -> Dict[str, Any]:
         """Handle filter_facts action via StandardizedAgent routing."""
-        facts = [
-            AtomicFact.from_dict(f) if isinstance(f, dict) else f
-            for f in request.payload["facts"]
-        ]
+        facts = [AtomicFact.from_dict(f) if isinstance(f, dict) else f for f in request.payload["facts"]]
         fact_types = request.payload.get("fact_types")
         temporal_types = request.payload.get("temporal_types")
         min_confidence = request.payload.get("min_confidence")
@@ -312,9 +301,7 @@ class KnowledgeExtractionAgent(StandardizedAgent):
 
 Respond only with valid JSON."""
 
-    def _build_extraction_prompt(
-        self, content: str, context: Optional[str] = None
-    ) -> str:
+    def _build_extraction_prompt(self, content: str, context: Optional[str] = None) -> str:
         """Build the LLM prompt for fact extraction.
 
         Args:
@@ -364,9 +351,7 @@ Return the results as a JSON array of facts. Example format:
         ]
         return any(re.search(pattern, text_lower) for pattern in date_patterns)
 
-    def _classify_temporal_type(
-        self, fact_text: str, context: str = ""
-    ) -> TemporalType:
+    def _classify_temporal_type(self, fact_text: str, context: str = "") -> TemporalType:
         """Classify the temporal type of a fact based on linguistic indicators."""
         text_lower = f"{fact_text} {context}".lower()
 
@@ -375,11 +360,7 @@ Return the results as a JSON array of facts. Example format:
         future_count = self._count_keyword_matches(text_lower, "future_indicators")
         past_count = self._count_keyword_matches(text_lower, "past_indicators")
 
-        if (
-            self._has_temporal_bound_pattern(text_lower)
-            or future_count > 0
-            or past_count > 0
-        ):
+        if self._has_temporal_bound_pattern(text_lower) or future_count > 0 or past_count > 0:
             return TemporalType.TEMPORAL_BOUND
         elif dynamic_count > static_count:
             return TemporalType.DYNAMIC
@@ -430,9 +411,7 @@ Return the results as a JSON array of facts. Example format:
 
         # Remove duplicates and common words
         common_words = self._get_common_words()
-        unique_entities = list(
-            set(e for e in entities if e.lower() not in common_words and len(e) > 1)
-        )
+        unique_entities = list(set(e for e in entities if e.lower() not in common_words and len(e) > 1))
 
         return unique_entities[:10]
 
@@ -462,17 +441,13 @@ Return the results as a JSON array of facts. Example format:
 
         # Check confidence range
         confidence = fact_data.get("confidence", 0)
-        if not isinstance(confidence, _NUMERIC_TYPES) or not (
-            0.0 <= confidence <= 1.0
-        ):  # Issue #380
+        if not isinstance(confidence, _NUMERIC_TYPES) or not (0.0 <= confidence <= 1.0):  # Issue #380
             logger.debug("Invalid confidence value: %s", confidence)
             return False
 
         # Check non-empty strings (Issue #380: use module-level constant)
         if any(
-            not isinstance(fact_data.get(field), str)
-            or not fact_data.get(field).strip()
-            for field in _FACT_TEXT_FIELDS
+            not isinstance(fact_data.get(field), str) or not fact_data.get(field).strip() for field in _FACT_TEXT_FIELDS
         ):
             logger.debug("Empty text fields in fact")
             return False
@@ -487,9 +462,7 @@ Return the results as a JSON array of facts. Example format:
 
         return True
 
-    async def _get_llm_facts_response(
-        self, content: str, context: Optional[str]
-    ) -> Optional[List[Dict[str, Any]]]:
+    async def _get_llm_facts_response(self, content: str, context: Optional[str]) -> Optional[List[Dict[str, Any]]]:
         """Get raw facts from LLM response. Returns None on error."""
         prompt = self._build_extraction_prompt(content, context)
         response = await self.llm_interface.chat(
@@ -515,9 +488,7 @@ Return the results as a JSON array of facts. Example format:
 
     def _enhance_fact_data(self, fact_data: Dict[str, Any], content: str) -> None:
         """Enhance fact with temporal classification and entity extraction."""
-        fact_text = (
-            f"{fact_data['subject']} {fact_data['predicate']} {fact_data['object']}"
-        )
+        fact_text = f"{fact_data['subject']} {fact_data['predicate']} {fact_data['object']}"
 
         # Enhance temporal classification if not confident
         if fact_data.get("confidence", 0) < 0.8:
@@ -579,16 +550,12 @@ Return the results as a JSON array of facts. Example format:
                     continue
 
                 self._enhance_fact_data(fact_data, content)
-                atomic_fact = self._create_atomic_fact(
-                    fact_data, source, content, context, chunk_id
-                )
+                atomic_fact = self._create_atomic_fact(fact_data, source, content, context, chunk_id)
 
                 if atomic_fact.confidence >= self.confidence_threshold:
                     extracted_facts.append(atomic_fact)
                 else:
-                    logger.debug(
-                        f"Fact below confidence threshold: {atomic_fact.confidence}"
-                    )
+                    logger.debug(f"Fact below confidence threshold: {atomic_fact.confidence}")
 
             except Exception as e:
                 logger.error("Error creating AtomicFact: %s", e)
@@ -670,9 +637,7 @@ Return the results as a JSON array of facts. Example format:
                     },
                 )
 
-            extracted_facts, validation_errors = self._convert_raw_facts(
-                raw_facts, source, content, context, chunk_id
-            )
+            extracted_facts, validation_errors = self._convert_raw_facts(raw_facts, source, content, context, chunk_id)
 
             processing_time = time.time() - start_time
             logger.info(
@@ -693,9 +658,7 @@ Return the results as a JSON array of facts. Example format:
         except Exception as e:
             processing_time = time.time() - start_time
             logger.error("Error in fact extraction: %s", e)
-            return self._build_extraction_error_result(
-                str(e), source, len(content), processing_time
-            )
+            return self._build_extraction_error_result(str(e), source, len(content), processing_time)
 
     def _aggregate_chunk_results(self, chunk_results: List[Any]) -> tuple:
         """Aggregate results from parallel chunk processing. Returns (facts, errors, success_count)."""
@@ -716,9 +679,7 @@ Return the results as a JSON array of facts. Example format:
 
         return all_facts, total_errors, successful_extractions
 
-    async def extract_facts_from_chunks(
-        self, chunks: List[Dict[str, Any]], source: str
-    ) -> FactExtractionResult:
+    async def extract_facts_from_chunks(self, chunks: List[Dict[str, Any]], source: str) -> FactExtractionResult:
         """Extract facts from multiple chunks in parallel."""
         logger.info("Processing %s chunks for fact extraction", len(chunks))
 
@@ -735,18 +696,12 @@ Return the results as a JSON array of facts. Example format:
                 )
 
         start_time = time.time()
-        chunk_results = await asyncio.gather(
-            *[process_chunk(chunk) for chunk in chunks], return_exceptions=True
-        )
+        chunk_results = await asyncio.gather(*[process_chunk(chunk) for chunk in chunks], return_exceptions=True)
 
-        all_facts, total_errors, successful = self._aggregate_chunk_results(
-            chunk_results
-        )
+        all_facts, total_errors, successful = self._aggregate_chunk_results(chunk_results)
         processing_time = time.time() - start_time
 
-        logger.info(
-            f"Extracted {len(all_facts)} total facts from {successful} chunks in {processing_time:.2f}s"
-        )
+        logger.info(f"Extracted {len(all_facts)} total facts from {successful} chunks in {processing_time:.2f}s")
 
         return FactExtractionResult(
             facts=all_facts,
@@ -791,14 +746,10 @@ Return the results as a JSON array of facts. Example format:
             filtered_facts = [f for f in filtered_facts if f.fact_type in fact_types]
 
         if temporal_types:
-            filtered_facts = [
-                f for f in filtered_facts if f.temporal_type in temporal_types
-            ]
+            filtered_facts = [f for f in filtered_facts if f.temporal_type in temporal_types]
 
         if min_confidence is not None:
-            filtered_facts = [
-                f for f in filtered_facts if f.confidence >= min_confidence
-            ]
+            filtered_facts = [f for f in filtered_facts if f.confidence >= min_confidence]
 
         logger.debug("Filtered %s facts to %s facts", len(facts), len(filtered_facts))
         return filtered_facts

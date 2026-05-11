@@ -70,8 +70,15 @@ def test_build_model_entry_merges_extra():
 @pytest.mark.asyncio
 async def test_get_available_models_cache_hit():
     cached_payload = {
-        "models": [{"name": "llama3", "provider": "ollama", "available": True,
-                    "context_window": 8192, "capabilities": ["chat"]}],
+        "models": [
+            {
+                "name": "llama3",
+                "provider": "ollama",
+                "available": True,
+                "context_window": 8192,
+                "capabilities": ["chat"],
+            }
+        ],
         "total_count": 1,
         "providers_queried": ["ollama"],
         "providers_errored": [],
@@ -117,17 +124,29 @@ async def test_get_available_models_cache_miss_fetches_providers():
         ),
         patch(
             "services.model_manager_service._fetch_from_providers",
-            new=AsyncMock(return_value={
-                "models": [
-                    {"name": "llama3.2:3b", "provider": "ollama", "available": True,
-                     "context_window": 8192, "capabilities": ["chat"]},
-                    {"name": "mistral:7b", "provider": "ollama", "available": True,
-                     "context_window": 32768, "capabilities": ["chat", "code"]},
-                ],
-                "total_count": 2,
-                "providers_queried": ["ollama"],
-                "providers_errored": [],
-            }),
+            new=AsyncMock(
+                return_value={
+                    "models": [
+                        {
+                            "name": "llama3.2:3b",
+                            "provider": "ollama",
+                            "available": True,
+                            "context_window": 8192,
+                            "capabilities": ["chat"],
+                        },
+                        {
+                            "name": "mistral:7b",
+                            "provider": "ollama",
+                            "available": True,
+                            "context_window": 32768,
+                            "capabilities": ["chat", "code"],
+                        },
+                    ],
+                    "total_count": 2,
+                    "providers_queried": ["ollama"],
+                    "providers_errored": [],
+                }
+            ),
         ),
     ):
         result = await get_available_models()
@@ -146,10 +165,20 @@ async def test_get_available_models_cache_miss_fetches_providers():
 async def test_get_model_names_filters_unavailable():
     cached_payload = {
         "models": [
-            {"name": "llama3", "provider": "ollama", "available": True,
-             "context_window": 8192, "capabilities": ["chat"]},
-            {"name": "gpt-4o", "provider": "openai", "available": False,
-             "context_window": 128000, "capabilities": ["chat"]},
+            {
+                "name": "llama3",
+                "provider": "ollama",
+                "available": True,
+                "context_window": 8192,
+                "capabilities": ["chat"],
+            },
+            {
+                "name": "gpt-4o",
+                "provider": "openai",
+                "available": False,
+                "context_window": 128000,
+                "capabilities": ["chat"],
+            },
         ],
         "total_count": 2,
         "providers_queried": ["ollama", "openai"],

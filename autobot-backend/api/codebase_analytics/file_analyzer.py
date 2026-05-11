@@ -168,19 +168,11 @@ def _build_file_analysis_result(
         was_processed=True,
         was_skipped_unchanged=False,
         file_hash=file_hash,
-        functions=_enrich_items_with_metadata(
-            file_analysis.get("functions", []), relative_path, file_category
-        ),
-        classes=_enrich_items_with_metadata(
-            file_analysis.get("classes", []), relative_path, file_category
-        ),
+        functions=_enrich_items_with_metadata(file_analysis.get("functions", []), relative_path, file_category),
+        classes=_enrich_items_with_metadata(file_analysis.get("classes", []), relative_path, file_category),
         imports=file_analysis.get("imports", []),
-        hardcodes=_enrich_items_with_metadata(
-            file_analysis.get("hardcodes", []), relative_path, file_category
-        ),
-        problems=_enrich_items_with_metadata(
-            file_analysis.get("problems", []), relative_path, file_category
-        ),
+        hardcodes=_enrich_items_with_metadata(file_analysis.get("hardcodes", []), relative_path, file_category),
+        problems=_enrich_items_with_metadata(file_analysis.get("problems", []), relative_path, file_category),
         technical_debt=file_analysis.get("technical_debt", []),
         line_count=file_analysis.get("line_count", 0),
         code_lines=file_analysis.get("code_lines", 0),
@@ -346,9 +338,7 @@ async def _analyze_single_file(
         store_file_hash: Async callable to persist file hash
         redis_client: Optional Redis client for incremental indexing
     """
-    extension, relative_path, file_category, base_result = _build_base_file_metadata(
-        file_path, root_path_obj
-    )
+    extension, relative_path, file_category, base_result = _build_base_file_metadata(file_path, root_path_obj)
 
     # Check if file exists and is not in skip directories
     try:
@@ -361,13 +351,9 @@ async def _analyze_single_file(
         return base_result
 
     # Check if file needs reindexing (Issue #539)
-    needs_reindex, current_hash = await file_needs_reindex(
-        file_path, relative_path, redis_client
-    )
+    needs_reindex, current_hash = await file_needs_reindex(file_path, relative_path, redis_client)
     if not needs_reindex:
-        return _build_unchanged_file_result(
-            file_path, relative_path, extension, file_category, current_hash
-        )
+        return _build_unchanged_file_result(file_path, relative_path, extension, file_category, current_hash)
 
     return await _run_analysis_and_build_result(
         file_path,

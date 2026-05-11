@@ -29,9 +29,7 @@ async def send_chat_message(chat_id: str, message: str) -> Dict[str, Any]:
     async with aiohttp.ClientSession() as session:
         chat_request = {"chatId": chat_id, "message": message}
 
-        async with session.post(
-            get_test_backend_url() + "/api/chat", json=chat_request
-        ) as response:
+        async with session.post(get_test_backend_url() + "/api/chat", json=chat_request) as response:
             if response.status == 200:
                 return await response.json()
             else:
@@ -44,9 +42,7 @@ async def execute_workflow(message: str, auto_approve: bool = True) -> Dict[str,
     async with aiohttp.ClientSession() as session:
         workflow_request = {"user_message": message, "auto_approve": auto_approve}
 
-        async with session.post(
-            get_test_backend_url() + "/api/workflow/execute", json=workflow_request
-        ) as response:
+        async with session.post(get_test_backend_url() + "/api/workflow/execute", json=workflow_request) as response:
             if response.status == 200:
                 return await response.json()
             else:
@@ -60,9 +56,7 @@ async def monitor_workflow(workflow_id: str, timeout: int = 60):
         start_time = time.time()
 
         while time.time() - start_time < timeout:
-            async with session.get(
-                get_test_backend_url() + f"/api/workflow/workflow/{workflow_id}/status"
-            ) as response:
+            async with session.get(get_test_backend_url() + f"/api/workflow/workflow/{workflow_id}/status") as response:
                 if response.status == 200:
                     status = await response.json()
 
@@ -95,9 +89,7 @@ async def demo_simple_query():
         chat_id = await create_chat_session()
         response = await send_chat_message(chat_id, "What is 2+2?")
 
-        print(
-            f"\n✅ Response: {response.get('response', 'No response')}"
-        )  # noqa: print
+        print(f"\n✅ Response: {response.get('response', 'No response')}")  # noqa: print
         print(f"Status: {response.get('status', 'unknown')}")  # noqa: print
 
     except Exception as e:
@@ -112,22 +104,16 @@ async def demo_research_workflow():
     print("Expected: Research workflow with web search")  # noqa: print
 
     try:
-        result = await execute_workflow(
-            "What are the latest Python web frameworks in 2024?", auto_approve=True
-        )
+        result = await execute_workflow("What are the latest Python web frameworks in 2024?", auto_approve=True)
 
         if result.get("type") == "workflow_orchestration":
             workflow_id = result.get("workflow_id")
             workflow_response = result.get("workflow_response", {})
 
             print("\n✅ Workflow initiated!")  # noqa: print
-            print(  # noqa: print
-                f"   Classification: {workflow_response.get('message_classification')}"
-            )
+            print(f"   Classification: {workflow_response.get('message_classification')}")  # noqa: print
             print(f"   Workflow ID: {workflow_id[:8]}...")  # noqa: print
-            print(  # noqa: print
-                f"   Agents: {', '.join(workflow_response.get('agents_involved', []))}"
-            )
+            print(f"   Agents: {', '.join(workflow_response.get('agents_involved', []))}")  # noqa: print
             print(f"   Steps: {workflow_response.get('planned_steps')}")  # noqa: print
 
             # Monitor progress
@@ -139,9 +125,7 @@ async def demo_research_workflow():
                 if final_status.get("steps_completed"):
                     print("\n📋 Completed Steps:")  # noqa: print
                     for step in final_status.get("steps_completed", []):
-                        print(  # noqa: print
-                            f"   ✓ {step.get('agent')}: {step.get('action')}"
-                        )  # noqa: print
+                        print(f"   ✓ {step.get('agent')}: {step.get('action')}")  # noqa: print  # noqa: print
         else:
             print(f"\n💬 Direct response: {result}")  # noqa: print
 
@@ -153,12 +137,8 @@ async def demo_complex_workflow():
     """Demonstrate a complex multi-agent workflow."""
     print("\n\n🚀 Demo 3: Complex Multi-Agent Workflow")  # noqa: print
     print("-" * 60)  # noqa: print
-    print(  # noqa: print
-        "Query: 'I need to scan my network for security vulnerabilities'"
-    )  # noqa: print
-    print(  # noqa: print
-        "Expected: 8-step workflow with research, approvals, and installation"
-    )  # noqa: print
+    print("Query: 'I need to scan my network for security vulnerabilities'")  # noqa: print  # noqa: print
+    print("Expected: 8-step workflow with research, approvals, and installation")  # noqa: print  # noqa: print
 
     try:
         result = await execute_workflow(
@@ -171,13 +151,9 @@ async def demo_complex_workflow():
             workflow_response = result.get("workflow_response", {})
 
             print("\n✅ Complex workflow initiated!")  # noqa: print
-            print(  # noqa: print
-                f"   Classification: {workflow_response.get('message_classification')}"
-            )
+            print(f"   Classification: {workflow_response.get('message_classification')}")  # noqa: print
             print(f"   Workflow ID: {workflow_id[:8]}...")  # noqa: print
-            print(  # noqa: print
-                f"   Estimated duration: {workflow_response.get('estimated_duration')}"
-            )
+            print(f"   Estimated duration: {workflow_response.get('estimated_duration')}")  # noqa: print
 
             # Show workflow plan
             print("\n📋 Workflow Plan:")  # noqa: print
@@ -194,12 +170,8 @@ async def demo_complex_workflow():
                 # Show results
                 if final_status.get("status") == "completed":
                     print("\n🎯 Workflow Results:")  # noqa: print
-                    print(  # noqa: print
-                        "   - Knowledge Base searched for existing tools"
-                    )  # noqa: print
-                    print(  # noqa: print
-                        "   - Research conducted on latest security scanners"
-                    )  # noqa: print
+                    print("   - Knowledge Base searched for existing tools")  # noqa: print  # noqa: print
+                    print("   - Research conducted on latest security scanners")  # noqa: print  # noqa: print
                     print("   - Tool recommendations prepared")  # noqa: print
                     print("   - Installation guides retrieved")  # noqa: print
                     print("   - Information stored for future reference")  # noqa: print
@@ -216,9 +188,7 @@ async def demo_workflow_management():
     try:
         # Check active workflows
         async with aiohttp.ClientSession() as session:
-            async with session.get(
-                get_test_backend_url() + "/api/workflow/workflows"
-            ) as response:
+            async with session.get(get_test_backend_url() + "/api/workflow/workflows") as response:
                 if response.status == 200:
                     data = await response.json()
                     active_count = data.get("active_workflows", 0)
@@ -228,13 +198,9 @@ async def demo_workflow_management():
                     if data.get("workflows"):
                         print("\n📋 Recent Workflows:")  # noqa: print
                         for workflow in data.get("workflows", [])[:3]:
-                            print(  # noqa: print
-                                f"\n   ID: {workflow.get('id', 'N/A')[:8]}..."
-                            )  # noqa: print
+                            print(f"\n   ID: {workflow.get('id', 'N/A')[:8]}...")  # noqa: print  # noqa: print
                             print(f"   Status: {workflow.get('status')}")  # noqa: print
-                            print(  # noqa: print
-                                f"   Type: {workflow.get('classification')}"
-                            )  # noqa: print
+                            print(f"   Type: {workflow.get('classification')}")  # noqa: print  # noqa: print
                             print(  # noqa: print
                                 f"   Progress: {workflow.get('steps_completed')}/{workflow.get('total_steps')} steps"
                             )
@@ -249,17 +215,13 @@ async def main():
     """Run all demonstrations."""
     print("🤖 AutoBot Multi-Agent Workflow Orchestration Demo")  # noqa: print
     print("=" * 70)  # noqa: print
-    print(  # noqa: print
-        "Demonstrating the transformation from generic responses to intelligent workflows\n"
-    )
+    print("Demonstrating the transformation from generic responses to intelligent workflows\n")  # noqa: print
 
     print("🔍 System Check...")  # noqa: print
     try:
         async with aiohttp.ClientSession() as session:
             # Check backend health
-            async with session.get(
-                get_test_backend_url() + "/api/system/health"
-            ) as response:
+            async with session.get(get_test_backend_url() + "/api/system/health") as response:
                 if response.status == 200:
                     health = await response.json()
                     print(f"✅ Backend: {health.get('status')}")  # noqa: print
@@ -284,13 +246,9 @@ async def main():
     print("\n🎯 Key Achievements Demonstrated:")  # noqa: print
     print("   1. Simple queries receive direct responses")  # noqa: print
     print("   2. Research queries trigger web search workflows")  # noqa: print
-    print(  # noqa: print
-        "   3. Complex queries orchestrate multiple specialized agents"
-    )  # noqa: print
+    print("   3. Complex queries orchestrate multiple specialized agents")  # noqa: print  # noqa: print
     print("   4. Full workflow tracking and management capabilities")  # noqa: print
-    print(  # noqa: print
-        "\n🚀 AutoBot has successfully transformed from generic responses"
-    )  # noqa: print
+    print("\n🚀 AutoBot has successfully transformed from generic responses")  # noqa: print  # noqa: print
     print("   to intelligent multi-agent workflow orchestration!")  # noqa: print
 
 

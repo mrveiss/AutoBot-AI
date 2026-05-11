@@ -153,9 +153,7 @@ class AsyncInMemoryClient(AsyncBaseClient):
         metadata: Optional[Metadata] = None,
         embedding_function: Optional[Any] = None,
     ) -> AsyncBaseCollection:
-        sync_col = self._sync.get_or_create_collection(
-            name, metadata=metadata, embedding_function=embedding_function
-        )
+        sync_col = self._sync.get_or_create_collection(name, metadata=metadata, embedding_function=embedding_function)
         return self._wrap(sync_col)  # type: ignore[arg-type]
 
     async def get_collection(self, name: str) -> AsyncBaseCollection:
@@ -169,9 +167,7 @@ class AsyncInMemoryClient(AsyncBaseClient):
         metadata: Optional[Metadata] = None,
         embedding_function: Optional[Any] = None,
     ) -> AsyncBaseCollection:
-        sync_col = self._sync.create_collection(
-            name, metadata=metadata, embedding_function=embedding_function
-        )
+        sync_col = self._sync.create_collection(name, metadata=metadata, embedding_function=embedding_function)
         return self._wrap(sync_col)  # type: ignore[arg-type]
 
     async def list_collections(self) -> List[AsyncBaseCollection]:

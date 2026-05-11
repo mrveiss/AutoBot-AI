@@ -34,6 +34,7 @@ def _stub_module(name: str, **attrs) -> types.ModuleType:
 
 if "xxhash" not in sys.modules:
     from unittest.mock import MagicMock
+
     _stub_module(
         "xxhash",
         xxh64=MagicMock(return_value=MagicMock(hexdigest=MagicMock(return_value="0" * 16))),
@@ -140,7 +141,7 @@ class TestGetModelKwargs:
             _clear_cache()
             kwargs = get_model_kwargs("test-model", provider="myprovider")
         assert kwargs["temperature"] == 0.5  # from default
-        assert kwargs["max_tokens"] == 2000   # overridden by provider
+        assert kwargs["max_tokens"] == 2000  # overridden by provider
 
     def test_returned_dict_is_copy(self):
         """Mutating the returned dict must not affect subsequent calls."""

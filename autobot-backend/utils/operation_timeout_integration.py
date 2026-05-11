@@ -23,6 +23,7 @@ import redis.asyncio as redis
 from fastapi import APIRouter, BackgroundTasks, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from autobot_shared.async_compat import run_or_schedule
 from constants.network_constants import ServiceURLs
 from constants.threshold_constants import TimingConstants
 from utils.catalog_http_exceptions import (
@@ -622,9 +623,10 @@ class OperationMigrator:
 
             # If original function expects progress callback
             if hasattr(original_function, "__code__") and "progress_callback" in original_function.__code__.co_varnames:
-                progress_callback = lambda step, processed, total=None: asyncio.create_task(
-                    context.update_progress(step, processed, total)
-                )
+
+                def progress_callback(step, processed, total=None):
+                    return asyncio.create_task(context.update_progress(step, processed, total))
+
                 return await original_function(progress_callback=progress_callback)
             else:
                 # Simple wrapper without progress
@@ -723,4 +725,4 @@ if __name__ == "__main__":
             await operation_integration_manager.shutdown()
 
     # Run example
-    asyncio.run(example_integration())
+    run_or_schedule(example_integration())

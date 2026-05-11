@@ -9,13 +9,13 @@ FastAPI endpoints for workflow automation.
 
 import json
 import logging
-from autobot_shared.singleton_factory import lazy_singleton
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
 from services.notification_service import NotificationConfig
 

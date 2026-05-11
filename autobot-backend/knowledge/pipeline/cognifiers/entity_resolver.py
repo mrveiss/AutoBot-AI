@@ -112,17 +112,13 @@ class EntityResolver(BaseCognifier):
                 existing.source_chunk_ids = list(set(existing.source_chunk_ids))
                 existing.extraction_count += 1
                 existing.confidence = min(1.0, existing.confidence + 0.1)
-                logger.debug(
-                    "Merged entity %r with %r", entity.name, existing.name
-                )
+                logger.debug("Merged entity %r with %r", entity.name, existing.name)
             else:
                 entity_map[canonical] = entity
 
         return list(entity_map.values())
 
-    def _find_equivalent_entity(
-        self, canonical_name: str, existing_keys: Iterable[str]
-    ) -> Optional[str]:
+    def _find_equivalent_entity(self, canonical_name: str, existing_keys: Iterable[str]) -> Optional[str]:
         """
         Find an equivalent entity in existing entities (Issue #3395).
 
@@ -158,9 +154,7 @@ class EntityResolver(BaseCognifier):
 
         return None
 
-    def _find_synonym_match(
-        self, canonical_name: str, existing_names: List[str]
-    ) -> Optional[str]:
+    def _find_synonym_match(self, canonical_name: str, existing_names: List[str]) -> Optional[str]:
         """
         Find entity match using predefined synonyms (Issue #3395).
 
@@ -175,18 +169,12 @@ class EntityResolver(BaseCognifier):
         for root, synonyms in self.synonyms.items():
             if canonical_name in synonyms or canonical_name == root:
                 for existing in existing_names:
-                    if (
-                        existing in synonyms
-                        or existing == root
-                        or existing in {root} | synonyms
-                    ):
+                    if existing in synonyms or existing == root or existing in {root} | synonyms:
                         return existing
 
         return None
 
-    def _find_fuzzy_match(
-        self, canonical_name: str, existing_names: List[str]
-    ) -> Optional[str]:
+    def _find_fuzzy_match(self, canonical_name: str, existing_names: List[str]) -> Optional[str]:
         """
         Find entity match using string similarity (Issue #3395).
 

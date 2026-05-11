@@ -7,14 +7,9 @@ System Validation API endpoints for AutoBot optimization suite
 """
 
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 
-from api.system_health import register_singleton_probe
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from utils.catalog_http_exceptions import raise_catalog_error_simple, raise_server_error
-from utils.system_validator import get_system_validator
 from api.schemas_workflows import (
     SystemValidationBenchmarkResponse,
     SystemValidationComponentResponse,
@@ -25,6 +20,10 @@ from api.schemas_workflows import (
     SystemValidationResultModel,
     SystemValidationStatusResponse,
 )
+from api.system_health import register_singleton_probe
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from utils.catalog_http_exceptions import raise_catalog_error_simple, raise_server_error
+from utils.system_validator import get_system_validator
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +61,7 @@ async def validation_health():
     operation="run_comprehensive_validation",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-async def run_comprehensive_validation(
-    request: SystemValidationRequestModel, background_tasks: BackgroundTasks
-):
+async def run_comprehensive_validation(request: SystemValidationRequestModel, background_tasks: BackgroundTasks):
     """Run comprehensive system validation"""
     try:
         validator = get_system_validator()
@@ -143,11 +140,7 @@ async def run_quick_validation():
         # Calculate overall status
         all_scores = [result["score"] for result in quick_results.values()]
         overall_score = sum(all_scores) / len(all_scores) if all_scores else 0
-        overall_status = (
-            "healthy"
-            if overall_score >= 80
-            else "degraded" if overall_score >= 60 else "unhealthy"
-        )
+        overall_status = "healthy" if overall_score >= 80 else "degraded" if overall_score >= 60 else "unhealthy"
 
         return {
             "status": overall_status,
@@ -227,40 +220,28 @@ async def get_optimization_recommendations():
         cache_result = await validator.validate_knowledge_base_caching()
         if "recommendations" in cache_result:
             recommendations.extend(
-                [
-                    {"component": "cache", "recommendation": rec}
-                    for rec in cache_result["recommendations"]
-                ]
+                [{"component": "cache", "recommendation": rec} for rec in cache_result["recommendations"]]
             )
 
         # Search recommendations
         search_result = await validator.validate_hybrid_search()
         if "recommendations" in search_result:
             recommendations.extend(
-                [
-                    {"component": "search", "recommendation": rec}
-                    for rec in search_result["recommendations"]
-                ]
+                [{"component": "search", "recommendation": rec} for rec in search_result["recommendations"]]
             )
 
         # Monitoring recommendations
         monitoring_result = await validator.validate_monitoring_system()
         if "recommendations" in monitoring_result:
             recommendations.extend(
-                [
-                    {"component": "monitoring", "recommendation": rec}
-                    for rec in monitoring_result["recommendations"]
-                ]
+                [{"component": "monitoring", "recommendation": rec} for rec in monitoring_result["recommendations"]]
             )
 
         # Model optimization recommendations
         model_result = await validator.validate_model_optimization()
         if "recommendations" in model_result:
             recommendations.extend(
-                [
-                    {"component": "model_optimization", "recommendation": rec}
-                    for rec in model_result["recommendations"]
-                ]
+                [{"component": "model_optimization", "recommendation": rec} for rec in model_result["recommendations"]]
             )
 
         return {

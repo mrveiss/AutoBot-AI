@@ -26,22 +26,13 @@ Test coverage:
 """
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from api.knowledge_grounding import (
-    get_stats,
-    ground_response,
-    list_conflicts,
-    resolve_conflict,
-    verify_claim,
-)
 from services.grounded_agent import (
     Claim,
     ClaimStatus,
-    Conflict,
-    ConflictResolution,
     GroundedAgent,
     GroundedResponse,
     VerifiedClaim,
@@ -573,28 +564,24 @@ async def test_api_ground_response_endpoint(mock_app):
 async def test_api_verify_claim_endpoint(mock_app):
     """Test POST /api/verify-claim endpoint."""
     # Endpoint test structure
-    pass
 
 
 @pytest.mark.asyncio
 async def test_api_list_conflicts_endpoint(mock_app):
     """Test GET /api/kb-conflicts endpoint."""
     # Endpoint test structure
-    pass
 
 
 @pytest.mark.asyncio
 async def test_api_resolve_conflict_endpoint(mock_app):
     """Test POST /api/kb-conflicts/{id}/resolve endpoint."""
     # Endpoint test structure
-    pass
 
 
 @pytest.mark.asyncio
 async def test_api_get_stats_endpoint(mock_app):
     """Test GET /api/kb-stats endpoint."""
     # Endpoint test structure
-    pass
 
 
 # ===== INTEGRATION TESTS =====

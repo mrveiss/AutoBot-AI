@@ -11,20 +11,26 @@ from VM4 (uses NetworkConstants.AI_STACK_VM_IP) with the main AutoBot backend.
 import logging
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
-from api.system_health import register_singleton_probe
+from api.schemas_agent import (
+    ComprehensiveResearchData,
+    EnhancedKnowledgeSearchData,
+    MultiAgentQueryData,
+)
+from api.schemas_ai_stack import AIStackAgentPayload, AIStackAgentsData, AIStackHealthData
+from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
-    KbCodeSearchRequest,
     ContentClassificationRequest,
     DevelopmentAnalysisRequest,
     EnhancedChatRequest,
+    KbCodeSearchRequest,
     KnowledgeExtractionRequest,
     RAGQueryRequest,
     ResearchRequest,
 )
-
+from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
@@ -34,14 +40,6 @@ from type_defs.common import Metadata
 
 # Import shared response utilities (Issue #292 - Eliminate duplicate code)
 from utils.response_helpers import create_success_response
-
-from api.schemas_ai_stack import AIStackAgentPayload, AIStackAgentsData, AIStackHealthData
-from api.schemas_common import DataResponse
-from api.schemas_agent import (
-    ComprehensiveResearchData,
-    EnhancedKnowledgeSearchData,
-    MultiAgentQueryData,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -87,9 +85,7 @@ async def ai_stack_health_check(admin_check: bool = Depends(check_admin_permissi
 
         return JSONResponse(
             status_code=200 if health_status["status"] == "healthy" else 503,
-            content=create_success_response(
-                health_status, "AI Stack health check completed"
-            ).model_dump(),
+            content=create_success_response(health_status, "AI Stack health check completed").model_dump(),
         )
     except Exception as e:
         logger.error("AI Stack health check failed: %s: %s", type(e).__name__, e)
@@ -152,9 +148,7 @@ async def rag_query(
     documents = request.documents
     if not documents and knowledge_base:
         try:
-            kb_results = await knowledge_base.search(
-                query=request.query, top_k=request.max_results
-            )
+            kb_results = await knowledge_base.search(query=request.query, top_k=request.max_results)
             documents = kb_results if isinstance(kb_results, list) else []
         except Exception as e:
             logger.warning("Knowledge base search failed: %s", e)
@@ -199,9 +193,7 @@ async def reformulate_query(
     operation="analyze_documents",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-async def analyze_documents(
-    documents: List[Metadata], admin_check: bool = Depends(check_admin_permission)
-):
+async def analyze_documents(documents: List[Metadata], admin_check: bool = Depends(check_admin_permission)):
     """
     Analyze and synthesize multiple documents.
 
@@ -246,12 +238,8 @@ async def enhanced_chat(
             # Search knowledge base for relevant context
             kb_context = await knowledge_base.search(query=request.message, top_k=5)
             if kb_context:
-                kb_summary = "\n".join(
-                    [f"- {item.get('content', '')[:200]}..." for item in kb_context[:3]]
-                )
-                enhanced_context = (
-                    f"{request.context or ''}\n\nRelevant knowledge:\n{kb_summary}"
-                )
+                kb_summary = "\n".join([f"- {item.get('content', '')[:200]}..." for item in kb_context[:3]])
+                enhanced_context = f"{request.context or ''}\n\nRelevant knowledge:\n{kb_summary}"
         except Exception as e:
             logger.warning("Knowledge base context enhancement failed: %s", e)
 
@@ -292,9 +280,7 @@ async def extract_knowledge(
         extraction_mode=request.extraction_mode,
     )
 
-    return create_success_response(
-        result, "Knowledge extraction completed successfully"
-    )
+    return create_success_response(result, "Knowledge extraction completed successfully")
 
 
 @router.post("/knowledge/enhanced-search", response_model=DataResponse[EnhancedKnowledgeSearchData])
@@ -374,9 +360,7 @@ async def get_system_knowledge(
     operation="comprehensive_research",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-async def comprehensive_research(
-    request: ResearchRequest, admin_check: bool = Depends(check_admin_permission)
-):
+async def comprehensive_research(request: ResearchRequest, admin_check: bool = Depends(check_admin_permission)):
     """
     Perform comprehensive research with multiple AI agents.
 
@@ -396,17 +380,13 @@ async def comprehensive_research(
     # Web research if requested
     if request.include_web:
         try:
-            web_result = await ai_client.web_research(
-                query=request.query, max_pages=10, include_analysis=True
-            )
+            web_result = await ai_client.web_research(query=request.query, max_pages=10, include_analysis=True)
             results["web_research"] = web_result
         except AIStackError as e:
             logger.warning("Web research failed: %s", e)
             results["web_research"] = {"error": "Internal server error"}
 
-    return create_success_response(
-        results, "Comprehensive research completed successfully"
-    )
+    return create_success_response(results, "Comprehensive research completed successfully")
 
 
 @router.post("/research/web", response_model=DataResponse[AIStackAgentPayload])
@@ -427,9 +407,7 @@ async def web_research(
     Issue #744: Requires admin authentication.
     """
     ai_client = await get_ai_stack_client()
-    result = await ai_client.web_research(
-        query=query, max_pages=max_pages, include_analysis=include_analysis
-    )
+    result = await ai_client.web_research(query=query, max_pages=max_pages, include_analysis=include_analysis)
 
     return create_success_response(result, "Web research completed successfully")
 
@@ -445,9 +423,7 @@ async def web_research(
     operation="search_code",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-async def search_code(
-    request: KbCodeSearchRequest, admin_check: bool = Depends(check_admin_permission)
-):
+async def search_code(request: KbCodeSearchRequest, admin_check: bool = Depends(check_admin_permission)):
     """
     Search codebase using NPU-accelerated AI.
 
@@ -483,9 +459,7 @@ async def analyze_development_speedup(
         code_path=request.code_path, analysis_type=request.analysis_type
     )
 
-    return create_success_response(
-        result, "Development speedup analysis completed successfully"
-    )
+    return create_success_response(result, "Development speedup analysis completed successfully")
 
 
 # ====================================================================
@@ -513,9 +487,7 @@ async def classify_content(
         content=request.content, classification_types=request.classification_types
     )
 
-    return create_success_response(
-        result, "Content classification completed successfully"
-    )
+    return create_success_response(result, "Content classification completed successfully")
 
 
 # ====================================================================
@@ -552,9 +524,7 @@ AGENT_QUERY_HANDLERS: Dict[str, AgentQueryHandler] = {
 }
 
 
-async def _execute_agent_query(
-    ai_client: Any, agent: str, query: str
-) -> Dict[str, Any]:
+async def _execute_agent_query(ai_client: Any, agent: str, query: str) -> Dict[str, Any]:
     """Execute agent query with dispatch table (Issue #336 - extracted helper)."""
     handler = AGENT_QUERY_HANDLERS.get(agent)
     if handler:
@@ -562,9 +532,7 @@ async def _execute_agent_query(
     return {"error": f"Unknown agent: {agent}"}
 
 
-async def _execute_parallel_agents(
-    ai_client: Any, agents: List[str], query: str
-) -> Dict[str, Any]:
+async def _execute_parallel_agents(ai_client: Any, agents: List[str], query: str) -> Dict[str, Any]:
     """Execute agents in parallel mode (Issue #315: extracted to reduce nesting).
 
     Args:
@@ -586,9 +554,7 @@ async def _execute_parallel_agents(
     return results
 
 
-async def _execute_sequential_agents(
-    ai_client: Any, agents: List[str], query: str
-) -> Dict[str, Any]:
+async def _execute_sequential_agents(ai_client: Any, agents: List[str], query: str) -> Dict[str, Any]:
     """Execute agents sequentially, each building on previous (Issue #315: extracted).
 
     Args:

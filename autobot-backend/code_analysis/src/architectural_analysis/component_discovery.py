@@ -69,9 +69,7 @@ class ComponentDiscovery:
         self._deps = dependency_analyzer or DependencyAnalyzer()
         self._patterns = pattern_detector or PatternDetector()
 
-    async def discover_components(
-        self, root_path: str, patterns: List[str]
-    ) -> List[ArchitecturalComponent]:
+    async def discover_components(self, root_path: str, patterns: List[str]) -> List[ArchitecturalComponent]:
         """
         Discover architectural components in the codebase.
 
@@ -91,9 +89,7 @@ class ComponentDiscovery:
 
         return components
 
-    async def _process_file_for_components(
-        self, file_path: Path, components: List[ArchitecturalComponent]
-    ) -> None:
+    async def _process_file_for_components(self, file_path: Path, components: List[ArchitecturalComponent]) -> None:
         """Process a single file to extract components."""
         if not file_path.is_file() or self._should_skip_file(file_path):
             return
@@ -109,9 +105,7 @@ class ComponentDiscovery:
         path_str = str(file_path)
         return any(pattern in path_str for pattern in self.skip_patterns)
 
-    async def _extract_components_from_file(
-        self, file_path: str
-    ) -> List[ArchitecturalComponent]:
+    async def _extract_components_from_file(self, file_path: str) -> List[ArchitecturalComponent]:
         """Extract architectural components from a file."""
         components = []
 
@@ -167,11 +161,7 @@ class ComponentDiscovery:
             dependencies = self._deps.extract_class_dependencies(node, content)
 
             # Extract interfaces (methods)
-            interfaces = [
-                method.name
-                for method in node.body
-                if isinstance(method, ast.FunctionDef)
-            ]
+            interfaces = [method.name for method in node.body if isinstance(method, ast.FunctionDef)]
 
             # Check if abstract
             is_abstract = self._is_abstract_class(node)
@@ -266,9 +256,7 @@ class ComponentDiscovery:
 
     def _has_abc_base(self, node: ast.ClassDef) -> bool:
         """Check for ABC inheritance."""
-        return any(
-            isinstance(base, ast.Name) and "ABC" in base.id for base in node.bases
-        )
+        return any(isinstance(base, ast.Name) and "ABC" in base.id for base in node.bases)
 
     def _has_abstract_method(self, node: ast.ClassDef) -> bool:
         """Check for abstract methods."""
@@ -281,10 +269,7 @@ class ComponentDiscovery:
 
     def _is_abstractmethod_decorated(self, method: ast.FunctionDef) -> bool:
         """Check if method has abstractmethod decorator."""
-        return any(
-            isinstance(dec, ast.Name) and dec.id == "abstractmethod"
-            for dec in method.decorator_list
-        )
+        return any(isinstance(dec, ast.Name) and dec.id == "abstractmethod" for dec in method.decorator_list)
 
 
 __all__ = ["ComponentDiscovery"]

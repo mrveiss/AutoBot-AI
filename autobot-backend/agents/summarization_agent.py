@@ -94,9 +94,7 @@ class SummarizationAgent(StandardizedAgent):
         )
         return await self.process_query(prompt)
 
-    async def process_query(
-        self, request_text: str, context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    async def process_query(self, request_text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Process a summarization query using the vLLM-optimised API (Issue #3389)."""
         try:
             logger.info("Summarization Agent processing: %s...", request_text[:50])
@@ -118,9 +116,7 @@ class SummarizationAgent(StandardizedAgent):
                 "response_text": response_text,
                 "agent_type": "summarization",
                 "model_used": self.model_name,
-                "token_usage": (
-                    response.get("usage", {}) if isinstance(response, dict) else {}
-                ),
+                "token_usage": (response.get("usage", {}) if isinstance(response, dict) else {}),
             }
         except Exception as e:
             logger.error("Summarization Agent error: %s", e)

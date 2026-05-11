@@ -4,12 +4,13 @@ Generate Automated Code Fixes
 Uses analysis results to generate specific, actionable code fixes
 """
 
-import asyncio
 import json
 from pathlib import Path
 
 from automated_fix_generator import AutomatedFixGenerator
 from code_quality_dashboard import CodeQualityDashboard
+
+from autobot_shared.async_compat import run_or_schedule
 
 
 def _print_fix_summary_stats(fix_results: dict) -> None:
@@ -20,17 +21,11 @@ def _print_fix_summary_stats(fix_results: dict) -> None:
     function length and improve readability.
     """
     print(f"📊 **Fix Generation Summary:**")  # noqa: print
-    print(
-        f"   • Total fixes generated: {fix_results['total_fixes_generated']}"
-    )  # noqa: print
-    print(
-        f"   • High confidence fixes: {fix_results['high_confidence_fixes']}"
-    )  # noqa: print
+    print(f"   • Total fixes generated: {fix_results['total_fixes_generated']}")  # noqa: print
+    print(f"   • High confidence fixes: {fix_results['high_confidence_fixes']}")  # noqa: print
     print(f"   • Low risk fixes: {fix_results['low_risk_fixes']}")  # noqa: print
     print(f"   • Patches generated: {len(fix_results['patches'])}")  # noqa: print
-    print(
-        f"   • Generation time: {fix_results['generation_time_seconds']:.2f} seconds"
-    )  # noqa: print
+    print(f"   • Generation time: {fix_results['generation_time_seconds']:.2f} seconds")  # noqa: print
     print()  # noqa: print
 
 
@@ -50,32 +45,20 @@ def _print_fix_categories(stats: dict) -> None:
     print("🎯 **Fix Confidence Distribution:**")  # noqa: print
     conf_stats = stats["by_confidence"]
     print(f"   • High confidence (>80%): {conf_stats['high']} fixes")  # noqa: print
-    print(
-        f"   • Medium confidence (60-80%): {conf_stats['medium']} fixes"
-    )  # noqa: print
+    print(f"   • Medium confidence (60-80%): {conf_stats['medium']} fixes")  # noqa: print
     print(f"   • Low confidence (<60%): {conf_stats['low']} fixes")  # noqa: print
     print()  # noqa: print
 
     print("⚠️ **Risk Assessment:**")  # noqa: print
     risk_stats = stats["by_risk"]
-    print(
-        f"   • Low risk: {risk_stats['low']} fixes (safe to auto-apply)"
-    )  # noqa: print
-    print(
-        f"   • Medium risk: {risk_stats['medium']} fixes (review recommended)"
-    )  # noqa: print
-    print(
-        f"   • High risk: {risk_stats['high']} fixes (manual review required)"
-    )  # noqa: print
+    print(f"   • Low risk: {risk_stats['low']} fixes (safe to auto-apply)")  # noqa: print
+    print(f"   • Medium risk: {risk_stats['medium']} fixes (review recommended)")  # noqa: print
+    print(f"   • High risk: {risk_stats['high']} fixes (manual review required)")  # noqa: print
     print()  # noqa: print
 
     print(f"🤖 **Automation Readiness:**")  # noqa: print
-    print(
-        f"   • Can be applied automatically: {stats['automated_fixes']} fixes"
-    )  # noqa: print
-    print(
-        f"   • Require manual review: {stats['manual_review_required']} fixes"
-    )  # noqa: print
+    print(f"   • Can be applied automatically: {stats['automated_fixes']} fixes")  # noqa: print
+    print(f"   • Require manual review: {stats['manual_review_required']} fixes")  # noqa: print
     print()  # noqa: print
 
 
@@ -88,11 +71,7 @@ def _print_high_priority_fixes(fix_results: dict) -> None:
     """
     print("🚨 **Top Priority Fixes (Immediate Action):**")  # noqa: print
 
-    high_priority_fixes = [
-        fix
-        for fix in fix_results["fixes"][:20]
-        if fix["severity"] in ["critical", "high"]
-    ]
+    high_priority_fixes = [fix for fix in fix_results["fixes"][:20] if fix["severity"] in ["critical", "high"]]
 
     for i, fix in enumerate(high_priority_fixes[:10], 1):
         severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
@@ -100,17 +79,11 @@ def _print_high_priority_fixes(fix_results: dict) -> None:
         confidence_icon = "🎯" if fix["confidence"] > 0.8 else "🤔"
         risk_icon = {"low": "✅", "medium": "⚠️", "high": "🚨"}[fix["risk_level"]]
 
-        print(
-            f"\n{i}. {emoji} **{fix['description']}** ({fix['severity'].upper()})"
-        )  # noqa: print
+        print(f"\n{i}. {emoji} **{fix['description']}** ({fix['severity'].upper()})")  # noqa: print
         print(f"   🏷️ Type: {fix['fix_type'].replace('_', ' ').title()}")  # noqa: print
         if fix["file_path"] != "Multiple files":
-            print(
-                f"   📄 Location: {fix['file_path']}:{fix['line_number']}"
-            )  # noqa: print
-        print(
-            f"   {confidence_icon} Confidence: {fix['confidence']:.0%}"
-        )  # noqa: print
+            print(f"   📄 Location: {fix['file_path']}:{fix['line_number']}")  # noqa: print
+        print(f"   {confidence_icon} Confidence: {fix['confidence']:.0%}")  # noqa: print
         print(f"   {risk_icon} Risk Level: {fix['risk_level'].title()}")  # noqa: print
         print(f"   📝 Explanation: {fix['explanation']}")  # noqa: print
 
@@ -140,47 +113,29 @@ def _print_patches_and_security(fix_results: dict) -> None:
 
         for i, patch in enumerate(fix_results["patches"][:5], 1):
             print(f"{i}. **{patch['description']}**")  # noqa: print
-            print(
-                f"   File: {patch['file_path']}:{patch['line_number']}"
-            )  # noqa: print
-            print(  # noqa: print
-                f"   Confidence: {patch['confidence']:.0%}, Risk: {patch['risk_level']}"
-            )
+            print(f"   File: {patch['file_path']}:{patch['line_number']}")  # noqa: print
+            print(f"   Confidence: {patch['confidence']:.0%}, Risk: {patch['risk_level']}")  # noqa: print
             print("   ```diff")  # noqa: print
             print(patch["patch_content"])  # noqa: print
             print("   ```")  # noqa: print
 
     # Security-specific fixes
-    security_fixes = [
-        f
-        for f in fix_results["fixes"]
-        if "security" in f["fix_type"] or "injection" in f["fix_type"]
-    ]
+    security_fixes = [f for f in fix_results["fixes"] if "security" in f["fix_type"] or "injection" in f["fix_type"]]
     if security_fixes:
         print(f"🛡️ **Critical Security Fixes:**")  # noqa: print
-        print(  # noqa: print
-            f"Found {len(security_fixes)} security-related fixes that should be applied immediately:"
-        )
+        print(f"Found {len(security_fixes)} security-related fixes that should be applied immediately:")  # noqa: print
 
         for fix in security_fixes[:3]:
             print(f"   • {fix['description']}")  # noqa: print
-            print(
-                f"     Location: {fix['file_path']}:{fix['line_number']}"
-            )  # noqa: print
+            print(f"     Location: {fix['file_path']}:{fix['line_number']}")  # noqa: print
             print(f"     Fix: {fix['explanation']}")  # noqa: print
         print()  # noqa: print
 
     # Performance-specific fixes
-    performance_fixes = [
-        f
-        for f in fix_results["fixes"]
-        if "performance" in f["fix_type"] or "memory" in f["fix_type"]
-    ]
+    performance_fixes = [f for f in fix_results["fixes"] if "performance" in f["fix_type"] or "memory" in f["fix_type"]]
     if performance_fixes:
         print(f"⚡ **Performance Optimization Fixes:**")  # noqa: print
-        print(
-            f"Found {len(performance_fixes)} performance-related fixes:"
-        )  # noqa: print
+        print(f"Found {len(performance_fixes)} performance-related fixes:")  # noqa: print
 
         for fix in performance_fixes[:3]:
             print(f"   • {fix['description']}")  # noqa: print
@@ -191,9 +146,7 @@ def _print_patches_and_security(fix_results: dict) -> None:
 def _print_fix_intro() -> None:
     """Print fix generation startup banner. Issue #1183: Extracted from generate_comprehensive_fixes()."""
     print("🔧 Starting automated fix generation...")  # noqa: print
-    print(
-        "This will analyze the codebase and generate specific code fixes for:"
-    )  # noqa: print
+    print("This will analyze the codebase and generate specific code fixes for:")  # noqa: print
     print("  • Security vulnerabilities")  # noqa: print
     print("  • Performance issues")  # noqa: print
     print("  • Code duplication")  # noqa: print
@@ -206,9 +159,7 @@ async def _test_and_print_safe_application(generator, fix_results: dict) -> None
     """Run dry-run fix application and print results. Issue #1183: Extracted from generate_comprehensive_fixes()."""
     print("🧪 **Testing Automated Fix Application (Dry Run):**")  # noqa: print
     application_results = await generator.apply_safe_fixes(fix_results, dry_run=True)
-    print(
-        f"   ✅ Can apply automatically: {application_results['total_applied']} fixes"
-    )  # noqa: print
+    print(f"   ✅ Can apply automatically: {application_results['total_applied']} fixes")  # noqa: print
     print("   🔍 Would require verification after application")  # noqa: print
     print()  # noqa: print
     if application_results["applied_fixes"]:
@@ -229,9 +180,7 @@ def _save_fix_reports(fix_results: dict) -> None:
             f.write("# Generated by AutoBot Code Quality System\n\n")
             for patch in fix_results["patches"]:
                 f.write(f"# Fix: {patch['description']}\n")
-                f.write(
-                    f"# Confidence: {patch['confidence']:.0%}, Risk: {patch['risk_level']}\n"
-                )
+                f.write(f"# Confidence: {patch['confidence']:.0%}, Risk: {patch['risk_level']}\n")
                 f.write(patch["patch_content"])
                 f.write("\n")
     print("📋 **Generated Reports:**")  # noqa: print
@@ -264,18 +213,14 @@ async def generate_comprehensive_fixes():
     # Extract detailed analysis results for fix generation
     detailed_analyses = analysis_results.get("detailed_analyses", {})
 
-    print(  # noqa: print
-        f"✅ Analysis complete. Found {analysis_results['issue_summary']['total_issues']} issues."
-    )
+    print(f"✅ Analysis complete. Found {analysis_results['issue_summary']['total_issues']} issues.")  # noqa: print
     print()  # noqa: print
 
     # Generate fixes
     generator = AutomatedFixGenerator()
 
     print("🛠️ Generating automated fixes...")  # noqa: print
-    fix_results = await generator.generate_fixes(
-        detailed_analyses, generate_patches=True
-    )
+    fix_results = await generator.generate_fixes(detailed_analyses, generate_patches=True)
 
     print("=== Automated Fix Generation Results ===\n")  # noqa: print
 
@@ -322,9 +267,7 @@ async def demonstrate_fix_application():
     print("   flake8 src/ backend/")  # noqa: print
     print("   ")  # noqa: print
     print("   # Commit and test before next batch")  # noqa: print
-    print(
-        "   git add -A && git commit -m 'Apply automated security fixes'"
-    )  # noqa: print
+    print("   git add -A && git commit -m 'Apply automated security fixes'")  # noqa: print
     print("   ```")  # noqa: print
     print()  # noqa: print
 
@@ -371,9 +314,7 @@ async def main():
 
     print("=== 🎯 Automated Fix Generation Complete ===")  # noqa: print
     print("Next steps:")  # noqa: print
-    print(
-        "1. Review automated_fixes_report.json for all generated fixes"
-    )  # noqa: print
+    print("1. Review automated_fixes_report.json for all generated fixes")  # noqa: print
     print("2. Apply high-confidence, low-risk fixes first")  # noqa: print
     print("3. Test thoroughly after each batch of fixes")  # noqa: print
     print("4. Use generated patches for easy application")  # noqa: print
@@ -381,4 +322,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

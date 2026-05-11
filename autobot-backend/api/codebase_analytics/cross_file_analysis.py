@@ -23,6 +23,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional  # noqa: F401  (List used in pub API)
 
+from autobot_shared.async_compat import run_or_schedule
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,9 +70,7 @@ async def _persist_to_chromadb(
 
         collection = await get_code_collection_async()
         if collection is None:
-            logger.warning(
-                "[#6747] Cross-file findings ready but ChromaDB unavailable; skipping persistence"
-            )
+            logger.warning("[#6747] Cross-file findings ready but ChromaDB unavailable; skipping persistence")
             return 0
 
         # The batch helper expects a starting index; we use a high offset to
@@ -79,9 +79,7 @@ async def _persist_to_chromadb(
         import time as _time
 
         start_idx = int(_time.time() * 1000) & 0x7FFFFFFF
-        await _store_problems_batch_to_chromadb(
-            collection, problems, start_idx, source_id=source_id
-        )
+        await _store_problems_batch_to_chromadb(collection, problems, start_idx, source_id=source_id)
         return len(problems)
     except Exception as exc:
         logger.warning("[#6747] Failed to persist cross-file findings: %s", exc)
@@ -122,9 +120,7 @@ async def run_cross_file_analysis(
 
     detector = AntiPatternDetector()
     try:
-        findings = await detector.analyze_cross_file_only(
-            root_path=root_path, exclude_patterns=exclude_patterns
-        )
+        findings = await detector.analyze_cross_file_only(root_path=root_path, exclude_patterns=exclude_patterns)
     except Exception as exc:
         logger.warning("[#6747] Cross-file analysis failed: %s", exc)
         return 0
@@ -159,6 +155,6 @@ def schedule_cross_file_analysis(
         loop.create_task(run_cross_file_analysis(root_path, source_id))
     except RuntimeError:
         try:
-            asyncio.run(run_cross_file_analysis(root_path, source_id))
+            run_or_schedule(run_cross_file_analysis(root_path, source_id))
         except Exception as exc:  # pragma: no cover
             logger.warning("[#6747] Cross-file analysis scheduling failed: %s", exc)

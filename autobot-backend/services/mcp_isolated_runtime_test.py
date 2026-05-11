@@ -190,10 +190,7 @@ class TestConcurrentRequestIds:
         # readline returns a unique success payload on every call so
         # _raw_request can parse it without crashing.
         async def _readline():
-            return (
-                json.dumps({"jsonrpc": "2.0", "id": 0, "result": {"pong": True}})
-                + "\n"
-            ).encode("utf-8")
+            return (json.dumps({"jsonrpc": "2.0", "id": 0, "result": {"pong": True}}) + "\n").encode("utf-8")
 
         proc.stdout = MagicMock()
         proc.stdout.readline = AsyncMock(side_effect=_readline)
@@ -219,8 +216,7 @@ class TestConcurrentRequestIds:
         ids = await asyncio.gather(*[client._next_id() for _ in range(self._N)])
         assert len(ids) == self._N
         assert len(set(ids)) == self._N, (
-            f"Collision detected: {self._N} calls produced only "
-            f"{len(set(ids))} unique IDs"
+            f"Collision detected: {self._N} calls produced only " f"{len(set(ids))} unique IDs"
         )
 
     # ------------------------------------------------------------------
@@ -245,20 +241,13 @@ class TestConcurrentRequestIds:
             "asyncio.create_subprocess_exec",
             new=AsyncMock(return_value=fake_proc),
         ):
-            await asyncio.gather(
-                *[
-                    client.call_tool("read_file", {"path": f"/tmp/f{i}"})
-                    for i in range(self._N)
-                ]
-            )
+            await asyncio.gather(*[client.call_tool("read_file", {"path": f"/tmp/f{i}"}) for i in range(self._N)])
 
         # Filter out the "shutdown" or "ping" requests emitted by _ensure_alive
         # (those also get ids but belong to internal housekeeping, not tool calls).
         # We only need to verify the tool call ids — captured_ids contains ALL
         # requests; uniqueness must still hold across the entire set.
-        assert len(captured_ids) >= self._N, (
-            f"Expected at least {self._N} captured ids, got {len(captured_ids)}"
-        )
+        assert len(captured_ids) >= self._N, f"Expected at least {self._N} captured ids, got {len(captured_ids)}"
         assert len(captured_ids) == len(set(captured_ids)), (
             f"Request ID collision detected in {len(captured_ids)} requests: "
             f"duplicates = {[x for x in captured_ids if captured_ids.count(x) > 1]}"
@@ -286,16 +275,11 @@ class TestConcurrentRequestIds:
             "asyncio.create_subprocess_exec",
             new=AsyncMock(return_value=fake_proc),
         ):
-            tool_coros = [
-                client.call_tool("list_dir", {"path": f"/tmp/{i}"})
-                for i in range(half)
-            ]
+            tool_coros = [client.call_tool("list_dir", {"path": f"/tmp/{i}"}) for i in range(half)]
             health_coros = [client.health_check() for _ in range(half)]
             await asyncio.gather(*tool_coros, *health_coros)
 
-        assert len(captured_ids) >= self._N, (
-            f"Expected at least {self._N} captured ids, got {len(captured_ids)}"
-        )
+        assert len(captured_ids) >= self._N, f"Expected at least {self._N} captured ids, got {len(captured_ids)}"
         assert len(captured_ids) == len(set(captured_ids)), (
             f"Request ID collision between call_tool and health_check: "
             f"duplicates = {[x for x in captured_ids if captured_ids.count(x) > 1]}"

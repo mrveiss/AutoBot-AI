@@ -103,14 +103,9 @@ class AccessControlMetrics(AsyncRedisClientMixin):
             )
 
             # Update aggregated counters using helper
-            await self._update_violation_counters(
-                redis, date_str, violation_id, timestamp, endpoint, username
-            )
+            await self._update_violation_counters(redis, date_str, violation_id, timestamp, endpoint, username)
 
-            logger.debug(
-                f"Recorded violation: {username} -> {endpoint} "
-                f"(session owned by {actual_owner})"
-            )
+            logger.debug(f"Recorded violation: {username} -> {endpoint} " f"(session owned by {actual_owner})")
             return True
 
         except Exception as e:
@@ -143,9 +138,7 @@ class AccessControlMetrics(AsyncRedisClientMixin):
             await pipe.hincrby(f"violations:daily:{date_str}", "total", 1)
             await pipe.hincrby(f"violations:by_endpoint:{date_str}", endpoint, 1)
             await pipe.hincrby(f"violations:by_user:{date_str}", username, 1)
-            await pipe.zadd(
-                f"violations:timeline:{date_str}", {violation_id: timestamp}
-            )
+            await pipe.zadd(f"violations:timeline:{date_str}", {violation_id: timestamp})
 
             # Set expirations
             await pipe.expire(f"violations:daily:{date_str}", retention_seconds)
@@ -177,9 +170,7 @@ class AccessControlMetrics(AsyncRedisClientMixin):
                 count = count.decode("utf-8")
             target_dict[key] = target_dict.get(key, 0) + int(count)
 
-    def _process_daily_results(
-        self, results: list, dates: list, stats: Metadata
-    ) -> None:
+    def _process_daily_results(self, results: list, dates: list, stats: Metadata) -> None:
         """Process pipeline results and aggregate into stats (Issue #665: extracted helper)."""
         for i, date in enumerate(dates):
             daily_data = results[i * 3]
@@ -188,11 +179,7 @@ class AccessControlMetrics(AsyncRedisClientMixin):
 
             # Process daily total
             if daily_data:
-                total_key = (
-                    b"total"
-                    if isinstance(list(daily_data.keys())[0], bytes)
-                    else "total"
-                )
+                total_key = b"total" if isinstance(list(daily_data.keys())[0], bytes) else "total"
                 daily_total = int(daily_data.get(total_key, 0))
                 stats["by_day"][date] = daily_total
                 stats["total_violations"] += daily_total
@@ -215,9 +202,7 @@ class AccessControlMetrics(AsyncRedisClientMixin):
                 change = ((today - yesterday) / yesterday) * 100
                 stats["daily_change_percent"] = round(change, 2)
 
-    async def get_statistics(
-        self, days: int = 7, include_details: bool = False
-    ) -> Metadata:
+    async def get_statistics(self, days: int = 7, include_details: bool = False) -> Metadata:
         """
         Get aggregated violation statistics
 

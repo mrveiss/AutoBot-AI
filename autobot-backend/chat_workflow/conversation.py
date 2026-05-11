@@ -42,13 +42,9 @@ class ConversationHandlerMixin:
 
         key = self._get_conversation_key(session_id)
         try:
-            history_json = await asyncio.wait_for(
-                self.redis_client.get(key), timeout=config.timeout.redis_op
-            )
+            history_json = await asyncio.wait_for(self.redis_client.get(key), timeout=config.timeout.redis_op)
             if history_json:
-                logger.debug(
-                    "Loaded conversation history from Redis for session %s", session_id
-                )
+                logger.debug("Loaded conversation history from Redis for session %s", session_id)
                 return json.loads(history_json)
         except asyncio.TimeoutError:
             logger.warning(
@@ -71,14 +67,10 @@ class ConversationHandlerMixin:
             if not history:
                 return history
 
-            logger.debug(
-                "Loaded conversation history from file for session %s", session_id
-            )
+            logger.debug("Loaded conversation history from file for session %s", session_id)
             # Repopulate Redis cache (non-blocking, fire-and-forget)
             if self.redis_client is not None:
-                asyncio.create_task(
-                    self._save_conversation_history(session_id, history)
-                )
+                asyncio.create_task(self._save_conversation_history(session_id, history))
 
             return history
 
@@ -86,9 +78,7 @@ class ConversationHandlerMixin:
             logger.error("Failed to load conversation history: %s", e)
             return []
 
-    async def _save_conversation_history(
-        self, session_id: str, history: List[Dict[str, str]]
-    ):
+    async def _save_conversation_history(self, session_id: str, history: List[Dict[str, str]]):
         """Save conversation history to Redis with TTL."""
         try:
             if self.redis_client is None:
@@ -100,14 +90,10 @@ class ConversationHandlerMixin:
             # Save with 24-hour expiration and 2s timeout
             try:
                 await asyncio.wait_for(
-                    self.redis_client.set(
-                        key, history_json, ex=self.conversation_history_ttl
-                    ),
+                    self.redis_client.set(key, history_json, ex=self.conversation_history_ttl),
                     timeout=2.0,
                 )
-                logger.debug(
-                    "Saved conversation history for session %s to Redis", session_id
-                )
+                logger.debug("Saved conversation history for session %s to Redis", session_id)
             except asyncio.TimeoutError:
                 logger.warning(
                     "Redis set timeout after 2s for session %s - data may not be cached",
@@ -129,28 +115,18 @@ class ConversationHandlerMixin:
             "messages": [],
         }
 
-    async def _load_existing_transcript(
-        self, transcript_path: Path, session_id: str
-    ) -> Dict:
+    async def _load_existing_transcript(self, transcript_path: Path, session_id: str) -> Dict:
         """Load existing transcript or create new on error (Issue #332 - extracted helper)."""
         try:
             async with aiofiles.open(transcript_path, "r", encoding="utf-8") as f:
                 content = await asyncio.wait_for(f.read(), timeout=5.0)
                 return json.loads(content)
         except asyncio.TimeoutError:
-            logger.warning(
-                f"File read timeout after 5s for {transcript_path}, creating new transcript"
-            )
+            logger.warning(f"File read timeout after 5s for {transcript_path}, creating new transcript")
         except OSError as os_err:
-            logger.warning(
-                f"Failed to read transcript file {transcript_path}: {os_err}, "
-                f"creating new transcript"
-            )
+            logger.warning(f"Failed to read transcript file {transcript_path}: {os_err}, " f"creating new transcript")
         except json.JSONDecodeError as json_err:
-            logger.warning(
-                f"Corrupted transcript file {transcript_path}: {json_err}, "
-                f"creating fresh transcript"
-            )
+            logger.warning(f"Corrupted transcript file {transcript_path}: {json_err}, " f"creating fresh transcript")
             await self._backup_corrupted_file(transcript_path)
 
         return self._create_empty_transcript(session_id)
@@ -164,9 +140,7 @@ class ConversationHandlerMixin:
         except Exception as backup_err:
             logger.warning("Could not backup corrupted file: %s", backup_err)
 
-    async def _write_transcript_atomic(
-        self, transcript_path: Path, transcript: Dict, session_id: str
-    ) -> None:
+    async def _write_transcript_atomic(self, transcript_path: Path, transcript: Dict, session_id: str) -> None:
         """Write transcript atomically via temp file (Issue #332 - extracted helper)."""
         temp_path = transcript_path.with_suffix(".tmp")
         try:
@@ -177,8 +151,7 @@ class ConversationHandlerMixin:
                 )
             await asyncio.to_thread(temp_path.rename, transcript_path)
             logger.debug(
-                f"Appended to transcript for session {session_id} "
-                f"({transcript['message_count']} total messages)"
+                f"Appended to transcript for session {session_id} " f"({transcript['message_count']} total messages)"
             )
         except asyncio.TimeoutError:
             logger.warning("File write timeout after 5s for %s", transcript_path)
@@ -186,13 +159,9 @@ class ConversationHandlerMixin:
             if await asyncio.to_thread(temp_path.exists):
                 await asyncio.to_thread(temp_path.unlink)
         except OSError as os_err:
-            logger.error(
-                "Failed to write transcript file %s: %s", transcript_path, os_err
-            )
+            logger.error("Failed to write transcript file %s: %s", transcript_path, os_err)
 
-    async def _append_to_transcript(
-        self, session_id: str, user_message: str, assistant_message: str
-    ):
+    async def _append_to_transcript(self, session_id: str, user_message: str, assistant_message: str):
         """Append message exchange to long-term transcript file (async with aiofiles)."""
         try:
             # Ensure transcript directory exists
@@ -205,9 +174,7 @@ class ConversationHandlerMixin:
             # Load existing transcript or create new
             # Issue #358 - avoid blocking
             if await asyncio.to_thread(transcript_path.exists):
-                transcript = await self._load_existing_transcript(
-                    transcript_path, session_id
-                )
+                transcript = await self._load_existing_transcript(transcript_path, session_id)
             else:
                 transcript = self._create_empty_transcript(session_id)
 
@@ -246,20 +213,13 @@ class ConversationHandlerMixin:
 
                 # Convert to simple history format (last 10 messages)
                 messages = transcript.get("messages", [])[-10:]
-                return [
-                    {"user": msg["user"], "assistant": msg["assistant"]}
-                    for msg in messages
-                ]
+                return [{"user": msg["user"], "assistant": msg["assistant"]} for msg in messages]
 
             except asyncio.TimeoutError:
-                logger.warning(
-                    f"File read timeout after 5s for {transcript_path}, returning empty history"
-                )
+                logger.warning(f"File read timeout after 5s for {transcript_path}, returning empty history")
                 return []
             except OSError as os_err:
-                logger.warning(
-                    "Failed to read transcript file %s: %s", transcript_path, os_err
-                )
+                logger.warning("Failed to read transcript file %s: %s", transcript_path, os_err)
                 return []
 
         except Exception as e:
@@ -322,13 +282,9 @@ class ConversationHandlerMixin:
             if last_entry.get("user") == message:
                 self._handle_existing_user_entry(last_entry, llm_response, session_id)
             else:
-                session.conversation_history.append(
-                    {"user": message, "assistant": llm_response}
-                )
+                session.conversation_history.append({"user": message, "assistant": llm_response})
         else:
-            session.conversation_history.append(
-                {"user": message, "assistant": llm_response}
-            )
+            session.conversation_history.append({"user": message, "assistant": llm_response})
 
         if len(session.conversation_history) > 10:
             session.conversation_history = session.conversation_history[-10:]
@@ -357,9 +313,7 @@ class ConversationHandlerMixin:
             self._append_to_transcript(session_id, message, llm_response),
         )
 
-    def _register_user_message_in_history(
-        self, session: WorkflowSession, message: str
-    ) -> None:
+    def _register_user_message_in_history(self, session: WorkflowSession, message: str) -> None:
         """
         Register user message in session history immediately (before LLM call).
 
@@ -381,9 +335,7 @@ class ConversationHandlerMixin:
             last_entry = session.conversation_history[-1]
             if last_entry.get("user") == message:
                 # Already registered (possibly from a retry or rapid double-send)
-                logger.debug(
-                    "[_register_user_message] Message already in history, skipping"
-                )
+                logger.debug("[_register_user_message] Message already in history, skipping")
                 return
 
         # Add user message with empty placeholder for assistant response
@@ -395,7 +347,6 @@ class ConversationHandlerMixin:
             }
         )
         logger.debug(
-            "[_register_user_message] Registered user message in history "
-            "(history length: %d)",
+            "[_register_user_message] Registered user message in history " "(history length: %d)",
             len(session.conversation_history),
         )

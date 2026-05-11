@@ -12,7 +12,6 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Request
 
-from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_workflows import (
     RegistryEndpointsResponse,
     RegistryHealthResponse,
@@ -22,6 +21,7 @@ from api.schemas_workflows import (
     RegistryTagsResponse,
     RegistryValidateResponse,
 )
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Create FastAPI router
@@ -77,10 +77,7 @@ def _get_core_system_routers() -> Dict[str, RouterConfig]:
             module_path="api.chat_consolidated",
             prefix="/api",
             tags=["chat", "consolidated", "all"],
-            description=(
-                "CONSOLIDATED chat router with ALL functionality from 5 routers -"
-                "ZERO functionality loss"
-            ),
+            description=("CONSOLIDATED chat router with ALL functionality from 5 routers -" "ZERO functionality loss"),
             version="v1.0",
         ),
         "settings": RouterConfig(
@@ -336,10 +333,7 @@ def _get_monitoring_routers() -> Dict[str, RouterConfig]:
             prefix="/api/monitoring",
             tags=["monitoring", "gpu", "npu", "performance"],
             status=RouterStatus.ENABLED,
-            description=(
-                "Comprehensive performance monitoring for GPU/NPU utilization and "
-                "multi-modal AI"
-            ),
+            description=("Comprehensive performance monitoring for GPU/NPU utilization and " "multi-modal AI"),
         ),
         "system_validation": RouterConfig(
             name="system_validation",
@@ -421,11 +415,7 @@ class APIRegistry:
 
     def get_enabled_routers(self) -> Dict[str, RouterConfig]:
         """Get all enabled routers"""
-        return {
-            name: config
-            for name, config in self.routers.items()
-            if config.status in ENABLED_ROUTER_STATUSES
-        }
+        return {name: config for name, config in self.routers.items() if config.status in ENABLED_ROUTER_STATUSES}
 
     def get_router_by_name(self, name: str) -> Optional[RouterConfig]:
         """Get router configuration by name"""
@@ -433,9 +423,7 @@ class APIRegistry:
 
     def get_routers_by_tag(self, tag: str) -> Dict[str, RouterConfig]:
         """Get all routers with specific tag"""
-        return {
-            name: config for name, config in self.routers.items() if tag in config.tags
-        }
+        return {name: config for name, config in self.routers.items() if tag in config.tags}
 
     def get_endpoint_list(self) -> List[Dict]:
         """Get list of all endpoints for documentation"""
@@ -628,7 +616,5 @@ async def registry_health():
         "status": "healthy",
         "total_routers": len(registry.routers),
         "enabled_routers": len(registry.get_enabled_routers()),
-        "disabled_routers": len(
-            [c for c in registry.routers.values() if c.status == RouterStatus.DISABLED]
-        ),
+        "disabled_routers": len([c for c in registry.routers.values() if c.status == RouterStatus.DISABLED]),
     }

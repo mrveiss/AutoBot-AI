@@ -76,9 +76,7 @@ async def test_2_task_execution_logging():
         assert task_id == "test-001", f"Expected task-001, got {task_id}"
 
         # Update status
-        success = await manager.update_task_status(
-            "test-001", TaskStatus.IN_PROGRESS, started_at=datetime.now()
-        )
+        success = await manager.update_task_status("test-001", TaskStatus.IN_PROGRESS, started_at=datetime.now())
         assert success, "Task status update failed"
 
         # Get task history
@@ -228,9 +226,7 @@ def test_6_backward_compatibility_enhanced():
         task_id2 = manager.log_task_execution(record2)
         assert task_id2 == "bc-002"
 
-    print(
-        "✅ PASSED: EnhancedMemoryManager backward compatibility works"
-    )  # noqa: print
+    print("✅ PASSED: EnhancedMemoryManager backward compatibility works")  # noqa: print
 
 
 async def test_7_backward_compatibility_longterm():
@@ -256,9 +252,7 @@ async def test_7_backward_compatibility_longterm():
         assert len(memories) == 1
         assert memories[0].content == "Test content"
 
-    print(
-        "✅ PASSED: LongTermMemoryManager backward compatibility works"
-    )  # noqa: print
+    print("✅ PASSED: LongTermMemoryManager backward compatibility works")  # noqa: print
 
 
 def test_8_sync_wrappers():

@@ -61,10 +61,7 @@ class SystemKnowledgeManager:
 
         if changed_files:
             ellipsis = "..." if len(changed_files) > 3 else ""
-            logger.info(
-                f"Detected changes in {len(changed_files)} files: "
-                f"{changed_files[:3]}{ellipsis}"
-            )
+            logger.info(f"Detected changes in {len(changed_files)} files: " f"{changed_files[:3]}{ellipsis}")
 
         # Import all system knowledge
         await self._import_system_knowledge()
@@ -124,17 +121,13 @@ class SystemKnowledgeManager:
             return file_states
 
         # Issue #358 - wrap glob in lambda to avoid blocking
-        yaml_files = await asyncio.to_thread(
-            lambda: list(self.system_knowledge_dir.rglob("*.yaml"))
-        )
+        yaml_files = await asyncio.to_thread(lambda: list(self.system_knowledge_dir.rglob("*.yaml")))
         for file_path in yaml_files:
             try:
                 # Get file content hash
                 async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                     content = await f.read()
-                file_hash = hashlib.md5(
-                    content.encode(), usedforsecurity=False
-                ).hexdigest()
+                file_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
 
                 # Use relative path as key
                 relative_path = str(file_path.relative_to(self.system_knowledge_dir))
@@ -203,9 +196,7 @@ class SystemKnowledgeManager:
                 ),
             )
 
-            logger.info(
-                f"Updated system knowledge cache with {len(current_state)} files"
-            )
+            logger.info(f"Updated system knowledge cache with {len(current_state)} files")
 
         except Exception as e:
             logger.warning("Failed to update system knowledge cache: %s", e)
@@ -235,9 +226,7 @@ class SystemKnowledgeManager:
 
         dir_exists = await asyncio.to_thread(self.runtime_knowledge_dir.exists)
         if dir_exists:
-            await asyncio.to_thread(
-                shutil.copytree, self.runtime_knowledge_dir, backup_path
-            )
+            await asyncio.to_thread(shutil.copytree, self.runtime_knowledge_dir, backup_path)
             logger.info("Backed up system knowledge to %s", backup_path)
 
     async def _clear_system_knowledge(self):
@@ -245,9 +234,7 @@ class SystemKnowledgeManager:
         dir_exists = await asyncio.to_thread(self.runtime_knowledge_dir.exists)
         if dir_exists:
             await asyncio.to_thread(shutil.rmtree, self.runtime_knowledge_dir)
-        await asyncio.to_thread(
-            self.runtime_knowledge_dir.mkdir, parents=True, exist_ok=True
-        )
+        await asyncio.to_thread(self.runtime_knowledge_dir.mkdir, parents=True, exist_ok=True)
 
         # Clear from knowledge base
         await self._clear_system_knowledge_from_kb()
@@ -261,9 +248,7 @@ class SystemKnowledgeManager:
         """Import all system knowledge from templates"""
         dir_exists = await asyncio.to_thread(self.system_knowledge_dir.exists)
         if not dir_exists:
-            logger.warning(
-                f"System knowledge directory not found: {self.system_knowledge_dir}"
-            )
+            logger.warning(f"System knowledge directory not found: {self.system_knowledge_dir}")
             await self._create_default_system_knowledge()
 
         # Import tools knowledge
@@ -483,10 +468,7 @@ class SystemKnowledgeManager:
         quality_and_pitfalls = self._get_workflow_quality_and_pitfalls()
         return {
             "metadata": self._get_workflow_metadata(),
-            "objective": (
-                "Analyze images for hidden files, steganographic content, "
-                "and embedded data"
-            ),
+            "objective": ("Analyze images for hidden files, steganographic content, " "and embedded data"),
             "prerequisites": [
                 "Target image file(s)",
                 "Basic understanding of steganography techniques",
@@ -525,9 +507,7 @@ class SystemKnowledgeManager:
 
         # Save steganography tools and workflow in parallel
         await asyncio.gather(
-            self._save_yaml_file(
-                tools_dir / "steganography.yaml", self._get_steganography_tools_data()
-            ),
+            self._save_yaml_file(tools_dir / "steganography.yaml", self._get_steganography_tools_data()),
             self._save_yaml_file(
                 workflows_dir / "image_forensics.yaml",
                 self._get_image_forensics_workflow_data(),
@@ -558,9 +538,7 @@ class SystemKnowledgeManager:
 
             # Copy to runtime directory
             runtime_file = self.runtime_knowledge_dir / "tools" / yaml_file.name
-            await asyncio.to_thread(
-                runtime_file.parent.mkdir, parents=True, exist_ok=True
-            )
+            await asyncio.to_thread(runtime_file.parent.mkdir, parents=True, exist_ok=True)
             await asyncio.to_thread(shutil.copy2, yaml_file, runtime_file)
 
             # Import tools into knowledge base
@@ -578,14 +556,10 @@ class SystemKnowledgeManager:
             "purpose": tool_data.get("purpose", ""),
             "category": tool_data.get("type", "general"),
             "platform": "linux",
-            "installation": self._format_installation(
-                tool_data.get("installation", {})
-            ),
+            "installation": self._format_installation(tool_data.get("installation", {})),
             "usage": self._format_usage(tool_data.get("usage", {})),
             "command_examples": tool_data.get("common_examples", []),
-            "troubleshooting": self._format_troubleshooting(
-                tool_data.get("troubleshooting", [])
-            ),
+            "troubleshooting": self._format_troubleshooting(tool_data.get("troubleshooting", [])),
             "security_notes": "\n".join(tool_data.get("security_notes", [])),
             "related_tools": tool_data.get("related_tools", []),
             "output_formats": "\n".join(tool_data.get("output_formats", [])),
@@ -655,9 +629,7 @@ class SystemKnowledgeManager:
 
             # Copy to runtime directory
             runtime_file = self.runtime_knowledge_dir / "workflows" / yaml_file.name
-            await asyncio.to_thread(
-                runtime_file.parent.mkdir, parents=True, exist_ok=True
-            )
+            await asyncio.to_thread(runtime_file.parent.mkdir, parents=True, exist_ok=True)
             await asyncio.to_thread(shutil.copy2, yaml_file, runtime_file)
 
             # Import workflow into knowledge base
@@ -687,9 +659,7 @@ class SystemKnowledgeManager:
         await self.librarian.store_workflow_knowledge(workflow_info)
         logger.info("Imported workflow: %s", workflow_name)
 
-    def _format_pitfalls(
-        self, pitfalls_data: List[Dict[str, str]]
-    ) -> List[Dict[str, str]]:
+    def _format_pitfalls(self, pitfalls_data: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """Format pitfalls data for librarian"""
         formatted = []
         for pitfall in pitfalls_data:
@@ -709,9 +679,7 @@ class SystemKnowledgeManager:
             return
 
         # Issue #358 - wrap glob in lambda to avoid blocking
-        yaml_files = await asyncio.to_thread(
-            lambda: list(procedures_dir.glob("*.yaml"))
-        )
+        yaml_files = await asyncio.to_thread(lambda: list(procedures_dir.glob("*.yaml")))
         for yaml_file in yaml_files:
             logger.info("Importing procedure from %s", yaml_file)
 
@@ -725,9 +693,7 @@ class SystemKnowledgeManager:
 
             # Copy to runtime directory
             runtime_file = self.runtime_knowledge_dir / "procedures" / yaml_file.name
-            await asyncio.to_thread(
-                runtime_file.parent.mkdir, parents=True, exist_ok=True
-            )
+            await asyncio.to_thread(runtime_file.parent.mkdir, parents=True, exist_ok=True)
             await asyncio.to_thread(shutil.copy2, yaml_file, runtime_file)
 
             # Import procedure into knowledge base
@@ -745,9 +711,7 @@ class SystemKnowledgeManager:
             "overview": procedure_data.get("overview", ""),
             "procedures": procedure_data.get("procedures", []),
             "steps": procedure_data.get("steps", []),
-            "common_issues": self._format_procedure_issues(
-                procedure_data.get("common_issues", [])
-            ),
+            "common_issues": self._format_procedure_issues(procedure_data.get("common_issues", [])),
             "best_practices": procedure_data.get("best_practices", []),
             "examples": procedure_data.get("examples", []),
             "verification": procedure_data.get("verification", []),
@@ -756,9 +720,7 @@ class SystemKnowledgeManager:
         await self.librarian.store_system_documentation(doc_info)
         logger.info("Imported procedure: %s", title)
 
-    def _format_procedure_issues(
-        self, issues_data: List[Dict[str, str]]
-    ) -> List[Dict[str, str]]:
+    def _format_procedure_issues(self, issues_data: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """Format procedure issues for librarian"""
         formatted = []
         for issue in issues_data:
@@ -815,9 +777,7 @@ class SystemKnowledgeManager:
         procedures_dir = self.runtime_knowledge_dir / "procedures"
         if not await asyncio.to_thread(procedures_dir.exists):
             return
-        yaml_files = await asyncio.to_thread(
-            lambda: list(procedures_dir.glob("*.yaml"))
-        )
+        yaml_files = await asyncio.to_thread(lambda: list(procedures_dir.glob("*.yaml")))
         for yaml_file in yaml_files:
             try:
                 async with aiofiles.open(yaml_file, "r", encoding="utf-8") as f:

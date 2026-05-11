@@ -313,9 +313,7 @@ async def test_endpoint_lookup_man_page_success():
     }
 
     with patch("api.manual_mcp._lookup_man_page", new=AsyncMock(return_value=fetched)):
-        response = await mcp_lookup_man_page(
-            ManPageRequest(command="ls"), current_user={"id": "test"}
-        )
+        response = await mcp_lookup_man_page(ManPageRequest(command="ls"), current_user={"id": "test"})
 
     assert response["success"] is True
     assert response["command"] == "ls"
@@ -339,9 +337,7 @@ async def test_endpoint_lookup_man_page_not_found():
     }
 
     with patch("api.manual_mcp._lookup_man_page", new=AsyncMock(return_value=empty)):
-        response = await mcp_lookup_man_page(
-            ManPageRequest(command="xyz_notfound"), current_user={"id": "test"}
-        )
+        response = await mcp_lookup_man_page(ManPageRequest(command="xyz_notfound"), current_user={"id": "test"})
 
     assert response["success"] is False
     assert "xyz_notfound" in response["error"]
@@ -356,12 +352,8 @@ async def test_endpoint_lookup_man_page_not_found():
 async def test_endpoint_lookup_man_page_exception():
     from api.manual_mcp import ManPageRequest, mcp_lookup_man_page
 
-    with patch(
-        "api.manual_mcp._lookup_man_page", new=AsyncMock(side_effect=RuntimeError("oops"))
-    ):
-        response = await mcp_lookup_man_page(
-            ManPageRequest(command="ls"), current_user={"id": "test"}
-        )
+    with patch("api.manual_mcp._lookup_man_page", new=AsyncMock(side_effect=RuntimeError("oops"))):
+        response = await mcp_lookup_man_page(ManPageRequest(command="ls"), current_user={"id": "test"})
 
     assert response["success"] is False
     assert response["result"] is None
@@ -376,10 +368,7 @@ async def test_endpoint_lookup_man_page_exception():
 async def test_query_doc_index_subprocess():
     from api.manual_mcp import _query_doc_index
 
-    man_k_output = (
-        "ls (1)               - list directory contents\n"
-        "lsblk (8)            - list block devices\n"
-    )
+    man_k_output = "ls (1)               - list directory contents\n" "lsblk (8)            - list block devices\n"
 
     mock_proc = MagicMock()
     mock_proc.stdout = man_k_output
@@ -427,9 +416,7 @@ async def test_endpoint_search_man_pages_success():
     hits = [{"command": "ls", "section": "1", "summary": "list directory contents"}]
 
     with patch("api.manual_mcp._query_doc_index", new=AsyncMock(return_value=hits)):
-        response = await mcp_search_man_pages(
-            ManPageSearchRequest(query="ls"), current_user={"id": "test"}
-        )
+        response = await mcp_search_man_pages(ManPageSearchRequest(query="ls"), current_user={"id": "test"})
 
     assert response["success"] is True
     assert response["count"] == 1
@@ -446,9 +433,7 @@ async def test_endpoint_get_doc_index_empty():
     from api.manual_mcp import ManPageSearchRequest, mcp_get_doc_index
 
     with patch("api.manual_mcp._query_doc_index", new=AsyncMock(return_value=[])):
-        response = await mcp_get_doc_index(
-            ManPageSearchRequest(query="nonexistent_xyz"), current_user={"id": "test"}
-        )
+        response = await mcp_get_doc_index(ManPageSearchRequest(query="nonexistent_xyz"), current_user={"id": "test"})
 
     assert response["success"] is True
     assert response["count"] == 0

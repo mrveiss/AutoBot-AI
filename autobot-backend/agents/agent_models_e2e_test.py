@@ -30,9 +30,7 @@ def test_ollama_models():
                 model_name = line.split()[0]
                 available_models.add(model_name)
 
-        print(  # noqa: print
-            f"📋 Available models: {', '.join(sorted(available_models))}"
-        )  # noqa: print
+        print(f"📋 Available models: {', '.join(sorted(available_models))}")  # noqa: print  # noqa: print
 
     except Exception as e:
         print(f"❌ Error checking ollama models: {e}")  # noqa: print
@@ -57,9 +55,7 @@ def test_ollama_models():
         if model in available_models:
             success_count += 1
 
-    print(  # noqa: print
-        f"\n📊 Model availability: {success_count}/{len(agent_types)} agents have available models"
-    )
+    print(f"\n📊 Model availability: {success_count}/{len(agent_types)} agents have available models")  # noqa: print
 
     # Test basic model functionality
     print("\n🧪 Testing model functionality...")  # noqa: print
@@ -101,9 +97,7 @@ def main():
 
     print("\n" + "=" * 50)  # noqa: print
     if success:
-        print(  # noqa: print
-            "✅ All agent models are properly configured and available!"
-        )  # noqa: print
+        print("✅ All agent models are properly configured and available!")  # noqa: print  # noqa: print
         return 0
     else:
         print("⚠️ Some models may need to be installed. Run:")  # noqa: print

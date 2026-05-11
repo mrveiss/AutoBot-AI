@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Unit tests for bounded_gather primitive."""
+
 import asyncio
 
 import pytest

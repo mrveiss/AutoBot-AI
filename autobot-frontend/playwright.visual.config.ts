@@ -28,14 +28,24 @@ export default defineConfig({
   workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? 'github' : [['html', { open: 'never' }]],
 
+  // The single test in storybook-stories.spec.ts loops through every
+  // discovered story (one iframe load + screenshot per story). Default
+  // 30s test timeout is exceeded once there are more than ~15 stories.
+  // Budget 5 minutes per project for headroom on slower CI runners.
+  timeout: 300_000,
+
   // Snapshot baselines live next to the tests, organized per OS to avoid
   // cross-platform rendering noise. Engineers regenerate locally on the
   // OS they develop on; CI runs Linux baselines.
   snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}-{platform}{ext}',
 
-  // Pixel-diff tolerance — small enough to catch real layout drift, large
-  // enough to ignore subpixel font rendering jitter across machines.
   expect: {
+    // Per-screenshot expect timeout. Default 5s is too tight for the
+    // first paint of complex stories on a cold CI runner.
+    timeout: 30_000,
+    // Pixel-diff tolerance — small enough to catch real layout drift,
+    // large enough to ignore subpixel font rendering jitter across
+    // machines.
     toHaveScreenshot: {
       maxDiffPixels: 100,
       threshold: 0.2,

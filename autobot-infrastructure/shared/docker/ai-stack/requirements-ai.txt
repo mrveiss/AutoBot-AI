@@ -5,7 +5,7 @@
 langchain>=1.2.13,<2.0.0         # Issue #2808: upper bound unified with backend canonical
 langchain-core>=1.2.22,<2.0.0   # Issue #2808: upper bound unified with backend canonical
 langchain-community>=0.4.1,<0.5.0  # Issue #2808: upper bound unified with backend canonical
-llama-index>=0.14.19,<0.15.0
+llama-index>=0.14.21,<0.15.0
 llama-index-core>=0.14.19,<0.15.0
 llama-index-vector-stores-chroma>=0.5.5,<1.0.0
 llama-index-embeddings-ollama>=0.9.0,<1.0.0
@@ -45,7 +45,7 @@ pydantic>=2.12.5
 
 # Utilities
 async-timeout>=5.0.1
-packaging>=26.0
+packaging>=26.2
 protobuf>=5.29.6,<8.0.0           # floor: opentelemetry-exporter-otlp-proto-grpc>=1.40.0 regenerated protos, C extension compatible (#3973); ceiling: mirrors googleapis-common-protos requirement (#4061)
 googleapis-common-protos>=1.57.0,<2.0.0  # required by opentelemetry-exporter-otlp-proto-grpc~=1.57; needs protobuf>=4.25.8 satisfied by floor above (#4061)
 python-dotenv>=1.2.2
@@ -55,7 +55,7 @@ typing-extensions>=4.15.0
 
 # Logging and Monitoring
 structlog>=25.5.0
-python-json-logger>=4.0.0
+python-json-logger>=4.1.0
 
 # Database
 sqlalchemy>=2.0.48

@@ -81,9 +81,7 @@ class MCPDispatcher:
         Makes a single HTTP request to /api/mcp/tools which aggregates all
         bridges.  Returns the number of tools cached.
         """
-        backend_url = (
-            f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-        )
+        backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
         try:
             http_client = get_http_client()
             async with await http_client.get(
@@ -192,9 +190,7 @@ class MCPDispatcher:
         )
         return result
 
-    async def _call_bridge(
-        self, tool_name: str, bridge: str, endpoint: str, arguments: dict
-    ) -> dict:
+    async def _call_bridge(self, tool_name: str, bridge: str, endpoint: str, arguments: dict) -> dict:
         """Execute a tool call against an MCP bridge.
 
         Routes through an isolated subprocess worker when the bridge policy

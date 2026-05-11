@@ -67,9 +67,7 @@ class TestUIElementCollection:
 
         app_type = collection.detect_application_type(screenshot)
 
-        assert (
-            app_type == "form_application"
-        ), "Should detect form application with inputs and buttons"
+        assert app_type == "form_application", "Should detect form application with inputs and buttons"
 
     def test_detect_application_type_web(self):
         """Test application type detection for web browsers"""
@@ -124,9 +122,7 @@ class TestUIElementCollection:
 
         readiness = collection.assess_automation_readiness()
 
-        assert (
-            readiness["readiness_score"] == 0.0
-        ), "Low confidence should result in 0% readiness"
+        assert readiness["readiness_score"] == 0.0, "Low confidence should result in 0% readiness"
         assert readiness["recommendation"] == "needs_improvement"
 
     def test_count_by_type(self, sample_elements):
@@ -144,9 +140,7 @@ class TestUIElementCollection:
 
         high_confidence = collection.filter_by_confidence(0.8)
 
-        assert (
-            len(high_confidence) == 2
-        ), "Should have 2 elements with confidence >= 0.8"
+        assert len(high_confidence) == 2, "Should have 2 elements with confidence >= 0.8"
 
     def test_find_interactive_elements(self, sample_elements):
         """Test finding interactive elements"""
@@ -253,14 +247,10 @@ class TestFeatureEnvyElimination:
         source = inspect.getsource(ContextAnalyzer.analyze_context)
 
         # Should create UIElementCollection and use its methods
-        assert (
-            "UIElementCollection" in source
-        ), "Should use UIElementCollection for analysis"
+        assert "UIElementCollection" in source, "Should use UIElementCollection for analysis"
 
         # Should NOT directly access element internals in loops
-        assert (
-            "for el in ui_elements" not in source
-        ), "Should NOT iterate elements directly - use collection methods"
+        assert "for el in ui_elements" not in source, "Should NOT iterate elements directly - use collection methods"
 
         # Should use collection methods
         assert "collection.detect_application_type" in source
@@ -271,9 +261,7 @@ class TestFeatureEnvyElimination:
     def test_ui_element_collection_encapsulates_behavior(self):
         """Verify UIElementCollection owns element analysis logic"""
 
-        collection_methods = [
-            method for method in dir(UIElementCollection) if not method.startswith("_")
-        ]
+        collection_methods = [method for method in dir(UIElementCollection) if not method.startswith("_")]
 
         # Should have analysis methods, not just data accessors
         assert "detect_application_type" in collection_methods
@@ -286,9 +274,7 @@ class TestFeatureEnvyElimination:
     def test_no_thin_wrapper_methods(self):
         """Verify ContextAnalyzer has no thin wrapper methods"""
 
-        analyzer_methods = [
-            method for method in dir(ContextAnalyzer) if not method.startswith("__")
-        ]
+        analyzer_methods = [method for method in dir(ContextAnalyzer) if not method.startswith("__")]
 
         # Should NOT have thin wrapper private methods
         assert (

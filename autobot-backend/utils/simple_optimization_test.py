@@ -4,8 +4,8 @@ Simple test to verify GPU optimization is working
 """
 
 import asyncio
-import sys
 import os
+import sys
 import time
 
 # Add AutoBot to path

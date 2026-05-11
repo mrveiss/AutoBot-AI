@@ -11,8 +11,9 @@ Contains the main ConversationFlowAnalyzer class that coordinates analysis.
 import logging
 from collections import Counter, defaultdict
 from datetime import datetime
-from autobot_shared.time_utils import parse_utc_iso
 from typing import Any, Dict, List, Optional, Tuple
+
+from autobot_shared.time_utils import parse_utc_iso
 
 from .classifiers import IntentClassifier, ResponseClassifier
 from .types import (
@@ -86,9 +87,7 @@ class ConversationFlowAnalyzer:
 
     def _classify_message_role(
         self, role: str, content: str
-    ) -> Tuple[
-        Optional[IntentCategory], Optional[ResponseType], int, int, Optional[str]
-    ]:
+    ) -> Tuple[Optional[IntentCategory], Optional[ResponseType], int, int, Optional[str]]:
         """Classify message based on role and extract metrics. Issue #620.
 
         Args:
@@ -162,9 +161,7 @@ class ConversationFlowAnalyzer:
     def _aggregate_message_metrics(
         self,
         messages: List[Dict[str, Any]],
-    ) -> Tuple[
-        List[ConversationMessage], List[IntentCategory], float, int, int, List[str]
-    ]:
+    ) -> Tuple[List[ConversationMessage], List[IntentCategory], float, int, int, List[str]]:
         """
         Parse messages and aggregate metrics. Issue #620.
 
@@ -208,9 +205,7 @@ class ConversationFlowAnalyzer:
             user_satisfaction_signals,
         )
 
-    def _calculate_success(
-        self, final_state: FlowState, error_count: int, clarification_count: int
-    ) -> bool:
+    def _calculate_success(self, final_state: FlowState, error_count: int, clarification_count: int) -> bool:
         """
         Calculate if conversation was successful. Issue #620.
 
@@ -252,13 +247,9 @@ class ConversationFlowAnalyzer:
             user_satisfaction_signals,
         ) = self._aggregate_message_metrics(messages)
 
-        final_state = self._determine_final_state(
-            parsed_messages, error_count, clarification_count
-        )
+        final_state = self._determine_final_state(parsed_messages, error_count, clarification_count)
         primary_intent = self._determine_primary_intent(intent_sequence)
-        successful = self._calculate_success(
-            final_state, error_count, clarification_count
-        )
+        successful = self._calculate_success(final_state, error_count, clarification_count)
         start_time = parsed_messages[0].timestamp if parsed_messages else None
         end_time = parsed_messages[-1].timestamp if parsed_messages else None
 
@@ -291,9 +282,7 @@ class ConversationFlowAnalyzer:
         last_msg = messages[-1]
 
         # Check for farewell
-        if last_msg.intent == IntentCategory.FAREWELL or (
-            last_msg.response_type == ResponseType.FAREWELL
-        ):
+        if last_msg.intent == IntentCategory.FAREWELL or (last_msg.response_type == ResponseType.FAREWELL):
             return FlowState.COMPLETED
 
         # Check for error recovery
@@ -310,9 +299,7 @@ class ConversationFlowAnalyzer:
 
         return FlowState.PROCESSING
 
-    def _determine_primary_intent(
-        self, intent_sequence: List[IntentCategory]
-    ) -> Optional[IntentCategory]:
+    def _determine_primary_intent(self, intent_sequence: List[IntentCategory]) -> Optional[IntentCategory]:
         """Determine the primary intent from a sequence."""
         if not intent_sequence:
             return None
@@ -444,9 +431,7 @@ class ConversationFlowAnalyzer:
         common_paths = self._find_common_paths()
         error_recovery = self._analyze_error_recovery()
         cache_opportunities = self._find_cache_opportunities()
-        health_score = self._calculate_health_score(
-            stats["success_rate"], stats["avg_latency"], len(bottlenecks)
-        )
+        health_score = self._calculate_health_score(stats["success_rate"], stats["avg_latency"], len(bottlenecks))
 
         return self._build_analysis_result(
             stats,
@@ -500,9 +485,7 @@ class ConversationFlowAnalyzer:
     def _extract_flow_patterns(self) -> List[FlowPattern]:
         """Extract common flow patterns."""
         # Group flows by intent sequence (as tuple for hashability)
-        sequence_groups: Dict[Tuple[IntentCategory, ...], List[ConversationFlow]] = (
-            defaultdict(list)
-        )
+        sequence_groups: Dict[Tuple[IntentCategory, ...], List[ConversationFlow]] = defaultdict(list)
 
         for flow in self._flows:
             # Use first 5 intents as pattern key
@@ -572,9 +555,7 @@ class ConversationFlowAnalyzer:
         Issue #620.
         """
         slow_sessions = [
-            f.session_id
-            for f in self._flows
-            if f.total_latency_ms > self.slow_response_threshold_ms * f.turn_count
+            f.session_id for f in self._flows if f.total_latency_ms > self.slow_response_threshold_ms * f.turn_count
         ]
         slow_severity = "medium" if len(slow_sessions) < 10 else "high"
         return self._create_bottleneck_if_significant(
@@ -594,11 +575,7 @@ class ConversationFlowAnalyzer:
 
         Issue #620.
         """
-        confused_sessions = [
-            f.session_id
-            for f in self._flows
-            if f.clarification_count >= self.clarification_threshold
-        ]
+        confused_sessions = [f.session_id for f in self._flows if f.clarification_count >= self.clarification_threshold]
         return self._create_bottleneck_if_significant(
             confused_sessions,
             BottleneckType.REPEATED_CLARIFICATION,
@@ -634,9 +611,7 @@ class ConversationFlowAnalyzer:
 
         Issue #620.
         """
-        long_sessions = [
-            f.session_id for f in self._flows if f.turn_count > self.max_turns_threshold
-        ]
+        long_sessions = [f.session_id for f in self._flows if f.turn_count > self.max_turns_threshold]
         return self._create_bottleneck_if_significant(
             long_sessions,
             BottleneckType.EXCESSIVE_TURNS,
@@ -670,9 +645,7 @@ class ConversationFlowAnalyzer:
 
         return bottlenecks
 
-    def _create_caching_optimization(
-        self, patterns: List[FlowPattern]
-    ) -> Optional[Optimization]:
+    def _create_caching_optimization(self, patterns: List[FlowPattern]) -> Optional[Optimization]:
         """
         Create caching optimization from frequent patterns. Issue #620.
 
@@ -695,9 +668,7 @@ class ConversationFlowAnalyzer:
             estimated_improvement="20-30% latency reduction",
         )
 
-    def _create_prompt_optimization(
-        self, patterns: List[FlowPattern]
-    ) -> Optional[Optimization]:
+    def _create_prompt_optimization(self, patterns: List[FlowPattern]) -> Optional[Optimization]:
         """
         Create prompt improvement optimization from low success patterns. Issue #620.
 
@@ -720,9 +691,7 @@ class ConversationFlowAnalyzer:
             estimated_improvement="30-50% success rate increase",
         )
 
-    def _create_bottleneck_optimizations(
-        self, bottlenecks: List[Bottleneck]
-    ) -> List[Optimization]:
+    def _create_bottleneck_optimizations(self, bottlenecks: List[Bottleneck]) -> List[Optimization]:
         """
         Create optimizations from detected bottlenecks. Issue #620.
 
@@ -745,10 +714,7 @@ class ConversationFlowAnalyzer:
                     estimated_improvement="50% reduction in error loops",
                 )
             )
-        if any(
-            b.bottleneck_type == BottleneckType.REPEATED_CLARIFICATION
-            for b in bottlenecks
-        ):
+        if any(b.bottleneck_type == BottleneckType.REPEATED_CLARIFICATION for b in bottlenecks):
             result.append(
                 Optimization(
                     optimization_type=OptimizationType.INTENT_CLASSIFICATION,
@@ -762,9 +728,7 @@ class ConversationFlowAnalyzer:
             )
         return result
 
-    def _generate_optimizations(
-        self, patterns: List[FlowPattern], bottlenecks: List[Bottleneck]
-    ) -> List[Optimization]:
+    def _generate_optimizations(self, patterns: List[FlowPattern], bottlenecks: List[Bottleneck]) -> List[Optimization]:
         """
         Generate optimization suggestions. Issue #620.
 
@@ -796,11 +760,7 @@ class ConversationFlowAnalyzer:
                 path_counter[path] += 1
 
         # Return paths with minimum occurrences
-        return [
-            list(path)
-            for path, count in path_counter.most_common(10)
-            if count >= self.min_pattern_occurrences
-        ]
+        return [list(path) for path, count in path_counter.most_common(10) if count >= self.min_pattern_occurrences]
 
     def _analyze_error_recovery(self) -> List[Dict[str, Any]]:
         """Analyze error recovery patterns."""
@@ -846,13 +806,9 @@ class ConversationFlowAnalyzer:
                     }
                 )
 
-        return sorted(opportunities, key=lambda x: x["occurrence_count"], reverse=True)[
-            :10
-        ]
+        return sorted(opportunities, key=lambda x: x["occurrence_count"], reverse=True)[:10]
 
-    def _calculate_health_score(
-        self, success_rate: float, avg_latency: float, bottleneck_count: int
-    ) -> float:
+    def _calculate_health_score(self, success_rate: float, avg_latency: float, bottleneck_count: int) -> float:
         """Calculate overall conversation health score (0-100)."""
         # Base score from success rate (50%)
         success_score = success_rate * 50

@@ -12,31 +12,32 @@ Author: mrveiss
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
+
+from api.system_health import register_singleton_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from computer_vision_system import ElementType, InteractionType, ScreenAnalyzer
-
-from api.system_health import register_singleton_probe
 
 router = APIRouter(tags=["vision", "gui-automation"])
 logger = logging.getLogger(__name__)
 
 # Global screen analyzer instance (thread-safe)
 import threading
+
 from api.schemas_system import (
     ElementDetectionRequest,
     OCRRequest,
     ScreenAnalysisRequest,
     ScreenAnalysisResponse,
     UIElementResponse,
-    VisionDetectElementsResponse,
-    VisionHealthResponse,
-    VisionOCRResponse,
     VisionAutomationOpportunitiesResponse,
+    VisionDetectElementsResponse,
     VisionElementTypesResponse,
+    VisionHealthResponse,
     VisionInteractionTypesResponse,
     VisionLayoutResponse,
+    VisionOCRResponse,
     VisionStatusResponse,
 )
 
@@ -125,9 +126,7 @@ async def analyze_screen(
         analyzer = get_screen_analyzer()
         analyzer.enable_multimodal_analysis = request.include_multimodal
 
-        screen_state = await analyzer.analyze_current_screen(
-            session_id=request.session_id
-        )
+        screen_state = await analyzer.analyze_current_screen(session_id=request.session_id)
 
         # Convert UIElements to response format
         ui_elements_response = []
@@ -141,9 +140,7 @@ async def analyze_screen(
                     confidence=element.confidence,
                     text_content=element.text_content,
                     attributes=element.attributes,
-                    possible_interactions=[
-                        i.value for i in element.possible_interactions
-                    ],
+                    possible_interactions=[i.value for i in element.possible_interactions],
                 )
             )
 
@@ -182,19 +179,14 @@ async def detect_elements(
     """
     try:
         analyzer = get_screen_analyzer()
-        screen_state = await analyzer.analyze_current_screen(
-            session_id=request.session_id
-        )
+        screen_state = await analyzer.analyze_current_screen(session_id=request.session_id)
 
         # Filter elements based on request
         filtered_elements = []
         for element in screen_state.ui_elements:
             if element.confidence < request.min_confidence:
                 continue
-            if (
-                request.element_type
-                and element.element_type.value != request.element_type
-            ):
+            if request.element_type and element.element_type.value != request.element_type:
                 continue
 
             filtered_elements.append(
@@ -205,9 +197,7 @@ async def detect_elements(
                     "center_point": list(element.center_point),
                     "confidence": element.confidence,
                     "text_content": element.text_content,
-                    "possible_interactions": [
-                        i.value for i in element.possible_interactions
-                    ],
+                    "possible_interactions": [i.value for i in element.possible_interactions],
                 }
             )
 
@@ -244,9 +234,7 @@ async def extract_text_ocr(
     """
     try:
         analyzer = get_screen_analyzer()
-        screen_state = await analyzer.analyze_current_screen(
-            session_id=request.session_id
-        )
+        screen_state = await analyzer.analyze_current_screen(session_id=request.session_id)
 
         # If region specified, filter text regions
         if request.region:

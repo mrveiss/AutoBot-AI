@@ -241,9 +241,7 @@ class TestSecretDatabase:
         await async_session.refresh(secret)
 
         # Retrieve from database
-        result = await async_session.execute(
-            select(Secret).where(Secret.id == secret.id)
-        )
+        result = await async_session.execute(select(Secret).where(Secret.id == secret.id))
         retrieved_secret = result.scalar_one()
 
         assert retrieved_secret.id == secret.id
@@ -272,9 +270,7 @@ class TestSecretDatabase:
         await async_session.commit()
 
         # Query by session_id
-        result = await async_session.execute(
-            select(Secret).where(Secret.session_id == session_id)
-        )
+        result = await async_session.execute(select(Secret).where(Secret.session_id == session_id))
         retrieved = result.scalar_one()
 
         assert retrieved.scope == SecretScope.SESSION.value

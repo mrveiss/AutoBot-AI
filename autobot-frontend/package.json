@@ -65,7 +65,7 @@
     "pinia-plugin-persistedstate": "^4.7.1",
     "three": "^0.184.0",
     "three-spritetext": "^1.10.0",
-    "vue": "^3.5.31",
+    "vue": "^3.5.34",
     "vue-i18n": "^11.3.1",
     "vue-router": "^5.0.4",
     "vue3-apexcharts": "^1.11.1"
@@ -90,7 +90,7 @@
     "@storybook/vue3": "^10.3.6",
     "@storybook/vue3-vite": "^10.3.6",
     "@tailwindcss/forms": "^0.5.11",
-    "@tailwindcss/postcss": "^4.2.2",
+    "@tailwindcss/postcss": "^4.3.0",
     "@tailwindcss/typography": "^0.5.19",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/user-event": "^14.6.1",
@@ -105,7 +105,7 @@
     "@types/estree": "^1.0.8",
     "@types/jsdom": "^28.0.1",
     "@types/json-schema": "^7.0.15",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.6.2",
     "@types/three": "^0.184.0",
     "@types/sinonjs__fake-timers": "^15.0.1",
     "@types/sizzle": "^2.3.10",
@@ -136,7 +136,7 @@
     "oxlint": "~1.58.0",
     "playwright": "^1.58.2",
     "postcss": "^8.5.8",
-    "prettier": "3.8.1",
+    "prettier": "3.8.3",
     "start-server-and-test": "^3.0.2",
     "storybook": "^10.3.6",
     "tailwindcss": "^4.2.4",
@@ -144,6 +144,6 @@
     "vite": "^8.0.9",
     "vite-plugin-vue-devtools": "^8.1.1",
     "vitest": "^4.1.5",
-    "vue-tsc": "^3.2.6"
+    "vue-tsc": "^3.2.8"
   }
 }

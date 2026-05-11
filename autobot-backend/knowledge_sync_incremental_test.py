@@ -86,25 +86,19 @@ class TestClassifyFileChange:
     def test_new_file_returns_new(self):
         metadata: Dict[str, Any] = {}
         stat = MagicMock(st_mtime=1000.0)
-        result = _classify_file_change(
-            metadata, "/new/file.md", _sha256("content"), stat, Path("file.md")
-        )
+        result = _classify_file_change(metadata, "/new/file.md", _sha256("content"), stat, Path("file.md"))
         assert result == "new"
 
     def test_unchanged_file_returns_none(self):
         h = _sha256("same content")
         metadata = {"/path/file.md": _make_file_metadata("/path/file.md", h, 1000.0)}
         stat = MagicMock(st_mtime=1000.0)
-        result = _classify_file_change(
-            metadata, "/path/file.md", h, stat, Path("file.md")
-        )
+        result = _classify_file_change(metadata, "/path/file.md", h, stat, Path("file.md"))
         assert result is None
 
     def test_changed_content_returns_changed(self):
         old_hash = _sha256("old content")
-        metadata = {
-            "/path/file.md": _make_file_metadata("/path/file.md", old_hash, 1000.0)
-        }
+        metadata = {"/path/file.md": _make_file_metadata("/path/file.md", old_hash, 1000.0)}
         stat = MagicMock(st_mtime=1000.0)
         result = _classify_file_change(
             metadata,
@@ -119,9 +113,7 @@ class TestClassifyFileChange:
         h = _sha256("same content")
         metadata = {"/path/file.md": _make_file_metadata("/path/file.md", h, 1000.0)}
         stat = MagicMock(st_mtime=2000.0)  # mtime differs but hash is same
-        result = _classify_file_change(
-            metadata, "/path/file.md", h, stat, Path("file.md")
-        )
+        result = _classify_file_change(metadata, "/path/file.md", h, stat, Path("file.md"))
         assert result == "timestamp"
 
 
@@ -133,9 +125,7 @@ class TestClassifyFileChange:
 class TestSyncMetrics:
     def test_record_file_analysis(self):
         m = SyncMetrics()
-        m.record_file_analysis(
-            total_scanned=10, changed_count=5, new_count=2, removed_count=1
-        )
+        m.record_file_analysis(total_scanned=10, changed_count=5, new_count=2, removed_count=1)
         assert m.total_files_scanned == 10
         assert m.files_changed == 3  # changed_count - new_count
         assert m.files_added == 2
@@ -282,14 +272,10 @@ class TestIncrementalKnowledgeSyncChangedFiles:
             doc.write_text(f"content {i}", encoding="utf-8")
             h = _sha256(f"content {i}")
             stat = doc.stat()
-            sync.file_metadata[str(doc)] = _make_file_metadata(
-                str(doc), h, stat.st_mtime
-            )
+            sync.file_metadata[str(doc)] = _make_file_metadata(str(doc), h, stat.st_mtime)
 
         start = time.monotonic()
-        changed, removed, new = await sync._analyze_file_changes(
-            [tmp_path / f"doc{i}.md" for i in range(20)]
-        )
+        changed, removed, new = await sync._analyze_file_changes([tmp_path / f"doc{i}.md" for i in range(20)])
         elapsed = time.monotonic() - start
 
         assert elapsed < 2.0, f"Unchanged vault analysis took {elapsed:.3f}s (limit 2s)"
@@ -313,9 +299,7 @@ class TestForceFullRebuild:
         service = KnowledgeSyncService()
         service.incremental_sync = MagicMock()
         service.incremental_sync.file_metadata = {"existing_file": MagicMock()}
-        service.incremental_sync.perform_incremental_sync = AsyncMock(
-            return_value=SyncMetrics()
-        )
+        service.incremental_sync.perform_incremental_sync = AsyncMock(return_value=SyncMetrics())
 
         await service.manual_sync(force_full=True)
 
@@ -330,9 +314,7 @@ class TestForceFullRebuild:
         service.incremental_sync = MagicMock()
         original_metadata = {"existing_file": MagicMock()}
         service.incremental_sync.file_metadata = original_metadata
-        service.incremental_sync.perform_incremental_sync = AsyncMock(
-            return_value=SyncMetrics()
-        )
+        service.incremental_sync.perform_incremental_sync = AsyncMock(return_value=SyncMetrics())
 
         await service.manual_sync(force_full=False)
 

@@ -10,13 +10,13 @@ Issue #3810.
 
 import sys
 import types
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-from autobot_shared.time_utils import now_utc
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+from autobot_shared.time_utils import now_utc
 
 # ---------------------------------------------------------------------------
 # Stub heavy dependencies so api/memory.py imports without a real Redis

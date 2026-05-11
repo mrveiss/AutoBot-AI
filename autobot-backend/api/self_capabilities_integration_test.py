@@ -51,9 +51,7 @@ def test_self_capabilities_returns_correct_structure(client: TestClient):
         "api_paths",
     ]
     for key in required_keys:
-        assert (
-            key in data
-        ), f"Missing required key '{key}' in response: {data.keys()}"
+        assert key in data, f"Missing required key '{key}' in response: {data.keys()}"
 
 
 def test_self_capabilities_endpoints_structure(client: TestClient):
@@ -77,9 +75,7 @@ def test_self_capabilities_endpoints_structure(client: TestClient):
         "operation_id",
     ]
     for field in required_fields:
-        assert (
-            field in endpoint
-        ), f"Missing required field '{field}' in endpoint entry: {endpoint.keys()}"
+        assert field in endpoint, f"Missing required field '{field}' in endpoint entry: {endpoint.keys()}"
 
 
 def test_self_capabilities_has_capabilities_endpoint(client: TestClient):
@@ -88,12 +84,8 @@ def test_self_capabilities_has_capabilities_endpoint(client: TestClient):
     data = response.json()
 
     # Find the capabilities endpoint in the list
-    capabilities_endpoints = [
-        ep for ep in data["endpoints"] if "/capabilities" in ep["path"]
-    ]
-    assert (
-        len(capabilities_endpoints) > 0
-    ), "Expected /api/capabilities endpoint to be in discovery list"
+    capabilities_endpoints = [ep for ep in data["endpoints"] if "/capabilities" in ep["path"]]
+    assert len(capabilities_endpoints) > 0, "Expected /api/capabilities endpoint to be in discovery list"
 
 
 def test_self_capabilities_grouping_by_tag(client: TestClient):
@@ -124,9 +116,13 @@ def test_self_capabilities_grouping_by_operation_type(client: TestClient):
     # Verify expected operation types
     valid_operations = {"query", "create", "update", "delete"}
     for op_type in data["by_operation_type"].keys():
-        assert (
-            op_type in valid_operations or op_type in {"get", "post", "put", "patch", "delete"}
-        ), f"Unexpected operation type: {op_type}"
+        assert op_type in valid_operations or op_type in {
+            "get",
+            "post",
+            "put",
+            "patch",
+            "delete",
+        }, f"Unexpected operation type: {op_type}"
 
 
 def test_self_capabilities_api_paths_list(client: TestClient):
@@ -154,9 +150,7 @@ def test_self_capabilities_total_endpoints_count(client: TestClient):
     data = response.json()
 
     assert isinstance(data["total_endpoints"], int)
-    assert data["total_endpoints"] == len(
-        data["endpoints"]
-    ), "total_endpoints should match endpoints list length"
+    assert data["total_endpoints"] == len(data["endpoints"]), "total_endpoints should match endpoints list length"
 
 
 def test_self_capabilities_unique_paths_count(client: TestClient):
@@ -165,9 +159,7 @@ def test_self_capabilities_unique_paths_count(client: TestClient):
     data = response.json()
 
     assert isinstance(data["unique_paths"], int)
-    assert data["unique_paths"] == len(
-        data["api_paths"]
-    ), "unique_paths should match api_paths list length"
+    assert data["unique_paths"] == len(data["api_paths"]), "unique_paths should match api_paths list length"
 
 
 def test_self_capabilities_endpoint_registration(app: FastAPI):

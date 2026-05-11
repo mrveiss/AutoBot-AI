@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 
 from agents.classification_agent import ClassificationResult
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.http_client import get_http_client
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import (
@@ -142,14 +143,10 @@ Respond with valid JSON:
 
             if gemma_result:
                 # Use Gemma result
-                final_result = self._create_gemma_result(
-                    gemma_result, keyword_result, user_message
-                )
+                final_result = self._create_gemma_result(gemma_result, keyword_result, user_message)
             else:
                 # Fallback to keyword classification
-                final_result = self._create_fallback_result(
-                    user_message, keyword_result
-                )
+                final_result = self._create_fallback_result(user_message, keyword_result)
 
             # Calculate response time
             response_time = (time.time() - start_time) * 1000
@@ -157,9 +154,7 @@ Respond with valid JSON:
 
             # Log performance
             model_used = final_result.context_analysis.get("model_used", "unknown")
-            logger.info(
-                f"Gemma classification completed in {response_time:.1f}ms using {model_used}"
-            )
+            logger.info(f"Gemma classification completed in {response_time:.1f}ms using {model_used}")
 
             return final_result
 
@@ -167,9 +162,7 @@ Respond with valid JSON:
             logger.error("Gemma classification error: %s", e)
             # Fallback to keyword classification
             final_result = self._create_fallback_result(user_message, keyword_result)
-            final_result.context_analysis["response_time_ms"] = (
-                time.time() - start_time
-            ) * 1000
+            final_result.context_analysis["response_time_ms"] = (time.time() - start_time) * 1000
             return final_result
 
     async def _read_streaming_response(self, response) -> str:
@@ -214,9 +207,7 @@ Respond with valid JSON:
             timeout=timeout,
         ) as response:
             if response.status != 200:
-                logger.warning(
-                    "Gemma model %s returned status %s", model, response.status
-                )
+                logger.warning("Gemma model %s returned status %s", model, response.status)
                 return None
 
             response_text = await self._read_streaming_response(response)
@@ -246,9 +237,7 @@ Respond with valid JSON:
         try:
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=5)
-            async with await http_client.get(
-                f"{self.ollama_host}/api/tags", timeout=timeout
-            ) as response:
+            async with await http_client.get(f"{self.ollama_host}/api/tags", timeout=timeout) as response:
                 if response.status == 200:
                     models_data = await response.json()
                     return [model["name"] for model in models_data.get("models", [])]
@@ -314,9 +303,7 @@ Respond with valid JSON:
                     "scope": gemma_result.get("scope", "single"),
                     "risk_level": gemma_result.get("risk_level", "low"),
                     "tools_required": gemma_result.get("tools_required", False),
-                    "web_browsing_needed": gemma_result.get(
-                        "web_browsing_needed", False
-                    ),
+                    "web_browsing_needed": gemma_result.get("web_browsing_needed", False),
                     "keyword_classification": keyword_result.value,
                     "classification_method": "gemma_llm",
                     "model_used": gemma_result.get("_model_used", "gemma"),
@@ -328,9 +315,7 @@ Respond with valid JSON:
             logger.error("Error creating Gemma result: %s", e)
             return self._create_fallback_result(user_message, keyword_result)
 
-    def _create_fallback_result(
-        self, user_message: str, keyword_result: TaskComplexity
-    ) -> ClassificationResult:
+    def _create_fallback_result(self, user_message: str, keyword_result: TaskComplexity) -> ClassificationResult:
         """Create fallback result using keyword classification."""
 
         return ClassificationResult(
@@ -343,14 +328,8 @@ Respond with valid JSON:
             context_analysis={
                 "domain": "general",
                 "intent": "unknown",
-                "scope": (
-                    "single"
-                    if keyword_result == TaskComplexity.SIMPLE
-                    else "multi-step"
-                ),
-                "risk_level": (
-                    "medium" if keyword_result == TaskComplexity.COMPLEX else "low"
-                ),
+                "scope": ("single" if keyword_result == TaskComplexity.SIMPLE else "multi-step"),
+                "risk_level": ("medium" if keyword_result == TaskComplexity.COMPLEX else "low"),
                 "classification_method": "keyword_fallback",
                 "original_message": user_message,
                 "model_used": "keyword_classifier",
@@ -411,14 +390,11 @@ Respond with valid JSON:
 # CLI test tool
 if __name__ == "__main__":
     import argparse
-    import asyncio
 
     parser = argparse.ArgumentParser(description="Test Gemma Classification Agent")
     parser.add_argument("message", nargs="?", help="Message to classify")
     parser.add_argument("--interactive", action="store_true", help="Interactive mode")
-    parser.add_argument(
-        "--benchmark", action="store_true", help="Run performance benchmark"
-    )
+    parser.add_argument("--benchmark", action="store_true", help="Run performance benchmark")
 
     args = parser.parse_args()
 
@@ -482,9 +458,7 @@ if __name__ == "__main__":
         print(f"Model: {model_used}")  # noqa: print
         print(f"Response Time: {response_time:.1f}ms")  # noqa: print
         print(f"Reasoning: {result.reasoning}")  # noqa: print
-        print(  # noqa: print
-            f"Context: {json.dumps(result.context_analysis, indent=2)}"
-        )  # noqa: print
+        print(f"Context: {json.dumps(result.context_analysis, indent=2)}")  # noqa: print  # noqa: print
 
     async def main():
         """Run Gemma classification agent in selected mode."""
@@ -501,4 +475,4 @@ if __name__ == "__main__":
                 "Usage: python gemma_classification_agent.py 'message' or --interactive or --benchmark"
             )
 
-    asyncio.run(main())
+    run_or_schedule(main())

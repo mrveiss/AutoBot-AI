@@ -106,9 +106,7 @@ class TestImagePipelineUnavailable:
 
     def test_unavailable_result_structure(self):
         pipe = ImagePipeline()
-        result = pipe._unavailable_result(
-            "PIL not installed. Run: pip install Pillow", {}
-        )
+        result = pipe._unavailable_result("PIL not installed. Run: pip install Pillow", {})
         assert result["type"] == "image_analysis"
         assert result["processing_status"] == "unavailable"
         assert result["confidence"] == 0.0
@@ -140,8 +138,9 @@ class TestImagePipelinePilOnly:
         img_bytes = _make_minimal_jpeg()
         media_input = _make_input(img_bytes)
 
-        with patch("media.image.pipeline._VISION_PROCESSOR_AVAILABLE", False), patch(
-            "media.image.pipeline._vision_processor", None
+        with (
+            patch("media.image.pipeline._VISION_PROCESSOR_AVAILABLE", False),
+            patch("media.image.pipeline._vision_processor", None),
         ):
             result = await pipe._process_image(media_input)
 
@@ -179,10 +178,11 @@ class TestImagePipelineVisionProcessor:
 
         mock_mm_input = MagicMock()
 
-        with patch("media.image.pipeline._PIL_AVAILABLE", True), patch(
-            "media.image.pipeline._VISION_PROCESSOR_AVAILABLE", True
-        ), patch("media.image.pipeline._vision_processor", mock_vp), patch(
-            "media.image.pipeline.MultiModalInput", return_value=mock_mm_input
+        with (
+            patch("media.image.pipeline._PIL_AVAILABLE", True),
+            patch("media.image.pipeline._VISION_PROCESSOR_AVAILABLE", True),
+            patch("media.image.pipeline._vision_processor", mock_vp),
+            patch("media.image.pipeline.MultiModalInput", return_value=mock_mm_input),
         ):
             result = await pipe._process_image(media_input)
 
@@ -205,10 +205,11 @@ class TestImagePipelineVisionProcessor:
         mock_vp = AsyncMock()
         mock_vp.process = AsyncMock(side_effect=RuntimeError("GPU unavailable"))
 
-        with patch("media.image.pipeline._PIL_AVAILABLE", True), patch(
-            "media.image.pipeline._VISION_PROCESSOR_AVAILABLE", True
-        ), patch("media.image.pipeline._vision_processor", mock_vp), patch(
-            "media.image.pipeline.MultiModalInput", return_value=MagicMock()
+        with (
+            patch("media.image.pipeline._PIL_AVAILABLE", True),
+            patch("media.image.pipeline._VISION_PROCESSOR_AVAILABLE", True),
+            patch("media.image.pipeline._vision_processor", mock_vp),
+            patch("media.image.pipeline.MultiModalInput", return_value=MagicMock()),
         ):
             result = await pipe._process_image(media_input)
 
@@ -230,8 +231,9 @@ class TestImagePipelineAsync:
         img_bytes = _make_minimal_jpeg()
         media_input = _make_input(img_bytes)
 
-        with patch("media.image.pipeline._VISION_PROCESSOR_AVAILABLE", False), patch(
-            "media.image.pipeline._vision_processor", None
+        with (
+            patch("media.image.pipeline._VISION_PROCESSOR_AVAILABLE", False),
+            patch("media.image.pipeline._vision_processor", None),
         ):
             result = await pipe._process_impl(media_input)
 

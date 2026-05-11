@@ -26,13 +26,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
-from auth_middleware import check_admin_permission
-from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from api.schemas_common import DataResponse
 from api.schemas_analytics import (
     CodeGenerationHealthResponse,
     CodeGenerationRefactoringTypesResponse,
@@ -48,7 +44,11 @@ from api.schemas_analytics import (
     RefactoringResponse,
     RefactoringType,
 )
+from api.schemas_common import DataResponse
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.singleton_factory import lazy_singleton
 
 # LLM Service for real code generation
 from services.llm_service import get_llm_service
@@ -65,9 +65,7 @@ _PYTHON_CODE_BLOCK_RE = re.compile(r"```python\n(.*?)```", re.DOTALL)
 _FUNC_SIGNATURE_RE = re.compile(r"(\s*)def (\w+)\((.*?)\):")
 _OPT_PYTHON_BLOCK_RE = re.compile(r"```(?:python)?\n(.*?)```", re.DOTALL)
 _FUNC_WITH_RETURN_RE = re.compile(r"(\s*)def (\w+)\((.*?)\).*:")
-_MULTI_LANG_BLOCK_RE = re.compile(
-    r"```(?:python|typescript|javascript)?\n(.*?)```", re.DOTALL
-)
+_MULTI_LANG_BLOCK_RE = re.compile(r"```(?:python|typescript|javascript)?\n(.*?)```", re.DOTALL)
 
 # Issue #380: Module-level tuple for import AST nodes
 _IMPORT_TYPES = (ast.Import, ast.ImportFrom)
@@ -283,9 +281,7 @@ class CodeValidator:
         }
         warnings = []
         if node.returns is None:
-            warnings.append(
-                f"Function '{node.name}' at line {node.lineno} missing return type hint"
-            )
+            warnings.append(f"Function '{node.name}' at line {node.lineno} missing return type hint")
         return func_info, warnings
 
     @staticmethod
@@ -307,9 +303,7 @@ class CodeValidator:
         return [f"{module}.{alias.name}" for alias in node.names]
 
     @staticmethod
-    def _process_ast_node(
-        node: ast.AST, functions: list, classes: list, imports: list, warnings: list
-    ) -> None:
+    def _process_ast_node(node: ast.AST, functions: list, classes: list, imports: list, warnings: list) -> None:
         """Process a single AST node for validation. (Issue #315 - extracted)"""
         if isinstance(node, ast.FunctionDef):
             func_info, func_warnings = CodeValidator._extract_function_info(node)
@@ -334,9 +328,7 @@ class CodeValidator:
 
             # Process each node using helper (Issue #315 - reduced depth)
             for node in ast.walk(tree):
-                CodeValidator._process_ast_node(
-                    node, functions, classes, imports, warnings
-                )
+                CodeValidator._process_ast_node(node, functions, classes, imports, warnings)
 
             ast_info = {
                 "functions": functions,
@@ -345,20 +337,14 @@ class CodeValidator:
                 "total_lines": len(code.split("\n")),
             }
 
-            return ValidationResult(
-                is_valid=True, errors=errors, warnings=warnings, ast_info=ast_info
-            )
+            return ValidationResult(is_valid=True, errors=errors, warnings=warnings, ast_info=ast_info)
 
         except SyntaxError as e:
             errors.append(f"Syntax error at line {e.lineno}: {e.msg}")
-            return ValidationResult(
-                is_valid=False, errors=errors, warnings=warnings, ast_info=ast_info
-            )
+            return ValidationResult(is_valid=False, errors=errors, warnings=warnings, ast_info=ast_info)
         except Exception as e:
             errors.append(f"Validation error: {str(e)}")
-            return ValidationResult(
-                is_valid=False, errors=errors, warnings=warnings, ast_info=ast_info
-            )
+            return ValidationResult(is_valid=False, errors=errors, warnings=warnings, ast_info=ast_info)
 
     @staticmethod
     def validate_typescript(code: str) -> ValidationResult:
@@ -450,9 +436,7 @@ class CodeGenerationEngine:
     async def _get_redis(self):
         """Get Redis client lazily"""
         if self._redis is None:
-            self._redis = get_redis_client(
-                async_client=True, database=RedisDatabase.MAIN
-            )
+            self._redis = get_redis_client(async_client=True, database=RedisDatabase.MAIN)
         return self._redis
 
     def _get_llm_client(self):
@@ -496,16 +480,12 @@ class CodeGenerationEngine:
                 # Check for function definitions
                 func_match = _FUNC_DEF_RE.search(line)
                 if func_match:
-                    modified_functions.add(
-                        f"Added/modified function: {func_match.group(1)}"
-                    )
+                    modified_functions.add(f"Added/modified function: {func_match.group(1)}")
             elif line.startswith("-") and not line.startswith("---"):
                 deletions += 1
                 func_match = _FUNC_DEF_RE.search(line)
                 if func_match:
-                    modified_functions.add(
-                        f"Removed/modified function: {func_match.group(1)}"
-                    )
+                    modified_functions.add(f"Removed/modified function: {func_match.group(1)}")
 
         if additions > 0:
             changes.append(f"Added {additions} lines")
@@ -516,9 +496,7 @@ class CodeGenerationEngine:
 
         return changes
 
-    async def _call_llm(
-        self, prompt: str, system_prompt: Optional[str] = None
-    ) -> Tuple[str, int]:
+    async def _call_llm(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, int]:
         """
         Call LLM for code generation/refactoring.
         Returns (response, tokens_used)
@@ -567,9 +545,7 @@ class CodeGenerationEngine:
             logger.error("LLM call failed: %s", str(e))
             raise RuntimeError("LLM code generation failed") from e
 
-    async def generate_code(
-        self, request: CodeGenerationRequest
-    ) -> CodeGenerationResponse:
+    async def generate_code(self, request: CodeGenerationRequest) -> CodeGenerationResponse:
         """Generate code from natural language description"""
         start_time = time.time()
 
@@ -597,9 +573,7 @@ class CodeGenerationEngine:
             validation = CodeValidator.validate(generated_code, request.language)
 
             # Track stats
-            await self._track_generation_stats(
-                "generate", request.language.value, tokens, validation.is_valid
-            )
+            await self._track_generation_stats("generate", request.language.value, tokens, validation.is_valid)
 
             return CodeGenerationResponse(
                 success=validation.is_valid,
@@ -632,9 +606,7 @@ class CodeGenerationEngine:
                 request.refactoring_type, REFACTORING_PROMPTS[RefactoringType.GENERAL]
             )
 
-            prompt = prompt_template.format(
-                language=request.language.value, code=request.code
-            )
+            prompt = prompt_template.format(language=request.language.value, code=request.code)
 
             # Call LLM
             refactored_code, tokens = await self._call_llm(prompt)
@@ -655,9 +627,7 @@ class CodeGenerationEngine:
                 )
 
             # Track stats
-            await self._track_generation_stats(
-                "refactor", request.language.value, tokens, validation.is_valid
-            )
+            await self._track_generation_stats("refactor", request.language.value, tokens, validation.is_valid)
 
             return RefactoringResponse(
                 success=validation.is_valid,
@@ -737,9 +707,7 @@ class CodeGenerationEngine:
             logger.error("Failed to get versions: %s", e)
             return []
 
-    async def rollback(
-        self, file_path: str, version_id: Optional[str] = None
-    ) -> Optional[str]:
+    async def rollback(self, file_path: str, version_id: Optional[str] = None) -> Optional[str]:
         """Rollback to a specific version or the last saved version"""
         try:
             versions = await self.get_versions(file_path)
@@ -761,9 +729,7 @@ class CodeGenerationEngine:
             logger.error("Failed to rollback: %s", e)
             return None
 
-    async def _track_generation_stats(
-        self, operation: str, language: str, tokens: int, success: bool
-    ):
+    async def _track_generation_stats(self, operation: str, language: str, tokens: int, success: bool):
         """Track code generation statistics"""
         try:
             redis = await self._get_redis()
@@ -801,9 +767,7 @@ class CodeGenerationEngine:
 
             today = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
             # Issue #3441: scope key to source when provided
-            key_prefix = (
-                f"{self._stats_key}:{source_id}" if source_id else self._stats_key
-            )
+            key_prefix = f"{self._stats_key}:{source_id}" if source_id else self._stats_key
             stats_key = f"{key_prefix}:{today}"
 
             stats_data = await redis.hgetall(stats_key)
@@ -849,8 +813,6 @@ get_code_generation_engine = lazy_singleton(CodeGenerationEngine)
 # =============================================================================
 
 
-
-
 @router.get("/health", response_model=CodeGenerationHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -866,8 +828,7 @@ async def get_health(admin_check: bool = Depends(check_admin_permission)):
     Issue #744: Requires admin authentication.
     """
     logger.warning(
-        "Deprecated health endpoint called: /api/code-generation/health — "
-        "use /api/system/health instead (#3333)"
+        "Deprecated health endpoint called: /api/code-generation/health — " "use /api/system/health instead (#3333)"
     )
     return {
         "status": "healthy",
@@ -963,9 +924,7 @@ async def validate_code(
     operation="get_versions",
     error_code_prefix="ANALYTICS_CODE_GENERATION",
 )
-async def get_versions(
-    admin_check: bool = Depends(check_admin_permission), file_path: str = None
-):
+async def get_versions(admin_check: bool = Depends(check_admin_permission), file_path: str = None):
     """
     Get saved code versions for a file.
 
@@ -989,9 +948,7 @@ async def get_versions(
     operation="rollback_code",
     error_code_prefix="ANALYTICS_CODE_GENERATION",
 )
-async def rollback_code(
-    admin_check: bool = Depends(check_admin_permission), request: CodeGenRollbackRequest = None
-):
+async def rollback_code(admin_check: bool = Depends(check_admin_permission), request: CodeGenRollbackRequest = None):
     """
     Rollback code to a previous version.
 
@@ -1003,9 +960,7 @@ async def rollback_code(
     code = await engine.rollback(request.file_path, request.version_id)
 
     if code is None:
-        raise HTTPException(
-            status_code=404, detail=f"No versions found for {request.file_path}"
-        )
+        raise HTTPException(status_code=404, detail=f"No versions found for {request.file_path}")
 
     return {
         "success": True,

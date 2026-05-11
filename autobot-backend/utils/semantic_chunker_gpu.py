@@ -28,6 +28,7 @@ os.environ["CUDA_CACHE_DISABLE"] = "0"  # Enable CUDA kernel caching
 
 import asyncio
 import concurrent.futures
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -314,6 +315,4 @@ class GPUSemanticChunker(SemanticChunkerBase):
 # Public factory (preserves singleton semantics for all 4 GPU callers)
 # ----------------------------------------------------------------------
 
-get_gpu_semantic_chunker = lazy_singleton(
-    lambda: GPUSemanticChunker(gpu_batch_size=500, enable_gpu_memory_pool=True)
-)
+get_gpu_semantic_chunker = lazy_singleton(lambda: GPUSemanticChunker(gpu_batch_size=500, enable_gpu_memory_pool=True))

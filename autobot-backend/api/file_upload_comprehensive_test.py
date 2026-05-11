@@ -155,9 +155,7 @@ class FileUploadAPITests(unittest.TestCase):
     def test_file_listing(self):
         """Test file listing API"""
         try:
-            response = requests.get(
-                f"{self.BASE_URL}/list", headers=self.HEADERS, timeout=10
-            )
+            response = requests.get(f"{self.BASE_URL}/list", headers=self.HEADERS, timeout=10)
 
             self.assertEqual(response.status_code, 200)
 
@@ -421,9 +419,7 @@ def run_comprehensive_tests():
         print(f"Ran {result.testsRun} tests successfully")  # noqa: print
         return 0
     else:
-        print(  # noqa: print
-            f"❌ {len(result.failures)} failures, {len(result.errors)} errors"
-        )  # noqa: print
+        print(f"❌ {len(result.failures)} failures, {len(result.errors)} errors")  # noqa: print  # noqa: print
 
         # Print failure details
         if result.failures:

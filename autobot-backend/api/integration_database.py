@@ -14,6 +14,20 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.schemas_code import (
+    IntegrationDatabaseConnectionTestResponse,
+    IntegrationDatabaseListResponse,
+    IntegrationDatabaseProvidersResponse,
+    IntegrationDatabaseQueryResponse,
+    IntegrationMongoQueryResponse,
+    IntegrationTablesListResponse,
+)
+from api.schemas_workflows import (
+    DatabaseConnectionRequest,
+    DatabaseListRequest,
+    DBIntegrationQueryRequest,
+    MongoQueryRequest,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from integrations.base import IntegrationConfig
@@ -22,20 +36,6 @@ from integrations.database_integration import (
     MySQLIntegration,
     PostgreSQLIntegration,
 )
-from api.schemas_code import (
-    IntegrationDatabaseConnectionTestResponse,
-    IntegrationDatabaseProvidersResponse,
-    IntegrationDatabaseQueryResponse,
-    IntegrationMongoQueryResponse,
-    IntegrationDatabaseListResponse,
-    IntegrationTablesListResponse,
-)
-from api.schemas_workflows import (
-    DBIntegrationQueryRequest,
-    DatabaseConnectionRequest,
-    DatabaseListRequest,
-    MongoQueryRequest,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +43,6 @@ router = APIRouter(
     tags=["integrations-database"],
     dependencies=[Depends(check_admin_permission)],
 )
-
-
 
 
 def _create_integration_config(
@@ -118,8 +116,7 @@ def _get_integration_class(provider: str):
     if not integration_class:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported provider: {provider}. "
-            f"Supported: {list(providers.keys())}",
+            detail=f"Unsupported provider: {provider}. " f"Supported: {list(providers.keys())}",
         )
 
     return integration_class
@@ -382,13 +379,9 @@ async def list_tables(provider: str, request: DatabaseListRequest):
 
         # MongoDB uses collections instead of tables
         if provider.lower() == "mongodb":
-            result = await integration.execute_action(
-                "list_collections", {"database": request.database}
-            )
+            result = await integration.execute_action("list_collections", {"database": request.database})
         else:
-            result = await integration.execute_action(
-                "list_tables", {"database": request.database}
-            )
+            result = await integration.execute_action("list_tables", {"database": request.database})
 
         return result
 

@@ -207,9 +207,7 @@ class PromptCompressor:
             strategy_used="none",
         )
 
-    def _extract_and_placeholder(
-        self, text: str, pattern: str, prefix: str
-    ) -> tuple[str, List[str]]:
+    def _extract_and_placeholder(self, text: str, pattern: str, prefix: str) -> tuple[str, List[str]]:
         """
         Extract pattern matches and replace with placeholders.
 
@@ -257,13 +255,9 @@ class PromptCompressor:
 
         # Preserve code blocks and URLs (Issue #620: uses helper)
         if self.config.preserve_code_blocks:
-            compressed, code_blocks = self._extract_and_placeholder(
-                compressed, r"```[\s\S]*?```", "__CODE_BLOCK_"
-            )
+            compressed, code_blocks = self._extract_and_placeholder(compressed, r"```[\s\S]*?```", "__CODE_BLOCK_")
         if self.config.preserve_urls:
-            compressed, urls = self._extract_and_placeholder(
-                compressed, r"https?://\S+", "__URL_"
-            )
+            compressed, urls = self._extract_and_placeholder(compressed, r"https?://\S+", "__URL_")
 
         # Apply compression rules
         compressed = re.sub(r"\s+", " ", compressed)
@@ -282,9 +276,7 @@ class PromptCompressor:
         compressed = re.sub(r" +", " ", compressed).strip()
 
         # Restore preserved content (Issue #620: uses helper)
-        compressed = self._restore_placeholders(
-            compressed, code_blocks, "__CODE_BLOCK_"
-        )
+        compressed = self._restore_placeholders(compressed, code_blocks, "__CODE_BLOCK_")
         compressed = self._restore_placeholders(compressed, urls, "__URL_")
         return compressed
 
@@ -367,9 +359,7 @@ class PromptCompressor:
             "total_compressed_tokens": total_compressed,
             "tokens_saved": total_original - total_compressed,
             "average_compression_ratio": round(avg_ratio, 3),
-            "overall_compression_ratio": round(
-                total_compressed / max(total_original, 1), 3
-            ),
+            "overall_compression_ratio": round(total_compressed / max(total_original, 1), 3),
         }
 
 

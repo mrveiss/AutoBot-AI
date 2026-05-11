@@ -275,7 +275,11 @@
       <div class="modal-content">
         <div class="modal-header">
           <h3 class="modal-title">{{ $t('analytics.evolution.analyzeRepository') }}</h3>
-          <button @click="showAnalysisModal = false" class="modal-close">
+          <button
+            @click="showAnalysisModal = false"
+            class="modal-close"
+            :aria-label="$t('common.close')"
+          >
             <Icon name="times" />
           </button>
         </div>

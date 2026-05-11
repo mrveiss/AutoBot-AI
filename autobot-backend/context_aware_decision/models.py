@@ -88,11 +88,7 @@ class DecisionContext:
         metadata_type: str,
     ) -> List[ContextElement]:
         """Get context elements filtered by metadata type."""
-        return [
-            ce
-            for ce in self.context_elements
-            if ce.metadata.get("type") == metadata_type
-        ]
+        return [ce for ce in self.context_elements if ce.metadata.get("type") == metadata_type]
 
     def get_high_risk_factors(self) -> List[Dict[str, Any]]:
         """Get high-severity risk factors."""
@@ -145,9 +141,7 @@ class InterventionOutcome:
 
     def has_high_risk_side_effects(self) -> bool:
         """Check if any side effects are high severity."""
-        return any(
-            effect.get("severity") == "high" for effect in self.side_effects
-        )
+        return any(effect.get("severity") == "high" for effect in self.side_effects)
 
 
 @dataclass

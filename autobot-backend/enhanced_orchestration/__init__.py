@@ -19,10 +19,12 @@ Sub-modules:
 - subagent_dispatcher.py: Autonomous subagent spawning for parallel workstreams (#6822)
 """
 
+from orchestration.types import AgentCapability  # canonical definition (#6192)
+
 from .agent_router import AgentRouter
 from .collaboration_coordinator import CollaborationCoordinator
-from .subagent_dispatcher import SubagentDispatcher
 from .execution_strategies import ExecutionStrategyHandler
+from .subagent_dispatcher import SubagentDispatcher
 from .success_criteria import (
     CriteriaResult,
     EvaluationResult,
@@ -30,7 +32,6 @@ from .success_criteria import (
     SuccessCriteriaEvaluator,
     SuccessCriteriaType,
 )
-from orchestration.types import AgentCapability  # canonical definition (#6192)
 from .types import (
     FALLBACK_TIERS,
     AgentPerformance,

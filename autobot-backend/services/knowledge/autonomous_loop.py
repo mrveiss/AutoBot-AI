@@ -34,11 +34,11 @@ import time
 import uuid
 from collections import deque
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from autobot_shared.time_utils import now_utc, parse_utc_iso
+from datetime import timezone
 from typing import Any, Deque, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 # Module-level imports for patchability in tests.
 # Deferred via try/except to survive environments where these aren't installed yet.
@@ -498,9 +498,7 @@ class AutonomousLoopRunner:
         # Query AnalyzerService lessons
         try:
             svc = get_analyzer_service(self._llm)
-            lessons = await svc.get_lessons_context(
-                "RAG retrieval optimization synthesis quality", limit=5
-            )
+            lessons = await svc.get_lessons_context("RAG retrieval optimization synthesis quality", limit=5)
             if lessons:
                 parts.append(lessons)
                 logger.debug("AutonomousLoop[%s] LEARN: fetched analyzer lessons", run_id)
@@ -512,19 +510,14 @@ class AutonomousLoopRunner:
             plog = SynthesisProvenanceLog()
             recent = await plog.get_recent(limit=5)
             if recent:
-                summary = "; ".join(
-                    f"run={e.get('run_id', '?')} model={e.get('llm_model', '?')}"
-                    for e in recent
-                )
+                summary = "; ".join(f"run={e.get('run_id', '?')} model={e.get('llm_model', '?')}" for e in recent)
                 parts.append(f"Recent provenance runs: {summary}")
         except Exception:
             logger.debug("AutonomousLoop[%s] LEARN: provenance log unavailable", run_id)
 
         return "\n".join(parts) if parts else "No prior lessons available."
 
-    async def _phase_hypothesize(
-        self, lessons_context: str, run_id: str
-    ) -> List[Dict[str, Any]]:
+    async def _phase_hypothesize(self, lessons_context: str, run_id: str) -> List[Dict[str, Any]]:
         """HYPOTHESIZE phase: ask LLM to propose N config variants."""
         cfg = get_rag_config()
         baseline_params = {
@@ -560,9 +553,7 @@ class AutonomousLoopRunner:
             variants: List[Dict[str, Any]] = json.loads(raw)
             if not isinstance(variants, list):
                 raise ValueError("Expected JSON array")
-            logger.info(
-                "AutonomousLoop[%s] HYPOTHESIZE: %d variants proposed", run_id, len(variants)
-            )
+            logger.info("AutonomousLoop[%s] HYPOTHESIZE: %d variants proposed", run_id, len(variants))
             return variants[: self.max_variants]
         except Exception:
             logger.exception("AutonomousLoop[%s] HYPOTHESIZE: LLM call failed", run_id)
@@ -581,27 +572,17 @@ class AutonomousLoopRunner:
                         "max_results_per_stage": random.choice([5, 10, 20, 30]),
                     }
                 )
-            logger.info(
-                "AutonomousLoop[%s] HYPOTHESIZE: using %d fallback variants", run_id, len(fallback)
-            )
+            logger.info("AutonomousLoop[%s] HYPOTHESIZE: using %d fallback variants", run_id, len(fallback))
             return fallback
 
-    async def _phase_experiment(
-        self, variants: List[Dict[str, Any]]
-    ) -> List[VariantResult]:
+    async def _phase_experiment(self, variants: List[Dict[str, Any]]) -> List[VariantResult]:
         """EXPERIMENT phase: score all variants concurrently."""
-        tasks = [
-            self._score_one_variant(variant, idx) for idx, variant in enumerate(variants)
-        ]
+        tasks = [self._score_one_variant(variant, idx) for idx, variant in enumerate(variants)]
         results: List[VariantResult] = await asyncio.gather(*tasks, return_exceptions=False)
-        logger.info(
-            "AutonomousLoop EXPERIMENT: %d variants scored", len(results)
-        )
+        logger.info("AutonomousLoop EXPERIMENT: %d variants scored", len(results))
         return results
 
-    async def _score_one_variant(
-        self, params: Dict[str, Any], idx: int
-    ) -> VariantResult:
+    async def _score_one_variant(self, params: Dict[str, Any], idx: int) -> VariantResult:
         """Score a single variant and wrap in VariantResult."""
         variant_id = f"v{idx:02d}"
         try:
@@ -635,8 +616,7 @@ class AutonomousLoopRunner:
             svc = get_analyzer_service(self._llm)
             # Build a synthetic "output" summarising the experiment results for the analyzer.
             summary = f"Baseline score: {baseline_score:.4f}\n" + "\n".join(
-                f"Variant {r.variant_id}: score={r.composite_score:.4f} params={r.params}"
-                for r in results
+                f"Variant {r.variant_id}: score={r.composite_score:.4f} params={r.params}" for r in results
             )
             score_delta = max((r.composite_score for r in results), default=0.0) - baseline_score
             if score_delta < 0:
@@ -653,9 +633,7 @@ class AutonomousLoopRunner:
             )
             if lessons:
                 await svc.store_lessons(lessons)
-                logger.info(
-                    "AutonomousLoop[%s] ANALYZE: stored %d lessons", run_id, len(lessons)
-                )
+                logger.info("AutonomousLoop[%s] ANALYZE: stored %d lessons", run_id, len(lessons))
                 return len(lessons)
         except Exception:
             logger.debug("AutonomousLoop[%s] ANALYZE: lesson distillation failed (non-fatal)", run_id)
@@ -772,9 +750,7 @@ async def get_loop_runner(
         # Never replace a running instance — it would orphan in-flight experiments.
         if _loop_orchestrator is not None and getattr(_loop_orchestrator, "_running", False):
             return _loop_orchestrator
-        if _loop_orchestrator is None or (
-            _loop_orchestrator._llm is None and llm_service is not None
-        ):
+        if _loop_orchestrator is None or (_loop_orchestrator._llm is None and llm_service is not None):
             orchestrator = AutonomousLoopRunner(
                 llm_service,
                 dry_run=dry_run,

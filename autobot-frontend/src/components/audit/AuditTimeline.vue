@@ -10,7 +10,11 @@
         </h3>
         <span class="entry-count">{{ $t('audit.timeline.eventsCount', { count: entries.length }) }}</span>
       </div>
-      <button class="btn btn-icon" @click="$emit('close')">
+      <button
+        class="btn btn-icon"
+        :aria-label="$t('common.close')"
+        @click="$emit('close')"
+      >
         <i class="fas fa-times"></i>
       </button>
     </div>

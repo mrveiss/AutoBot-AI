@@ -10,6 +10,7 @@ Usage::
     from services.tool_output_filter import get_tool_output_filter
     clean = get_tool_output_filter().prepare_and_filter("pytest tests/", raw, exit_code)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -25,13 +26,10 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_CONFIG = os.path.join(
-    os.path.dirname(__file__), "..", "config", "tool_output_filters.yaml"
-)
+_DEFAULT_CONFIG = os.path.join(os.path.dirname(__file__), "..", "config", "tool_output_filters.yaml")
 _TEE_DIR = Path.home() / ".local" / "share" / "autobot" / "tee"
 _NO_OP_PATTERNS = re.compile(
-    r"(Everything up-to-date|nothing to commit|Already up to date|"
-    r"no changes added|working tree clean)",
+    r"(Everything up-to-date|nothing to commit|Already up to date|" r"no changes added|working tree clean)",
     re.IGNORECASE,
 )
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*[mGKHF]")
@@ -45,6 +43,7 @@ _SHORT_SUMMARY_RE = re.compile(r"^=+ short test summary info =+", re.IGNORECASE)
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
 
 def _strip_ansi(text: str) -> str:
     return _ANSI_RE.sub("", text)
@@ -347,12 +346,21 @@ def classify_tool(command: str) -> str:
     """Return a category slug for *command* (used as Redis savings key prefix)."""
     cmd = command.strip().split()[0] if command.strip() else "unknown"
     categories = {
-        "pytest": "test", "python": "test",
-        "npm": "test", "yarn": "test", "pnpm": "test",
-        "ruff": "lint", "eslint": "lint", "mypy": "lint", "black": "lint", "flake8": "lint",
+        "pytest": "test",
+        "python": "test",
+        "npm": "test",
+        "yarn": "test",
+        "pnpm": "test",
+        "ruff": "lint",
+        "eslint": "lint",
+        "mypy": "lint",
+        "black": "lint",
+        "flake8": "lint",
         "git": "git",
-        "docker": "docker", "docker-compose": "docker",
-        "pip": "pkg", "pip3": "pkg",
+        "docker": "docker",
+        "docker-compose": "docker",
+        "pip": "pkg",
+        "pip3": "pkg",
         "gh": "gh",
     }
     return categories.get(cmd, "other")
@@ -366,6 +374,7 @@ async def record_filter_savings(command: str, original: str, filtered: str) -> N
     category = classify_tool(command)
     try:
         from autobot_shared.redis_client import get_async_redis_client
+
         redis = await get_async_redis_client()
         if redis is None:
             return
@@ -378,6 +387,7 @@ async def record_filter_savings(command: str, original: str, filtered: str) -> N
 # ---------------------------------------------------------------------------
 # ToolOutputFilter class
 # ---------------------------------------------------------------------------
+
 
 class ToolOutputFilter:
     """Apply a rule-based pipeline to tool command output."""
@@ -399,9 +409,7 @@ class ToolOutputFilter:
         """Inject compact-output flags before execution."""
         return inject_compact_flags(command)
 
-    def prepare_and_filter(
-        self, command: str, output: str, exit_code: int = 0, stderr: str = ""
-    ) -> str:
+    def prepare_and_filter(self, command: str, output: str, exit_code: int = 0, stderr: str = "") -> str:
         """Inject compact flags and filter output in a single call.
 
         Use this at sites that do not execute the command themselves (e.g. sites
@@ -438,9 +446,7 @@ class ToolOutputFilter:
                 filtered = filtered + "\n" + hint
 
         try:
-            asyncio.get_running_loop().create_task(
-                record_filter_savings(command, output, pre_hint_filtered)
-            )
+            asyncio.get_running_loop().create_task(record_filter_savings(command, output, pre_hint_filtered))
         except RuntimeError:
             pass
 
@@ -479,17 +485,11 @@ class ToolOutputFilter:
 
         if "strip_lines_matching" in rule:
             patterns = [re.compile(p) for p in rule["strip_lines_matching"]]
-            text = "\n".join(
-                line for line in text.splitlines()
-                if not any(p.search(line) for p in patterns)
-            )
+            text = "\n".join(line for line in text.splitlines() if not any(p.search(line) for p in patterns))
 
         if "keep_lines_matching" in rule:
             patterns = [re.compile(p) for p in rule["keep_lines_matching"]]
-            text = "\n".join(
-                line for line in text.splitlines()
-                if any(p.search(line) for p in patterns)
-            )
+            text = "\n".join(line for line in text.splitlines() if any(p.search(line) for p in patterns))
 
         if rule.get("dedup_consecutive"):
             text = _dedup_consecutive(text)
@@ -506,4 +506,5 @@ class ToolOutputFilter:
 
 # Singleton accessor — use this instead of ToolOutputFilter() at call sites.
 from autobot_shared.singleton_factory import lazy_singleton  # noqa: E402
+
 get_tool_output_filter = lazy_singleton(ToolOutputFilter)

@@ -10,7 +10,7 @@ Contains distributed agent registration, health monitoring, and lifecycle manage
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 from constants.threshold_constants import TimingConstants, WorkStealingConfig
@@ -98,9 +98,7 @@ class DistributedAgentManager:
             await self._initialize_distributed_agents()
 
             # Start health monitoring (includes work-stealing cycle)
-            self.health_monitor_task = asyncio.create_task(
-                self._health_monitor_loop(event_emitter)
-            )
+            self.health_monitor_task = asyncio.create_task(self._health_monitor_loop(event_emitter))
 
             logger.info("Distributed agent mode started successfully")
             return True
@@ -135,9 +133,7 @@ class DistributedAgentManager:
                 await self.register_agent(agent)
                 logger.info("Initialized distributed agent: %s", agent_type)
             except Exception as e:
-                logger.error(
-                    f"Failed to initialize distributed agent {agent_type}: {e}"
-                )
+                logger.error(f"Failed to initialize distributed agent {agent_type}: {e}")
 
     async def register_agent(self, agent: "BaseAgent") -> bool:
         """Register a distributed agent."""
@@ -217,9 +213,7 @@ class DistributedAgentManager:
         now = datetime.now(tz=timezone.utc)
 
         if error:
-            logger.error(
-                "Health check failed for distributed agent %s: %s", agent_id, error
-            )
+            logger.error("Health check failed for distributed agent %s: %s", agent_id, error)
             self._on_agent_failure(agent_id, agent_info, now)
             return
 
@@ -234,9 +228,7 @@ class DistributedAgentManager:
         if is_healthy:
             self._on_agent_success(agent_id, agent_info)
         else:
-            logger.warning(
-                "Distributed agent %s health issue: %s", agent_id, health.status.value
-            )
+            logger.warning("Distributed agent %s health issue: %s", agent_id, health.status.value)
             self._on_agent_failure(agent_id, agent_info, now)
 
     def _on_agent_success(self, agent_id: str, agent_info: DistributedAgentInfo) -> None:
@@ -254,9 +246,7 @@ class DistributedAgentManager:
                 prev_state.value,
             )
 
-    def _on_agent_failure(
-        self, agent_id: str, agent_info: DistributedAgentInfo, now: datetime
-    ) -> None:
+    def _on_agent_failure(self, agent_id: str, agent_info: DistributedAgentInfo, now: datetime) -> None:
         """Handle an unhealthy health check — increment failure count; open if threshold met."""
         agent_info.circuit_failure_count += 1
 
@@ -266,8 +256,7 @@ class DistributedAgentManager:
             agent_info.circuit_opened_at = now
             agent_info.circuit_probe_dispatched_at = None
             logger.warning(
-                "Circuit breaker re-OPENED for agent %s (half-open probe failed, "
-                "failure count=%d)",
+                "Circuit breaker re-OPENED for agent %s (half-open probe failed, " "failure count=%d)",
                 agent_id,
                 agent_info.circuit_failure_count,
             )
@@ -288,10 +277,7 @@ class DistributedAgentManager:
     async def _run_health_checks(self, agents_snapshot: list) -> None:
         """Run parallel health checks on agents (Issue #334 - extracted helper)."""
         results = await asyncio.gather(
-            *[
-                self._check_single_agent_health(aid, ainfo)
-                for aid, ainfo in agents_snapshot
-            ],
+            *[self._check_single_agent_health(aid, ainfo) for aid, ainfo in agents_snapshot],
             return_exceptions=True,
         )
 
@@ -341,8 +327,7 @@ class DistributedAgentManager:
                 # Promote to HALF_OPEN once the recovery timeout has elapsed.
                 if (
                     info.circuit_opened_at is not None
-                    and (now - info.circuit_opened_at).total_seconds()
-                    >= self.circuit_recovery_timeout_seconds
+                    and (now - info.circuit_opened_at).total_seconds() >= self.circuit_recovery_timeout_seconds
                 ):
                     info.circuit_state = CircuitState.HALF_OPEN
                     info.circuit_probe_dispatched_at = None
@@ -359,9 +344,7 @@ class DistributedAgentManager:
                 if info.circuit_probe_dispatched_at is not None:
                     continue
                 info.circuit_probe_dispatched_at = now
-                logger.info(
-                    "Circuit breaker half-open probe dispatched for agent %s", agent_id
-                )
+                logger.info("Circuit breaker half-open probe dispatched for agent %s", agent_id)
                 available.append(info.agent)
                 continue
 
@@ -513,9 +496,7 @@ class DistributedAgentManager:
 
         return True
 
-    async def _detect_and_steal_stale_tasks(
-        self, event_emitter: Optional[Any] = None
-    ) -> int:
+    async def _detect_and_steal_stale_tasks(self, event_emitter: Optional[Any] = None) -> int:
         """Scan all active tasks and steal those that are stale.
 
         Returns the number of tasks reassigned in this cycle.
@@ -534,9 +515,7 @@ class DistributedAgentManager:
                 reassigned += 1
 
         if reassigned:
-            logger.info(
-                "Work-stealing: reassigned %d stale task(s) this cycle", reassigned
-            )
+            logger.info("Work-stealing: reassigned %d stale task(s) this cycle", reassigned)
         return reassigned
 
     def get_statistics(self) -> Dict[str, Any]:
@@ -554,16 +533,12 @@ class DistributedAgentManager:
                 "last_health_check": agent_info.last_health_check.isoformat(),
                 "active_tasks": len(task_list),
                 "active_task_list": task_list,
-                "task_reassignment_counts": {
-                    t: self._task_reassignment_count.get(t, 0) for t in task_list
-                },
+                "task_reassignment_counts": {t: self._task_reassignment_count.get(t, 0) for t in task_list},
                 # Circuit breaker state (Issue #4694)
                 "circuit_state": agent_info.circuit_state.value,
                 "circuit_failure_count": agent_info.circuit_failure_count,
                 "circuit_opened_at": (
-                    agent_info.circuit_opened_at.isoformat()
-                    if agent_info.circuit_opened_at
-                    else None
+                    agent_info.circuit_opened_at.isoformat() if agent_info.circuit_opened_at else None
                 ),
             }
         stats["_work_stealing"] = {

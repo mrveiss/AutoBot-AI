@@ -231,9 +231,7 @@ class TestNiktoParser:
         assert osvdb_vuln.severity == "medium"
         assert osvdb_vuln.port == 80
 
-        dir_vuln = next(
-            v for v in result.vulnerabilities if "Directory indexing" in v.title
-        )
+        dir_vuln = next(v for v in result.vulnerabilities if "Directory indexing" in v.title)
         assert dir_vuln.severity == "low"
 
     def test_parse_empty_output(self) -> None:

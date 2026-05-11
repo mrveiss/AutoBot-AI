@@ -30,12 +30,8 @@ try:
 except ImportError as _benchmark_import_error:
     from autobot_shared.missing_dep import MissingDep as _MissingDep
 
-    BenchmarkRunner = _MissingDep(  # type: ignore[assignment, misc]
-        "BenchmarkRunner", _benchmark_import_error
-    )
-    assert_performance = _MissingDep(  # type: ignore[assignment, misc]
-        "assert_performance", _benchmark_import_error
-    )
+    BenchmarkRunner = _MissingDep("BenchmarkRunner", _benchmark_import_error)  # type: ignore[assignment, misc]
+    assert_performance = _MissingDep("assert_performance", _benchmark_import_error)  # type: ignore[assignment, misc]
 
 logger = logging.getLogger(__name__)
 
@@ -199,10 +195,7 @@ class TestAPIEndpointBenchmarks:
         import json
 
         test_data = {
-            "agents": [
-                {"id": f"agent_{i}", "status": "active", "tasks": [1, 2, 3]}
-                for i in range(100)
-            ],
+            "agents": [{"id": f"agent_{i}", "status": "active", "tasks": [1, 2, 3]} for i in range(100)],
             "metrics": {"cpu": 45.2, "memory": 67.8, "requests": 1000},
             "config": {"debug": False, "log_level": "INFO", "max_workers": 4},
         }
@@ -231,10 +224,7 @@ class TestAPIEndpointBenchmarks:
 
         test_json = json.dumps(
             {
-                "agents": [
-                    {"id": f"agent_{i}", "status": "active", "tasks": [1, 2, 3]}
-                    for i in range(100)
-                ],
+                "agents": [{"id": f"agent_{i}", "status": "active", "tasks": [1, 2, 3]} for i in range(100)],
                 "metrics": {"cpu": 45.2, "memory": 67.8, "requests": 1000},
             }
         )

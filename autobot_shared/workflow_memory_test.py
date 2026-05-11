@@ -3,8 +3,9 @@
 # Author: mrveiss
 """Tests for WorkflowMemory."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from autobot_shared.workflow_memory import WorkflowMemory
 

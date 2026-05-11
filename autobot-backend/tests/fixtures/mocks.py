@@ -123,15 +123,49 @@ def make_llm_response(
 
         return LLMResponse(content=content, error=error, model=model, provider=provider)
     except Exception:
-        return _MockLLMResponseShim(
-            content=content, error=error, model=model, provider=provider
-        )
+        return _MockLLMResponseShim(content=content, error=error, model=model, provider=provider)
 
 
 # Back-compat alias — internal callers still reference the underscore name.
 # New code should use `make_llm_response` directly.
 def _build_mock_response(content: str):
     return make_llm_response(content=content)
+
+
+def make_redis_pipeline(execute_returns: Any = None) -> "AsyncMock":
+    """Build an async-redis pipeline mock (canonical, #7339).
+
+    Supports both common pipeline usage patterns:
+
+    1. **Async context manager** —
+       ``async with redis.pipeline() as pipe: pipe.X(...); await pipe.execute()``
+    2. **Direct caller** —
+       ``pipe = redis.pipeline(); pipe.X(...); result = await pipe.execute()``
+
+    Buffered ops (``xadd``, ``hset``, etc.) are auto-created child
+    AsyncMocks via the parent's child-spawning behavior — sufficient for
+    both ``pipe.X(...)`` (returns coroutine, ignored by buffered code that
+    doesn't await) and ``await pipe.X(...)`` (returns AsyncMock from the
+    awaited coroutine).
+
+    ``pipe.execute()`` is async (always awaited in production).
+
+    Args:
+        execute_returns: value returned by ``await pipe.execute()``.
+            Default ``[]`` if ``None``. Pass a list of per-op results to
+            simulate multi-op pipeline returns (e.g. ``[1, 1, 1]`` for
+            three writes).
+
+    Returns:
+        An ``AsyncMock`` representing a redis pipeline.
+    """
+    from unittest.mock import AsyncMock
+
+    pipe = AsyncMock()
+    pipe.__aenter__ = AsyncMock(return_value=pipe)
+    pipe.__aexit__ = AsyncMock(return_value=False)
+    pipe.execute = AsyncMock(return_value=execute_returns if execute_returns is not None else [])
+    return pipe
 
 
 def make_async_redis(
@@ -173,6 +207,9 @@ def make_async_redis(
     zremrangebyrank_returns: int = 0,
     # Pub/sub
     publish_returns: int = 0,
+    # Pipeline + scan-iter (#7339)
+    pipeline: Optional["AsyncMock"] = None,
+    scan_iter_keys: Optional[List[bytes]] = None,
     **extra_methods: Any,
 ) -> "AsyncMock":
     """Build an async-redis-shaped ``AsyncMock`` for tests (canonical, #7264).
@@ -195,14 +232,30 @@ def make_async_redis(
 
         redis = make_async_redis(get_returns=b"hello", xadd=("stream", "1-0"))
 
+    For pipeline support (sync ``redis.pipeline()`` returning an async
+    context manager), pass an ``AsyncMock`` built via ``make_redis_pipeline()``
+    (#7339)::
+
+        pipe = make_redis_pipeline(execute_returns=[1, 1, 1])
+        redis = make_async_redis(pipeline=pipe)
+
+    For ``redis.scan_iter()`` (an async generator, not a coroutine), pass
+    a list of keys via ``scan_iter_keys=`` (#7339)::
+
+        redis = make_async_redis(scan_iter_keys=[b"key:1", b"key:2"])
+
     Args:
         \\*_returns: per-method return value overrides (see method names above).
+        pipeline: pre-built pipeline mock (use ``make_redis_pipeline()``).
+            Attached as a sync-callable ``redis.pipeline`` returning the mock.
+        scan_iter_keys: keys to yield from ``redis.scan_iter(match=…, count=…)``.
+            Use ``[]`` for an empty stream (skips override; AsyncMock default).
         \\**extra_methods: arbitrary additional method names → return values.
 
     Returns:
         An ``AsyncMock`` matching the redis-py async client surface.
     """
-    from unittest.mock import AsyncMock
+    from unittest.mock import AsyncMock, MagicMock
 
     redis = AsyncMock()
 
@@ -244,6 +297,25 @@ def make_async_redis(
     redis.zremrangebyrank = AsyncMock(return_value=zremrangebyrank_returns)
 
     redis.publish = AsyncMock(return_value=publish_returns)
+
+    # Pipeline support (#7339): redis.pipeline() is SYNC in redis-py, returning
+    # a pipeline object whose execute() is async. Wrapping with MagicMock keeps
+    # the call sync; the inner pipe is an AsyncMock built by make_redis_pipeline().
+    if pipeline is not None:
+        redis.pipeline = MagicMock(return_value=pipeline)
+
+    # scan_iter support (#7339): redis.scan_iter() is an ASYNC GENERATOR, not a
+    # coroutine. AsyncMock can't directly produce one, so we attach a real
+    # async-generator function. Accepts arbitrary kwargs (match, count, _type)
+    # so callers passing real redis-py kwargs don't TypeError.
+    if scan_iter_keys is not None:
+        keys_snapshot = list(scan_iter_keys)
+
+        async def _scan_iter(*_args: Any, **_kwargs: Any):
+            for k in keys_snapshot:
+                yield k
+
+        redis.scan_iter = _scan_iter
 
     for method_name, value in extra_methods.items():
         setattr(redis, method_name, AsyncMock(return_value=value))
@@ -483,5 +555,6 @@ __all__ = [
     "MockWorkerNode",
     "make_llm_response",
     "make_async_redis",
+    "make_redis_pipeline",
     "patch_async_redis",
 ]

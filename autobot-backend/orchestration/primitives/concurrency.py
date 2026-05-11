@@ -6,6 +6,7 @@
 See docs/developer/PRIMITIVES.md for the full inventory and #5059/#5060
 for the extraction-first methodology.
 """
+
 import asyncio
 from typing import Awaitable, TypeVar
 
@@ -30,6 +31,4 @@ async def bounded_gather(
         async with sem:
             return await coro
 
-    return list(
-        await asyncio.gather(*(_guarded(c) for c in coros), return_exceptions=return_exceptions)
-    )
+    return list(await asyncio.gather(*(_guarded(c) for c in coros), return_exceptions=return_exceptions))

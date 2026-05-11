@@ -11,9 +11,7 @@ Contains pattern dictionaries for blocking I/O, database operations, and HTTP op
 from typing import FrozenSet
 
 # Issue #380: Module-level frozenset for legacy DB operation fallback
-LEGACY_DB_OPERATIONS: FrozenSet[str] = frozenset(
-    {"execute", "executemany", "fetchone", "fetchall", "fetchmany"}
-)
+LEGACY_DB_OPERATIONS: FrozenSet[str] = frozenset({"execute", "executemany", "fetchone", "fetchall", "fetchmany"})
 
 # Issue #380: Module-level frozenset for DB context object names
 DB_OBJECTS: FrozenSet[str] = frozenset(

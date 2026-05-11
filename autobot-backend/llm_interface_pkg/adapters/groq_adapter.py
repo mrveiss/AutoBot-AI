@@ -62,9 +62,7 @@ class GroqAdapter(AdapterBase):
             from llm_providers.groq_provider import GroqProvider
 
             api_key = self.config.settings.get("api_key") or os.getenv("GROQ_API_KEY", "")
-            self._provider = GroqProvider(
-                settings={"api_key": api_key} if api_key else {}
-            )
+            self._provider = GroqProvider(settings={"api_key": api_key} if api_key else {})
         return self._provider
 
     async def execute(self, request: LLMRequest) -> LLMResponse:

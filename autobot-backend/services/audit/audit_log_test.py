@@ -11,23 +11,22 @@ Tests cover:
 """
 
 import json
-import sys
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Module-level stubs — keep import chain clean without a full backend venv
-# ---------------------------------------------------------------------------
-
 from services.audit.audit_log import (
-    AUDIT_LOG_TTL_SECONDS,
-    AuditAction,
     _GLOBAL_KEY,
+    AuditAction,
     audit_record,
     query_audit_log,
     record_event,
 )
+from tests.fixtures import make_async_redis, make_redis_pipeline
+
+# ---------------------------------------------------------------------------
+# Module-level stubs — keep import chain clean without a full backend venv
+# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
@@ -36,20 +35,16 @@ from services.audit.audit_log import (
 
 
 def _make_pipeline_mock():
-    """Return an async pipeline mock that supports context manager + execute."""
-    pipe = AsyncMock()
-    pipe.__aenter__ = AsyncMock(return_value=pipe)
-    pipe.__aexit__ = AsyncMock(return_value=False)
-    pipe.execute = AsyncMock(return_value=[1, 1, 1, 1, 1])
-    return pipe
+    # Migrated to canonical ``make_redis_pipeline()`` (#7280 round 6, post-#7339).
+    return make_redis_pipeline(execute_returns=[1, 1, 1, 1, 1])
 
 
 def _make_redis_mock(pipeline=None):
-    """Return a minimal async Redis mock with pipeline and zrangebyscore."""
-    redis_mock = AsyncMock()
-    redis_mock.pipeline = MagicMock(return_value=pipeline or _make_pipeline_mock())
-    redis_mock.zrangebyscore = AsyncMock(return_value=[])
-    return redis_mock
+    # Migrated to canonical ``make_async_redis(pipeline=...)`` (#7280 round 6).
+    return make_async_redis(
+        pipeline=pipeline or _make_pipeline_mock(),
+        zrangebyscore_returns=[],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +57,7 @@ class TestAuditAction:
         required = {
             "SESSION_CREATE",
             "SESSION_DELETE",
+            "SESSION_EXPORT",  # #7399: added after the test was written
             "KNOWLEDGE_ADD",
             "KNOWLEDGE_REMOVE",
             "API_KEY_CREATE",
@@ -220,9 +216,7 @@ class TestQueryAuditLog:
             "services.audit.audit_log.get_async_redis_client",
             new=AsyncMock(return_value=redis),
         ):
-            results = await query_audit_log(
-                user_id="frank", action=AuditAction.SESSION_CREATE
-            )
+            results = await query_audit_log(user_id="frank", action=AuditAction.SESSION_CREATE)
 
         assert len(results) == 1
         assert results[0]["action"] == AuditAction.SESSION_CREATE.value
@@ -250,10 +244,7 @@ class TestQueryAuditLog:
     @pytest.mark.asyncio
     async def test_limit_and_offset(self):
         t = 1_700_000_000.0
-        raws = [
-            self._make_raw_entry("hank", AuditAction.USER_CREATE, t + i)
-            for i in range(10)
-        ]
+        raws = [self._make_raw_entry("hank", AuditAction.USER_CREATE, t + i) for i in range(10)]
         redis = _make_redis_mock()
         redis.zrangebyscore = AsyncMock(return_value=raws)
 

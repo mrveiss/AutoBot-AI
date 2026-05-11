@@ -38,9 +38,7 @@ class SemanticChunker(BaseExtractor):
         self.max_tokens = kwargs.get("max_tokens", 512)
         self.overlap = kwargs.get("overlap", 50)
 
-    async def process(
-        self, input_data: Any, context: PipelineContext
-    ) -> AsyncIterator[ProcessedChunk]:
+    async def process(self, input_data: Any, context: PipelineContext) -> AsyncIterator[ProcessedChunk]:
         """
         Chunk text and yield ProcessedChunk objects.
 
@@ -59,9 +57,7 @@ class SemanticChunker(BaseExtractor):
         chunks = self._chunk_text(input_data)
 
         for idx, chunk_text in enumerate(chunks):
-            start_offset, end_offset = self._calculate_offsets(
-                input_data, chunk_text, idx
-            )
+            start_offset, end_offset = self._calculate_offsets(input_data, chunk_text, idx)
 
             yield ProcessedChunk(
                 content=chunk_text,
@@ -139,9 +135,7 @@ class SemanticChunker(BaseExtractor):
         """
         return len(text.split())
 
-    def _calculate_offsets(
-        self, full_text: str, chunk_text: str, chunk_index: int
-    ) -> tuple[int, int]:
+    def _calculate_offsets(self, full_text: str, chunk_text: str, chunk_index: int) -> tuple[int, int]:
         """
         Calculate chunk offsets. Helper for process (Issue #665).
 

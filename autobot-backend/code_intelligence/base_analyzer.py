@@ -169,9 +169,7 @@ class AnalysisResult:
         language = issue.language.value
         self.issues_by_language[language] = self.issues_by_language.get(language, 0) + 1
 
-    def get_high_confidence_issues(
-        self, min_confidence: float = 0.8
-    ) -> List[AnalysisIssue]:
+    def get_high_confidence_issues(self, min_confidence: float = 0.8) -> List[AnalysisIssue]:
         """Get issues with confidence above threshold."""
         return [i for i in self.issues if i.confidence >= min_confidence]
 
@@ -344,9 +342,7 @@ class MultiLanguageAnalyzer:
         if not analyzers:
             language = detect_language(file_path)
             if language != Language.UNKNOWN:
-                result.errors.append(
-                    f"No analyzer registered for language: {language.value}"
-                )
+                result.errors.append(f"No analyzer registered for language: {language.value}")
             return result
 
         result.files_analyzed = 1
@@ -357,9 +353,7 @@ class MultiLanguageAnalyzer:
                 for issue in issues:
                     result.add_issue(issue)
             except Exception as e:
-                result.errors.append(
-                    f"Analyzer {analyzer.analyzer_name} failed on {file_path}: {e}"
-                )
+                result.errors.append(f"Analyzer {analyzer.analyzer_name} failed on {file_path}: {e}")
 
         return result
 
@@ -402,9 +396,7 @@ class MultiLanguageAnalyzer:
 
         return files_to_analyze
 
-    def _aggregate_file_results(
-        self, result: "AnalysisResult", file_result: "AnalysisResult"
-    ) -> None:
+    def _aggregate_file_results(self, result: "AnalysisResult", file_result: "AnalysisResult") -> None:
         """Aggregate file analysis results into overall result (Issue #665: extracted helper)."""
         result.files_analyzed += file_result.files_analyzed
         result.errors.extend(file_result.errors)
@@ -432,9 +424,7 @@ class MultiLanguageAnalyzer:
         start_time = time.time()
 
         result = AnalysisResult()
-        files_to_analyze = self._collect_files_to_analyze(
-            directory, recursive, exclude_patterns
-        )
+        files_to_analyze = self._collect_files_to_analyze(directory, recursive, exclude_patterns)
 
         logger.info("Analyzing %d files in %s", len(files_to_analyze), directory)
 

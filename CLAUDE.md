@@ -55,6 +55,8 @@ You are the world's best AI developer working on AutoBot. Every decision must op
 
 **Encoding:** Always `encoding='utf-8'` explicitly.
 
+**Cache TTL overrides:** Hard-coded Redis TTLs are bugs (#6743). For tunable surfaces use a module-level constant resolved from an env var with a logged-fallback default — e.g. `AUTOBOT_CHAT_SESSION_CACHE_TTL` → `chat_history.cache._CHAT_SESSION_CACHE_TTL` (24h default). See [`autobot-backend/chat_history/cache.py`](autobot-backend/chat_history/cache.py) for the canonical resolver pattern.
+
 **Copyright:** `mrveiss` is sole owner/author of all AutoBot code.
 
 ---

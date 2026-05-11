@@ -22,9 +22,9 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Request
 from fastapi.openapi.utils import get_openapi
 
+from api.schemas_agent import SelfCapabilitiesResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.ttl_constants import TTL_5_MINUTES
-from api.schemas_agent import SelfCapabilitiesResponse
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +44,7 @@ _cache_lock = asyncio.Lock()
 def _schema_hash(app_routes_count: int) -> str:
     """Cheap fingerprint: route count is enough to detect new registrations."""
     # usedforsecurity=False: fingerprint only, not a security hash  # noqa: S324
-    return hashlib.md5(  # noqa: S324
-        str(app_routes_count).encode(), usedforsecurity=False
-    ).hexdigest()
+    return hashlib.md5(str(app_routes_count).encode(), usedforsecurity=False).hexdigest()  # noqa: S324
 
 
 def _cache_is_valid(current_hash: str) -> bool:
@@ -61,6 +59,7 @@ def _cache_is_valid(current_hash: str) -> bool:
 # ---------------------------------------------------------------------------
 # Core discovery logic
 # ---------------------------------------------------------------------------
+
 
 def _openapi_paths(app: Any) -> Dict[str, Any]:
     """Extract OpenAPI paths dict from the live app, generating schema if needed."""
@@ -159,6 +158,7 @@ def _build_payload(endpoints: List[Dict[str, Any]]) -> Dict[str, Any]:
 # Public discovery function (also used by llm_self_awareness.py)
 # ---------------------------------------------------------------------------
 
+
 async def discover_endpoints(app: Any) -> Dict[str, Any]:
     """
     Return live endpoint discovery data for the given FastAPI app.
@@ -185,9 +185,7 @@ async def discover_endpoints(app: Any) -> Dict[str, Any]:
         if _cache_is_valid(current_hash):
             return _cache  # type: ignore[return-value]
 
-        logger.info(
-            "endpoint-discovery: refreshing cache (routes=%d)", len(app.routes)
-        )
+        logger.info("endpoint-discovery: refreshing cache (routes=%d)", len(app.routes))
         paths = await asyncio.to_thread(_openapi_paths, app)
         endpoints = _collect_endpoints(paths)
         payload = _build_payload(endpoints)
@@ -207,6 +205,7 @@ async def discover_endpoints(app: Any) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # API endpoint
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "/capabilities",

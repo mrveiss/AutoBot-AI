@@ -22,7 +22,7 @@ This module provides:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 
 class CausalEffectType(str, Enum):
@@ -90,9 +90,7 @@ class Dependency:
     causal_effect: Optional[CausalEffect] = None
 
     def __str__(self) -> str:
-        return (
-            f"{self.source_step_id} --[{self.dep_type.value}]--> {self.target_step_id}"
-        )
+        return f"{self.source_step_id} --[{self.dep_type.value}]--> {self.target_step_id}"
 
 
 @dataclass
@@ -132,9 +130,7 @@ class StateFrame:
     timestamp: float
     state_snapshot: Dict[str, Any]
     mutations: Dict[str, Any] = field(default_factory=dict)  # Keys that changed
-    source_mutations: Dict[str, str] = field(
-        default_factory=dict
-    )  # key → which step set it
+    source_mutations: Dict[str, str] = field(default_factory=dict)  # key → which step set it
 
     def __str__(self) -> str:
         return f"StateFrame({self.step_id}, mutations={list(self.mutations.keys())})"
@@ -157,9 +153,7 @@ class EffectTrace:
 
     workflow_id: str
     execution_frames: List[StateFrame] = field(default_factory=list)
-    mutation_map: Dict[str, List[tuple[str, float]]] = field(
-        default_factory=dict
-    )  # key → [(step, time), ...]
+    mutation_map: Dict[str, List[tuple[str, float]]] = field(default_factory=dict)  # key → [(step, time), ...]
     step_outputs: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
     def add_frame(self, frame: StateFrame) -> None:
@@ -187,7 +181,10 @@ class EffectTrace:
         return self.mutation_map.get(key, [])
 
     def __str__(self) -> str:
-        return f"EffectTrace({self.workflow_id}, {len(self.execution_frames)} frames, {len(self.mutation_map)} mutated keys)"
+        return (
+            f"EffectTrace({self.workflow_id}, {len(self.execution_frames)} frames, "
+            f"{len(self.mutation_map)} mutated keys)"
+        )
 
 
 @dataclass

@@ -35,23 +35,14 @@ async def test_workflow_execution():
         if workflow_steps:
             # Test the actual execution method that would be called
             first_step = workflow_steps[0]
-            print(  # noqa: print
-                f"   Testing step: {first_step.agent_type} - {first_step.action}"
-            )  # noqa: print
+            print(f"   Testing step: {first_step.agent_type} - {first_step.action}")  # noqa: print  # noqa: print
 
             # This is the method that was failing before
-            test_result = await orchestrator._execute_workflow_steps(
-                workflow_steps, user_message
-            )
-            print(  # noqa: print
-                f"   ✅ Workflow execution result: {test_result.get('execution_status', 'unknown')}"
-            )
+            test_result = await orchestrator._execute_workflow_steps(workflow_steps, user_message)
+            print(f"   ✅ Workflow execution result: {test_result.get('execution_status', 'unknown')}")  # noqa: print
 
             # Check if tool registry error occurs
-            if (
-                "error" in test_result
-                and "Tool registry not initialized" in test_result.get("error", "")
-            ):
+            if "error" in test_result and "Tool registry not initialized" in test_result.get("error", ""):
                 print("   ❌ TOOL REGISTRY ERROR STILL PRESENT!")  # noqa: print
                 return False
             else:
@@ -85,10 +76,6 @@ async def test_workflow_execution():
 if __name__ == "__main__":
     result = asyncio.run(test_workflow_execution())
     if result:
-        print(  # noqa: print
-            "\n✅ CONCLUSION: Workflow orchestration system is fully functional"
-        )  # noqa: print
+        print("\n✅ CONCLUSION: Workflow orchestration system is fully functional")  # noqa: print  # noqa: print
     else:
-        print(  # noqa: print
-            "\n❌ CONCLUSION: Issues detected that need further debugging"
-        )  # noqa: print
+        print("\n❌ CONCLUSION: Issues detected that need further debugging")  # noqa: print  # noqa: print

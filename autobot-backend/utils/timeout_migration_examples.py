@@ -30,6 +30,8 @@ from constants.threshold_constants import TimingConstants
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))
 
+from autobot_shared.async_compat import run_or_schedule
+
 from .long_running_operations_framework import (
     LongRunningOperationManager,
     OperationExecutionContext,
@@ -728,7 +730,8 @@ class ExistingOperationMigrator:
         await asyncio.sleep(TimingConstants.POLL_INTERVAL)  # Simulate processing time
 
         try:
-            content = file_path.read_text(encoding="utf-8", errors="ignore")
+            # #7467: was sync `file_path.read_text` blocking the event loop.
+            content = await asyncio.to_thread(file_path.read_text, encoding="utf-8", errors="ignore")
             return {
                 "path": str(file_path),
                 "size": len(content),
@@ -830,7 +833,8 @@ class ExistingOperationMigrator:
         vulnerabilities: List[Dict[str, Any]] = []
 
         try:
-            content = file_path.read_text(encoding="utf-8", errors="ignore")
+            # #7467: was sync `file_path.read_text` blocking the event loop.
+            content = await asyncio.to_thread(file_path.read_text, encoding="utf-8", errors="ignore")
 
             if "vulnerability" in scan_types:
                 self._check_vulnerability_patterns(content, vulnerabilities)
@@ -1015,4 +1019,4 @@ if __name__ == "__main__":
             print("Operation integration manager not available")  # noqa: print
 
     # Run demonstration
-    asyncio.run(demonstration())
+    run_or_schedule(demonstration())

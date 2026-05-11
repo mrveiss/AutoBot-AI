@@ -13,7 +13,6 @@ import asyncio
 import logging
 import re
 import time
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -29,8 +28,8 @@ from integrations.rate_limiter import (
     SLACK_REQUESTS_PER_HOUR,
     SLACK_REQUESTS_PER_MINUTE,
     IntegrationRateLimiter,
-    integration_rate_limiter as _shared_rate_limiter,
 )
+from integrations.rate_limiter import integration_rate_limiter as _shared_rate_limiter
 
 logger = logging.getLogger(__name__)
 

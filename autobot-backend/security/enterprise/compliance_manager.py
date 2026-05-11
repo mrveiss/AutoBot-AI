@@ -91,9 +91,7 @@ class ComplianceManager:
 
         # Initialize audit storage
         self.audit_base_path = Path(
-            self.config.get("audit_storage", {}).get(
-                "base_path", str(PATH.get_log_path("audit"))
-            )
+            self.config.get("audit_storage", {}).get("base_path", str(PATH.get_log_path("audit")))
         )
         self.audit_base_path.mkdir(parents=True, exist_ok=True)
 
@@ -371,12 +369,8 @@ class ComplianceManager:
         # Add SOC2-specific fields
         if "soc2" in self.config.get("enabled_frameworks", []):
             audit_event["soc2"] = {
-                "trust_service_criteria": self._map_to_trust_criteria(
-                    audit_event["action"]
-                ),
-                "control_objective": self._get_control_objective(
-                    audit_event["event_type"]
-                ),
+                "trust_service_criteria": self._map_to_trust_criteria(audit_event["action"]),
+                "control_objective": self._get_control_objective(audit_event["event_type"]),
                 "evidence_type": "automated_log",
             }
 
@@ -385,9 +379,7 @@ class ComplianceManager:
             audit_event["gdpr"] = {
                 "lawful_basis": self._determine_lawful_basis(audit_event),
                 "data_subject_rights": self._check_data_subject_rights(audit_event),
-                "processing_purpose": self._get_processing_purpose(
-                    audit_event["action"]
-                ),
+                "processing_purpose": self._get_processing_purpose(audit_event["action"]),
             }
 
         # Add ISO27001-specific fields
@@ -501,9 +493,7 @@ class ComplianceManager:
 
         # Add PII-specific metadata
         audit_event["pii_handling"] = {
-            "anonymization_applied": (
-                self.config.get("privacy_controls", {}).get("anonymization", False)
-            ),
+            "anonymization_applied": (self.config.get("privacy_controls", {}).get("anonymization", False)),
             "consent_verified": await self._verify_consent(audit_event),
             "retention_period": self._get_pii_retention_period(audit_event),
             "encryption_applied": True,  # PII should always be encrypted
@@ -542,11 +532,7 @@ class ComplianceManager:
         }
 
         # Store in separate PII access log for DSAR responses
-        pii_log_path = (
-            self.audit_base_path
-            / "pii_access"
-            / f"{now_utc().strftime('%Y-%m-%d')}.json"
-        )
+        pii_log_path = self.audit_base_path / "pii_access" / f"{now_utc().strftime('%Y-%m-%d')}.json"
         # Issue #358 - avoid blocking
         await asyncio.to_thread(pii_log_path.parent.mkdir, exist_ok=True)
 
@@ -607,9 +593,7 @@ class ComplianceManager:
                 await f.write(json.dumps(encrypted_event) + "\n")
 
         except OSError as e:
-            logger.error(
-                "Failed to write encrypted audit event to %s: %s", storage_path, e
-            )
+            logger.error("Failed to write encrypted audit event to %s: %s", storage_path, e)
         except Exception as e:
             logger.error("Failed to store encrypted audit event: %s", e)
 
@@ -628,14 +612,9 @@ class ComplianceManager:
         self.stats["total_events"] += 1
 
         event_type = audit_event["event_type"]
-        self.stats["events_by_type"][event_type] = (
-            self.stats["events_by_type"].get(event_type, 0) + 1
-        )
+        self.stats["events_by_type"][event_type] = self.stats["events_by_type"].get(event_type, 0) + 1
 
-        if (
-            audit_event["event_type"] == AuditEventType.AUTHENTICATION.value
-            and audit_event["outcome"] == "failure"
-        ):
+        if audit_event["event_type"] == AuditEventType.AUTHENTICATION.value and audit_event["outcome"] == "failure":
             self.stats["failed_authentications"] += 1
 
         if audit_event["event_type"] == AuditEventType.SECURITY_INCIDENT.value:
@@ -682,9 +661,7 @@ class ComplianceManager:
                     "violation_type": "unauthorized_admin_action",
                     "severity": "high",
                     "control": "CC6.1",
-                    "description": (
-                        "Administrative action performed without proper authorization"
-                    ),
+                    "description": ("Administrative action performed without proper authorization"),
                 }
             )
 
@@ -698,7 +675,9 @@ class ComplianceManager:
         if audit_event["data_classification"] in {
             "pii",
             "sensitive_pii",
-        } and not audit_event.get("pii_handling", {}).get("consent_verified", True):
+        } and not audit_event.get(
+            "pii_handling", {}
+        ).get("consent_verified", True):
             violations.append(
                 {
                     "framework": "GDPR",
@@ -711,9 +690,7 @@ class ComplianceManager:
 
         return violations
 
-    async def _handle_compliance_violations(
-        self, violations: List[Dict], audit_event: Dict
-    ):
+    async def _handle_compliance_violations(self, violations: List[Dict], audit_event: Dict):
         """Handle detected compliance violations"""
         for violation in violations:
             # Log violation
@@ -735,11 +712,7 @@ class ComplianceManager:
 
     async def _store_violation_record(self, violation_event: Dict):
         """Store compliance violation record"""
-        violations_path = (
-            self.audit_base_path
-            / "violations"
-            / f"{now_utc().strftime('%Y-%m-%d')}.jsonl"
-        )
+        violations_path = self.audit_base_path / "violations" / f"{now_utc().strftime('%Y-%m-%d')}.jsonl"
         # Issue #358 - avoid blocking
         await asyncio.to_thread(violations_path.parent.mkdir, exist_ok=True)
 
@@ -748,9 +721,7 @@ class ComplianceManager:
             async with aiofiles.open(violations_path, "a", encoding="utf-8") as f:
                 await f.write(json.dumps(violation_event) + "\n")
         except OSError as e:
-            logger.error(
-                "Failed to write violation record to %s: %s", violations_path, e
-            )
+            logger.error("Failed to write violation record to %s: %s", violations_path, e)
         except Exception as e:
             logger.error("Failed to store violation record: %s", e)
 
@@ -768,22 +739,13 @@ class ComplianceManager:
         thresholds = self.config.get("notification_thresholds", {})
 
         # Check failed authentication rate
-        if (
-            audit_event["event_type"] == AuditEventType.AUTHENTICATION.value
-            and audit_event["outcome"] == "failure"
-        ):
-            recent_failures = await self._count_recent_events(
-                AuditEventType.AUTHENTICATION, outcome="failure", hours=1
-            )
+        if audit_event["event_type"] == AuditEventType.AUTHENTICATION.value and audit_event["outcome"] == "failure":
+            recent_failures = await self._count_recent_events(AuditEventType.AUTHENTICATION, outcome="failure", hours=1)
 
             if recent_failures >= thresholds.get("failed_authentication_rate", 10):
-                await self._send_security_alert(
-                    "High authentication failure rate detected"
-                )
+                await self._send_security_alert("High authentication failure rate detected")
 
-    async def _count_recent_events(
-        self, event_type: AuditEventType, outcome: str = None, hours: int = 1
-    ) -> int:
+    async def _count_recent_events(self, event_type: AuditEventType, outcome: str = None, hours: int = 1) -> int:
         """Count recent events of specific type"""
         # This would query the audit logs for recent events
         # For now, return a placeholder
@@ -806,15 +768,9 @@ class ComplianceManager:
             "framework": framework.value,
             "period": {"start": start_date.isoformat(), "end": end_date.isoformat()},
             "generated_at": utc_timestamp(),
-            "statistics": await self._gather_compliance_statistics(
-                framework, start_date, end_date
-            ),
-            "violations": await self._gather_violations(
-                framework, start_date, end_date
-            ),
-            "evidence": await self._gather_compliance_evidence(
-                framework, start_date, end_date
-            ),
+            "statistics": await self._gather_compliance_statistics(framework, start_date, end_date),
+            "violations": await self._gather_violations(framework, start_date, end_date),
+            "evidence": await self._gather_compliance_evidence(framework, start_date, end_date),
         }
 
         # Save report if output path provided
@@ -861,9 +817,7 @@ class ComplianceManager:
     async def _save_report(self, report: Dict, output_path: Path):
         """Save compliance report to file"""
         try:
-            await asyncio.to_thread(
-                output_path.parent.mkdir, parents=True, exist_ok=True
-            )
+            await asyncio.to_thread(output_path.parent.mkdir, parents=True, exist_ok=True)
             async with aiofiles.open(output_path, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(report, indent=2))
             logger.info("Compliance report saved to %s", output_path)
@@ -895,9 +849,7 @@ class ComplianceManager:
             }
 
         # Determine overall health
-        total_violations = sum(
-            f.get("violations_count", 0) for f in status["frameworks"].values()
-        )
+        total_violations = sum(f.get("violations_count", 0) for f in status["frameworks"].values())
         if total_violations == 0:
             status["overall_health"] = "healthy"
         elif total_violations < 5:

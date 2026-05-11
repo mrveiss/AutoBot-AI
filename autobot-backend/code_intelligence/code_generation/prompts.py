@@ -233,16 +233,12 @@ Requirements:
     }
 
     @classmethod
-    def get_template(
-        cls, refactoring_type: RefactoringType
-    ) -> Optional[PromptTemplate]:
+    def get_template(cls, refactoring_type: RefactoringType) -> Optional[PromptTemplate]:
         """Get the prompt template for a refactoring type."""
         return cls.TEMPLATES.get(refactoring_type)
 
     @classmethod
-    def format_prompt(
-        cls, refactoring_type: RefactoringType, **kwargs
-    ) -> Tuple[str, str]:
+    def format_prompt(cls, refactoring_type: RefactoringType, **kwargs) -> Tuple[str, str]:
         """
         Format a prompt template with the provided variables.
 

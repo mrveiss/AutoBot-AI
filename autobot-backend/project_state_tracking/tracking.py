@@ -88,9 +88,7 @@ async def track_user_interaction_to_redis(
             return
 
         current_hour = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
-        interaction_key = (
-            f"{REDIS_METRIC_KEYS['user_interactions']}:{current_hour.timestamp()}"
-        )
+        interaction_key = f"{REDIS_METRIC_KEYS['user_interactions']}:{current_hour.timestamp()}"
         type_key = f"autobot:metrics:interaction_types:{interaction_type}:count"
 
         # Issue #379: Batch all Redis operations using pipeline
@@ -119,9 +117,7 @@ def is_significant_interaction(interaction_type: str) -> bool:
 # ============================================================================
 
 
-def _handle_sync_error_tracking(
-    error: Exception, func: Callable, args: tuple, kwargs: dict
-) -> None:
+def _handle_sync_error_tracking(error: Exception, func: Callable, args: tuple, kwargs: dict) -> None:
     """Handle error tracking for sync functions"""
     error_context = {
         "function": func.__name__,
@@ -153,11 +149,19 @@ def _schedule_error_tracking(error: Exception, context: Dict[str, Any]) -> None:
 
 
 def _run_error_tracking(error: Exception, context: Dict[str, Any]) -> None:
-    """Run error tracking in new event loop"""
-    # Import here to avoid circular imports
+    """Run error tracking from sync error handlers.
+
+    #7469: was bare asyncio.run() — crashes if this sync helper is
+    invoked from an async caller (e.g. an exception handler on an
+    async path that delegates via thread executor). The shared
+    run_or_schedule helper handles both sync and in-loop contexts.
+    """
+    # Import here to avoid circular imports.
+    from autobot_shared.async_compat import run_or_schedule
+
     from . import track_system_error
 
-    asyncio.run(track_system_error(error, context))
+    run_or_schedule(track_system_error(error, context))
 
 
 def error_tracking_decorator(func: Callable) -> Callable:

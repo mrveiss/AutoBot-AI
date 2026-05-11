@@ -64,32 +64,23 @@ class PlaywrightService:
         """Check if Playwright container is healthy"""
         try:
             timeout = aiohttp.ClientTimeout(total=self.timeout)
-            async with await self.http_client.get(
-                f"{self.base_url}/health", timeout=timeout
-            ) as response:
+            async with await self.http_client.get(f"{self.base_url}/health", timeout=timeout) as response:
                 if response.status == 200:
                     health_data = await response.json()
                     self._healthy = health_data.get("status") == "healthy"
                     logger.debug("Playwright health check: %s", health_data)
                     return self._healthy
                 else:
-                    logger.warning(
-                        "Playwright health check failed: %s", response.status
-                    )
+                    logger.warning("Playwright health check failed: %s", response.status)
                     self._healthy = False
                     return False
 
         except asyncio.TimeoutError:
-            logger.error(
-                f"Playwright health check timed out after {self.timeout}s "
-                f"at {self.base_url}"
-            )
+            logger.error(f"Playwright health check timed out after {self.timeout}s " f"at {self.base_url}")
             self._healthy = False
             return False
         except aiohttp.ClientConnectorError as e:
-            logger.error(
-                f"Playwright service connection refused at {self.base_url}: {e}"
-            )
+            logger.error(f"Playwright service connection refused at {self.base_url}: {e}")
             self._healthy = False
             return False
         except aiohttp.ClientError as e:
@@ -134,14 +125,10 @@ class PlaywrightService:
         error_details = f"Exception: {type(e).__name__}: {str(e)}"
         if hasattr(e, "__cause__") and e.__cause__:
             error_details += f" | Caused by: {e.__cause__}"
-        error_details += (
-            f" | Traceback: {traceback.format_exc()[-500:]}"  # Last 500 chars
-        )
+        error_details += f" | Traceback: {traceback.format_exc()[-500:]}"  # Last 500 chars
         return error_details
 
-    async def search_web(
-        self, query: str, search_engine: str = "duckduckgo", max_results: int = 5
-    ) -> Metadata:
+    async def search_web(self, query: str, search_engine: str = "duckduckgo", max_results: int = 5) -> Metadata:
         """
         Perform web search using embedded Playwright
 
@@ -167,9 +154,7 @@ class PlaywrightService:
                 "max_results": max_results,
             }
             result = await self._post_and_parse("search", payload)
-            logger.info(
-                f"Web search completed: '{query}' -> {len(result.get('results', []))} results"
-            )
+            logger.info(f"Web search completed: '{query}' -> {len(result.get('results', []))} results")
             return result
 
         except asyncio.TimeoutError:
@@ -205,9 +190,7 @@ class PlaywrightService:
                 "results": [],
             }
 
-    async def test_frontend(
-        self, frontend_url: str = ServiceURLs.FRONTEND_LOCAL
-    ) -> Metadata:
+    async def test_frontend(self, frontend_url: str = ServiceURLs.FRONTEND_LOCAL) -> Metadata:
         """
         Test frontend functionality using embedded Playwright
 
@@ -225,16 +208,12 @@ class PlaywrightService:
                     url=self.base_url,
                 )
 
-            result = await self._post_and_parse(
-                "test-frontend", {"frontend_url": frontend_url}
-            )
+            result = await self._post_and_parse("test-frontend", {"frontend_url": frontend_url})
             logger.info("Frontend test completed: %s", result.get("summary", {}))
             return result
 
         except asyncio.TimeoutError:
-            logger.error(
-                "Frontend test timed out after %ss: %s", self.timeout, frontend_url
-            )
+            logger.error("Frontend test timed out after %ss: %s", self.timeout, frontend_url)
             return {
                 "success": False,
                 "error": f"Frontend test timed out after {self.timeout}s",
@@ -289,12 +268,8 @@ class PlaywrightService:
                     url=self.base_url,
                 )
 
-            result = await self._post_and_parse(
-                "send-test-message", {"message": message, "frontend_url": frontend_url}
-            )
-            logger.info(
-                f"Test message sent: '{message}' -> {len(result.get('steps', []))} steps completed"
-            )
+            result = await self._post_and_parse("send-test-message", {"message": message, "frontend_url": frontend_url})
+            logger.info(f"Test message sent: '{message}' -> {len(result.get('steps', []))} steps completed")
             return result
 
         except asyncio.TimeoutError:
@@ -329,9 +304,7 @@ class PlaywrightService:
                 "steps": [],
             }
 
-    async def capture_screenshot(
-        self, url: str, full_page: bool = True, wait_timeout: int = 5000
-    ) -> Metadata:
+    async def capture_screenshot(self, url: str, full_page: bool = True, wait_timeout: int = 5000) -> Metadata:
         """
         Capture screenshot of webpage
 
@@ -363,15 +336,11 @@ class PlaywrightService:
                         "url": url,
                         "timestamp": result.get("timestamp"),
                     }
-                    logger.info(
-                        f"Screenshot captured: {url} -> {screenshot_info['size']} bytes"
-                    )
+                    logger.info(f"Screenshot captured: {url} -> {screenshot_info['size']} bytes")
                     return screenshot_info
                 else:
                     error_text = await response.text()
-                    logger.error(
-                        "Screenshot failed: %s - %s", response.status, error_text
-                    )
+                    logger.error("Screenshot failed: %s - %s", response.status, error_text)
                     raise RuntimeError(f"Screenshot failed: {response.status}")
 
         except aiohttp.ClientError as e:
@@ -407,19 +376,13 @@ class PlaywrightService:
             if self._healthy:
                 # Get additional health info from container
                 timeout = aiohttp.ClientTimeout(total=self.timeout)
-                async with await self.http_client.get(
-                    f"{self.base_url}/health", timeout=timeout
-                ) as response:
+                async with await self.http_client.get(f"{self.base_url}/health", timeout=timeout) as response:
                     if response.status == 200:
                         container_health = await response.json()
                         status.update(
                             {
-                                "browser_connected": container_health.get(
-                                    "browser_connected", False
-                                ),
-                                "container_timestamp": container_health.get(
-                                    "timestamp"
-                                ),
+                                "browser_connected": container_health.get("browser_connected", False),
+                                "container_timestamp": container_health.get("timestamp"),
                                 "uptime": "active",
                             }
                         )
@@ -464,9 +427,7 @@ async def get_playwright_service() -> PlaywrightService:
                 # Use correct Playwright container IP address
                 container_host = os.getenv("AUTOBOT_BROWSER_SERVICE_HOST")
                 if not container_host:
-                    raise ValueError(
-                        "AUTOBOT_BROWSER_SERVICE_HOST environment variable must be set"
-                    )
+                    raise ValueError("AUTOBOT_BROWSER_SERVICE_HOST environment variable must be set")
                 _playwright_service = PlaywrightService(container_host=container_host)
                 await _playwright_service.initialize()
 

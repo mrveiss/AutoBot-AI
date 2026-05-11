@@ -50,6 +50,7 @@ await stop_monitoring()
 import logging
 from typing import Any, Dict, List
 
+from autobot_shared.async_compat import run_or_schedule
 from utils.performance_monitoring.analyzers import (
     AlertAnalyzer,
     RecommendationGenerator,
@@ -172,7 +173,6 @@ async def add_alert_callback(callback):
 # =============================================================================
 
 if __name__ == "__main__":
-    import asyncio
     import json
 
     async def test_monitoring():
@@ -192,4 +192,4 @@ if __name__ == "__main__":
         print(f"Optimization recommendations: {json.dumps(recommendations, indent=2)}")  # noqa: print  # noqa: print
 
     # Run test
-    asyncio.run(test_monitoring())
+    run_or_schedule(test_monitoring())

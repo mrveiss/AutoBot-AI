@@ -16,9 +16,7 @@ from typing import List, Tuple
 logger = logging.getLogger(__name__)
 
 
-def _load_single_mcp_router(
-    module_path: str, prefix: str, tags: List[str], name: str
-) -> Tuple | None:
+def _load_single_mcp_router(module_path: str, prefix: str, tags: List[str], name: str) -> Tuple | None:
     """Load a single MCP router with graceful fallback."""
     try:
         module = importlib.import_module(module_path)
@@ -29,9 +27,7 @@ def _load_single_mcp_router(
         logger.warning("⚠️ Optional MCP router not available: %s - %s", name, e)
         return None
     except AttributeError as e:
-        logger.warning(
-            "⚠️ Router not found in module %s: %s - %s", module_path, name, e
-        )
+        logger.warning("⚠️ Router not found in module %s: %s - %s", module_path, name, e)
         return None
 
 
@@ -75,8 +71,6 @@ def load_mcp_routers():
     if optional_routers:
         logger.info("✅ Loaded %s optional MCP routers", len(optional_routers))
     else:
-        logger.info(
-            "✅ MCP routers: Core MCP routers are loaded from core_routers"
-        )
+        logger.info("✅ MCP routers: Core MCP routers are loaded from core_routers")
 
     return optional_routers

@@ -77,28 +77,26 @@ _validation_judges_lock = threading.Lock()
 # Validation dashboard now returns proper error responses when generator unavailable.
 
 
-def _try_create_dashboard_generator() -> Optional[ValidationDashboardGenerator]:  # #6794: _MissingDep handles Optional[stub] safely
+def _try_create_dashboard_generator() -> (
+    Optional[ValidationDashboardGenerator]
+):  # #6794: _MissingDep handles Optional[stub] safely
     """Try to create dashboard generator, return None on failure. (Issue #315 - extracted)"""
     try:
         generator = ValidationDashboardGenerator()
         logger.info("Dashboard generator initialized")
         return generator
     except ImportError as e:
-        logger.error(
-            "Failed to initialize dashboard generator due to import error: %s", e
-        )
+        logger.error("Failed to initialize dashboard generator due to import error: %s", e)
     except (OSError, IOError) as e:
-        logger.error(
-            "Failed to initialize dashboard generator due to file system error: %s", e
-        )
+        logger.error("Failed to initialize dashboard generator due to file system error: %s", e)
     except Exception as e:
-        logger.error(
-            "Failed to initialize dashboard generator due to unexpected error: %s", e
-        )
+        logger.error("Failed to initialize dashboard generator due to unexpected error: %s", e)
     return None
 
 
-def get_dashboard_generator() -> Optional[ValidationDashboardGenerator]:  # #6794: _MissingDep handles Optional[stub] safely
+def get_dashboard_generator() -> (
+    Optional[ValidationDashboardGenerator]
+):  # #6794: _MissingDep handles Optional[stub] safely
     """Get or create dashboard generator instance (thread-safe)"""
     global _dashboard_generator
 
@@ -125,13 +123,9 @@ def _try_create_validation_judges() -> Optional[Metadata]:
         logger.info("Validation judges initialized")
         return judges
     except ImportError as e:
-        logger.error(
-            "Failed to initialize validation judges due to import error: %s", e
-        )
+        logger.error("Failed to initialize validation judges due to import error: %s", e)
     except Exception as e:
-        logger.error(
-            "Failed to initialize validation judges due to unexpected error: %s", e
-        )
+        logger.error("Failed to initialize validation judges due to unexpected error: %s", e)
     return None
 
 
@@ -309,9 +303,7 @@ async def get_dashboard_file():
     generator = get_dashboard_generator()
 
     if generator is None:
-        raise_service_unavailable(
-            "API_0005", "Validation dashboard generator not available"
-        )
+        raise_service_unavailable("API_0005", "Validation dashboard generator not available")
 
     try:
         # Generate dashboard
@@ -337,17 +329,13 @@ async def get_dashboard_file():
     operation="generate_dashboard",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-async def generate_dashboard(
-    request: DashboardGenerateRequest, background_tasks: BackgroundTasks
-):
+async def generate_dashboard(request: DashboardGenerateRequest, background_tasks: BackgroundTasks):
     """Generate validation dashboard with custom settings"""
     try:
         generator = get_dashboard_generator()
 
         if generator is None:
-            raise_service_unavailable(
-                "API_0005", "Validation dashboard generator not available"
-            )
+            raise_service_unavailable("API_0005", "Validation dashboard generator not available")
 
         # Update generator settings
         generator.refresh_interval = request.refresh_interval
@@ -357,19 +345,11 @@ async def generate_dashboard(
             """Generate validation dashboard HTML file asynchronously."""
             try:
                 dashboard_path = await generator.generate_html_dashboard()
-                logger.info(
-                    f"Background dashboard generation completed: {dashboard_path}"
-                )
+                logger.info(f"Background dashboard generation completed: {dashboard_path}")
             except (ImportError, AttributeError) as e:
-                logger.error(
-                    "Background dashboard generation failed due to "
-                    f"missing dependency: {e}"
-                )
+                logger.error("Background dashboard generation failed due to " f"missing dependency: {e}")
             except (OSError, IOError) as e:
-                logger.error(
-                    "Background dashboard generation failed due to "
-                    f"file system error: {e}"
-                )
+                logger.error("Background dashboard generation failed due to " f"file system error: {e}")
             except Exception as e:
                 logger.error("Background dashboard generation failed: %s", e)
 
@@ -387,9 +367,7 @@ async def generate_dashboard(
         }
 
     except (ImportError, AttributeError) as e:
-        logger.error(
-            f"Error initiating dashboard generation due to missing dependency: {e}"
-        )
+        logger.error(f"Error initiating dashboard generation due to missing dependency: {e}")
         raise_service_unavailable("API_0005", "Dashboard generator not available")
 
 
@@ -404,9 +382,7 @@ async def get_dashboard_metrics():
     generator = get_dashboard_generator()
 
     if generator is None:
-        raise_service_unavailable(
-            "API_0005", "Validation dashboard generator not available"
-        )
+        raise_service_unavailable("API_0005", "Validation dashboard generator not available")
 
     try:
         # Get basic metrics
@@ -419,27 +395,11 @@ async def get_dashboard_metrics():
             "recommendation_count": len(report["recommendations"]),
             "phase_summary": {
                 "total_phases": len(report["phase_details"]),
-                "completed_phases": len(
-                    [
-                        p
-                        for p in report["phase_details"]
-                        if p["completion_percentage"] >= 95.0
-                    ]
-                ),
+                "completed_phases": len([p for p in report["phase_details"] if p["completion_percentage"] >= 95.0]),
                 "phases_in_progress": len(
-                    [
-                        p
-                        for p in report["phase_details"]
-                        if 50.0 <= p["completion_percentage"] < 95.0
-                    ]
+                    [p for p in report["phase_details"] if 50.0 <= p["completion_percentage"] < 95.0]
                 ),
-                "phases_not_started": len(
-                    [
-                        p
-                        for p in report["phase_details"]
-                        if p["completion_percentage"] < 50.0
-                    ]
-                ),
+                "phases_not_started": len([p for p in report["phase_details"] if p["completion_percentage"] < 50.0]),
             },
         }
 
@@ -465,9 +425,7 @@ async def get_trend_data():
     generator = get_dashboard_generator()
 
     if generator is None:
-        raise_service_unavailable(
-            "API_0005", "Validation dashboard generator not available"
-        )
+        raise_service_unavailable("API_0005", "Validation dashboard generator not available")
 
     try:
         # Get trend data
@@ -495,9 +453,7 @@ async def get_system_alerts():
     generator = get_dashboard_generator()
 
     if generator is None:
-        raise_service_unavailable(
-            "API_0005", "Validation dashboard generator not available"
-        )
+        raise_service_unavailable("API_0005", "Validation dashboard generator not available")
 
     try:
         # Get current report
@@ -507,12 +463,8 @@ async def get_system_alerts():
             "status": "success",
             "alerts": report["alerts"],
             "alert_counts": {
-                "critical": len(
-                    [a for a in report["alerts"] if a["level"] == "critical"]
-                ),
-                "warning": len(
-                    [a for a in report["alerts"] if a["level"] == "warning"]
-                ),
+                "critical": len([a for a in report["alerts"] if a["level"] == "critical"]),
+                "warning": len([a for a in report["alerts"] if a["level"] == "warning"]),
                 "info": len([a for a in report["alerts"] if a["level"] == "info"]),
             },
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
@@ -534,9 +486,7 @@ async def get_system_recommendations():
     generator = get_dashboard_generator()
 
     if generator is None:
-        raise_service_unavailable(
-            "API_0005", "Validation dashboard generator not available"
-        )
+        raise_service_unavailable("API_0005", "Validation dashboard generator not available")
 
     try:
         # Get current report
@@ -546,23 +496,15 @@ async def get_system_recommendations():
             "status": "success",
             "recommendations": report["recommendations"],
             "recommendation_counts": {
-                "high": len(
-                    [r for r in report["recommendations"] if r["urgency"] == "high"]
-                ),
-                "medium": len(
-                    [r for r in report["recommendations"] if r["urgency"] == "medium"]
-                ),
-                "low": len(
-                    [r for r in report["recommendations"] if r["urgency"] == "low"]
-                ),
+                "high": len([r for r in report["recommendations"] if r["urgency"] == "high"]),
+                "medium": len([r for r in report["recommendations"] if r["urgency"] == "medium"]),
+                "low": len([r for r in report["recommendations"] if r["urgency"] == "low"]),
             },
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     except (ImportError, AttributeError) as e:
-        logger.error(
-            f"Error getting system recommendations due to missing dependency: {e}"
-        )
+        logger.error(f"Error getting system recommendations due to missing dependency: {e}")
         raise_service_unavailable("API_0005", "Dashboard generator not available")
 
 
@@ -594,9 +536,7 @@ async def judge_workflow_step(request: dict):
 
         # Evaluate with workflow step judge
         workflow_judge = judges["workflow_step_judge"]
-        judgment = await workflow_judge.evaluate_workflow_step(
-            step_data, workflow_context, user_context
-        )
+        judgment = await workflow_judge.evaluate_workflow_step(step_data, workflow_context, user_context)
 
         return {
             "status": "success",
@@ -652,9 +592,7 @@ async def judge_agent_response(request: dict):
     try:
         # Evaluate with agent response judge
         response_judge = judges["agent_response_judge"]
-        judgment = await response_judge.evaluate_agent_response(
-            user_request, response, agent_type, context
-        )
+        judgment = await response_judge.evaluate_agent_response(user_request, response, agent_type, context)
 
         return {
             "status": "success",
@@ -679,9 +617,7 @@ async def judge_agent_response(request: dict):
         }
 
     except (ImportError, AttributeError) as e:
-        logger.error(
-            "Error in agent response judgment due to missing dependency: %s", e
-        )
+        logger.error("Error in agent response judgment due to missing dependency: %s", e)
         raise_service_unavailable("API_0005", "Validation judges not available")
     except ValueError as e:
         logger.error("Error in agent response judgment due to invalid input: %s", e)
@@ -716,10 +652,7 @@ async def get_judge_status():
             metrics = judge.get_performance_metrics()
             judge_metrics[judge_name] = metrics
         except (ImportError, AttributeError) as e:
-            logger.error(
-                f"Error getting metrics for {judge_name} due to "
-                f"missing dependency: {e}"
-            )
+            logger.error(f"Error getting metrics for {judge_name} due to " f"missing dependency: {e}")
             judge_metrics[judge_name] = {
                 "error": "Judge not available",
                 "details": "Dependency not available",

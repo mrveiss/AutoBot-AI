@@ -28,9 +28,7 @@ from code_intelligence.base_analyzer import (
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level frozenset for dangerous shell commands
-_DANGEROUS_COMMANDS = frozenset(
-    {"rm", "mv", "cp", "chmod", "chown", "mkdir", "rmdir", "cd"}
-)
+_DANGEROUS_COMMANDS = frozenset({"rm", "mv", "cp", "chmod", "chown", "mkdir", "rmdir", "cd"})
 
 # Issue #380: Pre-compiled regex patterns for set options checking
 _SET_E_RE = re.compile(r"set\s+-[a-z]*e")
@@ -360,9 +358,7 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
         self._check_set_options()
         self._check_unquoted_variables()
 
-        logger.debug(
-            "Shell Analyzer found %d issues in %s", len(self.issues), file_path
-        )
+        logger.debug("Shell Analyzer found %d issues in %s", len(self.issues), file_path)
         return self.issues
 
     def _should_skip_line(self, line: str) -> bool:
@@ -417,9 +413,7 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
             current_code=line.strip(),
             confidence=confidence,
             potential_false_positive=confidence < 0.80,
-            false_positive_reason=(
-                "" if confidence >= 0.80 else "Context may justify this pattern"
-            ),
+            false_positive_reason=("" if confidence >= 0.80 else "Context may justify this pattern"),
             rule_id=rule_id,
             tags=["shell", category.value],
         )
@@ -437,9 +431,7 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
         try:
             match = re.search(pattern, line, re.IGNORECASE)
             if match:
-                issue = self._create_pattern_issue(
-                    line_num, line, match, pattern_data, prefix, category
-                )
+                issue = self._create_pattern_issue(line_num, line, match, pattern_data, prefix, category)
                 self.issues.append(issue)
         except re.error:
             pass  # Skip invalid regex patterns
@@ -457,9 +449,7 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
                 continue
 
             for pattern, pattern_data in patterns.items():
-                self._check_pattern_on_line(
-                    line_num, line, pattern, pattern_data, prefix, category
-                )
+                self._check_pattern_on_line(line_num, line, pattern, pattern_data, prefix, category)
 
     def _check_security_critical(self) -> None:
         """Check for critical security issues."""
@@ -562,9 +552,7 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
 
     def _check_unquoted_variables(self) -> None:
         """Advanced check for unquoted variables in dangerous contexts."""
-        for line_num, line in enumerate(
-            self.lines, start=1
-        ):  # Issue #380: use _DANGEROUS_COMMANDS
+        for line_num, line in enumerate(self.lines, start=1):  # Issue #380: use _DANGEROUS_COMMANDS
             if self._should_skip_line(line):
                 continue
 
@@ -591,8 +579,7 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
                             line_end=line_num,
                             title=f"Unquoted variable ${var_name} in {cmd}",
                             description=(
-                                "Unquoted variable expansion can cause issues "
-                                "with spaces or special characters"
+                                "Unquoted variable expansion can cause issues " "with spaces or special characters"
                             ),
                             recommendation=f'Quote the variable: "${var_name}" or "${{var_name}}"',
                             current_code=line.strip(),

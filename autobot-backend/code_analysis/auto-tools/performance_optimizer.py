@@ -20,11 +20,7 @@ class ConsoleLogCleaner:
 
     def __init__(self, project_root: str, backup_dir: str = None):
         self.project_root = Path(project_root)
-        self.backup_dir = (
-            Path(backup_dir)
-            if backup_dir
-            else self.project_root / ".console-cleanup-backups"
-        )
+        self.backup_dir = Path(backup_dir) if backup_dir else self.project_root / ".console-cleanup-backups"
         self.report = {
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "files_processed": 0,
@@ -85,9 +81,7 @@ class ConsoleLogCleaner:
             return False
 
         # Skip test files
-        if any(
-            pattern in file_path.name.lower() for pattern in ["test", "spec", "mock"]
-        ):
+        if any(pattern in file_path.name.lower() for pattern in ["test", "spec", "mock"]):
             return False
 
         # Skip minified files
@@ -138,19 +132,13 @@ class ConsoleLogCleaner:
             line_start_pos = current_pos
             current_pos += len(line) + 1  # +1 for newline
             stripped = line.strip()
-            if (
-                stripped.startswith("//")
-                or stripped.startswith("*")
-                or stripped.startswith("/*")
-            ):
+            if stripped.startswith("//") or stripped.startswith("*") or stripped.startswith("/*"):
                 continue
             for match in re.finditer(r"console\s*\.\s*log\s*\(", line):
                 before_match = line[: match.start()]
                 if self.is_in_string_or_comment_on_line(before_match, line):
                     continue
-                result = self._resolve_console_log_match(
-                    content, line, line_start_pos, match
-                )
+                result = self._resolve_console_log_match(content, line, line_start_pos, match)
                 if result:
                     console_logs.append(result)
         return console_logs
@@ -176,9 +164,7 @@ class ConsoleLogCleaner:
 
         return single_quotes % 2 == 1 or double_quotes % 2 == 1
 
-    def find_multiline_console_log(
-        self, content: str, start_pos: int
-    ) -> Tuple[int, int, str]:
+    def find_multiline_console_log(self, content: str, start_pos: int) -> Tuple[int, int, str]:
         """Find multiline console.log statement."""
         # Simple approach: look for next semicolon or end of block
         search_pos = start_pos
@@ -205,9 +191,7 @@ class ConsoleLogCleaner:
                             end_pos += 1
                         return (start_pos, end_pos, content[start_pos:end_pos])
             else:
-                if char == string_char and (
-                    search_pos == 0 or content[search_pos - 1] != "\\"
-                ):
+                if char == string_char and (search_pos == 0 or content[search_pos - 1] != "\\"):
                     in_string = False
                     string_char = None
 
@@ -273,14 +257,10 @@ class ConsoleLogCleaner:
             line_content = content[line_start:line_end].strip()
 
             # If the line only contains the console.log, remove the entire line
-            if line_content == match.strip() or line_content == match.strip().rstrip(
-                ";"
-            ):
+            if line_content == match.strip() or line_content == match.strip().rstrip(";"):
                 # Remove entire line including newline
                 if line_end < len(content):
-                    modified_content = (
-                        modified_content[:line_start] + modified_content[line_end + 1 :]
-                    )
+                    modified_content = modified_content[:line_start] + modified_content[line_end + 1 :]
                 else:
                     # Last line, just remove from line start
                     modified_content = modified_content[:line_start].rstrip() + "\n"
@@ -295,9 +275,7 @@ class ConsoleLogCleaner:
             if len(log_content) > 50:
                 log_content = log_content[:50] + "..."
 
-            removed_details.append(
-                {"line": content[:start].count("\n") + 1, "content": log_content}
-            )
+            removed_details.append({"line": content[:start].count("\n") + 1, "content": log_content})
 
         # Store details for report
         if removed_count > 0:
@@ -319,9 +297,7 @@ class ConsoleLogCleaner:
                 original_content = f.read()
 
             # Remove console.logs
-            modified_content, removed_count = self.remove_console_logs(
-                original_content, file_path
-            )
+            modified_content, removed_count = self.remove_console_logs(original_content, file_path)
 
             # If content changed, write back
             if removed_count > 0:
@@ -337,7 +313,7 @@ class ConsoleLogCleaner:
 
             return False
 
-        except Exception as e:
+        except Exception:
             self.report["errors"].append(
                 {
                     "file": str(file_path.relative_to(self.project_root)),
@@ -350,9 +326,7 @@ class ConsoleLogCleaner:
         """Clean console.logs from entire project or specific directory."""
         search_root = Path(target_dir) if target_dir else self.project_root
 
-        print(
-            f"🔍 Scanning for console.log statements in: {search_root}"
-        )  # noqa: print
+        print(f"🔍 Scanning for console.log statements in: {search_root}")  # noqa: print
         print(f"📁 Backups will be saved to: {self.backup_dir}")  # noqa: print
 
         # Find all files to process
@@ -383,9 +357,7 @@ class ConsoleLogCleaner:
     def _build_files_and_errors_section(self) -> str:
         """Build the modified-files and errors sections of the report. Issue #1183."""
         content = ""
-        for detail in sorted(
-            self.report["details"], key=lambda x: x["removed_count"], reverse=True
-        ):
+        for detail in sorted(self.report["details"], key=lambda x: x["removed_count"], reverse=True):
             content += f"\n### {detail['file']}\n"
             content += f"- Removed {detail['removed_count']} console.log statements\n"
             content += "- Locations:\n"
@@ -424,11 +396,7 @@ class ConsoleLogCleaner:
             "4. **Build-time Removal**: Consider using webpack/rollup plugins\n\n"
             f"## Backup Location\nAll modified files have been backed up to: `{self.backup_dir}`\n"
         )
-        report_path = (
-            Path(output_file)
-            if output_file
-            else self.project_root / "console-cleanup-report.md"
-        )
+        report_path = Path(output_file) if output_file else self.project_root / "console-cleanup-report.md"
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(report_content)
         print(f"\n📄 Report saved to: {report_path}")  # noqa: print
@@ -440,15 +408,9 @@ class ConsoleLogCleaner:
 
 def main():
     """Main entry point for the console.log cleanup tool."""
-    parser = argparse.ArgumentParser(
-        description="Remove console.log statements from JavaScript/TypeScript/Vue files"
-    )
-    parser.add_argument(
-        "project_path", help="Path to the project root or specific directory to clean"
-    )
-    parser.add_argument(
-        "--target-dir", help="Specific directory to clean (e.g., src/)", default=None
-    )
+    parser = argparse.ArgumentParser(description="Remove console.log statements from JavaScript/TypeScript/Vue files")
+    parser.add_argument("project_path", help="Path to the project root or specific directory to clean")
+    parser.add_argument("--target-dir", help="Specific directory to clean (e.g., src/)", default=None)
     parser.add_argument("--backup-dir", help="Directory to store backups", default=None)
     parser.add_argument("--report", help="Path for the cleanup report", default=None)
     parser.add_argument(
@@ -484,9 +446,7 @@ def main():
 
     # Print summary
     print(f"\n🎉 Cleanup Complete!")  # noqa: print
-    print(
-        f"   - Removed {report['console_logs_removed']} console.log statements"
-    )  # noqa: print
+    print(f"   - Removed {report['console_logs_removed']} console.log statements")  # noqa: print
     print(f"   - Modified {report['files_modified']} files")  # noqa: print
     print(f"   - Backups saved to: {cleaner.backup_dir}")  # noqa: print
 
@@ -497,9 +457,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) == 1:
         # Default to AutoBot frontend directory
-        project_root = os.environ.get(
-            "AUTOBOT_BASE_DIR", "/opt/autobot"
-        )  # noqa: ssot-path
+        project_root = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")  # noqa: ssot-path
         target_dir = "autobot-frontend/src"
 
         print("🚀 AutoBot Console.log Performance Fix Agent")  # noqa: print

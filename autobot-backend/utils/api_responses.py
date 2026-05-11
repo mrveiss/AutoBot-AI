@@ -72,10 +72,11 @@ return error_response(
 
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.time_utils import utc_timestamp
 from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+
+from autobot_shared.time_utils import utc_timestamp
 
 # ============================================================================
 # Response Models (Pydantic)

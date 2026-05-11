@@ -191,9 +191,7 @@ class TestGetLayerNames:
         """Returned list length must equal num_hidden_layers."""
         engine = _make_engine()
         for n in (1, 8, 32):
-            names = engine.get_layer_names(
-                {"model_type": "llama", "num_hidden_layers": n}
-            )
+            names = engine.get_layer_names({"model_type": "llama", "num_hidden_layers": n})
             assert len(names) == n
 
 
@@ -339,9 +337,7 @@ class TestForwardPass:
         engine = _make_engine()
         hidden = torch.randn(1, 3, 4)
         mock_cache = MagicMock()
-        result = engine.forward_pass(
-            hidden, [lambda x: x], kv_cache=mock_cache
-        )  # noqa: E731
+        result = engine.forward_pass(hidden, [lambda x: x], kv_cache=mock_cache)  # noqa: E731
         assert result.shape == hidden.shape
 
 
@@ -374,9 +370,7 @@ class TestGenerate:
 
         with (
             patch.object(engine, "_load_tokeniser", return_value=mock_tokeniser),
-            patch.object(
-                engine, "load_model_config", return_value={"num_hidden_layers": 1}
-            ),
+            patch.object(engine, "load_model_config", return_value={"num_hidden_layers": 1}),
             patch.object(engine, "get_layer_names", return_value=["model.layers.0"]),
             patch.object(engine, "_resolve_checkpoint_path", return_value="/fake/path"),
             patch.object(engine, "_run_layer_loop", return_value=fake_logits),
@@ -401,9 +395,7 @@ class TestGenerate:
 
         with (
             patch.object(engine, "_load_tokeniser", return_value=mock_tokeniser),
-            patch.object(
-                engine, "load_model_config", return_value={"num_hidden_layers": 1}
-            ),
+            patch.object(engine, "load_model_config", return_value={"num_hidden_layers": 1}),
             patch.object(engine, "get_layer_names", return_value=["model.layers.0"]),
             patch.object(engine, "_resolve_checkpoint_path", return_value="/fake/path"),
             patch.object(engine, "_run_layer_loop", side_effect=counted_run_layer_loop),
@@ -438,9 +430,7 @@ class TestGenerate:
 
         with (
             patch.object(engine, "_load_tokeniser", return_value=mock_tokeniser),
-            patch.object(
-                engine, "load_model_config", return_value={"num_hidden_layers": 1}
-            ),
+            patch.object(engine, "load_model_config", return_value={"num_hidden_layers": 1}),
             patch.object(engine, "get_layer_names", return_value=["model.layers.0"]),
             patch.object(engine, "_resolve_checkpoint_path", return_value="/fake/path"),
             patch.object(engine, "_run_layer_loop", side_effect=counted_run_layer_loop),
@@ -467,9 +457,7 @@ class TestStatsTracking:
         eos_id = 999
         mock_tokeniser = MagicMock()
         mock_tokeniser.eos_token_id = eos_id
-        mock_tokeniser.return_value = MagicMock(
-            input_ids=torch.zeros(1, 3, dtype=torch.long)
-        )
+        mock_tokeniser.return_value = MagicMock(input_ids=torch.zeros(1, 3, dtype=torch.long))
         mock_tokeniser.decode.return_value = "abc"
 
         # Use a non-EOS logit so we generate exactly max_new_tokens tokens
@@ -478,9 +466,7 @@ class TestStatsTracking:
 
         with (
             patch.object(engine, "_load_tokeniser", return_value=mock_tokeniser),
-            patch.object(
-                engine, "load_model_config", return_value={"num_hidden_layers": 1}
-            ),
+            patch.object(engine, "load_model_config", return_value={"num_hidden_layers": 1}),
             patch.object(engine, "get_layer_names", return_value=["model.layers.0"]),
             patch.object(engine, "_resolve_checkpoint_path", return_value="/fake/path"),
             patch.object(engine, "_run_layer_loop", return_value=fake_logits),

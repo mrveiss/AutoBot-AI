@@ -86,9 +86,7 @@ class TestSecurityCardSigner:
     def test_sign_raises_without_secret(self):
         from a2a.security import SecurityCardSigner
 
-        with patch(
-            "a2a.security._get_secret", side_effect=RuntimeError("AUTOBOT_A2A_SECRET")
-        ):
+        with patch("a2a.security._get_secret", side_effect=RuntimeError("AUTOBOT_A2A_SECRET")):
             with pytest.raises(RuntimeError, match="AUTOBOT_A2A_SECRET"):
                 SecurityCardSigner.sign({})
 
@@ -255,9 +253,7 @@ class TestCapabilityVerifier:
         with patch("a2a.capability_verifier._fetch_and_verify") as mock_fetch:
             from a2a.capability_verifier import CapabilityReport
 
-            mock_fetch.return_value = CapabilityReport(
-                verified=False, warnings=["Network error"]
-            )
+            mock_fetch.return_value = CapabilityReport(verified=False, warnings=["Network error"])
             report = await verify_remote_card("https://unreachable.invalid")
         assert report.verified is False
 
@@ -297,34 +293,71 @@ class TestCapabilityVerifier:
 
 
 class TestRateLimiting:
+    """Rate-limit tests — use the in-process fallback path of the shared
+    IPRateLimiter so tests don't require a live Redis. The limiter logic
+    itself is comprehensively tested in
+    ``autobot_shared/rate_limit_test.py`` (#7271). These tests only verify
+    a2a's wiring + that the shared limiter behaves correctly when stubbed
+    to use the fallback path.
+
+    Pre-#7271 this file directly poked module-level globals
+    (``_rate_buckets``, ``_check_rate_limit``, ``_RATE_LIMIT``). Those
+    symbols were collapsed into ``_a2a_limiter`` (an IPRateLimiter
+    instance); tests now exercise the limiter's public API.
+    """
+
     def teardown_method(self):
-        from api.a2a import _rate_buckets
+        from api.a2a import _a2a_limiter
 
-        _rate_buckets.clear()
+        _a2a_limiter._reset_inprocess()
 
-    def test_within_limit_passes(self):
-        from api.a2a import _check_rate_limit
+    @pytest.mark.asyncio
+    async def test_within_limit_passes(self):
+        from unittest.mock import AsyncMock, patch
 
-        for _ in range(5):
-            _check_rate_limit("1.2.3.4")  # should not raise
+        from api.a2a import _a2a_limiter
 
-    def test_exceeds_limit_raises(self):
+        # Stub Redis to None → forces in-process fallback path.
+        with patch(
+            "autobot_shared.redis_client.get_async_redis_client",
+            new=AsyncMock(return_value=None),
+        ):
+            for _ in range(5):
+                await _a2a_limiter.check_or_429("1.2.3.4")  # should not raise
+
+    @pytest.mark.asyncio
+    async def test_exceeds_limit_raises(self):
+        from unittest.mock import AsyncMock, patch
+
         from fastapi import HTTPException
 
-        from api.a2a import _RATE_LIMIT, _check_rate_limit, _rate_buckets
+        from api.a2a import _a2a_limiter
 
+        # Pre-seed the in-process bucket at the limit.
         now = time.time()
-        _rate_buckets["9.9.9.9"] = [now] * _RATE_LIMIT
-        with pytest.raises(HTTPException) as exc_info:
-            _check_rate_limit("9.9.9.9")
-        assert exc_info.value.status_code == 429
+        _a2a_limiter._inprocess_buckets["9.9.9.9"] = [now] * _a2a_limiter.limit
+        with patch(
+            "autobot_shared.redis_client.get_async_redis_client",
+            new=AsyncMock(return_value=None),
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await _a2a_limiter.check_or_429("9.9.9.9")
+            assert exc_info.value.status_code == 429
 
-    def test_old_entries_expire(self):
-        from api.a2a import _RATE_LIMIT, _check_rate_limit, _rate_buckets
+    @pytest.mark.asyncio
+    async def test_old_entries_expire(self):
+        from unittest.mock import AsyncMock, patch
 
-        old_time = time.time() - 120  # 2 minutes ago
-        _rate_buckets["5.5.5.5"] = [old_time] * _RATE_LIMIT
-        _check_rate_limit("5.5.5.5")  # should NOT raise — entries are stale
+        from api.a2a import _a2a_limiter
+
+        # Entries from 2 minutes ago — outside the 60s sliding window.
+        old_time = time.time() - 120
+        _a2a_limiter._inprocess_buckets["5.5.5.5"] = [old_time] * _a2a_limiter.limit
+        with patch(
+            "autobot_shared.redis_client.get_async_redis_client",
+            new=AsyncMock(return_value=None),
+        ):
+            await _a2a_limiter.check_or_429("5.5.5.5")  # should NOT raise — entries are stale
 
 
 # ---------------------------------------------------------------------------
@@ -340,11 +373,7 @@ class TestJwtSubExtraction:
         from api.a2a import _extract_jwt_sub
 
         header = base64.urlsafe_b64encode(b'{"alg":"HS256"}').rstrip(b"=").decode()
-        payload = (
-            base64.urlsafe_b64encode(json.dumps({"sub": "user42"}).encode())
-            .rstrip(b"=")
-            .decode()
-        )
+        payload = base64.urlsafe_b64encode(json.dumps({"sub": "user42"}).encode()).rstrip(b"=").decode()
         token = f"Bearer {header}.{payload}.fakesig"
         assert _extract_jwt_sub(token) == "user42"
 

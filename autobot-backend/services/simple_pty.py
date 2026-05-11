@@ -131,9 +131,7 @@ class SimplePTY:
         bash_cmd = ["/bin/bash"]
         if self.use_login_shell:
             bash_cmd.append("--login")
-            logger.info(
-                f"Starting login shell for session {self.session_id} (loads profile files)"
-            )
+            logger.info(f"Starting login shell for session {self.session_id} (loads profile files)")
         self.process = subprocess.Popen(
             bash_cmd,
             stdin=slave_fd,
@@ -164,9 +162,7 @@ class SimplePTY:
             env["TERM"] = "xterm-256color"
             if self.custom_ps1:
                 env["PS1"] = self.custom_ps1
-                logger.info(
-                    f"Setting custom PS1 prompt for session {self.session_id}: {self.custom_ps1}"
-                )
+                logger.info(f"Setting custom PS1 prompt for session {self.session_id}: {self.custom_ps1}")
 
             self._spawn_bash_process(slave_fd, env, initial_cwd)
 
@@ -175,9 +171,7 @@ class SimplePTY:
             self.reader_thread.start()
             self.writer_thread.start()
 
-            logger.info(
-                f"PTY started successfully for session {self.session_id}, PID: {self.process.pid}"
-            )
+            logger.info(f"PTY started successfully for session {self.session_id}, PID: {self.process.pid}")
             return True
 
         except Exception as e:
@@ -320,12 +314,7 @@ class SimplePTY:
 
     def is_alive(self) -> bool:
         """Check if PTY is alive"""
-        return (
-            self.running
-            and self.process
-            and self.process.poll() is None
-            and self.master_fd is not None
-        )
+        return self.running and self.process and self.process.poll() is None and self.master_fd is not None
 
     def cleanup(self):
         """Clean up PTY"""

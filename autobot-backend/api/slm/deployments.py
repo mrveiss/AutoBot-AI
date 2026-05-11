@@ -83,16 +83,12 @@ def _context_to_dict(ctx: DeploymentContext) -> dict:
         "deployment_id": ctx.deployment_id,
         "role_name": ctx.role_name,
         "target_nodes": ctx.target_nodes,
-        "strategy": (
-            ctx.strategy.value if hasattr(ctx.strategy, "value") else ctx.strategy
-        ),
+        "strategy": (ctx.strategy.value if hasattr(ctx.strategy, "value") else ctx.strategy),
         "playbook_path": ctx.playbook_path,
         "status": ctx.status.value if hasattr(ctx.status, "value") else ctx.status,
         "steps": [
             {
-                "step_type": (
-                    s.step_type.value if hasattr(s.step_type, "value") else s.step_type
-                ),
+                "step_type": (s.step_type.value if hasattr(s.step_type, "value") else s.step_type),
                 "node_id": s.node_id,
                 "node_name": s.node_name,
                 "description": s.description,
@@ -181,10 +177,7 @@ async def list_deployments(
     deployments = orch.active_deployments
     if status_filter:
         deployments = [
-            d
-            for d in deployments
-            if (d.status.value if hasattr(d.status, "value") else d.status)
-            == status_filter
+            d for d in deployments if (d.status.value if hasattr(d.status, "value") else d.status) == status_filter
         ]
     return {
         "deployments": [_context_to_dict(d) for d in deployments],
@@ -231,9 +224,7 @@ async def execute_deployment(
             detail=f"Could not execute deployment {deployment_id!r}",
         )
     logger.info("Deployment execution started: %s", deployment_id)
-    return DeploymentActionResponse(
-        deployment_id=deployment_id, action="execute", success=True
-    )
+    return DeploymentActionResponse(deployment_id=deployment_id, action="execute", success=True)
 
 
 @router.post("/{deployment_id}/cancel", summary="Cancel a deployment")
@@ -255,9 +246,7 @@ async def cancel_deployment(
             detail="Deployment cannot be cancelled in its current state",
         )
     logger.info("Deployment cancelled: %s", deployment_id)
-    return DeploymentActionResponse(
-        deployment_id=deployment_id, action="cancel", success=True
-    )
+    return DeploymentActionResponse(deployment_id=deployment_id, action="cancel", success=True)
 
 
 @router.post("/{deployment_id}/rollback", summary="Rollback a deployment")
@@ -279,6 +268,4 @@ async def rollback_deployment(
             detail="No deployed nodes to roll back",
         )
     logger.info("Rollback triggered for deployment %s", deployment_id)
-    return DeploymentActionResponse(
-        deployment_id=deployment_id, action="rollback", success=True
-    )
+    return DeploymentActionResponse(deployment_id=deployment_id, action="rollback", success=True)

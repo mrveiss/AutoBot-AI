@@ -25,9 +25,7 @@ async def test_security_layer():
 
     print("✅ Security layer initialized")  # noqa: print
     print(f"   - Authentication enabled: {security.enable_auth}")  # noqa: print
-    print(  # noqa: print
-        f"   - Command security enabled: {security.enable_command_security}"
-    )  # noqa: print
+    print(f"   - Command security enabled: {security.enable_command_security}")  # noqa: print  # noqa: print
     print(f"   - Docker sandbox enabled: {security.use_docker_sandbox}")  # noqa: print
     print(f"   - Audit log file: {security.audit_log_file}")  # noqa: print
     print()  # noqa: print
@@ -99,9 +97,7 @@ async def test_security_layer():
             "forbidden": "⛔",
         }.get(risk.value, "⚪")
 
-        print(  # noqa: print
-            f"   {risk_color} {risk.value:10} | {cmd:30} | {', '.join(reasons[:2])}"
-        )  # noqa: print
+        print(f"   {risk_color} {risk.value:10} | {cmd:30} | {', '.join(reasons[:2])}")  # noqa: print  # noqa: print
 
     print()  # noqa: print
 
@@ -135,9 +131,7 @@ async def test_docker_sandbox():
         # Test if Docker is available
         import subprocess
 
-        result = subprocess.run(
-            ["docker", "--version"], capture_output=True, text=True, timeout=10
-        )
+        result = subprocess.run(["docker", "--version"], capture_output=True, text=True, timeout=10)
         if result.returncode == 0:
             print(f"✅ Docker available: {result.stdout.strip()}")  # noqa: print
 
@@ -158,9 +152,7 @@ async def test_docker_sandbox():
                 # Test safe command in sandbox
                 result = await executor.run_shell_command("echo 'Hello from sandbox!'")
                 print(f"   Sandbox test result: {result['status']}")  # noqa: print
-                print(  # noqa: print
-                    f"   Sandbox security info: {result.get('security', {})}"
-                )  # noqa: print
+                print(f"   Sandbox security info: {result.get('security', {})}")  # noqa: print  # noqa: print
                 if result.get("stdout"):
                     print(f"   Sandbox output: {result['stdout']}")  # noqa: print
             else:

@@ -18,6 +18,7 @@ from knowledge.search_components.retrieval_learner import (
     _ucb1_score,
     get_retrieval_learner,
 )
+from tests.fixtures import make_async_redis
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -25,15 +26,10 @@ from knowledge.search_components.retrieval_learner import (
 
 
 def _make_redis_mock() -> AsyncMock:
-    """Return a Redis mock with sensible defaults."""
-    redis = AsyncMock()
-    redis.xrange = AsyncMock(return_value=[])
-    redis.hgetall = AsyncMock(return_value={})
-    redis.hset = AsyncMock()
-    redis.expire = AsyncMock()
-    redis.delete = AsyncMock()
-    redis.scan = AsyncMock(return_value=(0, []))
-    return redis
+    # Migrated to canonical ``make_async_redis()`` (#7280 round 5).
+    # ``hgetall``, ``hset``, ``expire``, ``delete`` are canonical defaults;
+    # ``xrange=[]`` and ``scan=(0, [])`` flow through ``**extra_methods``.
+    return make_async_redis(xrange=[], scan=(0, []))
 
 
 def _make_learner(redis: AsyncMock) -> RetrievalLearner:
@@ -217,7 +213,16 @@ class TestConsumeFeedbackStream:
 
     @pytest.mark.asyncio
     async def test_neutral_event_not_distilled(self):
-        """Identical retrieved and ranked IDs → not successful → no hset call."""
+        """Identical retrieved and ranked IDs → not successful → no PATTERN hset.
+
+        #7386: production legitimately calls ``redis.hset(_CURSOR_HASH_KEY, ...)``
+        after processing any event — cursor advance is required for correctness
+        so the next ``consume_feedback_stream`` call doesn't re-process the
+        same events. The original assertion ``not redis.hset.called`` was too
+        coarse — it caught the cursor-save call as well as the (absent)
+        pattern hset. Assert specifically that no hset hit the
+        ``rag:retrieval:pattern:*`` namespace.
+        """
         redis = _make_redis_mock()
         ids = ["a", "b", "c"]
         fields = _make_feedback_fields(retrieved=ids, ranked=ids, complexity="simple")
@@ -226,7 +231,17 @@ class TestConsumeFeedbackStream:
         learner = _make_learner(redis)
         await learner.consume_feedback_stream("2026-01-01")
 
-        assert not redis.hset.called
+        # Cursor save (`rag:rl:cursors`) is allowed; pattern persistence
+        # (`rag:retrieval:pattern:*`) is what neutral events MUST NOT trigger.
+        pattern_hset_calls = [
+            call
+            for call in redis.hset.call_args_list
+            if call.args and isinstance(call.args[0], str) and call.args[0].startswith("rag:retrieval:pattern:")
+        ]
+        assert not pattern_hset_calls, (
+            f"#7386: neutral event triggered pattern persistence — "
+            f"unexpected hset calls to pattern keys: {pattern_hset_calls}"
+        )
 
     @pytest.mark.asyncio
     async def test_cursor_advances_after_processing(self):
@@ -545,8 +560,8 @@ class TestGetMatchingPatternUCB1:
 
         # Both patterns match the same complexity-only key — we wire exact key → high,
         # complexity-only key → low so both qualify for comparison.
-        exact_hash = _compute_pattern_hash("simple", [])
-        complexity_hash = _compute_pattern_hash("simple", [])
+        _compute_pattern_hash("simple", [])
+        _compute_pattern_hash("simple", [])
         # exact_hash == complexity_hash when categories=[] → only one lookup happens
         # so instead we use categories to split them.
         exact_hash_with_cat = _compute_pattern_hash("simple", ["cat"])
@@ -667,7 +682,7 @@ class TestBenchmarkFeedbackRoundTrip:
     async def test_publish_feedback_events_writes_correct_schema(self):
         """Each published entry must include all fields expected by RetrievalLearner."""
         import json
-        from unittest.mock import AsyncMock, call
+        from unittest.mock import AsyncMock
 
         from knowledge.rag_benchmarks import BenchmarkResult, publish_feedback_events
 
@@ -720,7 +735,6 @@ class TestBenchmarkFeedbackRoundTrip:
     @pytest.mark.asyncio
     async def test_learner_processes_benchmark_generated_events(self):
         """RetrievalLearner.consume_feedback_stream() processes benchmark events and writes pattern."""
-        import json
 
         from knowledge.rag_benchmarks import _BENCHMARK_USER
 
@@ -752,9 +766,9 @@ class TestBenchmarkFeedbackRoundTrip:
         # The pattern key contains '__global__'; cursor key is 'rag:rl:cursors'.
         assert redis.hset.called
         all_hset_keys = [call[0][0] for call in redis.hset.call_args_list]
-        assert any("__global__" in k for k in all_hset_keys), (
-            f"Expected a pattern key containing '__global__' in hset calls; got {all_hset_keys}"
-        )
+        assert any(
+            "__global__" in k for k in all_hset_keys
+        ), f"Expected a pattern key containing '__global__' in hset calls; got {all_hset_keys}"
 
     @pytest.mark.asyncio
     async def test_publish_feedback_events_no_publish_when_all_zero_precision(self):

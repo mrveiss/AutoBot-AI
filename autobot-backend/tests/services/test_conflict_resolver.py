@@ -748,7 +748,7 @@ class TestHumanReviewEscalation:
         resolver._redis_client.set = AsyncMock()
         resolver._redis_client.lpush = AsyncMock()
 
-        ticket = await resolver.flag_for_human_review(conflict)
+        await resolver.flag_for_human_review(conflict)
 
         # Should call Redis set with ticket key
         resolver._redis_client.set.assert_called_once()
@@ -841,7 +841,7 @@ class TestConfidenceCalculations:
     @pytest.mark.asyncio
     async def test_very_low_base_confidence_with_decay(self):
         """Low base confidence should stay low after decay."""
-        resolver = ConflictResolver()
+        ConflictResolver()
 
         kb = KBFact(
             fact_text="Barely confident",

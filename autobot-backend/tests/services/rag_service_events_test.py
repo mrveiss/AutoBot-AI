@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from tests.fixtures import make_async_redis
+
 # =============================================================================
 # _emit_retrieval_feedback Tests
 # =============================================================================
@@ -152,13 +154,12 @@ class TestStoreFeedbackInStream:
         return svc
 
     def _make_redis_mock(self, xadd_side_effect=None):
-        """Build an async Redis mock that get_redis_client will return when awaited."""
-        mock_redis = AsyncMock()
-        mock_redis.xadd = AsyncMock(
-            return_value=b"1234-0",
-            side_effect=xadd_side_effect,
-        )
-        mock_redis.expire = AsyncMock(return_value=True)
+        # Migrated to canonical ``make_async_redis()`` (#7280 round 8).
+        # ``side_effect`` requires a post-set since canonical's ``**extra_methods``
+        # only configures ``return_value``.
+        mock_redis = make_async_redis(xadd=b"1234-0")
+        if xadd_side_effect is not None:
+            mock_redis.xadd = AsyncMock(return_value=b"1234-0", side_effect=xadd_side_effect)
         return mock_redis
 
     @pytest.mark.asyncio
@@ -356,10 +357,8 @@ class TestComplexityInStoreFeedbackInStream:
         return svc
 
     def _make_redis_mock(self):
-        mock_redis = AsyncMock()
-        mock_redis.xadd = AsyncMock(return_value=b"1234-0")
-        mock_redis.expire = AsyncMock(return_value=True)
-        return mock_redis
+        # Migrated to canonical ``make_async_redis()`` (#7280 round 8).
+        return make_async_redis(xadd=b"1234-0")
 
     @pytest.mark.asyncio
     async def test_stream_entry_contains_complexity_field(self):

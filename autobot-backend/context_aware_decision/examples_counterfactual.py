@@ -10,14 +10,14 @@ to preview consequences before committing to decisions.
 Not included in package; for development and documentation only.
 """
 
-import asyncio
 import time
-from typing import Any, Dict
+
+from autobot_shared.async_compat import run_or_schedule
 
 from .counterfactual_reasoner import CounterfactualReasoner
 from .decision_engine import DecisionEngine
 from .models import ContextElement, DecisionContext
-from .types import ConfidenceLevel, ContextType, DecisionType
+from .types import ContextType, DecisionType
 
 # =============================================================================
 # Example 1: Network Timeout Scenario
@@ -120,7 +120,7 @@ async def example_network_timeout():
         print(f"  Confidence: {outcome.confidence:.0%} ({outcome.prediction_source})")
         print(f"  Estimated Time: {outcome.estimated_latency_ms}ms")
         print(f"  Fallback Risk: {outcome.fallback_risk}")
-        print(f"  Side Effects:")
+        print("  Side Effects:")
         for effect in outcome.side_effects:
             print(
                 f"    - {effect['type']}: {effect.get('frequency', 1):.0%} frequency, "
@@ -135,8 +135,8 @@ async def example_network_timeout():
 
     best_option = max(outcomes.items(), key=lambda x: x[1].predicted_success_rate)
     print(f"\nRecommended: {best_option[0].upper()}")
-    print(f"  Why: {best_outcome[1].reasoning}")
-    print(f"  Success likelihood: {best_outcome[1].predicted_success_rate:.0%}")
+    print(f"  Why: {best_option[1].reasoning}")
+    print(f"  Success likelihood: {best_option[1].predicted_success_rate:.0%}")
 
 
 # =============================================================================
@@ -251,7 +251,7 @@ async def example_database_exhaustion():
         if outcome.fallback_risk:
             print(f"  ⚠ Risk if fails: {outcome.fallback_risk}")
         if outcome.side_effects:
-            print(f"  Side effects:")
+            print("  Side effects:")
             for effect in outcome.side_effects:
                 print(f"    • {effect['type']}: {effect.get('description', '')}")
 
@@ -265,24 +265,22 @@ async def example_database_exhaustion():
 
     print(f"\nAutomate: {automate_outcome.predicted_success_rate:.0%} success")
     print(f"  ✓ Fast ({automate_outcome.estimated_latency_ms}ms)")
-    print(f"  ✗ High risk (irreversible state mutation)")
+    print("  ✗ High risk (irreversible state mutation)")
     print(f"  ✗ Low confidence ({automate_outcome.confidence:.0%})")
 
     print(f"\nEscalate: {escalate_outcome.predicted_success_rate:.0%} success")
-    print(f"  ✓ Very safe (professional DBA)")
+    print("  ✓ Very safe (professional DBA)")
     print(f"  ✓ High confidence ({escalate_outcome.confidence:.0%})")
     print(f"  ✗ Slow ({escalate_outcome.estimated_latency_ms}ms > 2min deadline)")
 
     print(f"\nRetry: {retry_outcome.predicted_success_rate:.0%} success")
-    print(f"  ✓ Fastest")
-    print(f"  ✗ Only 40% likely to succeed (pool won't drain in time)")
+    print("  ✓ Fastest")
+    print("  ✗ Only 40% likely to succeed (pool won't drain in time)")
     print(f"  ✗ Low confidence ({retry_outcome.confidence:.0%})")
 
     print("\nRECOMMENDATION: Escalate to DBA")
     print("  • High success rate (95%) beats speed here")
-    print(
-        "  • 2-minute deadline is tight, but DBA can decide if automated expansion is safe"
-    )
+    print("  • 2-minute deadline is tight, but DBA can decide if automated expansion is safe")
     print("  • Avoid automation (irreversible state mutation in high-load condition)")
 
 
@@ -335,9 +333,7 @@ async def example_enhanced_decision():
         outcome = await reasoner.what_if(action["action"], context, action)
         decision.intervention_effects.append(outcome)
 
-    print(
-        f"Enhanced decision now includes {len(decision.intervention_effects)} predictions:"
-    )
+    print(f"Enhanced decision now includes {len(decision.intervention_effects)} predictions:")
     for effect in decision.intervention_effects:
         print(
             f"  • {effect.option}: {effect.predicted_success_rate:.0%} "
@@ -347,9 +343,7 @@ async def example_enhanced_decision():
     # Show serialization
     print("\nSerialized decision.to_dict():")
     decision_dict = decision.to_dict()
-    print(
-        f"  intervention_effects: {len(decision_dict['intervention_effects'])} entries"
-    )
+    print(f"  intervention_effects: {len(decision_dict['intervention_effects'])} entries")
     for ie in decision_dict["intervention_effects"]:
         print(f"    - {ie['option']}: {ie['predicted_success_rate']:.0%}")
 
@@ -367,4 +361,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

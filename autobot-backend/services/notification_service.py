@@ -109,18 +109,10 @@ class NotificationConfig:
 # ---------------------------------------------------------------------------
 
 _DEFAULT_TEMPLATES: Dict[str, str] = {
-    NotificationEvent.WORKFLOW_COMPLETED: (
-        "Workflow '$workflow_id' completed successfully."
-    ),
-    NotificationEvent.WORKFLOW_FAILED: (
-        "Workflow '$workflow_id' FAILED. Error: $error"
-    ),
-    NotificationEvent.STEP_FAILED: (
-        "Step '$step_name' in workflow '$workflow_id' failed. Error: $error"
-    ),
-    NotificationEvent.APPROVAL_NEEDED: (
-        "Workflow '$workflow_id' is waiting for approval at step '$step_name'."
-    ),
+    NotificationEvent.WORKFLOW_COMPLETED: ("Workflow '$workflow_id' completed successfully."),
+    NotificationEvent.WORKFLOW_FAILED: ("Workflow '$workflow_id' FAILED. Error: $error"),
+    NotificationEvent.STEP_FAILED: ("Step '$step_name' in workflow '$workflow_id' failed. Error: $error"),
+    NotificationEvent.APPROVAL_NEEDED: ("Workflow '$workflow_id' is waiting for approval at step '$step_name'."),
     NotificationEvent.SERVICE_FAILED: (
         "Service '$service' on '$hostname' transitioned $prev_state -> $new_state. $error_context"
     ),
@@ -186,9 +178,7 @@ class NotificationStore:
         }
         serialised = json.dumps(record)
         try:
-            client = await get_redis_client(
-                async_client=True, database=_NOTIFICATIONS_REDIS_DB
-            )
+            client = await get_redis_client(async_client=True, database=_NOTIFICATIONS_REDIS_DB)
             if client is None:
                 logger.warning(
                     "Redis unavailable — in-app notification not stored (user=%s)",
@@ -200,14 +190,10 @@ class NotificationStore:
             await client.lpush(list_key, serialised)
             await client.expire(list_key, _NOTIFICATION_TTL_SECONDS)
             await client.set(record_key, serialised, ex=_NOTIFICATION_TTL_SECONDS)
-            logger.debug(
-                "Stored in-app notification %s for user %s", notification_id, user_id
-            )
+            logger.debug("Stored in-app notification %s for user %s", notification_id, user_id)
             return notification_id
         except Exception as exc:
-            logger.error(
-                "Failed to store in-app notification for user %s: %s", user_id, exc
-            )
+            logger.error("Failed to store in-app notification for user %s: %s", user_id, exc)
             return None
 
     async def list(self, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
@@ -217,13 +203,9 @@ class NotificationStore:
         Returns an empty list if Redis is unavailable or no notifications exist.
         """
         try:
-            client = await get_redis_client(
-                async_client=True, database=_NOTIFICATIONS_REDIS_DB
-            )
+            client = await get_redis_client(async_client=True, database=_NOTIFICATIONS_REDIS_DB)
             if client is None:
-                logger.warning(
-                    "Redis unavailable — cannot list notifications (user=%s)", user_id
-                )
+                logger.warning("Redis unavailable — cannot list notifications (user=%s)", user_id)
                 return []
             raw_items = await client.lrange(self._list_key(user_id), 0, limit - 1)
             results: List[Dict[str, Any]] = []
@@ -231,9 +213,7 @@ class NotificationStore:
                 try:
                     results.append(json.loads(raw))
                 except (json.JSONDecodeError, TypeError) as parse_err:
-                    logger.warning(
-                        "Skipping malformed notification record: %s", parse_err
-                    )
+                    logger.warning("Skipping malformed notification record: %s", parse_err)
             return results
         except Exception as exc:
             logger.error("Failed to list notifications for user %s: %s", user_id, exc)
@@ -250,9 +230,7 @@ class NotificationStore:
         is unavailable.
         """
         try:
-            client = await get_redis_client(
-                async_client=True, database=_NOTIFICATIONS_REDIS_DB
-            )
+            client = await get_redis_client(async_client=True, database=_NOTIFICATIONS_REDIS_DB)
             if client is None:
                 logger.warning(
                     "Redis unavailable — cannot mark notification %s as read",
@@ -266,15 +244,11 @@ class NotificationStore:
                 return False
             record: Dict[str, Any] = json.loads(raw)
             record["read"] = True
-            await client.set(
-                record_key, json.dumps(record), ex=_NOTIFICATION_TTL_SECONDS
-            )
+            await client.set(record_key, json.dumps(record), ex=_NOTIFICATION_TTL_SECONDS)
             logger.debug("Marked notification %s as read", notification_id)
             return True
         except Exception as exc:
-            logger.error(
-                "Failed to mark notification %s as read: %s", notification_id, exc
-            )
+            logger.error("Failed to mark notification %s as read: %s", notification_id, exc)
             return False
 
 
@@ -321,9 +295,7 @@ class NotificationService:
             )
             return
 
-        message = self.render_template(
-            event.value, {**payload, "workflow_id": workflow_id}
-        )
+        message = self.render_template(event.value, {**payload, "workflow_id": workflow_id})
         logger.info(
             "Dispatching event=%s workflow=%s channels=%s",
             event.value,
@@ -335,15 +307,11 @@ class NotificationService:
             try:
                 channel = NotificationChannel(channel_str)
             except ValueError:
-                logger.warning(
-                    "Unknown notification channel '%s' — skipping", channel_str
-                )
+                logger.warning("Unknown notification channel '%s' — skipping", channel_str)
                 continue
 
             try:
-                await self._dispatch(
-                    channel, event, workflow_id, message, payload, config
-                )
+                await self._dispatch(channel, event, workflow_id, message, payload, config)
             except Exception as exc:
                 logger.error(
                     "Channel %s dispatch failed for event=%s workflow=%s: %s",
@@ -360,13 +328,9 @@ class NotificationService:
         Falls back to the built-in default template when no custom template is
         registered.  Missing substitution keys are left as-is (``safe_substitute``).
         """
-        raw = _DEFAULT_TEMPLATES.get(
-            event, "AutoBot notification: event=$event workflow=$workflow_id"
-        )
+        raw = _DEFAULT_TEMPLATES.get(event, "AutoBot notification: event=$event workflow=$workflow_id")
         tmpl = Template(raw)
-        return tmpl.safe_substitute(
-            {"event": event, **{str(k): str(v) for k, v in context.items()}}
-        )
+        return tmpl.safe_substitute({"event": event, **{str(k): str(v) for k, v in context.items()}})
 
     # ------------------------------------------------------------------
     # Internal dispatch

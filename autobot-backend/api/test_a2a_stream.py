@@ -19,12 +19,13 @@ import pytest_asyncio  # noqa: F401 — ensures pytest-asyncio plugin loaded
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from api.a2a import router
+from auth_middleware import check_admin_permission
+
 # ---------------------------------------------------------------------------
 # App setup — import router first, then override auth dependency
 # ---------------------------------------------------------------------------
 
-from api.a2a import router
-from auth_middleware import check_admin_permission
 
 # Build a minimal FastAPI app to exercise the router in isolation
 app = FastAPI()
@@ -55,7 +56,7 @@ async def _collect_sse(response) -> list:
         for line in chunk.split("\n"):
             line = line.strip()
             if line.startswith("data:"):
-                lines.append(line[len("data:"):].strip())
+                lines.append(line[len("data:") :].strip())
     return lines
 
 
@@ -71,9 +72,7 @@ async def test_stream_unknown_task_returns_404():
     mock_manager.get_task.return_value = None
 
     with patch("api.a2a.get_task_manager", return_value=mock_manager):
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/a2a/tasks/unknown-id/stream")
 
     assert response.status_code == 404
@@ -91,16 +90,15 @@ async def test_stream_redis_unavailable_yields_error_event():
     mock_manager = MagicMock()
     mock_manager.get_task.return_value = _make_task_mock("submitted")
 
-    with patch("api.a2a.get_task_manager", return_value=mock_manager), patch(
-        "autobot_shared.redis_client.get_async_redis_client",
-        new=AsyncMock(return_value=None),
+    with (
+        patch("api.a2a.get_task_manager", return_value=mock_manager),
+        patch(
+            "autobot_shared.redis_client.get_async_redis_client",
+            new=AsyncMock(return_value=None),
+        ),
     ):
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
-            async with client.stream(
-                "GET", "/api/a2a/tasks/test-task-id/stream"
-            ) as response:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with client.stream("GET", "/api/a2a/tasks/test-task-id/stream") as response:
                 assert response.status_code == 200
                 data_lines = await _collect_sse(response)
 
@@ -130,16 +128,15 @@ async def test_stream_terminal_task_closes_after_initial_state():
     mock_redis = MagicMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
-    with patch("api.a2a.get_task_manager", return_value=mock_manager), patch(
-        "autobot_shared.redis_client.get_async_redis_client",
-        new=AsyncMock(return_value=mock_redis),
+    with (
+        patch("api.a2a.get_task_manager", return_value=mock_manager),
+        patch(
+            "autobot_shared.redis_client.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
+        ),
     ):
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
-            async with client.stream(
-                "GET", "/api/a2a/tasks/test-task-id/stream"
-            ) as response:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with client.stream("GET", "/api/a2a/tasks/test-task-id/stream") as response:
                 assert response.status_code == 200
                 data_lines = await _collect_sse(response)
 
@@ -169,16 +166,15 @@ async def test_event_generator_task_expires_after_subscribe():
     mock_redis = MagicMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
-    with patch("api.a2a.get_task_manager", return_value=mock_manager), patch(
-        "autobot_shared.redis_client.get_async_redis_client",
-        new=AsyncMock(return_value=mock_redis),
+    with (
+        patch("api.a2a.get_task_manager", return_value=mock_manager),
+        patch(
+            "autobot_shared.redis_client.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
+        ),
     ):
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
-            async with client.stream(
-                "GET", "/api/a2a/tasks/test-task-id/stream"
-            ) as response:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with client.stream("GET", "/api/a2a/tasks/test-task-id/stream") as response:
                 assert response.status_code == 200
                 data_lines = await _collect_sse(response)
 
@@ -209,16 +205,15 @@ async def test_event_generator_reader_exception_unblocks_stream():
     mock_redis = MagicMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
-    with patch("api.a2a.get_task_manager", return_value=mock_manager), patch(
-        "autobot_shared.redis_client.get_async_redis_client",
-        new=AsyncMock(return_value=mock_redis),
+    with (
+        patch("api.a2a.get_task_manager", return_value=mock_manager),
+        patch(
+            "autobot_shared.redis_client.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
+        ),
     ):
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
-            async with client.stream(
-                "GET", "/api/a2a/tasks/test-task-id/stream"
-            ) as response:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with client.stream("GET", "/api/a2a/tasks/test-task-id/stream") as response:
                 assert response.status_code == 200
                 data_lines = await _collect_sse(response)
 

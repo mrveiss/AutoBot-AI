@@ -26,7 +26,7 @@ import yaml
 from constants.path_constants import PATH
 
 if TYPE_CHECKING:
-    from knowledge.backends import BaseClient, BaseCollection
+    from knowledge.backends import BaseClient
 
 logger = logging.getLogger(__name__)
 
@@ -104,9 +104,7 @@ def _load_manifest(manifest_path: str) -> SeedManifest:
             )
             for src in coll_data.get("sources", [])
         ]
-        collections.append(
-            SeedCollection(name=coll_data.get("name", COGNITION_COLLECTION), sources=sources)
-        )
+        collections.append(SeedCollection(name=coll_data.get("name", COGNITION_COLLECTION), sources=sources))
 
     return SeedManifest(collections=collections)
 
@@ -165,13 +163,9 @@ class CognitionSeeder:
             from knowledge.backends import get_default_client
 
             chromadb_path = self._root_dir / "data" / "chromadb"
-            self._client = await asyncio.to_thread(
-                get_default_client, db_path=str(chromadb_path)
-            )
+            self._client = await asyncio.to_thread(get_default_client, db_path=str(chromadb_path))
             ollama_url = get_ollama_url()
-            self._embed_model = OllamaEmbedding(
-                model_name="nomic-embed-text", base_url=ollama_url
-            )
+            self._embed_model = OllamaEmbedding(model_name="nomic-embed-text", base_url=ollama_url)
             self._initialized = True
             logger.info("CognitionSeeder initialized (chromadb_path=%s)", chromadb_path)
             return True
@@ -217,7 +211,8 @@ class CognitionSeeder:
             return 0
 
         try:
-            content = Path(abs_path).read_text(encoding="utf-8")
+            # #7467: was sync `Path(abs_path).read_text` blocking the event loop.
+            content = await asyncio.to_thread(Path(abs_path).read_text, encoding="utf-8")
         except OSError as exc:
             logger.warning("Cannot read seed file %s: %s", abs_path, exc)
             return 0
@@ -258,11 +253,7 @@ class CognitionSeeder:
         now_iso: str,
     ) -> int:
         """Recursively index all .md and .txt files under *dir_path*."""
-        abs_dir = (
-            os.path.join(str(self._root_dir), dir_path)
-            if not os.path.isabs(dir_path)
-            else dir_path
-        )
+        abs_dir = os.path.join(str(self._root_dir), dir_path) if not os.path.isabs(dir_path) else dir_path
         if not os.path.isdir(abs_dir):
             logger.warning("Seed directory not found, skipping: %s", abs_dir)
             return 0
@@ -333,9 +324,7 @@ class CognitionSeeder:
                 src_path = src.path
                 priority = src.priority
                 if os.path.isdir(
-                    os.path.join(str(self._root_dir), src_path)
-                    if not os.path.isabs(src_path)
-                    else src_path
+                    os.path.join(str(self._root_dir), src_path) if not os.path.isabs(src_path) else src_path
                 ):
                     count = await self._seed_directory(src_path, coll.name, priority, now_iso)
                 else:

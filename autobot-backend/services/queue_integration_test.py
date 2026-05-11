@@ -60,9 +60,7 @@ async def test_queue_integration():
     print("✅ TEST 3: Querying commands by chat_id...")  # noqa: print
     chat_commands = await queue.get_chat_commands("test_chat_456")
     assert len(chat_commands) >= 1, "Failed to find command by chat_id"
-    print(  # noqa: print
-        f"   Found {len(chat_commands)} command(s) for chat test_chat_456"
-    )  # noqa: print
+    print(f"   Found {len(chat_commands)} command(s) for chat test_chat_456")  # noqa: print  # noqa: print
     print()  # noqa: print
 
     # Test 4: Query pending approvals
@@ -94,13 +92,9 @@ async def test_queue_integration():
     assert success, "Failed to start execution"
 
     executing_cmd = await queue.get_command(cmd.command_id)
-    assert (
-        executing_cmd.state == CommandState.EXECUTING
-    ), "State not updated to EXECUTING"
+    assert executing_cmd.state == CommandState.EXECUTING, "State not updated to EXECUTING"
     print(f"   State: {executing_cmd.state.value}")  # noqa: print
-    print(  # noqa: print
-        f"   Execution started at: {executing_cmd.execution_started_at}"
-    )  # noqa: print
+    print(f"   Execution started at: {executing_cmd.execution_started_at}")  # noqa: print  # noqa: print
     print()  # noqa: print
 
     # Test 7: Complete execution
@@ -114,16 +108,12 @@ async def test_queue_integration():
     assert success, "Failed to complete command"
 
     completed_cmd = await queue.get_command(cmd.command_id)
-    assert (
-        completed_cmd.state == CommandState.COMPLETED
-    ), "State not updated to COMPLETED"
+    assert completed_cmd.state == CommandState.COMPLETED, "State not updated to COMPLETED"
     assert completed_cmd.output == "kali", "Output mismatch"
     print(f"   State: {completed_cmd.state.value}")  # noqa: print
     print(f"   Output: {completed_cmd.output}")  # noqa: print
     print(f"   Return code: {completed_cmd.return_code}")  # noqa: print
-    print(  # noqa: print
-        f"   Execution completed at: {completed_cmd.execution_completed_at}"
-    )  # noqa: print
+    print(f"   Execution completed at: {completed_cmd.execution_completed_at}")  # noqa: print  # noqa: print
     print()  # noqa: print
 
     # Test 8: Verify no longer in pending
@@ -147,9 +137,7 @@ async def test_queue_integration():
     )
 
     await queue.add_command(denied_cmd)
-    success = await queue.deny_command(
-        command_id=denied_cmd.command_id, user_id="test_user", comment="Too dangerous!"
-    )
+    success = await queue.deny_command(command_id=denied_cmd.command_id, user_id="test_user", comment="Too dangerous!")
     assert success, "Failed to deny command"
 
     denied = await queue.get_command(denied_cmd.command_id)

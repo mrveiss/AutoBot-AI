@@ -277,9 +277,7 @@ class TestRelevanceScorer:
         """Test combined relevance score calculation."""
         result = sample_results[0]
 
-        score = relevance_scorer.calculate_relevance_score(
-            base_score=0.8, query="jwt authentication", result=result
-        )
+        score = relevance_scorer.calculate_relevance_score(base_score=0.8, query="jwt authentication", result=result)
 
         # Score should be modified from base
         assert 0.0 <= score <= 1.0
@@ -471,9 +469,7 @@ class TestSearchAnalytics:
 
     def test_record_search(self, search_analytics):
         """Test recording a search event."""
-        search_analytics.record_search(
-            query="test query", result_count=10, duration_ms=50
-        )
+        search_analytics.record_search(query="test query", result_count=10, duration_ms=50)
 
         assert len(search_analytics.events) == 1
         assert search_analytics.query_counts["test query"] == 1
@@ -486,12 +482,8 @@ class TestSearchAnalytics:
 
     def test_record_click(self, search_analytics):
         """Test recording a click."""
-        search_analytics.record_search(
-            query="test", result_count=5, session_id="session_1"
-        )
-        search_analytics.record_click(
-            query="test", result_id="result_1", session_id="session_1"
-        )
+        search_analytics.record_search(query="test", result_count=5, session_id="session_1")
+        search_analytics.record_click(query="test", result_id="result_1", session_id="session_1")
 
         assert search_analytics.click_counts["result_1"] == 1
 
@@ -524,15 +516,11 @@ class TestSearchAnalytics:
         """Test click-through rate calculation."""
         # Record 10 searches
         for i in range(10):
-            search_analytics.record_search(
-                query=f"query_{i}", result_count=5, session_id=f"session_{i}"
-            )
+            search_analytics.record_search(query=f"query_{i}", result_count=5, session_id=f"session_{i}")
 
         # Record 3 clicks
         for i in range(3):
-            search_analytics.record_click(
-                query=f"query_{i}", result_id=f"result_{i}", session_id=f"session_{i}"
-            )
+            search_analytics.record_click(query=f"query_{i}", result_id=f"result_{i}", session_id=f"session_{i}")
 
         ctr = search_analytics.get_click_through_rate()
 
@@ -634,9 +622,7 @@ class TestSearchQualityIntegration:
         scorer = RelevanceScorer()
         for result in filtered_results:
             original_score = result["score"]
-            result["score"] = scorer.calculate_relevance_score(
-                original_score, query, result
-            )
+            result["score"] = scorer.calculate_relevance_score(original_score, query, result)
 
         # Step 4: Cluster results
         clusterer = ResultClusterer()
@@ -668,9 +654,7 @@ class TestSearchQualityIntegration:
 
         # Calculate new scores
         for result in sample_results:
-            result["new_score"] = relevance_scorer.calculate_relevance_score(
-                result["score"], query, result
-            )
+            result["new_score"] = relevance_scorer.calculate_relevance_score(result["score"], query, result)
 
         # Sort by new scores
         reordered = sorted(sample_results, key=lambda x: x["new_score"], reverse=True)

@@ -191,9 +191,7 @@ class TestReconcilerCallbacks:
             # Allow task to run
             await asyncio.sleep(0.1)
 
-            mock_manager.broadcast_state_change.assert_called_once_with(
-                "node-1", "online", "degraded"
-            )
+            mock_manager.broadcast_state_change.assert_called_once_with("node-1", "online", "degraded")
 
     @pytest.mark.asyncio
     async def test_alert_callback_broadcasts(self):
@@ -208,6 +206,4 @@ class TestReconcilerCallbacks:
 
             await asyncio.sleep(0.1)
 
-            mock_manager.broadcast_alert.assert_called_once_with(
-                "node-1", "warning", {"message": "test"}
-            )
+            mock_manager.broadcast_alert.assert_called_once_with("node-1", "warning", {"message": "test"})

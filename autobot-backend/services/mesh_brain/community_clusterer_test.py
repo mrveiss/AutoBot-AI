@@ -29,9 +29,11 @@ def _make_edges(pairs: list[tuple[str, str, float]]) -> list[dict]:
 def _ensure_graspologic_stub() -> None:
     """Install a minimal graspologic stub if not present, so tests run without the package."""
     if "graspologic" not in sys.modules:
+
         def _leiden(G, trials=3):
             # Assign each connected component its own community ID
             import networkx as nx
+
             partition = {}
             for comm_id, component in enumerate(nx.connected_components(G)):
                 for node in component:
@@ -74,10 +76,16 @@ def test_cluster_graph_triangle_returns_one_centroid():
 def test_cluster_graph_two_components_returns_two_centroids():
     """Two disconnected triangles → two communities → two centroids."""
     _ensure_graspologic_stub()
-    edges = _make_edges([
-        ("a1", "a2", 1.0), ("a2", "a3", 1.0), ("a1", "a3", 1.0),
-        ("b1", "b2", 1.0), ("b2", "b3", 1.0), ("b1", "b3", 1.0),
-    ])
+    edges = _make_edges(
+        [
+            ("a1", "a2", 1.0),
+            ("a2", "a3", 1.0),
+            ("a1", "a3", 1.0),
+            ("b1", "b2", 1.0),
+            ("b2", "b3", 1.0),
+            ("b1", "b3", 1.0),
+        ]
+    )
     centroids = cluster_graph(edges)
     assert len(centroids) == 2
     assert set(centroids).issubset({"a1", "a2", "a3", "b1", "b2", "b3"})
@@ -94,11 +102,13 @@ async def test_run_seeds_anchors_from_centroids():
     _ensure_graspologic_stub()
     db = AsyncMock()
     db.fetch_edges = AsyncMock(
-        return_value=_make_edges([
-            ("n1", "n2", 1.0),
-            ("n2", "n3", 1.0),
-            ("n1", "n3", 1.0),
-        ])
+        return_value=_make_edges(
+            [
+                ("n1", "n2", 1.0),
+                ("n2", "n3", 1.0),
+                ("n1", "n3", 1.0),
+            ]
+        )
     )
     db.promote_to_anchor = AsyncMock()
 
@@ -146,11 +156,13 @@ async def test_periodic_caller_promotes_anchors_on_connected_graph():
     _ensure_graspologic_stub()
     db = AsyncMock()
     db.fetch_edges = AsyncMock(
-        return_value=_make_edges([
-            ("p1", "p2", 0.9),
-            ("p2", "p3", 0.8),
-            ("p1", "p3", 0.7),
-        ])
+        return_value=_make_edges(
+            [
+                ("p1", "p2", 0.9),
+                ("p2", "p3", 0.8),
+                ("p1", "p3", 0.7),
+            ]
+        )
     )
     db.promote_to_anchor = AsyncMock()
 
@@ -179,10 +191,16 @@ async def test_periodic_caller_promotes_two_anchors_for_two_components():
     _ensure_graspologic_stub()
     db = AsyncMock()
     db.fetch_edges = AsyncMock(
-        return_value=_make_edges([
-            ("a1", "a2", 1.0), ("a2", "a3", 1.0), ("a1", "a3", 1.0),
-            ("b1", "b2", 1.0), ("b2", "b3", 1.0), ("b1", "b3", 1.0),
-        ])
+        return_value=_make_edges(
+            [
+                ("a1", "a2", 1.0),
+                ("a2", "a3", 1.0),
+                ("a1", "a3", 1.0),
+                ("b1", "b2", 1.0),
+                ("b2", "b3", 1.0),
+                ("b1", "b3", 1.0),
+            ]
+        )
     )
     db.promote_to_anchor = AsyncMock()
 
@@ -219,7 +237,6 @@ async def test_loop_body_logs_warning_and_sleeps_on_import_error(caplog):
     pattern — catch ImportError → log warning → sleep 24h → continue — works end-to-end.
     Prior behaviour was CRITICAL + permanent exit; now it retries after 24h (#4924).
     """
-    import asyncio
     import logging
 
     db = AsyncMock()
@@ -235,6 +252,7 @@ async def test_loop_body_logs_warning_and_sleeps_on_import_error(caplog):
             await CommunityClusterer(mesh_db).run()
         except ImportError as exc:
             import logging as _logging
+
             _logging.getLogger(__name__).warning(
                 "graspologic not installed — community clustering paused. "
                 "Install with: pip install graspologic. Retrying in 24h. Error: %s",
@@ -251,8 +269,6 @@ async def test_loop_body_logs_warning_and_sleeps_on_import_error(caplog):
     assert continued, "Loop should have continued (not exited) after ImportError"
     assert slept_seconds == [86400], "Loop should sleep 86400s (24h) on ImportError"
     assert any(
-        "graspologic not installed" in record.message
-        for record in caplog.records
-        if record.levelno == logging.WARNING
+        "graspologic not installed" in record.message for record in caplog.records if record.levelno == logging.WARNING
     ), "Expected WARNING log message about missing graspologic"
     db.promote_to_anchor.assert_not_called()

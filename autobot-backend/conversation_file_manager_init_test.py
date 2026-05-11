@@ -29,9 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 # Issue #618: Helper to run blocking sqlite3 queries in async context
-async def async_sqlite_query(
-    db_path: str, query: str, params: tuple = ()
-) -> List[Tuple[Any, ...]]:
+async def async_sqlite_query(db_path: str, query: str, params: tuple = ()) -> List[Tuple[Any, ...]]:
     """Execute sqlite3 query without blocking the event loop.
 
     Args:
@@ -78,9 +76,7 @@ async def async_sqlite_execute(db_path: str, query: str, params: tuple = ()) -> 
     await asyncio.to_thread(_execute)
 
 
-async def async_sqlite_multi_query(
-    db_path: str, queries: List[str]
-) -> List[List[Tuple[Any, ...]]]:
+async def async_sqlite_multi_query(db_path: str, queries: List[str]) -> List[List[Tuple[Any, ...]]]:
     """Execute multiple sqlite3 queries without blocking the event loop.
 
     Args:
@@ -139,9 +135,7 @@ class TestFirstTimeInitialization:
     """Test first-time database initialization from scratch."""
 
     @pytest.mark.asyncio
-    async def test_first_time_initialization(
-        self, conversation_file_manager, temp_db_path
-    ):
+    async def test_first_time_initialization(self, conversation_file_manager, temp_db_path):
         """
         Test Case 1.1: First-time database initialization creates complete schema
 
@@ -157,9 +151,7 @@ class TestFirstTimeInitialization:
         logger.info("=== Test 1.1: First-time initialization ===")
 
         # Verify database doesn't exist initially
-        assert not temp_db_path[
-            "db_path"
-        ].exists(), "Database should not exist before initialization"
+        assert not temp_db_path["db_path"].exists(), "Database should not exist before initialization"
 
         # Run initialization
         await conversation_file_manager.initialize()
@@ -193,9 +185,7 @@ class TestFirstTimeInitialization:
             "schema_migrations",  # Migration tracking table
         }
         actual_tables = {row[0] for row in results[0]}
-        assert expected_tables.issubset(
-            actual_tables
-        ), f"Missing tables: {expected_tables - actual_tables}"
+        assert expected_tables.issubset(actual_tables), f"Missing tables: {expected_tables - actual_tables}"
         logger.info(f"✓ All {len(expected_tables)} tables created")
 
         # Verify all required views exist
@@ -205,9 +195,7 @@ class TestFirstTimeInitialization:
             "v_pending_cleanups",
         }
         actual_views = {row[0] for row in results[1]}
-        assert expected_views.issubset(
-            actual_views
-        ), f"Missing views: {expected_views - actual_views}"
+        assert expected_views.issubset(actual_views), f"Missing views: {expected_views - actual_views}"
         logger.info(f"✓ All {len(expected_views)} views created")
 
         # Verify all required indexes exist
@@ -222,9 +210,7 @@ class TestFirstTimeInitialization:
             "idx_cleanup_queue_processed",
         }
         actual_indexes = {row[0] for row in results[2]}
-        assert expected_indexes.issubset(
-            actual_indexes
-        ), f"Missing indexes: {expected_indexes - actual_indexes}"
+        assert expected_indexes.issubset(actual_indexes), f"Missing indexes: {expected_indexes - actual_indexes}"
         logger.info(f"✓ All {len(expected_indexes)} indexes created")
 
         # Verify all required triggers exist
@@ -234,9 +220,7 @@ class TestFirstTimeInitialization:
             "trg_session_association_cleanup_schedule",
         }
         actual_triggers = {row[0] for row in results[3]}
-        assert expected_triggers.issubset(
-            actual_triggers
-        ), f"Missing triggers: {expected_triggers - actual_triggers}"
+        assert expected_triggers.issubset(actual_triggers), f"Missing triggers: {expected_triggers - actual_triggers}"
         logger.info(f"✓ All {len(expected_triggers)} triggers created")
 
         # Verify foreign keys are enabled
@@ -257,9 +241,7 @@ class TestIdempotentInitialization:
     """Test that initialization is safe to call multiple times."""
 
     @pytest.mark.asyncio
-    async def test_idempotent_initialization(
-        self, conversation_file_manager, temp_db_path
-    ):
+    async def test_idempotent_initialization(self, conversation_file_manager, temp_db_path):
         """
         Test Case 1.2: Multiple initialization calls are safe (idempotent)
 
@@ -305,13 +287,9 @@ class TestIdempotentInitialization:
         db_path_str = str(temp_db_path["db_path"])
 
         # Count migration records (should be exactly 1)
-        rows = await async_sqlite_query(
-            db_path_str, "SELECT COUNT(*) FROM schema_migrations WHERE version = '001'"
-        )
+        rows = await async_sqlite_query(db_path_str, "SELECT COUNT(*) FROM schema_migrations WHERE version = '001'")
         migration_count = rows[0][0]
-        assert (
-            migration_count == 1
-        ), f"Should have exactly 1 migration record, found {migration_count}"
+        assert migration_count == 1, f"Should have exactly 1 migration record, found {migration_count}"
         logger.info("✓ No duplicate migration records")
 
         # Verify table structure unchanged
@@ -332,9 +310,7 @@ class TestSchemaVersionTracking:
     """Test schema version tracking functionality."""
 
     @pytest.mark.asyncio
-    async def test_schema_version_tracking(
-        self, conversation_file_manager, temp_db_path
-    ):
+    async def test_schema_version_tracking(self, conversation_file_manager, temp_db_path):
         """
         Test Case 1.3: Schema version is tracked correctly
 
@@ -348,9 +324,7 @@ class TestSchemaVersionTracking:
 
         # Before initialization, version should be "unknown"
         version_before = await conversation_file_manager.get_schema_version()
-        assert (
-            version_before == "unknown"
-        ), f"Version before initialization should be 'unknown', got '{version_before}'"
+        assert version_before == "unknown", f"Version before initialization should be 'unknown', got '{version_before}'"
         logger.info("✓ Version 'unknown' before initialization")
 
         # Run initialization
@@ -358,9 +332,7 @@ class TestSchemaVersionTracking:
 
         # After initialization, version should be "001"
         version_after = await conversation_file_manager.get_schema_version()
-        assert (
-            version_after == "001"
-        ), f"Version after initialization should be '001', got '{version_after}'"
+        assert version_after == "001", f"Version after initialization should be '001', got '{version_after}'"
         logger.info(f"✓ Version set to '{version_after}' after initialization")
 
         # Verify schema_migrations table structure (Issue #618: use async sqlite helper)
@@ -374,9 +346,7 @@ class TestSchemaVersionTracking:
         assert len(rows) > 0, "schema_migrations table should exist"
 
         # Check table structure
-        rows = await async_sqlite_query(
-            db_path_str, "PRAGMA table_info(schema_migrations)"
-        )
+        rows = await async_sqlite_query(db_path_str, "PRAGMA table_info(schema_migrations)")
         columns = {row[1]: row[2] for row in rows}  # {column_name: type}
 
         expected_columns = {
@@ -397,15 +367,11 @@ class TestSchemaVersionTracking:
         logger.info("✓ schema_migrations table structure correct")
 
         # Verify migration record details
-        rows = await async_sqlite_query(
-            db_path_str, "SELECT * FROM schema_migrations WHERE version = '001'"
-        )
+        rows = await async_sqlite_query(db_path_str, "SELECT * FROM schema_migrations WHERE version = '001'")
         assert len(rows) > 0, "Migration record should exist"
         migration = rows[0]
         assert migration[1] == "001", "Version should be '001'"
-        assert (
-            migration[2] == "Create conversation_files database and schema"
-        ), "Description should be correct"
+        assert migration[2] == "Create conversation_files database and schema", "Description should be correct"
         assert migration[4] == "completed", "Status should be 'completed'"
         logger.info("✓ Migration record details correct")
 
@@ -416,9 +382,7 @@ class TestSchemaIntegrityVerification:
     """Test schema integrity verification functionality."""
 
     @pytest.mark.asyncio
-    async def test_integrity_verification_passes(
-        self, conversation_file_manager, temp_db_path
-    ):
+    async def test_integrity_verification_passes(self, conversation_file_manager, temp_db_path):
         """
         Test Case 1.4: Schema integrity verification passes for complete schema
 
@@ -451,9 +415,7 @@ class TestSchemaIntegrityVerification:
         ]
 
         for table in expected_tables:
-            rows = await async_sqlite_query(
-                db_path_str, f"SELECT COUNT(*) FROM {table}"
-            )
+            rows = await async_sqlite_query(db_path_str, f"SELECT COUNT(*) FROM {table}")
             count = rows[0][0]
             logger.info(f"✓ Table '{table}' queryable (count: {count})")
 
@@ -472,9 +434,7 @@ class TestSchemaIntegrityVerification:
         logger.info("=== Test 1.4: PASSED ===\n")
 
     @pytest.mark.asyncio
-    async def test_integrity_verification_fails_missing_table(
-        self, conversation_file_manager, temp_db_path
-    ):
+    async def test_integrity_verification_fails_missing_table(self, conversation_file_manager, temp_db_path):
         """
         Test Case 1.5: Schema integrity verification detects missing tables
 
@@ -483,17 +443,13 @@ class TestSchemaIntegrityVerification:
         - Appropriate error is raised
         - Error message identifies missing table
         """
-        logger.info(
-            "=== Test 1.5: Schema integrity verification (fail - missing table) ==="
-        )
+        logger.info("=== Test 1.5: Schema integrity verification (fail - missing table) ===")
 
         # Initialize database normally first
         await conversation_file_manager.initialize()
 
         # Manually remove one required table to simulate corruption (Issue #618: use async sqlite helper)
-        await async_sqlite_execute(
-            str(temp_db_path["db_path"]), "DROP TABLE file_metadata"
-        )
+        await async_sqlite_execute(str(temp_db_path["db_path"]), "DROP TABLE file_metadata")
         logger.info("✓ Dropped file_metadata table to simulate corruption")
 
         # Now create a new manager instance and try to initialize
@@ -512,16 +468,10 @@ class TestSchemaIntegrityVerification:
         # Instead, let's verify the migration validation logic catches missing tables
         import importlib
 
-        migration_module = importlib.import_module(
-            "database.migrations.001_create_conversation_files"
-        )
-        ConversationFilesMigration = getattr(
-            migration_module, "ConversationFilesMigration"
-        )
+        migration_module = importlib.import_module("database.migrations.001_create_conversation_files")
+        ConversationFilesMigration = getattr(migration_module, "ConversationFilesMigration")
 
-        migration = ConversationFilesMigration(
-            data_dir=temp_db_path["db_path"].parent, db_path=temp_db_path["db_path"]
-        )
+        migration = ConversationFilesMigration(data_dir=temp_db_path["db_path"].parent, db_path=temp_db_path["db_path"])
 
         # Connect and test validation
         migration.connection = migration._connect_database()
@@ -541,9 +491,7 @@ class TestSchemaMigrationFramework:
     """Test schema migration framework functionality."""
 
     @pytest.mark.asyncio
-    async def test_schema_migration_framework(
-        self, conversation_file_manager, temp_db_path
-    ):
+    async def test_schema_migration_framework(self, conversation_file_manager, temp_db_path):
         """
         Test Case 1.6: Schema migration framework is functional
 
@@ -566,16 +514,10 @@ class TestSchemaMigrationFramework:
         # Test rollback capability (for development/testing)
         import importlib
 
-        migration_module = importlib.import_module(
-            "database.migrations.001_create_conversation_files"
-        )
-        ConversationFilesMigration = getattr(
-            migration_module, "ConversationFilesMigration"
-        )
+        migration_module = importlib.import_module("database.migrations.001_create_conversation_files")
+        ConversationFilesMigration = getattr(migration_module, "ConversationFilesMigration")
 
-        migration = ConversationFilesMigration(
-            data_dir=temp_db_path["db_path"].parent, db_path=temp_db_path["db_path"]
-        )
+        migration = ConversationFilesMigration(data_dir=temp_db_path["db_path"].parent, db_path=temp_db_path["db_path"])
 
         # Rollback migration
         rollback_success = await migration.down()
@@ -599,9 +541,7 @@ class TestSchemaMigrationFramework:
         ]
 
         for table in schema_tables:
-            assert (
-                table not in remaining_tables
-            ), f"Table '{table}' should be removed after rollback"
+            assert table not in remaining_tables, f"Table '{table}' should be removed after rollback"
 
         logger.info("✓ All schema tables removed after rollback")
 
@@ -612,9 +552,7 @@ class TestSchemaMigrationFramework:
 
         # Verify version after re-application
         version_after = await conversation_file_manager.get_schema_version()
-        assert (
-            version_after == "001"
-        ), f"Version after re-application should be '001', got '{version_after}'"
+        assert version_after == "001", f"Version after re-application should be '001', got '{version_after}'"
 
         logger.info("=== Test 1.6: PASSED ===\n")
 
@@ -660,9 +598,7 @@ class TestConcurrentInitialization:
         exceptions = [r for r in results if isinstance(r, Exception)]
         if exceptions:
             logger.error(f"Exceptions occurred: {exceptions}")
-            raise AssertionError(
-                f"Concurrent initialization had {len(exceptions)} failures"
-            )
+            raise AssertionError(f"Concurrent initialization had {len(exceptions)} failures")
 
         logger.info("✓ All 5 instances initialized successfully")
 
@@ -670,13 +606,9 @@ class TestConcurrentInitialization:
         db_path_str = str(temp_db_path["db_path"])
 
         # Verify schema version recorded only once
-        rows = await async_sqlite_query(
-            db_path_str, "SELECT COUNT(*) FROM schema_migrations WHERE version = '001'"
-        )
+        rows = await async_sqlite_query(db_path_str, "SELECT COUNT(*) FROM schema_migrations WHERE version = '001'")
         migration_count = rows[0][0]
-        assert (
-            migration_count == 1
-        ), f"Should have exactly 1 migration record, found {migration_count}"
+        assert migration_count == 1, f"Should have exactly 1 migration record, found {migration_count}"
         logger.info(f"✓ Migration recorded once (not {len(managers)} times)")
 
         # Verify all tables exist (exclude internal SQLite tables)
@@ -691,9 +623,7 @@ class TestConcurrentInitialization:
         # Verify all manager instances can query schema version
         for i, manager in enumerate(managers):
             version = await manager.get_schema_version()
-            assert (
-                version == "001"
-            ), f"Manager {i} should report version '001', got '{version}'"
+            assert version == "001", f"Manager {i} should report version '001', got '{version}'"
 
         logger.info("✓ All manager instances report correct version")
         logger.info("=== Test 1.7: PASSED ===\n")
@@ -755,9 +685,7 @@ class TestErrorHandling:
                     "SELECT COUNT(*) FROM sqlite_master WHERE type='table'",
                 )
                 table_count = rows[0][0]
-                assert (
-                    table_count <= 1
-                ), "Should have at most schema_migrations table, no schema tables"
+                assert table_count <= 1, "Should have at most schema_migrations table, no schema tables"
                 logger.info("✓ No partial schema created")
             else:
                 logger.info("✓ No database file created")

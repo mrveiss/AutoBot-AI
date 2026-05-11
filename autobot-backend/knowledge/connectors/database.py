@@ -12,9 +12,9 @@ import hashlib
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
-from autobot_shared.time_utils import now_utc, parse_utc_iso
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
     ChangeInfo,
@@ -93,9 +93,7 @@ class DatabaseConnector(AbstractConnector):
             rows = await self._execute_query(since=None)
             for row in rows:
                 row_dict = _row_to_dict(row)
-                row_source_id = _row_to_source_id(
-                    self.config.connector_id, row_dict.get(self._id_column)
-                )
+                row_source_id = _row_to_source_id(self.config.connector_id, row_dict.get(self._id_column))
                 if row_source_id == source_id:
                     return self._build_content_result(source_id, row_dict)
             self.logger.warning("No row found for source_id: %s", source_id)
@@ -104,9 +102,7 @@ class DatabaseConnector(AbstractConnector):
             self.logger.error("fetch_content failed for %s: %s", source_id, exc)
             return None
 
-    async def detect_changes(
-        self, since: Optional[datetime] = None
-    ) -> List[ChangeInfo]:
+    async def detect_changes(self, since: Optional[datetime] = None) -> List[ChangeInfo]:
         """Return rows newer than *since* based on timestamp_column."""
         try:
             rows = await self._execute_query(since=since)
@@ -188,9 +184,7 @@ class DatabaseConnector(AbstractConnector):
             },
         )
 
-    def _build_content_result(
-        self, source_id: str, row_dict: Dict[str, Any]
-    ) -> ContentResult:
+    def _build_content_result(self, source_id: str, row_dict: Dict[str, Any]) -> ContentResult:
         """Concatenate content_columns into a ContentResult (Issue #1254)."""
         parts = []
         for col in self._content_columns:
@@ -224,9 +218,7 @@ def _row_to_dict(row: Any) -> Dict[str, Any]:
     return dict(row)
 
 
-def _extract_timestamp(
-    row_dict: Dict[str, Any], timestamp_column: Optional[str]
-) -> Optional[datetime]:
+def _extract_timestamp(row_dict: Dict[str, Any], timestamp_column: Optional[str]) -> Optional[datetime]:
     """Extract a datetime from row_dict using timestamp_column (Issue #1254)."""
     if not timestamp_column:
         return None

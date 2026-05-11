@@ -148,9 +148,7 @@ class CaptchaHumanLoop:
         Returns:
             True if auto-solving is enabled and type is supported
         """
-        return (
-            self.enable_auto_solve and captcha_type not in _UNSUPPORTED_CAPTCHA_TYPES
-        )  # Issue #380
+        return self.enable_auto_solve and captcha_type not in _UNSUPPORTED_CAPTCHA_TYPES  # Issue #380
 
     async def _try_auto_fill(
         self,
@@ -232,14 +230,10 @@ class CaptchaHumanLoop:
 
         if captcha_input_selector and solution:
             if await self._try_auto_fill(page, captcha_input_selector, solution):
-                return self._build_auto_solve_result(
-                    captcha_id, url, start_time, solution, confidence
-                )
+                return self._build_auto_solve_result(captcha_id, url, start_time, solution, confidence)
 
         if solution:
-            return self._build_auto_solve_result(
-                captcha_id, url, start_time, solution, confidence
-            )
+            return self._build_auto_solve_result(captcha_id, url, start_time, solution, confidence)
 
         return None
 
@@ -253,9 +247,7 @@ class CaptchaHumanLoop:
                 timeout=self.timeout_seconds,
             )
 
-            status = self._resolution_results.get(
-                captcha_id, CaptchaResolutionStatus.ERROR
-            )
+            status = self._resolution_results.get(captcha_id, CaptchaResolutionStatus.ERROR)
             success = status == CaptchaResolutionStatus.SOLVED
 
             if success:
@@ -427,9 +419,7 @@ class CaptchaHumanLoop:
             Tuple of (status, success). Issue #620.
         """
         logger.info("Requesting human intervention for CAPTCHA at %s", url)
-        resolution_event = await self._setup_human_intervention(
-            captcha_id, url, captcha_type, screenshot_b64
-        )
+        resolution_event = await self._setup_human_intervention(captcha_id, url, captcha_type, screenshot_b64)
         return await self._wait_for_human_resolution(captcha_id, url, resolution_event)
 
     async def request_human_intervention(
@@ -466,15 +456,11 @@ class CaptchaHumanLoop:
             if auto_result:
                 return auto_result
 
-            status, success = await self._human_intervention_flow(
-                captcha_id, url, captcha_type, screenshot_b64
-            )
+            status, success = await self._human_intervention_flow(captcha_id, url, captcha_type, screenshot_b64)
 
         except Exception as e:
             logger.error("Error requesting CAPTCHA intervention: %s", e)
-            return self._build_error_result(
-                captcha_id, url, start_time, "CAPTCHA intervention request failed"
-            )
+            return self._build_error_result(captcha_id, url, start_time, "CAPTCHA intervention request failed")
 
         finally:
             self._cleanup_captcha_tracking(captcha_id)
@@ -540,9 +526,7 @@ class CaptchaHumanLoop:
             },
         )
 
-    async def _notify_captcha_resolved(
-        self, captcha_id: str, url: str, status: CaptchaResolutionStatus
-    ) -> None:
+    async def _notify_captcha_resolved(self, captcha_id: str, url: str, status: CaptchaResolutionStatus) -> None:
         """Send WebSocket notification that CAPTCHA was resolved."""
         await get_event_manager().publish(
             "captcha_resolved",
@@ -557,17 +541,11 @@ class CaptchaHumanLoop:
     def get_pending_captchas(self) -> Dict[str, Any]:
         """Get list of pending CAPTCHA resolutions (for API status endpoint)."""
         return {
-            captcha_id: {
-                "status": self._resolution_results.get(
-                    captcha_id, CaptchaResolutionStatus.PENDING
-                ).value
-            }
+            captcha_id: {"status": self._resolution_results.get(captcha_id, CaptchaResolutionStatus.PENDING).value}
             for captcha_id in self._pending_resolutions.keys()
         }
 
-    async def _attempt_auto_solve(
-        self, screenshot: bytes, captcha_type: str
-    ) -> Optional[Dict[str, Any]]:
+    async def _attempt_auto_solve(self, screenshot: bytes, captcha_type: str) -> Optional[Dict[str, Any]]:
         """
         Attempt to automatically solve the CAPTCHA using OCR.
 

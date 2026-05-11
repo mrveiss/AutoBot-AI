@@ -135,16 +135,12 @@ class TierMetrics:
             self.simple_tier_requests += 1
             self.score_sum_simple += result.score
             if self.simple_tier_requests > 0:
-                self.avg_simple_score = (
-                    self.score_sum_simple / self.simple_tier_requests
-                )
+                self.avg_simple_score = self.score_sum_simple / self.simple_tier_requests
         else:
             self.complex_tier_requests += 1
             self.score_sum_complex += result.score
             if self.complex_tier_requests > 0:
-                self.avg_complex_score = (
-                    self.score_sum_complex / self.complex_tier_requests
-                )
+                self.avg_complex_score = self.score_sum_complex / self.complex_tier_requests
 
     def record_fallback(self) -> None:
         """Record a fallback from simple to complex tier."""
@@ -160,9 +156,7 @@ class TierMetrics:
             "avg_complex_score": round(self.avg_complex_score, 2),
             "fallback_count": self.fallback_count,
             "simple_tier_percentage": (
-                round(self.simple_tier_requests / self.total_requests * 100, 1)
-                if self.total_requests > 0
-                else 0.0
+                round(self.simple_tier_requests / self.total_requests * 100, 1) if self.total_requests > 0 else 0.0
             ),
         }
 

@@ -20,9 +20,9 @@ aiosqlite>=0.21.0
 # AI/ML
 openai>=2.32.0
 anthropic>=0.87.0
-chromadb>=1.5.5,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
+chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
 protobuf>=5.29.6,<8.0.0           # required floor for chromadb 1.5.5+ opentelemetry exporter; resolves googleapis-common-protos conflict (#4061)
-sentence-transformers>=5.3.0
+sentence-transformers>=5.4.1
 torch>=2.11.0  # Issue #904: ML model training
 torchvision>=0.26.0  # Issue #904: Must match torch CUDA major version (torch 2.11 → torchvision 0.26)
 torchmetrics>=1.9.0  # Issue #904: Training metrics
@@ -37,7 +37,7 @@ networkx>=3.3
 graspologic>=3.4.4
 tree-sitter>=0.23.0
 tree-sitter-python>=0.23.0
-tree-sitter-javascript>=0.23.0
+tree-sitter-javascript>=0.25.0
 
 # Include existing requirements
 -r ../requirements.txt
@@ -51,7 +51,7 @@ llama-index-llms-ollama>=0.10.1,<1.0.0       # Ollama LLM integration
 llama-index-embeddings-ollama>=0.9.0,<1.0.0  # Ollama embeddings
 llama-index-vector-stores-chroma>=0.5.5,<1.0.0  # ChromaDB vector store
 # LangChain 1.x ecosystem — migrated from 0.3.x to fix SSRF CVE (#1572)
-langchain>=1.2.13,<2.0.0               # Issue #1572: Migrated to 1.x (was 0.3.x)
+langchain>=1.2.18,<2.0.0               # Issue #1572: Migrated to 1.x (was 0.3.x)
 langchain-core>=1.2.22,<2.0.0         # Issue #1572: SSRF CVE fix requires >=1.2.11
 langchain-community>=0.4.1,<0.5.0     # Issue #1572: Compatible with langchain 1.x
 langchain-ollama>=1.0.1,<2.0.0        # Issue #1572: ChatOllama for QA chain
@@ -72,6 +72,7 @@ scikit-learn>=1.8.0           # Issue #2027: RAPTOR clustering
 aiohttp>=3.13.4         # Async HTTP client - SECURITY UPDATE
 beautifulsoup4>=4.14.3  # HTML parsing for link pipeline
 Pillow>=12.1.1          # Image processing - SECURITY UPDATE (OOB write fix)
+jsonschema>=4.23.0      # Issue #7405: JSON Schema validation for /knowledge/extract
 # Optional (install separately for full media support):
 # opencv-python>=4.8.0   # Frame extraction for video pipeline
 # transformers>=4.30.0   # Whisper transcription for audio pipeline

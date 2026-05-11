@@ -276,9 +276,7 @@ class ImportContext:
         self.module_to_names: dict[str, list[str]] = {}
         self.aliases: dict[str, str] = {}
 
-    def add_import(
-        self, module: str, name: str | None = None, alias: str | None = None
-    ):
+    def add_import(self, module: str, name: str | None = None, alias: str | None = None):
         """
         Register an import statement.
 

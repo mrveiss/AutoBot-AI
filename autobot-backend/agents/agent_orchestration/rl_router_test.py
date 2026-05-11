@@ -164,9 +164,7 @@ class TestEpsilonGreedy:
         router = await _make_router(store)
         agents = ["chat"]
         await router.select_agent("test query", agents)
-        eps_after_one = float(
-            (store.get("rl:router:epsilon") or store.get(b"rl:router:epsilon", b"1.0"))
-        )
+        eps_after_one = float((store.get("rl:router:epsilon") or store.get(b"rl:router:epsilon", b"1.0")))
         assert eps_after_one < _EPSILON_START
 
     @pytest.mark.asyncio
@@ -179,9 +177,7 @@ class TestEpsilonGreedy:
         # Run many steps
         for _ in range(20):
             await router.select_agent("test", agents)
-        final_eps_raw = store.get("rl:router:epsilon") or store.get(
-            b"rl:router:epsilon"
-        )
+        final_eps_raw = store.get("rl:router:epsilon") or store.get(b"rl:router:epsilon")
         if final_eps_raw:
             final_eps = float(final_eps_raw)
             assert final_eps >= _EPSILON_MIN
@@ -292,9 +288,7 @@ class TestAgentRouterRLIntegration:
 
         router = self._make_agent_router(rl_mock)
         # Use a query that won't trigger quick_route confidence > 0.8
-        result = await router.determine_routing(
-            "something ambiguous here please help me decide"
-        )
+        result = await router.determine_routing("something ambiguous here please help me decide")
         assert result.get("source") == "rl"
         assert result["confidence"] == 0.75
 
@@ -313,13 +307,9 @@ class TestAgentRouterRLIntegration:
             }
         )
         router = self._make_agent_router(rl_mock)
-        router.llm_interface.chat_completion = AsyncMock(
-            return_value={"content": llm_response}
-        )
+        router.llm_interface.chat_completion = AsyncMock(return_value={"content": llm_response})
 
-        result = await router.determine_routing(
-            "something ambiguous here please help me decide"
-        )
+        result = await router.determine_routing("something ambiguous here please help me decide")
         # Should NOT be 'rl' source — LLM was used
         assert result.get("source") != "rl"
 
@@ -339,13 +329,9 @@ class TestAgentRouterRLIntegration:
         )
         router = self._make_agent_router(rl_mock)
         router.rl_routing_enabled = False
-        router.llm_interface.chat_completion = AsyncMock(
-            return_value={"content": llm_response}
-        )
+        router.llm_interface.chat_completion = AsyncMock(return_value={"content": llm_response})
 
-        result = await router.determine_routing(
-            "something ambiguous here please help me decide"
-        )
+        result = await router.determine_routing("something ambiguous here please help me decide")
         assert result.get("source") != "rl"
 
     @pytest.mark.asyncio
@@ -363,14 +349,10 @@ class TestAgentRouterRLIntegration:
             }
         )
         router = self._make_agent_router(rl_mock)
-        router.llm_interface.chat_completion = AsyncMock(
-            return_value={"content": llm_response}
-        )
+        router.llm_interface.chat_completion = AsyncMock(return_value={"content": llm_response})
 
         # Should not raise — falls back to LLM silently
-        result = await router.determine_routing(
-            "something ambiguous here please help me decide"
-        )
+        result = await router.determine_routing("something ambiguous here please help me decide")
         assert result is not None
         assert result.get("source") != "rl"
 

@@ -9,8 +9,6 @@ import pytest
 
 from events.types import ArtifactType, build_artifact
 from tools.parallel.executor import (
-    _FILE_MODIFYING_TOOLS,
-    _TEST_RUNNER_TOOLS,
     ParallelToolExecutor,
     _ArtifactCapture,
 )
@@ -121,10 +119,7 @@ class TestPublishObservationWithArtifacts:
         # Create a valid artifact using build_artifact to ensure JSON serializability
         artifacts = [
             build_artifact(
-                artifact_type=ArtifactType.FILE_CHANGE,
-                content="test change",
-                label="test.py",
-                file_path="/tmp/test.py"
+                artifact_type=ArtifactType.FILE_CHANGE, content="test change", label="test.py", file_path="/tmp/test.py"
             )
         ]
 

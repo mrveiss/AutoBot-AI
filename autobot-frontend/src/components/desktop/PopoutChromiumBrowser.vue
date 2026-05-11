@@ -95,7 +95,11 @@
           <span class="font-medium text-autobot-text-primary">{{ $t('desktop.popoutBrowser.browserAutomation') }}</span>
           <span class="text-sm px-2 py-1 rounded" style="background: var(--color-info-bg); color: var(--color-info)">{{ playwrightStatus }}</span>
         </div>
-        <button @click="showPlaywrightPanel = false" class="text-autobot-text-muted hover:text-autobot-text-secondary">
+        <button
+          @click="showPlaywrightPanel = false"
+          class="text-autobot-text-muted hover:text-autobot-text-secondary"
+          :aria-label="$t('common.close')"
+        >
           <i class="fas fa-times"></i>
         </button>
       </div>

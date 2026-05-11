@@ -152,9 +152,7 @@ class CommandApprovalManager:
         ),
     }
 
-    def __init__(
-        self, custom_permissions: Optional[Dict[AgentRole, AgentPermissions]] = None
-    ):
+    def __init__(self, custom_permissions: Optional[Dict[AgentRole, AgentPermissions]] = None):
         """
         Initialize command approval manager.
 
@@ -182,17 +180,11 @@ class CommandApprovalManager:
         surpasses the effective maximum allowed for the given permissions.
         """
         supervised_mode = perms.supervised_mode
-        effective_max_risk = (
-            CommandRisk.FORBIDDEN if supervised_mode else perms.max_risk
-        )
+        effective_max_risk = CommandRisk.FORBIDDEN if supervised_mode else perms.max_risk
 
-        if _RISK_LEVELS.get(command_risk, 999) > _RISK_LEVELS.get(
-            effective_max_risk, 0
-        ):
+        if _RISK_LEVELS.get(command_risk, 999) > _RISK_LEVELS.get(effective_max_risk, 0):
             if supervised_mode:
-                reason = (
-                    f"Command risk {command_risk.value} exceeds supervised mode limit"
-                )
+                reason = f"Command risk {command_risk.value} exceeds supervised mode limit"
             else:
                 reason = (
                     f"Command risk {command_risk.value} exceeds agent max risk "
@@ -238,9 +230,7 @@ class CommandApprovalManager:
         if not perms:
             return False, f"Unknown agent role: {agent_role}"
 
-        exceeded, reason = CommandApprovalManager._check_risk_exceeds_limit(
-            command_risk, perms
-        )
+        exceeded, reason = CommandApprovalManager._check_risk_exceeds_limit(command_risk, perms)
         if exceeded:
             return False, reason
 
@@ -345,8 +335,7 @@ class CommandApprovalManager:
                 # Match pattern and risk level
                 if rule.pattern == pattern and rule.risk_level == risk_level:
                     logger.info(
-                        f"Auto-approve rule matched for user {user_id}: "
-                        f"pattern='{pattern}', risk={risk_level}"
+                        f"Auto-approve rule matched for user {user_id}: " f"pattern='{pattern}', risk={risk_level}"
                     )
                     return True
 
@@ -395,10 +384,7 @@ class CommandApprovalManager:
 
             self.auto_approve_rules[user_id].append(rule)
 
-            logger.info(
-                f"Auto-approve rule stored for user {user_id}: "
-                f"pattern='{pattern}', risk={risk_level}"
-            )
+            logger.info(f"Auto-approve rule stored for user {user_id}: " f"pattern='{pattern}', risk={risk_level}")
             return True
 
         except Exception as e:
@@ -595,10 +581,7 @@ class CommandApprovalManager:
         try:
             from autobot_shared.ssot_config import config
 
-            if (
-                not config.permission.enabled
-                or not config.permission.approval_memory_enabled
-            ):
+            if not config.permission.enabled or not config.permission.approval_memory_enabled:
                 return False
 
             from services.approval_memory import ApprovalMemoryManager  # noqa: F811
@@ -645,10 +628,7 @@ class CommandApprovalManager:
         try:
             from autobot_shared.ssot_config import config
 
-            if (
-                not config.permission.enabled
-                or not config.permission.approval_memory_enabled
-            ):
+            if not config.permission.enabled or not config.permission.approval_memory_enabled:
                 return False
 
             from services.approval_memory import ApprovalMemoryManager  # noqa: F811

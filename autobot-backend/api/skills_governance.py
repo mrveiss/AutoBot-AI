@@ -7,6 +7,8 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_agent import (
     ApprovalDecision,
@@ -23,10 +25,8 @@ from api.schemas_code import (
     SkillsGovernanceConfigResponse,
     SkillsGovernanceUpdateResponse,
 )
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc
 from skills.db import get_skills_engine
 from skills.generator import SkillGenerator
@@ -39,7 +39,6 @@ from skills.models import (
 )
 from skills.promoter import SkillPromoter
 from skills.validator import SkillValidator
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -52,9 +51,7 @@ _STATUS_REJECTED = "rejected"
 
 async def _get_skill_draft(session: AsyncSession, skill_id: str) -> SkillPackage:
     """Look up a DRAFT SkillPackage by id; raise 404 if not found."""
-    result = await session.execute(
-        select(SkillPackage).where(SkillPackage.id == skill_id)
-    )
+    result = await session.execute(select(SkillPackage).where(SkillPackage.id == skill_id))
     skill = result.scalar_one_or_none()
     if skill is None:
         raise HTTPException(status_code=404, detail=f"Skill draft {skill_id} not found")
@@ -63,9 +60,7 @@ async def _get_skill_draft(session: AsyncSession, skill_id: str) -> SkillPackage
 
 async def _get_approval(session: AsyncSession, approval_id: str) -> SkillApproval:
     """Look up a SkillApproval by id; raise 404 if not found."""
-    result = await session.execute(
-        select(SkillApproval).where(SkillApproval.id == approval_id)
-    )
+    result = await session.execute(select(SkillApproval).where(SkillApproval.id == approval_id))
     approval = result.scalar_one_or_none()
     if approval is None:
         raise HTTPException(status_code=404, detail=f"Approval {approval_id} not found")
@@ -138,9 +133,7 @@ async def list_drafts() -> List[Dict[str, Any]]:
     """Return all SkillPackage records in DRAFT state."""
     engine = get_skills_engine()
     async with AsyncSession(engine) as session:
-        result = await session.execute(
-            select(SkillPackage).where(SkillPackage.state == SkillState.DRAFT)
-        )
+        result = await session.execute(select(SkillPackage).where(SkillPackage.state == SkillState.DRAFT))
         drafts = result.scalars().all()
     return [
         {
@@ -180,7 +173,9 @@ async def test_draft(
     }
 
 
-@router.post("/drafts/{skill_id}/promote", summary="Promote a draft skill to builtin", response_model=SkillsDraftPromoteResponse)
+@router.post(
+    "/drafts/{skill_id}/promote", summary="Promote a draft skill to builtin", response_model=SkillsDraftPromoteResponse
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="promote_draft",
@@ -225,13 +220,9 @@ async def promote_draft(
                 skill_md=skill.skill_md,
                 skill_py=skill.skill_py,
             )
-        except (
-            Exception
-        ) as exc:  # intentionally broad: promoter can fail due to FS/git/IO errors
+        except Exception as exc:  # intentionally broad: promoter can fail due to FS/git/IO errors
             logger.error("Skill promotion failed for '%s': %s", skill.name, exc)
-            raise HTTPException(
-                status_code=500, detail="Internal server error"
-            ) from exc
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
         skill.state = SkillState.BUILTIN
         skill.promoted_at = now_utc()
         await session.commit()
@@ -250,9 +241,7 @@ async def list_approvals() -> List[Dict[str, Any]]:
     """Return all SkillApproval records with status 'pending'."""
     engine = get_skills_engine()
     async with AsyncSession(engine) as session:
-        result = await session.execute(
-            select(SkillApproval).where(SkillApproval.status == _STATUS_PENDING)
-        )
+        result = await session.execute(select(SkillApproval).where(SkillApproval.status == _STATUS_PENDING))
         approvals = result.scalars().all()
     return [
         {
@@ -267,7 +256,11 @@ async def list_approvals() -> List[Dict[str, Any]]:
     ]
 
 
-@router.post("/approvals/{approval_id}", summary="Approve or reject a skill approval", response_model=SkillsApprovalDecisionResponse)
+@router.post(
+    "/approvals/{approval_id}",
+    summary="Approve or reject a skill approval",
+    response_model=SkillsApprovalDecisionResponse,
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="decide_approval",

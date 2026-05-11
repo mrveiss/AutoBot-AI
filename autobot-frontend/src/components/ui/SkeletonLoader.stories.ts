@@ -38,10 +38,11 @@ const meta = {
       description: 'Custom variant default line width',
     },
   },
-} satisfies Meta<typeof SkeletonLoader>;
+} as Meta<typeof SkeletonLoader>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const Default: Story = {
   args: {

@@ -418,9 +418,7 @@ class PrecommitAnalyzer:
                 return True
         return False
 
-    def run_check(
-        self, check: CheckDefinition, filepath: str, content: str
-    ) -> List[CheckResult]:
+    def run_check(self, check: CheckDefinition, filepath: str, content: str) -> List[CheckResult]:
         """Run a single check against file content."""
         results = []
 
@@ -436,9 +434,7 @@ class PrecommitAnalyzer:
             lines = content.split("\n")
 
             if check.multiline:
-                self._run_multiline_check(
-                    check, filepath, content, lines, pattern, results
-                )
+                self._run_multiline_check(check, filepath, content, lines, pattern, results)
             else:
                 self._run_singleline_check(check, filepath, lines, pattern, results)
 
@@ -460,9 +456,7 @@ class PrecommitAnalyzer:
         for match in pattern.finditer(content):
             line_num = content[: match.start()].count("\n") + 1
             snippet = self._get_snippet(lines, line_num)
-            results.append(
-                self._create_check_result(check, filepath, line_num, snippet)
-            )
+            results.append(self._create_check_result(check, filepath, line_num, snippet))
 
     def _run_singleline_check(
         self,
@@ -476,11 +470,7 @@ class PrecommitAnalyzer:
         for i, line in enumerate(lines, 1):
             for match in pattern.finditer(line):
                 snippet = self._get_snippet(lines, i)
-                results.append(
-                    self._create_check_result(
-                        check, filepath, i, snippet, match.start() + 1
-                    )
-                )
+                results.append(self._create_check_result(check, filepath, i, snippet, match.start() + 1))
 
     def _create_check_result(
         self,
@@ -544,9 +534,7 @@ class PrecommitAnalyzer:
     def _analyze_files_parallel(self, files: List[str]) -> List[CheckResult]:
         """Analyze files in parallel (Issue #335 - extracted helper)."""
         all_results = []
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=self.max_workers
-        ) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             future_to_file = {executor.submit(self.analyze_file, f): f for f in files}
             for future in concurrent.futures.as_completed(future_to_file):
                 try:
@@ -577,15 +565,9 @@ class PrecommitAnalyzer:
         duration_ms = (time.time() - start_time) * 1000
 
         # Calculate statistics
-        blocked = any(
-            r.severity == CheckSeverity.BLOCK and not r.passed for r in all_results
-        )
-        warnings = sum(
-            1 for r in all_results if r.severity == CheckSeverity.WARN and not r.passed
-        )
-        infos = sum(
-            1 for r in all_results if r.severity == CheckSeverity.INFO and not r.passed
-        )
+        blocked = any(r.severity == CheckSeverity.BLOCK and not r.passed for r in all_results)
+        warnings = sum(1 for r in all_results if r.severity == CheckSeverity.WARN and not r.passed)
+        infos = sum(1 for r in all_results if r.severity == CheckSeverity.INFO and not r.passed)
         failed = sum(1 for r in all_results if not r.passed)
 
         active_checks = self._get_active_checks()
@@ -625,9 +607,7 @@ class PrecommitAnalyzer:
 
         return self.analyze_files(staged_files)
 
-    def analyze_content(
-        self, content: str, filepath: str = "untitled.py"
-    ) -> List[CheckResult]:
+    def analyze_content(self, content: str, filepath: str = "untitled.py") -> List[CheckResult]:
         """Analyze arbitrary content."""
         results = []
         active_checks = self._get_active_checks()
@@ -740,9 +720,7 @@ def get_check_categories() -> List[Dict[str, Any]]:
         else:
             category_counts[cat]["disabled"] += 1
 
-        category_counts[cat][check.severity.value] = (
-            category_counts[cat].get(check.severity.value, 0) + 1
-        )
+        category_counts[cat][check.severity.value] = category_counts[cat].get(check.severity.value, 0) + 1
 
     return [
         {

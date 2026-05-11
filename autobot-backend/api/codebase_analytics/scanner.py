@@ -158,9 +158,7 @@ def _update_task_batch_info_bound(
     task_id: str, current_batch: int, total_batches: int, items_in_batch: int = 0
 ) -> None:
     """Update task batch info — bound to module-level indexing_tasks."""
-    _pt_update_task_batch_info(
-        task_id, current_batch, total_batches, indexing_tasks, items_in_batch
-    )
+    _pt_update_task_batch_info(task_id, current_batch, total_batches, indexing_tasks, items_in_batch)
 
 
 def _update_task_stats_bound(task_id: str, **kwargs) -> None:
@@ -168,13 +166,9 @@ def _update_task_stats_bound(task_id: str, **kwargs) -> None:
     _pt_update_task_stats(task_id, indexing_tasks, **kwargs)
 
 
-def _mark_task_completed_bound(
-    task_id: str, analysis_results: Dict, hardcodes_stored: int, storage_type: str
-) -> None:
+def _mark_task_completed_bound(task_id: str, analysis_results: Dict, hardcodes_stored: int, storage_type: str) -> None:
     """Mark task completed — bound to module-level indexing_tasks."""
-    _pt_mark_completed(
-        task_id, analysis_results, hardcodes_stored, storage_type, indexing_tasks
-    )
+    _pt_mark_completed(task_id, analysis_results, hardcodes_stored, storage_type, indexing_tasks)
 
 
 def _mark_task_failed_bound(task_id: str, error: Exception) -> None:
@@ -184,14 +178,10 @@ def _mark_task_failed_bound(task_id: str, error: Exception) -> None:
 
 def _create_initial_task_state_bound() -> Dict:
     """Create initial task state with module-level config constants."""
-    return _create_initial_task_state(
-        CHROMADB_BATCH_SIZE, PARALLEL_BATCH_COUNT, INCREMENTAL_INDEXING_ENABLED
-    )
+    return _create_initial_task_state(CHROMADB_BATCH_SIZE, PARALLEL_BATCH_COUNT, INCREMENTAL_INDEXING_ENABLED)
 
 
-async def _file_needs_reindex_bound(
-    file_path, relative_path: str, redis_client
-) -> Tuple[bool, str]:
+async def _file_needs_reindex_bound(file_path, relative_path: str, redis_client) -> Tuple[bool, str]:
     """Check if file needs reindex — bound to module-level config and thread pool."""
     return await _file_needs_reindex(
         file_path,
@@ -308,9 +298,7 @@ async def scan_codebase(
             source_id=source_id,
         )
 
-        _log_incremental_stats(
-            files_processed, files_skipped, INCREMENTAL_INDEXING_ENABLED
-        )
+        _log_incremental_stats(files_processed, files_skipped, INCREMENTAL_INDEXING_ENABLED)
 
         if not PARALLEL_MODE_ENABLED:
             _calculate_analysis_statistics(analysis_results)
@@ -345,9 +333,7 @@ def _create_progress_updater(task_id: str, update_phase, update_batch_info):
 # =============================================================================
 
 
-async def _run_indexing_subprocess(
-    task_id: str, root_path: str, source_id: Optional[str] = None
-) -> None:
+async def _run_indexing_subprocess(task_id: str, root_path: str, source_id: Optional[str] = None) -> None:
     """Launch isolated indexing subprocess to prevent ChromaDB SIGSEGV (#1180).
 
     Delegates to subprocess_runner._run_indexing_subprocess with module-level
@@ -370,9 +356,7 @@ async def _run_indexing_subprocess(
 # =============================================================================
 
 
-async def do_indexing_with_progress(
-    task_id: str, root_path: str, source_id: Optional[str] = None
-):
+async def do_indexing_with_progress(task_id: str, root_path: str, source_id: Optional[str] = None):
     """Background task: Index codebase with real-time progress updates.
 
     Issue #281, #398: Refactored with extracted helpers for reduced complexity.
@@ -401,9 +385,7 @@ async def do_indexing_with_progress(
         def update_stats(**kwargs):
             _update_task_stats_bound(task_id, **kwargs)
 
-        update_progress = _create_progress_updater(
-            task_id, update_phase, update_batch_info
-        )
+        update_progress = _create_progress_updater(task_id, update_phase, update_batch_info)
 
         analysis_results, hardcodes_stored = await _ip_run_indexing_phases(
             task_id,
@@ -435,9 +417,7 @@ async def do_indexing_with_progress(
         except Exception as exc:
             logger.warning("[Task %s] Cross-file analysis skipped: %s", task_id, exc)
 
-        _mark_task_completed_bound(
-            task_id, analysis_results, hardcodes_stored, "chromadb"
-        )
+        _mark_task_completed_bound(task_id, analysis_results, hardcodes_stored, "chromadb")
         update_phase("finalize", "completed")
         await _save_task_to_redis_bound(task_id)
         logger.info("[Task %s] Indexing completed successfully", task_id)

@@ -47,10 +47,11 @@ const meta = {
       description: 'Message for empty state',
     },
   },
-} satisfies Meta<typeof DataTable>;
+} as Meta<typeof DataTable>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 const sampleColumns = [
   { key: 'name', label: 'Name', sortable: true },

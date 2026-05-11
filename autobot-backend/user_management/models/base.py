@@ -12,11 +12,12 @@ Provides:
 
 import uuid
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 
 from sqlalchemy import DateTime, ForeignKey, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, declared_attr, mapped_column
 from sqlalchemy.types import Uuid
+
+from autobot_shared.time_utils import now_utc
 
 
 class Base(DeclarativeBase):
@@ -55,8 +56,6 @@ class TimestampMixin:
     automatically. This class is kept only for backward compatibility with
     imports/references (#4300).
     """
-
-    pass
 
 
 class TenantMixin:

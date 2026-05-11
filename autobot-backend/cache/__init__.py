@@ -140,7 +140,5 @@ async def register_all_caches() -> int:
         if _register_single_cache(coordinator, module_path, class_name, factory):
             registered += 1
 
-    logger.info(
-        "CacheCoordinator: Registered %d caches for coordinated management", registered
-    )
+    logger.info("CacheCoordinator: Registered %d caches for coordinated management", registered)
     return registered

@@ -77,9 +77,7 @@ class CertificateDistributor:
 
         # Skip main-host (local machine)
         vms_to_process = {
-            name: ip
-            for name, ip in VM_DEFINITIONS.items()
-            if name not in exclude_vms and name != "main-host"
+            name: ip for name, ip in VM_DEFINITIONS.items() if name not in exclude_vms and name != "main-host"
         }
 
         logger.info(f"Distributing certificates to {len(vms_to_process)} VMs")
@@ -104,15 +102,11 @@ class CertificateDistributor:
 
         # Log summary
         success_count = sum(1 for r in results.values() if r.success)
-        logger.info(
-            f"Certificate distribution complete: {success_count}/{len(results)} successful"
-        )
+        logger.info(f"Certificate distribution complete: {success_count}/{len(results)} successful")
 
         return results
 
-    async def _prepare_remote_directory(
-        self, conn: asyncssh.SSHClientConnection, remote_dir: str
-    ) -> None:
+    async def _prepare_remote_directory(self, conn: asyncssh.SSHClientConnection, remote_dir: str) -> None:
         """
         Create remote directory and set initial ownership.
 
@@ -189,9 +183,7 @@ class CertificateDistributor:
             f"openssl verify -CAfile {ca_remote} {cert_remote}",
         )
         if verify_result.returncode != 0:
-            raise RuntimeError(
-                f"Certificate verification failed: {verify_result.stderr}"
-            )
+            raise RuntimeError(f"Certificate verification failed: {verify_result.stderr}")
 
     def _record_span_error(
         self,
@@ -322,8 +314,10 @@ class CertificateDistributor:
         mode: str = "644",
     ):
         """Copy a file to remote host and set permissions."""
-        # Read local file
-        content = local_path.read_bytes()
+        # Read local file. #7467: was sync `local_path.read_bytes()` —
+        # blocks the event loop on disk I/O during PKI distribution
+        # which runs concurrently across N VMs.
+        content = await asyncio.to_thread(local_path.read_bytes)
 
         # Write to temporary location
         temp_path = f"/tmp/{local_path.name}"  # nosec B108 - remote VM temp dir
@@ -365,8 +359,7 @@ class CertificateDistributor:
 
                     # Verify certificate chain
                     verify_result = await conn.run(
-                        f"openssl verify -CAfile {remote_dir}/ca-cert.pem "
-                        f"{remote_dir}/server-cert.pem"
+                        f"openssl verify -CAfile {remote_dir}/ca-cert.pem " f"{remote_dir}/server-cert.pem"
                     )
 
                     results[vm_name] = verify_result.returncode == 0

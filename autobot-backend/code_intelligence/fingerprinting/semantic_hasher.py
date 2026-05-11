@@ -103,9 +103,7 @@ class SemanticHasher:
         inputs = used - defined - self._BUILTIN_NAMES
         return sorted(inputs)
 
-    def _process_node_for_inputs(
-        self, child: ast.AST, defined: Set[str], used: Set[str]
-    ) -> None:
+    def _process_node_for_inputs(self, child: ast.AST, defined: Set[str], used: Set[str]) -> None:
         """
         Process a single node for input/output variable tracking.
 

@@ -34,9 +34,7 @@ class TestDeleteSourceDocuments:
 
         await _delete_source_documents(collection, "task-1", "source-X")
 
-        collection.get.assert_awaited_once_with(
-            where={"source_id": "source-X"}, include=[]
-        )
+        collection.get.assert_awaited_once_with(where={"source_id": "source-X"}, include=[])
         collection.delete.assert_awaited_once_with(ids=["a", "b", "c"])
 
     @pytest.mark.asyncio

@@ -61,9 +61,7 @@ class TaskExecutionContext:
             details: Additional details to include in the audit log
         """
         log_details = {"task_id": self.task_id, **(details or {})}
-        self.worker.security_layer.audit_log(
-            action, self.user_role, status, log_details
-        )
+        self.worker.security_layer.audit_log(action, self.user_role, status, log_details)
 
     def get_payload_value(self, key: str, default: Any = None) -> Any:
         """

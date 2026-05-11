@@ -195,10 +195,6 @@ def extract_user_context_from_request(current_user) -> tuple:
     else:
         user_id = str(current_user.id)
         user_org_id = str(current_user.org_id) if current_user.org_id else None
-        user_group_ids = [
-            str(m.team_id)
-            for m in current_user.team_memberships
-            if m.team and not m.team.is_deleted
-        ]
+        user_group_ids = [str(m.team_id) for m in current_user.team_memberships if m.team and not m.team.is_deleted]
 
     return user_id, user_org_id, user_group_ids

@@ -14,8 +14,9 @@ import logging
 from collections import defaultdict
 from typing import Dict, List, Set
 
-from autobot_shared.time_utils import utc_timestamp
 from fastapi import WebSocket, WebSocketDisconnect
+
+from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
 

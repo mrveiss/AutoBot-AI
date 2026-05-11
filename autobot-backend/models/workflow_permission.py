@@ -49,12 +49,7 @@ class WorkflowPermission(Base):
         onupdate=func.now(),
     )
 
-    __table_args__ = (
-        UniqueConstraint("workflow_id", "user_id", name="uq_workflow_permission"),
-    )
+    __table_args__ = (UniqueConstraint("workflow_id", "user_id", name="uq_workflow_permission"),)
 
     def __repr__(self) -> str:
-        return (
-            f"<WorkflowPermission workflow={self.workflow_id} "
-            f"user={self.user_id} role={self.role}>"
-        )
+        return f"<WorkflowPermission workflow={self.workflow_id} " f"user={self.user_id} role={self.role}>"

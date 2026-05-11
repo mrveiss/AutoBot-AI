@@ -14,15 +14,12 @@ Tests the provider-based memory architecture including:
 Issue #4344: Provider-based memory architecture with external provider support
 """
 
-import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from services.memory import (
-    ExternalProviderFactory,
     PostgresMemoryProvider,
-    ProviderType,
     RedisMemoryProvider,
 )
 from services.memory.memory_manager import MemoryManager
@@ -40,9 +37,7 @@ class TestPostgresMemoryProvider:
     @pytest.mark.asyncio
     async def test_initialize(self, provider):
         """Test provider initialization."""
-        with patch(
-            "services.memory.postgres_provider.AutoBotMemoryGraph"
-        ) as mock_graph:
+        with patch("services.memory.postgres_provider.AutoBotMemoryGraph") as mock_graph:
             mock_instance = AsyncMock()
             mock_graph.return_value = mock_instance
 
@@ -172,11 +167,10 @@ class TestMemoryManager:
     @pytest.mark.asyncio
     async def test_initialize_built_in_only(self, manager):
         """Test initialization with built-in provider only."""
-        with patch(
-            "services.memory.memory_manager.PostgresMemoryProvider"
-        ) as mock_pg, patch(
-            "services.memory.memory_manager.ExternalProviderFactory"
-        ) as mock_factory:
+        with (
+            patch("services.memory.memory_manager.PostgresMemoryProvider") as mock_pg,
+            patch("services.memory.memory_manager.ExternalProviderFactory") as mock_factory,
+        ):
             mock_built_in = AsyncMock()
             mock_pg.return_value = mock_built_in
             mock_factory.get_provider = AsyncMock(return_value=None)
@@ -190,11 +184,10 @@ class TestMemoryManager:
     @pytest.mark.asyncio
     async def test_initialize_with_external(self, manager):
         """Test initialization with external provider."""
-        with patch(
-            "services.memory.memory_manager.PostgresMemoryProvider"
-        ) as mock_pg, patch(
-            "services.memory.memory_manager.ExternalProviderFactory"
-        ) as mock_factory:
+        with (
+            patch("services.memory.memory_manager.PostgresMemoryProvider") as mock_pg,
+            patch("services.memory.memory_manager.ExternalProviderFactory") as mock_factory,
+        ):
             mock_built_in = AsyncMock()
             mock_external = AsyncMock()
             mock_pg.return_value = mock_built_in
@@ -251,9 +244,10 @@ async def test_dual_backend_retrieval():
     """Integration test: dual-backend retrieval works correctly."""
     manager = MemoryManager()
 
-    with patch("services.memory.memory_manager.PostgresMemoryProvider") as mock_pg, patch(
-        "services.memory.memory_manager.ExternalProviderFactory"
-    ) as mock_factory:
+    with (
+        patch("services.memory.memory_manager.PostgresMemoryProvider") as mock_pg,
+        patch("services.memory.memory_manager.ExternalProviderFactory") as mock_factory,
+    ):
         mock_built_in = AsyncMock()
         mock_external = AsyncMock()
         mock_pg.return_value = mock_built_in
@@ -261,9 +255,7 @@ async def test_dual_backend_retrieval():
 
         await manager.initialize()
 
-        external_results = [
-            {"id": "entity_1", "source": "external", "score": 0.95}
-        ]
+        external_results = [{"id": "entity_1", "source": "external", "score": 0.95}]
         mock_external.search = AsyncMock(return_value=external_results)
 
         results = await manager.search("test query")

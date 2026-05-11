@@ -102,9 +102,7 @@ class TestWorkflowCheckpointManager:
 
     def test_save_and_load(self) -> None:
         mgr = self._manager_with_fake_redis()
-        cp = StepCheckpoint(
-            step_id="step1", status=TaskStatus.COMPLETED.value, output={"success": True}
-        )
+        cp = StepCheckpoint(step_id="step1", status=TaskStatus.COMPLETED.value, output={"success": True})
         mgr.save("wf-1", cp)
 
         loaded = mgr.load_all("wf-1")
@@ -119,9 +117,7 @@ class TestWorkflowCheckpointManager:
     def test_save_multiple_steps(self) -> None:
         mgr = self._manager_with_fake_redis()
         for i in range(3):
-            mgr.save(
-                "wf-2", StepCheckpoint(step_id=f"s{i}", status=TaskStatus.COMPLETED.value, output={})
-            )
+            mgr.save("wf-2", StepCheckpoint(step_id=f"s{i}", status=TaskStatus.COMPLETED.value, output={}))
         loaded = mgr.load_all("wf-2")
         assert set(loaded.keys()) == {"s0", "s1", "s2"}
 
@@ -159,8 +155,7 @@ class TestWorkflowCheckpointManager:
     def test_checkpoint_ttl_is_30_days(self) -> None:
         """CHECKPOINT_TTL must be at least 30 days for paused workflows."""
         assert CHECKPOINT_TTL >= 30 * 24 * 3600, (
-            "CHECKPOINT_TTL is too short — paused workflows awaiting human "
-            "approval must survive at least 30 days"
+            "CHECKPOINT_TTL is too short — paused workflows awaiting human " "approval must survive at least 30 days"
         )
 
     def test_save_sets_ttl(self) -> None:

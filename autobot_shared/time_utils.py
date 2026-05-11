@@ -41,7 +41,6 @@ Migration plan (#5169 part C)
    workaround sites since 3.11 ``fromisoformat`` accepts ``Z`` natively
 """
 
-import time
 from datetime import datetime, timezone
 
 

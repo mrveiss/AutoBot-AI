@@ -11,6 +11,7 @@ Issue #718: Uses dedicated thread pool for file I/O to prevent blocking
 when the main asyncio thread pool is saturated by indexing operations.
 """
 
+import asyncio
 import logging
 import mimetypes
 import shutil
@@ -23,6 +24,20 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer
 
+from api.schemas_system import (
+    AdminFileListResponse,
+    AdminFileReadResponse,
+    DirectoryCreateResponse,
+    DirectoryListing,
+    DirectoryTreeResponse,
+    FileDeleteResponse,
+    FileInfo,
+    FilePreviewResponse,
+    FileRenameResponse,
+    FilesAPIUploadResponse,
+    FileStatsResponse,
+    FileViewResponse,
+)
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path
@@ -36,20 +51,6 @@ from security_layer import SecurityLayer
 from utils.io_executor import run_in_file_executor
 from utils.path_validation import is_invalid_name
 from utils.paths_manager import ensure_data_directory, get_data_path
-from api.schemas_system import (
-    AdminFileListResponse,
-    AdminFileReadResponse,
-    DirectoryCreateResponse,
-    DirectoryListing,
-    DirectoryTreeResponse,
-    FileDeleteResponse,
-    FileInfo,
-    FilePreviewResponse,
-    FileRenameResponse,
-    FileStatsResponse,
-    FileViewResponse,
-    FilesAPIUploadResponse,
-)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -200,9 +201,7 @@ def _check_file_permission(request: Request, permission: str) -> dict:
 
     Issue #620.
     """
-    has_permission, user_data = get_auth_middleware().check_file_permissions(
-        request, permission
-    )
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, permission)
     if not has_permission:
         raise HTTPException(
             status_code=403,
@@ -251,18 +250,14 @@ def validate_and_resolve_path(path: str) -> Path:
         or "~" in clean_path
         or any(char in clean_path for char in INVALID_PATH_CHARACTERS)
     ):
-        raise HTTPException(
-            status_code=400, detail="Invalid path: path traversal not allowed"
-        )
+        raise HTTPException(status_code=400, detail="Invalid path: path traversal not allowed")
 
     # URL decode to catch encoded traversal attempts
     import urllib.parse
 
     decoded_path = urllib.parse.unquote(clean_path)
     if ".." in decoded_path or decoded_path.startswith("/"):
-        raise HTTPException(
-            status_code=400, detail="Invalid path: encoded traversal not allowed"
-        )
+        raise HTTPException(status_code=400, detail="Invalid path: encoded traversal not allowed")
 
     # Validate via shared security module (#1721)
     try:
@@ -346,9 +341,7 @@ def _list_directory_contents(target_path: Path) -> tuple:
     total_files = 0
     total_directories = 0
 
-    for item in sorted(
-        target_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())
-    ):
+    for item in sorted(target_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
         try:
             relative_item_path = str(item.relative_to(SANDBOXED_ROOT))
             file_info = get_file_info(item, relative_item_path)
@@ -474,9 +467,7 @@ def _validate_upload_file(file: UploadFile, content: bytes) -> None:
         raise HTTPException(status_code=400, detail="No filename provided")
 
     if not is_safe_file(file.filename):
-        raise HTTPException(
-            status_code=400, detail=f"File type not allowed: {file.filename}"
-        )
+        raise HTTPException(status_code=400, detail=f"File type not allowed: {file.filename}")
 
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(
@@ -494,14 +485,11 @@ def _validate_upload_file(file: UploadFile, content: bytes) -> None:
     detected_mime = mimetypes.guess_type(file.filename)[0]
     if detected_mime and file.content_type and file.content_type != detected_mime:
         logger.warning(
-            f"MIME type mismatch for {file.filename}: "
-            f"declared={file.content_type}, detected={detected_mime}"
+            f"MIME type mismatch for {file.filename}: " f"declared={file.content_type}, detected={detected_mime}"
         )
 
 
-async def _write_upload_file(
-    target_file: Path, content: bytes, overwrite: bool
-) -> None:
+async def _write_upload_file(target_file: Path, content: bytes, overwrite: bool) -> None:
     """
     Write uploaded file to target location.
 
@@ -568,9 +556,7 @@ def _log_upload_audit(
     )
 
 
-async def _delete_file_item(
-    target_path: Path, path: str, security_layer, user_data: dict, request: Request
-) -> dict:
+async def _delete_file_item(target_path: Path, path: str, security_layer, user_data: dict, request: Request) -> dict:
     """
     Delete a single file and log audit.
 
@@ -628,9 +614,7 @@ async def _delete_directory_item(
     )
 
     if delete_type == "directory_recursive":
-        return {
-            "message": f"Directory '{target_path.name}' and all contents deleted successfully"
-        }
+        return {"message": f"Directory '{target_path.name}' and all contents deleted successfully"}
     return {"message": f"Directory '{target_path.name}' deleted successfully"}
 
 
@@ -657,13 +641,9 @@ async def upload_file(
         overwrite: Whether to overwrite existing files
     """
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = get_auth_middleware().check_file_permissions(
-        request, "upload"
-    )
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "upload")
     if not has_permission:
-        raise HTTPException(
-            status_code=403, detail="Insufficient permissions for file upload"
-        )
+        raise HTTPException(status_code=403, detail="Insufficient permissions for file upload")
 
     # Store user data in request state for audit logging
     request.state.user = user_data
@@ -714,13 +694,9 @@ async def download_file(request: Request, path: str):
         path: File path within the sandbox
     """
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = get_auth_middleware().check_file_permissions(
-        request, "download"
-    )
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "download")
     if not has_permission:
-        raise HTTPException(
-            status_code=403, detail="Insufficient permissions for file download"
-        )
+        raise HTTPException(status_code=403, detail="Insufficient permissions for file download")
 
     # Store user data in request state for audit logging
     request.state.user = user_data
@@ -775,9 +751,7 @@ async def view_file(request: Request, path: str):
     # SECURITY FIX: Use modern auth_middleware instead of deprecated function
     has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
-        raise HTTPException(
-            status_code=403, detail="Insufficient permissions for file viewing"
-        )
+        raise HTTPException(status_code=403, detail="Insufficient permissions for file viewing")
 
     # Store user data in request state for audit logging
     request.state.user = user_data
@@ -889,9 +863,7 @@ async def _validate_rename_paths(source_path: Path, new_name: str) -> Path:
     operation="rename_file_or_directory",
     error_code_prefix="FILES",
 )
-async def rename_file_or_directory(
-    request: Request, path: str = Form(...), new_name: str = Form(...)
-):
+async def rename_file_or_directory(request: Request, path: str = Form(...), new_name: str = Form(...)):
     """
     Rename a file or directory within the sandbox.
 
@@ -1036,13 +1008,9 @@ async def delete_file(request: Request, path: str):
     Args:
         path: Path to the file/directory to delete (query parameter)
     """
-    has_permission, user_data = get_auth_middleware().check_file_permissions(
-        request, "delete"
-    )
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "delete")
     if not has_permission:
-        raise HTTPException(
-            status_code=403, detail="Insufficient permissions for file deletion"
-        )
+        raise HTTPException(status_code=403, detail="Insufficient permissions for file deletion")
 
     request.state.user = user_data
     target_path = validate_and_resolve_path(path)
@@ -1054,12 +1022,8 @@ async def delete_file(request: Request, path: str):
     is_file = await run_in_file_executor(target_path.is_file)
 
     if is_file:
-        return await _delete_file_item(
-            target_path, path, security_layer, user_data, request
-        )
-    return await _delete_directory_item(
-        target_path, path, security_layer, user_data, request
-    )
+        return await _delete_file_item(target_path, path, security_layer, user_data, request)
+    return await _delete_directory_item(target_path, path, security_layer, user_data, request)
 
 
 def _log_directory_create_audit(
@@ -1102,9 +1066,7 @@ def _log_directory_create_audit(
     operation="create_directory",
     error_code_prefix="FILES",
 )
-async def create_directory(
-    request: Request, path: str = Form(...), name: str = Form(...)
-):
+async def create_directory(request: Request, path: str = Form(...), name: str = Form(...)):
     """
     Create a new directory within the sandbox.
 
@@ -1172,9 +1134,7 @@ async def get_directory_tree(request: Request, path: str = ""):
         """Recursively build directory tree structure (sync, runs in thread)"""
         try:
             items = []
-            for item in sorted(
-                directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())
-            ):
+            for item in sorted(directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
                 try:
                     relative_path = str(item.relative_to(SANDBOXED_ROOT))
                     item_info = {
@@ -1185,9 +1145,7 @@ async def get_directory_tree(request: Request, path: str = ""):
 
                     if item.is_file():
                         item_info["size"] = item.stat().st_size
-                        item_info["extension"] = (
-                            item.suffix.lower() if item.suffix else None
-                        )
+                        item_info["extension"] = item.suffix.lower() if item.suffix else None
                     else:
                         # Recursively add children for directories
                         item_info["children"] = build_tree(item, SANDBOXED_ROOT)
@@ -1219,9 +1177,7 @@ async def get_file_stats(request: Request):
     # SECURITY FIX: Enable proper authentication and authorization
     has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
-        raise HTTPException(
-            status_code=403, detail="Insufficient permissions for file statistics"
-        )
+        raise HTTPException(status_code=403, detail="Insufficient permissions for file statistics")
 
     # Store user data in request state for audit logging
     request.state.user = user_data
@@ -1242,9 +1198,7 @@ async def get_file_stats(request: Request):
 
         return total_files, total_directories, total_size
 
-    total_files, total_directories, total_size = await run_in_file_executor(
-        _collect_stats_sync
-    )
+    total_files, total_directories, total_size = await run_in_file_executor(_collect_stats_sync)
 
     return {
         "sandbox_root": str(SANDBOXED_ROOT),
@@ -1327,9 +1281,7 @@ async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ss
     if not target.is_dir():
         raise HTTPException(status_code=400, detail="Path is not a directory")
     try:
-        entries = sorted(
-            target.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower())  # codeql[py/path-injection]
-        )
+        entries = sorted(target.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower()))  # codeql[py/path-injection]
         return {"files": [_entry_to_file_item(e) for e in entries]}
     except PermissionError:
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -1352,10 +1304,10 @@ async def admin_read_file(path: str) -> dict:
     if not target.is_file():
         raise HTTPException(status_code=400, detail="Path is not a file")
     if target.stat().st_size > _ADMIN_MAX_READ_BYTES:
-        raise HTTPException(
-            status_code=413, detail="File too large to read inline (> 1 MB)"
-        )
+        raise HTTPException(status_code=413, detail="File too large to read inline (> 1 MB)")
     try:
-        return {"content": target.read_text(encoding="utf-8", errors="replace")}  # codeql[py/path-injection]
+        # #7467: was sync `target.read_text(...)` blocking the event loop.
+        content = await asyncio.to_thread(target.read_text, encoding="utf-8", errors="replace")
+        return {"content": content}  # codeql[py/path-injection]
     except PermissionError:
         raise HTTPException(status_code=403, detail="Permission denied")

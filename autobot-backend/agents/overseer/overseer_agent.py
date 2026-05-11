@@ -30,9 +30,7 @@ from .types import AgentTask, OverseerUpdate, StepResult, StepStatus, TaskPlan
 logger = logging.getLogger(__name__)
 
 
-def _build_previous_context(
-    task: AgentTask, completed_results: Dict[str, StepResult]
-) -> Dict[str, Dict[str, Any]]:
+def _build_previous_context(task: AgentTask, completed_results: Dict[str, StepResult]) -> Dict[str, Dict[str, Any]]:
     """
     Gather context from previous steps for a task.
 
@@ -57,9 +55,7 @@ def _build_previous_context(
     return previous_context
 
 
-def _build_error_update(
-    plan_id: str, task: AgentTask, error_message: str
-) -> OverseerUpdate:
+def _build_error_update(plan_id: str, task: AgentTask, error_message: str) -> OverseerUpdate:
     """
     Build an OverseerUpdate for error conditions.
 
@@ -120,10 +116,7 @@ class OverseerAgent:
             logger.error("Failed to get Ollama endpoint: %s", e)
             from autobot_shared.ssot_config import config as _ssot
 
-            return (
-                f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}"
-                + PATH_OLLAMA_GENERATE
-            )
+            return f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}" + PATH_OLLAMA_GENERATE
 
     def _get_model(self) -> str:
         """Get LLM model from config."""
@@ -132,9 +125,7 @@ class OverseerAgent:
         except Exception:
             return DEFAULT_LLM_MODEL
 
-    async def analyze_query(
-        self, query: str, context: Optional[Dict[str, Any]] = None
-    ) -> TaskPlan:
+    async def analyze_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> TaskPlan:
         """
         Analyze a user query and create a task plan.
 
@@ -169,9 +160,7 @@ class OverseerAgent:
             # Create a simple single-step fallback plan
             return self._create_fallback_plan(query)
 
-    def _build_decomposition_prompt(
-        self, query: str, context: Optional[Dict[str, Any]] = None
-    ) -> str:
+    def _build_decomposition_prompt(self, query: str, context: Optional[Dict[str, Any]] = None) -> str:
         """Build the prompt for task decomposition."""
         context_info = ""
         if context:
@@ -330,18 +319,14 @@ Examples:
         if not task.dependencies:
             return True, None
 
-        missing_deps = [
-            dep for dep in task.dependencies if dep not in completed_results
-        ]
+        missing_deps = [dep for dep in task.dependencies if dep not in completed_results]
         if missing_deps:
             logger.error(
                 "[OverseerAgent] Step %d has unmet dependencies: %s",
                 task.step_number,
                 missing_deps,
             )
-            error_update = _build_error_update(
-                plan_id, task, f"Unmet dependencies: {missing_deps}"
-            )
+            error_update = _build_error_update(plan_id, task, f"Unmet dependencies: {missing_deps}")
             return False, error_update
 
         return True, None
@@ -496,16 +481,11 @@ Examples:
             total_steps=len(plan.steps),
             content={
                 "analysis": plan.analysis,
-                "steps": [
-                    {"step_number": s.step_number, "description": s.description}
-                    for s in plan.steps
-                ],
+                "steps": [{"step_number": s.step_number, "description": s.description} for s in plan.steps],
             },
         )
 
-    async def orchestrate_execution(
-        self, plan: TaskPlan, executor
-    ) -> AsyncGenerator[OverseerUpdate, None]:
+    async def orchestrate_execution(self, plan: TaskPlan, executor) -> AsyncGenerator[OverseerUpdate, None]:
         """
         Orchestrate the execution of a task plan.
 
@@ -528,9 +508,7 @@ Examples:
 
         for task in plan.steps:
             # Issue #665: Uses helper for dependency validation
-            deps_valid, error_update = self._validate_task_dependencies(
-                task, completed_results, plan.plan_id
-            )
+            deps_valid, error_update = self._validate_task_dependencies(task, completed_results, plan.plan_id)
             if error_update:
                 yield error_update
             if not deps_valid:
@@ -567,8 +545,6 @@ Examples:
                 StepStatus.FAILED: "❌",
             }.get(step.status, "•")
 
-            summary_parts.append(
-                f"{status_icon} Step {step.step_number}: {step.description}"
-            )
+            summary_parts.append(f"{status_icon} Step {step.step_number}: {step.description}")
 
         return "\n".join(summary_parts)

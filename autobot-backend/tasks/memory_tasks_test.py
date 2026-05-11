@@ -27,7 +27,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # _async_write_verbatim
 # ---------------------------------------------------------------------------
@@ -54,9 +53,7 @@ class TestAsyncWriteVerbatim:
         with patch("memory.verbatim_store.get_verbatim_store", fake_get_store):
             from tasks.memory_tasks import _async_write_verbatim
 
-            chunk_id = await _async_write_verbatim(
-                "sess-1", 0, "user", "Hello", timestamp_iso, "u1"
-            )
+            chunk_id = await _async_write_verbatim("sess-1", 0, "user", "Hello", timestamp_iso, "u1")
 
         fake_store.append.assert_called_once()
         call_kwargs = fake_store.append.call_args
@@ -78,9 +75,7 @@ class TestAsyncWriteVerbatim:
             from tasks.memory_tasks import _async_write_verbatim
 
             with pytest.raises(RuntimeError, match="chroma down"):
-                await _async_write_verbatim(
-                    "sess-1", 0, "user", "Hello", timestamp_iso, None
-                )
+                await _async_write_verbatim("sess-1", 0, "user", "Hello", timestamp_iso, None)
 
 
 # ---------------------------------------------------------------------------
@@ -98,14 +93,12 @@ class TestAsyncExtractFacts:
         # import KnowledgeExtractionAgent`` inside the coroutine body, so we patch
         # that dotted path in sys.modules before calling the helper.
         mock_agent_instance = AsyncMock()
-        mock_agent_instance.extract_facts_from_messages = AsyncMock(
-            return_value={"facts_count": 3, "status": "ok"}
-        )
+        mock_agent_instance.extract_facts_from_messages = AsyncMock(return_value={"facts_count": 3, "status": "ok"})
         mock_agent_class = MagicMock(return_value=mock_agent_instance)
 
-        with patch.dict("sys.modules", {"agents.knowledge_extraction_agent": MagicMock(
-            KnowledgeExtractionAgent=mock_agent_class
-        )}):
+        with patch.dict(
+            "sys.modules", {"agents.knowledge_extraction_agent": MagicMock(KnowledgeExtractionAgent=mock_agent_class)}
+        ):
             from tasks.memory_tasks import _async_extract_facts
 
             count = await _async_extract_facts("sess-1", "user: hi\nassistant: hello", "u1")
@@ -120,9 +113,9 @@ class TestAsyncExtractFacts:
 
         mock_agent_class = MagicMock(return_value=mock_agent_instance)
 
-        with patch.dict("sys.modules", {"agents.knowledge_extraction_agent": MagicMock(
-            KnowledgeExtractionAgent=mock_agent_class
-        )}):
+        with patch.dict(
+            "sys.modules", {"agents.knowledge_extraction_agent": MagicMock(KnowledgeExtractionAgent=mock_agent_class)}
+        ):
             # Reload to pick up the patch
 
             import tasks.memory_tasks as mt
@@ -150,9 +143,7 @@ class TestAsyncUpdateGraph:
 
         mock_graph_class = MagicMock(return_value=mock_graph)
 
-        with patch.dict("sys.modules", {"autobot_memory_graph": MagicMock(
-            AutoBotMemoryGraph=mock_graph_class
-        )}):
+        with patch.dict("sys.modules", {"autobot_memory_graph": MagicMock(AutoBotMemoryGraph=mock_graph_class)}):
 
             import tasks.memory_tasks as mt
 
@@ -175,9 +166,7 @@ class TestAsyncUpdateGraph:
 
         mock_graph_class = MagicMock(return_value=mock_graph)
 
-        with patch.dict("sys.modules", {"autobot_memory_graph": MagicMock(
-            AutoBotMemoryGraph=mock_graph_class
-        )}):
+        with patch.dict("sys.modules", {"autobot_memory_graph": MagicMock(AutoBotMemoryGraph=mock_graph_class)}):
 
             import tasks.memory_tasks as mt
 

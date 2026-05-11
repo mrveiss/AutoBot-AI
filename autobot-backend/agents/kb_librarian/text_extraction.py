@@ -116,11 +116,7 @@ class TextExtractor:
             if any(word in line_lower for word in ADVANCED_FEATURE_KEYWORDS):
                 features.append(line.strip())
 
-        return (
-            "\n".join(features[:5])
-            if features
-            else "See documentation for advanced features"
-        )
+        return "\n".join(features[:5]) if features else "See documentation for advanced features"
 
     @classmethod
     def extract_error_codes(cls, text: str) -> str:
@@ -272,11 +268,7 @@ class TextExtractor:
             if any(indicator in line.lower() for indicator in FEATURE_INDICATORS):
                 features.append(line.strip())
 
-        return (
-            "\n".join(features[:5])
-            if features
-            else "Various features for system administration"
-        )
+        return "\n".join(features[:5]) if features else "Various features for system administration"
 
 
 __all__ = ["TextExtractor"]

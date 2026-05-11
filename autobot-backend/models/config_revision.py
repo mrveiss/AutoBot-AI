@@ -46,8 +46,4 @@ class ConfigRevision(Base):
     created_by = Column(String(255), nullable=False, index=True)
 
     def __repr__(self) -> str:
-        return (
-            f"<ConfigRevision id={self.id} "
-            f"entity={self.entity_type}/{self.entity_id} "
-            f"by={self.created_by}>"
-        )
+        return f"<ConfigRevision id={self.id} " f"entity={self.entity_type}/{self.entity_id} " f"by={self.created_by}>"

@@ -719,6 +719,8 @@ class TodoWriteInterceptor:
         return success_count > 0
 
 
+from autobot_shared.async_compat import run_or_schedule
+
 # Global optimizer instance for easy access (thread-safe)
 from autobot_shared.singleton_factory import lazy_singleton
 
@@ -800,4 +802,4 @@ async def example_usage():
 
 if __name__ == "__main__":
     # Run example
-    asyncio.run(example_usage())
+    run_or_schedule(example_usage())

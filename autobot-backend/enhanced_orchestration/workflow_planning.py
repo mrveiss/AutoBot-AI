@@ -18,7 +18,7 @@ is tracked separately in #6820.
 import logging
 import re
 import uuid
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 
 from .types import AgentCapability, AgentTask, ExecutionStrategy, WorkflowPlan
 
@@ -36,9 +36,23 @@ class StrategyPlanner:
             agent_capabilities: Mapping of agent types to their capabilities
         """
         self.agent_capabilities = agent_capabilities
+        # #7268 Phase 1: lazily-instantiated skill_router for plan-time binding.
+        # Created on first ``build_workflow_plan`` call and cached for the
+        # planner's lifetime. Each lookup is ``dry_run=True`` so no skill is
+        # auto-enabled and no Phase 3 gap-fill runs at plan time.
+        self._skill_router_skill: Optional[Any] = None
 
-    def build_workflow_plan(self, goal: str, plan_data: Dict[str, Any]) -> WorkflowPlan:
-        """Build workflow plan from parsed data"""
+    async def build_workflow_plan(self, goal: str, plan_data: Dict[str, Any]) -> WorkflowPlan:
+        """Build workflow plan from parsed data.
+
+        #7268 Phase 1, ADR-006: Skill-Bound Planning. After each task is
+        constructed from the LLM-parsed plan_data, attempt to resolve a
+        concrete skill via skill_router (dry_run mode — no auto-enable, no
+        Phase 3 gap-fill). When a skill matches, attach ``skill_name`` and
+        ``skill_action`` to the task so Phase 2 (WorkflowExecutor
+        consumption) can dispatch via ``SkillRegistry`` instead of (or in
+        addition to) capability-based agent routing.
+        """
         plan_id = str(uuid.uuid4())
 
         # Create tasks
@@ -66,6 +80,12 @@ class StrategyPlanner:
                 capabilities_required=caps_required,
             )
 
+            # #7268 Phase 1: bind a skill at plan time when one matches.
+            # Best-effort; failures (no registry, network error, malformed
+            # response) leave skill_name=None so legacy capability-based
+            # routing continues to work unchanged.
+            await self._bind_skill_to_task(task, task_data, goal)
+
             tasks.append(task)
             dependencies_graph[task_id] = task.dependencies
 
@@ -76,6 +96,19 @@ class StrategyPlanner:
         except ValueError:
             strategy = ExecutionStrategy.SEQUENTIAL
 
+        # #7431 Phase 3: if any task is awaiting an async-generated skill,
+        # flip the plan to BLOCKED so the executor refuses to run it. The
+        # resume path (BlockedPlanResumer subscriber) re-binds and unblocks
+        # once the awaited skill is promoted via skill_promoted Redis pub-sub.
+        plan_status = "blocked" if any(t.pending_skill_id for t in tasks) else "pending"
+        if plan_status == "blocked":
+            blocked_count = sum(1 for t in tasks if t.pending_skill_id)
+            logger.info(
+                "plan %s constructed in BLOCKED state: %d task(s) awaiting Phase 3 skill generation",
+                plan_id,
+                blocked_count,
+            )
+
         return WorkflowPlan(
             plan_id=plan_id,
             goal=goal,
@@ -85,6 +118,120 @@ class StrategyPlanner:
             estimated_total_duration_seconds=plan_data.get("estimated_duration", 60.0),
             resource_requirements=plan_data.get("resource_requirements", {}),
             success_criteria=plan_data.get("success_criteria", ["All tasks completed"]),
+            status=plan_status,
+        )
+
+    def _get_skill_router(self) -> Optional[Any]:
+        """Lazily instantiate ``SkillRouterSkill`` for plan-time lookups (#7268).
+
+        Returns ``None`` if instantiation fails (skills package import error,
+        registry unavailable, etc.) — caller treats that as "no skill match"
+        and leaves ``skill_name=None`` on the task. Cached after first success.
+        """
+        if self._skill_router_skill is not None:
+            return self._skill_router_skill
+        try:
+            from skills.builtin.skill_router import SkillRouterSkill
+
+            self._skill_router_skill = SkillRouterSkill()
+            return self._skill_router_skill
+        except Exception as exc:  # noqa: BLE001 — best-effort init
+            logger.debug("skill_router unavailable for plan-time binding: %s", exc)
+            return None
+
+    async def _bind_skill_to_task(self, task: "AgentTask", task_data: Dict[str, Any], goal: str) -> None:
+        """Resolve a concrete skill for this task via skill_router (#7268 Phase 1).
+
+        Uses ``dry_run=True`` so the registry is not mutated at plan time
+        (no auto-enable) and the Phase 3 gap-fill loop does not fire (no
+        synchronous LLM-driven skill creation during planning). The task
+        description used for routing is, in priority order:
+
+        1. ``task_data["task"]`` — explicit task description from plan_data
+        2. ``task_data["explanation"]`` — LLM-provided rationale
+        3. ``f"{task.action} (in workflow: {goal})"`` — synthesized fallback
+
+        Failures and "no match" cases leave ``skill_name=None``.
+        """
+        router = self._get_skill_router()
+        if router is None:
+            return
+
+        task_desc = task_data.get("task") or task_data.get("explanation") or f"{task.action} (in workflow: {goal})"
+        try:
+            result = await router.execute(
+                "find_skill",
+                {"task": task_desc, "dry_run": True},
+            )
+        except Exception as exc:  # noqa: BLE001 — best-effort resolution
+            logger.debug("skill_router lookup raised for task %s: %s", task.task_id, exc)
+            return
+
+        if not isinstance(result, dict) or not result.get("success"):
+            return
+
+        skill_name = result.get("enabled_skill")
+        if not skill_name:
+            # #7431 Phase 3: no skill matched — fire async gap-fill in the
+            # background and attach a pending_skill_id so the plan can flip
+            # to BLOCKED. The forthcoming resume path re-binds the task
+            # when the generated skill is promoted (skill_promoted Redis
+            # pub-sub event from registry.register).
+            await self._trigger_async_gap_fill(task, task_desc)
+            return
+
+        # Action defaults to ``"execute"`` — Phase 2 (WorkflowExecutor
+        # consumption) can refine this once the dispatch contract is decided.
+        task.skill_name = skill_name
+        task.skill_action = task_data.get("skill_action") or "execute"
+        task.skill_resolution_method = result.get("method")
+        logger.debug(
+            "bound skill '%s' to task %s (method=%s)",
+            skill_name,
+            task.task_id,
+            task.skill_resolution_method,
+        )
+
+    async def _trigger_async_gap_fill(self, task: "AgentTask", intent: str) -> None:
+        """Fire Phase 3 gap-fill in background; attach pending_skill_id (#7431).
+
+        Best-effort: when the pending_skills module isn't importable the
+        task stays unbound (legacy capability dispatch continues). This
+        keeps planner behavior compatible with stripped-down environments
+        that don't ship the gap-fill pipeline.
+        """
+        try:
+            from skills.pending_skills import trigger_gap_fill
+        except ImportError:
+            logger.debug("pending_skills module unavailable; gap-fill skipped")
+            return
+
+        router = self._get_skill_router()
+        if router is None:
+            logger.debug("skill_router unavailable; gap-fill skipped for task %s", task.task_id)
+            return
+
+        async def _router_call(task_intent: str) -> Dict[str, Any]:
+            # No dry_run → Phase 3 (research → autonomous-skill-development
+            # → governance → register) runs. Result returned here is just
+            # informational; the resume path listens on skill_promoted via
+            # Redis pub-sub for the eventual outcome.
+            return await router.execute("find_skill", {"task": task_intent})
+
+        # plan_id is not yet known here (binding happens before plan
+        # construction completes) — record placeholder and reconcile in
+        # build_workflow_plan via the post-loop pass that flips status.
+        binding = await trigger_gap_fill(
+            intent=intent,
+            plan_id="<pending-plan>",
+            task_id=task.task_id,
+            router_call=_router_call,
+        )
+        task.pending_skill_id = binding.pending_skill_id
+        logger.info(
+            "task %s blocked on Phase 3 skill generation (pending_skill_id=%s)",
+            task.task_id,
+            binding.pending_skill_id,
         )
 
     def create_fallback_plan(self, goal: str) -> Dict[str, Any]:
@@ -135,9 +282,7 @@ class StrategyPlanner:
             success_criteria=["Task completed"],
         )
 
-    def topological_sort_tasks(
-        self, tasks: List[AgentTask], dependencies: Dict[str, List[str]]
-    ) -> List[AgentTask]:
+    def topological_sort_tasks(self, tasks: List[AgentTask], dependencies: Dict[str, List[str]]) -> List[AgentTask]:
         """Sort tasks based on dependencies"""
         # Create task lookup
         task_map = {task.task_id: task for task in tasks}
@@ -206,17 +351,13 @@ class StrategyPlanner:
 
         return stages
 
-    def enhance_task_for_collaboration(
-        self, task: AgentTask, collab_channel: str
-    ) -> AgentTask:
+    def enhance_task_for_collaboration(self, task: AgentTask, collab_channel: str) -> AgentTask:
         """Enhance task with collaboration metadata"""
         task.metadata["collaboration_channel"] = collab_channel
         task.metadata["enable_sharing"] = True
         return task
 
-    def check_success_criteria(
-        self, plan: WorkflowPlan, results: Dict[str, Any]
-    ) -> bool:
+    def check_success_criteria(self, plan: WorkflowPlan, results: Dict[str, Any]) -> bool:
         """Check if workflow met success criteria"""
         # Basic check: all non-optional tasks completed
         for task in plan.tasks:
@@ -234,9 +375,7 @@ class StrategyPlanner:
 
         return True
 
-    def evaluate_success_criterion(
-        self, criterion: str, results: Dict[str, Any]
-    ) -> bool:
+    def evaluate_success_criterion(self, criterion: str, results: Dict[str, Any]) -> bool:
         """
         Evaluate a single success criterion against workflow results.
 
@@ -263,9 +402,7 @@ class StrategyPlanner:
             if match:
                 required_rate = float(match.group(1)) / 100
                 if results:
-                    completed = sum(
-                        1 for r in results.values() if r.get("status") == "completed"
-                    )
+                    completed = sum(1 for r in results.values() if r.get("status") == "completed")
                     actual_rate = completed / len(results)
                     return actual_rate >= required_rate
             return True
@@ -273,9 +410,7 @@ class StrategyPlanner:
         # Pattern: "Task:<task_id> completed"
         if criterion_lower.startswith("task:") and "completed" in criterion_lower:
             # Extract task_id between "task:" and "completed"
-            parts = (
-                criterion_lower.replace("task:", "").replace("completed", "").strip()
-            )
+            parts = criterion_lower.replace("task:", "").replace("completed", "").strip()
             task_id = parts.strip()
             if task_id in results:
                 return results[task_id].get("status") == "completed"

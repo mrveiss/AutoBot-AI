@@ -28,9 +28,7 @@ class _SkillsEngineManager:
                 if self._engine is None:
                     base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
                     db_path = os.path.join(base, "data", "autobot_data.db")
-                    self._engine = create_async_engine(
-                        f"sqlite+aiosqlite:///{db_path}"
-                    )
+                    self._engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
         return self._engine
 
     async def close(self) -> None:

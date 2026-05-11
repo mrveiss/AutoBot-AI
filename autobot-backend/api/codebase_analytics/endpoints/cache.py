@@ -29,9 +29,7 @@ router = APIRouter()
     error_code_prefix="CODEBASE",
 )
 async def clear_codebase_cache(
-    source_id: Optional[str] = Query(
-        None, description="#1772: clear only this source's cache"
-    ),
+    source_id: Optional[str] = Query(None, description="#1772: clear only this source's cache"),
 ):
     """Clear codebase analysis cache from storage.
 

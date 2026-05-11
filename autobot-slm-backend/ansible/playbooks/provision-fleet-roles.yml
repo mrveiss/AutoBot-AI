@@ -448,6 +448,20 @@
     # Without this, the SLM login page calls /api/auth/login which nginx routes
     # to the user backend (port 8001) → 502 in co-located mode.
     # Must run BEFORE nginx test/reload so the new assets are served immediately.
+    #
+    # #7472: ensure node_modules exists before build — provisioning may run
+    # standalone (re-provision after disk wipe, fresh install where this
+    # phase races deploy-slm-manager's npm install). Without this, build
+    # fails with `sh: 1: vite: not found` (rc=127). Idempotent no-op when
+    # deps already installed.
+    - name: "SLM | Ensure SLM frontend node_modules exist (#7472)"
+      community.general.npm:
+        path: "{{ slm_frontend_dir | default('/opt/autobot/autobot-slm-frontend') }}"
+        state: present
+      become_user: "{{ slm_user | default('autobot') }}"
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
     - name: "SLM | Rebuild SLM frontend with co-located API prefix (#3268)"
       ansible.builtin.command:
         cmd: npm run build

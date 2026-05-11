@@ -584,7 +584,7 @@ async function togglePattern(pattern: Pattern) {
   const newState = !pattern.enabled
   try {
     // Issue #701: Fixed api.post call - data should be second arg, options third
-    await api.post(`${getApiBase()}/performance/patterns/${pattern.id}/toggle`, { enabled: newState })
+    await api.post<any>(`${getApiBase()}/performance/patterns/${pattern.id}/toggle`, { enabled: newState })
     pattern.enabled = newState
   } catch (error) {
     logger.warn('Failed to toggle pattern:', error)

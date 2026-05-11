@@ -93,9 +93,7 @@ class TestTTSWorkerSynthesize:
         )
         elapsed = time.monotonic() - start
         assert resp.status_code == 200
-        assert (
-            elapsed < LATENCY_BUDGET_SEC
-        ), f"TTS synthesis took {elapsed:.2f}s, budget is {LATENCY_BUDGET_SEC}s"
+        assert elapsed < LATENCY_BUDGET_SEC, f"TTS synthesis took {elapsed:.2f}s, budget is {LATENCY_BUDGET_SEC}s"
 
     def test_synthesize_returns_non_empty_audio(self):
         resp = requests.post(

@@ -57,7 +57,6 @@ for _name, _mod in [
 from knowledge.memory_graph.hybrid_scorer import (  # noqa: E402
     HybridScorer,
     SearchResult,
-    _build_explanation,
     _entity_to_text,
     cosine_similarity,
 )
@@ -170,9 +169,7 @@ class TestBM25Score:
 
     def test_multiple_keywords_accumulate(self):
         score_one, _ = self.scorer.bm25_score(["bug"], "we fixed a bug")
-        score_two, _ = self.scorer.bm25_score(
-            ["bug", "fixed"], "we fixed a bug"
-        )
+        score_two, _ = self.scorer.bm25_score(["bug", "fixed"], "we fixed a bug")
         assert score_two >= score_one
 
     def test_score_normalised_to_one(self):
@@ -447,9 +444,7 @@ class TestScoreAndRank:
             "knowledge.memory_graph.hybrid_scorer._fetch_entity_embedding",
             new=AsyncMock(return_value=_make_embedding()),
         ):
-            results = await self.scorer.score_and_rank(
-                "fixed", intent, entities, q_embed, limit=10
-            )
+            results = await self.scorer.score_and_rank("fixed", intent, entities, q_embed, limit=10)
 
         scores = [r.score for r in results]
         assert scores == sorted(scores, reverse=True)
@@ -477,9 +472,7 @@ class TestScoreAndRank:
 
     @pytest.mark.asyncio
     async def test_empty_candidates_returns_empty(self):
-        results = await self.scorer.score_and_rank(
-            "query", QueryIntent(), [], None, 5
-        )
+        results = await self.scorer.score_and_rank("query", QueryIntent(), [], None, 5)
         assert results == []
 
     @pytest.mark.asyncio
@@ -492,9 +485,7 @@ class TestScoreAndRank:
             "knowledge.memory_graph.hybrid_scorer._fetch_entity_embedding",
             new=AsyncMock(return_value=_make_embedding()),
         ):
-            results = await self.scorer.score_and_rank(
-                "fixed", intent, [entity], q_embed, limit=1
-            )
+            results = await self.scorer.score_and_rank("fixed", intent, [entity], q_embed, limit=1)
 
         r = results[0]
         assert 0.0 <= r.score <= 1.0
@@ -512,9 +503,7 @@ class TestProcessQuery:
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=None)
         redis_mock.setex = AsyncMock()
-        redis_mock.execute_command = AsyncMock(
-            return_value=_build_raw_ft_response(candidates or [])
-        )
+        redis_mock.execute_command = AsyncMock(return_value=_build_raw_ft_response(candidates or []))
 
         processor = MemoryGraphQueryProcessor(redis_client=redis_mock)
 
@@ -554,9 +543,7 @@ class TestProcessQuery:
 
     @pytest.mark.asyncio
     async def test_respects_limit(self):
-        candidates = [
-            _make_entity(entity_id=str(i), name=f"E{i}") for i in range(10)
-        ]
+        candidates = [_make_entity(entity_id=str(i), name=f"E{i}") for i in range(10)]
         processor, ep, eep = self._make_processor(candidates=candidates)
         with ep, eep:
             results = await processor.process_query("fix bugs", limit=3)
@@ -576,13 +563,15 @@ class TestProcessQuery:
             intent_captured.append(intent)
             return original_build(intent)
 
-        with ep, eep, patch(
-            "knowledge.memory_graph.query_processor._build_redis_query",
-            side_effect=capturing_build,
+        with (
+            ep,
+            eep,
+            patch(
+                "knowledge.memory_graph.query_processor._build_redis_query",
+                side_effect=capturing_build,
+            ),
         ):
-            await processor.process_query(
-                "query", filters={"entity_types": ["FEATURE"]}
-            )
+            await processor.process_query("query", filters={"entity_types": ["FEATURE"]})
 
         assert intent_captured
         assert "FEATURE" in intent_captured[0].entity_types
@@ -632,9 +621,10 @@ class TestEntityRetrieval:
     async def test_get_related_entities_follows_relations(self):
         source_entity = _make_entity(name="Source Entity")
         related_entity = _make_entity(name="Related Entity")
-        relations_doc = {"entity_id": source_entity["id"], "relations": [
-            {"to": "Related Entity", "type": "relates_to"}
-        ]}
+        relations_doc = {
+            "entity_id": source_entity["id"],
+            "relations": [{"to": "Related Entity", "type": "relates_to"}],
+        }
 
         json_mock = AsyncMock()
         json_mock.get = AsyncMock(return_value=relations_doc)
@@ -642,10 +632,12 @@ class TestEntityRetrieval:
         redis_mock.json = MagicMock(return_value=json_mock)
 
         # First FT.SEARCH call → source entity; second → related entity
-        redis_mock.execute_command = AsyncMock(side_effect=[
-            _build_raw_ft_response([source_entity]),
-            _build_raw_ft_response([related_entity]),
-        ])
+        redis_mock.execute_command = AsyncMock(
+            side_effect=[
+                _build_raw_ft_response([source_entity]),
+                _build_raw_ft_response([related_entity]),
+            ]
+        )
 
         processor = MemoryGraphQueryProcessor(redis_client=redis_mock)
         results = await processor.get_related_entities("Source Entity")

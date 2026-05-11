@@ -1,8 +1,12 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+# flake8: noqa: E501
 """
 CausalInferenceEngine Examples - Production scenarios and expected outputs.
+
+Long descriptive strings in this examples file intentionally exceed
+line-length=120 for readability (file-level noqa above).
 
 Issue #4069: Real-world examples showing how the engine analyzes failures.
 
@@ -19,16 +23,14 @@ Each scenario includes:
 - Confounders
 - Interventions
 - Recommendations
-- Severity assessment
+- CausalSeverity assessment
 """
-
-from datetime import datetime
 
 from services.causal_inference_engine import (
     CausalAnalysisReport,
+    CausalSeverity,
     Intervention,
     RecommendationType,
-    Severity,
 )
 from services.root_cause_analyzer import CausalEvent
 
@@ -345,9 +347,7 @@ EXAMPLE_3_MULTI_FACTOR = {
             "recommendation_type": "long_term",
             "impact_rank": 3,
             "confidence": 0.75,
-            "evidence": [
-                "Confounder: network flakiness normally tolerated via retries"
-            ],
+            "evidence": ["Confounder: network flakiness normally tolerated via retries"],
         },
     ],
     "severity": "critical",
@@ -553,7 +553,7 @@ def create_example_report_1() -> CausalAnalysisReport:
             )
             for interv in EXAMPLE_1_POOL_EXHAUSTION["interventions"]
         ],
-        severity=Severity(EXAMPLE_1_POOL_EXHAUSTION["severity"]),
+        severity=CausalSeverity(EXAMPLE_1_POOL_EXHAUSTION["severity"]),
         confidence=EXAMPLE_1_POOL_EXHAUSTION["confidence"],
         chain_depth=len(EXAMPLE_1_POOL_EXHAUSTION["causal_chain"]),
         confounding_strength=EXAMPLE_1_POOL_EXHAUSTION["confounding_strength"],

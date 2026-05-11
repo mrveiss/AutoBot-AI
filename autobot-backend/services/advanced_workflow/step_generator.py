@@ -59,9 +59,7 @@ class StepGenerator:
             )
 
             # Issue #321: Use delegation method to reduce message chains
-            base_steps = self.enhanced_orchestrator.plan_workflow_steps(
-                user_request, complexity
-            )
+            base_steps = self.enhanced_orchestrator.plan_workflow_steps(user_request, complexity)
 
             # Convert to smart steps with AI enhancements
             smart_steps = []
@@ -73,9 +71,7 @@ class StepGenerator:
                     command=command,
                     description=base_step.action,
                     explanation=f"AI-generated step for: {base_step.action}",
-                    intent=WorkflowIntent(
-                        intent_analysis.get("primary_intent", "configuration")
-                    ),
+                    intent=WorkflowIntent(intent_analysis.get("primary_intent", "configuration")),
                     confidence_score=0.8,
                     success_probability=0.85,
                     alternative_commands=await self._generate_alternatives(command),
@@ -87,9 +83,7 @@ class StepGenerator:
                 smart_steps.append(smart_step)
 
             # Add intelligent pre and post steps
-            smart_steps = await self._add_intelligent_bookends(
-                smart_steps, intent_analysis
-            )
+            smart_steps = await self._add_intelligent_bookends(smart_steps, intent_analysis)
 
             return smart_steps
 
@@ -187,9 +181,7 @@ class StepGenerator:
                 command="echo 'Starting AI-optimized workflow...'",
                 description="Initialize workflow",
                 explanation="AI workflow initialization with system checks",
-                intent=WorkflowIntent(
-                    intent_analysis.get("primary_intent", "configuration")
-                ),
+                intent=WorkflowIntent(intent_analysis.get("primary_intent", "configuration")),
                 confidence_score=1.0,
                 requires_confirmation=False,
                 ai_generated=True,
@@ -236,9 +228,7 @@ class StepGenerator:
         enhanced_steps.extend(post_steps)
         return enhanced_steps
 
-    def _generate_fallback_steps(
-        self, user_request: str, intent_analysis: Metadata
-    ) -> List[SmartWorkflowStep]:
+    def _generate_fallback_steps(self, user_request: str, intent_analysis: Metadata) -> List[SmartWorkflowStep]:
         """Generate fallback steps when AI generation fails"""
         return [
             SmartWorkflowStep(
@@ -246,9 +236,7 @@ class StepGenerator:
                 command=f"echo 'Processing request: {user_request}'",
                 description="Process user request",
                 explanation="Fallback step for user request processing",
-                intent=WorkflowIntent(
-                    intent_analysis.get("primary_intent", "configuration")
-                ),
+                intent=WorkflowIntent(intent_analysis.get("primary_intent", "configuration")),
                 confidence_score=0.5,
                 requires_confirmation=False,
                 ai_generated=True,

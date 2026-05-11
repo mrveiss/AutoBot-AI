@@ -21,9 +21,7 @@ class MeshGraph(Protocol):
 class StalenessResult:
     """Container for BFS staleness propagation results."""
 
-    def __init__(
-        self, scores: dict[str, float], source_node: str, max_depth: int, decay: float
-    ) -> None:
+    def __init__(self, scores: dict[str, float], source_node: str, max_depth: int, decay: float) -> None:
         self.scores = scores
         self.source_node = source_node
         self.max_depth = max_depth
@@ -38,11 +36,7 @@ class StalenessResult:
 
         Excludes the source node (it was just updated, not stale).
         """
-        return [
-            nid
-            for nid, score in self.scores.items()
-            if score >= threshold and nid != self.source_node
-        ]
+        return [nid for nid, score in self.scores.items() if score >= threshold and nid != self.source_node]
 
 
 async def propagate_staleness(
@@ -89,9 +83,7 @@ async def propagate_staleness(
     return StalenessResult(staleness, changed_doc_id, max_depth, decay)
 
 
-async def store_staleness_scores(
-    redis, scores: dict[str, float], ttl: int = 3600
-) -> int:
+async def store_staleness_scores(redis, scores: dict[str, float], ttl: int = 3600) -> int:
     """Store staleness scores in Redis for hot-path retrieval.
 
     Args:
@@ -147,13 +139,8 @@ class RedisGraphAdapter:
         in the same format expected by ``propagate_staleness()``.
         """
         key = f"mesh:edges:{node_id}"
-        raw: list[tuple[bytes, float]] = await self._redis.zrangebyscore(
-            key, min=0.0, max="+inf", withscores=True
-        )
-        return [
-            (member.decode() if isinstance(member, bytes) else member, score)
-            for member, score in raw
-        ]
+        raw: list[tuple[bytes, float]] = await self._redis.zrangebyscore(key, min=0.0, max="+inf", withscores=True)
+        return [(member.decode() if isinstance(member, bytes) else member, score) for member, score in raw]
 
 
 async def enqueue_for_reembedding(redis, node_ids: list[str]) -> int:
@@ -172,7 +159,5 @@ async def enqueue_for_reembedding(redis, node_ids: list[str]) -> int:
     if not node_ids:
         return 0
     await redis.rpush(_REEMBED_QUEUE_KEY, *node_ids)
-    logger.info(
-        "Enqueued %d nodes for re-embedding (key=%s)", len(node_ids), _REEMBED_QUEUE_KEY
-    )
+    logger.info("Enqueued %d nodes for re-embedding (key=%s)", len(node_ids), _REEMBED_QUEUE_KEY)
     return len(node_ids)

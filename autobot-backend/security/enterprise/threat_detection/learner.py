@@ -86,9 +86,7 @@ class ThreatDetectionLearner:
         try:
             self._redis.hincrby(key, field, 1)
             self._redis.hset(key, "last_seen", utc_timestamp())
-            logger.debug(
-                "Recorded outcome pattern=%s tp=%s", pattern_id, is_true_positive
-            )
+            logger.debug("Recorded outcome pattern=%s tp=%s", pattern_id, is_true_positive)
         except Exception as exc:
             logger.error("Failed to record outcome for pattern %s: %s", pattern_id, exc)
 
@@ -144,9 +142,7 @@ class ThreatDetectionLearner:
 
     # ── Mitigation effectiveness ───────────────────────────────────────────────
 
-    def record_mitigation_outcome(
-        self, threat_type: str, action: str, success: bool
-    ) -> None:
+    def record_mitigation_outcome(self, threat_type: str, action: str, success: bool) -> None:
         """
         Update the EMA effectiveness score for a mitigation action.
 
@@ -199,9 +195,7 @@ class ThreatDetectionLearner:
                 return None
             best_action = max(scores, key=lambda k: float(scores[k]))
             # Redis may return bytes or str depending on decode_responses setting
-            action_str = (
-                best_action.decode() if isinstance(best_action, bytes) else best_action
-            )
+            action_str = best_action.decode() if isinstance(best_action, bytes) else best_action
             best_score = float(scores[best_action])
             logger.debug(
                 "Best mitigation threat_type=%s action=%s ema=%.3f",
@@ -211,9 +205,7 @@ class ThreatDetectionLearner:
             )
             return action_str
         except Exception as exc:
-            logger.error(
-                "Failed to get best mitigation for threat_type %s: %s", threat_type, exc
-            )
+            logger.error("Failed to get best mitigation for threat_type %s: %s", threat_type, exc)
             return None
 
     # ── Maintenance ────────────────────────────────────────────────────────────
@@ -241,18 +233,14 @@ class ThreatDetectionLearner:
         for raw_key in pattern_keys:
             key = raw_key.decode() if isinstance(raw_key, bytes) else raw_key
             pattern_id = key[len(_OUTCOME_KEY_PREFIX) :]
-            pruned_this, flagged_this = self._consolidate_pattern(
-                key, pattern_id, cutoff
-            )
+            pruned_this, flagged_this = self._consolidate_pattern(key, pattern_id, cutoff)
             pruned += pruned_this
             flagged += flagged_this
 
         logger.info("Consolidation complete: pruned=%d flagged=%d", pruned, flagged)
         return {"pruned": pruned, "flagged": flagged}
 
-    def _consolidate_pattern(
-        self, redis_key: str, pattern_id: str, cutoff: datetime
-    ) -> tuple:
+    def _consolidate_pattern(self, redis_key: str, pattern_id: str, cutoff: datetime) -> tuple:
         """
         Evaluate a single pattern key for pruning or flagging.
 
@@ -269,11 +257,7 @@ class ThreatDetectionLearner:
         last_seen_raw = data[2]
         if last_seen_raw:
             try:
-                last_seen = parse_utc_iso(
-                    last_seen_raw.decode()
-                    if isinstance(last_seen_raw, bytes)
-                    else last_seen_raw
-                )
+                last_seen = parse_utc_iso(last_seen_raw.decode() if isinstance(last_seen_raw, bytes) else last_seen_raw)
                 if last_seen < cutoff:
                     self._redis.delete(redis_key)
                     logger.debug(

@@ -16,6 +16,8 @@ from pathlib import Path
 
 from code_analyzer import CodeAnalyzer
 
+from autobot_shared.async_compat import run_or_schedule
+
 logger = logging.getLogger(__name__)
 
 # Command execution function names to search for (Issue #398: extracted data)
@@ -65,9 +67,7 @@ def _find_command_duplicates(results: dict) -> list:
     command_duplicates = []
     for group in results.get("duplicate_details", []):
         for func in group.get("functions", []):
-            if any(
-                cmd in func.get("name", "").lower() for cmd in COMMAND_FUNCTION_NAMES
-            ):
+            if any(cmd in func.get("name", "").lower() for cmd in COMMAND_FUNCTION_NAMES):
                 command_duplicates.append(group)
                 break
     return command_duplicates
@@ -80,9 +80,7 @@ def _print_duplicate_analysis(command_duplicates: list) -> None:
         logger.info("No command execution duplicates found")
         return
 
-    logger.info(
-        f"Found {len(command_duplicates)} groups of duplicate command execution functions:"
-    )
+    logger.info(f"Found {len(command_duplicates)} groups of duplicate command execution functions:")
     for i, group in enumerate(command_duplicates, 1):
         logger.info(f"{i}. Similarity: {group['similarity_score']:.0%}")
         logger.info(f"   Potential lines saved: {group['estimated_lines_saved']}")
@@ -100,9 +98,7 @@ def _print_refactoring_plan(refactoring_plan: dict) -> None:
             logger.info(f"  {action}")
 
 
-def _save_analysis_report(
-    results: dict, command_duplicates: list, refactoring_plan: dict
-) -> Path:
+def _save_analysis_report(results: dict, command_duplicates: list, refactoring_plan: dict) -> Path:
     """Save detailed analysis report to JSON file (Issue #398: extracted)."""
     report_path = Path("code_analysis_report.json")
     with open(report_path, "w", encoding="utf-8") as f:
@@ -128,9 +124,7 @@ def _print_migration_outline() -> None:
     logger.info("   # Before: await self._run_command(cmd)")
     logger.info("   # After:  result = await execute_shell_command(cmd)")
     logger.info("3. Handle return format differences:")
-    logger.info(
-        "   # Standardize to: result['stdout'], result['stderr'], result['status']"
-    )
+    logger.info("   # Standardize to: result['stdout'], result['stderr'], result['status']")
 
 
 async def analyze_command_execution_duplicates():
@@ -138,9 +132,7 @@ async def analyze_command_execution_duplicates():
     logger.info("Starting code analysis for command execution duplicates...")
 
     analyzer = CodeAnalyzer(use_npu=False)
-    results = await analyzer.analyze_codebase(
-        root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
-    )
+    results = await analyzer.analyze_codebase(root_path=".", patterns=["src/**/*.py", "backend/**/*.py"])
 
     command_duplicates = _find_command_duplicates(results)
     _print_duplicate_analysis(command_duplicates)
@@ -358,7 +350,8 @@ async def create_command_utils_library():
     Issue #1183: library content extracted to module-level constant to reduce function length.
     """
     lib_path = Path("src/utils/command_utils_consolidated.py")
-    lib_path.write_text(_COMMAND_UTILS_LIBRARY_CONTENT, encoding="utf-8")
+    # #7467: was sync `lib_path.write_text` blocking the event loop.
+    await asyncio.to_thread(lib_path.write_text, _COMMAND_UTILS_LIBRARY_CONTENT, encoding="utf-8")
     logger.info(f"Created consolidated command utilities at: {lib_path}")
 
 
@@ -379,4 +372,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

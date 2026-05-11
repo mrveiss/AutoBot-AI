@@ -970,6 +970,8 @@ class AdvancedRAGOptimizer:
 # Global instance for system integration (thread-safe)
 import asyncio as _asyncio_lock
 
+from autobot_shared.async_compat import run_or_schedule
+
 _rag_optimizer_instance = None
 _rag_optimizer_lock = _asyncio_lock.Lock()
 
@@ -1028,4 +1030,4 @@ if __name__ == "__main__":
                 print(f"  Hybrid Score: {result.hybrid_score:.3f}")  # noqa: print
                 print(f"  Content: {result.content[:200]}...")  # noqa: print
 
-    asyncio.run(main())
+    run_or_schedule(main())

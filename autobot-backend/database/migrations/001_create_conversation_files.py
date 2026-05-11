@@ -5,13 +5,13 @@ Created: 2025-09-30
 Description: Initial migration to create conversation-specific file management database
 """
 
-import asyncio
 import logging
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from autobot_shared.async_compat import run_or_schedule
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 
@@ -76,8 +76,7 @@ class ConversationFilesMigration:
         """
         if not self.schema_path.exists():
             raise FileNotFoundError(
-                f"Schema file not found: {self.schema_path}\n"
-                f"Expected location: {self.schema_path.absolute()}"
+                f"Schema file not found: {self.schema_path}\n" f"Expected location: {self.schema_path.absolute()}"
             )
 
         with open(self.schema_path, "r", encoding="utf-8") as f:
@@ -192,9 +191,7 @@ class ConversationFilesMigration:
         Returns:
             bool: True if all indexes are present, False otherwise
         """
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_autoindex_%'"
-        )
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_autoindex_%'")
         actual_indexes = {row[0] for row in cursor.fetchall()}
         missing_indexes = expected_indexes - actual_indexes
         if missing_indexes:
@@ -203,9 +200,7 @@ class ConversationFilesMigration:
         logger.info(f"✓ All {len(expected_indexes)} indexes created")
         return True
 
-    def _validate_triggers(
-        self, cursor: sqlite3.Cursor, expected_triggers: set
-    ) -> bool:
+    def _validate_triggers(self, cursor: sqlite3.Cursor, expected_triggers: set) -> bool:
         """
         Validate that all expected triggers exist in the database.
 
@@ -516,8 +511,8 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) > 1 and sys.argv[1] == "down":
-        exit_code = asyncio.run(rollback_migration())
+        exit_code = run_or_schedule(rollback_migration())
     else:
-        exit_code = asyncio.run(run_migration())
+        exit_code = run_or_schedule(run_migration())
 
     sys.exit(exit_code)

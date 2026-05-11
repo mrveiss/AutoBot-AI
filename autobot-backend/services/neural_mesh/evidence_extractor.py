@@ -130,9 +130,7 @@ class EvidenceExtractor:
         """
         sentences: list[tuple[str, str]] = []
         for chunk in chunks:
-            chunk_id = chunk.get("chunk_id") or chunk.get("metadata", {}).get(
-                "chunk_id", ""
-            )
+            chunk_id = chunk.get("chunk_id") or chunk.get("metadata", {}).get("chunk_id", "")
             content = chunk.get("content", "")
             for sent in self._split_sentences(content):
                 stripped = sent.strip()
@@ -156,9 +154,7 @@ class EvidenceExtractor:
         pattern = _ABBREVS + r"(?<=[.!?])\s+"
         return [s.strip() for s in re.split(pattern, text) if s.strip()]
 
-    async def _score_sentences(
-        self, query: str, sentences: list[tuple[str, str]]
-    ) -> list[tuple[str, str, float]]:
+    async def _score_sentences(self, query: str, sentences: list[tuple[str, str]]) -> list[tuple[str, str, float]]:
         """Score each sentence against the query with the cross-encoder.
 
         Applies sigmoid normalisation so raw logits become 0-1 relevance

@@ -81,9 +81,7 @@ async def get_chain_of_command(
     try:
         chain = await svc.get_chain_of_command(agent_id)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Request failed"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request failed")
     return ChainOfCommandResponse(chain=[AgentSummary(**item) for item in chain])
 
 
@@ -256,9 +254,7 @@ async def delegate_task(
             context=body.context,
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed")
     return _delegation_to_response(delegation)
 
 
@@ -283,9 +279,7 @@ async def escalate_delegation(
     try:
         delegation = await svc.escalate_task(delegation_id)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed")
     return _delegation_to_response(delegation)
 
 
@@ -309,9 +303,7 @@ async def update_delegation_status(
     try:
         delegation = await svc.update_status(delegation_id, body.status, body.result)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Request failed"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request failed")
     return _delegation_to_response(delegation)
 
 
@@ -350,9 +342,7 @@ async def list_agent_delegations(
         default="delegator",
         description="Filter by 'delegator' or 'assignee'",
     ),
-    delegation_status: Optional[str] = Query(
-        default=None, alias="status", description="Filter by status"
-    ),
+    delegation_status: Optional[str] = Query(default=None, alias="status", description="Filter by status"),
     limit: int = Query(default=50, ge=1, le=200),
     session: AsyncSession = Depends(get_db_session),
 ) -> List[DelegationResponse]:

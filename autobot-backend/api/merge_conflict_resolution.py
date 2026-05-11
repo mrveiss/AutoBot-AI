@@ -23,6 +23,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from api.schemas_code import (
+    ApplyResolutionRequest,
+    ConflictAnalysisRequest,
+    ConflictResolutionRequest,
+    RepositoryAnalysisRequest,
+)
+from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
@@ -33,13 +40,6 @@ from code_intelligence.merge_conflict_resolver import (
     MergeConflictResolver,
     ResolutionStrategy,
     analyze_repository,
-)
-from api.schemas_common import DataResponse
-from api.schemas_code import (
-    ApplyResolutionRequest,
-    ConflictAnalysisRequest,
-    ConflictResolutionRequest,
-    RepositoryAnalysisRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,9 +66,7 @@ def _build_conflict_data(conflict: "ConflictBlock") -> dict:
         "start_line": conflict.start_line,
         "end_line": conflict.end_line,
         "severity": conflict.severity.value,
-        "conflict_type": (
-            conflict.conflict_type.value if conflict.conflict_type else None
-        ),
+        "conflict_type": (conflict.conflict_type.value if conflict.conflict_type else None),
         "ours_lines": len(conflict.ours_content.split("\n")),
         "theirs_lines": len(conflict.theirs_content.split("\n")),
         "has_base": conflict.base_content is not None,
@@ -83,19 +81,13 @@ def _calculate_severity_distribution(conflicts: list) -> dict:
     return {
         "trivial": sum(1 for c in conflicts if c.severity == ConflictSeverity.TRIVIAL),
         "simple": sum(1 for c in conflicts if c.severity == ConflictSeverity.SIMPLE),
-        "moderate": sum(
-            1 for c in conflicts if c.severity == ConflictSeverity.MODERATE
-        ),
+        "moderate": sum(1 for c in conflicts if c.severity == ConflictSeverity.MODERATE),
         "complex": sum(1 for c in conflicts if c.severity == ConflictSeverity.COMPLEX),
-        "critical": sum(
-            1 for c in conflicts if c.severity == ConflictSeverity.CRITICAL
-        ),
+        "critical": sum(1 for c in conflicts if c.severity == ConflictSeverity.CRITICAL),
     }
 
 
-def _build_resolution_response(
-    results: list, file_path: str, safe_mode: bool
-) -> JSONResponse:
+def _build_resolution_response(results: list, file_path: str, safe_mode: bool) -> JSONResponse:
     """Build the JSONResponse for a successful conflict resolution.
 
     Helper for resolve_conflicts. Ref: #1088.
@@ -418,18 +410,12 @@ async def apply_resolution(
         if request.create_backup:
             backup_str = f"{safe_path}.backup.{int(datetime.now(tz=timezone.utc).timestamp())}"
             backup_safe = _assert_safe_path(backup_str)
-            await asyncio.to_thread(
-                lambda: __import__("shutil").copy2(str(safe_path), str(backup_safe))
-            )
+            await asyncio.to_thread(lambda: __import__("shutil").copy2(str(safe_path), str(backup_safe)))
             backup_path = str(backup_safe)
             logger.info("Created backup at %s", backup_path)
 
         # Write resolved content
-        await asyncio.to_thread(
-            lambda: open(str(safe_path), "w", encoding="utf-8").write(
-                request.resolved_content
-            )
-        )
+        await asyncio.to_thread(lambda: open(str(safe_path), "w", encoding="utf-8").write(request.resolved_content))
 
         logger.info("Applied resolution to %s", safe_path)
 

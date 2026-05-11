@@ -182,10 +182,7 @@ def test_analyze_partial_statement(mock_redis):
     context = analyzer.analyze(code, cursor_line=2, cursor_position=12)
 
     # Check partial statement
-    assert (
-        "y = x + " in context.partial_statement
-        or context.cursor_line.strip().startswith("y")
-    )
+    assert "y = x + " in context.partial_statement or context.cursor_line.strip().startswith("y")
 
 
 @patch("services.context_analyzer.get_redis_client")

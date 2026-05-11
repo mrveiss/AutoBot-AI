@@ -179,9 +179,7 @@ def _format_issue_type_subsection(issue_type: str, issues: List[Dict]) -> List[s
     return lines
 
 
-def _format_severity_subsection(
-    severity: str, severity_issues: Dict[str, List[Dict]]
-) -> List[str]:
+def _format_severity_subsection(severity: str, severity_issues: Dict[str, List[Dict]]) -> List[str]:
     """
     Format a severity subsection with all its issue types.
 
@@ -196,9 +194,7 @@ def _format_severity_subsection(
     ]
 
     for issue_type in sorted(severity_issues.keys()):
-        lines.extend(
-            _format_issue_type_subsection(issue_type, severity_issues[issue_type])
-        )
+        lines.extend(_format_issue_type_subsection(issue_type, severity_issues[issue_type]))
 
     return lines
 
@@ -263,9 +259,7 @@ def _calculate_severity_and_type_counts(
     return severity_counts, type_counts
 
 
-def _build_report_header(
-    path_info: str, total_count: int, counts: Dict[str, int]
-) -> List[str]:
+def _build_report_header(path_info: str, total_count: int, counts: Dict[str, int]) -> List[str]:
     """Build the report header with category counts table (Issue #398: extracted)."""
     now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     return [
@@ -287,9 +281,7 @@ def _build_report_header(
     ]
 
 
-def _build_summary_section(
-    severity_counts: Dict[str, int], type_counts: Dict[str, int]
-) -> List[str]:
+def _build_summary_section(severity_counts: Dict[str, int], type_counts: Dict[str, int]) -> List[str]:
     """Build the summary section with severity and type tables (Issue #398: extracted)."""
     lines = [
         "## Summary",
@@ -414,11 +406,9 @@ def _generate_file_assessment_details(fa) -> List[str]:
 
 def _generate_high_risk_files(prediction: PredictionResult) -> List[str]:
     """Generate high-risk files section. Issue #484: Extracted from _generate_bug_risk_section."""
-    high_risk_files = [
-        fa
-        for fa in prediction.file_assessments
-        if fa.risk_level.value in ("critical", "high")
-    ][:TOP_HIGH_RISK_FILES_LIMIT]
+    high_risk_files = [fa for fa in prediction.file_assessments if fa.risk_level.value in ("critical", "high")][
+        :TOP_HIGH_RISK_FILES_LIMIT
+    ]
 
     if not high_risk_files:
         return []
@@ -456,9 +446,7 @@ def _generate_bug_risk_section(prediction: PredictionResult) -> List[str]:
     if prediction.accuracy_score is not None:
         lines.append(f"**Prediction Accuracy:** {prediction.accuracy_score:.1f}%")
     else:
-        lines.append(
-            "**Prediction Accuracy:** *Historical accuracy data not yet available*"
-        )
+        lines.append("**Prediction Accuracy:** *Historical accuracy data not yet available*")
     lines.append("")
 
     # Compose from extracted helpers (Issue #484)
@@ -545,14 +533,10 @@ def _generate_orphaned_section(analysis: APIEndpointAnalysis) -> List[str]:
     ]
 
     for ep in analysis.orphaned[:API_ENDPOINT_LIST_LIMIT]:
-        lines.append(
-            f"| {ep.method} | `{ep.path}` | `{ep.file_path}` | {ep.line_number} |"
-        )
+        lines.append(f"| {ep.method} | `{ep.path}` | `{ep.file_path}` | {ep.line_number} |")
 
     if len(analysis.orphaned) > API_ENDPOINT_LIST_LIMIT:
-        lines.append(
-            f"| ... | *{len(analysis.orphaned) - API_ENDPOINT_LIST_LIMIT} more* | | |"
-        )
+        lines.append(f"| ... | *{len(analysis.orphaned) - API_ENDPOINT_LIST_LIMIT} more* | | |")
 
     lines.append("")
     return lines
@@ -573,14 +557,10 @@ def _generate_missing_section(analysis: APIEndpointAnalysis) -> List[str]:
     ]
 
     for ep in analysis.missing[:API_ENDPOINT_LIST_LIMIT]:
-        lines.append(
-            f"| {ep.method} | `{ep.path}` | `{ep.file_path}` | {ep.line_number} |"
-        )
+        lines.append(f"| {ep.method} | `{ep.path}` | `{ep.file_path}` | {ep.line_number} |")
 
     if len(analysis.missing) > API_ENDPOINT_LIST_LIMIT:
-        lines.append(
-            f"| ... | *{len(analysis.missing) - API_ENDPOINT_LIST_LIMIT} more* | | |"
-        )
+        lines.append(f"| ... | *{len(analysis.missing) - API_ENDPOINT_LIST_LIMIT} more* | | |")
 
     lines.append("")
     return lines
@@ -707,9 +687,7 @@ def _generate_high_similarity_duplicates(analysis: DuplicateAnalysis) -> List[st
 
 def _generate_medium_similarity_duplicates(analysis: DuplicateAnalysis) -> List[str]:
     """Generate medium similarity duplicates section."""
-    medium_similarity_dups = [
-        d for d in analysis.duplicates if 0.70 <= d.similarity < 0.90
-    ]
+    medium_similarity_dups = [d for d in analysis.duplicates if 0.70 <= d.similarity < 0.90]
     if not medium_similarity_dups:
         return []
 
@@ -725,10 +703,7 @@ def _generate_medium_similarity_duplicates(analysis: DuplicateAnalysis) -> List[
     for dup in medium_similarity_dups[:10]:  # Limit to top 10
         file1_short = _shorten_path(dup.file1)
         file2_short = _shorten_path(dup.file2)
-        lines.append(
-            f"| `{file1_short}` | `{file2_short}` | "
-            f"{dup.similarity * 100:.0f}% | {dup.line_count} |"
-        )
+        lines.append(f"| `{file1_short}` | `{file2_short}` | " f"{dup.similarity * 100:.0f}% | {dup.line_count} |")
 
     if len(medium_similarity_dups) > 10:
         lines.append(f"| ... | *{len(medium_similarity_dups) - 10} more* | | |")
@@ -810,11 +785,7 @@ def _get_severity_color(severity: str) -> str:
 
 def _generate_cross_language_overview(analysis: CrossLanguageAnalysis) -> List[str]:
     """Generate cross-language analysis overview section."""
-    total_files = (
-        analysis.python_files_analyzed
-        + analysis.typescript_files_analyzed
-        + analysis.vue_files_analyzed
-    )
+    total_files = analysis.python_files_analyzed + analysis.typescript_files_analyzed + analysis.vue_files_analyzed
 
     lines = [
         "### Overview",
@@ -850,9 +821,7 @@ def _generate_dto_mismatches_section(analysis: CrossLanguageAnalysis) -> List[st
     ]
 
     for m in analysis.dto_mismatches[:15]:
-        lines.append(
-            f"| `{m.backend_type}` | `{m.field_name}` | {m.mismatch_type} | {m.recommendation[:50]}... |"
-        )
+        lines.append(f"| `{m.backend_type}` | `{m.field_name}` | {m.mismatch_type} | {m.recommendation[:50]}... |")
 
     if len(analysis.dto_mismatches) > 15:
         lines.append(f"| ... | *{len(analysis.dto_mismatches) - 15} more* | | |")
@@ -866,16 +835,8 @@ def _generate_api_mismatches_section(analysis: CrossLanguageAnalysis) -> List[st
     if not analysis.api_contract_mismatches:
         return []
 
-    orphaned = [
-        m
-        for m in analysis.api_contract_mismatches
-        if m.mismatch_type == "orphaned_endpoint"
-    ]
-    missing = [
-        m
-        for m in analysis.api_contract_mismatches
-        if m.mismatch_type == "missing_endpoint"
-    ]
+    orphaned = [m for m in analysis.api_contract_mismatches if m.mismatch_type == "orphaned_endpoint"]
+    missing = [m for m in analysis.api_contract_mismatches if m.mismatch_type == "missing_endpoint"]
 
     lines = [
         "### 🟠 API Contract Mismatches",
@@ -940,11 +901,7 @@ def _generate_validation_duplications_section(
     ]
 
     for v in analysis.validation_duplications[:10]:
-        py_loc = (
-            f"`{v.python_location.file_path}:{v.python_location.line_start}`"
-            if v.python_location
-            else "N/A"
-        )
+        py_loc = f"`{v.python_location.file_path}:{v.python_location.line_start}`" if v.python_location else "N/A"
         ts_loc = (
             f"`{v.typescript_location.file_path}:{v.typescript_location.line_start}`"
             if v.typescript_location
@@ -989,9 +946,7 @@ def _generate_semantic_matches_section(analysis: CrossLanguageAnalysis) -> List[
 
     for m in high_similarity[:10]:
         py_name = m.metadata.get("python_name", "Unknown") if m.metadata else "Unknown"
-        ts_name = (
-            m.metadata.get("typescript_name", "Unknown") if m.metadata else "Unknown"
-        )
+        ts_name = m.metadata.get("typescript_name", "Unknown") if m.metadata else "Unknown"
         lines.append(f"| {m.similarity_score:.0%} | `{py_name}` | `{ts_name}` |")
 
     if len(high_similarity) > 10:
@@ -1108,9 +1063,7 @@ def _generate_regex_opportunities_section(report: PatternAnalysisReport) -> List
             ]
         )
     if len(report.regex_opportunities) > 5:
-        lines.append(
-            f"*... and {len(report.regex_opportunities) - 5} more opportunities*"
-        )
+        lines.append(f"*... and {len(report.regex_opportunities) - 5} more opportunities*")
         lines.append("")
     return lines
 
@@ -1128,16 +1081,12 @@ def _generate_complexity_hotspots_section(report: PatternAnalysisReport) -> List
         "| Function | File | Cyclomatic | Cognitive | Nesting |",
         "|----------|------|------------|-----------|---------|",
     ]
-    sorted_hotspots = sorted(
-        report.complexity_hotspots, key=lambda h: h.cyclomatic_complexity, reverse=True
-    )[
+    sorted_hotspots = sorted(report.complexity_hotspots, key=lambda h: h.cyclomatic_complexity, reverse=True)[
         :15
     ]  # Top 15
 
     for hotspot in sorted_hotspots:
-        func_name = (
-            hotspot.locations[0].function_name if hotspot.locations else "unknown"
-        )
+        func_name = hotspot.locations[0].function_name if hotspot.locations else "unknown"
         file_path = hotspot.locations[0].file_path if hotspot.locations else "N/A"
         short_path = file_path.split("/")[-1] if "/" in file_path else file_path
         lines.append(
@@ -1153,11 +1102,7 @@ def _generate_pattern_recommendations(report: PatternAnalysisReport) -> List[str
     high_severity_count = 0
     if report.duplicate_patterns:
         high_severity_count = len(
-            [
-                d
-                for d in report.duplicate_patterns
-                if hasattr(d.severity, "value") and d.severity.value == "high"
-            ]
+            [d for d in report.duplicate_patterns if hasattr(d.severity, "value") and d.severity.value == "high"]
         )
     regex_count = len(report.regex_opportunities) if report.regex_opportunities else 0
 
@@ -1319,9 +1264,7 @@ def _fetch_problems_from_chromadb(
                         "type": metadata.get("problem_type", "unknown"),
                         "severity": metadata.get("severity", "low"),
                         "file_path": metadata.get("file_path", ""),
-                        "file_category": metadata.get(
-                            "file_category", FILE_CATEGORY_CODE
-                        ),
+                        "file_category": metadata.get("file_category", FILE_CATEGORY_CODE),
                         "line_number": metadata.get("line_number"),
                         "description": metadata.get("description", ""),
                         "suggestion": metadata.get("suggestion", ""),
@@ -1411,9 +1354,7 @@ async def _run_parallel_analyses(
         return result
 
     # Run all analyses in parallel with individual error handling
-    results = await asyncio.gather(
-        *[task for _, task in analysis_tasks], return_exceptions=True
-    )
+    results = await asyncio.gather(*[task for _, task in analysis_tasks], return_exceptions=True)
 
     # Map results back to dict
     for i, (task_name, _) in enumerate(analysis_tasks):
@@ -1708,9 +1649,7 @@ def _build_issue_sections(by_category: Dict[str, List[Dict]]) -> List[str]:
 
     # Section 1: Code, Config & Test Issues (PRIORITY - must fix)
     code_problems = (
-        by_category[FILE_CATEGORY_CODE]
-        + by_category[FILE_CATEGORY_CONFIG]
-        + by_category[FILE_CATEGORY_TEST]
+        by_category[FILE_CATEGORY_CODE] + by_category[FILE_CATEGORY_CONFIG] + by_category[FILE_CATEGORY_TEST]
     )
     if code_problems:
         lines.extend(
@@ -1730,8 +1669,7 @@ def _build_issue_sections(by_category: Dict[str, List[Dict]]) -> List[str]:
                 by_category[FILE_CATEGORY_BACKUP],
                 FILE_CATEGORY_BACKUP,
                 "📦 Backup File Issues",
-                note="**Note:** These are backup files kept for rollback. "
-                "Fix only if restoring these files.",
+                note="**Note:** These are backup files kept for rollback. " "Fix only if restoring these files.",
             )
         )
         lines.extend(["---", ""])
@@ -1743,8 +1681,7 @@ def _build_issue_sections(by_category: Dict[str, List[Dict]]) -> List[str]:
                 by_category[FILE_CATEGORY_ARCHIVE],
                 FILE_CATEGORY_ARCHIVE,
                 "🗄️ Archived File Issues",
-                note="**Note:** These are archived/deprecated files. "
-                "Usually do not require fixes.",
+                note="**Note:** These are archived/deprecated files. " "Usually do not require fixes.",
             )
         )
         lines.extend(["---", ""])
@@ -1777,13 +1714,9 @@ def _compute_correlation_data(
     Returns:
         Tuple of (files_with_issues, high_risk_files_dict, overlap_set)
     """
-    files_with_issues = set(
-        p.get("file_path", "") for p in problems if p.get("file_path")
-    )
+    files_with_issues = set(p.get("file_path", "") for p in problems if p.get("file_path"))
     high_risk_files = {
-        fa.file_path: fa
-        for fa in prediction.file_assessments
-        if fa.risk_level.value in ("critical", "high")
+        fa.file_path: fa for fa in prediction.file_assessments if fa.risk_level.value in ("critical", "high")
     }
     overlap = files_with_issues & set(high_risk_files.keys())
     return files_with_issues, high_risk_files, overlap
@@ -1814,17 +1747,14 @@ def _format_correlation_table(
             issue_counts[fp] = issue_counts.get(fp, 0) + 1
 
     # Sort by risk score
-    sorted_overlap = sorted(
-        overlap, key=lambda f: high_risk_files[f].risk_score, reverse=True
-    )
+    sorted_overlap = sorted(overlap, key=lambda f: high_risk_files[f].risk_score, reverse=True)
 
     for file_path in sorted_overlap[:10]:
         fa = high_risk_files[file_path]
         issue_count = issue_counts.get(file_path, 0)
         emoji = _get_risk_emoji(fa.risk_level.value)
         lines.append(
-            f"| `{file_path}` | {issue_count} | {fa.risk_score:.1f} | "
-            f"{emoji} {fa.risk_level.value.capitalize()} |"
+            f"| `{file_path}` | {issue_count} | {fa.risk_score:.1f} | " f"{emoji} {fa.risk_level.value.capitalize()} |"
         )
 
     lines.extend(
@@ -1898,9 +1828,7 @@ def _insert_correlation_into_bug_risk(
     if insert_idx is not None:
         # Remove placeholder and insert real data
         # Keep header + blank + note, then insert correlation, then final --- and blank
-        return (
-            bug_risk_lines[: insert_idx + 3] + correlation_lines + bug_risk_lines[-2:]
-        )
+        return bug_risk_lines[: insert_idx + 3] + correlation_lines + bug_risk_lines[-2:]
 
     return bug_risk_lines
 
@@ -2109,9 +2037,7 @@ async def generate_analysis_report(
     # (which runs in a thread) can validate file paths without blocking the event loop.
     source_root = await resolve_source_root(source_id)
 
-    problems = await asyncio.to_thread(
-        _fetch_problems_from_chromadb, source_id, source_root
-    )
+    problems = await asyncio.to_thread(_fetch_problems_from_chromadb, source_id, source_root)
     analyses = await _resolve_analyses(
         quick=quick,
         include_bug_prediction=include_bug_prediction,

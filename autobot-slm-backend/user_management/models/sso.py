@@ -10,7 +10,7 @@ Supports multiple SSO providers:
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 

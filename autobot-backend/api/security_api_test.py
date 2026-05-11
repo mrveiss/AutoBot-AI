@@ -108,9 +108,7 @@ class TestSecurityAPI:
 
     def test_get_security_status_error(self):
         """Test security status endpoint error handling"""
-        self.mock_security_layer.get_pending_approvals.side_effect = Exception(
-            "Test error"
-        )
+        self.mock_security_layer.get_pending_approvals.side_effect = Exception("Test error")
 
         response = self.client.get("/api/security/status")
 
@@ -122,9 +120,7 @@ class TestSecurityAPI:
         """Test successful command approval"""
         approval_request = {"command_id": "cmd_123", "approved": True}
 
-        response = self.client.post(
-            "/api/security/approve-command", json=approval_request
-        )
+        response = self.client.post("/api/security/approve-command", json=approval_request)
 
         assert response.status_code == 200
         data = response.json()
@@ -132,38 +128,28 @@ class TestSecurityAPI:
         assert "cmd_123 approved" in data["message"]
 
         # Verify security layer was called
-        self.mock_security_layer.approve_command.assert_called_once_with(
-            "cmd_123", True
-        )
+        self.mock_security_layer.approve_command.assert_called_once_with("cmd_123", True)
 
     def test_approve_command_denial(self):
         """Test command approval denial"""
         approval_request = {"command_id": "cmd_456", "approved": False}
 
-        response = self.client.post(
-            "/api/security/approve-command", json=approval_request
-        )
+        response = self.client.post("/api/security/approve-command", json=approval_request)
 
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
         assert "cmd_456 denied" in data["message"]
 
-        self.mock_security_layer.approve_command.assert_called_once_with(
-            "cmd_456", False
-        )
+        self.mock_security_layer.approve_command.assert_called_once_with("cmd_456", False)
 
     def test_approve_command_error(self):
         """Test command approval error handling"""
-        self.mock_security_layer.approve_command.side_effect = Exception(
-            "Approval error"
-        )
+        self.mock_security_layer.approve_command.side_effect = Exception("Approval error")
 
         approval_request = {"command_id": "cmd_123", "approved": True}
 
-        response = self.client.post(
-            "/api/security/approve-command", json=approval_request
-        )
+        response = self.client.post("/api/security/approve-command", json=approval_request)
 
         assert response.status_code == 500
         data = response.json()
@@ -200,9 +186,7 @@ class TestSecurityAPI:
 
     def test_get_pending_approvals_error(self):
         """Test pending approvals endpoint error handling"""
-        self.mock_security_layer.get_pending_approvals.side_effect = Exception(
-            "Database error"
-        )
+        self.mock_security_layer.get_pending_approvals.side_effect = Exception("Database error")
 
         response = self.client.get("/api/security/pending-approvals")
 
@@ -243,16 +227,12 @@ class TestSecurityAPI:
         """Test command history retrieval with filters"""
         self.mock_security_layer.get_command_history.return_value = []
 
-        response = self.client.get(
-            "/api/security/command-history?user=test_user&limit=10"
-        )
+        response = self.client.get("/api/security/command-history?user=test_user&limit=10")
 
         assert response.status_code == 200
 
         # Verify filters were passed to security layer
-        self.mock_security_layer.get_command_history.assert_called_once_with(
-            user="test_user", limit=10
-        )
+        self.mock_security_layer.get_command_history.assert_called_once_with(user="test_user", limit=10)
 
     def test_get_command_history_default_parameters(self):
         """Test command history with default parameters"""
@@ -263,15 +243,11 @@ class TestSecurityAPI:
         assert response.status_code == 200
 
         # Verify default parameters
-        self.mock_security_layer.get_command_history.assert_called_once_with(
-            user=None, limit=50
-        )
+        self.mock_security_layer.get_command_history.assert_called_once_with(user=None, limit=50)
 
     def test_get_command_history_error(self):
         """Test command history endpoint error handling"""
-        self.mock_security_layer.get_command_history.side_effect = Exception(
-            "History error"
-        )
+        self.mock_security_layer.get_command_history.side_effect = Exception("History error")
 
         response = self.client.get("/api/security/command-history")
 

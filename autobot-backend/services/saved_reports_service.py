@@ -16,7 +16,7 @@ Parent Issue: #1282 (bi_export_endpoints.py integration)
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase
@@ -125,9 +125,7 @@ class SavedReportsService(AsyncRedisClientMixin):
     # Report execution
     # ------------------------------------------------------------------
 
-    async def run_report(
-        self, report_id: str, days: int = 30
-    ) -> Optional[Dict[str, Any]]:
+    async def run_report(self, report_id: str, days: int = 30) -> Optional[Dict[str, Any]]:
         """
         Run a saved report: fetch live analytics for configured sections.
 

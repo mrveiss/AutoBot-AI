@@ -11,7 +11,6 @@ Analyzes codebase for:
 - Team coverage analysis
 """
 
-import asyncio
 import json
 import logging
 import subprocess
@@ -23,13 +22,15 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from autobot_shared.async_compat import run_or_schedule
+
 # Issue #542: Handle imports for both standalone execution and backend import
 _project_root = Path(__file__).resolve().parents[3]
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 try:
-    from autobot_shared.redis_client import get_async_redis_client, get_redis_client
+    from autobot_shared.redis_client import get_redis_client
     from constants.ttl_constants import TTL_1_HOUR
 
     _REDIS_AVAILABLE = True
@@ -167,7 +168,7 @@ class OwnershipAnalyzer:
     async def _ensure_redis(self):
         """Lazy-init async Redis client on first use (#2725)."""
         if self.redis_client is None:
-            from autobot_shared.redis_client import get_async_redis_client, get_redis_client
+            from autobot_shared.redis_client import get_async_redis_client
 
             self.redis_client = await get_async_redis_client()
 
@@ -204,21 +205,15 @@ class OwnershipAnalyzer:
         logger.info(f"Aggregated to {len(directory_ownerships)} directories")
 
         # Calculate expertise scores
-        expertise_scores = self._calculate_expertise_scores(
-            file_ownerships, directory_ownerships, days_for_recency
-        )
+        expertise_scores = self._calculate_expertise_scores(file_ownerships, directory_ownerships, days_for_recency)
         logger.info(f"Calculated expertise for {len(expertise_scores)} contributors")
 
         # Detect knowledge gaps
-        knowledge_gaps = self._detect_knowledge_gaps(
-            file_ownerships, directory_ownerships, days_for_recency
-        )
+        knowledge_gaps = self._detect_knowledge_gaps(file_ownerships, directory_ownerships, days_for_recency)
         logger.info(f"Detected {len(knowledge_gaps)} knowledge gaps")
 
         # Calculate metrics
-        metrics = self._calculate_metrics(
-            file_ownerships, directory_ownerships, expertise_scores, knowledge_gaps
-        )
+        metrics = self._calculate_metrics(file_ownerships, directory_ownerships, expertise_scores, knowledge_gaps)
 
         analysis_time = time.time() - start_time
 
@@ -258,29 +253,17 @@ class OwnershipAnalyzer:
                 "total_directories": len(directory_ownerships),
                 "total_contributors": len(expertise_scores),
                 "knowledge_gaps_count": len(knowledge_gaps),
-                "critical_gaps": len(
-                    [g for g in knowledge_gaps if g.risk_level == "critical"]
-                ),
-                "high_risk_gaps": len(
-                    [g for g in knowledge_gaps if g.risk_level == "high"]
-                ),
+                "critical_gaps": len([g for g in knowledge_gaps if g.risk_level == "critical"]),
+                "high_risk_gaps": len([g for g in knowledge_gaps if g.risk_level == "high"]),
             },
-            "file_ownership": [
-                self._serialize_file_ownership(f) for f in file_ownerships[:100]
-            ],
-            "directory_ownership": [
-                self._serialize_directory_ownership(d) for d in directory_ownerships
-            ],
-            "expertise_scores": [
-                self._serialize_expertise(e) for e in expertise_scores
-            ],
+            "file_ownership": [self._serialize_file_ownership(f) for f in file_ownerships[:100]],
+            "directory_ownership": [self._serialize_directory_ownership(d) for d in directory_ownerships],
+            "expertise_scores": [self._serialize_expertise(e) for e in expertise_scores],
             "knowledge_gaps": [self._serialize_gap(g) for g in knowledge_gaps],
             "metrics": metrics,
         }
 
-    async def _analyze_file_ownership(
-        self, root_path: str, patterns: List[str]
-    ) -> List[FileOwnership]:
+    async def _analyze_file_ownership(self, root_path: str, patterns: List[str]) -> List[FileOwnership]:
         """Analyze ownership for individual files using git blame"""
         file_ownerships = []
         root = Path(root_path).resolve()
@@ -307,9 +290,7 @@ class OwnershipAnalyzer:
         Issue #1183: Extracted from _get_file_ownership() to reduce function length.
         Returns (total_lines, author_lines) where author_lines maps author → stats.
         """
-        author_lines: Dict[str, Dict[str, Any]] = defaultdict(
-            lambda: {"lines": 0, "email": "", "dates": []}
-        )
+        author_lines: Dict[str, Dict[str, Any]] = defaultdict(lambda: {"lines": 0, "email": "", "dates": []})
         total_lines = 0
         current_author = ""
         current_email = ""
@@ -363,9 +344,7 @@ class OwnershipAnalyzer:
         contributors.sort(key=lambda x: x.lines_count, reverse=True)
         return contributors
 
-    async def _get_file_ownership(
-        self, file_path: Path, root: Path
-    ) -> Optional[FileOwnership]:
+    async def _get_file_ownership(self, file_path: Path, root: Path) -> Optional[FileOwnership]:
         """Get ownership data for a single file using git blame"""
         try:
             relative_path = str(file_path.relative_to(root))
@@ -387,24 +366,18 @@ class OwnershipAnalyzer:
             if total_lines == 0:
                 return None
 
-            contributors = self._build_file_contributors(
-                author_lines, total_lines, relative_path
-            )
+            contributors = self._build_file_contributors(author_lines, total_lines, relative_path)
 
             # Determine primary owner
             primary_owner = contributors[0].author_name if contributors else None
             ownership_pct = contributors[0].lines_percentage if contributors else 0.0
 
             # Calculate bus factor (contributors with >10% ownership)
-            significant_contributors = [
-                c for c in contributors if c.lines_percentage >= 10
-            ]
+            significant_contributors = [c for c in contributors if c.lines_percentage >= 10]
             bus_factor = max(1, len(significant_contributors))
 
             # Determine knowledge risk
-            knowledge_risk = self._calculate_knowledge_risk(
-                bus_factor, contributors, total_lines
-            )
+            knowledge_risk = self._calculate_knowledge_risk(bus_factor, contributors, total_lines)
 
             # Issue #1183: Delegate last_modified computation to helper
             last_modified = self._get_last_modified(contributors)
@@ -442,17 +415,13 @@ class OwnershipAnalyzer:
                     last_modified = contrib.last_commit_date
         return last_modified
 
-    def _aggregate_directory_ownership(
-        self, file_ownerships: List[FileOwnership]
-    ) -> List[DirectoryOwnership]:
+    def _aggregate_directory_ownership(self, file_ownerships: List[FileOwnership]) -> List[DirectoryOwnership]:
         """Aggregate file ownership to directory level"""
         dir_data: Dict[str, Dict[str, Any]] = defaultdict(
             lambda: {
                 "files": 0,
                 "lines": 0,
-                "author_lines": defaultdict(
-                    lambda: {"lines": 0, "email": "", "files": set()}
-                ),
+                "author_lines": defaultdict(lambda: {"lines": 0, "email": "", "files": set()}),
             }
         )
 
@@ -466,24 +435,16 @@ class OwnershipAnalyzer:
             dir_data[dir_path]["lines"] += fo.total_lines
 
             for contrib in fo.contributors:
-                dir_data[dir_path]["author_lines"][contrib.author_name][
-                    "lines"
-                ] += contrib.lines_count
-                dir_data[dir_path]["author_lines"][contrib.author_name][
-                    "email"
-                ] = contrib.author_email
-                dir_data[dir_path]["author_lines"][contrib.author_name]["files"].add(
-                    fo.file_path
-                )
+                dir_data[dir_path]["author_lines"][contrib.author_name]["lines"] += contrib.lines_count
+                dir_data[dir_path]["author_lines"][contrib.author_name]["email"] = contrib.author_email
+                dir_data[dir_path]["author_lines"][contrib.author_name]["files"].add(fo.file_path)
 
         # Issue #1183: Delegate directory object building to extracted helper
         directory_ownerships = self._build_dir_ownership_objects(dir_data)
         directory_ownerships.sort(key=lambda x: x.total_lines, reverse=True)
         return directory_ownerships
 
-    def _build_dir_ownership_objects(
-        self, dir_data: Dict[str, Dict[str, Any]]
-    ) -> List[DirectoryOwnership]:
+    def _build_dir_ownership_objects(self, dir_data: Dict[str, Dict[str, Any]]) -> List[DirectoryOwnership]:
         """Build DirectoryOwnership objects from aggregated dir_data.
 
         Issue #1183: Extracted from _aggregate_directory_ownership() to reduce function length.
@@ -497,11 +458,7 @@ class OwnershipAnalyzer:
                     author_name=author_name,
                     author_email=author_data["email"],
                     lines_count=author_data["lines"],
-                    lines_percentage=(
-                        round((author_data["lines"] / total_lines) * 100, 1)
-                        if total_lines > 0
-                        else 0
-                    ),
+                    lines_percentage=(round((author_data["lines"] / total_lines) * 100, 1) if total_lines > 0 else 0),
                     commits_count=0,
                     files_touched=list(author_data["files"]),
                 )
@@ -509,13 +466,9 @@ class OwnershipAnalyzer:
             contributors.sort(key=lambda x: x.lines_count, reverse=True)
             primary_owner = contributors[0].author_name if contributors else None
             ownership_pct = contributors[0].lines_percentage if contributors else 0.0
-            significant_contributors = [
-                c for c in contributors if c.lines_percentage >= 10
-            ]
+            significant_contributors = [c for c in contributors if c.lines_percentage >= 10]
             bus_factor = max(1, len(significant_contributors))
-            knowledge_risk = self._calculate_knowledge_risk(
-                bus_factor, contributors, total_lines
-            )
+            knowledge_risk = self._calculate_knowledge_risk(bus_factor, contributors, total_lines)
             directory_ownerships.append(
                 DirectoryOwnership(
                     directory_path=dir_path,
@@ -562,9 +515,7 @@ class OwnershipAnalyzer:
                 if contrib.last_commit_date:
                     current = author_data[contrib.author_name]["last_activity"]
                     if not current or contrib.last_commit_date > current:
-                        author_data[contrib.author_name][
-                            "last_activity"
-                        ] = contrib.last_commit_date
+                        author_data[contrib.author_name]["last_activity"] = contrib.last_commit_date
 
         # Aggregate directory ownership
         for do in directory_ownerships:
@@ -581,9 +532,7 @@ class OwnershipAnalyzer:
 
         # Issue #1183: Delegate per-author calculation to extracted helper
         expertise_scores = [
-            self._compute_expertise_score(
-                author_name, data, max_lines, max_commits, days_for_recency, now
-            )
+            self._compute_expertise_score(author_name, data, max_lines, max_commits, days_for_recency, now)
             for author_name, data in author_data.items()
         ]
         expertise_scores.sort(key=lambda x: x.overall_score, reverse=True)
@@ -756,9 +705,7 @@ class OwnershipAnalyzer:
             ),
             "team_coverage": round(
                 (
-                    len([e for e in expertise_scores if e.recency_score > 50])
-                    / len(expertise_scores)
-                    * 100
+                    len([e for e in expertise_scores if e.recency_score > 50]) / len(expertise_scores) * 100
                     if expertise_scores
                     else 0
                 ),
@@ -865,9 +812,7 @@ class OwnershipAnalyzer:
             try:
                 cursor = 0
                 while True:
-                    cursor, keys = await self.redis_client.scan(
-                        cursor, match="ownership_analysis:*", count=100
-                    )
+                    cursor, keys = await self.redis_client.scan(cursor, match="ownership_analysis:*", count=100)
                     if keys:
                         await self.redis_client.delete(*keys)
                     if cursor == 0:
@@ -899,20 +844,14 @@ async def main():
 
     print("\n=== Code Ownership Analysis Results ===")  # noqa: print
     print(f"Total files analyzed: {results['summary']['total_files']}")  # noqa: print
-    print(
-        f"Total contributors: {results['summary']['total_contributors']}"
-    )  # noqa: print
-    print(
-        f"Knowledge gaps detected: {results['summary']['knowledge_gaps_count']}"
-    )  # noqa: print
+    print(f"Total contributors: {results['summary']['total_contributors']}")  # noqa: print
+    print(f"Knowledge gaps detected: {results['summary']['knowledge_gaps_count']}")  # noqa: print
     print(f"Critical gaps: {results['summary']['critical_gaps']}")  # noqa: print
     print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     print("\n=== Top Contributors ===")  # noqa: print
     for i, contrib in enumerate(results["metrics"]["top_contributors"][:5], 1):
-        print(  # noqa: print
-            f"{i}. {contrib['name']}: {contrib['lines']} lines (score: {contrib['score']})"
-        )
+        print(f"{i}. {contrib['name']}: {contrib['lines']} lines (score: {contrib['score']})")  # noqa: print
 
     print("\n=== Knowledge Gaps ===")  # noqa: print
     for gap in results["knowledge_gaps"][:5]:
@@ -922,11 +861,9 @@ async def main():
     print("\n=== Metrics ===")  # noqa: print
     metrics = results["metrics"]
     print(f"Overall bus factor: {metrics['overall_bus_factor']}")  # noqa: print
-    print(
-        f"Ownership concentration: {metrics['ownership_concentration']}%"
-    )  # noqa: print
+    print(f"Ownership concentration: {metrics['ownership_concentration']}%")  # noqa: print
     print(f"Team coverage: {metrics['team_coverage']}%")  # noqa: print
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

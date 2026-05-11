@@ -11,6 +11,14 @@
 # fleet-specific paths (e.g. AUTOBOT_TLS_CERT_DIR=infrastructure/shared/certs)
 # that are invalid in a Docker context. See #2458.
 #
+# Healthcheck convention (#7456):
+#   - Default to ``["CMD", ...]`` (exec form) — no shell, no env-var
+#     expansion, no I/O redirection. Faster + safer.
+#   - Use ``["CMD-SHELL", "..."]`` ONLY when the check needs a shell
+#     feature: ``${VAR}`` expansion, ``$HOSTNAME`` reference, redirection
+#     (``>/dev/null 2>&1``), or piped commands. Audit confirmed all 3
+#     current CMD-SHELL uses (postgres, celery, ollama) are justified.
+#
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss

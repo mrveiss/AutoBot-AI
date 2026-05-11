@@ -28,7 +28,6 @@ from tasks.knowledge_tasks import (
     _run_async_in_loop,
 )
 
-
 # ---------------------------------------------------------------------------
 # _collect_orphan_doc_ids
 # ---------------------------------------------------------------------------
@@ -178,9 +177,7 @@ def test_cleanup_files_older_than_filters_by_mtime(tmp_path):
     _touch(new_file, "new" * 100, age_seconds=1 * 3600)  # 1 hour old
 
     cutoff = time.time() - (7 * 86400)  # 7-day TTL
-    scanned, removed, bytes_freed = _cleanup_files_older_than(
-        [tmp_path], cutoff, dry_run=False
-    )
+    scanned, removed, bytes_freed = _cleanup_files_older_than([tmp_path], cutoff, dry_run=False)
 
     assert scanned == 2
     assert removed == 1
@@ -194,9 +191,7 @@ def test_cleanup_files_older_than_dry_run_preserves_files(tmp_path):
     _touch(old_file, "old" * 100, age_seconds=10 * 86400)
 
     cutoff = time.time() - (7 * 86400)
-    scanned, removed, bytes_freed = _cleanup_files_older_than(
-        [tmp_path], cutoff, dry_run=True
-    )
+    scanned, removed, bytes_freed = _cleanup_files_older_than([tmp_path], cutoff, dry_run=True)
 
     assert scanned == 1
     assert removed == 0
@@ -206,9 +201,7 @@ def test_cleanup_files_older_than_dry_run_preserves_files(tmp_path):
 
 def test_cleanup_files_older_than_skips_missing_directory(tmp_path):
     missing = tmp_path / "does-not-exist"
-    scanned, removed, bytes_freed = _cleanup_files_older_than(
-        [missing], time.time(), dry_run=False
-    )
+    scanned, removed, bytes_freed = _cleanup_files_older_than([missing], time.time(), dry_run=False)
     assert (scanned, removed, bytes_freed) == (0, 0, 0)
 
 
@@ -243,9 +236,7 @@ def test_cleanup_excludes_sqlite_files(tmp_path):
         _touch(f, "payload" * 20, age_seconds=30 * 86400)
 
     cutoff = time.time() - (7 * 86400)
-    scanned, removed, _ = _cleanup_files_older_than(
-        [tmp_path], cutoff, dry_run=False
-    )
+    scanned, removed, _ = _cleanup_files_older_than([tmp_path], cutoff, dry_run=False)
 
     # All 6 files scanned; only .log removed.
     assert scanned == 6
@@ -272,9 +263,7 @@ def test_cleanup_excludes_files_under_chromadb_parent_dir(tmp_path):
     _touch(stale, "stale", age_seconds=30 * 86400)
 
     cutoff = time.time() - (7 * 86400)
-    scanned, removed, _ = _cleanup_files_older_than(
-        [tmp_path], cutoff, dry_run=False
-    )
+    scanned, removed, _ = _cleanup_files_older_than([tmp_path], cutoff, dry_run=False)
 
     assert scanned == 2
     assert removed == 1
@@ -290,9 +279,7 @@ def test_cleanup_excludes_files_under_redis_parent_dir(tmp_path):
     _touch(protected, "payload", age_seconds=30 * 86400)
 
     cutoff = time.time() - (7 * 86400)
-    scanned, removed, _ = _cleanup_files_older_than(
-        [tmp_path], cutoff, dry_run=False
-    )
+    scanned, removed, _ = _cleanup_files_older_than([tmp_path], cutoff, dry_run=False)
 
     assert scanned == 1
     assert removed == 0

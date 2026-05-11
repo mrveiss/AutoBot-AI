@@ -76,9 +76,7 @@ class TestHardwarePriorityEndpoint:
     def test_patch_returns_200_with_valid_payload(self):
         app = _make_app()
 
-        fake_config = {
-            "hardware": {"acceleration": {"priority_order": ["npu", "gpu", "cpu"]}}
-        }
+        fake_config = {"hardware": {"acceleration": {"priority_order": ["npu", "gpu", "cpu"]}}}
         mock_hw = MagicMock()
         mock_hw.update_priorities = MagicMock()
         mock_revision = MagicMock()
@@ -160,6 +158,7 @@ class TestHardwareAccelerationManagerUpdatePriorities:
             mgr.npu_available = True
             mgr.gpu_available = True
             import psutil
+
             mgr.cpu_cores = psutil.cpu_count()
         return mgr
 

@@ -6,7 +6,7 @@ Tests how security components work together with the rest of the AutoBot system
 import asyncio
 import os
 import tempfile
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -71,9 +71,7 @@ class TestSecuritySystemIntegration:
             mock_process.returncode = 0
             mock_subprocess.return_value = mock_process
 
-            result = await security_layer.execute_command(
-                "echo 'integration test'", "test_user", "admin"
-            )
+            result = await security_layer.execute_command("echo 'integration test'", "test_user", "admin")
 
             # Verify successful execution
             assert result["status"] == "success"
@@ -86,8 +84,7 @@ class TestSecuritySystemIntegration:
 
             # Check that command was logged
             command_logged = any(
-                "echo 'integration test'" in entry.get("details", {}).get("command", "")
-                for entry in history
+                "echo 'integration test'" in entry.get("details", {}).get("command", "") for entry in history
             )
             assert command_logged
 
@@ -123,9 +120,7 @@ class TestSecuritySystemIntegration:
             mock_process.returncode = 0
             mock_subprocess.return_value = mock_process
 
-            result = await security_layer.execute_command(
-                "ls -la", "admin_user", "admin"
-            )
+            result = await security_layer.execute_command("ls -la", "admin_user", "admin")
             assert result["status"] == "success"
 
         # Guest should be denied shell execution
@@ -305,9 +300,7 @@ class TestSecuritySystemResilience:
         security_layer.audit_log_file = "/invalid/path/audit.log"
 
         # Should not raise exception
-        security_layer.audit_log(
-            action="test_action", user="test_user", outcome="test", details={}
-        )
+        security_layer.audit_log(action="test_action", user="test_user", outcome="test", details={})
 
         # Command execution should still work
         with patch("asyncio.create_subprocess_shell") as mock_subprocess:
@@ -349,16 +342,11 @@ class TestSecuritySystemResilience:
 
         # Test command that needs approval
         try:
-            result = await security_layer.execute_command(
-                "rm test.txt", "user", "admin"
-            )
+            result = await security_layer.execute_command("rm test.txt", "user", "admin")
 
             # Should handle timeout gracefully
             assert result["status"] == "error"
-            assert (
-                "timeout" in result.get("stderr", "").lower()
-                or "denied" in result.get("stderr", "").lower()
-            )
+            assert "timeout" in result.get("stderr", "").lower() or "denied" in result.get("stderr", "").lower()
 
         except asyncio.TimeoutError:
             # If timeout is not caught, that's also acceptable behavior
@@ -394,9 +382,7 @@ class TestSecurityPerformance:
         duration = end_time - start_time
 
         # Should be fast (< 1 second for 60 assessments)
-        assert (
-            duration < 1.0
-        ), f"Risk assessment took {duration:.2f}s for {len(commands)} commands"
+        assert duration < 1.0, f"Risk assessment took {duration:.2f}s for {len(commands)} commands"
 
         # Average should be under 16ms per assessment
         avg_time = duration / len(commands) * 1000

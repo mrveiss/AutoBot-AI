@@ -20,6 +20,7 @@ from typing import Any, Dict, Optional
 
 import yaml
 
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 
 logger = logging.getLogger(__name__)
@@ -904,4 +905,4 @@ if __name__ == "__main__":
         #         await asyncio.sleep(0.1)  # Small delay to prevent
         #         # busy-waiting
 
-    asyncio.run(test_voice_interface())
+    run_or_schedule(test_voice_interface())

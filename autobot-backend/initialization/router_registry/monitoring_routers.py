@@ -77,9 +77,7 @@ MONITORING_ROUTER_CONFIGS = [
 ]
 
 
-def _try_load_router(
-    module_path: str, router_attr: str, prefix: str, tags: List[str], name: str
-) -> Tuple:
+def _try_load_router(module_path: str, router_attr: str, prefix: str, tags: List[str], name: str) -> Tuple:
     """
     Attempt to load a single router module with graceful fallback.
 

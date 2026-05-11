@@ -73,9 +73,7 @@ class TaskPatternLearner(AsyncRedisClientMixin):
         """
         return task_type.strip().lower().replace("-", "_").replace(" ", "_")
 
-    async def learn_from_outcomes(
-        self, task_type: str, outcomes: List[Dict]
-    ) -> Optional[LearnedStrategy]:
+    async def learn_from_outcomes(self, task_type: str, outcomes: List[Dict]) -> Optional[LearnedStrategy]:
         """Analyze recent outcomes and extract the best strategy.
 
         Args:
@@ -118,9 +116,7 @@ class TaskPatternLearner(AsyncRedisClientMixin):
             logger.warning("Error synthesizing strategy for %s: %s", task_type, exc)
             return self._fallback_strategy(task_type, outcomes, best_outcome)
 
-    def _build_synthesis_prompt(
-        self, task_type: str, outcomes: List[Dict], best_outcome: Dict
-    ) -> str:
+    def _build_synthesis_prompt(self, task_type: str, outcomes: List[Dict], best_outcome: Dict) -> str:
         """Build synthesis prompt from outcome data."""
         summary = json.dumps(
             [
@@ -158,11 +154,7 @@ class TaskPatternLearner(AsyncRedisClientMixin):
     ) -> Optional[LearnedStrategy]:
         """Parse LLM response into a LearnedStrategy."""
         try:
-            content = (
-                response
-                if isinstance(response, (str, dict))
-                else getattr(response, "content", "{}")
-            )
+            content = response if isinstance(response, (str, dict)) else getattr(response, "content", "{}")
             data = content if isinstance(content, dict) else json.loads(content)
             avg_score = sum(o.get("score", 0.0) for o in outcomes) / len(outcomes)
             return LearnedStrategy(
@@ -178,9 +170,7 @@ class TaskPatternLearner(AsyncRedisClientMixin):
             logger.warning("Failed to parse strategy response: %s", exc)
             return None
 
-    def _fallback_strategy(
-        self, task_type: str, outcomes: List[Dict], best_outcome: Dict
-    ) -> LearnedStrategy:
+    def _fallback_strategy(self, task_type: str, outcomes: List[Dict], best_outcome: Dict) -> LearnedStrategy:
         """Build a basic strategy when LLM synthesis is unavailable."""
         avg_score = sum(o.get("score", 0.0) for o in outcomes) / len(outcomes)
         return LearnedStrategy(
@@ -192,9 +182,7 @@ class TaskPatternLearner(AsyncRedisClientMixin):
             confidence=0.3,
         )
 
-    async def _persist_strategy(
-        self, task_type: str, strategy: LearnedStrategy
-    ) -> None:
+    async def _persist_strategy(self, task_type: str, strategy: LearnedStrategy) -> None:
         """Persist learned strategy to Redis."""
         try:
             redis = await self._get_redis()

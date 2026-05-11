@@ -9,11 +9,12 @@ NOTE: generate_architecture_recommendations (~155 lines) is an ACCEPTABLE EXCEPT
 per Issue #490 - analysis output generator with sequential logic. Low priority.
 """
 
-import asyncio
 import json
 from pathlib import Path
 
 from architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
+
+from autobot_shared.async_compat import run_or_schedule
 
 
 async def analyze_architectural_patterns():
@@ -24,9 +25,7 @@ async def analyze_architectural_patterns():
     analyzer = ArchitecturalPatternAnalyzer()
 
     # Run analysis
-    results = await analyzer.analyze_architecture(
-        root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
-    )
+    results = await analyzer.analyze_architecture(root_path=".", patterns=["src/**/*.py", "backend/**/*.py"])
 
     print("\n=== Architectural Pattern Analysis Results ===\n")  # noqa: print
 
@@ -59,32 +58,18 @@ def _print_summary_metrics(results: dict) -> None:
     # Summary
     print(f"📊 **Analysis Summary:**")  # noqa: print
     print(f"   - Total components: {results['total_components']}")  # noqa: print
-    print(
-        f"   - Architectural issues: {results['architectural_issues']}"
-    )  # noqa: print
-    print(
-        f"   - Design patterns found: {results['design_patterns_found']}"
-    )  # noqa: print
-    print(
-        f"   - Architecture score: {results['architecture_score']}/100"
-    )  # noqa: print
-    print(
-        f"   - Analysis time: {results['analysis_time_seconds']:.2f}s\n"
-    )  # noqa: print
+    print(f"   - Architectural issues: {results['architectural_issues']}")  # noqa: print
+    print(f"   - Design patterns found: {results['design_patterns_found']}")  # noqa: print
+    print(f"   - Architecture score: {results['architecture_score']}/100")  # noqa: print
+    print(f"   - Analysis time: {results['analysis_time_seconds']:.2f}s\n")  # noqa: print
 
     # Detailed metrics
     metrics = results["metrics"]
     print("🏛️ **Architectural Quality Metrics:**")  # noqa: print
-    print(  # noqa: print
-        f"   - Coupling score: {metrics['coupling_score']}/100 (lower coupling is better)"
-    )
+    print(f"   - Coupling score: {metrics['coupling_score']}/100 (lower coupling is better)")  # noqa: print
     print(f"   - Cohesion score: {metrics['cohesion_score']}/100")  # noqa: print
-    print(
-        f"   - Pattern adherence: {metrics['pattern_adherence_score']}/100"
-    )  # noqa: print
-    print(
-        f"   - Maintainability index: {metrics['maintainability_index']}/100"
-    )  # noqa: print
+    print(f"   - Pattern adherence: {metrics['pattern_adherence_score']}/100")  # noqa: print
+    print(f"   - Maintainability index: {metrics['maintainability_index']}/100")  # noqa: print
     print(f"   - Abstraction score: {metrics['abstraction_score']}/100")  # noqa: print
     print(f"   - Instability score: {metrics['instability_score']}/100")  # noqa: print
     print()  # noqa: print
@@ -120,15 +105,11 @@ def _analyze_patterns(results: dict) -> None:
 
         print("🎨 **Design Patterns Detected:**")  # noqa: print
         for pattern, count in sorted(pattern_counts.items()):
-            print(
-                f"   - {pattern.replace('_', ' ').title()}: {count} instances"
-            )  # noqa: print
+            print(f"   - {pattern.replace('_', ' ').title()}: {count} instances")  # noqa: print
 
         print("\n📋 **Pattern Details:**")  # noqa: print
         for pattern in results["detected_patterns"][:10]:  # Show first 10
-            print(  # noqa: print
-                f"   - {pattern['pattern'].title()} in {pattern['file']}:{pattern['line']}"
-            )
+            print(f"   - {pattern['pattern'].title()} in {pattern['file']}:{pattern['line']}")  # noqa: print
             print(f"     {pattern['description']}")  # noqa: print
         print()  # noqa: print
 
@@ -144,17 +125,11 @@ def _analyze_patterns(results: dict) -> None:
             }
             emoji = severity_emoji.get(issue["severity"], "⚪")
 
-            print(  # noqa: print
-                f"\n   {emoji} **{issue['type'].replace('_', ' ').title()}** ({issue['severity']})"
-            )
+            print(f"\n   {emoji} **{issue['type'].replace('_', ' ').title()}** ({issue['severity']})")  # noqa: print
             print(f"      {issue['description']}")  # noqa: print
-            print(
-                f"      Affects: {issue['affected_components_count']} components"
-            )  # noqa: print
+            print(f"      Affects: {issue['affected_components_count']} components")  # noqa: print
             print(f"      💡 Suggestion: {issue['suggestion']}")  # noqa: print
-            print(
-                f"      🔧 Refactoring effort: {issue['refactoring_effort']}"
-            )  # noqa: print
+            print(f"      🔧 Refactoring effort: {issue['refactoring_effort']}")  # noqa: print
             if issue["pattern_violation"]:
                 print(f"      ❌ Violates: {issue['pattern_violation']}")  # noqa: print
 
@@ -170,28 +145,16 @@ def _analyze_coupling(results: dict) -> None:
     """
 
     # High coupling analysis
-    high_coupling_components = [
-        c for c in results["components"] if c["coupling_score"] > 10
-    ]
+    high_coupling_components = [c for c in results["components"] if c["coupling_score"] > 10]
     if high_coupling_components:
         print(f"\n🔗 **High Coupling Analysis:**")  # noqa: print
-        print(  # noqa: print
-            f"   Found {len(high_coupling_components)} components with high coupling:"
-        )
+        print(f"   Found {len(high_coupling_components)} components with high coupling:")  # noqa: print
         for comp in high_coupling_components[:5]:  # Show top 5
-            print(
-                f"   - {comp['type'].title()} '{comp['name']}' in {comp['file']}"
-            )  # noqa: print
-            print(
-                f"     Coupling score: {comp['coupling_score']} dependencies"
-            )  # noqa: print
-            print(
-                f"     Dependencies: {', '.join(comp['dependencies'][:5])}"
-            )  # noqa: print
+            print(f"   - {comp['type'].title()} '{comp['name']}' in {comp['file']}")  # noqa: print
+            print(f"     Coupling score: {comp['coupling_score']} dependencies")  # noqa: print
+            print(f"     Dependencies: {', '.join(comp['dependencies'][:5])}")  # noqa: print
             if len(comp["dependencies"]) > 5:
-                print(
-                    f"     ... and {len(comp['dependencies']) - 5} more"
-                )  # noqa: print
+                print(f"     ... and {len(comp['dependencies']) - 5} more")  # noqa: print
         print()  # noqa: print
 
 
@@ -206,16 +169,10 @@ def _analyze_cohesion_complexity(results: dict) -> None:
     """
 
     # Low cohesion analysis
-    low_cohesion_classes = [
-        c
-        for c in results["components"]
-        if c["type"] == "class" and c["cohesion_score"] < 0.3
-    ]
+    low_cohesion_classes = [c for c in results["components"] if c["type"] == "class" and c["cohesion_score"] < 0.3]
     if low_cohesion_classes:
         print(f"🔄 **Low Cohesion Analysis:**")  # noqa: print
-        print(
-            f"   Found {len(low_cohesion_classes)} classes with low cohesion:"
-        )  # noqa: print
+        print(f"   Found {len(low_cohesion_classes)} classes with low cohesion:")  # noqa: print
         for comp in low_cohesion_classes[:5]:
             print(f"   - Class '{comp['name']}' in {comp['file']}")  # noqa: print
             print(f"     Cohesion score: {comp['cohesion_score']:.2f}")  # noqa: print
@@ -223,18 +180,12 @@ def _analyze_cohesion_complexity(results: dict) -> None:
         print()  # noqa: print
 
     # Complex components
-    complex_components = [
-        c for c in results["components"] if c["complexity_score"] > 20
-    ]
+    complex_components = [c for c in results["components"] if c["complexity_score"] > 20]
     if complex_components:
         print(f"🧠 **High Complexity Analysis:**")  # noqa: print
-        print(
-            f"   Found {len(complex_components)} highly complex components:"
-        )  # noqa: print
+        print(f"   Found {len(complex_components)} highly complex components:")  # noqa: print
         for comp in complex_components[:5]:
-            print(
-                f"   - {comp['type'].title()} '{comp['name']}' in {comp['file']}"
-            )  # noqa: print
+            print(f"   - {comp['type'].title()} '{comp['name']}' in {comp['file']}")  # noqa: print
             print(f"     Complexity score: {comp['complexity_score']}")  # noqa: print
             if comp["patterns"]:
                 print(f"     Patterns: {', '.join(comp['patterns'])}")  # noqa: print
@@ -325,9 +276,7 @@ def _generate_dependency_recommendations() -> None:
     print("    def save(self, data): pass")  # noqa: print
     print()  # noqa: print
     print("class OrderService:")  # noqa: print
-    print(
-        "    def __init__(self, db: DatabaseInterface, email_service):"
-    )  # noqa: print
+    print("    def __init__(self, db: DatabaseInterface, email_service):")  # noqa: print
     print("        self.db = db  # Injected dependency")  # noqa: print
     print("        self.email = email_service  # Injected dependency")  # noqa: print
     print("```")  # noqa: print
@@ -389,9 +338,7 @@ def _generate_creational_recommendations() -> None:
     print("        elif config_type == 'production':")  # noqa: print
     print("            return PostgresDatabase()")  # noqa: print
     print("        else:")  # noqa: print
-    print(
-        "            raise ValueError(f'Unknown config type: {config_type}')"
-    )  # noqa: print
+    print("            raise ValueError(f'Unknown config type: {config_type}')")  # noqa: print
     print("```")  # noqa: print
     print()  # noqa: print
 
@@ -401,9 +348,7 @@ def _generate_creational_recommendations() -> None:
     print("# ❌ Direct database calls in business logic")  # noqa: print
     print("class UserService:")  # noqa: print
     print("    def get_user(self, user_id):")  # noqa: print
-    print(
-        "        cursor.execute('SELECT * FROM users WHERE id = %s', user_id)"
-    )  # noqa: print
+    print("        cursor.execute('SELECT * FROM users WHERE id = %s', user_id)")  # noqa: print
     print("        return cursor.fetchone()")  # noqa: print
     print()  # noqa: print
     print("# ✅ Repository pattern")  # noqa: print
@@ -457,12 +402,8 @@ def _demonstrate_dependency_rules_testing() -> None:
     print("from pathlib import Path")  # noqa: print
     print()  # noqa: print
     print("def test_layer_dependencies():")  # noqa: print
-    print(
-        '    """Test that presentation layer doesn\'t import from infrastructure"""'
-    )  # noqa: print
-    print(
-        "    presentation_files = list(Path('src/presentation').glob('**/*.py'))"
-    )  # noqa: print
+    print('    """Test that presentation layer doesn\'t import from infrastructure"""')  # noqa: print
+    print("    presentation_files = list(Path('src/presentation').glob('**/*.py'))")  # noqa: print
     print("    ")  # noqa: print
     print("    for file_path in presentation_files:")  # noqa: print
     print("        with open(file_path) as f:")  # noqa: print
@@ -470,12 +411,8 @@ def _demonstrate_dependency_rules_testing() -> None:
     print("        ")  # noqa: print
     print("        for node in ast.walk(tree):")  # noqa: print
     print("            if isinstance(node, ast.ImportFrom):")  # noqa: print
-    print(
-        "                if node.module and 'infrastructure' in node.module:"
-    )  # noqa: print
-    print(  # noqa: print
-        "                    assert False, f'{file_path} imports from infrastructure'"
-    )
+    print("                if node.module and 'infrastructure' in node.module:")  # noqa: print
+    print("                    assert False, f'{file_path} imports from infrastructure'")  # noqa: print
     print("```")  # noqa: print
     print()  # noqa: print
 
@@ -499,12 +436,8 @@ async def demonstrate_architecture_testing():
     print("        ")  # noqa: print
     print("        for node in ast.walk(tree):")  # noqa: print
     print("            if isinstance(node, ast.ClassDef):")  # noqa: print
-    print(  # noqa: print
-        "                method_count = len([n for n in node.body if isinstance(n, ast.FunctionDef)])"
-    )
-    print(  # noqa: print
-        "                assert method_count < 20, f'Class {node.name} has {method_count} methods'"
-    )
+    print("                method_count = len([n for n in node.body if isinstance(n, ast.FunctionDef)])")  # noqa: print
+    print("                assert method_count < 20, f'Class {node.name} has {method_count} methods'")  # noqa: print
     print("```")  # noqa: print
     print()  # noqa: print
 
@@ -534,9 +467,7 @@ async def main():
 
     print("\n=== Analysis Complete ===")  # noqa: print
     print("Next steps:")  # noqa: print
-    print(
-        "1. Review architectural_analysis_report.json for detailed findings"
-    )  # noqa: print
+    print("1. Review architectural_analysis_report.json for detailed findings")  # noqa: print
     print("2. Fix high-severity architectural issues first")  # noqa: print
     print("3. Reduce coupling in highly-coupled components")  # noqa: print
     print("4. Improve cohesion in low-cohesion classes")  # noqa: print
@@ -545,4 +476,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

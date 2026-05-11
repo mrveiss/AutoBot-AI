@@ -9,7 +9,6 @@ a live CA on the test machine.
 """
 
 import asyncio
-import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -19,10 +18,10 @@ from pki.config import TLSConfig, VMCertificateInfo
 from pki.generator import CertificateGenerator
 from pki.manager import PKIManager
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_vm_info(tmp_path: Path, name: str = "redis") -> VMCertificateInfo:
     """Create a minimal VMCertificateInfo rooted under tmp_path."""
@@ -65,6 +64,7 @@ def _make_manager(tmp_path: Path) -> PKIManager:
 # renew() — no-op when nothing needs renewal
 # ---------------------------------------------------------------------------
 
+
 def test_renew_no_certs_returns_true(tmp_path):
     manager = _make_manager(tmp_path)
     manager.generator.needs_renewal.return_value = []
@@ -80,13 +80,12 @@ def test_renew_no_certs_returns_true(tmp_path):
 # renew() — CA in list raises ValueError
 # ---------------------------------------------------------------------------
 
+
 def test_renew_ca_raises_value_error(tmp_path):
     manager = _make_manager(tmp_path)
 
     with pytest.raises(ValueError, match="CA certificate renewal requires manual steps"):
-        asyncio.get_event_loop().run_until_complete(
-            manager.renew(certificates=["ca"])
-        )
+        asyncio.get_event_loop().run_until_complete(manager.renew(certificates=["ca"]))
 
     manager.generator._renew_service_cert.assert_not_called()
     manager.generator._generate_service_cert.assert_not_called()
@@ -97,9 +96,7 @@ def test_renew_ca_mixed_list_raises_before_any_cert(tmp_path):
     manager = _make_manager(tmp_path)
 
     with pytest.raises(ValueError):
-        asyncio.get_event_loop().run_until_complete(
-            manager.renew(certificates=["redis", "ca"])
-        )
+        asyncio.get_event_loop().run_until_complete(manager.renew(certificates=["redis", "ca"]))
 
     manager.generator._renew_service_cert.assert_not_called()
     manager.generator._generate_service_cert.assert_not_called()
@@ -109,6 +106,7 @@ def test_renew_ca_mixed_list_raises_before_any_cert(tmp_path):
 # renew() — preserve_keys=True (default) path
 # ---------------------------------------------------------------------------
 
+
 def test_renew_preserve_keys_calls_renew_service_cert(tmp_path):
     manager = _make_manager(tmp_path)
     manager.generator._renew_service_cert.return_value = True
@@ -117,9 +115,7 @@ def test_renew_preserve_keys_calls_renew_service_cert(tmp_path):
     manager.config.get_vm_cert_info.return_value = vm_info
 
     with patch("pki.manager.VM_DEFINITIONS", {"redis": "192.168.1.10"}):
-        result = asyncio.get_event_loop().run_until_complete(
-            manager.renew(certificates=["redis"], preserve_keys=True)
-        )
+        result = asyncio.get_event_loop().run_until_complete(manager.renew(certificates=["redis"], preserve_keys=True))
 
     assert result is True
     manager.generator._renew_service_cert.assert_called_once_with(vm_info)
@@ -136,9 +132,7 @@ def test_renew_default_preserve_keys_true(tmp_path):
     manager.config.get_vm_cert_info.return_value = vm_info
 
     with patch("pki.manager.VM_DEFINITIONS", {"redis": "192.168.1.10"}):
-        result = asyncio.get_event_loop().run_until_complete(
-            manager.renew(certificates=["redis"])
-        )
+        result = asyncio.get_event_loop().run_until_complete(manager.renew(certificates=["redis"]))
 
     assert result is True
     manager.generator._renew_service_cert.assert_called_once()
@@ -149,6 +143,7 @@ def test_renew_default_preserve_keys_true(tmp_path):
 # renew() — preserve_keys=False (key rotation) path
 # ---------------------------------------------------------------------------
 
+
 def test_renew_rotate_keys_calls_generate_service_cert(tmp_path):
     manager = _make_manager(tmp_path)
     manager.generator._generate_service_cert.return_value = True
@@ -157,9 +152,7 @@ def test_renew_rotate_keys_calls_generate_service_cert(tmp_path):
     manager.config.get_vm_cert_info.return_value = vm_info
 
     with patch("pki.manager.VM_DEFINITIONS", {"redis": "192.168.1.10"}):
-        result = asyncio.get_event_loop().run_until_complete(
-            manager.renew(certificates=["redis"], preserve_keys=False)
-        )
+        result = asyncio.get_event_loop().run_until_complete(manager.renew(certificates=["redis"], preserve_keys=False))
 
     assert result is True
     manager.generator._generate_service_cert.assert_called_once_with(vm_info, force=True)
@@ -171,6 +164,7 @@ def test_renew_rotate_keys_calls_generate_service_cert(tmp_path):
 # renew() — failure propagation
 # ---------------------------------------------------------------------------
 
+
 def test_renew_preserve_keys_failure_returns_false(tmp_path):
     manager = _make_manager(tmp_path)
     manager.generator._renew_service_cert.return_value = False
@@ -179,9 +173,7 @@ def test_renew_preserve_keys_failure_returns_false(tmp_path):
     manager.config.get_vm_cert_info.return_value = vm_info
 
     with patch("pki.manager.VM_DEFINITIONS", {"redis": "192.168.1.10"}):
-        result = asyncio.get_event_loop().run_until_complete(
-            manager.renew(certificates=["redis"], preserve_keys=True)
-        )
+        result = asyncio.get_event_loop().run_until_complete(manager.renew(certificates=["redis"], preserve_keys=True))
 
     assert result is False
     # Distribution must NOT be called when cert generation failed
@@ -196,9 +188,7 @@ def test_renew_rotate_keys_failure_returns_false(tmp_path):
     manager.config.get_vm_cert_info.return_value = vm_info
 
     with patch("pki.manager.VM_DEFINITIONS", {"redis": "192.168.1.10"}):
-        result = asyncio.get_event_loop().run_until_complete(
-            manager.renew(certificates=["redis"], preserve_keys=False)
-        )
+        result = asyncio.get_event_loop().run_until_complete(manager.renew(certificates=["redis"], preserve_keys=False))
 
     assert result is False
     manager.distributor._distribute_to_vm.assert_not_awaited()
@@ -208,13 +198,12 @@ def test_renew_rotate_keys_failure_returns_false(tmp_path):
 # renew() — unknown cert name is skipped, not a hard failure
 # ---------------------------------------------------------------------------
 
+
 def test_renew_unknown_cert_name_skipped(tmp_path):
     manager = _make_manager(tmp_path)
 
     with patch("pki.manager.VM_DEFINITIONS", {}):
-        result = asyncio.get_event_loop().run_until_complete(
-            manager.renew(certificates=["unknown-vm"])
-        )
+        result = asyncio.get_event_loop().run_until_complete(manager.renew(certificates=["unknown-vm"]))
 
     assert result is True
     manager.generator._renew_service_cert.assert_not_called()
@@ -224,6 +213,7 @@ def test_renew_unknown_cert_name_skipped(tmp_path):
 # ---------------------------------------------------------------------------
 # CertificateGenerator._renew_service_cert — unit tests
 # ---------------------------------------------------------------------------
+
 
 def test_renew_service_cert_missing_key_returns_false(tmp_path):
     config = MagicMock(spec=TLSConfig)
@@ -268,6 +258,7 @@ def test_renew_service_cert_preserves_key_file(tmp_path):
     def fake_sign_certificate(csr_path, cert_path, *args, **kwargs):
         cert_path.write_text("CERT", encoding="utf-8")
         import os
+
         os.chmod(cert_path, 0o644)
         return True
 

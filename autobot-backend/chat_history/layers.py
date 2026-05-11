@@ -26,6 +26,7 @@ Usage::
     )
 """
 
+import asyncio
 import logging
 import os
 import re
@@ -37,9 +38,7 @@ logger = logging.getLogger(__name__)
 # Feature flag
 # ---------------------------------------------------------------------------
 
-TIERED_CONTEXT_ENABLED: bool = (
-    os.getenv("TIERED_CONTEXT_ENABLED", "false").lower() == "true"
-)
+TIERED_CONTEXT_ENABLED: bool = os.getenv("TIERED_CONTEXT_ENABLED", "false").lower() == "true"
 
 # ---------------------------------------------------------------------------
 # Retrieval-trigger keywords for L3
@@ -115,10 +114,10 @@ class Layer1EssentialStory:
 
             import yaml
 
-            yaml_path = (
-                Path(__file__).parent.parent / "config" / "context_windows.yaml"
-            )
-            data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+            yaml_path = Path(__file__).parent.parent / "config" / "context_windows.yaml"
+            # #7467: was sync `yaml_path.read_text` blocking the event loop.
+            content = await asyncio.to_thread(yaml_path.read_text, encoding="utf-8")
+            data = yaml.safe_load(content)
             model_name = context.get("model_name", "default")
             entry = (data.get("models") or {}).get(model_name) or {}
             if "essential_story_tokens" in entry:
@@ -163,9 +162,7 @@ class Layer2OnDemand:
 
             parts: list[str] = []
             for candidate in unique[:5]:  # cap at 5 lookups
-                entities = await memory_graph.search_entities(
-                    query=candidate, limit=3
-                )
+                entities = await memory_graph.search_entities(query=candidate, limit=3)
                 for ent in entities:
                     name = ent.get("name", "")
                     description = ent.get("description", "") or ent.get("content", "")
@@ -205,21 +202,17 @@ class Layer3DeepSearch:
             if not knowledge_service or not user_message:
                 return ""
 
-            knowledge_context, citations, _, _ = (
-                await knowledge_service.conversation_aware_retrieve(
-                    query=user_message,
-                    conversation_history=[],
-                    top_k=5,
-                    score_threshold=0.3,
-                    force_retrieval=True,
-                )
+            knowledge_context, citations, _, _ = await knowledge_service.conversation_aware_retrieve(
+                query=user_message,
+                conversation_history=[],
+                top_k=5,
+                score_threshold=0.3,
+                force_retrieval=True,
             )
             if not knowledge_context:
                 return ""
 
-            logger.info(
-                "Layer3DeepSearch: retrieved %d citations", len(citations)
-            )
+            logger.info("Layer3DeepSearch: retrieved %d citations", len(citations))
             return knowledge_context
         except Exception:
             logger.warning("Layer3DeepSearch.render failed", exc_info=True)

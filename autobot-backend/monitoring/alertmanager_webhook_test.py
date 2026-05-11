@@ -627,9 +627,7 @@ class TestAlertRulesYaml:
         groups = {g["name"]: g for g in alert_rules_content["groups"]}
 
         assert "autobot_security_alerts" in groups
-        security_rules = {
-            r["alert"]: r for r in groups["autobot_security_alerts"]["rules"]
-        }
+        security_rules = {r["alert"]: r for r in groups["autobot_security_alerts"]["rules"]}
 
         assert "SecurityViolation" in security_rules
         assert "UnusualErrorPattern" in security_rules
@@ -657,22 +655,12 @@ class TestAlertRulesYaml:
         """Verify all rules have required fields"""
         for group in alert_rules_content["groups"]:
             for rule in group["rules"]:
-                assert (
-                    "alert" in rule
-                ), f"Rule missing 'alert' field in group {group['name']}"
-                assert (
-                    "expr" in rule
-                ), f"Rule {rule.get('alert', 'unknown')} missing 'expr' field"
+                assert "alert" in rule, f"Rule missing 'alert' field in group {group['name']}"
+                assert "expr" in rule, f"Rule {rule.get('alert', 'unknown')} missing 'expr' field"
                 assert "labels" in rule, f"Rule {rule['alert']} missing 'labels' field"
-                assert (
-                    "annotations" in rule
-                ), f"Rule {rule['alert']} missing 'annotations' field"
-                assert (
-                    "severity" in rule["labels"]
-                ), f"Rule {rule['alert']} missing 'severity' label"
-                assert (
-                    "summary" in rule["annotations"]
-                ), f"Rule {rule['alert']} missing 'summary' annotation"
+                assert "annotations" in rule, f"Rule {rule['alert']} missing 'annotations' field"
+                assert "severity" in rule["labels"], f"Rule {rule['alert']} missing 'severity' label"
+                assert "summary" in rule["annotations"], f"Rule {rule['alert']} missing 'summary' annotation"
 
 
 class TestAlertManagerConfig:
@@ -733,9 +721,7 @@ class TestAlertManagerConfig:
 
         # Find circuit breaker inhibition rules
         cb_inhibitions = [
-            r
-            for r in inhibit_rules
-            if r.get("source_match", {}).get("alertname") == "CircuitBreakerOpen"
+            r for r in inhibit_rules if r.get("source_match", {}).get("alertname") == "CircuitBreakerOpen"
         ]
 
         assert len(cb_inhibitions) >= 3, "Missing circuit breaker inhibition rules"
@@ -746,9 +732,7 @@ class TestAlertManagerConfig:
 
         # Find Redis inhibition rules
         redis_inhibitions = [
-            r
-            for r in inhibit_rules
-            if r.get("source_match", {}).get("alertname") == "RedisServerDown"
+            r for r in inhibit_rules if r.get("source_match", {}).get("alertname") == "RedisServerDown"
         ]
 
         assert len(redis_inhibitions) >= 1, "Missing Redis inhibition rules"
@@ -759,9 +743,7 @@ class TestEnvironmentVariables:
 
     def test_env_example_has_alert_config(self):
         """Verify .env.example has alert configuration section"""
-        with open(
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.example", "r"
-        ) as f:
+        with open("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.example", "r") as f:
             content = f.read()
 
         assert "ALERT NOTIFICATION CONFIGURATION" in content
@@ -771,9 +753,7 @@ class TestEnvironmentVariables:
 
     def test_env_example_has_email_config(self):
         """Verify .env.example has email notification config"""
-        with open(
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.example", "r"
-        ) as f:
+        with open("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.example", "r") as f:
             content = f.read()
 
         assert "ALERT_EMAIL_USERNAME" in content
@@ -782,9 +762,7 @@ class TestEnvironmentVariables:
 
     def test_env_example_has_slack_config(self):
         """Verify .env.example has Slack notification config"""
-        with open(
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.example", "r"
-        ) as f:
+        with open("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.example", "r") as f:
             content = f.read()
 
         assert "ALERT_SLACK_WEBHOOK_URL" in content

@@ -21,7 +21,7 @@ Boundary with ProcessAdapterService (#1751):
 import asyncio
 import logging
 import sys
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from fastapi import (
     APIRouter,
@@ -33,11 +33,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse
-from api.system_health import ComponentHealth, register_health_probe
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.security.path_validator import validate_path
-from constants.path_constants import PATH
-from constants.threshold_constants import TimingConstants
+
 from api.schemas_workflows import (
     CodebaseIndexingRequest,
     KnowledgeBaseRequest,
@@ -50,6 +46,11 @@ from api.schemas_workflows import (
     SecurityScanRequest,
     TestSuiteRequest,
 )
+from api.system_health import ComponentHealth, register_health_probe
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.security.path_validator import validate_path
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
 
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))
@@ -62,6 +63,7 @@ try:
         OperationMigrator,
         operation_integration_manager,
     )
+
     _OPERATIONS_AVAILABLE = True
 except ImportError as _e:
     from autobot_shared.missing_dep import MissingDep as _MissingDep
@@ -87,9 +89,7 @@ except ImportError:
 async def get_operation_manager():
     """Dependency to get the operation integration manager"""
     if not _OPERATIONS_AVAILABLE:
-        raise HTTPException(
-            status_code=503, detail="Long-running operations service not available"
-        )
+        raise HTTPException(status_code=503, detail="Long-running operations service not available")
     return operation_integration_manager
 
 
@@ -129,21 +129,15 @@ async def start_codebase_indexing(
         from pathlib import Path
 
         try:
-            safe_codebase_path = Path(
-                validate_path(request.codebase_path, must_exist=True)
-            )
+            safe_codebase_path = Path(validate_path(request.codebase_path, must_exist=True))
         except (ValueError, PermissionError):
-            raise HTTPException(
-                status_code=400, detail="Invalid or inaccessible codebase path"
-            )
+            raise HTTPException(status_code=400, detail="Invalid or inaccessible codebase path")
 
         estimated_files = 0
         try:
             for pattern in request.file_patterns:
                 # Issue #358 - avoid blocking rglob() in async context
-                pattern_files = await asyncio.to_thread(
-                    lambda p=pattern: list(safe_codebase_path.rglob(p))
-                )
+                pattern_files = await asyncio.to_thread(lambda p=pattern: list(safe_codebase_path.rglob(p)))
                 estimated_files += len(pattern_files)
         except Exception:
             estimated_files = 1000  # Default estimate
@@ -152,10 +146,7 @@ async def start_codebase_indexing(
         create_request = CreateOperationRequest(
             operation_type="codebase_indexing",
             name=f"Index codebase: {safe_codebase_path.name}",
-            description=(
-                f"Comprehensive indexing of {safe_codebase_path} with"
-                f"patterns {request.file_patterns}"
-            ),
+            description=(f"Comprehensive indexing of {safe_codebase_path} with" f"patterns {request.file_patterns}"),
             priority=request.priority,
             estimated_items=estimated_files,
             context=context,
@@ -208,17 +199,13 @@ async def start_comprehensive_testing(
         try:
             safe_test_path = Path(validate_path(request.test_path, must_exist=True))
         except (ValueError, PermissionError):
-            raise HTTPException(
-                status_code=400, detail="Invalid or inaccessible test path"
-            )
+            raise HTTPException(status_code=400, detail="Invalid or inaccessible test path")
 
         estimated_tests = 0
         try:
             for pattern in request.test_patterns:
                 # Issue #358 - avoid blocking rglob() in async context
-                pattern_files = await asyncio.to_thread(
-                    lambda p=pattern: list(safe_test_path.rglob(p))
-                )
+                pattern_files = await asyncio.to_thread(lambda p=pattern: list(safe_test_path.rglob(p)))
                 estimated_tests += len(pattern_files)
         except Exception:
             estimated_tests = 50  # Default estimate
@@ -226,10 +213,7 @@ async def start_comprehensive_testing(
         create_request = CreateOperationRequest(
             operation_type="comprehensive_test_suite",
             name=f"Comprehensive test suite: {safe_test_path.name}",
-            description=(
-                f"Run all tests in {safe_test_path} with patterns"
-                f"{request.test_patterns}"
-            ),
+            description=(f"Run all tests in {safe_test_path} with patterns" f"{request.test_patterns}"),
             priority=request.priority,
             estimated_items=estimated_tests,
             context=context,
@@ -238,9 +222,7 @@ async def start_comprehensive_testing(
 
         result = await manager.router.routes[0].endpoint(create_request)
 
-        logger.info(
-            f"Started comprehensive testing operation: {result['operation_id']}"
-        )
+        logger.info(f"Started comprehensive testing operation: {result['operation_id']}")
         return result
 
     except Exception as e:
@@ -293,9 +275,7 @@ async def start_knowledge_base_population(
 
         result = await manager.router.routes[0].endpoint(create_request)
 
-        logger.info(
-            f"Started knowledge base population operation: {result['operation_id']}"
-        )
+        logger.info(f"Started knowledge base population operation: {result['operation_id']}")
         return result
 
     except Exception as e:
@@ -407,9 +387,7 @@ async def migrate_existing_operation(
     operation="get_operation_status",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-async def get_operation_status(
-    operation_id: str, manager=Depends(get_operation_manager)
-):
+async def get_operation_status(operation_id: str, manager=Depends(get_operation_manager)):
     """Get detailed operation status"""
     try:
         operation = manager.operation_manager.get_operation(operation_id)
@@ -440,28 +418,18 @@ async def list_operations(
         status_filter = OperationStatus(status) if status else None
         type_filter = OperationType(operation_type) if operation_type else None
 
-        operations = manager.operation_manager.list_operations(
-            status_filter, type_filter
-        )
+        operations = manager.operation_manager.list_operations(status_filter, type_filter)
         operations = operations[:limit]
 
         # Convert to response format
-        operation_responses = [
-            manager._convert_operation_to_response(op) for op in operations
-        ]
+        operation_responses = [manager._convert_operation_to_response(op) for op in operations]
 
         # Issue #321: Use helper method to reduce message chains
         all_operations = manager.get_all_operations()
         total_count = len(all_operations)
-        active_count = len(
-            [op for op in all_operations if op.status == OperationStatus.RUNNING]
-        )
-        completed_count = len(
-            [op for op in all_operations if op.status == OperationStatus.COMPLETED]
-        )
-        failed_count = len(
-            [op for op in all_operations if op.status in FAILED_OPERATION_STATUSES]
-        )
+        active_count = len([op for op in all_operations if op.status == OperationStatus.RUNNING])
+        completed_count = len([op for op in all_operations if op.status == OperationStatus.COMPLETED])
+        failed_count = len([op for op in all_operations if op.status in FAILED_OPERATION_STATUSES])
 
         return {
             "operations": operation_responses,
@@ -487,9 +455,7 @@ async def cancel_operation(operation_id: str, manager=Depends(get_operation_mana
     try:
         success = await manager.operation_manager.cancel_operation(operation_id)
         if not success:
-            raise HTTPException(
-                status_code=404, detail="Operation not found or cannot be cancelled"
-            )
+            raise HTTPException(status_code=404, detail="Operation not found or cannot be cancelled")
 
         return {"status": "cancelled", "operation_id": operation_id}
 
@@ -510,15 +476,11 @@ async def resume_operation(operation_id: str, manager=Depends(get_operation_mana
         # Issue #321: Use helper method to reduce message chains
         checkpoints = await manager.list_operation_checkpoints(operation_id)
         if not checkpoints:
-            raise HTTPException(
-                status_code=404, detail="No checkpoints found for operation"
-            )
+            raise HTTPException(status_code=404, detail="No checkpoints found for operation")
 
         # Use latest checkpoint
         latest_checkpoint = checkpoints[-1]
-        new_operation_id = await manager.operation_manager.resume_operation(
-            latest_checkpoint.checkpoint_id
-        )
+        new_operation_id = await manager.operation_manager.resume_operation(latest_checkpoint.checkpoint_id)
 
         return {
             "status": "resumed",
@@ -553,27 +515,19 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
 
     try:
         # Send current progress if operation exists
-        operation = operation_integration_manager.operation_manager.get_operation(
-            operation_id
-        )
+        operation = operation_integration_manager.operation_manager.get_operation(operation_id)
         if operation:
             await websocket.send_json(
                 {
                     "type": "current_progress",
-                    "data": (
-                        operation_integration_manager._convert_operation_to_response(
-                            operation
-                        ).dict()
-                    ),
+                    "data": (operation_integration_manager._convert_operation_to_response(operation).dict()),
                 }
             )
 
         # Keep connection alive
         while True:
             try:
-                await asyncio.wait_for(
-                    websocket.receive_text(), timeout=TimingConstants.SHORT_TIMEOUT
-                )
+                await asyncio.wait_for(websocket.receive_text(), timeout=TimingConstants.SHORT_TIMEOUT)
             except asyncio.TimeoutError:
                 # Send ping to keep connection alive
                 await websocket.send_json({"type": "ping"})
@@ -584,12 +538,9 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
         # Remove from connections
         if (
             operation_id in operation_integration_manager.websocket_connections
-            and websocket
-            in operation_integration_manager.websocket_connections[operation_id]
+            and websocket in operation_integration_manager.websocket_connections[operation_id]
         ):
-            operation_integration_manager.websocket_connections[operation_id].remove(
-                websocket
-            )
+            operation_integration_manager.websocket_connections[operation_id].remove(websocket)
 
 
 @register_health_probe("long_running")
@@ -615,15 +566,9 @@ async def probe_long_running(
         )
     try:
         all_operations = operation_integration_manager.get_all_operations()
-        active_operations = sum(
-            1 for op in all_operations if op.status == OperationStatus.RUNNING
-        )
-        redis_connected = (
-            operation_integration_manager.redis_client is not None
-        )
-        background_processor_running = (
-            operation_integration_manager.is_background_processor_running()
-        )
+        active_operations = sum(1 for op in all_operations if op.status == OperationStatus.RUNNING)
+        redis_connected = operation_integration_manager.redis_client is not None
+        background_processor_running = operation_integration_manager.is_background_processor_running()
         return ComponentHealth(
             name="long_running",
             status="ok",
@@ -663,18 +608,14 @@ async def operations_health():
     try:
         # Issue #321: Use helper method to reduce message chains
         all_operations = operation_integration_manager.get_all_operations()
-        active_operations = len(
-            [op for op in all_operations if op.status == OperationStatus.RUNNING]
-        )
+        active_operations = len([op for op in all_operations if op.status == OperationStatus.RUNNING])
 
         return {
             "status": "healthy",
             "active_operations": active_operations,
             "total_operations": len(all_operations),
             "redis_connected": operation_integration_manager.redis_client is not None,
-            "background_processor_running": (
-                operation_integration_manager.is_background_processor_running()
-            ),
+            "background_processor_running": (operation_integration_manager.is_background_processor_running()),
         }
 
     except Exception:

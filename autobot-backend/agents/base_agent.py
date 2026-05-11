@@ -128,9 +128,7 @@ class BaseAgent(ABC):
     Designed for hybrid local/container deployment.
     """
 
-    def __init__(
-        self, agent_type: str, deployment_mode: DeploymentMode = DeploymentMode.LOCAL
-    ):
+    def __init__(self, agent_type: str, deployment_mode: DeploymentMode = DeploymentMode.LOCAL):
         """Initialize base agent with type, deployment mode, and tracking."""
         self.agent_type = agent_type
         self.deployment_mode = deployment_mode
@@ -155,9 +153,7 @@ class BaseAgent(ABC):
 
         self._diary = AgentDiaryService()
 
-        logger.info(
-            "Initialized %s agent in %s mode", agent_type, deployment_mode.value
-        )
+        logger.info("Initialized %s agent in %s mode", agent_type, deployment_mode.value)
 
     @abstractmethod
     async def process_request(self, request: AgentRequest) -> AgentResponse:
@@ -315,10 +311,7 @@ class BaseAgent(ABC):
             response.execution_time = execution_time
 
             # Fire-and-forget diary write — never blocks the caller (#5071)
-            _diary_entry = (
-                f"action={request.action} status={response.status} "
-                f"exec={execution_time:.2f}s"
-            )[:200]
+            _diary_entry = (f"action={request.action} status={response.status} " f"exec={execution_time:.2f}s")[:200]
             asyncio.create_task(
                 self._diary.write(
                     self.agent_type,
@@ -334,16 +327,8 @@ class BaseAgent(ABC):
             # Record completion in Redis analytics
             if analytics is not None:
                 try:
-                    outcome = (
-                        TaskStatus.COMPLETED
-                        if response.status == "success"
-                        else TaskStatus.FAILED
-                    )
-                    tokens = (
-                        response.metadata.get("token_usage")
-                        if response.metadata
-                        else None
-                    )
+                    outcome = TaskStatus.COMPLETED if response.status == "success" else TaskStatus.FAILED
+                    tokens = response.metadata.get("token_usage") if response.metadata else None
                     await analytics.track_task_complete(
                         task_id=task_id,
                         status=outcome,
@@ -406,20 +391,13 @@ class BaseAgent(ABC):
             from events.stream_manager import RedisEventStreamManager
             from events.types import TaskArtifact, create_observation_event
 
-            artifacts = [
-                TaskArtifact.from_dict(a) if isinstance(a, dict) else a
-                for a in artifacts_raw
-            ]
+            artifacts = [TaskArtifact.from_dict(a) if isinstance(a, dict) else a for a in artifacts_raw]
 
             obs_event = create_observation_event(
                 action_id=request.request_id,
                 tool_name=self.agent_type,
                 success=response.status == "success",
-                result=(
-                    response.result
-                    if isinstance(response.result, (str, type(None)))
-                    else str(response.result)
-                ),
+                result=(response.result if isinstance(response.result, (str, type(None))) else str(response.result)),
                 error=response.error,
                 execution_time_ms=response.execution_time * 1000,
                 task_id=task_id,
@@ -460,9 +438,7 @@ class BaseAgent(ABC):
                 {"type": "redis", "id": f"{self.agent_id}_redis"},
             ]
 
-            self.communication_protocol = await manager.register_agent(
-                identity, channel_configs
-            )
+            self.communication_protocol = await manager.register_agent(identity, channel_configs)
 
             # Register default message handlers
             self.communication_protocol.register_message_handler(
@@ -473,14 +449,10 @@ class BaseAgent(ABC):
             return True
 
         except Exception as e:
-            logger.error(
-                "Failed to initialize communication for %s: %s", self.agent_id, e
-            )
+            logger.error("Failed to initialize communication for %s: %s", self.agent_id, e)
             return False
 
-    async def _handle_communication_request(
-        self, message: StandardMessage
-    ) -> Optional[StandardMessage]:
+    async def _handle_communication_request(self, message: StandardMessage) -> Optional[StandardMessage]:
         """Handle incoming communication requests"""
         try:
             # Convert communication message to AgentRequest
@@ -525,9 +497,7 @@ class BaseAgent(ABC):
                 ),
             )
 
-    async def send_message_to_agent(
-        self, recipient_id: str, message_data: Any, timeout: float = 30.0
-    ) -> Optional[Any]:
+    async def send_message_to_agent(self, recipient_id: str, message_data: Any, timeout: float = 30.0) -> Optional[Any]:
         """Send a message to another agent"""
         if not self.communication_protocol:
             logger.error("Communication not initialized for agent %s", self.agent_id)
@@ -536,9 +506,7 @@ class BaseAgent(ABC):
         try:
             from protocols.agent_communication import send_agent_request
 
-            return await send_agent_request(
-                self.agent_id, recipient_id, message_data, timeout
-            )
+            return await send_agent_request(self.agent_id, recipient_id, message_data, timeout)
         except Exception as e:
             logger.error("Error sending message to %s: %s", recipient_id, e)
             return None

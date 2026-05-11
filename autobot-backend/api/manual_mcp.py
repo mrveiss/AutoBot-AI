@@ -18,16 +18,16 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends
 
-from auth_middleware import get_current_user
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.redis_client import get_redis_client
-from services.man_page_parser import ManPageContent, get_man_page_content
-from api.schemas_common import DataResponse
 from api.schemas_code import (
     ManPageRequest,
     ManPageSearchRequest,
     ManualMCPToolItem,
 )
+from api.schemas_common import DataResponse
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_redis_client
+from services.man_page_parser import ManPageContent, get_man_page_content
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["manual_mcp", "mcp"])
@@ -110,9 +110,7 @@ async def _fetch_man_page(command: str, section: str) -> dict:
     Tries the local `man` subprocess via ManPageParser. Returns a dict with
     parse_success=False when the command is unavailable rather than raising.
     """
-    content: ManPageContent = await asyncio.to_thread(
-        get_man_page_content, command, section
-    )
+    content: ManPageContent = await asyncio.to_thread(get_man_page_content, command, section)
     return _serialize_man_page(content, cached=False)
 
 
@@ -163,8 +161,7 @@ async def _query_doc_index(query: str, max_results: int) -> List[dict]:
             hits = [
                 entry
                 for entry in index
-                if lower_q in entry.get("command", "").lower()
-                or lower_q in entry.get("summary", "").lower()
+                if lower_q in entry.get("command", "").lower() or lower_q in entry.get("summary", "").lower()
             ]
             return hits[:max_results]
     except Exception as exc:  # noqa: BLE001

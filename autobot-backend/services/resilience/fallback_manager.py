@@ -9,7 +9,6 @@ Primary service → secondary service → minimal-feature mode.
 Ensures core functions work even when peripherals fail.
 """
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from threading import Lock
@@ -70,9 +69,7 @@ class FallbackChain:
                 )
 
                 if fallback.is_async:
-                    raise ValueError(
-                        f"Sync execute called on async fallback {fallback.name}"
-                    )
+                    raise ValueError(f"Sync execute called on async fallback {fallback.name}")
 
                 result = fallback.handler(*args, **kwargs)
                 self.succeeded = True
@@ -91,10 +88,7 @@ class FallbackChain:
                 )
                 continue
 
-        raise RuntimeError(
-            f"All fallbacks exhausted for {self.name} "
-            f"({self.attempted} attempts)"
-        )
+        raise RuntimeError(f"All fallbacks exhausted for {self.name} " f"({self.attempted} attempts)")
 
     async def execute_async(self, *args, **kwargs) -> Any:
         """
@@ -140,10 +134,7 @@ class FallbackChain:
                 )
                 continue
 
-        raise RuntimeError(
-            f"All fallbacks exhausted for {self.name} "
-            f"({self.attempted} attempts)"
-        )
+        raise RuntimeError(f"All fallbacks exhausted for {self.name} " f"({self.attempted} attempts)")
 
 
 class FallbackManager:

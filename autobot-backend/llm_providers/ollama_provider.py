@@ -104,9 +104,11 @@ class OllamaProvider(BaseProvider):
                 base_url = self._resolve_base_url()
                 model = request.model_name or self._get_setting("default_model", "")
                 raw_messages = [
-                    {"role": m["role"], "content": m["content"]}
-                    if isinstance(m, dict)
-                    else {"role": m.role, "content": m.content}
+                    (
+                        {"role": m["role"], "content": m["content"]}
+                        if isinstance(m, dict)
+                        else {"role": m.role, "content": m.content}
+                    )
                     for m in request.messages
                 ]
                 prompt = render_chat_template(raw_messages, chat_template)
@@ -119,7 +121,6 @@ class OllamaProvider(BaseProvider):
                 if request.max_tokens:
                     payload["options"]["num_predict"] = request.max_tokens
 
-                import json as _json
                 http_client = get_http_client()
                 timeout = aiohttp.ClientTimeout(total=None, connect=5.0, sock_read=None)
                 async with await http_client.post(
@@ -198,9 +199,11 @@ class OllamaProvider(BaseProvider):
         if chat_template:
             # Render messages via Jinja2 template and use raw prompt API.
             raw_messages = [
-                {"role": m["role"], "content": m["content"]}
-                if isinstance(m, dict)
-                else {"role": m.role, "content": m.content}
+                (
+                    {"role": m["role"], "content": m["content"]}
+                    if isinstance(m, dict)
+                    else {"role": m.role, "content": m.content}
+                )
                 for m in request.messages
             ]
             prompt = render_chat_template(raw_messages, chat_template)
@@ -234,19 +237,14 @@ class OllamaProvider(BaseProvider):
             ) as resp:
                 if resp.status != 200:
                     body = await resp.text()
-                    raise RuntimeError(
-                        f"Ollama stream returned HTTP {resp.status}: {body}"
-                    )
+                    raise RuntimeError(f"Ollama stream returned HTTP {resp.status}: {body}")
                 async for line in resp.content:
                     decoded = line.decode("utf-8").strip()
                     if not decoded:
                         continue
                     chunk = _json.loads(decoded)
                     # /api/chat returns message.content; /api/generate returns response
-                    text = (
-                        chunk.get("message", {}).get("content", "")
-                        or chunk.get("response", "")
-                    )
+                    text = chunk.get("message", {}).get("content", "") or chunk.get("response", "")
                     if text:
                         yield text
                     if chunk.get("done"):

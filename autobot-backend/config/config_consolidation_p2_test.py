@@ -56,9 +56,7 @@ async def test_config_consolidation():
         ]
 
         for section in expected_sections:
-            assert (
-                section in default_config
-            ), f"Missing expected section in defaults: {section}"
+            assert section in default_config, f"Missing expected section in defaults: {section}"
             print(f"   ✓ Found default section: {section}")  # noqa: print
 
         print("✅ PASSED: All default config sections present")  # noqa: print
@@ -78,20 +76,12 @@ async def test_config_consolidation():
         filtered = unified_config_manager._filter_sensitive_data(test_data)
 
         # Check that sensitive fields are redacted
-        assert (
-            filtered["redis"]["password"] == "***REDACTED***"
-        ), "Password should be redacted"
-        assert (
-            filtered["api"]["api_key"] == "***REDACTED***"
-        ), "API key should be redacted"
+        assert filtered["redis"]["password"] == "***REDACTED***", "Password should be redacted"
+        assert filtered["api"]["api_key"] == "***REDACTED***", "API key should be redacted"
 
         # Check that non-sensitive fields are preserved
-        assert (
-            filtered["redis"]["host"] == "localhost"
-        ), "Non-sensitive host should be preserved"
-        assert (
-            filtered["redis"]["port"] == 6379
-        ), "Non-sensitive port should be preserved"
+        assert filtered["redis"]["host"] == "localhost", "Non-sensitive host should be preserved"
+        assert filtered["redis"]["port"] == 6379, "Non-sensitive port should be preserved"
 
         print("✅ PASSED: Sensitive data filtering works correctly")  # noqa: print
     except Exception as e:
@@ -102,9 +92,7 @@ async def test_config_consolidation():
     print("\n[TEST 4] Async config operations...")  # noqa: print
     try:
         # Test async load
-        test_config = await unified_config_manager.load_config_async(
-            "test", use_cache=False
-        )
+        test_config = await unified_config_manager.load_config_async("test", use_cache=False)
         assert isinstance(test_config, dict), "Async load should return dictionary"
 
         # Test async save
@@ -112,12 +100,8 @@ async def test_config_consolidation():
         await unified_config_manager.save_config_async("test", test_data)
 
         # Verify saved data
-        reloaded = await unified_config_manager.load_config_async(
-            "test", use_cache=False
-        )
-        assert (
-            reloaded.get("test_key") == "test_value"
-        ), "Saved data should be retrievable"
+        reloaded = await unified_config_manager.load_config_async("test", use_cache=False)
+        assert reloaded.get("test_key") == "test_value", "Saved data should be retrievable"
 
         print("✅ PASSED: Async config operations work")  # noqa: print
     except Exception as e:

@@ -7,7 +7,6 @@ Alembic Environment Configuration
 This module configures Alembic migrations for the User Management System.
 """
 
-import asyncio
 import os
 import sys
 from logging.config import fileConfig
@@ -20,6 +19,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from autobot_shared.async_compat import run_or_schedule
 from user_management.config import get_deployment_config
 
 # Import models to register with SQLAlchemy
@@ -114,7 +114,7 @@ async def run_async_migrations() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    asyncio.run(run_async_migrations())
+    run_or_schedule(run_async_migrations())
 
 
 if context.is_offline_mode():

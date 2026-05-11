@@ -159,11 +159,7 @@ class DevLoggingFixer:
 
     def __init__(self, project_root: str, backup_dir: str = None):
         self.project_root = Path(project_root)
-        self.backup_dir = (
-            Path(backup_dir)
-            if backup_dir
-            else self.project_root / ".dev-logging-backups"
-        )
+        self.backup_dir = Path(backup_dir) if backup_dir else self.project_root / ".dev-logging-backups"
         self.report = {
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "files_processed": 0,
@@ -208,9 +204,7 @@ class DevLoggingFixer:
             return False
 
         # Skip test files
-        if any(
-            pattern in file_path.name.lower() for pattern in ["test", "spec", "mock"]
-        ):
+        if any(pattern in file_path.name.lower() for pattern in ["test", "spec", "mock"]):
             return False
 
         # Skip minified files
@@ -264,9 +258,7 @@ class DevLoggingFixer:
         js_code = self._get_dev_logger_js_code()
         self._write_logger_file(utils_dir, js_code)
 
-    def _process_console_match(
-        self, match, content: str, modified_content: str, conversion_details: list
-    ):
+    def _process_console_match(self, match, content: str, modified_content: str, conversion_details: list):
         """
         Process a single console.log regex match and apply the devLog replacement.
 
@@ -309,9 +301,7 @@ class DevLoggingFixer:
 
         # Replace console.log with devLog.log
         replacement = f"devLog.log({args})"
-        modified_content = (
-            modified_content[:start_pos] + replacement + modified_content[end_pos:]
-        )
+        modified_content = modified_content[:start_pos] + replacement + modified_content[end_pos:]
 
         conversion_details.append(
             {
@@ -348,9 +338,7 @@ class DevLoggingFixer:
             # Check if it's inside a comment or string
             if self.is_in_comment_or_string(content, match.start()):
                 continue
-            modified_content, delta = self._process_console_match(
-                match, content, modified_content, conversion_details
-            )
+            modified_content, delta = self._process_console_match(match, content, modified_content, conversion_details)
             converted_count += delta
 
         # Add import statement if we made conversions and don't have import
@@ -361,11 +349,7 @@ class DevLoggingFixer:
 
             # Look for existing imports or script tag
             for i, line in enumerate(lines):
-                if (
-                    "import " in line
-                    or line.strip().startswith("<script")
-                    or "from " in line
-                ):
+                if "import " in line or line.strip().startswith("<script") or "from " in line:
                     import_index = i + 1
                 elif line.strip() == "" and import_index > 0:
                     import_index = i
@@ -418,9 +402,7 @@ class DevLoggingFixer:
                 original_content = f.read()
 
             # Convert console.logs
-            modified_content, converted_count = self.convert_console_logs(
-                original_content, file_path
-            )
+            modified_content, converted_count = self.convert_console_logs(original_content, file_path)
 
             # If content changed, write back
             if converted_count > 0:
@@ -436,7 +418,7 @@ class DevLoggingFixer:
 
             return False
 
-        except Exception as e:
+        except Exception:
             self.report["errors"].append(
                 {
                     "file": str(file_path.relative_to(self.project_root)),
@@ -449,9 +431,7 @@ class DevLoggingFixer:
         """Convert console.logs in entire project or specific directory."""
         search_root = Path(target_dir) if target_dir else self.project_root
 
-        print(
-            f"🔧 Converting console.log to development logging in: {search_root}"
-        )  # noqa: print
+        print(f"🔧 Converting console.log to development logging in: {search_root}")  # noqa: print
         print(f"📁 Backups will be saved to: {self.backup_dir}")  # noqa: print
 
         # Create development logger utility
@@ -535,13 +515,9 @@ Import statement has been added: `import {{ devLog }} from '@/utils/devLogger.js
         Returns:
             str: Updated report content with file details appended
         """
-        for detail in sorted(
-            self.report["details"], key=lambda x: x["converted_count"], reverse=True
-        ):
+        for detail in sorted(self.report["details"], key=lambda x: x["converted_count"], reverse=True):
             report_content += f"\n### {detail['file']}\n"
-            report_content += (
-                f"- Converted {detail['converted_count']} console.log statements\n"
-            )
+            report_content += f"- Converted {detail['converted_count']} console.log statements\n"
             report_content += "- Conversions:\n"
             for conv in detail["conversions"][:3]:  # Show first 3
                 report_content += f"  - Line {conv['line']}: `{conv['original']}` → `{conv['converted']}`\n"
@@ -575,11 +551,7 @@ Make sure your build process sets NODE_ENV appropriately:
 All modified files have been backed up to: `{}`
 """.format(self.backup_dir)
 
-        report_path = (
-            Path(output_file)
-            if output_file
-            else (self.project_root / "dev-logging-conversion-report.md")
-        )
+        report_path = Path(output_file) if output_file else (self.project_root / "dev-logging-conversion-report.md")
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(report_content)
         print(f"\n📄 Report saved to: {report_path}")  # noqa: print
@@ -605,15 +577,9 @@ All modified files have been backed up to: `{}`
 
 def main():
     """Main entry point for the development logging conversion tool."""
-    parser = argparse.ArgumentParser(
-        description="Convert console.log to environment-aware development logging"
-    )
-    parser.add_argument(
-        "project_path", help="Path to the project root or specific directory to convert"
-    )
-    parser.add_argument(
-        "--target-dir", help="Specific directory to convert (e.g., src/)", default=None
-    )
+    parser = argparse.ArgumentParser(description="Convert console.log to environment-aware development logging")
+    parser.add_argument("project_path", help="Path to the project root or specific directory to convert")
+    parser.add_argument("--target-dir", help="Specific directory to convert (e.g., src/)", default=None)
     parser.add_argument("--backup-dir", help="Directory to store backups", default=None)
     parser.add_argument("--report", help="Path for the conversion report", default=None)
 
@@ -634,9 +600,7 @@ def main():
 
     # Print summary
     print(f"\n🎉 Conversion Complete!")  # noqa: print
-    print(
-        f"   - Converted {report['console_logs_converted']} console.log statements"
-    )  # noqa: print
+    print(f"   - Converted {report['console_logs_converted']} console.log statements")  # noqa: print
     print(f"   - Modified {report['files_modified']} files")  # noqa: print
     print(f"   - Created development logger utility")  # noqa: print
     print(f"   - Backups saved to: {converter.backup_dir}")  # noqa: print

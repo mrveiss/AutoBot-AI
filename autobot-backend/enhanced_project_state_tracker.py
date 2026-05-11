@@ -12,8 +12,9 @@ Part of Issue #381 - God Class Refactoring
 Original file: 1,505 lines → Package with focused modules
 """
 
-import asyncio
 import sys
+
+from autobot_shared.async_compat import run_or_schedule
 
 # Re-export all public APIs from the package
 from project_state_tracking import (  # Types and enums; Models; Database; Main tracker; Convenience functions; CLI handlers; Backward compatibility aliases for sync functions
@@ -104,8 +105,6 @@ if __name__ == "__main__":
             await handler(tracker)
         else:
             print(f"Unknown command: {command}")  # noqa: print
-            print(  # noqa: print
-                "Available commands: snapshot, summary, report, metrics, test-tracking, export"
-            )
+            print("Available commands: snapshot, summary, report, metrics, test-tracking, export")  # noqa: print
 
-    asyncio.run(main())
+    run_or_schedule(main())

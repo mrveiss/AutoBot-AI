@@ -53,30 +53,21 @@ class WorkflowLearningEngine:
             request_hash = str(hash(user_request))
             self.learning_data["user_patterns"][request_hash] = features
 
-            logger.info(
-                f"Recorded workflow generation learning data for request: "
-                f"{user_request[:50]}"
-            )
+            logger.info(f"Recorded workflow generation learning data for request: " f"{user_request[:50]}")
 
         except Exception as e:
             logger.error("Failed to record learning data: %s", e)
 
-    async def get_optimization_recommendations(
-        self, workflow_id: str, user_feedback: Metadata = None
-    ) -> List[str]:
+    async def get_optimization_recommendations(self, workflow_id: str, user_feedback: Metadata = None) -> List[str]:
         """Get AI-driven optimization recommendations"""
         recommendations = []
 
         if user_feedback:
             satisfaction = user_feedback.get("satisfaction_score", 0)
             if satisfaction < 7:
-                recommendations.append(
-                    "Reduce workflow complexity based on user feedback"
-                )
+                recommendations.append("Reduce workflow complexity based on user feedback")
 
             if user_feedback.get("too_many_confirmations"):
-                recommendations.append(
-                    "Decrease confirmation requirements for trusted operations"
-                )
+                recommendations.append("Decrease confirmation requirements for trusted operations")
 
         return recommendations

@@ -20,7 +20,7 @@ import os
 import subprocess
 import sys
 import tempfile
-from typing import Dict, Any
+from typing import Any, Dict
 
 from services.tool_output_filter import get_tool_output_filter
 
@@ -62,9 +62,7 @@ def execute_code(code: str, timeout_seconds: int = 30) -> Dict[str, Any]:
 
         raw_stdout = result.stdout
         raw_stderr = result.stderr
-        truncated = (
-            len(raw_stdout) > MAX_OUTPUT_BYTES or len(raw_stderr) > MAX_OUTPUT_BYTES
-        )
+        truncated = len(raw_stdout) > MAX_OUTPUT_BYTES or len(raw_stderr) > MAX_OUTPUT_BYTES
 
         stdout_text = get_tool_output_filter().prepare_and_filter(
             "python", raw_stdout[:MAX_OUTPUT_BYTES].decode("utf-8", errors="replace")

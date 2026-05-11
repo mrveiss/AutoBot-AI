@@ -3,11 +3,12 @@
 Analyze AutoBot codebase for performance issues, memory leaks, and processing inefficiencies
 """
 
-import asyncio
 import json
 from pathlib import Path
 
 from performance_analyzer import PerformanceAnalyzer
+
+from autobot_shared.async_compat import run_or_schedule
 
 
 def _print_perf_summary(results: dict) -> None:
@@ -15,23 +16,15 @@ def _print_perf_summary(results: dict) -> None:
     print("\n=== Performance Analysis Results ===\n")  # noqa: print
     m = results["metrics"]
     print("📊 **Analysis Summary:**")  # noqa: print
-    print(
-        f"   - Total performance issues: {results['total_performance_issues']}"
-    )  # noqa: print
+    print(f"   - Total performance issues: {results['total_performance_issues']}")  # noqa: print
     print(f"   - Critical issues: {results['critical_issues']}")  # noqa: print
-    print(
-        f"   - High priority issues: {results['high_priority_issues']}"
-    )  # noqa: print
+    print(f"   - High priority issues: {results['high_priority_issues']}")  # noqa: print
     print(f"   - Files with issues: {m['files_with_issues']}")  # noqa: print
     print(f"   - Performance debt score: {m['performance_debt_score']}")  # noqa: print
-    print(
-        f"   - Analysis time: {results['analysis_time_seconds']:.2f}s\n"
-    )  # noqa: print
+    print(f"   - Analysis time: {results['analysis_time_seconds']:.2f}s\n")  # noqa: print
     print("🏷️  **Issue Categories:**")  # noqa: print
     for category, count in results["categories"].items():
-        print(
-            f"   - {category.replace('_', ' ').title()}: {count} issues"
-        )  # noqa: print
+        print(f"   - {category.replace('_', ' ').title()}: {count} issues")  # noqa: print
     print()  # noqa: print
 
 
@@ -41,9 +34,7 @@ def _print_critical_and_high_issues(details: list) -> None:
     if critical:
         print("🚨 **Critical Performance Issues:**")  # noqa: print
         for issue in critical[:10]:
-            print(
-                f"   - {issue['file']}:{issue['line']} - {issue['type']}"
-            )  # noqa: print
+            print(f"   - {issue['file']}:{issue['line']} - {issue['type']}")  # noqa: print
             print(f"     💡 {issue['description']}")  # noqa: print
             print(f"     🔧 Suggestion: {issue['suggestion']}")  # noqa: print
             print()  # noqa: print
@@ -51,9 +42,7 @@ def _print_critical_and_high_issues(details: list) -> None:
     if high:
         print("⚠️  **High Priority Performance Issues:**")  # noqa: print
         for issue in high[:5]:
-            print(
-                f"   - {issue['file']}:{issue['line']} - {issue['type']}"
-            )  # noqa: print
+            print(f"   - {issue['file']}:{issue['line']} - {issue['type']}")  # noqa: print
             print(f"     {issue['description']}")  # noqa: print
         print()  # noqa: print
 
@@ -65,18 +54,14 @@ def _print_memory_blocking_db_issues(details: list) -> None:
         print("💾 **Memory Leak Analysis:**")  # noqa: print
         print(f"   Found {len(memory)} potential memory leaks:")  # noqa: print
         for issue in memory[:5]:
-            snippet = (
-                issue["code_snippet"].split()[0] if issue["code_snippet"] else "N/A"
-            )
+            snippet = issue["code_snippet"].split()[0] if issue["code_snippet"] else "N/A"
             print(f"   - {issue['file']}:{issue['line']}")  # noqa: print
             print(f"     Code: {snippet}")  # noqa: print
         print()  # noqa: print
     blocking = [i for i in details if i["type"] == "blocking_calls"]
     if blocking:
         print("🔒 **Blocking Call Analysis:**")  # noqa: print
-        print(
-            f"   Found {len(blocking)} blocking calls in async functions:"
-        )  # noqa: print
+        print(f"   Found {len(blocking)} blocking calls in async functions:")  # noqa: print
         for issue in blocking[:5]:
             print(f"   - {issue['file']}:{issue['line']}")  # noqa: print
             print(f"     Function: {issue['function'] or 'N/A'}")  # noqa: print
@@ -95,9 +80,7 @@ async def analyze_performance_issues():
     """Analyze codebase for performance and memory issues"""
     print("🚀 Starting performance and memory leak analysis...")  # noqa: print
     analyzer = PerformanceAnalyzer()
-    results = await analyzer.analyze_performance(
-        root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
-    )
+    results = await analyzer.analyze_performance(root_path=".", patterns=["src/**/*.py", "backend/**/*.py"])
     _print_perf_summary(results)
     details = results["performance_details"]
     _print_critical_and_high_issues(details)
@@ -114,9 +97,7 @@ def _print_common_fix_patterns() -> None:
     """Print 5 common performance fix code examples. Issue #1183."""
     print("🛠️  **Common Performance Patterns to Fix:**\n")  # noqa: print
     print("**1. Memory Leak Prevention:**\n```python")  # noqa: print
-    print(
-        "# ❌ Bad - Resource leak\nf = open('file.txt', 'r')\ndata = f.read()\n"
-    )  # noqa: print
+    print("# ❌ Bad - Resource leak\nf = open('file.txt', 'r')\ndata = f.read()\n")  # noqa: print
     print(
         "# ✅ Good - Proper resource management\nwith open('file.txt', 'r') as f:\n    data = f.read()\n```\n"
     )  # noqa: print
@@ -135,9 +116,7 @@ def _print_common_fix_patterns() -> None:
         "# ✅ Good - Bulk query\nuser_ids = [user.id for user in users]\nprofiles = db.query(Profile).filter(Profile.user_id.in_(user_ids)).all()\nprofile_dict = {p.user_id: p for p in profiles}\n```\n"
     )  # noqa: print
     print("**4. Loop Performance Optimization:**\n```python")  # noqa: print
-    print(
-        "# ❌ Bad - Inefficient loop\nresult = ''\nfor item in large_list:\n    result += str(item)\n"
-    )  # noqa: print
+    print("# ❌ Bad - Inefficient loop\nresult = ''\nfor item in large_list:\n    result += str(item)\n")  # noqa: print
     print(
         "# ✅ Good - List comprehension and join\nresult = ''.join(str(item) for item in large_list)\n```\n"
     )  # noqa: print
@@ -186,9 +165,7 @@ async def demonstrate_monitoring_setup():
     print("def log_memory_usage(func_name: str):")  # noqa: print
     print("    process = psutil.Process()")  # noqa: print
     print("    memory_mb = process.memory_info().rss / 1024 / 1024")  # noqa: print
-    print(
-        "    logging.info(f'{func_name}: Memory usage: {memory_mb:.2f} MB')"
-    )  # noqa: print
+    print("    logging.info(f'{func_name}: Memory usage: {memory_mb:.2f} MB')")  # noqa: print
     print("```")  # noqa: print
     print()  # noqa: print
 
@@ -205,9 +182,7 @@ async def demonstrate_monitoring_setup():
     print("        execution_time = time.time() - start_time")  # noqa: print
     print("        ")  # noqa: print
     print("        if execution_time > 1.0:  # Log slow operations")  # noqa: print
-    print(
-        "            logging.warning(f'{func.__name__} took {execution_time:.2f}s')"
-    )  # noqa: print
+    print("            logging.warning(f'{func.__name__} took {execution_time:.2f}s')")  # noqa: print
     print("        ")  # noqa: print
     print("        return result")  # noqa: print
     print("    return wrapper")  # noqa: print
@@ -221,9 +196,7 @@ async def demonstrate_monitoring_setup():
     print("    used_memory = info['used_memory_human']")  # noqa: print
     print("    connected_clients = info['connected_clients']")  # noqa: print
     print("    ")  # noqa: print
-    print(  # noqa: print
-        "    logging.info(f'Redis memory: {used_memory}, Clients: {connected_clients}')"
-    )
+    print("    logging.info(f'Redis memory: {used_memory}, Clients: {connected_clients}')")  # noqa: print
     print("```")  # noqa: print
     print()  # noqa: print
 
@@ -239,9 +212,7 @@ async def main():
 
     print("\n=== Analysis Complete ===")  # noqa: print
     print("Next steps:")  # noqa: print
-    print(
-        "1. Review performance_analysis_report.json for detailed findings"
-    )  # noqa: print
+    print("1. Review performance_analysis_report.json for detailed findings")  # noqa: print
     print("2. Fix critical memory leaks and blocking calls first")  # noqa: print
     print("3. Optimize database queries and loops")  # noqa: print
     print("4. Add performance monitoring to track improvements")  # noqa: print
@@ -249,4 +220,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

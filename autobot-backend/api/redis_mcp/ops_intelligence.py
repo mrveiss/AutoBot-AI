@@ -23,9 +23,7 @@ async def _get_client(database: str = "main"):
     return await get_async_redis_client(database=database)
 
 
-async def handle_redis_server_info(
-    section: Optional[str] = None, database: str = "main"
-) -> Metadata:
+async def handle_redis_server_info(section: Optional[str] = None, database: str = "main") -> Metadata:
     """Get Redis server stats."""
     client = await _get_client(database)
     if section:
@@ -171,9 +169,5 @@ def _format_stream_entry(entry) -> Optional[Dict[str, Any]]:
         return None
     entry_id, fields = entry
     decoded_id = _decode(entry_id)
-    decoded_fields = (
-        {_decode(k): _decode(v) for k, v in fields.items()}
-        if isinstance(fields, dict)
-        else {}
-    )
+    decoded_fields = {_decode(k): _decode(v) for k, v in fields.items()} if isinstance(fields, dict) else {}
     return {"id": decoded_id, "fields": decoded_fields}

@@ -48,22 +48,13 @@ def _get_ownership_analyzer():
             sys.path.insert(0, backend_root)
 
         # Load ownership_analyzer from code_analysis/src/ (#1210)
-        analyzer_path = (
-            Path(__file__).resolve().parents[3]
-            / "code_analysis"
-            / "src"
-            / "ownership_analyzer.py"
-        )
+        analyzer_path = Path(__file__).resolve().parents[3] / "code_analysis" / "src" / "ownership_analyzer.py"
 
         if not analyzer_path.exists():
-            logger.warning(
-                "OwnershipAnalyzer not available: %s does not exist", analyzer_path
-            )
+            logger.warning("OwnershipAnalyzer not available: %s does not exist", analyzer_path)
             return None
 
-        spec = importlib.util.spec_from_file_location(
-            "ownership_analyzer", analyzer_path
-        )
+        spec = importlib.util.spec_from_file_location("ownership_analyzer", analyzer_path)
         if spec is None or spec.loader is None:
             logger.warning("OwnershipAnalyzer not available: Could not load spec")
             return None
@@ -137,9 +128,7 @@ async def _run_ownership_analysis(analyzer, path: str, pattern_list: list, days:
                 timeout=ANALYSIS_TIMEOUT,
             )
     except asyncio.TimeoutError:
-        logger.warning(
-            "Ownership analysis timed out after %d seconds", ANALYSIS_TIMEOUT
-        )
+        logger.warning("Ownership analysis timed out after %d seconds", ANALYSIS_TIMEOUT)
         return None
 
 
@@ -189,9 +178,7 @@ def _build_ownership_error_response(message: str, include_lists: bool = True) ->
     return response
 
 
-def _build_expertise_response(
-    scores: list, total: int, source: str, status: str = "success"
-) -> dict:
+def _build_expertise_response(scores: list, total: int, source: str, status: str = "success") -> dict:
     """Build response for expertise scores endpoint.
 
     Issue #665: Extracted from get_expertise_scores to reduce function length.
@@ -232,9 +219,7 @@ def _build_expertise_error(message: str) -> dict:
     }
 
 
-def _build_knowledge_gaps_response(
-    gaps: list, total: int, source: str, status: str = "success"
-) -> dict:
+def _build_knowledge_gaps_response(gaps: list, total: int, source: str, status: str = "success") -> dict:
     """Build response for knowledge gaps endpoint.
 
     Issue #665: Extracted from get_knowledge_gaps to reduce function length.
@@ -275,9 +260,7 @@ def _build_knowledge_gaps_error(message: str) -> dict:
     }
 
 
-async def _check_ownership_cache(
-    refresh: bool, source_id: Optional[str] = None
-) -> Optional[JSONResponse]:
+async def _check_ownership_cache(refresh: bool, source_id: Optional[str] = None) -> Optional[JSONResponse]:
     """Check cache for ownership analysis results.
 
     Issue #665: Extracted from get_ownership_analysis to reduce function length.
@@ -315,9 +298,7 @@ async def get_ownership_analysis(
     refresh: bool = Query(False, description="Force fresh analysis"),
     patterns: str = Query("**/*.py,**/*.ts,**/*.vue", description="Glob patterns"),
     days: int = Query(90, description="Days for recency scoring"),
-    source_id: Optional[str] = Query(
-        None, description="#1772: source_id for API consistency"
-    ),
+    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
 ):
     """Analyze code ownership (Issue #248). Issue #665: Refactored with helpers."""
     cached = await _check_ownership_cache(refresh, source_id=source_id)
@@ -334,9 +315,7 @@ async def get_ownership_analysis(
             if source and source.clone_path:
                 project_root = source.clone_path
         except Exception:
-            logger.debug(
-                "Could not resolve clone_path for %s, using default", source_id
-            )
+            logger.debug("Could not resolve clone_path for %s, using default", source_id)
     if not path:
         path = project_root
 
@@ -350,9 +329,7 @@ async def get_ownership_analysis(
         analyzer = _get_ownership_analyzer()
         if not analyzer:
             return JSONResponse(
-                _build_ownership_error_response(
-                    "OwnershipAnalyzer not available. Check tools installation."
-                )
+                _build_ownership_error_response("OwnershipAnalyzer not available. Check tools installation.")
             )
 
         analysis = await _run_ownership_analysis(analyzer, path, pattern_list, days)
@@ -377,11 +354,7 @@ async def get_ownership_analysis(
 
     except Exception as e:
         logger.error("Ownership analysis failed: %s", e, exc_info=True)
-        return JSONResponse(
-            _build_ownership_error_response(
-                "Ownership analysis failed", include_lists=False
-            )
-        )
+        return JSONResponse(_build_ownership_error_response("Ownership analysis failed", include_lists=False))
 
 
 @router.get("/expertise")
@@ -392,9 +365,7 @@ async def get_ownership_analysis(
 )
 async def get_expertise_scores(
     path: str = Query(None, description="Root path to analyze"),
-    source_id: Optional[str] = Query(
-        None, description="#1772: source_id for API consistency"
-    ),
+    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
 ):
     """
     Get contributor expertise scores for a codebase (Issue #248).
@@ -426,18 +397,12 @@ async def get_expertise_scores(
     try:
         analyzer = _get_ownership_analyzer()
         if not analyzer:
-            return JSONResponse(
-                _build_expertise_error("OwnershipAnalyzer not available")
-            )
+            return JSONResponse(_build_expertise_error("OwnershipAnalyzer not available"))
 
         analysis = await analyzer.analyze_ownership(path)
         expertise_scores = analysis.get("expertise_scores", [])
 
-        return JSONResponse(
-            _build_expertise_response(
-                expertise_scores[:20], len(expertise_scores), "live_analysis"
-            )
-        )
+        return JSONResponse(_build_expertise_response(expertise_scores[:20], len(expertise_scores), "live_analysis"))
 
     except Exception as e:
         logger.error("Failed to get expertise scores: %s", e, exc_info=True)
@@ -452,12 +417,8 @@ async def get_expertise_scores(
 )
 async def get_knowledge_gaps(
     path: str = Query(None, description="Root path to analyze"),
-    risk_level: str = Query(
-        None, description="Filter by risk level (critical, high, medium, low)"
-    ),
-    source_id: Optional[str] = Query(
-        None, description="#1772: source_id for API consistency"
-    ),
+    risk_level: str = Query(None, description="Filter by risk level (critical, high, medium, low)"),
+    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
 ):
     """
     Get knowledge gaps in the codebase (Issue #248).
@@ -475,9 +436,7 @@ async def get_knowledge_gaps(
             gaps = cached["knowledge_gaps"]
             if risk_level:
                 gaps = [g for g in gaps if g.get("risk_level") == risk_level]
-            return JSONResponse(
-                _build_knowledge_gaps_response(gaps, len(gaps), "cache")
-            )
+            return JSONResponse(_build_knowledge_gaps_response(gaps, len(gaps), "cache"))
 
     # Run fresh analysis if no cache
     project_root = _get_project_root()
@@ -492,9 +451,7 @@ async def get_knowledge_gaps(
     try:
         analyzer = _get_ownership_analyzer()
         if not analyzer:
-            return JSONResponse(
-                _build_knowledge_gaps_error("OwnershipAnalyzer not available")
-            )
+            return JSONResponse(_build_knowledge_gaps_error("OwnershipAnalyzer not available"))
 
         analysis = await analyzer.analyze_ownership(path)
         gaps = analysis.get("knowledge_gaps", [])
@@ -502,9 +459,7 @@ async def get_knowledge_gaps(
         if risk_level:
             gaps = [g for g in gaps if g.get("risk_level") == risk_level]
 
-        return JSONResponse(
-            _build_knowledge_gaps_response(gaps[:30], len(gaps), "live_analysis")
-        )
+        return JSONResponse(_build_knowledge_gaps_response(gaps[:30], len(gaps), "live_analysis"))
 
     except Exception as e:
         logger.error("Failed to get knowledge gaps: %s", e, exc_info=True)

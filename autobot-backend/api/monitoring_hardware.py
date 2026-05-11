@@ -36,11 +36,7 @@ class HardwareMonitorStub:
             disk = psutil.disk_usage("/")
 
             return {
-                "status": (
-                    "healthy"
-                    if cpu_percent < 90 and memory.percent < 90
-                    else "degraded"
-                ),
+                "status": ("healthy" if cpu_percent < 90 and memory.percent < 90 else "degraded"),
                 "cpu_usage": cpu_percent,
                 "memory_usage": memory.percent,
                 "disk_usage": disk.percent,

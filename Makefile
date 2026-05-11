@@ -34,11 +34,11 @@ test-e2e:
 
 ## Format Python with project-pinned Black + isort settings (#7249)
 format:
-	@scripts/format.sh
+	@bash scripts/format.sh
 
 ## Same as `make format` but exits non-zero if anything would change (CI mode)
 format-check:
-	@scripts/format.sh --check
+	@bash scripts/format.sh --check
 
 ## Show this help
 help:

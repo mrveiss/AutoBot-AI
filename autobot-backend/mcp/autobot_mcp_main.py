@@ -15,9 +15,9 @@ Usage:
     python -m mcp.autobot_mcp_main --http --host 127.0.0.1 --port 9200
 """
 
-import asyncio
 import sys
 
+from autobot_shared.async_compat import run_or_schedule
 from mcp.autobot_server import AutoBotMCPServer
 
 
@@ -37,4 +37,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

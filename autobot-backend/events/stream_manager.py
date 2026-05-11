@@ -248,9 +248,7 @@ class RedisEventStreamManager(EventStreamManager):
         if not isinstance(entry_data, dict):
             return entry_data
         return {
-            (k.decode("utf-8") if isinstance(k, bytes) else k): (
-                v.decode("utf-8") if isinstance(v, bytes) else v
-            )
+            (k.decode("utf-8") if isinstance(k, bytes) else k): (v.decode("utf-8") if isinstance(v, bytes) else v)
             for k, v in entry_data.items()
         }
 
@@ -440,11 +438,7 @@ class RedisEventStreamManager(EventStreamManager):
         """
         redis_client = await self._get_redis()
 
-        stream_key = (
-            f"{self.config.task_stream_prefix}{task_id}"
-            if task_id
-            else self.config.stream_key
-        )
+        stream_key = f"{self.config.task_stream_prefix}{task_id}" if task_id else self.config.stream_key
 
         # Get stream length
         length = await redis_client.xlen(stream_key)
@@ -529,9 +523,7 @@ class RedisEventStreamManager(EventStreamManager):
                     exc,
                 )
 
-        logger.debug(
-            "Collected %d artifact(s) for task %s", len(artifacts), task_id
-        )
+        logger.debug("Collected %d artifact(s) for task %s", len(artifacts), task_id)
         return artifacts
 
     async def close(self) -> None:

@@ -8,15 +8,14 @@ Base interface for pluggable execution backends supporting local, Docker, SSH, a
 Provides unified API for task execution with resource limits, health checks, and result capture.
 """
 
-import asyncio
-import json
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from enum import Enum
 from typing import Any, Dict, Optional, Tuple
+
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -117,9 +116,7 @@ class ExecutionBackend(ABC):
         self._last_health_check = now_utc()
 
     @abstractmethod
-    async def execute(
-        self, task: ExecutionTask
-    ) -> ExecutionResult:
+    async def execute(self, task: ExecutionTask) -> ExecutionResult:
         """Execute a task on this backend.
 
         Args:
@@ -131,7 +128,6 @@ class ExecutionBackend(ABC):
         Raises:
             RuntimeError: If backend is unhealthy or execution fails
         """
-        pass
 
     @abstractmethod
     async def health_check(self) -> bool:
@@ -140,7 +136,6 @@ class ExecutionBackend(ABC):
         Returns:
             True if backend is operational, False otherwise
         """
-        pass
 
     @abstractmethod
     async def cleanup(self) -> None:
@@ -148,7 +143,6 @@ class ExecutionBackend(ABC):
 
         Should be called during shutdown.
         """
-        pass
 
     async def is_healthy(self) -> bool:
         """Check cached health status with periodic refresh.

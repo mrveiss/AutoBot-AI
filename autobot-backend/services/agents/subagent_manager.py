@@ -15,10 +15,9 @@ Core functionality:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from autobot_shared.time_utils import now_utc
 
+from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
 
 from .subagent_task import (
@@ -114,9 +113,7 @@ class SubagentManager:
 
         return None
 
-    async def get_batch_results(
-        self, task_ids: List[str]
-    ) -> Dict[str, Optional[TaskResult]]:
+    async def get_batch_results(self, task_ids: List[str]) -> Dict[str, Optional[TaskResult]]:
         """Get results for multiple tasks."""
         results = {}
         for task_id in task_ids:
@@ -185,9 +182,7 @@ class SubagentManager:
                 return False
 
             # Get child IDs before deleting
-            child_ids = await self.redis.lrange(
-                f"subagent:children:{parent_task_id}", 0, -1
-            )
+            child_ids = await self.redis.lrange(f"subagent:children:{parent_task_id}", 0, -1)
 
             # Delete each child's data
             for child_id in child_ids:
@@ -249,9 +244,7 @@ class SubagentManager:
 
             except asyncio.TimeoutError:
                 duration = asyncio.get_running_loop().time() - start_time
-                logger.warning(
-                    "Task %s timed out after %.1f seconds", task_id, duration
-                )
+                logger.warning("Task %s timed out after %.1f seconds", task_id, duration)
                 result = TaskResult(
                     task_id=task_id,
                     status=TaskStatus.TIMEOUT,
@@ -301,9 +294,7 @@ class SubagentManager:
 
             elapsed = asyncio.get_running_loop().time() - start_time
             if elapsed > timeout_seconds:
-                logger.warning(
-                    "Timed out waiting for results after %.1f seconds", elapsed
-                )
+                logger.warning("Timed out waiting for results after %.1f seconds", elapsed)
                 return results
 
             await asyncio.sleep(check_interval)

@@ -10,7 +10,7 @@ Issue #726 Phase 4: Redis replication orchestration
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 

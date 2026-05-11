@@ -73,9 +73,7 @@ def _update_warmup_cache(client: Any, warmup_time: float) -> None:
     _npu_cache_timestamp = time.time()
 
 
-async def _build_warmup_success_result(
-    embedding: List[float], warmup_time: float, client: Any
-) -> Dict[str, Any]:
+async def _build_warmup_success_result(embedding: List[float], warmup_time: float, client: Any) -> Dict[str, Any]:
     """Issue #665: Extracted from warmup_npu_connection to reduce function length."""
     result = {
         "status": "success",
@@ -94,9 +92,7 @@ async def _build_warmup_success_result(
             )
     except Exception:
         logger.debug("Suppressed exception in try block", exc_info=True)
-    logger.info(
-        "NPU warmup complete: %d dimensions in %.1fms", len(embedding), warmup_time
-    )
+    logger.info("NPU warmup complete: %d dimensions in %.1fms", len(embedding), warmup_time)
     return result
 
 
@@ -127,9 +123,7 @@ async def warmup_npu_connection() -> Dict[str, Any]:
             logger.info("NPU warmup: Worker not available")
             return result
 
-        embedding = await client.generate_embedding(
-            "NPU warmup test embedding for connection initialization"
-        )
+        embedding = await client.generate_embedding("NPU warmup test embedding for connection initialization")
         warmup_time = (time.time() - start_time) * 1000
         _update_warmup_cache(client, warmup_time)
 
@@ -269,9 +263,7 @@ def _decode_redis_hash(fact_data: Dict[bytes, bytes]) -> Dict[str, Any]:
     if "metadata" in decoded:
         try:
             raw = decoded["metadata"]
-            decoded["_parsed_metadata"] = (
-                raw if isinstance(raw, dict) else json.loads(raw)
-            )
+            decoded["_parsed_metadata"] = raw if isinstance(raw, dict) else json.loads(raw)
         except (json.JSONDecodeError, TypeError):
             decoded["_parsed_metadata"] = {}
     else:
@@ -355,9 +347,7 @@ class FactsMixin:
         except Exception as exc:
             logger.warning("BM25 stats refresh scheduling failed: %s", exc)
 
-    async def _find_fact_by_unique_key(
-        self, unique_key: str
-    ) -> Optional[Dict[str, Any]]:
+    async def _find_fact_by_unique_key(self, unique_key: str) -> Optional[Dict[str, Any]]:
         """
         Find an existing fact by unique key (fast Redis SET lookup).
         Issue #315: Refactored to use helper for reduced nesting.
@@ -401,9 +391,7 @@ class FactsMixin:
 
         return None
 
-    async def _find_existing_fact(
-        self, content: str, metadata: Dict[str, Any]
-    ) -> Optional[str]:
+    async def _find_existing_fact(self, content: str, metadata: Dict[str, Any]) -> Optional[str]:
         """
         Check if a fact with identical content and metadata already exists.
 
@@ -432,9 +420,7 @@ class FactsMixin:
 
         return None
 
-    async def _find_duplicate(
-        self, content: str, threshold: float = 0.92
-    ) -> Optional[Dict[str, Any]]:
+    async def _find_duplicate(self, content: str, threshold: float = 0.92) -> Optional[Dict[str, Any]]:
         """Check ChromaDB for near-duplicate content before inserting.
 
         Issue #3788: Semantic similarity guard for individual fact writes.
@@ -481,9 +467,7 @@ class FactsMixin:
             logger.debug("_find_duplicate: query failed, skipping check: %s", exc)
         return None
 
-    async def _check_for_duplicates(
-        self, content: str, metadata: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    async def _check_for_duplicates(self, content: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Check for duplicate facts by unique_key, content hash, or semantic similarity.
 
@@ -501,9 +485,7 @@ class FactsMixin:
         if "unique_key" in metadata:
             existing = await self._find_fact_by_unique_key(metadata["unique_key"])
             if existing:
-                logger.info(
-                    "Duplicate detected via unique_key: %s", metadata["unique_key"]
-                )
+                logger.info("Duplicate detected via unique_key: %s", metadata["unique_key"])
                 return {
                     "status": "duplicate",
                     "fact_id": existing["fact_id"],
@@ -523,9 +505,7 @@ class FactsMixin:
         # Issue #3788: Semantic similarity check against ChromaDB
         from autobot_shared.ssot_config import config as _cfg
 
-        existing_meta = await self._find_duplicate(
-            content, threshold=_cfg.cache.l2.kb_dedup_threshold
-        )
+        existing_meta = await self._find_duplicate(content, threshold=_cfg.cache.l2.kb_dedup_threshold)
         if existing_meta:
             dup_id = existing_meta.get("fact_id") or existing_meta.get("id", "?")
             logger.info("Near-duplicate fact detected via semantic check: %s", dup_id)
@@ -537,9 +517,7 @@ class FactsMixin:
 
         return None
 
-    async def _store_fact_in_redis(
-        self, fact_id: str, content: str, metadata: Dict[str, Any]
-    ) -> None:
+    async def _store_fact_in_redis(self, fact_id: str, content: str, metadata: Dict[str, Any]) -> None:
         """
         Store fact data in Redis with hash mappings.
 
@@ -566,9 +544,7 @@ class FactsMixin:
 
         # Store content hash for deduplication
         content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
-        await asyncio.to_thread(
-            self.redis_client.set, "content_hash:%s" % content_hash, fact_id
-        )
+        await asyncio.to_thread(self.redis_client.set, "content_hash:%s" % content_hash, fact_id)
 
         # Store unique_key mapping if provided
         if "unique_key" in metadata:
@@ -593,13 +569,9 @@ class FactsMixin:
         elif owner_id:
             # Issue #689: Fallback simple tracking when ownership manager
             # is not initialized
-            await asyncio.to_thread(
-                self.redis_client.sadd, "user:facts:%s" % owner_id, fact_id
-            )
+            await asyncio.to_thread(self.redis_client.sadd, "user:facts:%s" % owner_id, fact_id)
 
-    async def _vectorize_fact_in_chromadb(
-        self, fact_id: str, content: str, metadata: Dict[str, Any]
-    ) -> None:
+    async def _vectorize_fact_in_chromadb(self, fact_id: str, content: str, metadata: Dict[str, Any]) -> None:
         """
         Vectorize and store fact in ChromaDB vector store.
 
@@ -657,9 +629,7 @@ class FactsMixin:
 
         return metadata
 
-    async def _store_and_vectorize_fact(
-        self, fact_id: str, content: str, metadata: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _store_and_vectorize_fact(self, fact_id: str, content: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Store fact in Redis, vectorize, and update stats (Issue #398: extracted)."""
         await self._store_fact_in_redis(fact_id, content, metadata)
         await self._vectorize_fact_in_chromadb(fact_id, content, metadata)
@@ -670,9 +640,7 @@ class FactsMixin:
         self._schedule_bm25_refresh()
         return {"status": "success", "fact_id": fact_id, "action": "created"}
 
-    async def store_fact(
-        self, content: str, metadata: Dict[str, Any] = None, fact_id: str = None
-    ) -> Dict[str, Any]:
+    async def store_fact(self, content: str, metadata: Dict[str, Any] = None, fact_id: str = None) -> Dict[str, Any]:
         """Store a new fact in Redis and vectorize it (Issue #398: refactored)."""
         self.ensure_initialized()
 
@@ -693,9 +661,7 @@ class FactsMixin:
             logger.error("Failed to store fact: %s", e)
             return {"status": "error", "message": "Knowledge operation failed"}
 
-    async def _get_fact_for_vectorization(
-        self, fact_id: str
-    ) -> Optional[Dict[str, Any]]:
+    async def _get_fact_for_vectorization(self, fact_id: str) -> Optional[Dict[str, Any]]:
         """Get and decode fact data for vectorization (Issue #398: extracted)."""
         fact_key = "fact:%s" % fact_id
         fact_data = await asyncio.to_thread(self.redis_client.hgetall, fact_key)
@@ -728,9 +694,7 @@ class FactsMixin:
             if not self.vector_store:
                 return {"status": "error", "message": "Vector store not available"}
 
-            await self._vectorize_fact_in_chromadb(
-                fact_id, fact_info["content"], fact_info["metadata"]
-            )
+            await self._vectorize_fact_in_chromadb(fact_id, fact_info["content"], fact_info["metadata"])
 
             logger.info("Vectorized existing fact %s", fact_id)
             return {
@@ -808,11 +772,7 @@ class FactsMixin:
             return None
 
         # Extract fact_id from key
-        fact_id = (
-            key.split(":")[-1]
-            if isinstance(key, str)
-            else key.decode("utf-8").split(":")[-1]
-        )
+        fact_id = key.split(":")[-1] if isinstance(key, str) else key.decode("utf-8").split(":")[-1]
 
         # Decode data using helper
         decoded = _decode_redis_hash(fact_data)
@@ -888,9 +848,7 @@ class FactsMixin:
             decoded[k] = v
         return decoded
 
-    async def _revectorize_fact(
-        self, fact_id: str, content: str, current_metadata: Dict
-    ) -> None:
+    async def _revectorize_fact(self, fact_id: str, content: str, current_metadata: Dict) -> None:
         """Re-vectorize fact after content update (Issue #398: extracted).
 
         Issue #165: Uses NPU worker for hardware-accelerated embedding generation.
@@ -909,23 +867,15 @@ class FactsMixin:
         await asyncio.to_thread(self.vector_store.add, [doc])
         logger.info("Re-vectorized updated fact %s", fact_id)
 
-    async def _refresh_content_hash(
-        self, fact_id: str, old_content: str, new_content: str
-    ) -> None:
+    async def _refresh_content_hash(self, fact_id: str, old_content: str, new_content: str) -> None:
         """Refresh content_hash dedup key when content changes. Issue #1375."""
         if old_content:
             old_hash = hashlib.sha256(old_content.encode("utf-8")).hexdigest()[:16]
-            await asyncio.to_thread(
-                self.redis_client.delete, "content_hash:%s" % old_hash
-            )
+            await asyncio.to_thread(self.redis_client.delete, "content_hash:%s" % old_hash)
         new_hash = hashlib.sha256(new_content.encode("utf-8")).hexdigest()[:16]
-        await asyncio.to_thread(
-            self.redis_client.set, "content_hash:%s" % new_hash, fact_id
-        )
+        await asyncio.to_thread(self.redis_client.set, "content_hash:%s" % new_hash, fact_id)
 
-    async def update_fact(
-        self, fact_id: str, content: str = None, metadata: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
+    async def update_fact(self, fact_id: str, content: str = None, metadata: Dict[str, Any] = None) -> Dict[str, Any]:
         """Update an existing fact (Issue #398: refactored)."""
         self.ensure_initialized()
 
@@ -948,9 +898,7 @@ class FactsMixin:
 
             if content is not None:
                 # Issue #1375: Refresh dedup key + fingerprint on content change
-                await self._refresh_content_hash(
-                    fact_id, decoded.get("content", ""), content
-                )
+                await self._refresh_content_hash(fact_id, decoded.get("content", ""), content)
                 decoded["content"] = content
                 from services.content_fingerprint import compute_fingerprint
 
@@ -970,9 +918,7 @@ class FactsMixin:
             )
 
             if content is not None and self.vector_store:
-                await self._revectorize_fact(
-                    fact_id, decoded["content"], current_metadata
-                )
+                await self._revectorize_fact(fact_id, decoded["content"], current_metadata)
 
             return {"status": "success", "fact_id": fact_id, "action": "updated"}
 
@@ -980,9 +926,7 @@ class FactsMixin:
             logger.error("Failed to update fact %s: %s", fact_id, e)
             return {"status": "error", "message": "Knowledge operation failed"}
 
-    async def _cleanup_fact_mappings(
-        self, fact_id: str, content: str, metadata: Dict[str, Any]
-    ) -> None:
+    async def _cleanup_fact_mappings(self, fact_id: str, content: str, metadata: Dict[str, Any]) -> None:
         """Clean up Redis mappings for a deleted fact. Issue #620 and #688.
 
         Removes content hash, unique key, session tracking mappings, and
@@ -995,19 +939,13 @@ class FactsMixin:
         """
         if content:
             content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
-            await asyncio.to_thread(
-                self.redis_client.delete, "content_hash:%s" % content_hash
-            )
+            await asyncio.to_thread(self.redis_client.delete, "content_hash:%s" % content_hash)
 
         unique_key = metadata.get("unique_key")
         if unique_key:
-            await asyncio.to_thread(
-                self.redis_client.delete, "unique_key:man_page:%s" % unique_key
-            )
+            await asyncio.to_thread(self.redis_client.delete, "unique_key:man_page:%s" % unique_key)
 
-        await asyncio.to_thread(
-            self.redis_client.delete, "fact:origin:session:%s" % fact_id
-        )
+        await asyncio.to_thread(self.redis_client.delete, "fact:origin:session:%s" % fact_id)
 
         # Issue #688: Clean up ownership indexes
         if hasattr(self, "ownership_manager"):
@@ -1025,9 +963,7 @@ class FactsMixin:
             except Exception as e:
                 logger.warning("Could not delete vector for fact %s: %s", fact_id, e)
 
-    async def delete_fact(
-        self, fact_id: str, *, _skip_bm25_refresh: bool = False
-    ) -> dict:
+    async def delete_fact(self, fact_id: str, *, _skip_bm25_refresh: bool = False) -> dict:
         """Delete a fact from Redis and ChromaDB. Issue #620.
 
         Args:
@@ -1091,9 +1027,7 @@ class FactsMixin:
     # SESSION-FACT RELATIONSHIP TRACKING (Issue #547)
     # =========================================================================
 
-    async def _track_session_fact_relationship(
-        self, session_id: str, fact_id: str
-    ) -> None:
+    async def _track_session_fact_relationship(self, session_id: str, fact_id: str) -> None:
         """
         Track bidirectional relationship between session and fact for orphan cleanup.
 
@@ -1109,14 +1043,10 @@ class FactsMixin:
         """
         try:
             # Add fact to session's fact set
-            await asyncio.to_thread(
-                self.redis_client.sadd, "session:facts:%s" % session_id, fact_id
-            )
+            await asyncio.to_thread(self.redis_client.sadd, "session:facts:%s" % session_id, fact_id)
 
             # Store reverse lookup (fact -> session)
-            await asyncio.to_thread(
-                self.redis_client.set, "fact:origin:session:%s" % fact_id, session_id
-            )
+            await asyncio.to_thread(self.redis_client.set, "fact:origin:session:%s" % fact_id, session_id)
 
             logger.debug(
                 "Tracked session-fact relationship: session=%s, fact=%s",
@@ -1145,15 +1075,10 @@ class FactsMixin:
             List of fact IDs created in this session
         """
         try:
-            fact_ids = await asyncio.to_thread(
-                self.redis_client.smembers, "session:facts:%s" % session_id
-            )
+            fact_ids = await asyncio.to_thread(self.redis_client.smembers, "session:facts:%s" % session_id)
 
             # Decode bytes to strings
-            return [
-                fid.decode("utf-8") if isinstance(fid, bytes) else fid
-                for fid in (fact_ids or [])
-            ]
+            return [fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in (fact_ids or [])]
 
         except Exception as e:
             logger.error("Failed to get facts by session %s: %s", session_id, e)
@@ -1172,16 +1097,10 @@ class FactsMixin:
             Session ID or None if not tracked
         """
         try:
-            session_id = await asyncio.to_thread(
-                self.redis_client.get, "fact:origin:session:%s" % fact_id
-            )
+            session_id = await asyncio.to_thread(self.redis_client.get, "fact:origin:session:%s" % fact_id)
 
             if session_id:
-                return (
-                    session_id.decode("utf-8")
-                    if isinstance(session_id, bytes)
-                    else session_id
-                )
+                return session_id.decode("utf-8") if isinstance(session_id, bytes) else session_id
             return None
 
         except Exception as e:
@@ -1247,9 +1166,7 @@ class FactsMixin:
         try:
             # Check if fact should be preserved
             if preserve_important and fact_id in important_ids:
-                logger.debug(
-                    "Preserving important fact %s from session %s", fact_id, session_id
-                )
+                logger.debug("Preserving important fact %s from session %s", fact_id, session_id)
                 result["preserved_count"] += 1
                 return
 
@@ -1268,9 +1185,7 @@ class FactsMixin:
 
         except Exception as e:
             logger.error("Failed to delete fact %s: %s", fact_id, e)
-            result["errors"].append(
-                {"fact_id": fact_id, "error": "Fact deletion failed"}
-            )
+            result["errors"].append({"fact_id": fact_id, "error": "Fact deletion failed"})
 
     async def _process_session_facts_deletion(
         self,
@@ -1292,15 +1207,11 @@ class FactsMixin:
             important_ids = await self._batch_check_important_facts(fact_ids)
 
         for fact_id in fact_ids:
-            await self._delete_single_fact_for_session(
-                fact_id, session_id, important_ids, preserve_important, result
-            )
+            await self._delete_single_fact_for_session(fact_id, session_id, important_ids, preserve_important, result)
 
         await self._cleanup_session_tracking(session_id, fact_ids)
 
-    async def delete_facts_by_session(
-        self, session_id: str, preserve_important: bool = True
-    ) -> Dict[str, Any]:
+    async def delete_facts_by_session(self, session_id: str, preserve_important: bool = True) -> Dict[str, Any]:
         """Delete all facts created during a specific session. Issue #620.
 
         Args:
@@ -1331,9 +1242,7 @@ class FactsMixin:
                 preserve_important,
             )
 
-            await self._process_session_facts_deletion(
-                session_id, fact_ids, preserve_important, result
-            )
+            await self._process_session_facts_deletion(session_id, fact_ids, preserve_important, result)
 
             logger.info(
                 "Session %s cleanup complete: deleted=%d, preserved=%d, errors=%d",
@@ -1346,14 +1255,10 @@ class FactsMixin:
 
         except Exception as e:
             logger.error("Failed to delete facts for session %s: %s", session_id, e)
-            result["errors"].append(
-                {"session_id": session_id, "error": "Session facts deletion failed"}
-            )
+            result["errors"].append({"session_id": session_id, "error": "Session facts deletion failed"})
             return result
 
-    async def _cleanup_session_tracking(
-        self, session_id: str, fact_ids: List[str]
-    ) -> None:
+    async def _cleanup_session_tracking(self, session_id: str, fact_ids: List[str]) -> None:
         """
         Clean up session tracking keys after facts deletion.
 
@@ -1365,22 +1270,16 @@ class FactsMixin:
         """
         try:
             # Delete the session's fact set
-            await asyncio.to_thread(
-                self.redis_client.delete, "session:facts:%s" % session_id
-            )
+            await asyncio.to_thread(self.redis_client.delete, "session:facts:%s" % session_id)
 
             # Delete reverse lookup keys for each fact
             for fact_id in fact_ids:
-                await asyncio.to_thread(
-                    self.redis_client.delete, "fact:origin:session:%s" % fact_id
-                )
+                await asyncio.to_thread(self.redis_client.delete, "fact:origin:session:%s" % fact_id)
 
             logger.debug("Cleaned up tracking for session %s", session_id)
 
         except Exception as e:
-            logger.warning(
-                "Failed to cleanup session tracking for %s: %s", session_id, e
-            )
+            logger.warning("Failed to cleanup session tracking for %s: %s", session_id, e)
 
     # =========================================================================
     # FACT SHARING (Issue #689)
@@ -1421,9 +1320,7 @@ class FactsMixin:
             "errors": errors,
         }
 
-    async def _share_single_fact(
-        self, fact_id: str, shared_with: List[str], shared_by: str
-    ) -> None:
+    async def _share_single_fact(self, fact_id: str, shared_with: List[str], shared_by: str) -> None:
         """Share a single fact with users. Helper for share_facts (#689)."""
         fact_key = "fact:%s" % fact_id
         raw = await asyncio.to_thread(self.redis_client.hget, fact_key, "metadata")
@@ -1439,9 +1336,7 @@ class FactsMixin:
         metadata["shared_by"] = shared_by
         metadata["shared_at"] = datetime.now(tz=timezone.utc).isoformat()
 
-        await asyncio.to_thread(
-            self.redis_client.hset, fact_key, "metadata", json.dumps(metadata)
-        )
+        await asyncio.to_thread(self.redis_client.hset, fact_key, "metadata", json.dumps(metadata))
 
         for user_id in shared_with:
             await asyncio.to_thread(
@@ -1460,13 +1355,8 @@ class FactsMixin:
             List of fact dicts with content and metadata
         """
         try:
-            raw_ids = await asyncio.to_thread(
-                self.redis_client.smembers, "user:shared_facts:%s" % user_id
-            )
-            fact_ids = [
-                fid.decode("utf-8") if isinstance(fid, bytes) else fid
-                for fid in (raw_ids or [])
-            ]
+            raw_ids = await asyncio.to_thread(self.redis_client.smembers, "user:shared_facts:%s" % user_id)
+            fact_ids = [fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in (raw_ids or [])]
             facts = []
             for fid in fact_ids:
                 fact = self.get_fact(fid)

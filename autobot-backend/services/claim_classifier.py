@@ -19,7 +19,6 @@ Issue: Knowledge Grounding Tier 4 implementation
 
 import asyncio
 import json
-import logging
 import re
 import time
 from typing import Any, Dict, List, Optional, Set
@@ -47,19 +46,13 @@ _PATTERN_CAUSAL = re.compile(
     r"(.*?)\s+(?:causes|leads to|results in|triggers|creates)\s+(.*?)(?:[.!?]|$)",
     re.IGNORECASE,
 )
-_PATTERN_STATE = re.compile(
-    r"(.*?)\s+(?:is|are|was|were)\s+(.*?)(?:[.!?]|$)", re.IGNORECASE
-)
+_PATTERN_STATE = re.compile(r"(.*?)\s+(?:is|are|was|were)\s+(.*?)(?:[.!?]|$)", re.IGNORECASE)
 _PATTERN_QUANTITY = re.compile(
     r"(.*?)\s+(?:is|has)\s+([0-9]+\s*(?:ms|seconds?|minutes?|hours?|days?|%|bytes?|kb|mb|gb))",
     re.IGNORECASE,
 )
-_PATTERN_SHOULD = re.compile(
-    r"(?:should|must|need to|have to)\s+(.*?)(?:[.!?]|$)", re.IGNORECASE
-)
-_PATTERN_WILL = re.compile(
-    r"(?:will|would|can|could)\s+(.*?)(?:[.!?]|$)", re.IGNORECASE
-)
+_PATTERN_SHOULD = re.compile(r"(?:should|must|need to|have to)\s+(.*?)(?:[.!?]|$)", re.IGNORECASE)
+_PATTERN_WILL = re.compile(r"(?:will|would|can|could)\s+(.*?)(?:[.!?]|$)", re.IGNORECASE)
 
 
 class ClaimClassifier:
@@ -104,9 +97,7 @@ class ClaimClassifier:
             self._redis_client = await get_async_redis_client(database="main")
             self._semaphore = asyncio.Semaphore(self.batch_semaphore_limit)
             self._initialized = True
-            logger.info(
-                f"ClaimClassifier initialized with semaphore limit {self.batch_semaphore_limit}"
-            )
+            logger.info(f"ClaimClassifier initialized with semaphore limit {self.batch_semaphore_limit}")
         except Exception as e:
             logger.error(f"Failed to initialize ClaimClassifier: {e}")
             # Gracefully continue without caching if Redis unavailable
@@ -157,9 +148,7 @@ class ClaimClassifier:
             self._extract_predictive_claims(sentence, claims)
 
         # Remove duplicates and very short claims
-        filtered_claims = [
-            c for c in claims if len(c) > 5 and c.lower() not in ("unknown", "none")
-        ]
+        filtered_claims = [c for c in claims if len(c) > 5 and c.lower() not in ("unknown", "none")]
 
         # Calculate extraction confidence based on claim count and sentence count
         extraction_confidence = min(1.0, len(filtered_claims) / max(1, len(sentences)))
@@ -167,8 +156,7 @@ class ClaimClassifier:
         processing_time_ms = (time.time() - start_time) * 1000
 
         logger.debug(
-            f"Extracted {len(filtered_claims)} claims from {len(sentences)} sentences "
-            f"in {processing_time_ms:.1f}ms"
+            f"Extracted {len(filtered_claims)} claims from {len(sentences)} sentences " f"in {processing_time_ms:.1f}ms"
         )
 
         return ClaimExtractionResult(
@@ -210,9 +198,7 @@ class ClaimClassifier:
         kb_results = await self._search_knowledge_base(claim)
 
         # Determine KB status and confidence
-        kb_status, confidence, sources, kb_fact = self._evaluate_kb_results(
-            kb_results
-        )
+        kb_status, confidence, sources, kb_fact = self._evaluate_kb_results(kb_results)
 
         # Create claim object
         result = Claim(
@@ -231,9 +217,7 @@ class ClaimClassifier:
         # Cache the result
         await self._save_to_cache(cache_key, result)
 
-        logger.debug(
-            f"Classified claim '{claim[:50]}...' as {claim_type.value}/{kb_status.value}"
-        )
+        logger.debug(f"Classified claim '{claim[:50]}...' as {claim_type.value}/{kb_status.value}")
 
         return result
 
@@ -350,16 +334,11 @@ class ClaimClassifier:
         claim_lower = claim.lower()
 
         # Procedural: should, must, need to, have to
-        if any(
-            word in claim_lower for word in ["should", "must", "need to", "have to"]
-        ):
+        if any(word in claim_lower for word in ["should", "must", "need to", "have to"]):
             return ClaimType.PROCEDURAL
 
         # Predictive: will, would, can, could, improve, help, cause
-        if any(
-            word in claim_lower
-            for word in ["will", "would", "can", "could", "improve", "help", "cause"]
-        ):
+        if any(word in claim_lower for word in ["will", "would", "can", "could", "improve", "help", "cause"]):
             return ClaimType.PREDICTIVE
 
         # Opinion indicators: bad, good, inefficient, better, worse, think, believe
@@ -496,9 +475,7 @@ class ClaimClassifier:
 
         try:
             claim_json = json.dumps(claim.to_dict())
-            await self._redis_client.setex(
-                cache_key, self.cache_ttl, claim_json
-            )
+            await self._redis_client.setex(cache_key, self.cache_ttl, claim_json)
         except Exception as e:
             logger.debug(f"Cache storage failed: {e}")
 

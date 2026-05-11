@@ -52,6 +52,13 @@ class WorkflowRunner:
         self.resource_semaphore: asyncio.Semaphore = asyncio.Semaphore(max_parallel_tasks)
         self._criteria_evaluator = criteria_evaluator or SuccessCriteriaEvaluator()
         self._strategy_handler: Optional[ExecutionStrategyHandler] = None
+        # #7431 ADR-006 §Q1: subscriber that wakes blocked plans when
+        # skill_promoted events arrive on Redis pub-sub. Lazy-constructed
+        # via get_blocked_plan_resumer(); not started automatically — the
+        # orchestrator (or whichever caller owns the lifecycle) must call
+        # start() / stop() to enable auto-resume. Tests that don't need
+        # auto-resume never construct the resumer (zero overhead).
+        self._resumer: Optional[Any] = None
 
     # ------------------------------------------------------------------ helpers
 
@@ -75,6 +82,28 @@ class WorkflowRunner:
 
     async def execute_workflow(self, plan: WorkflowPlan, _depth: int = 0) -> Dict[str, Any]:
         """Execute a WorkflowPlan through the strategy handler."""
+        # #7431 Phase 3: refuse to execute a plan blocked on async skill
+        # generation. The resume path (BlockedPlanResumer subscriber, lands
+        # in a forthcoming commit) re-invokes execute_workflow once the
+        # awaited skill is promoted via the skill_promoted Redis pub-sub
+        # event. Returning a structured response (rather than raising) lets
+        # the caller decide whether to retry, surface to user, or wait.
+        if plan.status == "blocked":
+            pending_ids = [t.pending_skill_id for t in plan.tasks if t.pending_skill_id]
+            logger.info(
+                "workflow %s is blocked on %d pending skill(s); refusing to execute",
+                plan.plan_id,
+                len(pending_ids),
+            )
+            return {
+                "plan_id": plan.plan_id,
+                "success": False,
+                "status": "blocked",
+                "reason": "blocked_on_skill_generation",
+                "pending_skill_ids": pending_ids,
+                "results": {},
+            }
+
         logger.info("Executing workflow %s strategy=%s", plan.plan_id, plan.strategy.value)
         start_time = time.time()
         results: Dict[str, Any] = {}
@@ -92,6 +121,100 @@ class WorkflowRunner:
     async def get_agent_recommendations(self, capabilities_needed: Set) -> List[str]:
         return await self._agent_router.get_agent_recommendations(capabilities_needed)
 
+    def get_blocked_plan_resumer(self) -> Any:
+        """Return the BlockedPlanResumer for this runner (lazy-constructed).
+
+        Caller is responsible for the resumer's lifecycle: call
+        ``await resumer.start()`` to begin auto-resume, ``await
+        resumer.stop()`` for graceful shutdown. The resumer subscribes to
+        the ``skill_promoted`` Redis pub-sub channel and calls
+        ``try_resume_blocked_plan`` for each BLOCKED plan whenever a new
+        skill is promoted. #7431, ADR-006 §Q1.
+        """
+        if self._resumer is None:
+            from enhanced_orchestration.blocked_plan_resumer import BlockedPlanResumer
+
+            self._resumer = BlockedPlanResumer(self)
+        return self._resumer
+
+    async def try_resume_blocked_plan(self, plan_id: str) -> Dict[str, Any]:
+        """Re-attempt skill binding on a BLOCKED plan and execute if it unblocks.
+
+        ADR-006 §Q1 manual resume API. Triggered by:
+        - The auto-subscriber (forthcoming) when a ``skill_promoted`` event
+          fires on Redis pub-sub (registry.register publishes it).
+        - Periodic retry workers, dashboards, or operator commands.
+
+        Behavior:
+        - Plan unknown to active_workflows → ``{"resumed": False, "reason": "plan_not_found"}``.
+        - Plan not BLOCKED → ``{"resumed": False, "reason": "plan_not_blocked"}`` (no-op).
+        - Plan BLOCKED: clear all pending_skill_id values + matching
+          PendingSkillsRegistry entries, set plan.status="pending",
+          re-invoke ``StrategyPlanner.build_workflow_plan`` against the
+          original plan_data — but since plan_data isn't retained, we
+          instead re-run the per-task ``_bind_skill_to_task`` against the
+          current router state. If any task is still unresolved, the plan
+          re-blocks. Otherwise execute_workflow runs.
+        """
+        plan = self.active_workflows.get(plan_id)
+        if plan is None:
+            return {"resumed": False, "reason": "plan_not_found"}
+        if plan.status != "blocked":
+            return {"resumed": False, "reason": "plan_not_blocked"}
+
+        # Clear pending state on every task that was waiting; bind_skill
+        # will be re-attempted below against the current registry.
+        try:
+            from skills.pending_skills import get_pending_skills_registry
+
+            pending_registry = get_pending_skills_registry()
+        except ImportError:
+            pending_registry = None
+        for task in plan.tasks:
+            if task.pending_skill_id:
+                if pending_registry is not None:
+                    pending_registry.clear(task.pending_skill_id)
+                task.pending_skill_id = None
+        plan.status = "pending"
+
+        # Re-attempt skill binding against the current registry. If the
+        # promoted skill addresses the previously-unresolved intent, the
+        # task gets bound; otherwise it goes back to BLOCKED via the
+        # planner's gap-fill path (no infinite loop — gap-fill only fires
+        # when a fresh skill_router lookup still finds no winner).
+        await self._rebind_blocked_tasks(plan)
+
+        if plan.status == "blocked":
+            return {
+                "resumed": False,
+                "reason": "still_missing_skills",
+                "pending_skill_ids": [t.pending_skill_id for t in plan.tasks if t.pending_skill_id],
+            }
+
+        result = await self.execute_workflow(plan)
+        return {"resumed": True, "result": result}
+
+    async def _rebind_blocked_tasks(self, plan: WorkflowPlan) -> None:
+        """Re-run ``_bind_skill_to_task`` for every task in a freshly-unblocked
+        plan. Used by ``try_resume_blocked_plan`` to reconcile the plan with
+        the current SkillRegistry contents (which may have grown since the
+        plan was originally constructed)."""
+        any_pending = False
+        for task in plan.tasks:
+            # Reset only the binding fields; leave inputs/dependencies/etc alone.
+            task.skill_name = None
+            task.skill_action = None
+            task.skill_resolution_method = None
+            await self._strategy_planner._bind_skill_to_task(
+                task,
+                {"task": task.action or task.task_id, "skill_action": task.skill_action},
+                plan.goal,
+            )
+            if task.pending_skill_id:
+                any_pending = True
+        if any_pending:
+            plan.status = "blocked"
+
     def get_performance_report(self) -> Dict[str, Any]:
         return {
             "agent_performance": self._perf.report(),
@@ -101,9 +224,7 @@ class WorkflowRunner:
 
     # ------------------------------------------------------ execution internals
 
-    async def _evaluate_workflow_criteria(
-        self, plan: WorkflowPlan, results: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _evaluate_workflow_criteria(self, plan: WorkflowPlan, results: Dict[str, Any]) -> Dict[str, Any]:
         if plan.structured_criteria:
             eval_result = await self._criteria_evaluator.evaluate(plan.structured_criteria, results)
             return eval_result.to_dict()
@@ -150,22 +271,22 @@ class WorkflowRunner:
         if _depth >= 5:
             logger.error("Max fallback depth (5) reached, aborting fallback chain")
             return {"plan_id": plan.plan_id, "success": False, "error": str(error), "results": results}
-        for fallback in (plan.fallback_plans or []):
+        for fallback in plan.fallback_plans or []:
             try:
                 return await self.execute_workflow(fallback, _depth + 1)
             except Exception as fe:
                 logger.error("Fallback plan failed: %s", fe)
         return {"plan_id": plan.plan_id, "success": False, "error": str(error), "results": results}
 
-    async def _handle_task_timeout(
-        self, task: AgentTask, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _handle_task_timeout(self, task: AgentTask, context: Dict[str, Any]) -> Dict[str, Any]:
         task.fail_execution("Timeout")
         if task.can_retry():
             task.increment_retry()
             logger.warning(
                 "Task %s timed out, retrying (%d/%d)",
-                task.task_id, task.retry_count, task.max_retries,
+                task.task_id,
+                task.retry_count,
+                task.max_retries,
             )
             return await self._execute_single_agent_task(task, context)
         self._perf.update(task.agent_type, False, time.time() - (task.start_time or time.time()))
@@ -177,12 +298,19 @@ class WorkflowRunner:
         self._perf.update(task.agent_type, False, execution_time)
         return task.to_failed_result(str(error))
 
-    async def _execute_single_agent_task(
-        self, task: AgentTask, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _execute_single_agent_task(self, task: AgentTask, context: Dict[str, Any]) -> Dict[str, Any]:
         task.start_execution()
         try:
             async with self.resource_semaphore:
+                # #7430 Phase 2: if StrategyPlanner bound a skill at plan time
+                # (#7268 Phase 1), dispatch via SkillRegistry instead of the
+                # capability-based agent path. ADR-006 default: skill-bound
+                # execution **replaces** agent dispatch — the skill is the
+                # concrete implementation. Removed/disabled skill at execute
+                # time fails the step (don't silently re-route at execute time;
+                # plans should re-plan instead, per #7431 Q3).
+                if task.skill_name:
+                    return await self._dispatch_via_skill(task, context)
                 agent = await self._agent_router.get_agent_instance(task.agent_type)
                 if not agent:
                     raise Exception(f"Agent {task.agent_type} not available")
@@ -199,9 +327,53 @@ class WorkflowRunner:
         except Exception as e:
             return self._handle_task_exception(task, e)
 
-    async def _publish_workflow_event(
-        self, workflow_id: str, event_type: str, data: Dict[str, Any]
-    ) -> None:
+    async def _dispatch_via_skill(self, task: AgentTask, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Dispatch task via the bound skill (#7430 Phase 2 of #7268 / ADR-006).
+
+        Caller already holds ``self.resource_semaphore`` and called
+        ``task.start_execution()``. We enforce the same timeout behavior as
+        the legacy agent path so resource accounting + perf metrics stay
+        consistent.
+
+        Failure modes:
+        - Skill not registered (or registered but disabled) → raise
+          ``RuntimeError`` so the existing ``_handle_task_exception`` path
+          surfaces it as a failed task. This is the explicit ADR-006 choice
+          per #7431 Q3 — fail the step, don't re-route at execute time.
+        - Skill ``execute`` raises → propagate up; same handler.
+        - Skill ``execute`` times out → propagate ``asyncio.TimeoutError``;
+          same handler.
+        """
+        # Lazy import — avoids circular dep if skills imports orchestration
+        from skills.registry import get_skill_registry
+
+        registry = get_skill_registry()
+        skill = registry.get(task.skill_name)
+        if skill is None:
+            raise RuntimeError(
+                f"Skill '{task.skill_name}' bound at plan time is not registered "
+                f"(registry may have been mutated between plan and execute). "
+                f"Failing step per ADR-006 'fail-don't-reroute' policy."
+            )
+        if not skill.enabled:
+            raise RuntimeError(
+                f"Skill '{task.skill_name}' is registered but disabled at execute time. "
+                f"Failing step per ADR-006 'fail-don't-reroute' policy."
+            )
+
+        enhanced_inputs = task.get_enhanced_inputs(context)
+        action = task.skill_action or "execute"
+        result = await asyncio.wait_for(
+            skill.execute(action, enhanced_inputs),
+            timeout=task.timeout_seconds,
+        )
+        task.complete_execution(result)
+        # Perf-tracker key uses skill_name — agent_type may still be set on
+        # the task for legacy reasons but the actual dispatch was the skill.
+        self._perf.update(f"skill:{task.skill_name}", True, task.get_execution_time())
+        return task.to_completed_result(result)
+
+    async def _publish_workflow_event(self, workflow_id: str, event_type: str, data: Dict[str, Any]) -> None:
         await _get_event_manager().publish(
             "workflow_event",
             {"workflow_id": workflow_id, "event_type": event_type, "timestamp": time.time(), "data": data},

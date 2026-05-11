@@ -20,16 +20,16 @@ Used for:
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query
 
-from api.system_health import register_singleton_probe
 from api.schemas_system import (
     FailureAnalysisRequest,
     FailureAnalysisResponse,
     HealthCheckResponse,
 )
-from services.causal_inference_engine import CausalInferenceEngine
+from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.causal_inference_engine import CausalInferenceEngine
 
 logger = logging.getLogger(__name__)
 
@@ -79,9 +79,7 @@ async def analyze_failure(request: FailureAnalysisRequest):
 
     try:
         engine = get_engine()
-        report = await engine.analyze_failure(
-            request.task_id, request.error_description
-        )
+        report = await engine.analyze_failure(request.task_id, request.error_description)
 
         # Check if analysis succeeded
         if report.analysis_status == "failed":
@@ -121,7 +119,7 @@ async def health_check():
         HealthCheckResponse with status and engine readiness
     """
     try:
-        engine = get_engine()
+        get_engine()
         # Engine is ready if it can be instantiated
         return HealthCheckResponse(status="ok", engine_ready=True)
     except Exception as e:
@@ -137,9 +135,7 @@ async def health_check():
 )
 async def analyze_failure_get(
     task_id: str = Query(..., description="Task ID to analyze"),
-    error_description: Optional[str] = Query(
-        None, description="Optional error description"
-    ),
+    error_description: Optional[str] = Query(None, description="Optional error description"),
 ):
     """
     Alternative GET endpoint for failure analysis (useful for integration testing).
@@ -151,7 +147,5 @@ async def analyze_failure_get(
     Returns:
         CausalAnalysisReport serialized
     """
-    request = FailureAnalysisRequest(
-        task_id=task_id, error_description=error_description
-    )
+    request = FailureAnalysisRequest(task_id=task_id, error_description=error_description)
     return await analyze_failure(request)

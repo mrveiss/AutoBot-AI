@@ -61,9 +61,7 @@ class SourceResult:
         }
 
     @classmethod
-    def failure(
-        cls, source_name: str, error: str, latency: float = 0.0
-    ) -> "SourceResult":
+    def failure(cls, source_name: str, error: str, latency: float = 0.0) -> "SourceResult":
         """Convenience constructor for a failed result."""
         return cls(
             source_name=source_name,
@@ -192,14 +190,10 @@ class FREDSource(OSINTSource):
             for row in recent:
                 parts = row.split(",")
                 if len(parts) == 2:
-                    parsed.append(
-                        {"date": parts[0].strip(), "gdp_growth_pct": parts[1].strip()}
-                    )
+                    parsed.append({"date": parts[0].strip(), "gdp_growth_pct": parts[1].strip()})
             latency = time.monotonic() - start
             logger.info("FREDSource sweep succeeded: %d records", len(parsed))
-            return SourceResult(
-                source_name=self.name, data=parsed, latency_seconds=latency
-            )
+            return SourceResult(source_name=self.name, data=parsed, latency_seconds=latency)
         except Exception as exc:
             latency = time.monotonic() - start
             logger.warning("FREDSource sweep failed: %s", exc)
@@ -225,9 +219,7 @@ class GDELTSource(OSINTSource):
             resp = await client.get(self._URL, timeout=20.0)
             resp.raise_for_status()
             # lastupdate.txt lines: "<bytes> <md5> <url>"
-            lines = [
-                line.strip() for line in resp.text.strip().splitlines() if line.strip()
-            ]
+            lines = [line.strip() for line in resp.text.strip().splitlines() if line.strip()]
             urls = [line.split()[-1] for line in lines if line.split()]
             latency = time.monotonic() - start
             logger.info("GDELTSource sweep succeeded: %d dataset URLs", len(urls))
@@ -389,13 +381,8 @@ class OSINTEngine(AsyncRedisClientMixin):
             return []
 
         async with httpx.AsyncClient(follow_redirects=True) as client:
-            tasks = [
-                self._sweep_with_timeout(source, client, timeout_per_source)
-                for source in self._sources.values()
-            ]
-            results: List[SourceResult] = await asyncio.gather(
-                *tasks, return_exceptions=False
-            )
+            tasks = [self._sweep_with_timeout(source, client, timeout_per_source) for source in self._sources.values()]
+            results: List[SourceResult] = await asyncio.gather(*tasks, return_exceptions=False)
 
         await self._cache_results(results)
         logger.info(
@@ -419,9 +406,7 @@ class OSINTEngine(AsyncRedisClientMixin):
             return result
         except asyncio.TimeoutError:
             latency = time.monotonic() - start
-            logger.warning(
-                "OSINTEngine: source '%s' timed out after %.1fs", source.name, latency
-            )
+            logger.warning("OSINTEngine: source '%s' timed out after %.1fs", source.name, latency)
             return SourceResult.failure(
                 source.name,
                 f"Source timed out after {timeout}s",

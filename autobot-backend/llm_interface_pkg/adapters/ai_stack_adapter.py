@@ -98,7 +98,7 @@ class AIStackAdapter(AdapterBase):
                     )
                 )
 
-        except Exception as e:
+        except Exception:
             elapsed = time.time() - start
             healthy = False
             diagnostics.append(

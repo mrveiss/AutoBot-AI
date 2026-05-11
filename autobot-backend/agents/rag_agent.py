@@ -117,9 +117,7 @@ class RAGAgent(StandardizedAgent):
         """Return list of capabilities this agent supports."""
         return self.capabilities.copy()
 
-    def _build_rag_messages(
-        self, query: str, document_context: str
-    ) -> List[Dict[str, str]]:
+    def _build_rag_messages(self, query: str, document_context: str) -> List[Dict[str, str]]:
         """
         Build message list for RAG query processing.
 
@@ -148,9 +146,7 @@ class RAGAgent(StandardizedAgent):
             "synthesized_response": synthesis_result.get("response", ""),
             "confidence_score": synthesis_result.get("confidence", 0.8),
             "document_analysis": document_analysis,
-            "sources_used": [
-                doc.get("metadata", {}).get("filename", "Unknown") for doc in documents
-            ],
+            "sources_used": [doc.get("metadata", {}).get("filename", "Unknown") for doc in documents],
             "agent_type": "rag",
             "model_used": self.model_name,
             "metadata": {
@@ -196,25 +192,19 @@ class RAGAgent(StandardizedAgent):
             synthesis_result = self._extract_synthesis_response(response)
             document_analysis = self._analyze_document_relevance(query, documents)
 
-            return self._build_rag_success_response(
-                synthesis_result, document_analysis, documents
-            )
+            return self._build_rag_success_response(synthesis_result, document_analysis, documents)
 
         except Exception as e:
             logger.error("RAG Agent error: %s", e)
             return {
                 "status": "error",
-                "synthesized_response": (
-                    "I encountered an error while synthesizing information from the documents."
-                ),
+                "synthesized_response": ("I encountered an error while synthesizing information from the documents."),
                 "error": "RAG synthesis failed",
                 "agent_type": "rag",
                 "model_used": self.model_name,
             }
 
-    async def reformulate_query(
-        self, original_query: str, context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    async def reformulate_query(self, original_query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Reformulate a query to improve retrieval effectiveness.
 
@@ -262,9 +252,7 @@ class RAGAgent(StandardizedAgent):
                 "error": "Query reformulation failed",
             }
 
-    async def rank_documents(
-        self, query: str, documents: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    async def rank_documents(self, query: str, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Rank documents by relevance to the query.
 
@@ -379,9 +367,7 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
 
         return "\n".join(context_parts)
 
-    def _analyze_document_relevance(
-        self, query: str, documents: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    def _analyze_document_relevance(self, query: str, documents: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Analyze relevance of documents to the query."""
         analysis = {
             "total_documents": len(documents),

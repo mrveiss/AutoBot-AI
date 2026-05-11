@@ -13,14 +13,6 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth_middleware import check_admin_permission
-from api.schemas_workflows import (
-    GitHubCommentRequest,
-    GitHubConnectionTestRequest,
-    GitHubReviewRequest,
-)
-from integrations.base import IntegrationConfig, IntegrationHealth
-from integrations.github_integration import GitHubIntegration
 from api.schemas_system import (
     GitHubCommitResponse,
     GitHubCommitsResponse,
@@ -29,15 +21,23 @@ from api.schemas_system import (
     GitHubIssuesResponse,
     GitHubPRCommentResponse,
     GitHubPRCommentsResponse,
-    GitHubPRReviewResponse,
     GitHubProviderInfo,
+    GitHubPRReviewResponse,
     GitHubPullRequestDiffResponse,
     GitHubPullRequestResponse,
     GitHubPullRequestsResponse,
     GitHubRepositoryResponse,
     GitHubRepositoryTreeResponse,
 )
+from api.schemas_workflows import (
+    GitHubCommentRequest,
+    GitHubConnectionTestRequest,
+    GitHubReviewRequest,
+)
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from integrations.base import IntegrationConfig, IntegrationHealth
+from integrations.github_integration import GitHubIntegration
 
 logger = logging.getLogger(__name__)
 
@@ -243,9 +243,7 @@ async def post_pr_comment(request: GitHubCommentRequest) -> Dict[str, Any]:
                 "body": request.body,
             },
         )
-        logger.info(
-            "Posted comment to %s/%s#%d", request.owner, request.repo, request.pull_number
-        )
+        logger.info("Posted comment to %s/%s#%d", request.owner, request.repo, request.pull_number)
         return result
     except Exception as exc:
         logger.error("Failed to post PR comment: %s", exc)
@@ -375,9 +373,7 @@ async def get_repository(
     """
     try:
         integration = _make_integration(token)
-        result = await integration.execute_action(
-            "get_repository", {"owner": owner, "repo": repo}
-        )
+        result = await integration.execute_action("get_repository", {"owner": owner, "repo": repo})
         return result
     except Exception as exc:
         logger.error("Failed to get repository %s/%s: %s", owner, repo, exc)
@@ -434,9 +430,7 @@ async def get_commit(
     """
     try:
         integration = _make_integration(token)
-        result = await integration.execute_action(
-            "get_commit", {"owner": owner, "repo": repo, "ref": ref}
-        )
+        result = await integration.execute_action("get_commit", {"owner": owner, "repo": repo, "ref": ref})
         return result
     except Exception as exc:
         logger.error("Failed to get commit %s/%s@%s: %s", owner, repo, ref, exc)

@@ -81,7 +81,7 @@ export function useNotificationConfig() {
     return wrapSaving(async () => {
       try {
         const url = `${getApiBase()}/workflow-automation/notification_config/${workflowId}`;
-        await apiClient.put(url, config.value);
+        await apiClient.put<any>(url, config.value);
         logger.info('Saved notification config for workflow', workflowId);
         return true;
       } catch (err) {

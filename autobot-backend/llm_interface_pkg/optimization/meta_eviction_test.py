@@ -189,9 +189,7 @@ class TestEvictLayerToMetaStandard:
                 "llm_interface_pkg.optimization.meta_eviction._import_torch",
                 return_value=mock_torch,
             ),
-            patch(
-                "llm_interface_pkg.optimization.meta_eviction._import_accelerate"
-            ) as mock_acc,
+            patch("llm_interface_pkg.optimization.meta_eviction._import_accelerate") as mock_acc,
         ):
             evict_layer_to_meta(layer)
         mock_acc.assert_not_called()
@@ -215,9 +213,7 @@ class TestEvictLayerToMetaStandard:
 class TestEvictLayerToMetaQuantized:
     """Tests for evict_layer_to_meta() with quantizer (per-param path)."""
 
-    def _run_quantized_eviction(
-        self, layer, param_names=("weight", "bias"), buffer_names=()
-    ):
+    def _run_quantized_eviction(self, layer, param_names=("weight", "bias"), buffer_names=()):
         """Helper: run quantized eviction with mocked torch + accelerate."""
         layer.named_parameters.return_value = [(n, MagicMock()) for n in param_names]
         layer.named_buffers.return_value = [(n, MagicMock()) for n in buffer_names]
@@ -254,9 +250,7 @@ class TestEvictLayerToMetaQuantized:
     def test_calls_set_module_tensor_for_buffers(self):
         """Quantized path also handles named buffers."""
         layer = MagicMock(name="Layer")
-        set_fn = self._run_quantized_eviction(
-            layer, param_names=("weight",), buffer_names=("running_mean",)
-        )
+        set_fn = self._run_quantized_eviction(layer, param_names=("weight",), buffer_names=("running_mean",))
         assert set_fn.call_count == 2  # 1 param + 1 buffer
 
     def test_does_not_call_layer_to(self):
@@ -351,9 +345,7 @@ class TestMetaDeviceEvictionManager:
         layer = _make_layer_mock()
 
         with (
-            patch(
-                "llm_interface_pkg.optimization.meta_eviction.evict_layer_to_meta"
-            ) as mock_evict,
+            patch("llm_interface_pkg.optimization.meta_eviction.evict_layer_to_meta") as mock_evict,
             patch(
                 "llm_interface_pkg.optimization.meta_eviction.get_gpu_memory_allocated",
                 return_value=0,
@@ -370,9 +362,7 @@ class TestMetaDeviceEvictionManager:
         layer = _make_layer_mock()
 
         with (
-            patch(
-                "llm_interface_pkg.optimization.meta_eviction.evict_layer_to_meta"
-            ) as mock_evict,
+            patch("llm_interface_pkg.optimization.meta_eviction.evict_layer_to_meta") as mock_evict,
             patch(
                 "llm_interface_pkg.optimization.meta_eviction.get_gpu_memory_allocated",
                 return_value=0,

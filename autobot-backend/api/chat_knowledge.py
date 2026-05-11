@@ -45,15 +45,6 @@ from typing import Dict, List, Optional
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from chat_history import ChatHistoryManager
-from api.system_health import ComponentHealth, register_health_probe
-
-# Import existing components
-from knowledge_base import KnowledgeBase
-from services.llm_service import get_llm_service
-from type_defs.common import Metadata
-
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     AddKnowledgeRequest,
@@ -69,6 +60,15 @@ from api.schemas_knowledge import (
     PreserveSessionFactsResponse,
     SessionFactsResponse,
 )
+from api.system_health import ComponentHealth, register_health_probe
+from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from chat_history import ChatHistoryManager
+
+# Import existing components
+from knowledge_base import KnowledgeBase
+from services.llm_service import get_llm_service
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
@@ -100,9 +100,7 @@ async def get_chat_knowledge_manager_instance(request: Request = None):
     # Cache in app state if request available
     if request is not None:
         request.app.state.chat_knowledge_manager = new_manager
-        logger.info(
-            "Cached new chat knowledge manager in app.state for future requests"
-        )
+        logger.info("Cached new chat knowledge manager in app.state for future requests")
 
     return new_manager
 
@@ -213,9 +211,7 @@ class ChatKnowledgeManager:
         file_name = os.path.basename(file_path)
         # Issue #358 - avoid blocking
         file_exists = await asyncio.to_thread(os.path.exists, file_path)
-        size_bytes = (
-            await asyncio.to_thread(os.path.getsize, file_path) if file_exists else None
-        )
+        size_bytes = await asyncio.to_thread(os.path.getsize, file_path) if file_exists else None
 
         association = ChatFileAssociation(
             file_id=file_id,
@@ -243,14 +239,10 @@ class ChatKnowledgeManager:
                 }
             )
 
-        logger.info(
-            f"File associated with chat {chat_id}: {file_name} ({association_type.value})"
-        )
+        logger.info(f"File associated with chat {chat_id}: {file_name} ({association_type.value})")
         return association
 
-    async def add_temporary_knowledge(
-        self, chat_id: str, content: str, metadata: Optional[Metadata] = None
-    ) -> str:
+    async def add_temporary_knowledge(self, chat_id: str, content: str, metadata: Optional[Metadata] = None) -> str:
         """Add temporary knowledge to chat context"""
         knowledge_id = str(uuid.uuid4())
 
@@ -286,9 +278,7 @@ class ChatKnowledgeManager:
                         "content": item["content"],
                         "metadata": item.get("metadata", {}),
                         "created_at": item["created_at"],
-                        "suggested_action": self._suggest_knowledge_action(
-                            item["content"]
-                        ),
+                        "suggested_action": self._suggest_knowledge_action(item["content"]),
                     }
                 )
 
@@ -299,24 +289,16 @@ class ChatKnowledgeManager:
         # Simple heuristics for suggestions
         content_lower = content.lower()
 
-        if any(
-            keyword in content_lower
-            for keyword in TROUBLESHOOTING_KEYWORDS  # O(1) lookup (Issue #326)
-        ):
+        if any(keyword in content_lower for keyword in TROUBLESHOOTING_KEYWORDS):  # O(1) lookup (Issue #326)
             return KnowledgeDecision.ADD_TO_KB  # Useful for troubleshooting
-        elif any(
-            keyword in content_lower
-            for keyword in DOCUMENTATION_KEYWORDS  # O(1) lookup (Issue #326)
-        ):
+        elif any(keyword in content_lower for keyword in DOCUMENTATION_KEYWORDS):  # O(1) lookup (Issue #326)
             return KnowledgeDecision.ADD_TO_KB  # Useful for documentation
         elif len(content) < 50:
             return KnowledgeDecision.DELETE  # Too short to be useful
         else:
             return KnowledgeDecision.KEEP_TEMPORARY  # Keep for this session
 
-    async def apply_knowledge_decision(
-        self, chat_id: str, knowledge_id: str, decision: KnowledgeDecision
-    ) -> bool:
+    async def apply_knowledge_decision(self, chat_id: str, knowledge_id: str, decision: KnowledgeDecision) -> bool:
         """Apply user decision for temporary knowledge"""
         if chat_id not in self.chat_contexts:
             return False
@@ -396,16 +378,12 @@ class ChatKnowledgeManager:
                 "message_stats": {
                     "total": len(messages),
                     "user": len([m for m in messages if m.get("role") == "user"]),
-                    "assistant": len(
-                        [m for m in messages if m.get("role") == "assistant"]
-                    ),
+                    "assistant": len([m for m in messages if m.get("role") == "assistant"]),
                 },
             },
         }
 
-    def _build_chat_kb_metadata(
-        self, base_metadata: dict, chat_id: str, context
-    ) -> dict:
+    def _build_chat_kb_metadata(self, base_metadata: dict, chat_id: str, context) -> dict:
         """Helper for compile_chat_to_knowledge. Ref: #1088."""
         # Issue #547: Include source_session_id for orphan cleanup
         # Issue #688: Include ownership metadata for chat-compiled knowledge
@@ -447,22 +425,14 @@ class ChatKnowledgeManager:
         Format the summary with clear sections and bullet points.
         """
 
-        summary_response = await self.llm_interface.chat(
-            messages=[{"role": "user", "content": summary_prompt}]
-        )
+        summary_response = await self.llm_interface.chat(messages=[{"role": "user", "content": summary_prompt}])
         summary = summary_response.content
 
         context = self.chat_contexts.get(chat_id)
-        compiled_knowledge = self._build_compiled_knowledge_dict(
-            chat_id, title, context, messages, summary
-        )
-        kb_metadata = self._build_chat_kb_metadata(
-            compiled_knowledge["metadata"], chat_id, context
-        )
+        compiled_knowledge = self._build_compiled_knowledge_dict(chat_id, title, context, messages, summary)
+        kb_metadata = self._build_chat_kb_metadata(compiled_knowledge["metadata"], chat_id, context)
 
-        kb_id = await self.knowledge_base.add_content(
-            content=summary, metadata=kb_metadata
-        )
+        kb_id = await self.knowledge_base.add_content(content=summary, metadata=kb_metadata)
         compiled_knowledge["kb_id"] = kb_id
 
         logger.info("Chat %s compiled to knowledge base as %s", chat_id, kb_id)
@@ -479,10 +449,7 @@ class ChatKnowledgeManager:
 
         for result in kb_results:
             # Filter by chat if specified
-            if (
-                chat_id
-                and result.get("metadata", {}).get("source") != f"chat_{chat_id}"
-            ):
+            if chat_id and result.get("metadata", {}).get("source") != f"chat_{chat_id}":
                 continue
 
             results.append(
@@ -496,11 +463,7 @@ class ChatKnowledgeManager:
 
         # Search in temporary knowledge if requested
         if include_temporary:
-            contexts_to_search = (
-                [self.chat_contexts[chat_id]]
-                if chat_id
-                else self.chat_contexts.values()
-            )
+            contexts_to_search = [self.chat_contexts[chat_id]] if chat_id else self.chat_contexts.values()
 
             for context in contexts_to_search:
                 for item in context.temporary_knowledge:
@@ -568,9 +531,7 @@ async def create_chat_context(request_data: CreateContextRequest, request: Reque
     operation="associate_file_with_chat",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-async def associate_file_with_chat(
-    request_data: AssociateFileRequest, request: Request
-):
+async def associate_file_with_chat(request_data: AssociateFileRequest, request: Request):
     """Associate a file with a chat session"""
     try:
         manager = await get_chat_knowledge_manager_instance(request)
@@ -883,8 +844,7 @@ async def get_session_facts(session_id: str, request: Request):
             formatted_facts.append(
                 {
                     "id": fact.get("id"),
-                    "content": fact.get("content", "")[:200]
-                    + ("..." if len(fact.get("content", "")) > 200 else ""),
+                    "content": fact.get("content", "")[:200] + ("..." if len(fact.get("content", "")) > 200 else ""),
                     "full_content": fact.get("content", ""),
                     "category": fact.get("category", "general"),
                     "tags": fact.get("tags", []),
@@ -931,9 +891,7 @@ async def _preserve_single_fact(
             metadata["preserved_at"] = preserve_time
             metadata["preserved_from_deletion"] = True
 
-            success = await knowledge_base.update_fact(
-                fact_id=fact_id, metadata=metadata
-            )
+            success = await knowledge_base.update_fact(fact_id=fact_id, metadata=metadata)
             if success:
                 return {"status": "success", "fact_id": fact_id}
             else:
@@ -980,9 +938,7 @@ def _count_preserve_results(results: list, session_id: str) -> tuple[int, int, l
     operation="preserve_session_facts",
     error_code_prefix="CHAT_KB",
 )
-async def preserve_session_facts(
-    session_id: str, request: Request, body: MarkFactsPreservedRequest
-):
+async def preserve_session_facts(session_id: str, request: Request, body: MarkFactsPreservedRequest):
     """
     Mark specific facts as preserved/important before session deletion.
 
@@ -999,9 +955,7 @@ async def preserve_session_facts(
         Update result with counts
     """
     if len(body.fact_ids) > 100:
-        raise HTTPException(
-            status_code=400, detail="Maximum 100 facts can be preserved at once"
-        )
+        raise HTTPException(status_code=400, detail="Maximum 100 facts can be preserved at once")
 
     knowledge_base = getattr(request.app.state, "knowledge_base", None)
     if not knowledge_base:
@@ -1026,9 +980,7 @@ async def preserve_session_facts(
             return_exceptions=True,
         )
 
-        updated_count, failed_count, errors = _count_preserve_results(
-            results, session_id
-        )
+        updated_count, failed_count, errors = _count_preserve_results(results, session_id)
 
         return {
             "status": "success" if failed_count == 0 else "partial",
@@ -1060,10 +1012,7 @@ if __name__ == "__main__":
         # Add temporary knowledge
         knowledge_id = await manager.add_temporary_knowledge(
             chat_id="test_chat_123",
-            content=(
-                "FastAPI is a modern web framework for Python with automatic API"
-                "documentation."
-            ),
+            content=("FastAPI is a modern web framework for Python with automatic API" "documentation."),
             metadata={"category": "framework"},
         )
 
@@ -1080,4 +1029,4 @@ if __name__ == "__main__":
 
         logger.info("Demo completed!")
 
-    asyncio.run(demo())
+    run_or_schedule(demo())

@@ -11,7 +11,7 @@ Provides comprehensive error tracking, resolution, and analytics endpoints.
 
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status

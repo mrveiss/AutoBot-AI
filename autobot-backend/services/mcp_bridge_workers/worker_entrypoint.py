@@ -33,7 +33,9 @@ import logging
 import os
 import resource
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Dict
+
+from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger("mcp_worker")
 
@@ -66,9 +68,7 @@ def _load_bridge(bridge_module: str) -> Any:
     return importlib.import_module(mod_path)
 
 
-async def _invoke_tool(
-    bridge: Any, tool_name: str, arguments: Dict[str, Any]
-) -> Dict[str, Any]:
+async def _invoke_tool(bridge: Any, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
     """Dispatch *tool_name* on *bridge* module.
 
     Prefers a module-level ``mcp_call_tool(name, arguments)`` coroutine.
@@ -137,9 +137,7 @@ async def _serve(bridge_module: str) -> None:
         raise
 
     try:
-        writer_transport, writer_protocol = await loop.connect_write_pipe(
-            asyncio.streams.FlowControlMixin, sys.stdout
-        )
+        writer_transport, writer_protocol = await loop.connect_write_pipe(asyncio.streams.FlowControlMixin, sys.stdout)
     except Exception as exc:
         logger.error("worker: failed to connect stdout: %s", exc)
         raise
@@ -182,7 +180,7 @@ def main() -> None:
         print("usage: worker_entrypoint.py <bridge_module>", file=sys.stderr)
         sys.exit(2)
     _apply_rlimits()
-    asyncio.run(_serve(sys.argv[1]))
+    run_or_schedule(_serve(sys.argv[1]))
 
 
 if __name__ == "__main__":

@@ -111,9 +111,7 @@ async def evaluate_task_output(
     confidence = _score_response(response_text, input_text)
 
     if confidence >= threshold:
-        logger.debug(
-            "Self-eval PASSED (confidence=%.4f, threshold=%.4f)", confidence, threshold
-        )
+        logger.debug("Self-eval PASSED (confidence=%.4f, threshold=%.4f)", confidence, threshold)
         return EvalResult(
             passed=True,
             confidence=confidence,

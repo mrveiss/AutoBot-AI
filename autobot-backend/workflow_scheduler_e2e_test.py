@@ -4,8 +4,8 @@ Test the new workflow scheduler and queue management system
 """
 
 import asyncio
-import sys
 import os
+import sys
 from datetime import datetime, timedelta
 
 sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))

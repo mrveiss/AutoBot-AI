@@ -26,8 +26,8 @@ from models.schemas import (
     TLSEndpointResponse,
     TLSEndpointsResponse,
 )
-from services.auth import get_current_user
 from services.ansible_utils import _extract_failure_summary
+from services.auth import get_current_user
 from services.database import get_db
 from services.tls_credentials import get_tls_credential_service
 

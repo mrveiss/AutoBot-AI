@@ -5,8 +5,6 @@
 Unit tests for onboarding preset loader (Issue #5061).
 """
 
-import pytest
-
 from onboarding.presets import get_all_presets, get_preset
 
 REQUIRED_FIELDS = {"name", "title", "description", "agents", "skills", "connectors", "system_prompt", "llm_tier"}
@@ -29,9 +27,9 @@ class TestGetAllPresets:
 
     def test_all_llm_tiers_are_valid(self):
         for preset in get_all_presets():
-            assert preset["llm_tier"] in VALID_TIERS, (
-                f"Preset '{preset['name']}' has invalid llm_tier '{preset['llm_tier']}'"
-            )
+            assert (
+                preset["llm_tier"] in VALID_TIERS
+            ), f"Preset '{preset['name']}' has invalid llm_tier '{preset['llm_tier']}'"
 
     def test_returns_copies_not_references(self):
         presets = get_all_presets()

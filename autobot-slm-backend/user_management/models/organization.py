@@ -9,7 +9,7 @@ In multi_company and provider modes, each organization is isolated.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text

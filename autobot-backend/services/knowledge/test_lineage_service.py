@@ -13,7 +13,7 @@ import sys
 import types
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -94,10 +94,7 @@ def _make_provenance_log(entries: List[Dict[str, Any]]) -> MagicMock:
         return result
 
     async def _get_best_run_id_for_collection(collection_name: str):
-        candidates = [
-            e for e in entries
-            if e.get("collection_name") == collection_name and e.get("run_id")
-        ]
+        candidates = [e for e in entries if e.get("collection_name") == collection_name and e.get("run_id")]
         if not candidates:
             return None
         best = max(candidates, key=lambda e: float(e.get("score", 0.0)))
@@ -106,9 +103,7 @@ def _make_provenance_log(entries: List[Dict[str, Any]]) -> MagicMock:
     log = MagicMock()
     log.get_recent = AsyncMock(return_value=entries)
     log.get_by_run_id = AsyncMock(side_effect=_get_by_run_id)
-    log.get_best_run_id_for_collection = AsyncMock(
-        side_effect=_get_best_run_id_for_collection
-    )
+    log.get_best_run_id_for_collection = AsyncMock(side_effect=_get_best_run_id_for_collection)
     return log
 
 

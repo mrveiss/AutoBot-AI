@@ -9,12 +9,11 @@ Issue #635.
 """
 
 import uuid
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from autobot_shared.time_utils import now_utc
 
+from autobot_shared.time_utils import now_utc
 from user_management.services.user_service import (
     InvalidCredentialsError,
     UserNotFoundError,

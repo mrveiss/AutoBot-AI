@@ -152,14 +152,10 @@ class CaptchaSolver:
         self.service = config.get("service", "2captcha")
         self.timeout = config.get("timeout", 120)
 
-    async def solve_recaptcha(
-        self, site_key: str, page_url: str, invisible: bool = False
-    ) -> Optional[str]:
+    async def solve_recaptcha(self, site_key: str, page_url: str, invisible: bool = False) -> Optional[str]:
         """Solve reCAPTCHA using solving service."""
         if not self.api_key:
-            logger.warning(  # codeql[py/clear-text-logging-sensitive-data]
-                "No CAPTCHA API key configured"
-            )
+            logger.warning("No CAPTCHA API key configured")  # codeql[py/clear-text-logging-sensitive-data]
             return None
         try:
             if self.service == "2captcha":
@@ -173,9 +169,7 @@ class CaptchaSolver:
             logger.error("CAPTCHA solving failed: %s", str(e))
             return None
 
-    async def _solve_2captcha(
-        self, site_key: str, page_url: str, invisible: bool
-    ) -> Optional[str]:
+    async def _solve_2captcha(self, site_key: str, page_url: str, invisible: bool) -> Optional[str]:
         """Solve reCAPTCHA using 2captcha service."""
         if not AIOHTTP_AVAILABLE:
             return None
@@ -217,9 +211,7 @@ class CaptchaSolver:
         logger.error("CAPTCHA solving timeout")
         return None
 
-    async def _solve_anticaptcha(
-        self, site_key: str, page_url: str, invisible: bool
-    ) -> Optional[str]:
+    async def _solve_anticaptcha(self, site_key: str, page_url: str, invisible: bool) -> Optional[str]:
         """Solve reCAPTCHA using AntiCaptcha service (placeholder)."""
         logger.info("AntiCaptcha integration not implemented yet")
         return None
@@ -363,10 +355,7 @@ class WebResearcher:
     async def initialize(self):
         """Initialize browser automation."""
         if not PLAYWRIGHT_AVAILABLE:
-            raise RuntimeError(
-                "Playwright not available. "
-                "Run: pip install playwright && playwright install"
-            )
+            raise RuntimeError("Playwright not available. " "Run: pip install playwright && playwright install")
         playwright = await async_playwright().start()
         self.browser = await playwright.chromium.launch(
             headless=self.config.get("headless", True),
@@ -409,10 +398,7 @@ class WebResearcher:
             extra_http_headers={
                 "Accept-Language": fp["language"],
                 "Accept-Encoding": "gzip, deflate, br",
-                "Accept": (
-                    "text/html,application/xhtml+xml,"
-                    "application/xml;q=0.9,image/webp,*/*;q=0.8"
-                ),
+                "Accept": ("text/html,application/xhtml+xml," "application/xml;q=0.9,image/webp,*/*;q=0.8"),
                 "DNT": "1",
                 "Connection": "keep-alive",
                 "Upgrade-Insecure-Requests": "1",
@@ -470,9 +456,7 @@ class WebResearcher:
             unique = self._deduplicate_results(all_results)
             ranked = self._rank_results(unique, query)[:max_results]
             enhanced = await self._enhance_results_with_content(ranked)
-            return self._build_search_response(
-                query, enhanced, len(all_results), len(unique), 3
-            )
+            return self._build_search_response(query, enhanced, len(all_results), len(unique), 3)
         except Exception as e:
             logger.error("Web search failed: %s", str(e))
             return {
@@ -483,9 +467,7 @@ class WebResearcher:
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
-    async def _search_all_engines(
-        self, query: str, max_results: int
-    ) -> List[Dict[str, Any]]:
+    async def _search_all_engines(self, query: str, max_results: int) -> List[Dict[str, Any]]:
         """Execute search across all configured engines. Issue #620."""
         engines = [
             ("duckduckgo", self._search_duckduckgo),
@@ -532,9 +514,7 @@ class WebResearcher:
     # Search engine implementations
     # -------------------------------------------------------------------
 
-    async def _search_duckduckgo(
-        self, query: str, max_results: int
-    ) -> List[Dict[str, Any]]:
+    async def _search_duckduckgo(self, query: str, max_results: int) -> List[Dict[str, Any]]:
         """Search DuckDuckGo with anti-detection."""
         page = await self.context.new_page()
         results: List[Dict[str, Any]] = []
@@ -650,9 +630,7 @@ class WebResearcher:
             "domain": urlparse(url).netloc if url else "",
         }
 
-    async def _search_google(
-        self, query: str, max_results: int
-    ) -> List[Dict[str, Any]]:
+    async def _search_google(self, query: str, max_results: int) -> List[Dict[str, Any]]:
         """Search Google with anti-detection."""
         page = await self.context.new_page()
         results: List[Dict[str, Any]] = []
@@ -740,22 +718,15 @@ class WebResearcher:
         solution = await self.captcha_solver.solve_recaptcha(site_key, page.url)
         if not solution:
             return False
-        await page.evaluate(
-            "document.getElementById('g-recaptcha-response')"
-            f'.innerHTML="{solution}";'
-        )
+        await page.evaluate("document.getElementById('g-recaptcha-response')" f'.innerHTML="{solution}";')
         await page.evaluate("if(window.captchaCallback) window.captchaCallback();")
         await page.wait_for_timeout(2000)
         return True
 
     async def _request_human_captcha(self, page: Page, captcha_type: str) -> bool:
         """Request human intervention for CAPTCHA. Issue #620."""
-        service = get_captcha_human_loop(
-            timeout_seconds=120.0, auto_skip_on_timeout=True
-        )
-        result = await service.request_human_intervention(
-            page=page, url=page.url, captcha_type=captcha_type
-        )
+        service = get_captcha_human_loop(timeout_seconds=120.0, auto_skip_on_timeout=True)
+        result = await service.request_human_intervention(page=page, url=page.url, captcha_type=captcha_type)
         if result.success:
             logger.info(
                 "CAPTCHA solved by user in %.1fs",
@@ -774,9 +745,7 @@ class WebResearcher:
     # Content scraping and enhancement
     # -------------------------------------------------------------------
 
-    async def _enhance_results_with_content(
-        self, results: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    async def _enhance_results_with_content(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Enhance search results by scraping page content."""
         enhanced = []
         for result in results:
@@ -886,9 +855,7 @@ class WebResearcher:
             score += 0.1
         return min(score, 1.0)
 
-    def _deduplicate_results(
-        self, results: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _deduplicate_results(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Remove duplicate search results by URL."""
         seen: set = set()
         unique: List[Dict[str, Any]] = []
@@ -900,22 +867,14 @@ class WebResearcher:
                 unique.append(result)
         return unique
 
-    def _rank_results(
-        self, results: List[Dict[str, Any]], query: str
-    ) -> List[Dict[str, Any]]:
+    def _rank_results(self, results: List[Dict[str, Any]], query: str) -> List[Dict[str, Any]]:
         """Rank search results by relevance."""
         query_terms = set(query.lower().split())
         for result in results:
             title_terms = set(result.get("title", "").lower().split())
             snippet_terms = set(result.get("snippet", "").lower().split())
-            title_overlap = (
-                len(query_terms & title_terms) / len(query_terms) if query_terms else 0
-            )
-            snippet_overlap = (
-                len(query_terms & snippet_terms) / len(query_terms)
-                if query_terms
-                else 0
-            )
+            title_overlap = len(query_terms & title_terms) / len(query_terms) if query_terms else 0
+            snippet_overlap = len(query_terms & snippet_terms) / len(query_terms) if query_terms else 0
             result["relevance_score"] = title_overlap * 0.7 + snippet_overlap * 0.3
         return sorted(
             results,
@@ -1014,9 +973,7 @@ class WebResearcher:
             return result
         except asyncio.TimeoutError:
             logger.warning("Research timed out after %ss", timeout_secs)
-            self.circuit_breaker._record_failure(
-                time.time() - _start, TimeoutError("web research timed out")
-            )
+            self.circuit_breaker._record_failure(time.time() - _start, TimeoutError("web research timed out"))
             return self._build_failure_response(query)
         except Exception as e:
             logger.error("Research failed: %s", e)
@@ -1027,10 +984,7 @@ class WebResearcher:
         """Build response for disabled state."""
         return {
             "status": "disabled",
-            "message": (
-                "Web research is disabled. "
-                "Enable it in settings to use this feature."
-            ),
+            "message": ("Web research is disabled. " "Enable it in settings to use this feature."),
             "query": query,
             "results": [],
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
@@ -1091,9 +1045,7 @@ class WebResearcher:
                 sources_count=0,
             )
 
-    def _convert_to_research_results(
-        self, search_results: Dict[str, Any]
-    ) -> List[ResearchResult]:
+    def _convert_to_research_results(self, search_results: Dict[str, Any]) -> List[ResearchResult]:
         """Convert raw search results to ResearchResult models."""
         results = []
         if search_results.get("status") != "success":
@@ -1130,9 +1082,7 @@ class WebResearcher:
                 "detailed_info": detailed_info,
                 "research_results": [r.model_dump() for r in research_results],
                 "web_search_results": search_results.get("results", []),
-                "summary": self._generate_research_summary(
-                    research_results, request.query
-                ),
+                "summary": self._generate_research_summary(research_results, request.query),
             }
         except Exception as e:
             logger.error("Tool research failed: %s", e)
@@ -1164,9 +1114,7 @@ class WebResearcher:
             "installation_command": tool_info.get("installation", "Not available"),
             "usage_example": tool_info.get("usage", "Not available"),
             "prerequisites": tool_info.get("prerequisites", ["sudo privileges"]),
-            "verification_command": tool_info.get(
-                "verification", f"{tool_name} --version"
-            ),
+            "verification_command": tool_info.get("verification", f"{tool_name} --version"),
             "web_resources": web_results,
         }
 
@@ -1202,18 +1150,14 @@ class WebResearcher:
         """Get command to verify tool installation."""
         tool_lower = tool_name.lower()
         if tool_lower in _TOOL_REFERENCE_DATA:
-            return _TOOL_REFERENCE_DATA[tool_lower].get(
-                "verification", f"{tool_name} --version"
-            )
+            return _TOOL_REFERENCE_DATA[tool_lower].get("verification", f"{tool_name} --version")
         return f"{tool_name} --version"
 
     # -------------------------------------------------------------------
     # Summary generation
     # -------------------------------------------------------------------
 
-    def _generate_research_summary(
-        self, results: List[ResearchResult], query: str
-    ) -> str:
+    def _generate_research_summary(self, results: List[ResearchResult], query: str) -> str:
         """Generate summary from ResearchResult list."""
         if not results:
             return f"No relevant results found for '{query}'"
@@ -1230,9 +1174,7 @@ class WebResearcher:
             summary += f" Top result: '{results[0].title}'"
         return summary
 
-    def _generate_source_summary(
-        self, sources: List[Dict[str, Any]], query: str
-    ) -> str:
+    def _generate_source_summary(self, sources: List[Dict[str, Any]], query: str) -> str:
         """Generate summary from source dicts (for KB integration)."""
         if not sources:
             return "No relevant information found."
@@ -1273,9 +1215,7 @@ class WebResearcher:
 
             sources = self._convert_to_sources(search_results)
             summary = self._generate_source_summary(sources, query)
-            kb_worthy = [
-                s for s in sources if s["quality_score"] >= self.quality_threshold
-            ]
+            kb_worthy = [s for s in sources if s["quality_score"] >= self.quality_threshold]
 
             result = {
                 "status": "success",
@@ -1306,9 +1246,7 @@ class WebResearcher:
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
-    def _convert_to_sources(
-        self, search_results: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+    def _convert_to_sources(self, search_results: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Convert search results to source format for KB."""
         sources = []
         for r in search_results.get("results", []):
@@ -1327,9 +1265,7 @@ class WebResearcher:
             )
         return sources
 
-    async def search_and_store_knowledge(
-        self, query: str, knowledge_base
-    ) -> Dict[str, Any]:
+    async def search_and_store_knowledge(self, query: str, knowledge_base) -> Dict[str, Any]:
         """Research query and store high-quality results in KB."""
         research_results = await self.research_query(query)
         if research_results.get("status") != "success":
@@ -1406,11 +1342,7 @@ class WebResearcher:
     def _cleanup_cache(self):
         """Clean up expired cache entries."""
         now = time.time()
-        expired = [
-            k
-            for k, v in self._cache.items()
-            if now - v.get("cached_at", 0) > self._cache_ttl
-        ]
+        expired = [k for k, v in self._cache.items() if now - v.get("cached_at", 0) > self._cache_ttl]
         for k in expired:
             del self._cache[k]
         logger.debug("Cleaned up %s expired cache entries", len(expired))

@@ -12,15 +12,15 @@ Verifies that all Slack API operations properly handle:
 """
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from integrations.base import IntegrationConfig
 from integrations.slack_integration import (
     SlackChannelMapping,
     SlackNotificationIntegration,
 )
-from integrations.base import IntegrationConfig
 
 
 @pytest.fixture
@@ -58,9 +58,7 @@ class TestPostTaskCompletion:
     @pytest.mark.asyncio
     async def test_post_task_completion_success(self, slack_integration):
         """Task completion posts successfully to Slack."""
-        slack_integration._make_slack_request = AsyncMock(
-            return_value={"ok": True, "ts": "1234567890.0"}
-        )
+        slack_integration._make_slack_request = AsyncMock(return_value={"ok": True, "ts": "1234567890.0"})
 
         params = {
             "channel": "C12345",
@@ -80,9 +78,7 @@ class TestPostTaskCompletion:
     @pytest.mark.asyncio
     async def test_post_task_completion_network_error(self, slack_integration):
         """Task completion gracefully handles network errors."""
-        slack_integration._make_slack_request = AsyncMock(
-            side_effect=ConnectionError("Network unreachable")
-        )
+        slack_integration._make_slack_request = AsyncMock(side_effect=ConnectionError("Network unreachable"))
 
         params = {
             "channel": "C12345",
@@ -104,9 +100,7 @@ class TestPostTaskCompletion:
     @pytest.mark.asyncio
     async def test_post_task_completion_api_error(self, slack_integration):
         """Task completion handles Slack API errors."""
-        slack_integration._make_slack_request = AsyncMock(
-            return_value={"ok": False, "error": "channel_not_found"}
-        )
+        slack_integration._make_slack_request = AsyncMock(return_value={"ok": False, "error": "channel_not_found"})
 
         params = {
             "channel": "C_INVALID",
@@ -130,9 +124,7 @@ class TestRequestApproval:
     @pytest.mark.asyncio
     async def test_request_approval_success(self, slack_integration):
         """Approval request posts successfully and stores thread."""
-        slack_integration._make_slack_request = AsyncMock(
-            return_value={"ok": True, "ts": "1234567890.0"}
-        )
+        slack_integration._make_slack_request = AsyncMock(return_value={"ok": True, "ts": "1234567890.0"})
         slack_integration._store_approval_thread = AsyncMock(return_value=True)
 
         params = {
@@ -147,18 +139,14 @@ class TestRequestApproval:
         result = await slack_integration.request_approval(params)
 
         assert result["ok"] is True
-        slack_integration._store_approval_thread.assert_awaited_once_with(
-            "approval-123", "C67890", "1234567890.0"
-        )
+        slack_integration._store_approval_thread.assert_awaited_once_with("approval-123", "C67890", "1234567890.0")
 
     @pytest.mark.asyncio
     async def test_request_approval_network_timeout(self, slack_integration):
         """Approval request handles timeout errors."""
         import asyncio
 
-        slack_integration._make_slack_request = AsyncMock(
-            side_effect=asyncio.TimeoutError("Request timed out")
-        )
+        slack_integration._make_slack_request = AsyncMock(side_effect=asyncio.TimeoutError("Request timed out"))
 
         params = {
             "channel": "C67890",
@@ -178,9 +166,7 @@ class TestRequestApproval:
     @pytest.mark.asyncio
     async def test_request_approval_auth_error(self, slack_integration):
         """Approval request handles auth failures."""
-        slack_integration._make_slack_request = AsyncMock(
-            return_value={"ok": False, "error": "invalid_auth"}
-        )
+        slack_integration._make_slack_request = AsyncMock(return_value={"ok": False, "error": "invalid_auth"})
 
         params = {
             "channel": "C67890",
@@ -203,9 +189,7 @@ class TestPostAgentStatus:
     @pytest.mark.asyncio
     async def test_post_agent_status_success(self, slack_integration):
         """Agent status posts successfully."""
-        slack_integration._make_slack_request = AsyncMock(
-            return_value={"ok": True, "ts": "1234567890.0"}
-        )
+        slack_integration._make_slack_request = AsyncMock(return_value={"ok": True, "ts": "1234567890.0"})
 
         params = {
             "channel": "C12345",
@@ -222,9 +206,7 @@ class TestPostAgentStatus:
     @pytest.mark.asyncio
     async def test_post_agent_status_with_thread(self, slack_integration):
         """Agent status posts to thread when specified."""
-        slack_integration._make_slack_request = AsyncMock(
-            return_value={"ok": True, "ts": "1234567890.1"}
-        )
+        slack_integration._make_slack_request = AsyncMock(return_value={"ok": True, "ts": "1234567890.1"})
 
         params = {
             "channel": "C12345",
@@ -243,9 +225,7 @@ class TestPostAgentStatus:
     @pytest.mark.asyncio
     async def test_post_agent_status_rate_limit(self, slack_integration):
         """Agent status handles rate limiting."""
-        slack_integration._make_slack_request = AsyncMock(
-            return_value={"ok": False, "error": "rate_limited"}
-        )
+        slack_integration._make_slack_request = AsyncMock(return_value={"ok": False, "error": "rate_limited"})
 
         params = {
             "channel": "C12345",
@@ -267,9 +247,7 @@ class TestReplyInThread:
     @pytest.mark.asyncio
     async def test_reply_in_thread_success(self, slack_integration):
         """Thread reply posts successfully."""
-        slack_integration._make_slack_request = AsyncMock(
-            return_value={"ok": True, "ts": "1234567890.1"}
-        )
+        slack_integration._make_slack_request = AsyncMock(return_value={"ok": True, "ts": "1234567890.1"})
 
         params = {
             "channel": "C12345",
@@ -284,9 +262,7 @@ class TestReplyInThread:
     @pytest.mark.asyncio
     async def test_reply_in_thread_invalid_thread(self, slack_integration):
         """Thread reply handles invalid thread timestamps."""
-        slack_integration._make_slack_request = AsyncMock(
-            return_value={"ok": False, "error": "thread_not_found"}
-        )
+        slack_integration._make_slack_request = AsyncMock(return_value={"ok": False, "error": "thread_not_found"})
 
         params = {
             "channel": "C12345",
@@ -302,9 +278,7 @@ class TestReplyInThread:
     @pytest.mark.asyncio
     async def test_reply_in_thread_permission_error(self, slack_integration):
         """Thread reply handles permission errors."""
-        slack_integration._make_slack_request = AsyncMock(
-            return_value={"ok": False, "error": "no_permission"}
-        )
+        slack_integration._make_slack_request = AsyncMock(return_value={"ok": False, "error": "no_permission"})
 
         params = {
             "channel": "C12345",
@@ -368,9 +342,7 @@ class TestCheckApprovalResponse:
         assert result["decided_by"] == "U67890"
 
     @pytest.mark.asyncio
-    async def test_check_approval_response_not_found_in_redis(
-        self, slack_integration
-    ):
+    async def test_check_approval_response_not_found_in_redis(self, slack_integration):
         """Approval check handles missing Redis entry."""
         slack_integration._load_approval_thread = AsyncMock(return_value=None)
 
@@ -386,9 +358,7 @@ class TestCheckApprovalResponse:
         slack_integration._load_approval_thread = AsyncMock(
             return_value={"channel": "C67890", "thread_ts": "1234567890.0"}
         )
-        slack_integration._make_slack_request = AsyncMock(
-            return_value={"ok": False, "error": "channel_not_found"}
-        )
+        slack_integration._make_slack_request = AsyncMock(return_value={"ok": False, "error": "channel_not_found"})
 
         params = {"approval_id": "approval-888"}
         result = await slack_integration.check_approval_response(params)
@@ -399,9 +369,7 @@ class TestCheckApprovalResponse:
     @pytest.mark.asyncio
     async def test_check_approval_response_exception(self, slack_integration):
         """Approval check handles unexpected exceptions."""
-        slack_integration._load_approval_thread = AsyncMock(
-            side_effect=RuntimeError("Unexpected error")
-        )
+        slack_integration._load_approval_thread = AsyncMock(side_effect=RuntimeError("Unexpected error"))
 
         params = {"approval_id": "approval-777"}
         result = await slack_integration.check_approval_response(params)
@@ -415,9 +383,7 @@ class TestChannelMapping:
     """Test channel mapping storage and retrieval."""
 
     @pytest.mark.asyncio
-    async def test_save_channel_mapping_success(
-        self, slack_integration, channel_mapping
-    ):
+    async def test_save_channel_mapping_success(self, slack_integration, channel_mapping):
         """Channel mapping saves successfully to Redis."""
         mock_redis = AsyncMock()
         with patch(
@@ -430,9 +396,7 @@ class TestChannelMapping:
             mock_redis.set.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_save_channel_mapping_redis_unavailable(
-        self, slack_integration, channel_mapping
-    ):
+    async def test_save_channel_mapping_redis_unavailable(self, slack_integration, channel_mapping):
         """Channel mapping gracefully handles Redis unavailability."""
         with patch(
             "integrations.slack_integration.get_redis_client",
@@ -443,9 +407,7 @@ class TestChannelMapping:
             assert result is False
 
     @pytest.mark.asyncio
-    async def test_save_channel_mapping_redis_error(
-        self, slack_integration, channel_mapping
-    ):
+    async def test_save_channel_mapping_redis_error(self, slack_integration, channel_mapping):
         """Channel mapping handles Redis errors."""
         mock_redis = AsyncMock()
         mock_redis.set.side_effect = Exception("Redis connection failed")
@@ -459,9 +421,7 @@ class TestChannelMapping:
             assert result is False
 
     @pytest.mark.asyncio
-    async def test_load_channel_mapping_success(
-        self, slack_integration, channel_mapping
-    ):
+    async def test_load_channel_mapping_success(self, slack_integration, channel_mapping):
         """Channel mapping loads successfully from Redis."""
         mapping_data = json.dumps(channel_mapping.to_dict())
         mock_redis = AsyncMock()
@@ -487,9 +447,7 @@ class TestChannelMapping:
             "integrations.slack_integration.get_redis_client",
             return_value=mock_redis,
         ):
-            result = await slack_integration.load_channel_mapping(
-                "proj-nonexistent"
-            )
+            result = await slack_integration.load_channel_mapping("proj-nonexistent")
 
             assert result is None
 
@@ -533,9 +491,7 @@ class TestApprovalThreadStorage:
             "integrations.slack_integration.get_redis_client",
             return_value=mock_redis,
         ):
-            result = await slack_integration._store_approval_thread(
-                "approval-123", "C12345", "1234567890.0"
-            )
+            result = await slack_integration._store_approval_thread("approval-123", "C12345", "1234567890.0")
 
             assert result is True
             mock_redis.set.assert_awaited_once()
@@ -550,18 +506,14 @@ class TestApprovalThreadStorage:
             "integrations.slack_integration.get_redis_client",
             return_value=mock_redis,
         ):
-            result = await slack_integration._store_approval_thread(
-                "approval-123", "C12345", "1234567890.0"
-            )
+            result = await slack_integration._store_approval_thread("approval-123", "C12345", "1234567890.0")
 
             assert result is False
 
     @pytest.mark.asyncio
     async def test_load_approval_thread_success(self, slack_integration):
         """Approval thread loads successfully."""
-        thread_data = json.dumps(
-            {"channel": "C12345", "thread_ts": "1234567890.0"}
-        )
+        thread_data = json.dumps({"channel": "C12345", "thread_ts": "1234567890.0"})
         mock_redis = AsyncMock()
         mock_redis.get.return_value = thread_data
 
@@ -585,9 +537,7 @@ class TestApprovalThreadStorage:
             "integrations.slack_integration.get_redis_client",
             return_value=mock_redis,
         ):
-            result = await slack_integration._load_approval_thread(
-                "approval-nonexistent"
-            )
+            result = await slack_integration._load_approval_thread("approval-nonexistent")
 
             assert result is None
 

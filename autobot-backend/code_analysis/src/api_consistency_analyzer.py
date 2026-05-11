@@ -4,7 +4,6 @@ Analyzes API endpoints for consistency, patterns, and best practices
 """
 
 import ast
-import asyncio
 import json
 import logging
 import re
@@ -13,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.async_compat import run_or_schedule
 from constants.ttl_constants import TTL_1_HOUR
 
 logger = logging.getLogger(__name__)
@@ -103,8 +103,7 @@ class APIConsistencyAnalyzer:
         self._compiled_framework_patterns = {}
         for framework, pattern_list in self.framework_patterns.items():
             compiled_list = [
-                (re.compile(pattern, re.MULTILINE | re.IGNORECASE), desc)
-                for pattern, desc in pattern_list
+                (re.compile(pattern, re.MULTILINE | re.IGNORECASE), desc) for pattern, desc in pattern_list
             ]
             self._compiled_framework_patterns[framework] = compiled_list
 
@@ -117,9 +116,7 @@ class APIConsistencyAnalyzer:
 
             self.redis_client = await get_async_redis_client()
 
-    async def analyze_api_consistency(
-        self, root_path: str = ".", patterns: List[str] = None
-    ) -> Dict[str, Any]:
+    async def analyze_api_consistency(self, root_path: str = ".", patterns: List[str] = None) -> Dict[str, Any]:
         """Analyze API endpoints for consistency"""
 
         start_time = time.time()
@@ -150,9 +147,7 @@ class APIConsistencyAnalyzer:
             "consistency_score": metrics.consistency_score,
             "analysis_time_seconds": analysis_time,
             "endpoints": [self._serialize_endpoint(ep) for ep in endpoints],
-            "inconsistencies": [
-                self._serialize_inconsistency(inc) for inc in inconsistencies
-            ],
+            "inconsistencies": [self._serialize_inconsistency(inc) for inc in inconsistencies],
             "recommendations": recommendations,
             "metrics": {
                 "total_endpoints": metrics.total_endpoints,
@@ -170,9 +165,7 @@ class APIConsistencyAnalyzer:
         logger.info(f"API consistency analysis complete in {analysis_time:.2f}s")
         return results
 
-    async def _discover_api_endpoints(
-        self, root_path: str, patterns: List[str]
-    ) -> List[APIEndpoint]:
+    async def _discover_api_endpoints(self, root_path: str, patterns: List[str]) -> List[APIEndpoint]:
         """Discover API endpoints in the codebase"""
 
         endpoints = []
@@ -182,14 +175,10 @@ class APIConsistencyAnalyzer:
             for file_path in root.glob(pattern):
                 if file_path.is_file() and not self._should_skip_file(file_path):
                     try:
-                        file_endpoints = await self._extract_endpoints_from_file(
-                            str(file_path)
-                        )
+                        file_endpoints = await self._extract_endpoints_from_file(str(file_path))
                         endpoints.extend(file_endpoints)
                     except Exception as e:
-                        logger.warning(
-                            f"Failed to extract endpoints from {file_path}: {e}"
-                        )
+                        logger.warning(f"Failed to extract endpoints from {file_path}: {e}")
 
         return endpoints
 
@@ -223,18 +212,12 @@ class APIConsistencyAnalyzer:
             # Try to parse as AST for function analysis
             try:
                 tree = ast.parse(content, filename=file_path)
-                endpoints.extend(
-                    await self._extract_endpoints_from_ast(
-                        file_path, tree, content, lines
-                    )
-                )
+                endpoints.extend(await self._extract_endpoints_from_ast(file_path, tree, content, lines))
             except SyntaxError:
                 pass
 
             # Regex-based extraction for different frameworks
-            endpoints.extend(
-                await self._extract_endpoints_with_regex(file_path, content, lines)
-            )
+            endpoints.extend(await self._extract_endpoints_with_regex(file_path, content, lines))
 
         except Exception as e:
             logger.error(f"Error extracting endpoints from {file_path}: {e}")
@@ -252,9 +235,7 @@ class APIConsistencyAnalyzer:
             if isinstance(node, ast.FunctionDef):
                 # Look for decorators that indicate API endpoints
                 for decorator in node.decorator_list:
-                    endpoint = self._analyze_decorator_for_endpoint(
-                        decorator, node, file_path, lines
-                    )
+                    endpoint = self._analyze_decorator_for_endpoint(decorator, node, file_path, lines)
                     if endpoint:
                         endpoints.append(endpoint)
 
@@ -290,19 +271,13 @@ class APIConsistencyAnalyzer:
                             return_type=self._extract_return_type(func_node),
                             has_auth=self._check_has_auth(func_node, lines),
                             has_validation=self._check_has_validation(func_node, lines),
-                            has_error_handling=self._check_has_error_handling(
-                                func_node, lines
-                            ),
-                            response_format=self._detect_response_format(
-                                func_node, lines
-                            ),
+                            has_error_handling=self._check_has_error_handling(func_node, lines),
+                            response_format=self._detect_response_format(func_node, lines),
                         )
 
         return None
 
-    async def _extract_endpoints_with_regex(
-        self, file_path: str, content: str, lines: List[str]
-    ) -> List[APIEndpoint]:
+    async def _extract_endpoints_with_regex(self, file_path: str, content: str, lines: List[str]) -> List[APIEndpoint]:
         """Extract endpoints using regex patterns.
 
         Issue #510: Optimized to use precompiled patterns from init.
@@ -321,9 +296,7 @@ class APIConsistencyAnalyzer:
                         path = match.group(2)
                     elif framework == "flask":
                         path = match.group(1)
-                        method = (
-                            match.group(2).upper() if len(match.groups()) > 1 else "GET"
-                        )
+                        method = match.group(2).upper() if len(match.groups()) > 1 else "GET"
                     else:  # django
                         path = match.group(1)
                         method = "GET"  # Default for Django patterns
@@ -340,15 +313,9 @@ class APIConsistencyAnalyzer:
                         parameters=[],
                         return_type=None,
                         has_auth=self._check_auth_in_context(lines, line_num),
-                        has_validation=self._check_validation_in_context(
-                            lines, line_num
-                        ),
-                        has_error_handling=self._check_error_handling_in_context(
-                            lines, line_num
-                        ),
-                        response_format=self._detect_response_format_in_context(
-                            lines, line_num
-                        ),
+                        has_validation=self._check_validation_in_context(lines, line_num),
+                        has_error_handling=self._check_error_handling_in_context(lines, line_num),
+                        response_format=self._detect_response_format_in_context(lines, line_num),
                     )
 
                     endpoints.append(endpoint)
@@ -366,11 +333,7 @@ class APIConsistencyAnalyzer:
     def _extract_return_type(self, func_node: ast.FunctionDef) -> Optional[str]:
         """Extract return type annotation"""
         if func_node.returns:
-            return (
-                ast.unparse(func_node.returns)
-                if hasattr(ast, "unparse")
-                else str(func_node.returns)
-            )
+            return ast.unparse(func_node.returns) if hasattr(ast, "unparse") else str(func_node.returns)
         return None
 
     def _check_has_auth(self, func_node: ast.FunctionDef, lines: List[str]) -> bool:
@@ -378,10 +341,7 @@ class APIConsistencyAnalyzer:
         # Look for auth-related decorators or parameters
         for decorator in func_node.decorator_list:
             decorator_str = str(decorator)
-            if any(
-                auth_keyword in decorator_str.lower()
-                for auth_keyword in ["auth", "login", "token", "depends"]
-            ):
+            if any(auth_keyword in decorator_str.lower() for auth_keyword in ["auth", "login", "token", "depends"]):
                 return True
 
         # Check function parameters for auth-related names
@@ -392,9 +352,7 @@ class APIConsistencyAnalyzer:
 
         return False
 
-    def _check_has_validation(
-        self, func_node: ast.FunctionDef, lines: List[str]
-    ) -> bool:
+    def _check_has_validation(self, func_node: ast.FunctionDef, lines: List[str]) -> bool:
         """Check if endpoint has input validation"""
         # Look for validation patterns in function body
         function_text = "\n".join(lines[func_node.lineno - 1 : func_node.end_lineno])
@@ -402,9 +360,7 @@ class APIConsistencyAnalyzer:
 
         return any(pattern in function_text.lower() for pattern in validation_patterns)
 
-    def _check_has_error_handling(
-        self, func_node: ast.FunctionDef, lines: List[str]
-    ) -> bool:
+    def _check_has_error_handling(self, func_node: ast.FunctionDef, lines: List[str]) -> bool:
         """Check if endpoint has proper error handling"""
         # Look for try/except blocks or error response patterns
         for node in ast.walk(func_node):
@@ -419,9 +375,7 @@ class APIConsistencyAnalyzer:
 
         return any(pattern in function_text for pattern in error_patterns)
 
-    def _detect_response_format(
-        self, func_node: ast.FunctionDef, lines: List[str]
-    ) -> str:
+    def _detect_response_format(self, func_node: ast.FunctionDef, lines: List[str]) -> str:
         """Detect response format (JSON, HTML, etc.)"""
         function_text = "\n".join(lines[func_node.lineno - 1 : func_node.end_lineno])
 
@@ -434,9 +388,7 @@ class APIConsistencyAnalyzer:
         else:
             return "unknown"
 
-    def _find_associated_function(
-        self, lines: List[str], line_num: int
-    ) -> Optional[str]:
+    def _find_associated_function(self, lines: List[str], line_num: int) -> Optional[str]:
         """Find function associated with a decorator"""
         # Look for function definition after the decorator
         for i in range(line_num, min(len(lines), line_num + 5)):
@@ -475,9 +427,7 @@ class APIConsistencyAnalyzer:
         error_keywords = ["try:", "except:", "HTTPException", "raise", "error"]
         return any(keyword in context for keyword in error_keywords)
 
-    def _detect_response_format_in_context(
-        self, lines: List[str], line_num: int
-    ) -> str:
+    def _detect_response_format_in_context(self, lines: List[str], line_num: int) -> str:
         """Detect response format in context"""
         context_start = max(0, line_num - 10)
         context_end = min(len(lines), line_num + 10)
@@ -492,9 +442,7 @@ class APIConsistencyAnalyzer:
         else:
             return "unknown"
 
-    async def _analyze_consistency_patterns(
-        self, endpoints: List[APIEndpoint]
-    ) -> List[APIInconsistency]:
+    async def _analyze_consistency_patterns(self, endpoints: List[APIEndpoint]) -> List[APIInconsistency]:
         """Analyze endpoints for consistency patterns"""
 
         inconsistencies = []
@@ -521,9 +469,7 @@ class APIConsistencyAnalyzer:
 
         return inconsistencies
 
-    def _analyze_naming_consistency(
-        self, endpoints: List[APIEndpoint]
-    ) -> List[APIInconsistency]:
+    def _analyze_naming_consistency(self, endpoints: List[APIEndpoint]) -> List[APIInconsistency]:
         """Analyze naming consistency across endpoints"""
 
         inconsistencies = []
@@ -572,9 +518,7 @@ class APIConsistencyAnalyzer:
 
         return inconsistencies
 
-    def _analyze_response_format_consistency(
-        self, endpoints: List[APIEndpoint]
-    ) -> List[APIInconsistency]:
+    def _analyze_response_format_consistency(self, endpoints: List[APIEndpoint]) -> List[APIInconsistency]:
         """Analyze response format consistency"""
 
         # Group endpoints by method to check format consistency
@@ -599,9 +543,7 @@ class APIConsistencyAnalyzer:
                                 severity="high",
                                 description=f"Inconsistent response formats for {method} endpoints",
                                 affected_endpoints=[
-                                    ep
-                                    for ep in method_endpoints
-                                    if ep.response_format in known_formats
+                                    ep for ep in method_endpoints if ep.response_format in known_formats
                                 ],
                                 suggestion="Standardize on JSON responses for API endpoints",
                                 examples=[
@@ -615,14 +557,10 @@ class APIConsistencyAnalyzer:
 
         return inconsistencies
 
-    def _analyze_error_handling_consistency(
-        self, endpoints: List[APIEndpoint]
-    ) -> List[APIInconsistency]:
+    def _analyze_error_handling_consistency(self, endpoints: List[APIEndpoint]) -> List[APIInconsistency]:
         """Analyze error handling consistency"""
 
-        endpoints_without_error_handling = [
-            ep for ep in endpoints if not ep.has_error_handling
-        ]
+        endpoints_without_error_handling = [ep for ep in endpoints if not ep.has_error_handling]
 
         if endpoints_without_error_handling:
             return [
@@ -643,9 +581,7 @@ class APIConsistencyAnalyzer:
 
         return []
 
-    def _analyze_auth_consistency(
-        self, endpoints: List[APIEndpoint]
-    ) -> List[APIInconsistency]:
+    def _analyze_auth_consistency(self, endpoints: List[APIEndpoint]) -> List[APIInconsistency]:
         """Analyze authentication consistency"""
 
         # Check if endpoints that should have auth are missing it
@@ -678,9 +614,7 @@ class APIConsistencyAnalyzer:
 
         return inconsistencies
 
-    def _analyze_parameter_consistency(
-        self, endpoints: List[APIEndpoint]
-    ) -> List[APIInconsistency]:
+    def _analyze_parameter_consistency(self, endpoints: List[APIEndpoint]) -> List[APIInconsistency]:
         """Analyze parameter naming consistency"""
 
         # Look for common parameters with different names
@@ -734,9 +668,7 @@ class APIConsistencyAnalyzer:
         ]
 
         for pattern1, pattern2 in common_patterns:
-            if (pattern1 in name1 and pattern2 in name2) or (
-                pattern2 in name1 and pattern1 in name2
-            ):
+            if (pattern1 in name1 and pattern2 in name2) or (pattern2 in name1 and pattern1 in name2):
                 return True
 
         return False
@@ -750,23 +682,14 @@ class APIConsistencyAnalyzer:
             return APIMetrics(0, 0, 0, 0, 0, 0)
 
         # Calculate individual consistency scores
-        naming_score = self._calculate_naming_consistency_score(
-            endpoints, inconsistencies
-        )
-        response_format_score = self._calculate_response_format_score(
-            endpoints, inconsistencies
-        )
+        naming_score = self._calculate_naming_consistency_score(endpoints, inconsistencies)
+        response_format_score = self._calculate_response_format_score(endpoints, inconsistencies)
         error_handling_score = self._calculate_error_handling_score(endpoints)
-        auth_pattern_score = self._calculate_auth_pattern_score(
-            endpoints, inconsistencies
-        )
+        auth_pattern_score = self._calculate_auth_pattern_score(endpoints, inconsistencies)
 
         # Overall consistency score (weighted average)
         overall_score = (
-            naming_score * 0.2
-            + response_format_score * 0.3
-            + error_handling_score * 0.3
-            + auth_pattern_score * 0.2
+            naming_score * 0.2 + response_format_score * 0.3 + error_handling_score * 0.3 + auth_pattern_score * 0.2
         )
 
         return APIMetrics(
@@ -782,9 +705,7 @@ class APIConsistencyAnalyzer:
         self, endpoints: List[APIEndpoint], inconsistencies: List[APIInconsistency]
     ) -> float:
         """Calculate naming consistency score"""
-        naming_issues = [
-            inc for inc in inconsistencies if inc.issue_type == "naming_inconsistency"
-        ]
+        naming_issues = [inc for inc in inconsistencies if inc.issue_type == "naming_inconsistency"]
         affected_count = sum(len(inc.affected_endpoints) for inc in naming_issues)
 
         return max(0, (len(endpoints) - affected_count) / len(endpoints) * 100)
@@ -793,38 +714,26 @@ class APIConsistencyAnalyzer:
         self, endpoints: List[APIEndpoint], inconsistencies: List[APIInconsistency]
     ) -> float:
         """Calculate response format consistency score"""
-        format_issues = [
-            inc
-            for inc in inconsistencies
-            if inc.issue_type == "response_format_inconsistency"
-        ]
+        format_issues = [inc for inc in inconsistencies if inc.issue_type == "response_format_inconsistency"]
         affected_count = sum(len(inc.affected_endpoints) for inc in format_issues)
 
         return max(0, (len(endpoints) - affected_count) / len(endpoints) * 100)
 
     def _calculate_error_handling_score(self, endpoints: List[APIEndpoint]) -> float:
         """Calculate error handling consistency score"""
-        endpoints_with_error_handling = len(
-            [ep for ep in endpoints if ep.has_error_handling]
-        )
-        return (
-            (endpoints_with_error_handling / len(endpoints) * 100) if endpoints else 0
-        )
+        endpoints_with_error_handling = len([ep for ep in endpoints if ep.has_error_handling])
+        return (endpoints_with_error_handling / len(endpoints) * 100) if endpoints else 0
 
     def _calculate_auth_pattern_score(
         self, endpoints: List[APIEndpoint], inconsistencies: List[APIInconsistency]
     ) -> float:
         """Calculate auth pattern consistency score"""
-        auth_issues = [
-            inc for inc in inconsistencies if inc.issue_type == "missing_authentication"
-        ]
+        auth_issues = [inc for inc in inconsistencies if inc.issue_type == "missing_authentication"]
         affected_count = sum(len(inc.affected_endpoints) for inc in auth_issues)
 
         return max(0, (len(endpoints) - affected_count) / len(endpoints) * 100)
 
-    async def _generate_api_recommendations(
-        self, inconsistencies: List[APIInconsistency]
-    ) -> List[str]:
+    async def _generate_api_recommendations(self, inconsistencies: List[APIInconsistency]) -> List[str]:
         """Generate API improvement recommendations"""
 
         recommendations = []
@@ -838,27 +747,19 @@ class APIConsistencyAnalyzer:
 
         # Generate recommendations based on issues found
         if "missing_error_handling" in by_type:
-            recommendations.append(
-                "Implement consistent error handling across all endpoints"
-            )
+            recommendations.append("Implement consistent error handling across all endpoints")
 
         if "missing_authentication" in by_type:
             recommendations.append("Add authentication to sensitive endpoints")
 
         if "response_format_inconsistency" in by_type:
-            recommendations.append(
-                "Standardize response formats (preferably JSON for APIs)"
-            )
+            recommendations.append("Standardize response formats (preferably JSON for APIs)")
 
         if "naming_inconsistency" in by_type:
-            recommendations.append(
-                "Adopt consistent naming conventions (snake_case for Python)"
-            )
+            recommendations.append("Adopt consistent naming conventions (snake_case for Python)")
 
         if "parameter_naming_inconsistency" in by_type:
-            recommendations.append(
-                "Standardize parameter naming across similar endpoints"
-            )
+            recommendations.append("Standardize parameter naming across similar endpoints")
 
         return recommendations
 
@@ -878,9 +779,7 @@ class APIConsistencyAnalyzer:
             "response_format": endpoint.response_format,
         }
 
-    def _serialize_inconsistency(
-        self, inconsistency: APIInconsistency
-    ) -> Dict[str, Any]:
+    def _serialize_inconsistency(self, inconsistency: APIInconsistency) -> Dict[str, Any]:
         """Serialize inconsistency for output"""
         return {
             "type": inconsistency.issue_type,
@@ -909,9 +808,7 @@ class APIConsistencyAnalyzer:
             try:
                 cursor = 0
                 while True:
-                    cursor, keys = await self.redis_client.scan(
-                        cursor, match="api_analysis:*", count=100
-                    )
+                    cursor, keys = await self.redis_client.scan(cursor, match="api_analysis:*", count=100)
                     if keys:
                         await self.redis_client.delete(*keys)
                     if cursor == 0:
@@ -926,39 +823,27 @@ async def main():
     analyzer = APIConsistencyAnalyzer()
 
     # Analyze API endpoints for consistency
-    results = await analyzer.analyze_api_consistency(
-        root_path=".", patterns=["backend/**/*.py"]
-    )
+    results = await analyzer.analyze_api_consistency(root_path=".", patterns=["backend/**/*.py"])
 
     # Print summary
     print(f"\n=== API Consistency Analysis Results ===")  # noqa: print
     print(f"Total endpoints: {results['total_endpoints']}")  # noqa: print
     print(f"Inconsistencies found: {results['inconsistencies_found']}")  # noqa: print
-    print(
-        f"Overall consistency score: {results['consistency_score']}/100"
-    )  # noqa: print
+    print(f"Overall consistency score: {results['consistency_score']}/100")  # noqa: print
     print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     # Print detailed metrics
     metrics = results["metrics"]
     print(f"\n=== Detailed Metrics ===")  # noqa: print
     print(f"Naming consistency: {metrics['naming_consistency']}/100")  # noqa: print
-    print(
-        f"Response format consistency: {metrics['response_format_consistency']}/100"
-    )  # noqa: print
-    print(
-        f"Error handling consistency: {metrics['error_handling_consistency']}/100"
-    )  # noqa: print
-    print(
-        f"Auth pattern consistency: {metrics['auth_pattern_consistency']}/100"
-    )  # noqa: print
+    print(f"Response format consistency: {metrics['response_format_consistency']}/100")  # noqa: print
+    print(f"Error handling consistency: {metrics['error_handling_consistency']}/100")  # noqa: print
+    print(f"Auth pattern consistency: {metrics['auth_pattern_consistency']}/100")  # noqa: print
 
     # Print found endpoints
     print(f"\n=== API Endpoints Found ===")  # noqa: print
     for endpoint in results["endpoints"]:
-        print(
-            f"{endpoint['method']} {endpoint['path']} -> {endpoint['function']}()"
-        )  # noqa: print
+        print(f"{endpoint['method']} {endpoint['path']} -> {endpoint['function']}()")  # noqa: print
         print(  # noqa: print
             f"  Auth: {endpoint['has_auth']}, Validation: {endpoint['has_validation']}, "
             f"Error Handling: {endpoint['has_error_handling']}"
@@ -968,14 +853,10 @@ async def main():
     if results["inconsistencies"]:
         print(f"\n=== Consistency Issues ===")  # noqa: print
         for inc in results["inconsistencies"]:
-            print(
-                f"{inc['type']} ({inc['severity']}): {inc['description']}"
-            )  # noqa: print
-            print(
-                f"  Affects {inc['affected_endpoints_count']} endpoints"
-            )  # noqa: print
+            print(f"{inc['type']} ({inc['severity']}): {inc['description']}")  # noqa: print
+            print(f"  Affects {inc['affected_endpoints_count']} endpoints")  # noqa: print
             print(f"  Suggestion: {inc['suggestion']}")  # noqa: print
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_or_schedule(main())

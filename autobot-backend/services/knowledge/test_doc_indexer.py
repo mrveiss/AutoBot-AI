@@ -61,9 +61,7 @@ _path_constants.PATH = _FakePATH()  # type: ignore[attr-defined]
 # so patch() paths work correctly.
 _BACKEND_ROOT = Path(__file__).parent.parent.parent  # autobot-backend/
 _DOC_INDEXER_PATH = Path(__file__).parent / "doc_indexer.py"
-_spec = importlib.util.spec_from_file_location(
-    "services.knowledge.doc_indexer", str(_DOC_INDEXER_PATH)
-)
+_spec = importlib.util.spec_from_file_location("services.knowledge.doc_indexer", str(_DOC_INDEXER_PATH))
 assert _spec and _spec.loader, "Could not load doc_indexer spec"
 _doc_indexer_mod = importlib.util.module_from_spec(_spec)
 sys.modules["services.knowledge.doc_indexer"] = _doc_indexer_mod
@@ -143,9 +141,7 @@ class TestFilterChangedFiles:
         f.write_text("same content", encoding="utf-8")
         current_hash = _compute_file_hash(str(f))
 
-        changed, new_hashes = _filter_changed_files(
-            [(str(f), 1)], {"unchanged.md": current_hash}, tmp_path
-        )
+        changed, new_hashes = _filter_changed_files([(str(f), 1)], {"unchanged.md": current_hash}, tmp_path)
 
         assert len(changed) == 0
         assert new_hashes.get("unchanged.md") == current_hash
@@ -155,9 +151,7 @@ class TestFilterChangedFiles:
         f = tmp_path / "changed.md"
         f.write_text("new content", encoding="utf-8")
 
-        changed, new_hashes = _filter_changed_files(
-            [(str(f), 1)], {"changed.md": "stale_hash_abc123"}, tmp_path
-        )
+        changed, new_hashes = _filter_changed_files([(str(f), 1)], {"changed.md": "stale_hash_abc123"}, tmp_path)
 
         assert len(changed) == 1
         assert changed[0][0] == str(f)
@@ -312,8 +306,7 @@ class TestIndexAll:
 
         # Both files must be indexed — cache was ignored because collection was empty
         assert mock_index.call_count == 2, (
-            f"Expected 2 files indexed (full index forced by empty collection), "
-            f"got {mock_index.call_count}"
+            f"Expected 2 files indexed (full index forced by empty collection), " f"got {mock_index.call_count}"
         )
 
     @pytest.mark.asyncio
@@ -580,9 +573,7 @@ class TestIndexAllEmpty4350Fix:
         ):
             await svc.index_all(force=False)
 
-        assert len(indexed_files) == 1, (
-            "Empty collection must trigger full index even when hash cache matches (#4350)"
-        )
+        assert len(indexed_files) == 1, "Empty collection must trigger full index even when hash cache matches (#4350)"
 
     @pytest.mark.asyncio
     async def test_non_empty_collection_uses_incremental(self, tmp_path):
@@ -705,9 +696,7 @@ class TestHashCacheEdgeCases4382:
 
         # Cache uses resolved key for target; symlink should resolve to same hash
         _, link_rel = _normalize_path(str(link), tmp_path)
-        changed, new_hashes = _filter_changed_files(
-            [(str(link), 1)], {link_rel: target_hash}, tmp_path
-        )
+        changed, new_hashes = _filter_changed_files([(str(link), 1)], {link_rel: target_hash}, tmp_path)
         # Hash matches → file should NOT appear as changed
         assert len(changed) == 0
 
@@ -725,6 +714,7 @@ class TestHashCacheEdgeCases4382:
             # On Linux running as root, chmod 000 is bypassed — skip assertion.
             if result != "":
                 import os as _os
+
                 assert _os.getuid() == 0, "Non-root should get empty hash for unreadable file"
         finally:
             f.chmod(0o644)
@@ -737,6 +727,7 @@ class TestHashCacheEdgeCases4382:
         f.chmod(0o000)
         try:
             import os as _os
+
             if _os.getuid() == 0:
                 # Root bypasses chmod — skip this test
                 return
@@ -787,9 +778,7 @@ class TestHashCacheEdgeCases4382:
         current_hash = _compute_file_hash(str(f))
 
         _, rel = _normalize_path(str(f), tmp_path)
-        changed, _ = _filter_changed_files(
-            [(str(f), 1)], {rel: current_hash}, tmp_path
-        )
+        changed, _ = _filter_changed_files([(str(f), 1)], {rel: current_hash}, tmp_path)
         assert len(changed) == 0
 
     # ------------------------------------------------------------------
@@ -814,9 +803,7 @@ class TestHashCacheEdgeCases4382:
         link_b.symlink_to(link_a)
 
         cache = {"loop_a.md": "cafebabe"}
-        changed, new_hashes = _filter_changed_files(
-            [(str(link_a), 1)], cache, tmp_path
-        )
+        changed, new_hashes = _filter_changed_files([(str(link_a), 1)], cache, tmp_path)
         # Circular symlink → hash is '' → cached hash preserved, not marked changed
         assert len(changed) == 0
         assert new_hashes.get("loop_a.md") == "cafebabe"
@@ -1036,8 +1023,7 @@ class TestIndexChunkOversized4665:
             svc._index_chunk(chunk, 0, 1, "docs/oversized.md", [], 1)
 
         assert any(
-            "oversized" in r.message.lower() or "oversized" in r.getMessage().lower()
-            for r in caplog.records
+            "oversized" in r.message.lower() or "oversized" in r.getMessage().lower() for r in caplog.records
         ), "Expected WARNING with 'oversized' in message"
         assert any(
             "docs/oversized.md" in r.getMessage() for r in caplog.records
@@ -1122,9 +1108,7 @@ class TestIndexChunkMultiLevelSplit4702:
     def test_always_oversized_drops_at_max_depth(self):
         """If every embed call raises oversized, chunk is dropped at max_depth → False."""
         svc = _make_service()
-        svc._embed_model.get_text_embedding.side_effect = ValueError(
-            "input too large for model context length"
-        )
+        svc._embed_model.get_text_embedding.side_effect = ValueError("input too large for model context length")
         chunk = self._make_chunk("C" * 3200)
         ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
 
@@ -1158,12 +1142,8 @@ class TestIndexChunkMultiLevelSplit4702:
         svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
 
         # Both sub-IDs must end with the depth-0 suffix
-        assert any(uid.endswith("_L0") for uid in upserted_ids), (
-            f"Expected _L0 suffix in {upserted_ids}"
-        )
-        assert any(uid.endswith("_R0") for uid in upserted_ids), (
-            f"Expected _R0 suffix in {upserted_ids}"
-        )
+        assert any(uid.endswith("_L0") for uid in upserted_ids), f"Expected _L0 suffix in {upserted_ids}"
+        assert any(uid.endswith("_R0") for uid in upserted_ids), f"Expected _R0 suffix in {upserted_ids}"
 
     # ------------------------------------------------------------------
     # Non-oversized error at any depth stops recursion immediately
@@ -1308,9 +1288,7 @@ class TestRunKbSynthesis:
         ):
             await svc._run_kb_synthesis(["docs/README.md"])
 
-        mock_synthesizer.synthesize_docs.assert_awaited_once_with(
-            ["docs/README.md"], collection_config=col_cfg
-        )
+        mock_synthesizer.synthesize_docs.assert_awaited_once_with(["docs/README.md"], collection_config=col_cfg)
 
     @pytest.mark.asyncio
     async def test_swallows_exception_silently(self):
@@ -1361,9 +1339,7 @@ class TestRunKbSynthesis:
         ):
             await svc._run_kb_synthesis(["docs/README.md"])
 
-        mock_synthesizer.synthesize_docs.assert_awaited_once_with(
-            ["docs/README.md"], collection_config=None
-        )
+        mock_synthesizer.synthesize_docs.assert_awaited_once_with(["docs/README.md"], collection_config=None)
 
 
 class TestFindCollectionConfig:

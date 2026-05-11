@@ -278,9 +278,7 @@ def _truncate_large_file(content: str, max_chars: int = 20000) -> str:
     else:
         # Issue #4394: snap to whitespace so multi-byte chars are not split mid-word
         head_end = _snap_to_char_boundary(content, section_size, search_forward=True)
-        tail_start = _snap_to_char_boundary(
-            content, len(content) - section_size, search_forward=False
-        )
+        tail_start = _snap_to_char_boundary(content, len(content) - section_size, search_forward=False)
 
     # Ensure tail_start > head_end to avoid overlap on pathological inputs
     if tail_start <= head_end:
@@ -528,9 +526,7 @@ class PromptManager:
                 )
                 return
 
-            sections: Dict[str, str] = {
-                k: str(v) for k, v in data.items() if isinstance(v, str)
-            }
+            sections: Dict[str, str] = {k: str(v) for k, v in data.items() if isinstance(v, str)}
             self.yaml_sections[prompt_key] = sections
 
             assembled = self._assemble_yaml_sections(sections)
@@ -671,10 +667,7 @@ class PromptManager:
             fallback_prompt = self._try_fallbacks(prompt_key)
             if fallback_prompt is None:
                 available_keys = sorted(self.prompts)
-                raise KeyError(
-                    f"Prompt '{prompt_key}' not found. Available prompts: "
-                    f"{available_keys}"
-                )
+                raise KeyError(f"Prompt '{prompt_key}' not found. Available prompts: " f"{available_keys}")
             return fallback_prompt
 
         try:
@@ -706,9 +699,9 @@ class PromptManager:
         Returns:
             Rendered assembled prompt string.
         """
-        overrides_hash = hashlib.md5(
-            json.dumps(overrides, sort_keys=True).encode(), usedforsecurity=False
-        ).hexdigest()[:8]
+        overrides_hash = hashlib.md5(json.dumps(overrides, sort_keys=True).encode(), usedforsecurity=False).hexdigest()[
+            :8
+        ]
         cache_key = f"{prompt_key}.__overrides_{overrides_hash}"
 
         if cache_key not in self.templates:
@@ -716,19 +709,13 @@ class PromptManager:
             merged.update(overrides)
             assembled = self._assemble_yaml_sections(merged)
             self.templates[cache_key] = self.jinja_env.from_string(assembled)
-            logger.debug(
-                "Cached overridden YAML prompt '%s' (hash %s)", prompt_key, overrides_hash
-            )
+            logger.debug("Cached overridden YAML prompt '%s' (hash %s)", prompt_key, overrides_hash)
 
         try:
             return self.templates[cache_key].render(**kwargs)
         except Exception as e:
-            logger.error(
-                "Error rendering overridden template '%s': %s", prompt_key, e
-            )
-            assembled = self._assemble_yaml_sections(
-                {**self.yaml_sections[prompt_key], **overrides}
-            )
+            logger.error("Error rendering overridden template '%s': %s", prompt_key, e)
+            assembled = self._assemble_yaml_sections({**self.yaml_sections[prompt_key], **overrides})
             return assembled
 
     def _try_fallbacks(self, prompt_key: str) -> Optional[str]:
@@ -742,18 +729,14 @@ class PromptManager:
         # Strategy 1: Case insensitive match
         for key in self.prompts:
             if key.lower() == prompt_key.lower():
-                logger.warning(
-                    f"Using case-insensitive match '{key}' for '{prompt_key}'"
-                )
+                logger.warning(f"Using case-insensitive match '{key}' for '{prompt_key}'")
                 return self.prompts[key]
 
         # Strategy 2: Look for default variant
         if not prompt_key.startswith("default."):
             default_key = f"default.{prompt_key}"
             if default_key in self.prompts:
-                logger.warning(
-                    f"Using default variant '{default_key}' for '{prompt_key}'"
-                )
+                logger.warning(f"Using default variant '{default_key}' for '{prompt_key}'")
                 return self.prompts[default_key]
 
         # Strategy 3: Look for similar patterns
@@ -834,9 +817,7 @@ class PromptManager:
         self.templates[prompt_key] = Template(content)
         logger.debug("Added/updated prompt: %s", prompt_key)
 
-    def _scan_for_injection(
-        self, content: str, file_name: str
-    ) -> Dict[str, Any]:
+    def _scan_for_injection(self, content: str, file_name: str) -> Dict[str, Any]:
         """
         Scan context files for prompt injection patterns.
 
@@ -864,8 +845,8 @@ class PromptManager:
         """
         try:
             from security.prompt_injection_detector import (
-                get_prompt_injection_detector,
                 InjectionRisk,
+                get_prompt_injection_detector,
             )
 
             detector = get_prompt_injection_detector(strict_mode=True)
@@ -898,8 +879,7 @@ class PromptManager:
 
             elif result.risk_level != InjectionRisk.SAFE:
                 logger.info(
-                    "⚠️ Suspicious patterns in context file '%s' "
-                    "(risk: %s): %s",
+                    "⚠️ Suspicious patterns in context file '%s' " "(risk: %s): %s",
                     file_name,
                     result.risk_level.value,
                     result.detected_patterns,
@@ -917,9 +897,7 @@ class PromptManager:
                 "error": str(e),
             }
 
-    def load_and_scan_context_files(
-        self, project_root: Optional[Path] = None
-    ) -> Dict[str, Any]:
+    def load_and_scan_context_files(self, project_root: Optional[Path] = None) -> Dict[str, Any]:
         """
         Load and scan context files for prompt injection patterns.
 
@@ -1000,11 +978,7 @@ class PromptManager:
             # Determine if injection should be blocked
             if scan_results["has_critical"]:
                 scan_results["blocked"] = True
-                blocked_files = [
-                    d["file_name"]
-                    for d in scan_results["detections"]
-                    if d["risk_level"] == "critical"
-                ]
+                blocked_files = [d["file_name"] for d in scan_results["detections"] if d["risk_level"] == "critical"]
                 error_msg = (
                     f"🚨 CRITICAL prompt injection detected in context files: "
                     f"{', '.join(blocked_files)}. Injection blocked."
@@ -1055,16 +1029,10 @@ class PromptManager:
             Dictionary of prompt keys and content for the category
         """
         if category == "root":
-            return {
-                key: content for key, content in self.prompts.items() if "." not in key
-            }
+            return {key: content for key, content in self.prompts.items() if "." not in key}
 
         prefix = f"{category}."
-        return {
-            key: content
-            for key, content in self.prompts.items()
-            if key.startswith(prefix)
-        }
+        return {key: content for key, content in self.prompts.items() if key.startswith(prefix)}
 
     def _check_prompt_changes(self) -> tuple[bool, List[str]]:
         """Check if prompt files have changed since last load"""
@@ -1119,9 +1087,7 @@ class PromptManager:
                 try:
                     # Get file content hash
                     content = file_path.read_text(encoding="utf-8")
-                    file_hash = hashlib.md5(
-                        content.encode(), usedforsecurity=False
-                    ).hexdigest()
+                    file_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
 
                     # Use relative path as key
                     relative_path = str(file_path.relative_to(self.prompts_dir))
@@ -1183,9 +1149,7 @@ class PromptManager:
                 ),
             )
 
-            logger.debug(
-                "Updated prompt change cache with %s files", len(current_state)
-            )
+            logger.debug("Updated prompt change cache with %s files", len(current_state))
 
         except Exception as e:
             logger.debug("Failed to update prompt change cache: %s", e)
@@ -1196,17 +1160,12 @@ class PromptManager:
             # Get all prompt file paths and their modification times
             files_info = []
             for file_path in self.prompts_dir.rglob("*"):
-                if (
-                    file_path.is_file()
-                    and file_path.suffix in _SUPPORTED_PROMPT_EXTENSIONS
-                ):
+                if file_path.is_file() and file_path.suffix in _SUPPORTED_PROMPT_EXTENSIONS:
                     files_info.append(f"{file_path}:{file_path.stat().st_mtime}")
 
             # Create hash of file info
             content = "\n".join(sorted(files_info))
-            cache_hash = hashlib.md5(
-                content.encode(), usedforsecurity=False
-            ).hexdigest()[:12]
+            cache_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()[:12]
             return f"autobot:prompts:cache:{cache_hash}"
         except Exception as e:
             logger.warning("Failed to generate cache key: %s", e)
@@ -1240,9 +1199,7 @@ class PromptManager:
 
             # Cache for 24 hours in dedicated prompts database (DB 2)
             redis_client.setex(cache_key, TTL_24_HOURS, json.dumps(data))
-            logger.debug(
-                "Saved prompts to Redis prompts database (DB 2): %s", cache_key
-            )
+            logger.debug("Saved prompts to Redis prompts database (DB 2): %s", cache_key)
         except Exception as e:
             logger.debug("Redis prompts cache save failed: %s", e)
 
@@ -1306,9 +1263,7 @@ def _build_dynamic_context(
             tool_descriptions=tool_descriptions,
         )
     except KeyError:
-        logger.warning(
-            "Dynamic context template not found, using minimal dynamic section"
-        )
+        logger.warning("Dynamic context template not found, using minimal dynamic section")
         return (
             f"\n\n## Session Context\nSession ID: {session_id or 'N/A'}\nDate:"
             f"{datetime.now(tz=timezone.utc).strftime('%Y-%m-%d')}"

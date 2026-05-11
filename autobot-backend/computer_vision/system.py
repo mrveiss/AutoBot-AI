@@ -36,9 +36,7 @@ class ComputerVisionSystem:
 
         logger.info("Computer Vision System initialized")
 
-    def _prepare_analysis_results(
-        self, screen_state: ScreenState, changes: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _prepare_analysis_results(self, screen_state: ScreenState, changes: Dict[str, Any]) -> Dict[str, Any]:
         """Prepare comprehensive analysis results from screen state. Issue #620.
 
         Args:
@@ -81,9 +79,7 @@ class ComputerVisionSystem:
         ) as task_context:
             try:
                 # Perform comprehensive screen analysis
-                screen_state = await self.screen_analyzer.analyze_current_screen(
-                    session_id, context_audio
-                )
+                screen_state = await self.screen_analyzer.analyze_current_screen(session_id, context_audio)
 
                 # Detect changes from previous analysis
                 changes = await self.screen_analyzer.detect_screen_changes()
@@ -127,10 +123,7 @@ class ComputerVisionSystem:
                 "elements_detected": len(latest_analysis.ui_elements),
                 "confidence": latest_analysis.confidence_score,
                 "automation_ready": (
-                    latest_analysis.context_analysis.get(
-                        "automation_readiness", {}
-                    ).get("recommendation")
-                    == "ready"
+                    latest_analysis.context_analysis.get("automation_readiness", {}).get("recommendation") == "ready"
                 ),
             },
             "history_count": len(self.analysis_history),

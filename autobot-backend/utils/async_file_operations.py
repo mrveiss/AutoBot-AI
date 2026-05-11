@@ -69,9 +69,7 @@ class AsyncFileOperations:
             if len(content.encode(encoding)) <= _MAX_CACHE_ENTRY_BYTES:
                 self._cache_file_content(file_path, content)
             else:
-                logger.debug(
-                    "Skipping cache for large file %s (%d chars)", file_path, len(content)
-                )
+                logger.debug("Skipping cache for large file %s (%d chars)", file_path, len(content))
 
             logger.debug("📖 Read %s chars from %s", len(content), file_path)
             return content

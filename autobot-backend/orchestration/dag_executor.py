@@ -132,9 +132,7 @@ class WorkflowDAG:
     and one with ``label=False``.
     """
 
-    def __init__(
-        self, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]
-    ) -> None:
+    def __init__(self, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> None:
         self._nodes: Dict[str, DAGNode] = {}
         self._successors: Dict[str, List[DAGEdge]] = {}
         self._predecessors: Dict[str, List[str]] = {}
@@ -152,9 +150,7 @@ class WorkflowDAG:
         for raw in edges:
             src, tgt = raw["source"], raw["target"]
             if src not in self._nodes or tgt not in self._nodes:
-                logger.warning(
-                    "DAG edge (%s → %s) references unknown node; skipping", src, tgt
-                )
+                logger.warning("DAG edge (%s → %s) references unknown node; skipping", src, tgt)
                 continue
             label_raw = raw.get("label")
             label: Optional[bool] = None if label_raw is None else bool(label_raw)
@@ -273,9 +269,7 @@ def _evaluate_condition(node: DAGNode, ctx: DAGExecutionContext) -> bool:
     """
     expr: str = node.data.get("condition", "")
     if not expr:
-        logger.warning(
-            "Condition node %s has empty expression; defaulting False", node.node_id
-        )
+        logger.warning("Condition node %s has empty expression; defaulting False", node.node_id)
         return False
 
     safe_globals: Dict[str, Any] = {"__builtins__": {}}
@@ -292,9 +286,7 @@ def _evaluate_condition(node: DAGNode, ctx: DAGExecutionContext) -> bool:
 
     try:
         result = eval(expr, safe_globals, safe_locals)  # noqa: S307  # nosec B307
-        logger.debug(
-            "Condition node %s: expr=%r → %s", node.node_id, expr, bool(result)
-        )
+        logger.debug("Condition node %s: expr=%r → %s", node.node_id, expr, bool(result))
         return bool(result)
     except Exception as exc:
         logger.warning(
@@ -386,9 +378,7 @@ class DAGExecutor:
 
         visited: Set[str] = set()
         try:
-            await self._visit_nodes(
-                [r.node_id for r in roots], dag, ctx, visited, context or {}
-            )
+            await self._visit_nodes([r.node_id for r in roots], dag, ctx, visited, context or {})
         except Exception as exc:
             logger.error("Workflow %s DAG execution raised: %s", workflow_id, exc)
             ctx.status = TaskStatus.FAILED.value
@@ -399,9 +389,7 @@ class DAGExecutor:
             ctx.status = TaskStatus.COMPLETED.value
         else:
             ctx.status = TaskStatus.PARTIALLY_COMPLETED.value
-        logger.info(
-            "Workflow %s DAG execution finished: status=%s", workflow_id, ctx.status
-        )
+        logger.info("Workflow %s DAG execution finished: status=%s", workflow_id, ctx.status)
         return ctx
 
     # ------------------------------------------------------------------
@@ -429,12 +417,7 @@ class DAGExecutor:
         if len(unvisited) == 1:
             await self._visit_single(unvisited[0], dag, ctx, visited, context)
         else:
-            await asyncio.gather(
-                *(
-                    self._visit_single(nid, dag, ctx, visited, context)
-                    for nid in unvisited
-                )
-            )
+            await asyncio.gather(*(self._visit_single(nid, dag, ctx, visited, context) for nid in unvisited))
 
     async def _visit_single(
         self,
@@ -456,9 +439,7 @@ class DAGExecutor:
 
         if node_id in ctx.skipped_nodes:
             logger.debug("Skipping node %s (marked skipped by branch pruning)", node_id)
-            next_ids = self._get_next_node_ids(
-                node, dag, condition_result=None, skipped=True
-            )
+            next_ids = self._get_next_node_ids(node, dag, condition_result=None, skipped=True)
             await self._visit_nodes(next_ids, dag, ctx, visited, context)
             return
 
@@ -633,12 +614,8 @@ async def _execute_on_node(
     connector = aiohttp.TCPConnector(ssl=ssl_ctx)
 
     try:
-        async with aiohttp.ClientSession(
-            headers=headers, connector=connector
-        ) as session:
-            async with session.post(
-                url, json=payload, timeout=aiohttp.ClientTimeout(total=timeout + 30)
-            ) as resp:
+        async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
+            async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=timeout + 30)) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     return {
@@ -724,10 +701,7 @@ async def execute_distributed_shell(node: DAGNode, ctx: DAGExecutionContext) -> 
     t0 = time.monotonic()
 
     results: List[Dict[str, Any]] = await asyncio.gather(
-        *(
-            _execute_on_node(slm_url, auth_token, nid, script, language, timeout)
-            for nid in target_nodes
-        )
+        *(_execute_on_node(slm_url, auth_token, nid, script, language, timeout) for nid in target_nodes)
     )
 
     total_ms = int((time.monotonic() - t0) * 1000)
@@ -758,9 +732,7 @@ async def execute_distributed_shell(node: DAGNode, ctx: DAGExecutionContext) -> 
 # ---------------------------------------------------------------------------
 
 
-def workflow_has_condition_nodes(
-    steps: List[Dict[str, Any]], edges: List[Dict[str, Any]]
-) -> bool:
+def workflow_has_condition_nodes(steps: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> bool:
     """
     Return True when the step/edge list describes a branching workflow.
 
@@ -802,9 +774,7 @@ def build_dag(steps: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> Workf
             continue
         if "from" in raw and "to" in raw:
             label = _condition_to_label(raw.get("condition"))
-            normalized.append(
-                {"source": raw["from"], "target": raw["to"], "label": label}
-            )
+            normalized.append({"source": raw["from"], "target": raw["to"], "label": label})
             continue
         # Malformed entry — let WorkflowDAG's warn-and-skip handle it.
         normalized.append(raw)

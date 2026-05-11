@@ -846,6 +846,8 @@ class ClaudeAPIOptimizationSuite:
 # Global optimization suite instance (thread-safe)
 import threading
 
+from autobot_shared.async_compat import run_or_schedule
+
 _global_optimization_suite: Optional[ClaudeAPIOptimizationSuite] = None
 _global_optimization_suite_lock = threading.Lock()
 
@@ -963,4 +965,4 @@ async def example_usage():
 
 if __name__ == "__main__":
     # Run example
-    asyncio.run(example_usage())
+    run_or_schedule(example_usage())

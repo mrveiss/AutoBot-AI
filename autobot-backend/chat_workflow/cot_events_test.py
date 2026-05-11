@@ -18,7 +18,7 @@ Tests verify:
 import importlib.util
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 # Load cot_events.py directly without triggering the full backend import chain
 cot_events_path = Path(__file__).parent / "cot_events.py"
@@ -345,9 +345,7 @@ class TestCausalChainInPayloads:
             emit_step_start(step_name="test", causal_chain=chain)
             emit_step_complete(step_name="test", start_time=1000.0, causal_chain=chain)
             emit_tool_call(tool_name="test", arguments={}, causal_chain=chain)
-            emit_tool_result(
-                tool_name="test", result="ok", start_time=1000.0, causal_chain=chain
-            )
+            emit_tool_result(tool_name="test", result="ok", start_time=1000.0, causal_chain=chain)
             emit_llm_chunk(chunk="text", causal_chain=chain)
             emit_plan(steps=["step"], causal_chain=chain)
 

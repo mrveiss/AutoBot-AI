@@ -65,9 +65,7 @@ class TestPermissionEnum:
             if perm.value in legacy_permissions:
                 continue  # Skip legacy permissions
             parts = perm.value.split(".")
-            assert (
-                len(parts) >= 2
-            ), f"Permission {perm.value} doesn't follow naming convention"
+            assert len(parts) >= 2, f"Permission {perm.value} doesn't follow naming convention"
 
 
 class TestRoleEnum:
@@ -260,9 +258,7 @@ class TestRequireAnyPermission:
         mock_config.return_value = mock_deployment
 
         request = self._create_mock_request()
-        dependency = require_any_permission(
-            Permission.ANALYTICS_VIEW, Permission.ADMIN_SYSTEM
-        )
+        dependency = require_any_permission(Permission.ANALYTICS_VIEW, Permission.ADMIN_SYSTEM)
 
         # In single user mode, should return True
         result = dependency(request)

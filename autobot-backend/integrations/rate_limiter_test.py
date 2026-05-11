@@ -85,7 +85,7 @@ def test_state_retry_after_expires():
 
 def test_github_headers_zero_remaining_sets_retry_after():
     state = RateLimitState(requests_per_minute=1000, requests_per_hour=1000)
-    now = time.monotonic()
+    time.monotonic()
     reset_epoch = time.time() + 60  # 60 s from now (wall clock)
     # Map monotonic now to wall-clock: we pass reset as monotonic equivalent
     state.apply_github_headers(

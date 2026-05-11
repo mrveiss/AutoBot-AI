@@ -19,13 +19,13 @@ from knowledge.backends.async_base import AsyncBaseClient, AsyncBaseCollection
 from knowledge.backends.async_chromadb_adapter import AsyncChromaDBClient
 from knowledge.backends.async_memory_adapter import AsyncInMemoryClient
 
-
 # --- fixture factories ------------------------------------------------------
 #
 # Same rationale as test_base.py: ChromaDB 1.x EphemeralClient leaks state
 # across instances in the same process, so we use a per-test PersistentClient
 # pointed at a fresh temp directory. The async adapter wraps an
 # AsyncChromaClient, which itself wraps the raw PersistentClient.
+
 
 def _memory_client(tmp_path) -> AsyncBaseClient:  # tmp_path unused
     return AsyncInMemoryClient()
@@ -58,6 +58,7 @@ async def collection(client: AsyncBaseClient) -> AsyncBaseCollection:
 
 
 # --- collection contract ----------------------------------------------------
+
 
 async def test_add_then_count(collection: AsyncBaseCollection) -> None:
     await collection.add(
@@ -115,9 +116,7 @@ async def test_query_returns_nested_lists_ordered_by_distance(
 async def test_delete_by_ids_reduces_count(
     collection: AsyncBaseCollection,
 ) -> None:
-    await collection.add(
-        ids=["a", "b"], documents=["x", "y"], embeddings=[[1.0, 0.0], [0.0, 1.0]]
-    )
+    await collection.add(ids=["a", "b"], documents=["x", "y"], embeddings=[[1.0, 0.0], [0.0, 1.0]])
     await collection.delete(ids=["a"])
     assert await collection.count() == 1
     got_a = await collection.get(ids=["a"])
@@ -144,15 +143,14 @@ async def test_empty_query_returns_empty_inner_lists(
 async def test_peek_returns_flat_lists(
     collection: AsyncBaseCollection,
 ) -> None:
-    await collection.add(
-        ids=["a", "b"], documents=["x", "y"], embeddings=[[1.0, 0.0], [0.0, 1.0]]
-    )
+    await collection.add(ids=["a", "b"], documents=["x", "y"], embeddings=[[1.0, 0.0], [0.0, 1.0]])
     peek = await collection.peek(limit=1)
     assert len(peek["ids"]) == 1
     assert not isinstance(peek["ids"][0], list)
 
 
 # --- client contract --------------------------------------------------------
+
 
 async def test_get_or_create_is_idempotent(client: AsyncBaseClient) -> None:
     a = await client.get_or_create_collection("dup-collection")
@@ -197,12 +195,13 @@ async def test_list_collections_returns_async_base_collection_instances(
     cols = await client.list_collections()
     assert cols, "list_collections returned empty"
     for col in cols:
-        assert isinstance(col, AsyncBaseCollection), (
-            f"list_collections must wrap raw backend objects, got {type(col)!r}"
-        )
+        assert isinstance(
+            col, AsyncBaseCollection
+        ), f"list_collections must wrap raw backend objects, got {type(col)!r}"
 
 
 # --- update / where-filter / pagination contract (Issue #5135) --------------
+
 
 async def test_update_replaces_document_and_metadata(
     collection: AsyncBaseCollection,
@@ -239,9 +238,7 @@ async def test_update_preserves_ordering(
         embeddings=[[1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [0.5, 0.5]],
     )
     before = (await collection.get(ids=["a", "b", "c", "d"]))["ids"]
-    await collection.update(
-        ids=["c"], documents=["doc-c-v2"], embeddings=[[1.0, 1.0]]
-    )
+    await collection.update(ids=["c"], documents=["doc-c-v2"], embeddings=[[1.0, 1.0]])
     after = (await collection.get(ids=["a", "b", "c", "d"]))["ids"]
     assert before == after == ["a", "b", "c", "d"]
 

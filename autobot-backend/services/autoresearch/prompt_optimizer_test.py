@@ -25,6 +25,7 @@ from services.autoresearch.scorers import ScorerResult
 # Helper factory
 # ---------------------------------------------------------------------------
 
+
 def _make_variant(vid: str, score: float, round_number: int = 1) -> PromptVariant:
     return PromptVariant(
         id=vid,
@@ -56,6 +57,7 @@ def _make_entry(
 # PromptVariant
 # ---------------------------------------------------------------------------
 
+
 class TestPromptVariantModel:
     def test_to_dict(self):
         variant = PromptVariant(
@@ -83,6 +85,7 @@ class TestPromptVariantModel:
 # OptimizationSession
 # ---------------------------------------------------------------------------
 
+
 class TestOptimizationSession:
     def test_to_dict(self):
         target = PromptOptTarget(
@@ -102,6 +105,7 @@ class TestOptimizationSession:
 # ---------------------------------------------------------------------------
 # Archive unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestArchive:
     def test_add_retains_all_entries(self):
@@ -182,6 +186,7 @@ class TestArchive:
 # PromptOptimizer integration (archive-aware)
 # ---------------------------------------------------------------------------
 
+
 class TestPromptOptimizerLoop:
     @pytest.fixture
     def mock_llm(self):
@@ -255,9 +260,7 @@ class TestPromptOptimizerLoop:
         """First scorer in chain receives staged_eval_fraction; subsequent get None."""
         cheap_scorer = AsyncMock()
         cheap_scorer.name = "cheap"
-        cheap_scorer.score.return_value = ScorerResult(
-            score=0.9, raw_score=9, metadata={}, scorer_name="cheap"
-        )
+        cheap_scorer.score.return_value = ScorerResult(score=0.9, raw_score=9, metadata={}, scorer_name="cheap")
 
         expensive_scorer = AsyncMock()
         expensive_scorer.name = "expensive"
@@ -305,9 +308,7 @@ class TestPromptOptimizerLoop:
         cheap_scorer = AsyncMock()
         cheap_scorer.name = "cheap"
         # All 3 variants score below threshold
-        cheap_scorer.score.return_value = ScorerResult(
-            score=0.2, raw_score=2, metadata={}, scorer_name="cheap"
-        )
+        cheap_scorer.score.return_value = ScorerResult(score=0.2, raw_score=2, metadata={}, scorer_name="cheap")
 
         expensive_scorer = AsyncMock()
         expensive_scorer.name = "expensive"
@@ -347,15 +348,11 @@ class TestPromptOptimizerLoop:
         """Variants above threshold advance to tier-2."""
         cheap_scorer = AsyncMock()
         cheap_scorer.name = "cheap"
-        cheap_scorer.score.return_value = ScorerResult(
-            score=0.8, raw_score=8, metadata={}, scorer_name="cheap"
-        )
+        cheap_scorer.score.return_value = ScorerResult(score=0.8, raw_score=8, metadata={}, scorer_name="cheap")
 
         expensive_scorer = AsyncMock()
         expensive_scorer.name = "expensive"
-        expensive_scorer.score.return_value = ScorerResult(
-            score=0.9, raw_score=9, metadata={}, scorer_name="expensive"
-        )
+        expensive_scorer.score.return_value = ScorerResult(score=0.9, raw_score=9, metadata={}, scorer_name="expensive")
 
         cfg = AutoResearchConfig()
         cfg.staged_eval_fraction = 0.3
@@ -404,9 +401,7 @@ class TestPromptOptimizerLoop:
         assert session.rounds_completed == 0
 
     @pytest.mark.asyncio
-    async def test_scorer_failure_marks_variant_invalid_in_archive(
-        self, mock_llm
-    ):
+    async def test_scorer_failure_marks_variant_invalid_in_archive(self, mock_llm):
         """Variants whose scorer raises must have valid_parent=False in archive."""
         failing_scorer = AsyncMock()
         failing_scorer.score.side_effect = RuntimeError("scorer exploded")

@@ -524,10 +524,7 @@ class TestPromptTemplateManager:
         """Test getting ADD_TYPE_HINTS template."""
         template = PromptTemplateManager.get_template(RefactoringType.ADD_TYPE_HINTS)
         assert template is not None
-        assert (
-            "type" in template.user_prompt_template.lower()
-            or template.name == "add_type_hints"
-        )
+        assert "type" in template.user_prompt_template.lower() or template.name == "add_type_hints"
 
     def test_format_prompt(self):
         """Test formatting a prompt template."""
@@ -545,9 +542,7 @@ class TestPromptTemplateManager:
 
     def test_template_for_add_error_handling(self):
         """Test getting ADD_ERROR_HANDLING template."""
-        template = PromptTemplateManager.get_template(
-            RefactoringType.ADD_ERROR_HANDLING
-        )
+        template = PromptTemplateManager.get_template(RefactoringType.ADD_ERROR_HANDLING)
         assert template is not None
 
     def test_template_for_custom(self):

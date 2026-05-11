@@ -59,20 +59,12 @@ async def test_workflow_planning():
     # Get workflow response
     workflow_response = await orchestrator.create_workflow_response(complex_request)
 
-    print(  # noqa: print
-        f"Classification: {workflow_response['message_classification']}"
-    )  # noqa: print
+    print(f"Classification: {workflow_response['message_classification']}")  # noqa: print  # noqa: print
     print(f"Workflow Required: {workflow_response['workflow_required']}")  # noqa: print
     print(f"Planned Steps: {workflow_response['planned_steps']}")  # noqa: print
-    print(  # noqa: print
-        f"Agents Involved: {', '.join(workflow_response['agents_involved'])}"
-    )  # noqa: print
-    print(  # noqa: print
-        f"User Approvals: {workflow_response['user_approvals_needed']}"
-    )  # noqa: print
-    print(  # noqa: print
-        f"Estimated Duration: {workflow_response['estimated_duration']}"
-    )  # noqa: print
+    print(f"Agents Involved: {', '.join(workflow_response['agents_involved'])}")  # noqa: print  # noqa: print
+    print(f"User Approvals: {workflow_response['user_approvals_needed']}")  # noqa: print  # noqa: print
+    print(f"Estimated Duration: {workflow_response['estimated_duration']}")  # noqa: print  # noqa: print
     print()  # noqa: print
 
     print("📝 Workflow Steps:")  # noqa: print
@@ -97,9 +89,7 @@ async def test_orchestrator_integration():
     test_request = "find tools that would require to do network scan"
 
     print(f"Testing request: '{test_request}'")  # noqa: print
-    print(  # noqa: print
-        "This should trigger workflow orchestration instead of generic response..."
-    )  # noqa: print
+    print("This should trigger workflow orchestration instead of generic response...")  # noqa: print  # noqa: print
     print()  # noqa: print
 
     try:
@@ -108,9 +98,7 @@ async def test_orchestrator_integration():
         print("📊 Execution Result:")  # noqa: print
         print(f"Status: {result.get('status', 'unknown')}")  # noqa: print
         print(f"Tool Used: {result.get('tool_name', 'none')}")  # noqa: print
-        print(  # noqa: print
-            f"Workflow Planned: {result.get('workflow_planned', False)}"
-        )  # noqa: print
+        print(f"Workflow Planned: {result.get('workflow_planned', False)}")  # noqa: print  # noqa: print
         print()  # noqa: print
 
         if result.get("response_text"):
@@ -132,21 +120,15 @@ async def demonstrate_improved_capability():
 
     print("❌ OLD BEHAVIOR:")  # noqa: print
     print("   User: 'find tools that would require to do network scan'")  # noqa: print
-    print(  # noqa: print
-        "   AutoBot: 'Port Scanner, Sniffing Software, Password Cracking Tools, Reconnaissance Tools'"
-    )
-    print(  # noqa: print
-        "   Issues: Generic, unhelpful, no specific tools, no guidance"
-    )  # noqa: print
+    print("   AutoBot: 'Port Scanner, Sniffing Software, Password Cracking Tools, Reconnaissance Tools'")  # noqa: print
+    print("   Issues: Generic, unhelpful, no specific tools, no guidance")  # noqa: print  # noqa: print
     print()  # noqa: print
 
     print("✅ NEW BEHAVIOR (with Workflow Orchestration):")  # noqa: print
 
     # Run the improved orchestration
     orchestrator = Orchestrator()
-    result = await orchestrator.execute_goal(
-        "find tools that would require to do network scan"
-    )
+    result = await orchestrator.execute_goal("find tools that would require to do network scan")
 
     if result and result.get("response_text"):
         lines = result["response_text"].split("\n")
@@ -179,15 +161,9 @@ async def main():
     print("✅ Research agent integration ready")  # noqa: print
     print("✅ Orchestrator enhancement complete")  # noqa: print
     print()  # noqa: print
-    print(  # noqa: print
-        "🎉 AutoBot now has enhanced multi-agent workflow orchestration!"
-    )  # noqa: print
-    print(  # noqa: print
-        "   The system will no longer give generic responses to complex requests."
-    )  # noqa: print
-    print(  # noqa: print
-        "   Instead, it coordinates multiple agents to provide comprehensive solutions."
-    )
+    print("🎉 AutoBot now has enhanced multi-agent workflow orchestration!")  # noqa: print  # noqa: print
+    print("   The system will no longer give generic responses to complex requests.")  # noqa: print  # noqa: print
+    print("   Instead, it coordinates multiple agents to provide comprehensive solutions.")  # noqa: print
 
 
 if __name__ == "__main__":

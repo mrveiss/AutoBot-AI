@@ -75,9 +75,7 @@ class WorkflowMemory:
     Issue #3019.
     """
 
-    def __init__(
-        self, workflow_id: str, ttl_seconds: int = DEFAULT_TTL_SECONDS
-    ) -> None:
+    def __init__(self, workflow_id: str, ttl_seconds: int = DEFAULT_TTL_SECONDS) -> None:
         """
         Initialise memory for *workflow_id*.
 

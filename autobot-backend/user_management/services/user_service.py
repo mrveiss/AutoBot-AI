@@ -11,7 +11,6 @@ authentication, and role assignment.
 import logging
 import secrets
 import uuid
-from datetime import datetime, timezone
 from typing import List, Optional
 
 import bcrypt
@@ -19,11 +18,11 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from autobot_shared.time_utils import now_utc
 from user_management.models import Role, User, UserRole
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services.base_service import BaseService, TenantContext
 from user_management.services.session_service import SessionService
-from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 

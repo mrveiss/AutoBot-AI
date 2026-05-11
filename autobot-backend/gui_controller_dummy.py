@@ -19,13 +19,10 @@ class GUIController:
     def __init__(self):
         """Initialize dummy GUI controller for non-GUI environments."""
         logger.info(
-            "Initializing Dummy GUIController for Linux environment. "
-            "GUI automation features will be skipped."
+            "Initializing Dummy GUIController for Linux environment. " "GUI automation features will be skipped."
         )
 
-    async def _screenshot(
-        self, region: Optional[Tuple[int, int, int, int]] = None
-    ) -> Any:
+    async def _screenshot(self, region: Optional[Tuple[int, int, int, int]] = None) -> Any:
         """Return None as screenshot is not supported in dummy controller."""
         logger.debug("Dummy GUIController: _screenshot skipped.")
         await asyncio.sleep(0)
@@ -45,14 +42,9 @@ class GUIController:
         await asyncio.sleep(0)
         return {"status": "success", "message": "GUI click skipped (Dummy Controller)."}
 
-    async def read_text_from_region(
-        self, x: int, y: int, width: int, height: int
-    ) -> Dict[str, Any]:
+    async def read_text_from_region(self, x: int, y: int, width: int, height: int) -> Dict[str, Any]:
         """Return empty text as OCR is not supported in dummy mode."""
-        logger.debug(
-            "Dummy GUIController: read_text_from_region("
-            f"{x}, {y}, {width}, {height}) skipped."
-        )
+        logger.debug("Dummy GUIController: read_text_from_region(" f"{x}, {y}, {width}, {height}) skipped.")
         await asyncio.sleep(0)
         return {
             "status": "success",
@@ -80,9 +72,7 @@ class GUIController:
 
     async def bring_window_to_front(self, app_title: str) -> Dict[str, Any]:
         """Return success status without window management in dummy mode."""
-        logger.debug(
-            f"Dummy GUIController: bring_window_to_front('{app_title}') skipped."
-        )
+        logger.debug(f"Dummy GUIController: bring_window_to_front('{app_title}') skipped.")
         await asyncio.sleep(0)
         return {
             "status": "success",

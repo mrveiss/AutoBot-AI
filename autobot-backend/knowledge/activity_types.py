@@ -18,8 +18,9 @@ import uuid
 from datetime import datetime
 from typing import Any, Optional
 
-from autobot_shared.time_utils import now_utc
 from pydantic import BaseModel, Field
+
+from autobot_shared.time_utils import now_utc
 
 
 class TerminalActivity(BaseModel):
@@ -35,16 +36,10 @@ class TerminalActivity(BaseModel):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
     user_id: uuid.UUID = Field(..., description="User who executed the command")
-    session_id: Optional[str] = Field(
-        None, description="Chat session ID if executed via chat"
-    )
+    session_id: Optional[str] = Field(None, description="Chat session ID if executed via chat")
     command: str = Field(..., description="The shell command executed")
-    working_directory: Optional[str] = Field(
-        None, description="Directory where command was executed"
-    )
-    exit_code: Optional[int] = Field(
-        None, description="Command exit code (0 = success)"
-    )
+    working_directory: Optional[str] = Field(None, description="Directory where command was executed")
+    exit_code: Optional[int] = Field(None, description="Command exit code (0 = success)")
     output: Optional[str] = Field(None, description="Command output (stdout + stderr)")
     secrets_used: list[uuid.UUID] = Field(
         default_factory=list,
@@ -84,17 +79,13 @@ class FileActivity(BaseModel):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
     user_id: uuid.UUID = Field(..., description="User who performed the operation")
-    session_id: Optional[str] = Field(
-        None, description="Chat session ID if performed via chat"
-    )
+    session_id: Optional[str] = Field(None, description="Chat session ID if performed via chat")
     operation: str = Field(
         ...,
         description="Operation type: create, read, update, delete, rename, move",
     )
     path: str = Field(..., description="File or directory path")
-    new_path: Optional[str] = Field(
-        None, description="New path for rename/move operations"
-    )
+    new_path: Optional[str] = Field(None, description="New path for rename/move operations")
     file_type: Optional[str] = Field(None, description="File MIME type or extension")
     size_bytes: Optional[int] = Field(None, description="File size in bytes")
     metadata: dict[str, Any] = Field(
@@ -130,20 +121,14 @@ class BrowserActivity(BaseModel):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
     user_id: uuid.UUID = Field(..., description="User who performed the action")
-    session_id: Optional[str] = Field(
-        None, description="Chat session ID if performed via chat"
-    )
+    session_id: Optional[str] = Field(None, description="Chat session ID if performed via chat")
     url: str = Field(..., description="Target URL")
     action: str = Field(
         ...,
         description="Action type: navigate, click, type, submit, scroll",
     )
-    selector: Optional[str] = Field(
-        None, description="CSS selector for targeted element"
-    )
-    input_value: Optional[str] = Field(
-        None, description="Value entered (for type/submit actions)"
-    )
+    selector: Optional[str] = Field(None, description="CSS selector for targeted element")
+    input_value: Optional[str] = Field(None, description="Value entered (for type/submit actions)")
     secrets_used: list[uuid.UUID] = Field(
         default_factory=list,
         description="IDs of secrets used (credentials, API keys)",
@@ -181,21 +166,15 @@ class DesktopActivity(BaseModel):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
     user_id: uuid.UUID = Field(..., description="User who performed the action")
-    session_id: Optional[str] = Field(
-        None, description="Chat session ID if performed via chat"
-    )
+    session_id: Optional[str] = Field(None, description="Chat session ID if performed via chat")
     action: str = Field(
         ...,
         description="Action type: click, type, move, screenshot, window_focus",
     )
-    coordinates: Optional[tuple[int, int]] = Field(
-        None, description="Screen coordinates (x, y) for click/move"
-    )
+    coordinates: Optional[tuple[int, int]] = Field(None, description="Screen coordinates (x, y) for click/move")
     window_title: Optional[str] = Field(None, description="Target window title")
     input_text: Optional[str] = Field(None, description="Text typed (for type actions)")
-    screenshot_path: Optional[str] = Field(
-        None, description="Path to captured screenshot"
-    )
+    screenshot_path: Optional[str] = Field(None, description="Path to captured screenshot")
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional metadata (app name, OCR results, etc.)",
@@ -240,15 +219,9 @@ class SecretUsage(BaseModel):
         description="Type of activity: terminal, browser, file, desktop, api",
     )
     activity_id: uuid.UUID = Field(..., description="ID of the parent activity entity")
-    session_id: Optional[str] = Field(
-        None, description="Chat session ID if accessed via chat"
-    )
-    access_granted: bool = Field(
-        ..., description="Whether access was granted or denied"
-    )
-    denial_reason: Optional[str] = Field(
-        None, description="Reason for denial (if access_granted=False)"
-    )
+    session_id: Optional[str] = Field(None, description="Chat session ID if accessed via chat")
+    access_granted: bool = Field(..., description="Whether access was granted or denied")
+    denial_reason: Optional[str] = Field(None, description="Reason for denial (if access_granted=False)")
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional metadata (IP, user agent, etc.)",

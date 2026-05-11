@@ -170,11 +170,13 @@ def test_prompt_spec_round_trip():
 def test_prompt_spec_from_dict_drops_unknown_keys():
     """Forward-compat: unknown keys (added by future server versions) don't
     break older clients deserializing the payload."""
-    spec = PromptSpec.from_dict({
-        "user_prompt": "hi",
-        "version": "1",
-        "future_field_we_dont_know_yet": "ignore me",
-    })
+    spec = PromptSpec.from_dict(
+        {
+            "user_prompt": "hi",
+            "version": "1",
+            "future_field_we_dont_know_yet": "ignore me",
+        }
+    )
     assert spec.user_prompt == "hi"
     assert spec.version == "1"
 
@@ -210,6 +212,7 @@ def test_workflow_task_round_trip_with_prompt():
 def test_workflow_task_from_dict_requires_task_id():
     """Missing task_id (the only required field) raises KeyError."""
     import pytest
+
     with pytest.raises(KeyError, match="task_id"):
         WorkflowTask.from_dict({"description": "no task_id"})
 
@@ -266,6 +269,7 @@ def test_workflow_plan_from_dict_accepts_enum_or_string():
 def test_workflow_plan_from_dict_requires_plan_id_goal_tasks():
     """All three required fields validated."""
     import pytest
+
     for missing in ("plan_id", "goal", "tasks"):
         data = {"plan_id": "p1", "goal": "g", "tasks": []}
         del data[missing]
@@ -313,6 +317,7 @@ def test_workflow_task_get_execution_time_zero_until_complete():
     t.start_execution()
     assert t.get_execution_time() == 0.0  # no end yet
     import time as _time
+
     _time.sleep(0.001)
     t.complete_execution({})
     assert t.get_execution_time() > 0.0
@@ -321,13 +326,13 @@ def test_workflow_task_get_execution_time_zero_until_complete():
 def test_workflow_task_retry_methods():
     """can_retry() respects max_retries; increment_retry() advances the counter."""
     t = WorkflowTask(task_id="t1", max_retries=2)
-    assert t.can_retry()                # 0 < 2
+    assert t.can_retry()  # 0 < 2
     t.increment_retry()
     assert t.retry_count == 1
-    assert t.can_retry()                # 1 < 2
+    assert t.can_retry()  # 1 < 2
     t.increment_retry()
     assert t.retry_count == 2
-    assert not t.can_retry()            # 2 == 2
+    assert not t.can_retry()  # 2 == 2
 
 
 def test_workflow_task_get_enhanced_inputs_merges_context():
@@ -349,6 +354,7 @@ def test_workflow_task_to_completed_result_shape():
     t = WorkflowTask(task_id="t1", agent_type="researcher")
     t.start_execution()
     import time as _time
+
     _time.sleep(0.001)
     t.complete_execution({"answer": "yes"})
     res = t.to_completed_result({"answer": "yes"})
@@ -379,3 +385,43 @@ def test_lifecycle_methods_inherited_by_subclasses_and_aliases():
     # Smoke-checked by importer; can't run from autobot_shared without deps.
 
     # Subclass would also work — covered by enhanced_orchestration tests.
+
+
+# ---------------------------------------------------------------------------
+# #7431 — pending_skill_id field (async Phase 3 gap-fill marker)
+# ---------------------------------------------------------------------------
+
+
+def test_workflow_task_pending_skill_id_defaults_none():
+    """Default leaves pending_skill_id unset — no behavior change for tasks
+    that never went through Phase 3 gap-fill."""
+    t = WorkflowTask(task_id="t1")
+    assert t.pending_skill_id is None
+
+
+def test_workflow_task_pending_skill_id_explicit_value():
+    """Constructor accepts pending_skill_id directly (planner uses this)."""
+    t = WorkflowTask(task_id="t1", pending_skill_id="gen-abc-123")
+    assert t.pending_skill_id == "gen-abc-123"
+
+
+def test_workflow_task_pending_skill_id_round_trip():
+    """to_dict / from_dict preserves the async gap-fill marker so plans
+    can be persisted while blocked and resumed after restart."""
+    t = WorkflowTask(task_id="t1", pending_skill_id="gen-abc-123")
+    restored = WorkflowTask.from_dict(t.to_dict())
+    assert restored.pending_skill_id == "gen-abc-123"
+
+
+def test_workflow_task_pending_skill_id_independent_of_skill_name():
+    """skill_name and pending_skill_id are independent fields. In practice
+    they are mutually exclusive (planner sets one OR the other) but the
+    dataclass doesn't enforce that — the constraint lives in the planner."""
+    t = WorkflowTask(
+        task_id="t1",
+        skill_name="translation",
+        skill_action="translate",
+        pending_skill_id=None,
+    )
+    assert t.skill_name == "translation"
+    assert t.pending_skill_id is None

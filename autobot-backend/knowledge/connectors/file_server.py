@@ -15,7 +15,6 @@ import hashlib
 import logging
 import mimetypes
 from datetime import datetime, timezone
-from autobot_shared.time_utils import now_utc
 from pathlib import Path
 from typing import List, Optional
 
@@ -102,9 +101,7 @@ class FileServerConnector(AbstractConnector):
             await asyncio.to_thread(list, self._base_path.iterdir())
             return True
         except PermissionError as exc:
-            self.logger.error(
-                "Permission denied on base_path %s: %s", self._base_path, exc
-            )
+            self.logger.error("Permission denied on base_path %s: %s", self._base_path, exc)
             return False
         except Exception as exc:
             self.logger.error("test_connection failed: %s", exc)
@@ -118,9 +115,7 @@ class FileServerConnector(AbstractConnector):
         """Read and return file content for *source_id* (which is the file path)."""
         return await asyncio.to_thread(self._read_file_sync, source_id)
 
-    async def detect_changes(
-        self, since: Optional[datetime] = None
-    ) -> List[ChangeInfo]:
+    async def detect_changes(self, since: Optional[datetime] = None) -> List[ChangeInfo]:
         """Compare current file mtimes against *since* and report changes."""
         sources = await self.discover_sources()
         changes: List[ChangeInfo] = []

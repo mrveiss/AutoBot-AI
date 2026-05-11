@@ -12,7 +12,7 @@ import hmac
 import logging
 import secrets
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import select
@@ -156,9 +156,9 @@ class APIKeyService(BaseService):
     @staticmethod
     def _hash_key_legacy(key: str) -> str:
         """Hash using bare SHA-256 (pre-#1721 format, for migration)."""
-        return hashlib.sha256(
-            key.encode()
-        ).hexdigest()  # codeql[py/weak-sensitive-data-hashing] legacy API token lookup hash retained for migration only, not password storage
+        # codeql[py/weak-sensitive-data-hashing] — legacy API token lookup
+        # hash retained for migration only, NOT used for password storage.
+        return hashlib.sha256(key.encode()).hexdigest()
 
     @staticmethod
     def _calculate_expiration(expires_days: Optional[int]) -> Optional[datetime]:

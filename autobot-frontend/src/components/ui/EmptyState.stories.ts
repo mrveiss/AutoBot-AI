@@ -27,10 +27,11 @@ const meta = {
       description: 'Compact mode (smaller spacing)',
     },
   },
-} satisfies Meta<typeof EmptyState>;
+} as Meta<typeof EmptyState>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const Default: Story = {
   args: {

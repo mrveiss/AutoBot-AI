@@ -11,9 +11,10 @@ Issue #476: Added /metrics endpoint for Prometheus integration.
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, HTTPException
+
 from api.schemas_analytics import (
     RumApiCallMetric,
     RumConfig,
@@ -122,9 +123,7 @@ _RUM_LOG_FORMATTERS = {
 }
 
 
-def _log_rum_event_by_type(
-    event_type: str, log_message: str, interaction_tracking: bool, rum_logger
-) -> None:
+def _log_rum_event_by_type(event_type: str, log_message: str, interaction_tracking: bool, rum_logger) -> None:
     """Log RUM event using appropriate log level (Issue #315: extracted).
 
     Args:
@@ -163,9 +162,7 @@ def setup_rum_logger():
     # Create file handler for RUM logs using centralized path
     rum_log_path = get_rum_log_path()
     handler = logging.FileHandler(rum_log_path)
-    formatter = logging.Formatter(
-        "%(asctime)s - RUM - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-    )
+    formatter = logging.Formatter("%(asctime)s - RUM - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
     handler.setFormatter(formatter)
 
     # Clear existing handlers and add our handler
@@ -259,9 +256,7 @@ async def log_rum_event(event: RumEvent):
 
         # Log to dedicated RUM log file based on event type (outside lock)
         log_message = format_rum_log_message(event_data)
-        _log_rum_event_by_type(
-            event.type, log_message, interaction_tracking, rum_logger
-        )
+        _log_rum_event_by_type(event.type, log_message, interaction_tracking, rum_logger)
 
         return {
             "status": "success",
@@ -314,9 +309,7 @@ async def clear_rum_data():
             rum_events.clear()
             rum_sessions.clear()
 
-        rum_logger.info(
-            f"RUM data cleared: {events_cleared} events, {sessions_cleared} sessions"
-        )
+        rum_logger.info(f"RUM data cleared: {events_cleared} events, {sessions_cleared} sessions")
 
         return {
             "status": "success",
@@ -393,9 +386,7 @@ async def get_rum_status():
 
             for session_data in rum_sessions.values():
                 last_activity = parse_utc_iso(session_data["last_activity"])
-                if (datetime.now(tz=timezone.utc) - last_activity) < timedelta(
-                    minutes=30
-                ):
+                if (datetime.now(tz=timezone.utc) - last_activity) < timedelta(minutes=30):
                     active_sessions += 1
 
                 if last_activity.date() == today:
@@ -446,9 +437,7 @@ def format_rum_log_message(event_data: Metadata) -> str:
 def _process_page_metrics(metrics_manager, page_metrics: RumPageMetrics) -> None:
     """Process page performance metrics."""
     if page_metrics.load_time_seconds is not None:
-        metrics_manager.record_frontend_page_load(
-            page_metrics.page, page_metrics.load_time_seconds
-        )
+        metrics_manager.record_frontend_page_load(page_metrics.page, page_metrics.load_time_seconds)
     if page_metrics.fcp_seconds is not None:
         metrics_manager.record_frontend_fcp(page_metrics.page, page_metrics.fcp_seconds)
     if page_metrics.lcp_seconds is not None:
@@ -456,9 +445,7 @@ def _process_page_metrics(metrics_manager, page_metrics: RumPageMetrics) -> None
     if page_metrics.tti_seconds is not None:
         metrics_manager.record_frontend_tti(page_metrics.page, page_metrics.tti_seconds)
     if page_metrics.dom_loaded_seconds is not None:
-        metrics_manager.record_frontend_dom_loaded(
-            page_metrics.page, page_metrics.dom_loaded_seconds
-        )
+        metrics_manager.record_frontend_dom_loaded(page_metrics.page, page_metrics.dom_loaded_seconds)
 
 
 def _process_api_calls(metrics_manager, api_calls: List[RumApiCallMetric]) -> None:
@@ -473,9 +460,7 @@ def _process_api_calls(metrics_manager, api_calls: List[RumApiCallMetric]) -> No
             is_timeout=call.is_timeout,
         )
         if call.error_type:
-            metrics_manager.record_frontend_api_error(
-                call.endpoint, call.method, call.error_type
-            )
+            metrics_manager.record_frontend_api_error(call.endpoint, call.method, call.error_type)
 
 
 def _process_js_errors(metrics_manager, js_errors: List[RumJsErrorMetric]) -> None:
@@ -486,21 +471,15 @@ def _process_js_errors(metrics_manager, js_errors: List[RumJsErrorMetric]) -> No
         else:
             metrics_manager.record_frontend_js_error(error.error_type, error.page)
         if error.component:
-            metrics_manager.record_frontend_component_error(
-                error.component, error.error_type
-            )
+            metrics_manager.record_frontend_component_error(error.component, error.error_type)
 
 
-def _process_user_actions(
-    metrics_manager, user_actions: List[RumUserActionMetric]
-) -> None:
+def _process_user_actions(metrics_manager, user_actions: List[RumUserActionMetric]) -> None:
     """Process user action metrics."""
     for action in user_actions:
         metrics_manager.record_frontend_user_action(action.action_type, action.page)
         if action.form_name and action.form_status:
-            metrics_manager.record_frontend_form_submission(
-                action.form_name, action.form_status
-            )
+            metrics_manager.record_frontend_form_submission(action.form_name, action.form_status)
 
 
 def _process_session_metric(metrics_manager, session: RumSessionMetric) -> None:
@@ -511,31 +490,23 @@ def _process_session_metric(metrics_manager, session: RumSessionMetric) -> None:
         metrics_manager.record_frontend_session_duration(session.duration_seconds)
 
 
-def _process_websocket_events(
-    metrics_manager, websocket_events: List[RumWebSocketMetric]
-) -> None:
+def _process_websocket_events(metrics_manager, websocket_events: List[RumWebSocketMetric]) -> None:
     """Process WebSocket event metrics."""
     for ws_event in websocket_events:
         metrics_manager.record_frontend_ws_event(ws_event.event)
         if ws_event.direction and ws_event.event_type:
-            metrics_manager.record_frontend_ws_message(
-                ws_event.direction, ws_event.event_type
-            )
+            metrics_manager.record_frontend_ws_message(ws_event.direction, ws_event.event_type)
 
 
 def _process_resources(metrics_manager, resources: List[RumResourceMetric]) -> None:
     """Process resource load metrics."""
     for resource in resources:
-        metrics_manager.record_frontend_resource_load(
-            resource.resource_type, resource.load_time_seconds
-        )
+        metrics_manager.record_frontend_resource_load(resource.resource_type, resource.load_time_seconds)
         if resource.is_slow:
             metrics_manager.record_frontend_slow_resource(resource.resource_type)
 
 
-def _process_critical_issues(
-    metrics_manager, critical_issues: List[RumCriticalIssueMetric]
-) -> None:
+def _process_critical_issues(metrics_manager, critical_issues: List[RumCriticalIssueMetric]) -> None:
     """Process critical issue metrics."""
     for issue in critical_issues:
         metrics_manager.record_frontend_critical_issue(issue.issue_type)
@@ -597,9 +568,7 @@ async def receive_rum_metrics(metrics: RumMetrics):
         metrics_manager = get_metrics_manager()
         recorded_count = _dispatch_and_tally_rum_metrics(metrics_manager, metrics)
 
-        logger.debug(
-            f"Recorded {recorded_count} RUM metrics from session {metrics.session_id}"
-        )
+        logger.debug(f"Recorded {recorded_count} RUM metrics from session {metrics.session_id}")
 
         return {
             "status": "success",

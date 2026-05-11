@@ -74,11 +74,7 @@ async def test_lsp_signature_incompatible_async_sync_mismatch(fixture_root):
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],  # truthy non-default — see analyze() `or` idiom
     )
-    sig_issues = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type.value == "lsp_signature_incompatible"
-    ]
+    sig_issues = [ap for ap in report.anti_patterns if ap.pattern_type.value == "lsp_signature_incompatible"]
     assert sig_issues, "expected at least one LSP_SIGNATURE_INCOMPATIBLE finding"
     msg = sig_issues[0].description
     assert "sync" in msg and "async" in msg
@@ -144,9 +140,7 @@ async def test_lsp_exception_contract_changed(fixture_root):
         exclude_patterns=["__pycache__"],  # truthy non-default — see analyze() `or` idiom
     )
     exc_issues = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type == apd.AntiPatternType.LSP_EXCEPTION_CONTRACT_CHANGED
+        ap for ap in report.anti_patterns if ap.pattern_type == apd.AntiPatternType.LSP_EXCEPTION_CONTRACT_CHANGED
     ]
     assert exc_issues
     assert "ValueError" in exc_issues[0].description
@@ -241,9 +235,7 @@ async def test_lsp_skips_child_with_widened_preconditions(fixture_root):
         exclude_patterns=["__pycache__"],
     )
     sig_issues = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type == apd.AntiPatternType.LSP_SIGNATURE_INCOMPATIBLE
+        ap for ap in report.anti_patterns if ap.pattern_type == apd.AntiPatternType.LSP_SIGNATURE_INCOMPATIBLE
     ]
     assert not sig_issues, (
         f"child widening preconditions should NOT be flagged; got: "
@@ -324,11 +316,7 @@ async def test_lsp_skips_mixin_classes(fixture_root):
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],  # truthy non-default — see analyze() `or` idiom
     )
-    lsp = [
-        ap
-        for ap in report.anti_patterns
-        if ap.pattern_type == apd.AntiPatternType.LSP_SIGNATURE_INCOMPATIBLE
-    ]
+    lsp = [ap for ap in report.anti_patterns if ap.pattern_type == apd.AntiPatternType.LSP_SIGNATURE_INCOMPATIBLE]
     assert not lsp, f"Mixin override should be ignored, got: {lsp}"
 
 

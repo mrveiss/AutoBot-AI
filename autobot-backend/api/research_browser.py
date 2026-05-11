@@ -16,21 +16,20 @@ import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from api.system_health import ComponentHealth, register_health_probe
-
-from auth_middleware import check_admin_permission
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.ssot_config import config as ssot_config
-from config.manager import get_config_manager
-from constants.error_constants import ERR_SESSION_NOT_FOUND
-from api.schemas_common import DataResponse
 from api.schemas_code import ResearchBrowserHealthResponse
+from api.schemas_common import DataResponse
 from api.schemas_workflows import (
     BrowserResearchRequest,
     CreateChatBrowserRequest,
     NavigationRequest,
     SessionAction,
 )
+from api.system_health import ComponentHealth, register_health_probe
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.ssot_config import config as ssot_config
+from config.manager import get_config_manager
+from constants.error_constants import ERR_SESSION_NOT_FOUND
 
 logger = logging.getLogger(__name__)
 
@@ -147,9 +146,7 @@ async def handle_session_action(request: SessionAction):
 
     if request.action == "wait":
         # Wait for user interaction to complete
-        interaction_complete = await session.wait_for_user_interaction(
-            request.timeout_seconds or 300
-        )
+        interaction_complete = await session.wait_for_user_interaction(request.timeout_seconds or 300)
         result["interaction_complete"] = interaction_complete
         result["status"] = session.status
 
@@ -230,9 +227,7 @@ async def download_mhtml(session_id: str, filename: str):
             break
 
     # Issue #358 - avoid blocking
-    mhtml_exists = (
-        await asyncio.to_thread(os.path.exists, mhtml_path) if mhtml_path else False
-    )
+    mhtml_exists = await asyncio.to_thread(os.path.exists, mhtml_path) if mhtml_path else False
     if not mhtml_path or not mhtml_exists:
         raise HTTPException(status_code=404, detail="MHTML file not found")
 
@@ -382,11 +377,7 @@ async def _get_docker_browser_info(session) -> dict:
             "vnc_url": PLAYWRIGHT_VNC_URL.replace("vnc.html", ""),
             "direct_url": get_vnc_direct_url(),
             "session_active": session.status == "active",
-            "environment": (
-                "container"
-                if await asyncio.to_thread(os.path.exists, "/.dockerenv")
-                else "host"
-            ),
+            "environment": ("container" if await asyncio.to_thread(os.path.exists, "/.dockerenv") else "host"),
         }
     except Exception:
         return {"available": False}
@@ -439,9 +430,7 @@ async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
     """
     _require_browser()
     # Check for existing session for this conversation
-    existing_session = get_research_browser_manager().get_session_by_conversation(
-        request.conversation_id
-    )
+    existing_session = get_research_browser_manager().get_session_by_conversation(request.conversation_id)
 
     if existing_session and existing_session.status != "closed":
         logger.info(
@@ -461,12 +450,8 @@ async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
         )
 
     # Create new session
-    logger.info(
-        f"Creating new browser session for conversation {request.conversation_id}"
-    )
-    session_id = await get_research_browser_manager().create_session(
-        request.conversation_id, headless=request.headless
-    )
+    logger.info(f"Creating new browser session for conversation {request.conversation_id}")
+    session_id = await get_research_browser_manager().create_session(request.conversation_id, headless=request.headless)
 
     if not session_id:
         raise HTTPException(status_code=500, detail="Failed to create browser session")

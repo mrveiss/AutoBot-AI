@@ -6,10 +6,11 @@ const meta = {
   component: OfflineBanner,
   tags: ['autodocs'],
   argTypes: {},
-} satisfies Meta<typeof OfflineBanner>;
+} as Meta<typeof OfflineBanner>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+type Story = StoryObj<any>;
 
 export const Default: Story = {
   render: () => ({

@@ -129,9 +129,7 @@ class DuplicatePattern(CodePattern):
         base.update(
             {
                 "similarity_score": self.similarity_score,
-                "canonical_code": (
-                    self.canonical_code[:500] if self.canonical_code else ""
-                ),
+                "canonical_code": (self.canonical_code[:500] if self.canonical_code else ""),
                 "code_reduction_potential": self.code_reduction_potential,
             }
         )
@@ -247,9 +245,7 @@ class PatternCluster:
             "pattern_type": self.pattern_type.value,
             "size": self.size,
             "patterns": [p.to_dict() for p in self.patterns],
-            "representative_code": (
-                self.representative_code[:500] if self.representative_code else ""
-            ),
+            "representative_code": (self.representative_code[:500] if self.representative_code else ""),
         }
 
 
@@ -266,9 +262,7 @@ class PatternAnalysisReport:
     # Pattern findings
     duplicate_patterns: List[DuplicatePattern] = field(default_factory=list)
     regex_opportunities: List[RegexOpportunity] = field(default_factory=list)
-    modularization_suggestions: List[ModularizationSuggestion] = field(
-        default_factory=list
-    )
+    modularization_suggestions: List[ModularizationSuggestion] = field(default_factory=list)
     complexity_hotspots: List[ComplexityHotspot] = field(default_factory=list)
     other_patterns: List[CodePattern] = field(default_factory=list)
 
@@ -314,20 +308,16 @@ class PatternAnalysisReport:
         self.severity_distribution = {}
         for pattern in all_patterns:
             severity = pattern.severity.value
-            self.severity_distribution[severity] = (
-                self.severity_distribution.get(severity, 0) + 1
-            )
+            self.severity_distribution[severity] = self.severity_distribution.get(severity, 0) + 1
 
         # LOC reduction potential
-        self.potential_loc_reduction = sum(
-            dp.code_reduction_potential for dp in self.duplicate_patterns
-        )
+        self.potential_loc_reduction = sum(dp.code_reduction_potential for dp in self.duplicate_patterns)
 
         # Complexity score calculation
         if self.complexity_hotspots:
-            avg_complexity = sum(
-                h.cyclomatic_complexity for h in self.complexity_hotspots
-            ) / len(self.complexity_hotspots)
+            avg_complexity = sum(h.cyclomatic_complexity for h in self.complexity_hotspots) / len(
+                self.complexity_hotspots
+            )
             if avg_complexity <= 5:
                 self.complexity_score = "A"
             elif avg_complexity <= 10:
@@ -359,9 +349,7 @@ class PatternAnalysisReport:
             "severity_distribution": self.severity_distribution,
             "duplicate_patterns": [p.to_dict() for p in self.duplicate_patterns],
             "regex_opportunities": [p.to_dict() for p in self.regex_opportunities],
-            "modularization_suggestions": [
-                p.to_dict() for p in self.modularization_suggestions
-            ],
+            "modularization_suggestions": [p.to_dict() for p in self.modularization_suggestions],
             "complexity_hotspots": [p.to_dict() for p in self.complexity_hotspots],
             "other_patterns": [p.to_dict() for p in self.other_patterns],
             "pattern_clusters": [c.to_dict() for c in self.pattern_clusters],
@@ -461,10 +449,7 @@ class PatternAnalysisReport:
         )[:15]:
             loc = str(ch.locations[0]) if ch.locations else "N/A"
             suggestions = "; ".join(ch.simplification_suggestions[:2])
-            md.append(
-                f"| `{loc}` | {ch.cyclomatic_complexity} | "
-                f"{ch.maintainability_index:.1f} | {suggestions} |"
-            )
+            md.append(f"| `{loc}` | {ch.cyclomatic_complexity} | " f"{ch.maintainability_index:.1f} | {suggestions} |")
         md.append("")
         return md
 

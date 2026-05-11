@@ -38,9 +38,7 @@ from autobot_shared.redis_client import get_redis_client
 from constants.network_constants import NetworkConstants, ServiceURLs
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -96,16 +94,8 @@ class AsyncBaselineTest:
         if latencies:
             mean = statistics.mean(latencies)
             median = statistics.median(latencies)
-            p95 = (
-                sorted(latencies)[int(len(latencies) * 0.95)]
-                if len(latencies) > 1
-                else mean
-            )
-            p99 = (
-                sorted(latencies)[int(len(latencies) * 0.99)]
-                if len(latencies) > 1
-                else mean
-            )
+            p95 = sorted(latencies)[int(len(latencies) * 0.95)] if len(latencies) > 1 else mean
+            p99 = sorted(latencies)[int(len(latencies) * 0.99)] if len(latencies) > 1 else mean
             min_lat = min(latencies)
             max_lat = max(latencies)
             std_dev = statistics.stdev(latencies) if len(latencies) > 1 else 0.0
@@ -130,9 +120,7 @@ class AsyncBaselineTest:
             metadata=metadata or {},
         )
 
-    async def test_concurrent_chat_requests(
-        self, concurrent_users: int = 50
-    ) -> PerformanceMetrics:
+    async def test_concurrent_chat_requests(self, concurrent_users: int = 50) -> PerformanceMetrics:
         """
         Test Scenario 1: Concurrent chat requests
 
@@ -156,9 +144,7 @@ class AsyncBaselineTest:
                 }
 
                 start = time.perf_counter()
-                async with session.post(
-                    url, json=payload, timeout=aiohttp.ClientTimeout(total=60.0)
-                ) as response:
+                async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=60.0)) as response:
                     await response.text()
                     end = time.perf_counter()
 
@@ -186,9 +172,7 @@ class AsyncBaselineTest:
 
         # Count successes and failures
         success_count = sum(1 for r in results if r == "success")
-        fail_count = sum(
-            1 for r in results if r == "failed" or isinstance(r, Exception)
-        )
+        fail_count = sum(1 for r in results if r == "failed" or isinstance(r, Exception))
 
         metrics = self.calculate_metrics(
             test_name=f"concurrent_chat_{concurrent_users}_users",
@@ -212,9 +196,7 @@ class AsyncBaselineTest:
 
         return metrics
 
-    async def test_concurrent_redis_operations(
-        self, operations: int = 100
-    ) -> PerformanceMetrics:
+    async def test_concurrent_redis_operations(self, operations: int = 100) -> PerformanceMetrics:
         """
         Test Scenario 2: Concurrent Redis operations
 
@@ -257,9 +239,7 @@ class AsyncBaselineTest:
         start_time = time.perf_counter()
 
         # Create async Redis connection using canonical pattern
-        redis_client = get_redis_client(
-            async_client=True, database="metrics"
-        )  # METRICS_DB
+        redis_client = get_redis_client(async_client=True, database="metrics")  # METRICS_DB
 
         try:
             # Launch all operations concurrently
@@ -274,9 +254,7 @@ class AsyncBaselineTest:
 
         # Count successes and failures
         success_count = sum(1 for r in results if r == "success")
-        fail_count = sum(
-            1 for r in results if r == "failed" or isinstance(r, Exception)
-        )
+        fail_count = sum(1 for r in results if r == "failed" or isinstance(r, Exception))
 
         metrics = self.calculate_metrics(
             test_name=f"concurrent_redis_{operations}_ops",
@@ -299,9 +277,7 @@ class AsyncBaselineTest:
 
         return metrics
 
-    async def test_mixed_io_operations(
-        self, operations: int = 50
-    ) -> PerformanceMetrics:
+    async def test_mixed_io_operations(self, operations: int = 50) -> PerformanceMetrics:
         """
         Test Scenario 3: Mixed file I/O and Redis operations
 
@@ -361,9 +337,7 @@ class AsyncBaselineTest:
         start_time = time.perf_counter()
 
         # Create async Redis connection using canonical pattern
-        redis_client = get_redis_client(
-            async_client=True, database="metrics"
-        )  # METRICS_DB
+        redis_client = get_redis_client(async_client=True, database="metrics")  # METRICS_DB
 
         try:
             # Launch all operations concurrently
@@ -382,9 +356,7 @@ class AsyncBaselineTest:
 
         # Count successes and failures
         success_count = sum(1 for r in results if r == "success")
-        fail_count = sum(
-            1 for r in results if r == "failed" or isinstance(r, Exception)
-        )
+        fail_count = sum(1 for r in results if r == "failed" or isinstance(r, Exception))
 
         metrics = self.calculate_metrics(
             test_name=f"mixed_io_{operations}_ops",
@@ -412,9 +384,7 @@ class AsyncBaselineTest:
 
         Tests inter-VM communication performance (main -> frontend, npu-worker, etc.)
         """
-        logger.info(
-            f"🔗 Starting cross-VM latency test ({requests} requests per VM)..."
-        )
+        logger.info(f"🔗 Starting cross-VM latency test ({requests} requests per VM)...")
 
         vm_endpoints = {
             "frontend": f"{ServiceURLs.FRONTEND_VM}/",
@@ -432,9 +402,7 @@ class AsyncBaselineTest:
             try:
                 if vm_name == "redis":
                     # Special handling for Redis (not HTTP) using canonical pattern
-                    redis_client = get_redis_client(
-                        async_client=True, database="main"  # MAIN_DB (default DB 0)
-                    )
+                    redis_client = get_redis_client(async_client=True, database="main")  # MAIN_DB (default DB 0)
                     try:
                         start = time.perf_counter()
                         await redis_client.ping()
@@ -444,9 +412,7 @@ class AsyncBaselineTest:
                 else:
                     # HTTP endpoint
                     start = time.perf_counter()
-                    async with session.get(
-                        endpoint, timeout=aiohttp.ClientTimeout(total=10.0)
-                    ) as response:
+                    async with session.get(endpoint, timeout=aiohttp.ClientTimeout(total=10.0)) as response:
                         await response.text()
                         end = time.perf_counter()
 
@@ -455,9 +421,7 @@ class AsyncBaselineTest:
                 return "success"
 
             except Exception as e:
-                logger.debug(
-                    f"Cross-VM request failed ({vm_name}, req {request_id}): {e}"
-                )
+                logger.debug(f"Cross-VM request failed ({vm_name}, req {request_id}): {e}")
                 return "failed"
 
         start_time = time.perf_counter()
@@ -476,9 +440,7 @@ class AsyncBaselineTest:
 
         # Count successes and failures
         success_count = sum(1 for r in results if r == "success")
-        fail_count = sum(
-            1 for r in results if r == "failed" or isinstance(r, Exception)
-        )
+        fail_count = sum(1 for r in results if r == "failed" or isinstance(r, Exception))
 
         metrics = self.calculate_metrics(
             test_name=f"cross_vm_latency_{len(vm_endpoints)}_vms",
@@ -552,57 +514,37 @@ class AsyncBaselineTest:
         report["summary"] = {
             "total_requests": total_requests,
             "total_successful": total_successful,
-            "overall_success_rate": (
-                (total_successful / total_requests * 100) if total_requests > 0 else 0
-            ),
+            "overall_success_rate": ((total_successful / total_requests * 100) if total_requests > 0 else 0),
         }
 
         # Performance analysis against targets
-        chat_test = next(
-            (r for r in self.results if "concurrent_chat" in r.test_name), None
-        )
-        redis_test = next(
-            (r for r in self.results if "concurrent_redis" in r.test_name), None
-        )
-        cross_vm_test = next(
-            (r for r in self.results if "cross_vm" in r.test_name), None
-        )
+        chat_test = next((r for r in self.results if "concurrent_chat" in r.test_name), None)
+        redis_test = next((r for r in self.results if "concurrent_redis" in r.test_name), None)
+        cross_vm_test = next((r for r in self.results if "cross_vm" in r.test_name), None)
 
         report["performance_analysis"] = {
             "chat_performance": {
                 "baseline_p95_ms": chat_test.p95_latency_ms if chat_test else 0,
                 "target_after_async_ms": 2000,  # 2s target
-                "meets_target": (
-                    (chat_test.p95_latency_ms < 2000) if chat_test else False
-                ),
+                "meets_target": ((chat_test.p95_latency_ms < 2000) if chat_test else False),
                 "improvement_needed": (
-                    "10-50x faster"
-                    if chat_test and chat_test.p95_latency_ms > 10000
-                    else "Already fast"
+                    "10-50x faster" if chat_test and chat_test.p95_latency_ms > 10000 else "Already fast"
                 ),
             },
             "redis_performance": {
-                "baseline_ops_per_sec": (
-                    redis_test.requests_per_second if redis_test else 0
-                ),
+                "baseline_ops_per_sec": (redis_test.requests_per_second if redis_test else 0),
                 "target_ops_per_sec": 1000,  # Target throughput
-                "meets_target": (
-                    (redis_test.requests_per_second > 1000) if redis_test else False
-                ),
+                "meets_target": ((redis_test.requests_per_second > 1000) if redis_test else False),
             },
             "cross_vm_latency": {
                 "baseline_p95_ms": cross_vm_test.p95_latency_ms if cross_vm_test else 0,
                 "target_p95_ms": 100,  # <100ms target
-                "meets_target": (
-                    (cross_vm_test.p95_latency_ms < 100) if cross_vm_test else False
-                ),
+                "meets_target": ((cross_vm_test.p95_latency_ms < 100) if cross_vm_test else False),
             },
         }
 
         # Save report to file
-        output_dir = Path(
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/performance/results"
-        )
+        output_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/performance/results")
         output_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -619,9 +561,7 @@ class AsyncBaselineTest:
         print("=" * 80)  # noqa: print
         print(f"Total Tests: {report['total_tests']}")  # noqa: print
         print(f"Total Requests: {total_requests}")  # noqa: print
-        print(  # noqa: print
-            f"Success Rate: {report['summary']['overall_success_rate']:.1f}%"
-        )  # noqa: print
+        print(f"Success Rate: {report['summary']['overall_success_rate']:.1f}%")  # noqa: print  # noqa: print
         print()  # noqa: print
 
         if chat_test:
@@ -635,9 +575,7 @@ class AsyncBaselineTest:
 
         if redis_test:
             print("Redis Performance (100 concurrent ops):")  # noqa: print
-            print(  # noqa: print
-                f"  Throughput: {redis_test.requests_per_second:.0f} ops/sec"
-            )  # noqa: print
+            print(f"  Throughput: {redis_test.requests_per_second:.0f} ops/sec")  # noqa: print  # noqa: print
             print(f"  P95 Latency: {redis_test.p95_latency_ms:.0f}ms")  # noqa: print
             print(  # noqa: print
                 f"  Status: {'✅ GOOD' if redis_test.requests_per_second > 500 else '⚠️ COULD BE FASTER'}"

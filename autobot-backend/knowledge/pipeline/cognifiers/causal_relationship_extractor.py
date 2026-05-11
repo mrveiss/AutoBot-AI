@@ -12,11 +12,11 @@ extraction with condition detection and evidence tracking.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
-from knowledge.pipeline.models.causal_edge import CausalEdge, EffectType
+from knowledge.pipeline.models.causal_edge import CausalEdge
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.registry import TaskRegistry
 from services.llm_service import get_llm_service
@@ -33,7 +33,8 @@ For each causal relationship, provide:
 - source_name: The cause entity (e.g., "cache_ttl", "request_rate")
 - target_name: The effect entity (e.g., "query_latency", "memory_usage")
 - effect_type: One of CAUSES, ENABLES, PREVENTS, AMPLIFIES, REDUCES, INHIBITS, ACCELERATES, DECELERATES
-- condition: When does this causality hold? (e.g., "when cache is full", "under high load", or empty string for unconditional)
+- condition: When does this causality hold? (e.g., "when cache is full", "under high load",
+  or empty string for unconditional)
 - evidence_text: The exact sentence supporting this causality
 - confidence: 0.9-1.0 for explicit statements, 0.7-0.85 for strong inference, reject (<0.7)
 
@@ -173,9 +174,7 @@ class CausalRelationshipExtractor(BaseCognifier):
         logger.info("Extracted %d causal edges", len(causal_edges))
         return context
 
-    def _nlp_extract(
-        self, chunks: List[ProcessedChunk], document_id
-    ) -> List[CausalEdge]:
+    def _nlp_extract(self, chunks: List[ProcessedChunk], document_id) -> List[CausalEdge]:
         """
         Extract causal edges using lightweight NLP patterns.
 
@@ -192,9 +191,7 @@ class CausalRelationshipExtractor(BaseCognifier):
             edges.extend(chunk_edges)
         return edges
 
-    def _nlp_extract_chunk(
-        self, chunk: ProcessedChunk, document_id
-    ) -> List[CausalEdge]:
+    def _nlp_extract_chunk(self, chunk: ProcessedChunk, document_id) -> List[CausalEdge]:
         """
         Extract causal edges from single chunk via keyword matching.
 
@@ -205,7 +202,7 @@ class CausalRelationshipExtractor(BaseCognifier):
         Returns:
             List of CausalEdge objects
         """
-        text_lower = chunk.content.lower()
+        chunk.content.lower()
         edges: List[CausalEdge] = []
 
         # Simple heuristic: find sentences with causal keywords
@@ -240,11 +237,7 @@ class CausalRelationshipExtractor(BaseCognifier):
                     after = sent[idx + len(keyword_match) :].strip().split()
 
                     source = before[-1] if before else "unknown"
-                    target = (
-                        after[1]
-                        if len(after) > 1
-                        else (after[0] if after else "unknown")
-                    )
+                    target = after[1] if len(after) > 1 else (after[0] if after else "unknown")
 
                     # Clean up word fragments
                     source = source.strip("(),;:")
@@ -266,9 +259,7 @@ class CausalRelationshipExtractor(BaseCognifier):
 
         return edges
 
-    async def _llm_process(
-        self, chunks: List[ProcessedChunk], context: PipelineContext
-    ) -> List[CausalEdge]:
+    async def _llm_process(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[CausalEdge]:
         """
         Run LLM-based extraction over chunks in batches.
 
@@ -286,9 +277,7 @@ class CausalRelationshipExtractor(BaseCognifier):
             all_edges.extend(batch_edges)
         return all_edges
 
-    async def _process_batch(
-        self, chunks: List[ProcessedChunk], context: PipelineContext
-    ) -> List[CausalEdge]:
+    async def _process_batch(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[CausalEdge]:
         """
         Process a batch of chunks.
 
@@ -305,9 +294,7 @@ class CausalRelationshipExtractor(BaseCognifier):
             edges.extend(chunk_edges)
         return edges
 
-    async def _extract_from_chunk(
-        self, chunk: ProcessedChunk, context: PipelineContext
-    ) -> List[CausalEdge]:
+    async def _extract_from_chunk(self, chunk: ProcessedChunk, context: PipelineContext) -> List[CausalEdge]:
         """
         Extract causal edges from single chunk using LLM.
 
@@ -320,9 +307,7 @@ class CausalRelationshipExtractor(BaseCognifier):
         """
         try:
             prompt = CAUSAL_EXTRACTION_PROMPT.format(text=chunk.content)
-            response = await self.llm.chat(
-                [{"role": "user", "content": prompt}]
-            )
+            response = await self.llm.chat([{"role": "user", "content": prompt}])
             parsed = parse_llm_json_response(response.content)
             raw_edges = parsed if isinstance(parsed, list) else []
             return self._convert_to_causal_edges(raw_edges, chunk, context.document_id)

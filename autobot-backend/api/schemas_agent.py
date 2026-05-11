@@ -23,6 +23,7 @@ _PERSONALITY_VALID_TONES = {"direct", "professional", "casual", "technical"}
 # Agent schemas
 # ---------------------------------------------------------------------------
 
+
 class AgentCommandApprovalResponse(BaseModel):
     """Response for POST /command_approval."""
 
@@ -31,14 +32,12 @@ class AgentCommandApprovalResponse(BaseModel):
     approved: bool
 
 
-
 class AgentCommandExecuteResponse(BaseModel):
     """Response for POST /execute_command — success path returns {"message", "output", "status"}."""
 
     message: str
     output: Optional[str] = None
     status: Optional[str] = None
-
 
 
 class AgentHealthResponse(BaseModel):
@@ -57,7 +56,6 @@ class AgentHealthResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class MemoryStatisticsResponse(BaseModel):
     """Response for GET /statistics."""
 
@@ -69,14 +67,12 @@ class MemoryStatisticsResponse(BaseModel):
     performance_insights: Optional[Any] = None
 
 
-
 class MemoryTaskHistoryResponse(BaseModel):
     """Response for GET /tasks/history."""
 
     total_records: int
     filter_criteria: Dict[str, Any]
     tasks: List[Any]
-
 
 
 class MemoryTaskCreateResponse(BaseModel):
@@ -87,14 +83,12 @@ class MemoryTaskCreateResponse(BaseModel):
     timestamp: str
 
 
-
 class MemoryTaskUpdateResponse(BaseModel):
     """Response for PUT /tasks/{task_id}."""
 
     task_id: str
     status: str
     timestamp: str
-
 
 
 class MemoryMarkdownReferenceResponse(BaseModel):
@@ -107,14 +101,12 @@ class MemoryMarkdownReferenceResponse(BaseModel):
     timestamp: str
 
 
-
 class MemoryMarkdownScanResponse(BaseModel):
     """Response for GET /markdown/scan."""
 
     status: str
     scan_results: Optional[Any] = None
     timestamp: str
-
 
 
 class MemoryMarkdownSearchResponse(BaseModel):
@@ -126,14 +118,12 @@ class MemoryMarkdownSearchResponse(BaseModel):
     results: List[Any]
 
 
-
 class MemoryDocumentReferencesResponse(BaseModel):
     """Response for GET /markdown/{file_path}/references."""
 
     file_path: str
     timestamp: str
     references: Optional[Any] = None
-
 
 
 class MemoryEmbeddingCacheStatsResponse(BaseModel):
@@ -144,7 +134,6 @@ class MemoryEmbeddingCacheStatsResponse(BaseModel):
     status: str
 
 
-
 class MemoryCleanupResponse(BaseModel):
     """Response for DELETE /cleanup."""
 
@@ -152,7 +141,6 @@ class MemoryCleanupResponse(BaseModel):
     cleanup_results: Dict[str, Any]
     days_kept: int
     timestamp: str
-
 
 
 class MemoryActiveTasksResponse(BaseModel):
@@ -168,7 +156,6 @@ class MemoryActiveTasksResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class AgentConfigEnableDisableResponse(BaseModel):
     """Response for POST /agents/{agent_id}/enable and /disable."""
 
@@ -177,14 +164,12 @@ class AgentConfigEnableDisableResponse(BaseModel):
     agent_name: str
 
 
-
 class AgentConfigUpdateModelResponse(BaseModel):
     """Response for POST /agents/{agent_id}/model."""
 
     status: str
     message: str
     updated_config: Dict[str, Any]
-
 
 
 class AgentConfigHealthResponse(BaseModel):
@@ -200,7 +185,6 @@ class AgentConfigHealthResponse(BaseModel):
     response_time: float
 
 
-
 class AgentConfigOverviewResponse(BaseModel):
     """Response for GET /status/overview."""
 
@@ -213,10 +197,10 @@ class AgentConfigOverviewResponse(BaseModel):
     agents: List[Any]
     timestamp: str
 
+
 # ---------------------------------------------------------------------------
 # a2a.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
-
 
 
 class A2AAgentCardResponse(BaseModel):
@@ -290,7 +274,6 @@ class A2ACapabilitiesResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class LLMConnectionTestResponse(BaseModel):
     """Response for POST /llm/test_connection."""
 
@@ -300,13 +283,11 @@ class LLMConnectionTestResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class LLMModelsResponse(BaseModel):
     """Response for GET /llm/models."""
 
     models: List[Any]
     total_count: int
-
 
 
 class LLMCurrentResponse(BaseModel):
@@ -315,7 +296,6 @@ class LLMCurrentResponse(BaseModel):
     model: str
     provider: str
     config: Dict[str, Any]
-
 
 
 class LLMEmbeddingModelsResponse(BaseModel):
@@ -330,7 +310,6 @@ class LLMEmbeddingModelsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class LLMOptimizationHealthResponse(BaseModel):
     """Response for GET /llm-optimization/health."""
 
@@ -341,14 +320,12 @@ class LLMOptimizationHealthResponse(BaseModel):
     redis_connected: bool
 
 
-
 class LLMAvailableModelsResponse(BaseModel):
     """Response for GET /llm-optimization/models/available."""
 
     models_count: int
     models: List[Any]
     timestamp: float
-
 
 
 class LLMSelectModelResponse(BaseModel):
@@ -361,7 +338,6 @@ class LLMSelectModelResponse(BaseModel):
     timestamp: float
 
 
-
 class LLMTrackPerformanceResponse(BaseModel):
     """Response for POST /llm-optimization/models/performance/track."""
 
@@ -370,14 +346,12 @@ class LLMTrackPerformanceResponse(BaseModel):
     recorded_data: Dict[str, Any]
 
 
-
 class LLMOptimizationSuggestionsResponse(BaseModel):
     """Response for GET /llm-optimization/optimization/suggestions."""
 
     suggestions_count: int
     suggestions: List[Any]
     timestamp: float
-
 
 
 class LLMModelsComparisonResponse(BaseModel):
@@ -389,7 +363,6 @@ class LLMModelsComparisonResponse(BaseModel):
     timestamp: float
 
     model_config = {"extra": "allow"}
-
 
 
 class LLMBenchmarkResponse(BaseModel):
@@ -404,7 +377,6 @@ class LLMBenchmarkResponse(BaseModel):
     timestamp: float
 
 
-
 class LLMSystemResourcesResponse(BaseModel):
     """Response for GET /llm-optimization/system/resources."""
 
@@ -412,7 +384,6 @@ class LLMSystemResourcesResponse(BaseModel):
     recommendations: List[Any]
     optimal_model_size_gb: float
     timestamp: float
-
 
 
 class LLMOptimizationConfigResponse(BaseModel):
@@ -426,13 +397,11 @@ class LLMOptimizationConfigResponse(BaseModel):
     optimization_factors: List[str]
 
 
-
 class LLMInferenceSettingsResponse(BaseModel):
     """Response for GET/POST /llm-optimization/inference/settings."""
 
     settings: Dict[str, Any]
     timestamp: float
-
 
 
 class LLMInferenceMetricsResponse(BaseModel):
@@ -447,7 +416,6 @@ class LLMInferenceMetricsResponse(BaseModel):
     timestamp: float
 
 
-
 class LLMProviderOptimizationSummaryResponse(BaseModel):
     """Response for GET /llm-optimization/inference/provider/{provider_type}/optimizations."""
 
@@ -456,7 +424,6 @@ class LLMProviderOptimizationSummaryResponse(BaseModel):
     is_cloud: bool
     optimizations: Dict[str, Any]
     timestamp: float
-
 
 
 class LLMModelPerformanceHistoryResponse(BaseModel):
@@ -473,7 +440,6 @@ class LLMModelPerformanceHistoryResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class LLMAwarenessStatusResponse(BaseModel):
     """Response for GET /llm-awareness/status."""
 
@@ -485,7 +451,6 @@ class LLMAwarenessStatusResponse(BaseModel):
     system_maturity: str
 
 
-
 class LLMSystemContextResponse(BaseModel):
     """Response for GET /llm-awareness/context."""
 
@@ -495,14 +460,12 @@ class LLMSystemContextResponse(BaseModel):
     timestamp: str
 
 
-
 class LLMCapabilitiesSummaryResponse(BaseModel):
     """Response for GET /llm-awareness/capabilities."""
 
     status: str
     capabilities: Dict[str, Any]
     timestamp: str
-
 
 
 class LLMInjectContextResponse(BaseModel):
@@ -515,14 +478,12 @@ class LLMInjectContextResponse(BaseModel):
     timestamp: str
 
 
-
 class LLMAnalyzeQueryResponse(BaseModel):
     """Response for POST /llm-awareness/analyze-query."""
 
     status: str
     analysis: Dict[str, Any]
     timestamp: str
-
 
 
 class LLMCapabilitySummaryTextResponse(BaseModel):
@@ -534,14 +495,12 @@ class LLMCapabilitySummaryTextResponse(BaseModel):
     timestamp: str
 
 
-
 class LLMPhaseInfoResponse(BaseModel):
     """Response for GET /llm-awareness/phase-info."""
 
     status: str
     phase_info: Dict[str, Any]
     timestamp: str
-
 
 
 class LLMAwarenessMetricsResponse(BaseModel):
@@ -552,7 +511,6 @@ class LLMAwarenessMetricsResponse(BaseModel):
     timestamp: str
 
 
-
 class LLMExportAwarenessResponse(BaseModel):
     """Response for POST /llm-awareness/export."""
 
@@ -561,7 +519,6 @@ class LLMExportAwarenessResponse(BaseModel):
     output_path: str
     format: str
     timestamp: str
-
 
 
 class LLMAwarenessHealthResponse(BaseModel):
@@ -580,7 +537,6 @@ class LLMAwarenessHealthResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class LLMPatternsHealthResponse(BaseModel):
     """Response for GET /llm-patterns/health."""
 
@@ -591,7 +547,6 @@ class LLMPatternsHealthResponse(BaseModel):
     features: List[str]
     supported_categories: List[str]
     optimization_types: List[str]
-
 
 
 class LLMPatternsAnalyzeResponse(BaseModel):
@@ -606,7 +561,6 @@ class LLMPatternsAnalyzeResponse(BaseModel):
     cache_potential: bool
 
 
-
 class LLMPatternsRecordResponse(BaseModel):
     """Response for POST /llm-patterns/record."""
 
@@ -615,7 +569,6 @@ class LLMPatternsRecordResponse(BaseModel):
     category: str
     cost: float
     cache_count: int
-
 
 
 class LLMPatternsStatsResponse(BaseModel):
@@ -633,7 +586,6 @@ class LLMPatternsStatsResponse(BaseModel):
     successful_requests: int
 
 
-
 class LLMPatternsCacheOpportunitiesResponse(BaseModel):
     """Response for GET /llm-patterns/cache-opportunities."""
 
@@ -642,12 +594,10 @@ class LLMPatternsCacheOpportunitiesResponse(BaseModel):
     min_occurrences: int
 
 
-
 class LLMPatternsRecommendationsResponse(BaseModel):
     """Response for GET /llm-patterns/recommendations."""
 
     recommendations: List[Any]
-
 
 
 class LLMPatternsModelComparisonResponse(BaseModel):
@@ -657,14 +607,12 @@ class LLMPatternsModelComparisonResponse(BaseModel):
     period_days: int
 
 
-
 class LLMPatternsCategoryDistributionResponse(BaseModel):
     """Response for GET /llm-patterns/category-distribution."""
 
     categories: List[Any]
     total_count: int
     total_cost: float
-
 
 
 class LLMPatternsCostBreakdownResponse(BaseModel):
@@ -682,7 +630,6 @@ class LLMPatternsCostBreakdownResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # intelligent_agent.py schemas  (Issue #5937)
 # ---------------------------------------------------------------------------
-
 
 
 class AgentSystemCapabilitiesResponse(BaseModel):
@@ -832,7 +779,6 @@ class LogFileMetadata(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class AgentReloadResponse(BaseModel):
     """Response for POST /intelligent-agent/reload."""
 
@@ -850,7 +796,6 @@ class AgentReloadResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class SavedReportResponse(BaseModel):
     """Response for POST /bi/reports/save — shape from SavedReportsService.create_report()."""
 
@@ -862,7 +807,6 @@ class SavedReportResponse(BaseModel):
     updated_at: Any
 
 
-
 class SavedReportsListResponse(BaseModel):
     """Response for GET /bi/reports/saved."""
 
@@ -872,7 +816,6 @@ class SavedReportsListResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # conversation_export.py schemas  (Issue #5991)
 # ---------------------------------------------------------------------------
-
 
 
 class ConversationImportResponse(BaseModel):
@@ -893,7 +836,6 @@ class ConversationImportResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class NLDatabaseSchemaResponse(BaseModel):
     """Response for GET /nl-database/schema.
 
@@ -912,7 +854,6 @@ class NLDatabaseSchemaResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class WebhookAcceptedResponse(BaseModel):
     """Response for POST /triggers/webhook/{trigger_id}."""
 
@@ -922,7 +863,6 @@ class WebhookAcceptedResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # self_capabilities.py schemas  (Issue #5991)
 # ---------------------------------------------------------------------------
-
 
 
 class SelfCapabilitiesResponse(BaseModel):
@@ -1091,9 +1031,7 @@ class UpdateOrgRequest(BaseModel):
         description="One of: manager, coordinator, specialist, worker",
     )
     title: Optional[str] = Field(default=None, description="Human-readable job title")
-    capabilities: Optional[str] = Field(
-        default=None, description="Free-text capability description"
-    )
+    capabilities: Optional[str] = Field(default=None, description="Free-text capability description")
 
 
 class UpsertOrgRequest(BaseModel):
@@ -1111,9 +1049,7 @@ class AgentDelegateRequest(BaseModel):
 
     assignee_id: str = Field(..., description="Direct report to assign to")
     task_description: str = Field(..., description="What the assignee should do")
-    context: Optional[Dict[str, Any]] = Field(
-        default=None, description="Extra context for the task"
-    )
+    context: Optional[Dict[str, Any]] = Field(default=None, description="Extra context for the task")
 
 
 class DelegationResponse(BaseModel):
@@ -1144,9 +1080,7 @@ class CollabInviteRequest(BaseModel):
     """Request to invite user to session."""
 
     user_id: str = Field(..., description="User ID to invite")
-    permission: PermissionLevel = Field(
-        ..., description="Permission level (owner/editor/viewer)"
-    )
+    permission: PermissionLevel = Field(..., description="Permission level (owner/editor/viewer)")
 
 
 class CollabRemoveRequest(BaseModel):
@@ -1300,8 +1234,7 @@ class RoleAssignmentResponse(BaseModel):
 
 
 class RoleUpdateRequest(BaseModel):
-    role: str = Field(..., description="Role name: admin, user, or readonly",
-                     pattern="^(admin|user|readonly)$")
+    role: str = Field(..., description="Role name: admin, user, or readonly", pattern="^(admin|user|readonly)$")
 
 
 class RoleUpdateResponse(BaseModel):
@@ -1606,9 +1539,7 @@ class PersonalityProfileCreate(BaseModel):
     @classmethod
     def language_code_must_be_valid(cls, v: str) -> str:
         if v not in SUPPORTED_LANGUAGES:
-            raise ValueError(
-                f"language_code must be one of {sorted(SUPPORTED_LANGUAGES)}"
-            )
+            raise ValueError(f"language_code must be one of {sorted(SUPPORTED_LANGUAGES)}")
         return v
 
 
@@ -1635,9 +1566,7 @@ class PersonalityProfileUpdate(BaseModel):
     @classmethod
     def language_code_must_be_valid(cls, v: Optional[str]) -> Optional[str]:
         if v is not None and v not in SUPPORTED_LANGUAGES:
-            raise ValueError(
-                f"language_code must be one of {sorted(SUPPORTED_LANGUAGES)}"
-            )
+            raise ValueError(f"language_code must be one of {sorted(SUPPORTED_LANGUAGES)}")
         return v
 
 
@@ -1935,14 +1864,10 @@ class ConversationImportRequest(BaseModel):
     document: dict = Field(
         ...,
         description=(
-            "AutoBot conversation export document produced by the export endpoint "
-            "(format: autobot-conversation-v1)."
+            "AutoBot conversation export document produced by the export endpoint " "(format: autobot-conversation-v1)."
         ),
     )
     on_conflict: str = Field(
         default="skip",
-        description=(
-            "Conflict resolution strategy when session_id already exists. "
-            "One of: skip, replace, rename."
-        ),
+        description=("Conflict resolution strategy when session_id already exists. " "One of: skip, replace, rename."),
     )

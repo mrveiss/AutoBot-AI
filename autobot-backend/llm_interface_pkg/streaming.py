@@ -60,8 +60,7 @@ class StreamingManager:
 
             if failure_data.get("count", 0) >= self.failure_threshold:
                 logger.warning(
-                    f"Model {model} has {failure_data.get('count', 0)} streaming "
-                    "failures but streaming is REQUIRED"
+                    f"Model {model} has {failure_data.get('count', 0)} streaming " "failures but streaming is REQUIRED"
                 )
         return True
 
@@ -76,8 +75,7 @@ class StreamingManager:
             self.streaming_failures[model] = {"count": 0, "last_reset": time.time()}
         self.streaming_failures[model]["count"] += 1
         logger.warning(
-            f"Streaming failure recorded for {model}: "
-            f"{self.streaming_failures[model]['count']} total failures"
+            f"Streaming failure recorded for {model}: " f"{self.streaming_failures[model]['count']} total failures"
         )
 
     def record_success(self, model: str):
@@ -89,9 +87,7 @@ class StreamingManager:
         """
         if model in self.streaming_failures:
             # Reduce failure count on success
-            self.streaming_failures[model]["count"] = max(
-                0, self.streaming_failures[model]["count"] - 1
-            )
+            self.streaming_failures[model]["count"] = max(0, self.streaming_failures[model]["count"] - 1)
 
     def get_failure_count(self, model: str) -> int:
         """

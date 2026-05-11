@@ -9,11 +9,8 @@ ansible/inventory/localhost.yml, and autobot_shared/* files) are excluded from
 the drift report even when their checksums differ between source and deployed.
 """
 
-import os
 import tempfile
 from pathlib import Path
-
-import pytest
 
 # Load drift_checker without triggering services/__init__.py import chain.
 _mod_path = Path(__file__).parent.parent.parent / "services" / "drift_checker.py"

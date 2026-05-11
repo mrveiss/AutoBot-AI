@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Unit tests for ToolOutputFilter pipeline stages."""
+
 import os
 import tempfile
 
@@ -23,14 +24,11 @@ from services.tool_output_filter import (
     inject_compact_flags,
     join_with_overflow,
     short_circuit_git,
-    tee_and_hint,
 )
 
 
 def _make_filter(rules: dict) -> ToolOutputFilter:
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as fh:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as fh:
         yaml.dump({"filters": rules}, fh)
         path = fh.name
     try:
@@ -42,6 +40,7 @@ def _make_filter(rules: dict) -> ToolOutputFilter:
 # ---------------------------------------------------------------------------
 # _strip_ansi
 # ---------------------------------------------------------------------------
+
 
 def test_strip_ansi_removes_color_codes():
     assert _strip_ansi("\x1b[31mRED\x1b[0m") == "RED"
@@ -55,6 +54,7 @@ def test_strip_ansi_passthrough_clean():
 # _dedup_consecutive
 # ---------------------------------------------------------------------------
 
+
 def test_dedup_consecutive_collapses():
     assert _dedup_consecutive("a\na\na\nb\nb\nc") == "a [×3]\nb [×2]\nc"
 
@@ -66,6 +66,7 @@ def test_dedup_consecutive_no_repeats():
 # ---------------------------------------------------------------------------
 # _tail_lines
 # ---------------------------------------------------------------------------
+
 
 def test_tail_lines_adds_omission_prefix():
     result = _tail_lines("\n".join(str(i) for i in range(10)), 3)
@@ -87,6 +88,7 @@ def test_tail_lines_exact_limit_no_prefix():
 # join_with_overflow
 # ---------------------------------------------------------------------------
 
+
 def test_join_with_overflow_under_limit():
     assert join_with_overflow(["a", "b", "c"], 5) == "a, b, c"
 
@@ -101,6 +103,7 @@ def test_join_with_overflow_over_limit():
 # ---------------------------------------------------------------------------
 # inject_compact_flags
 # ---------------------------------------------------------------------------
+
 
 def test_inject_compact_flags_pytest():
     result = inject_compact_flags("pytest tests/")
@@ -136,6 +139,7 @@ def test_inject_compact_flags_python_m_pytest():
 # ---------------------------------------------------------------------------
 # apply_no_op_detection
 # ---------------------------------------------------------------------------
+
 
 def test_apply_no_op_detection_matches():
     result = apply_no_op_detection("git push", "Everything up-to-date\nmore", 0)
@@ -234,6 +238,7 @@ def test_filter_ruff_json_groups_by_rule():
 # short_circuit_git
 # ---------------------------------------------------------------------------
 
+
 def test_short_circuit_git_up_to_date():
     result = short_circuit_git("push", "Everything up-to-date", "", 0)
     assert result is not None
@@ -258,6 +263,7 @@ def test_short_circuit_git_nothing_to_commit():
 # ---------------------------------------------------------------------------
 # _line_similarity
 # ---------------------------------------------------------------------------
+
 
 def test_line_similarity_identical():
     assert _line_similarity("abc", "abc") == 1.0
@@ -369,6 +375,7 @@ def test_filter_markdown_preserves_code_blocks():
 # classify_tool
 # ---------------------------------------------------------------------------
 
+
 def test_classify_tool_pytest():
     assert classify_tool("pytest tests/") == "test"
 
@@ -388,6 +395,7 @@ def test_classify_tool_unknown():
 # ---------------------------------------------------------------------------
 # ToolOutputFilter — pipeline dispatch via filter_type
 # ---------------------------------------------------------------------------
+
 
 def test_filter_type_pytest_dispatch():
     f = _make_filter({"r": {"match_command": "^pytest", "strip_ansi": True, "filter_type": "pytest"}})
@@ -418,6 +426,7 @@ def test_filter_type_markdown_dispatch():
 # ToolOutputFilter — basic pipeline stages (existing tests, updated)
 # ---------------------------------------------------------------------------
 
+
 def test_passthrough_when_no_rule():
     f = _make_filter({})
     output = "some\noutput\nhere"
@@ -430,21 +439,25 @@ def test_strip_ansi_stage():
 
 
 def test_match_output_short_circuit():
-    f = _make_filter({
-        "r": {"match_command": "^git", "match_output": [{"pattern": "Everything up-to-date", "message": "ok"}]},
-    })
+    f = _make_filter(
+        {
+            "r": {"match_command": "^git", "match_output": [{"pattern": "Everything up-to-date", "message": "ok"}]},
+        }
+    )
     # exit_code=1 to bypass apply_no_op_detection
     assert f.filter("git push", "Everything up-to-date\nmore stuff", exit_code=1) == "ok"
 
 
 def test_match_output_no_match_continues():
-    f = _make_filter({
-        "r": {
-            "match_command": "^git",
-            "match_output": [{"pattern": "Everything up-to-date", "message": "ok"}],
-            "max_lines": 5,
-        },
-    })
+    f = _make_filter(
+        {
+            "r": {
+                "match_command": "^git",
+                "match_output": [{"pattern": "Everything up-to-date", "message": "ok"}],
+                "max_lines": 5,
+            },
+        }
+    )
     assert "branch pushed" in f.filter("git push", "branch pushed\nremote updated")
 
 
@@ -476,17 +489,22 @@ def test_max_lines_truncates_to_last_n():
 
 
 def test_on_empty_returned_when_filtered_result_empty():
-    f = _make_filter({"r": {
-        "match_command": "^pytest",
-        "strip_lines_matching": [".*"],
-        "on_empty": "All tests passed",
-    }})
+    f = _make_filter(
+        {
+            "r": {
+                "match_command": "^pytest",
+                "strip_lines_matching": [".*"],
+                "on_empty": "All tests passed",
+            }
+        }
+    )
     assert f.filter("pytest tests/", "test_foo PASSED\ntest_bar PASSED") == "All tests passed"
 
 
 # ---------------------------------------------------------------------------
 # ToolOutputFilter — real config smoke tests
 # ---------------------------------------------------------------------------
+
 
 def test_real_config_loads():
     f = ToolOutputFilter()
@@ -572,6 +590,7 @@ def test_filter_pytest_summary_info_final_line_preserved():
 # filter_ruff_json — join_with_overflow header (#5894)
 # ---------------------------------------------------------------------------
 
+
 def test_filter_ruff_json_multi_rule_summary_header():
     data = (
         '[{"code":"F401","filename":"a.py","location":{"row":1},"message":"unused"},'
@@ -593,6 +612,7 @@ def test_filter_ruff_json_single_rule_no_summary_header():
 # short_circuit_git wired in filter() (#5894)
 # ---------------------------------------------------------------------------
 
+
 def test_filter_short_circuit_git_via_stderr():
     f = ToolOutputFilter()
     # exit_code=0, stderr contains no-op phrase; apply_no_op_detection won't
@@ -612,6 +632,7 @@ def test_filter_short_circuit_git_not_triggered_when_no_stderr():
 # ---------------------------------------------------------------------------
 # prepare_and_filter (#5891)
 # ---------------------------------------------------------------------------
+
 
 def test_prepare_and_filter_injects_and_filters():
     f = ToolOutputFilter()
@@ -633,8 +654,10 @@ def test_prepare_and_filter_injects_pytest_flags():
 # filter_blocks instance method (#5894)
 # ---------------------------------------------------------------------------
 
+
 class _MockBlockHandler:
     """Concrete BlockHandler for testing."""
+
     def __init__(self):
         self._in_error = False
 
@@ -651,13 +674,7 @@ class _MockBlockHandler:
 
 def test_filter_blocks_instance_method_keeps_error_blocks():
     f = ToolOutputFilter()
-    output = (
-        "preamble\n"
-        "BLOCK_START: ERROR: bad thing\n"
-        "detail line\n"
-        "BLOCK_END\n"
-        "footer"
-    )
+    output = "preamble\n" "BLOCK_START: ERROR: bad thing\n" "detail line\n" "BLOCK_END\n" "footer"
     result = f.filter_blocks(output, _MockBlockHandler())
     assert "detail line" in result
 
@@ -665,6 +682,7 @@ def test_filter_blocks_instance_method_keeps_error_blocks():
 # ---------------------------------------------------------------------------
 # get_tool_output_filter singleton (#5893)
 # ---------------------------------------------------------------------------
+
 
 def test_get_tool_output_filter_returns_instance():
     instance = get_tool_output_filter()
@@ -679,8 +697,10 @@ def test_get_tool_output_filter_same_object_on_repeated_calls():
 # record_filter_savings uses pre-hint bytes (#5895)
 # ---------------------------------------------------------------------------
 
+
 def test_filter_savings_not_inflated_by_tee_hint(tmp_path, monkeypatch):
     import services.tool_output_filter as mod
+
     # Override tee dir to tmp so tee_and_hint actually writes
     monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
     saved_args: list = []
@@ -692,7 +712,7 @@ def test_filter_savings_not_inflated_by_tee_hint(tmp_path, monkeypatch):
 
     monkeypatch.setattr(mod, "record_filter_savings", _capture)
 
-    f = ToolOutputFilter()
+    ToolOutputFilter()
     # Build output that will trigger savings > 200 so tee_and_hint fires.
     # Use a rule with max_lines=1 to compress heavily.
     big_output = "\n".join(["x" * 40] * 30)  # ~1200 bytes

@@ -8,14 +8,9 @@ Exposes project development phase information and validation status
 """
 
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from api.system_health import register_singleton_probe
-from project_state_manager import DevelopmentPhase, get_project_state_manager
-from utils.advanced_cache_manager import smart_cache
 from api.schemas_common import DataResponse
 from api.schemas_system import (
     PhaseStatus,
@@ -24,6 +19,10 @@ from api.schemas_system import (
     ProjectStatus,
     ValidationResultModel,
 )
+from api.system_health import register_singleton_probe
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from project_state_manager import DevelopmentPhase, get_project_state_manager
+from utils.advanced_cache_manager import smart_cache
 
 logger = logging.getLogger(__name__)
 
@@ -67,11 +66,7 @@ async def get_project_status(detailed: bool = False):
             completed_phases=status["completed_phases"],
             active_phases=status["active_phases"],
             overall_completion=status["overall_completion"],
-            next_suggested_phase=(
-                str(status["next_suggested_phase"])
-                if status["next_suggested_phase"]
-                else None
-            ),
+            next_suggested_phase=(str(status["next_suggested_phase"]) if status["next_suggested_phase"] else None),
             phases=phases,
         )
 
@@ -171,11 +166,7 @@ async def get_all_phases():
                         "validation_target": cap.validation_target,
                         "required": cap.required,
                         "implemented": cap.implemented,
-                        "last_validated": (
-                            cap.last_validated.isoformat()
-                            if cap.last_validated
-                            else None
-                        ),
+                        "last_validated": (cap.last_validated.isoformat() if cap.last_validated else None),
                         "validation_details": cap.validation_details,
                     }
                 )
@@ -186,9 +177,7 @@ async def get_all_phases():
                 "completion_percentage": info.completion_percentage,
                 "is_active": info.is_active,
                 "is_completed": info.is_completed,
-                "last_validated": (
-                    info.last_validated.isoformat() if info.last_validated else None
-                ),
+                "last_validated": (info.last_validated.isoformat() if info.last_validated else None),
                 "prerequisites": [p.value for p in info.prerequisites],
                 "capabilities": capabilities,
             }

@@ -10,6 +10,11 @@ All models use UUID primary keys and include:
 - Multi-tenancy via org_id foreign key
 """
 
+# Issue #898: Import backend.models AFTER local models to ensure
+# user_management.models.base is fully initialized before activity
+# models import from it, preventing the circular import metaclass
+# conflict (#4300).
+import models  # noqa: F401 - imports for side effects
 from user_management.models.api_key import APIKey
 from user_management.models.audit import AuditLog
 from user_management.models.base import Base, TenantMixin, TimestampMixin
@@ -19,12 +24,6 @@ from user_management.models.role import Permission, Role, RolePermission, UserRo
 from user_management.models.sso import SSOProvider, UserSSOLink
 from user_management.models.team import Team, TeamMembership
 from user_management.models.user import User
-
-# Issue #898: Import backend.models AFTER local models to ensure
-# user_management.models.base is fully initialized before activity
-# models import from it, preventing the circular import metaclass
-# conflict (#4300).
-import models  # noqa: F401 - imports for side effects
 
 __all__ = [
     "Base",

@@ -187,7 +187,7 @@ async function handleLogin() {
   await wrap(async () => {
   try {
     // ApiClient.post() returns parsed JSON directly (#810)
-    const response = await ApiClient.post(`${getApiBase()}/auth/login`, {
+    const response = await ApiClient.post<any>(`${getApiBase()}/auth/login`, {
       username: credentials.username,
       password: credentials.password
     })

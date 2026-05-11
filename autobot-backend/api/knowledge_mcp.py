@@ -13,10 +13,16 @@ graph (chat_workflow/graph.py).
 
 import asyncio
 import logging
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends
+
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.singleton_factory import lazy_singleton
+from constants.model_constants import ModelConstants
+from dependencies import get_config
 from knowledge.schemas.mcp import (
     DocumentAddRequest,
     KnowledgeSearchRequest,
@@ -32,11 +38,6 @@ from knowledge.schemas.mcp import (
     McpToolsResponse,
     McpVectorSimilarityResponse,
 )
-from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from constants.model_constants import ModelConstants
-from dependencies import get_config
 from knowledge_base import KnowledgeBase
 from type_defs.common import Metadata
 from utils.service_registry import get_service_url
@@ -70,9 +71,7 @@ def _get_chat_ollama():
     try:
         llm_config = get_config().get_llm_config()
         model = ModelConstants.DEFAULT_OLLAMA_MODEL
-        base_url = llm_config.get("ollama", {}).get(
-            "base_url", get_service_url("ollama")
-        )
+        base_url = llm_config.get("ollama", {}).get("base_url", get_service_url("ollama"))
         return ChatOllama(model=model, base_url=base_url, temperature=0.7)
     except Exception as exc:
         logger.warning("Failed to create ChatOllama: %s", exc)
@@ -122,10 +121,7 @@ def _create_add_document_tool() -> McpToolsResponse:
     """
     return McpToolsResponse(
         name="add_to_knowledge_base",
-        description=(
-            "Add new information to the AutoBot knowledge base (stored in Redis"
-            "vectors)"
-        ),
+        description=("Add new information to the AutoBot knowledge base (stored in Redis" "vectors)"),
         input_schema={
             "type": "object",
             "properties": {
@@ -213,6 +209,113 @@ def _create_qa_chain_tool() -> McpToolsResponse:
     )
 
 
+def _create_extract_tool() -> McpToolsResponse:
+    """Create MCP tool descriptor for POST /knowledge/extract.
+
+    Issue #7405: Schema-driven structured data extraction.
+    """
+    return McpToolsResponse(
+        name="extract_structured_data",
+        description=(
+            "Fetch a URL and extract structured data matching a JSON Schema via LLM. "
+            "Strips <script> blocks before prompting (prompt-injection guard). "
+            "Returns validated JSON matching the caller-supplied schema."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Absolute URL to fetch"},
+                "schema": {"type": "object", "description": "JSON Schema (draft 2020-12) for the output"},
+                "render": {
+                    "type": "string",
+                    "enum": ["auto", "fast", "playwright"],
+                    "default": "auto",
+                    "description": "Render mode",
+                },
+                "ingest": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Index raw page markdown into ChromaDB",
+                },
+            },
+            "required": ["url", "schema"],
+        },
+    )
+
+
+def _create_scrape_url_tool() -> McpToolsResponse:
+    """Create MCP tool descriptor for POST /mcp/scrape_url. Issue #7509."""
+    return McpToolsResponse(
+        name="scrape_url",
+        description=(
+            "Fetch a single URL and return its full markdown content. "
+            "Supports Jina fast-path, BS4, and Playwright render modes. "
+            "Returns markdown with a status header."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Absolute URL to fetch"},
+                "render": {
+                    "type": "string",
+                    "enum": ["auto", "fast", "playwright"],
+                    "default": "auto",
+                    "description": "Render mode",
+                },
+            },
+            "required": ["url"],
+        },
+    )
+
+
+def _create_crawl_site_tool() -> McpToolsResponse:
+    """Create MCP tool descriptor for POST /mcp/crawl_site. Issue #7509."""
+    return McpToolsResponse(
+        name="crawl_site",
+        description=(
+            "BFS crawl one or more seed URLs up to max_depth hops. "
+            "Returns a markdown index of crawled pages. "
+            "Set ingest=true to write successful pages to the knowledge base."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "seed_urls": {"type": "array", "items": {"type": "string"}, "description": "Starting URLs"},
+                "max_depth": {"type": "integer", "default": 1, "description": "Link-hop depth"},
+                "max_pages": {"type": "integer", "default": 100, "description": "Hard cap on pages fetched"},
+                "respect_robots": {"type": "boolean", "default": True, "description": "Honour robots.txt"},
+                "ingest": {"type": "boolean", "default": False, "description": "Write pages to knowledge base"},
+                "same_origin": {"type": "boolean", "default": True, "description": "Restrict to same scheme+host"},
+            },
+            "required": ["seed_urls"],
+        },
+    )
+
+
+def _create_map_site_tool() -> McpToolsResponse:
+    """Create MCP tool descriptor for POST /mcp/map_site. Issue #7509."""
+    return McpToolsResponse(
+        name="map_site",
+        description=(
+            "Discover all URLs for a domain via sitemap.xml, falling back to BFS crawl. "
+            "Returns a markdown list of URLs grouped by depth."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string", "description": "Domain to map (bare or with scheme)"},
+                "max_urls": {"type": "integer", "default": 500, "description": "Hard cap on returned URLs"},
+                "respect_robots": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Honour robots.txt during crawl fallback",
+                },
+            },
+            "required": ["domain"],
+        },
+    )
+
+
 def _get_knowledge_search_tools() -> List[McpToolsResponse]:
     """
     Get MCP tools for knowledge base search and retrieval operations.
@@ -220,6 +323,8 @@ def _get_knowledge_search_tools() -> List[McpToolsResponse]:
     Issue #281: Extracted from get_mcp_tools to reduce function length
     and improve maintainability of tool definitions by category.
     Issue #665: Further refactored to reduce from 102 lines to below 20 lines.
+    Issue #7405: Added extract_structured_data tool.
+    Issue #7509: Added scrape_url, crawl_site, map_site tools.
 
     Returns:
         List of McpToolsResponse definitions for search/retrieval operations
@@ -229,6 +334,10 @@ def _get_knowledge_search_tools() -> List[McpToolsResponse]:
         _create_add_document_tool(),
         _create_vector_search_tool(),
         _create_qa_chain_tool(),
+        _create_extract_tool(),
+        _create_scrape_url_tool(),
+        _create_crawl_site_tool(),
+        _create_map_site_tool(),
     ]
 
 
@@ -334,9 +443,7 @@ async def mcp_search_knowledge_base(
         kb = get_knowledge_base()
 
         # Perform the search
-        results = await kb.search(
-            query=request.query, top_k=request.top_k, filters=request.filters
-        )
+        results = await kb.search(query=request.query, top_k=request.top_k, filters=request.filters)
 
         # Format results for MCP
         formatted_results = []
@@ -465,9 +572,7 @@ async def mcp_summarize_knowledge_topic(
         if not results:
             return {
                 "success": True,
-                "summary": (
-                    f"No information found about '{topic}' in the knowledge base."
-                ),
+                "summary": (f"No information found about '{topic}' in the knowledge base."),
                 "source_count": 0,
             }
 
@@ -486,9 +591,7 @@ async def mcp_summarize_knowledge_topic(
             summary = await kb.llm.generate(prompt, max_tokens=max_length)
         else:
             # Fallback to simple truncation
-            summary = combined_content[
-                : max_length * 4
-            ]  # Rough char to token conversion
+            summary = combined_content[: max_length * 4]  # Rough char to token conversion
             if len(summary) < len(combined_content):
                 summary += "..."
 
@@ -586,10 +689,7 @@ async def mcp_langchain_qa_chain(
         context = "\n\n".join([r.get("content", "") for r in search_results])
 
         # Issue #1047: Use ChatOllama (langchain 1.x) for QA
-        prompt = (
-            f"Based on the following context, answer this question: "
-            f"{question}\n\nContext:\n{context}"
-        )
+        prompt = f"Based on the following context, answer this question: " f"{question}\n\nContext:\n{context}"
 
         chat_llm = _get_chat_ollama()
         if chat_llm:
@@ -600,10 +700,7 @@ async def mcp_langchain_qa_chain(
             answer = await asyncio.to_thread(kb.llm.complete, prompt)
             answer = str(answer)
         else:
-            answer = (
-                f"Based on the search results: "
-                f"{search_results[0].get('content', '')[:500]}..."
-            )
+            answer = f"Based on the search results: " f"{search_results[0].get('content', '')[:500]}..."
 
         return {
             "success": True,
@@ -615,6 +712,156 @@ async def mcp_langchain_qa_chain(
     except Exception as e:
         logger.error("Error in LangChain QA chain: %s", e)
         return {"success": False, "error": "Internal server error", "answer": ""}
+
+
+@router.post("/mcp/extract_structured_data")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_extract_structured_data",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def mcp_extract_structured_data(
+    request: Metadata,
+    current_user: dict = Depends(get_current_user),
+):
+    """MCP tool: Extract structured data from a URL using JSON Schema + LLM.
+
+    Issue #7405: Delegates to POST /knowledge/extract logic via extract_url().
+    """
+    url = request.get("url")
+    schema = request.get("schema")
+    render = request.get("render", "auto")
+
+    if not url or not schema:
+        return {"success": False, "error": "url and schema are required"}
+
+    try:
+        from web_fetch.extractors import extract_url
+
+        result = await extract_url(url=url, schema=schema, render=render)
+        return {"success": True, **result}
+    except RuntimeError as exc:
+        logger.warning("mcp_extract_structured_data fetch failed for %s: %s", url, exc)
+        return {"success": False, "error_code": "fetch_failed", "details": str(exc)}
+    except ValueError as exc:
+        logger.warning("mcp_extract_structured_data schema invalid for %s: %s", url, exc)
+        return {"success": False, "error_code": "schema_invalid", "details": str(exc)}
+    except Exception as exc:
+        logger.error("mcp_extract_structured_data unexpected error: %s", exc)
+        return {"success": False, "error": "Internal server error"}
+
+
+@router.post("/mcp/scrape_url")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_scrape_url",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def mcp_scrape_url(
+    request: Metadata,
+    current_user: dict = Depends(get_current_user),
+):
+    """MCP tool: Fetch a URL and return its markdown content. Issue #7509."""
+    url = request.get("url")
+    render = request.get("render", "auto")
+
+    if not url:
+        return {"success": False, "error": "url is required"}
+
+    try:
+        from web_fetch import RenderMode, WebFetcher
+
+        fetch_result = await WebFetcher.fetch(url, render=RenderMode(render))
+        if not fetch_result.success:
+            return {"success": False, "error_code": fetch_result.error_code, "url": url}
+        title = f"# {fetch_result.title}\n\n" if fetch_result.title else ""
+        header = f"## Scraped: {url} (status {fetch_result.status_code}, source: {fetch_result.source})\n\n"
+        return {
+            "success": True,
+            "url": fetch_result.url,
+            "markdown": header + title + (fetch_result.markdown or "*(no content)*"),
+        }
+    except Exception as exc:
+        logger.error("mcp_scrape_url failed for %s: %s", url, exc)
+        return {"success": False, "error": "Internal server error"}
+
+
+@router.post("/mcp/crawl_site")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_crawl_site",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def mcp_crawl_site(
+    request: Metadata,
+    current_user: dict = Depends(get_current_user),
+):
+    """MCP tool: BFS crawl seed URLs and return a markdown index. Issue #7509."""
+    seed_urls = request.get("seed_urls", [])
+    max_depth = int(request.get("max_depth", 1))
+    max_pages = int(request.get("max_pages", 100))
+    respect_robots = bool(request.get("respect_robots", True))
+    ingest = bool(request.get("ingest", False))
+    same_origin = bool(request.get("same_origin", True))
+
+    if not seed_urls:
+        return {"success": False, "error": "seed_urls is required"}
+
+    try:
+        from chat_workflow.tool_handler import _format_crawl_results
+        from knowledge.connectors.models import ConnectorConfig
+        from knowledge.connectors.web_crawler import WebCrawlerConnector
+
+        cfg = ConnectorConfig(
+            connector_id="mcp_crawl", connector_type="web_crawler", name="mcp_crawl", config={"urls": seed_urls}
+        )
+        connector = WebCrawlerConnector(cfg)
+        results = await connector.crawl(
+            seed_urls=seed_urls,
+            max_depth=max_depth,
+            max_pages=max_pages,
+            respect_robots=respect_robots,
+            ingest=ingest,
+            same_origin=same_origin,
+        )
+        return {"success": True, "page_count": len(results), "markdown": _format_crawl_results(seed_urls, results)}
+    except Exception as exc:
+        logger.error("mcp_crawl_site failed: %s", exc)
+        return {"success": False, "error": "Internal server error"}
+
+
+@router.post("/mcp/map_site")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_map_site",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def mcp_map_site(
+    request: Metadata,
+    current_user: dict = Depends(get_current_user),
+):
+    """MCP tool: Discover all URLs for a domain via sitemap or BFS. Issue #7509."""
+    domain = request.get("domain", "").strip()
+    max_urls = int(request.get("max_urls", 500))
+    respect_robots = bool(request.get("respect_robots", True))
+
+    if not domain:
+        return {"success": False, "error": "domain is required"}
+
+    try:
+        from chat_workflow.tool_handler import _format_map_results
+        from web_fetch.site_mapper import SiteMapper
+
+        site_result = await SiteMapper.map_site(domain, max_urls=max_urls, respect_robots=respect_robots)
+        return {
+            "success": True,
+            "url_count": len(site_result.entries),
+            "source": site_result.source,
+            "markdown": _format_map_results(site_result),
+        }
+    except Exception as exc:
+        logger.error("mcp_map_site failed for %s: %s", domain, exc)
+        return {"success": False, "error": "Internal server error"}
 
 
 async def _vector_op_info(kb, redis_mgr, params: dict) -> dict:
@@ -728,9 +975,7 @@ async def get_mcp_schema(
     return {
         "name": "autobot-knowledge-base",
         "version": "2.0.0",
-        "description": (
-            "MCP tools for accessing AutoBot's knowledge base via LangChain, LlamaIndex, and Redis"
-        ),
+        "description": ("MCP tools for accessing AutoBot's knowledge base via LangChain, LlamaIndex, and Redis"),
         "tools": await get_mcp_tools(),
         "backends": {
             "langchain": "LangChain for orchestration and QA chains",

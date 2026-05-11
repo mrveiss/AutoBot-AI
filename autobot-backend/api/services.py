@@ -9,21 +9,20 @@ Provides service status, health checks, and system information endpoints.
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 
-from auth_middleware import check_admin_permission
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from api.schemas_system import (
-    ServiceStatus,
     ServicesHealthAggregateResponse,
     ServicesHealthDeprecatedResponse,
     ServicesResponse,
+    ServiceStatus,
     ServicesVMsStatusResponse,
     SystemInfo,
     VMStatus,
 )
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import existing monitoring functionality
 try:
@@ -52,9 +51,7 @@ def _determine_redis_status(redis_status_obj) -> tuple[str, str]:
         "failed": ("error", "Redis service failed"),
     }
 
-    return status_map.get(
-        redis_status_obj.status, ("warning", "Redis service status unknown")
-    )
+    return status_map.get(redis_status_obj.status, ("warning", "Redis service status unknown"))
 
 
 async def _get_services_from_monitoring() -> list:
@@ -189,8 +186,6 @@ async def get_services(admin_check: bool = Depends(check_admin_permission)):
         raise HTTPException(status_code=500, detail="Failed to get services")
 
 
-
-
 @router.get("/health", response_model=ServicesHealthDeprecatedResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -206,8 +201,7 @@ async def get_health(admin_check: bool = Depends(check_admin_permission)):
     Issue #744: Requires admin authentication.
     """
     logger.warning(
-        "Deprecated health endpoint called: /api/services/health — "
-        "use /api/system/health instead (#3333)"
+        "Deprecated health endpoint called: /api/services/health — " "use /api/system/health instead (#3333)"
     )
     return {
         "status": "healthy",

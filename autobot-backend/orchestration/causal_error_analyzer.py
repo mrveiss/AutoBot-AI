@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from agent_loop.think_tool import ThinkTool, think_causally
+from agent_loop.think_tool import ThinkTool
 from agent_loop.types import ThinkCategory, ThinkResult
 
 logger = logging.getLogger(__name__)
@@ -68,9 +68,7 @@ class CausalErrorAnalyzer:
             CausalErrorAnalysis with root cause and causal chain
         """
         # Build context for causal analysis
-        analysis_context = self._build_analysis_context(
-            error, context, execution_history or []
-        )
+        analysis_context = self._build_analysis_context(error, context, execution_history or [])
 
         # Use Think Tool with causal reasoning
         think_result = await self.think_tool.think(
@@ -141,9 +139,7 @@ class CausalErrorAnalyzer:
 
         return "\n".join(parts)
 
-    def _parse_causal_result(
-        self, error: Exception, think_result: ThinkResult
-    ) -> CausalErrorAnalysis:
+    def _parse_causal_result(self, error: Exception, think_result: ThinkResult) -> CausalErrorAnalysis:
         """Parse Think Tool result into structured analysis."""
         # Extract key information from the reasoning
         reasoning = think_result.reasoning

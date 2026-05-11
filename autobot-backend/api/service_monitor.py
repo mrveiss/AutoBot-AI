@@ -17,12 +17,12 @@ from typing import Any, Dict, List, Tuple
 import aiohttp
 from fastapi import APIRouter
 
-from autobot_shared.ssot_config import config as _ssot
 from api.schemas_system import (
     ServiceMonitorServicesResponse,
     ServiceMonitorVMsResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.ssot_config import config as _ssot
 
 logger = logging.getLogger(__name__)
 

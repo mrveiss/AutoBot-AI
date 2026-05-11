@@ -31,13 +31,9 @@ async def test_live_workflow_system():
             async with session.get(f"{base_url}/api/hello") as response:
                 if response.status == 200:
                     result = await response.json()
-                    print(  # noqa: print
-                        f"✅ Backend connected: {result.get('message', 'OK')}"
-                    )  # noqa: print
+                    print(f"✅ Backend connected: {result.get('message', 'OK')}")  # noqa: print  # noqa: print
                 else:
-                    print(  # noqa: print
-                        f"❌ Backend connection failed: {response.status}"
-                    )  # noqa: print
+                    print(f"❌ Backend connection failed: {response.status}")  # noqa: print  # noqa: print
                     return False
         except Exception as e:
             print(f"❌ Cannot connect to backend: {e}")  # noqa: print
@@ -54,13 +50,9 @@ async def test_live_workflow_system():
                 if response.status == 200:
                     result = await response.json()
                     print("✅ Workflows endpoint working")  # noqa: print
-                    print(  # noqa: print
-                        f"   Active workflows: {result.get('active_workflows', 0)}"
-                    )  # noqa: print
+                    print(f"   Active workflows: {result.get('active_workflows', 0)}")  # noqa: print  # noqa: print
                 else:
-                    print(  # noqa: print
-                        f"❌ Workflows endpoint failed: {response.status}"
-                    )  # noqa: print
+                    print(f"❌ Workflows endpoint failed: {response.status}")  # noqa: print  # noqa: print
                     return False
         except Exception as e:
             print(f"❌ Workflow endpoint error: {e}")  # noqa: print
@@ -76,9 +68,7 @@ async def test_live_workflow_system():
         }
 
         try:
-            async with session.post(
-                f"{base_url}/api/workflow/execute", json=workflow_request
-            ) as response:
+            async with session.post(f"{base_url}/api/workflow/execute", json=workflow_request) as response:
                 if response.status == 200:
                     result = await response.json()
                     print("✅ Workflow execution started")  # noqa: print
@@ -98,21 +88,15 @@ async def test_live_workflow_system():
                         print(  # noqa: print
                             f"      Classification: {workflow_response.get('message_classification', 'unknown')}"
                         )
-                        print(  # noqa: print
-                            f"      Agents: {', '.join(workflow_response.get('agents_involved', []))}"
-                        )
-                        print(  # noqa: print
-                            f"      Steps: {workflow_response.get('planned_steps', 0)}"
-                        )
+                        print(f"      Agents: {', '.join(workflow_response.get('agents_involved', []))}")  # noqa: print
+                        print(f"      Steps: {workflow_response.get('planned_steps', 0)}")  # noqa: print
                         print(  # noqa: print
                             f"      Duration: {workflow_response.get('estimated_duration', 'unknown')}"
                         )
 
                 else:
                     error_text = await response.text()
-                    print(  # noqa: print
-                        f"❌ Workflow execution failed: {response.status}"
-                    )  # noqa: print
+                    print(f"❌ Workflow execution failed: {response.status}")  # noqa: print  # noqa: print
                     print(f"   Error: {error_text}")  # noqa: print
 
         except Exception as e:
@@ -148,9 +132,7 @@ async def test_live_workflow_system():
 
             print("✅ Research agent working")  # noqa: print
             print(f"   Tools found: {result.get('tools_found', [])}")  # noqa: print
-            print(  # noqa: print
-                f"   Recommendation: {result.get('recommendation', 'N/A')}"
-            )  # noqa: print
+            print(f"   Recommendation: {result.get('recommendation', 'N/A')}")  # noqa: print  # noqa: print
 
         except Exception as e:
             print(f"⚠️  Research agent test: {e}")  # noqa: print
@@ -169,9 +151,7 @@ async def monitor_workflow_progress(session, base_url, workflow_id):
 
     for i in range(max_checks):
         try:
-            async with session.get(
-                f"{base_url}/api/workflow/workflow/{workflow_id}/status"
-            ) as response:
+            async with session.get(f"{base_url}/api/workflow/workflow/{workflow_id}/status") as response:
                 if response.status == 200:
                     status = await response.json()
                     current_step = status.get("current_step", 0)
@@ -188,9 +168,7 @@ async def monitor_workflow_progress(session, base_url, workflow_id):
                         break
 
                 else:
-                    print(
-                        f"   ❌ Status check failed: {response.status}"
-                    )  # noqa: print
+                    print(f"   ❌ Status check failed: {response.status}")  # noqa: print
                     break
 
         except Exception as e:
@@ -211,29 +189,18 @@ async def test_chat_integration():
     async with aiohttp.ClientSession() as session:
         try:
             # Send a complex request through the chat endpoint
-            chat_request = {
-                "message": "find tools that would require to do network scan"
-            }
+            chat_request = {"message": "find tools that would require to do network scan"}
 
-            async with session.post(
-                f"{base_url}/api/chat", json=chat_request
-            ) as response:
+            async with session.post(f"{base_url}/api/chat", json=chat_request) as response:
                 if response.status == 200:
                     result = await response.json()
                     print("✅ Chat endpoint integration working")  # noqa: print
 
                     # Check if the response indicates workflow orchestration
                     response_text = result.get("response", "")
-                    if (
-                        "workflow" in response_text.lower()
-                        or "orchestration" in response_text.lower()
-                    ):
-                        print(  # noqa: print
-                            "   🎯 Workflow orchestration detected in chat response"
-                        )  # noqa: print
-                        print(  # noqa: print
-                            f"   Response preview: {response_text[:100]}..."
-                        )  # noqa: print
+                    if "workflow" in response_text.lower() or "orchestration" in response_text.lower():
+                        print("   🎯 Workflow orchestration detected in chat response")  # noqa: print  # noqa: print
+                        print(f"   Response preview: {response_text[:100]}...")  # noqa: print  # noqa: print
                     else:
                         print("   💬 Standard chat response received")  # noqa: print
                         print(f"   Response: {response_text[:100]}...")  # noqa: print

@@ -13,9 +13,7 @@ from .analyzer import SecurityAnalyzer
 from .constants import OWASP_MAPPING, VulnerabilityType
 
 
-def analyze_security(
-    directory: Optional[str] = None, exclude_patterns: Optional[List[str]] = None
-) -> Dict[str, Any]:
+def analyze_security(directory: Optional[str] = None, exclude_patterns: Optional[List[str]] = None) -> Dict[str, Any]:
     """
     Convenience function to analyze security of a directory.
 
@@ -26,9 +24,7 @@ def analyze_security(
     Returns:
         Dictionary with results and summary
     """
-    analyzer = SecurityAnalyzer(
-        project_root=directory, exclude_patterns=exclude_patterns
-    )
+    analyzer = SecurityAnalyzer(project_root=directory, exclude_patterns=exclude_patterns)
     results = analyzer.analyze_directory()
 
     return {

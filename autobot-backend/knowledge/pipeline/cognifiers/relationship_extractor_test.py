@@ -153,9 +153,7 @@ class TestKeywordPatternCreatesTypedRelationship:
 
         valid = set(RelationType.__args__)
         for keyword, rel_type in NLP_KEYWORD_PATTERNS.items():
-            assert (
-                rel_type in valid
-            ), f"Keyword '{keyword}' maps to '{rel_type}' which is not a valid RelationType"
+            assert rel_type in valid, f"Keyword '{keyword}' maps to '{rel_type}' which is not a valid RelationType"
 
 
 # ---------------------------------------------------------------------------

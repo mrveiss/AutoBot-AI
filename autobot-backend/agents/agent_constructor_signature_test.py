@@ -35,12 +35,10 @@ class TestLLMFailsafeAgentSignature:
             pytest.skip(f"LLMFailsafeAgent dep chain unavailable: {exc}")
 
         params = _signature_or_skip(LLMFailsafeAgent)
-        assert "agent_type" in params, (
-            "LLMFailsafeAgent.__init__ must accept agent_type for factory compatibility"
-        )
-        assert "deployment_mode" in params, (
-            "LLMFailsafeAgent.__init__ must accept deployment_mode for factory compatibility"
-        )
+        assert "agent_type" in params, "LLMFailsafeAgent.__init__ must accept agent_type for factory compatibility"
+        assert (
+            "deployment_mode" in params
+        ), "LLMFailsafeAgent.__init__ must accept deployment_mode for factory compatibility"
 
     def test_default_agent_type_falls_back_to_AGENT_ID(self):
         """Calling with no args must still produce the historical agent_type."""
@@ -68,12 +66,10 @@ class TestDataAnalysisAgentSignature:
             pytest.skip(f"DataAnalysisAgent dep chain unavailable: {exc}")
 
         params = _signature_or_skip(DataAnalysisAgent)
-        assert "agent_type" in params, (
-            "DataAnalysisAgent.__init__ must accept agent_type for factory compatibility"
-        )
-        assert "deployment_mode" in params, (
-            "DataAnalysisAgent.__init__ must accept deployment_mode for factory compatibility"
-        )
+        assert "agent_type" in params, "DataAnalysisAgent.__init__ must accept agent_type for factory compatibility"
+        assert (
+            "deployment_mode" in params
+        ), "DataAnalysisAgent.__init__ must accept deployment_mode for factory compatibility"
 
     def test_default_agent_type_falls_back_to_AGENT_ID(self):
         try:

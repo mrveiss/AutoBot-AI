@@ -39,9 +39,7 @@ class SystemContextCollector:
             # Active takeovers
             active_takeovers = get_takeover_manager().get_active_sessions()
             if active_takeovers:
-                system_elements.append(
-                    self._create_active_takeovers_context(active_takeovers)
-                )
+                system_elements.append(self._create_active_takeovers_context(active_takeovers))
 
             # System resource information
             resource_context = self._create_resource_context()
@@ -70,9 +68,7 @@ class SystemContextCollector:
             metadata={"type": "takeover_status"},
         )
 
-    def _create_active_takeovers_context(
-        self, active_takeovers: List[Dict[str, Any]]
-    ) -> ContextElement:
+    def _create_active_takeovers_context(self, active_takeovers: List[Dict[str, Any]]) -> ContextElement:
         """Create context element for active takeovers."""
         return ContextElement(
             context_id=f"active_takeovers_{self.time_provider.current_timestamp_millis()}",

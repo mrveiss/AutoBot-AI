@@ -122,6 +122,27 @@ class WorkflowTask:
     start_time: Optional[float] = None
     end_time: Optional[float] = None
 
+    # Skill binding (#7268 Phase 1, ADR-006: Skill-Bound Planning).
+    # Populated at plan time by StrategyPlanner via skill_router lookup
+    # (dry_run=True — no auto-enable, no Phase 3 gap-fill at plan time).
+    # ``skill_name`` is the registered skill name; ``skill_action`` is the
+    # action to invoke at execute time; ``skill_resolution_method`` records
+    # how it was resolved (``"keyword"`` / ``"llm"`` / ``None``).
+    # WorkflowExecutor consumes ``skill_name``/``skill_action`` since #7430.
+    skill_name: Optional[str] = None
+    skill_action: Optional[str] = None
+    skill_resolution_method: Optional[str] = None
+
+    # Async gap-fill marker (#7431 Phase 3, ADR-006). Set when the planner
+    # found no matching skill for the task's intent and triggered Phase 3
+    # of ``skill_router`` (research → autonomous-skill-development) as a
+    # background job. The enclosing ``WorkflowPlan.status`` flips to
+    # ``"blocked"`` while at least one task carries this id. Cleared when
+    # the resume path re-binds the task (clears + re-runs ``bind_skills``).
+    # ``skill_name`` and ``pending_skill_id`` are mutually exclusive on a
+    # skill-binding step.
+    pending_skill_id: Optional[str] = None
+
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
@@ -293,16 +314,10 @@ class WorkflowPlan:
         fallback_plans_raw = data.get("fallback_plans", [])
         fallback_plans = [cls.from_dict(p) for p in fallback_plans_raw]
         strategy_raw = data.get("strategy", ExecutionStrategy.SEQUENTIAL.value)
-        strategy = (
-            strategy_raw if isinstance(strategy_raw, ExecutionStrategy)
-            else ExecutionStrategy(strategy_raw)
-        )
+        strategy = strategy_raw if isinstance(strategy_raw, ExecutionStrategy) else ExecutionStrategy(strategy_raw)
         known = {f.name for f in cls.__dataclass_fields__.values()}
         nested_keys = {"tasks", "fallback_plans", "strategy"}
-        kwargs = {
-            k: v for k, v in data.items()
-            if k in known and k not in nested_keys
-        }
+        kwargs = {k: v for k, v in data.items() if k in known and k not in nested_keys}
         kwargs["tasks"] = tasks
         kwargs["fallback_plans"] = fallback_plans
         kwargs["strategy"] = strategy

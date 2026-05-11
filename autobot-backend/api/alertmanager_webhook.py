@@ -117,8 +117,7 @@ async def _process_alert(alert: AlertInstance, group_status: str):
             )
         else:
             logger.info(
-                f"✅ RESOLVED [{labels.get('severity', '').upper()}] "
-                f"{labels.get('alertname')}: Alert resolved"
+                f"✅ RESOLVED [{labels.get('severity', '').upper()}] " f"{labels.get('alertname')}: Alert resolved"
             )
 
     except Exception as e:

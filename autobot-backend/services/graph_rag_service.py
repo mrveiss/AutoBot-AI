@@ -86,9 +86,7 @@ class GraphRAGMetrics(RAGMetrics):
         self.documents_considered = rag_metrics.documents_considered
         self.hybrid_search_enabled = rag_metrics.hybrid_search_enabled
 
-    def record_graph_results(
-        self, graph_traversal_time: float, results_added: int
-    ) -> None:
+    def record_graph_results(self, graph_traversal_time: float, results_added: int) -> None:
         """Record graph expansion results (Issue #372 - reduces feature envy)."""
         self.graph_expansion_enabled = True
         self.graph_traversal_time = graph_traversal_time
@@ -242,9 +240,7 @@ class GraphRAGService:
         try:
             self._seen_content.clear()
 
-            rag_results = await self._perform_initial_rag_search(
-                query, max_results, enable_reranking, timeout, metrics
-            )
+            rag_results = await self._perform_initial_rag_search(query, max_results, enable_reranking, timeout, metrics)
 
             all_results = await self._extract_and_expand_graph(
                 query, rag_results, start_entity, max_depth, max_results, metrics
@@ -263,9 +259,7 @@ class GraphRAGService:
         except (asyncio.TimeoutError, Exception) as e:
             return self._handle_search_error(e, metrics, start_time, timeout)
 
-    async def _extract_entities_from_results(
-        self, results: List[SearchResult]
-    ) -> List[EntityMatch]:
+    async def _extract_entities_from_results(self, results: List[SearchResult]) -> List[EntityMatch]:
         """
         Extract entity references from search results.
 
@@ -320,13 +314,9 @@ class GraphRAGService:
             max_depth,
         )
 
-        all_related_results = await self._fetch_related_entities_parallel(
-            start_points, max_depth
-        )
+        all_related_results = await self._fetch_related_entities_parallel(start_points, max_depth)
 
-        expanded_results = self._process_graph_traversal_results(
-            start_points, all_related_results, max_depth
-        )
+        expanded_results = self._process_graph_traversal_results(start_points, all_related_results, max_depth)
 
         logger.info("Graph expansion yielded %s results", len(expanded_results))
         return expanded_results[:max_results]
@@ -382,18 +372,12 @@ class GraphRAGService:
         """
         expanded_results = []
 
-        for (entity_name, base_score), related in zip(
-            start_points, all_related_results
-        ):
+        for (entity_name, base_score), related in zip(start_points, all_related_results):
             if isinstance(related, Exception):
-                logger.warning(
-                    "Graph traversal failed for '%s': %s", entity_name, related
-                )
+                logger.warning("Graph traversal failed for '%s': %s", entity_name, related)
                 continue
 
-            logger.debug(
-                "Found %s related entities for '%s'", len(related), entity_name
-            )
+            logger.debug("Found %s related entities for '%s'", len(related), entity_name)
 
             for item in related:
                 result = self._create_search_result_from_entity(
@@ -408,9 +392,7 @@ class GraphRAGService:
 
         return expanded_results
 
-    def _build_content_hash_map(
-        self, results: List[SearchResult]
-    ) -> Dict[int, SearchResult]:
+    def _build_content_hash_map(self, results: List[SearchResult]) -> Dict[int, SearchResult]:
         """
         Build hash map of results, keeping highest-scored duplicates.
 
@@ -430,9 +412,7 @@ class GraphRAGService:
                 content_hashes[content_hash] = result
         return content_hashes
 
-    def _assign_relevance_ranks(
-        self, results: List[SearchResult], max_results: int
-    ) -> List[SearchResult]:
+    def _assign_relevance_ranks(self, results: List[SearchResult], max_results: int) -> List[SearchResult]:
         """
         Sort results and assign relevance ranks.
 
@@ -448,9 +428,7 @@ class GraphRAGService:
             result.relevance_rank = idx + 1
         return results[:max_results]
 
-    async def _deduplicate_and_rank(
-        self, results: List[SearchResult], max_results: int
-    ) -> List[SearchResult]:
+    async def _deduplicate_and_rank(self, results: List[SearchResult], max_results: int) -> List[SearchResult]:
         """
         Deduplicate results and rank by hybrid score.
 
@@ -589,10 +567,7 @@ class GraphRAGService:
         matches = []
 
         entities = await asyncio.gather(
-            *[
-                self.graph.get_entity(entity_name=entity_ref, include_relations=False)
-                for entity_ref in entity_refs
-            ],
+            *[self.graph.get_entity(entity_name=entity_ref, include_relations=False) for entity_ref in entity_refs],
             return_exceptions=True,
         )
 
@@ -610,9 +585,7 @@ class GraphRAGService:
                         relationship_path=[],
                     )
                 )
-                logger.debug(
-                    "Matched entity: %s (relevance=%.2f)", entity_ref, relevance
-                )
+                logger.debug("Matched entity: %s (relevance=%.2f)", entity_ref, relevance)
 
         return matches
 
@@ -659,9 +632,7 @@ class GraphRAGService:
         relationship_strength = relation.get("metadata", {}).get("strength", 1.0)
         proximity_score = base_score * relationship_strength
 
-        hybrid_score = (
-            1.0 - self.graph_weight
-        ) * base_score + self.graph_weight * proximity_score
+        hybrid_score = (1.0 - self.graph_weight) * base_score + self.graph_weight * proximity_score
 
         _origin = relation.get("metadata", {}).get("origin", "inferred")
         _provenance: str = _origin if _origin in ("extracted", "inferred", "ambiguous") else "inferred"
@@ -693,9 +664,7 @@ class GraphRAGService:
         Returns:
             Dictionary with service metrics including RAG and graph statistics
         """
-        rag_stats = (
-            await self.rag.get_metrics() if hasattr(self.rag, "get_metrics") else {}
-        )
+        rag_stats = await self.rag.get_metrics() if hasattr(self.rag, "get_metrics") else {}
 
         return {
             "service": "GraphRAGService",

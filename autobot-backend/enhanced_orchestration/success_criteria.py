@@ -117,11 +117,7 @@ class SuccessCriteriaEvaluator:
         if not criteria_list:
             return EvaluationResult(overall="full", score=1.0, results=[])
 
-        per_result = list(
-            await asyncio.gather(
-                *[self._evaluate_one(c, workflow_result) for c in criteria_list]
-            )
-        )
+        per_result = list(await asyncio.gather(*[self._evaluate_one(c, workflow_result) for c in criteria_list]))
         return self._aggregate(per_result)
 
     # ------------------------------------------------------------------
@@ -146,9 +142,7 @@ class SuccessCriteriaEvaluator:
             passed, detail = False, f"Evaluation error: {exc}"
         return CriteriaResult(criteria=criterion, passed=passed, detail=detail)
 
-    def _handler_for(
-        self, criteria_type: SuccessCriteriaType
-    ) -> Callable:
+    def _handler_for(self, criteria_type: SuccessCriteriaType) -> Callable:
         """Return the async check method for a given type."""
         return {
             SuccessCriteriaType.EXIT_CODE: self._check_exit_code,
@@ -158,9 +152,7 @@ class SuccessCriteriaEvaluator:
         }[criteria_type]
 
     @staticmethod
-    async def _check_exit_code(
-        params: Dict[str, Any], result: Dict[str, Any]
-    ) -> tuple[bool, str]:
+    async def _check_exit_code(params: Dict[str, Any], result: Dict[str, Any]) -> tuple[bool, str]:
         """Check exit_code == params['expected'] (default 0)."""
         expected = params.get("expected", 0)
         actual = result.get("exit_code")
@@ -170,9 +162,7 @@ class SuccessCriteriaEvaluator:
         return passed, f"exit_code={actual} (expected {expected})"
 
     @staticmethod
-    async def _check_output_pattern(
-        params: Dict[str, Any], result: Dict[str, Any]
-    ) -> tuple[bool, str]:
+    async def _check_output_pattern(params: Dict[str, Any], result: Dict[str, Any]) -> tuple[bool, str]:
         """Check that params['pattern'] matches result output string."""
         pattern = params.get("pattern", "")
         output = str(result.get("output", ""))
@@ -182,9 +172,7 @@ class SuccessCriteriaEvaluator:
         return matched, f"Pattern '{pattern}' {'matched' if matched else 'not found'}"
 
     @staticmethod
-    async def _check_resource_exists(
-        params: Dict[str, Any], result: Dict[str, Any]
-    ) -> tuple[bool, str]:
+    async def _check_resource_exists(params: Dict[str, Any], result: Dict[str, Any]) -> tuple[bool, str]:
         """Check that params['key'] is present (and truthy) in result."""
         key = params.get("key", "")
         if not key:
@@ -194,9 +182,7 @@ class SuccessCriteriaEvaluator:
         return exists, f"Resource key '{key}' {'found' if exists else 'missing'}"
 
     @staticmethod
-    async def _check_custom(
-        params: Dict[str, Any], result: Dict[str, Any]
-    ) -> tuple[bool, str]:
+    async def _check_custom(params: Dict[str, Any], result: Dict[str, Any]) -> tuple[bool, str]:
         """Invoke params['fn'](result) -> bool if provided."""
         fn: Optional[Callable] = params.get("fn")
         if fn is None:
@@ -207,7 +193,6 @@ class SuccessCriteriaEvaluator:
             passed = bool(fn(result))
         return passed, "Custom function returned " + str(passed)
 
-
     @staticmethod
     def _aggregate(per_result: List[CriteriaResult]) -> EvaluationResult:
         """Compute weighted score and overall status from per-criterion results."""
@@ -215,14 +200,10 @@ class SuccessCriteriaEvaluator:
         if total_weight == 0:
             return EvaluationResult(overall="full", score=1.0, results=per_result)
 
-        passed_weight = sum(
-            r.criteria.weight for r in per_result if r.passed
-        )
+        passed_weight = sum(r.criteria.weight for r in per_result if r.passed)
         score = passed_weight / total_weight
 
-        required_failed = any(
-            not r.passed and r.criteria.required for r in per_result
-        )
+        required_failed = any(not r.passed and r.criteria.required for r in per_result)
 
         if required_failed or score == 0.0:
             overall = "failed"

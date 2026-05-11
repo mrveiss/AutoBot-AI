@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import config
@@ -44,21 +45,11 @@ try:
 except ImportError as _log_forwarder_import_error:
     from autobot_shared.missing_dep import MissingDep as _MissingDep
 
-    DestinationConfig = _MissingDep(  # type: ignore[assignment, misc]
-        "DestinationConfig", _log_forwarder_import_error
-    )
-    DestinationScope = _MissingDep(  # type: ignore[assignment, misc]
-        "DestinationScope", _log_forwarder_import_error
-    )
-    DestinationType = _MissingDep(  # type: ignore[assignment, misc]
-        "DestinationType", _log_forwarder_import_error
-    )
-    LogForwarder = _MissingDep(  # type: ignore[assignment, misc]
-        "LogForwarder", _log_forwarder_import_error
-    )
-    SyslogProtocol = _MissingDep(  # type: ignore[assignment, misc]
-        "SyslogProtocol", _log_forwarder_import_error
-    )
+    DestinationConfig = _MissingDep("DestinationConfig", _log_forwarder_import_error)  # type: ignore[assignment, misc]
+    DestinationScope = _MissingDep("DestinationScope", _log_forwarder_import_error)  # type: ignore[assignment, misc]
+    DestinationType = _MissingDep("DestinationType", _log_forwarder_import_error)  # type: ignore[assignment, misc]
+    LogForwarder = _MissingDep("LogForwarder", _log_forwarder_import_error)  # type: ignore[assignment, misc]
+    SyslogProtocol = _MissingDep("SyslogProtocol", _log_forwarder_import_error)  # type: ignore[assignment, misc]
 from api.schemas_system import (
     LogForwardingDestinationItem,
     LogFwdAutoStartResponse,
@@ -97,6 +88,7 @@ async def _get_forwarder() -> LogForwarder:
 
 # Pydantic models for API
 
+
 def _build_updated_destination_config(
     name: str,
     existing: DestinationConfig,
@@ -124,9 +116,7 @@ def _build_updated_destination_config(
         retry_delay=update_dict.get("retry_delay", existing.retry_delay),
         scope=DestinationScope(update_dict.get("scope", existing.scope.value)),
         target_hosts=update_dict.get("target_hosts", existing.target_hosts),
-        syslog_protocol=SyslogProtocol(
-            update_dict.get("syslog_protocol", existing.syslog_protocol.value)
-        ),
+        syslog_protocol=SyslogProtocol(update_dict.get("syslog_protocol", existing.syslog_protocol.value)),
         ssl_verify=update_dict.get("ssl_verify", existing.ssl_verify),
         ssl_ca_cert=update_dict.get("ssl_ca_cert", existing.ssl_ca_cert),
         ssl_client_cert=update_dict.get("ssl_client_cert", existing.ssl_client_cert),
@@ -139,9 +129,7 @@ def _config_to_destination_config(data: LogFwdDestinationCreate) -> DestinationC
     try:
         dest_type = DestinationType(data.type)
     except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid destination type: {data.type}"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid destination type: {data.type}")
 
     try:
         scope = DestinationScope(data.scope)
@@ -250,9 +238,7 @@ async def get_destination(
     try:
         forwarder = await _get_forwarder()
         if name not in forwarder.destinations:
-            raise HTTPException(
-                status_code=404, detail=f"Destination not found: {name}"
-            )
+            raise HTTPException(status_code=404, detail=f"Destination not found: {name}")
 
         dest = forwarder.destinations[name]
         return {
@@ -288,9 +274,7 @@ async def create_destination_endpoint(
 
         # Check if name already exists
         if data.name in forwarder.destinations:
-            raise HTTPException(
-                status_code=409, detail=f"Destination already exists: {data.name}"
-            )
+            raise HTTPException(status_code=409, detail=f"Destination already exists: {data.name}")
 
         config = _config_to_destination_config(data)
         success = forwarder.add_destination(config)
@@ -335,9 +319,7 @@ async def update_destination(
         forwarder = await _get_forwarder()
 
         if name not in forwarder.destinations:
-            raise HTTPException(
-                status_code=404, detail=f"Destination not found: {name}"
-            )
+            raise HTTPException(status_code=404, detail=f"Destination not found: {name}")
 
         existing = forwarder.destinations[name].config
         update_dict = data.model_dump(exclude_unset=True)
@@ -385,9 +367,7 @@ async def delete_destination(
         forwarder = await _get_forwarder()
 
         if name not in forwarder.destinations:
-            raise HTTPException(
-                status_code=404, detail=f"Destination not found: {name}"
-            )
+            raise HTTPException(status_code=404, detail=f"Destination not found: {name}")
 
         success = forwarder.remove_destination(name)
         if not success:
@@ -419,9 +399,7 @@ async def test_destination(
         forwarder = await _get_forwarder()
 
         if name not in forwarder.destinations:
-            raise HTTPException(
-                status_code=404, detail=f"Destination not found: {name}"
-            )
+            raise HTTPException(status_code=404, detail=f"Destination not found: {name}")
 
         dest = forwarder.destinations[name]
 
@@ -432,11 +410,7 @@ async def test_destination(
             "name": name,
             "healthy": healthy,
             "last_error": dest._last_error,
-            "message": (
-                "Connection successful"
-                if healthy
-                else f"Connection failed: {dest._last_error}"
-            ),
+            "message": ("Connection successful" if healthy else f"Connection failed: {dest._last_error}"),
         }
     except HTTPException:
         raise
@@ -515,12 +489,8 @@ async def get_status(
             "queue_size": forwarder.log_queue.qsize(),
             "destinations": destinations_status,
             "total_destinations": len(forwarder.destinations),
-            "enabled_destinations": sum(
-                1 for d in forwarder.destinations.values() if d.config.enabled
-            ),
-            "healthy_destinations": sum(
-                1 for d in forwarder.destinations.values() if d.is_healthy
-            ),
+            "enabled_destinations": sum(1 for d in forwarder.destinations.values() if d.config.enabled),
+            "healthy_destinations": sum(1 for d in forwarder.destinations.values() if d.is_healthy),
             "total_sent": total_sent,
             "total_failed": total_failed,
         }
@@ -762,11 +732,7 @@ async def get_auto_start(
     forwarder = await _get_forwarder()
     return {
         "auto_start": forwarder.auto_start,
-        "message": (
-            "Auto-start is enabled"
-            if forwarder.auto_start
-            else "Auto-start is disabled"
-        ),
+        "message": ("Auto-start is enabled" if forwarder.auto_start else "Auto-start is disabled"),
     }
 
 

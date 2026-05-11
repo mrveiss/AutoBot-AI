@@ -70,9 +70,7 @@ class CounterfactualReasoner:
             redis = await self._get_redis()
 
             # 1. Try empirical prediction first (fastest, most accurate)
-            empirical_outcome = await self._predict_empirical(
-                decision_option, context, redis
-            )
+            empirical_outcome = await self._predict_empirical(decision_option, context, redis)
             if empirical_outcome:
                 return empirical_outcome
 
@@ -82,9 +80,7 @@ class CounterfactualReasoner:
                 return causal_outcome
 
             # 3. Fall back to heuristics
-            heuristic_outcome = self._predict_heuristic(
-                decision_option, context, action_details
-            )
+            heuristic_outcome = self._predict_heuristic(decision_option, context, action_details)
             return heuristic_outcome
 
         except Exception as e:
@@ -105,18 +101,14 @@ class CounterfactualReasoner:
         """
         try:
             # Look up execution history for this decision type + option
-            history_key = self.EXECUTION_HISTORY_KEY.format(
-                decision_type=context.decision_type.value
-            )
+            history_key = self.EXECUTION_HISTORY_KEY.format(decision_type=context.decision_type.value)
             history_json = await redis.get(history_key)
 
             if not history_json:
                 return None
 
             history = json.loads(history_json)
-            similar_decisions = [
-                h for h in history if h.get("option") == decision_option
-            ]
+            similar_decisions = [h for h in history if h.get("option") == decision_option]
 
             if not similar_decisions or len(similar_decisions) < 2:
                 return None
@@ -138,9 +130,7 @@ class CounterfactualReasoner:
                 # Aggregate side effects
                 for effect in decision.get("side_effects", []):
                     effect_key = effect.get("type", "unknown")
-                    side_effects_aggregate[effect_key] = (
-                        side_effects_aggregate.get(effect_key, 0) + 1
-                    )
+                    side_effects_aggregate[effect_key] = side_effects_aggregate.get(effect_key, 0) + 1
 
                 # Collect latency
                 if decision.get("latency_ms"):
@@ -158,11 +148,7 @@ class CounterfactualReasoner:
                 for effect_type, count in side_effects_aggregate.items()
             ]
 
-            avg_latency = (
-                int(sum(latency_samples) / len(latency_samples))
-                if latency_samples
-                else None
-            )
+            avg_latency = int(sum(latency_samples) / len(latency_samples)) if latency_samples else None
 
             return InterventionOutcome(
                 option=decision_option,
@@ -210,9 +196,7 @@ class CounterfactualReasoner:
                 return None
 
             # Aggregate causal predictions
-            success_rates = [
-                p.get("predicted_success_rate", 0.5) for p in applicable_patterns
-            ]
+            success_rates = [p.get("predicted_success_rate", 0.5) for p in applicable_patterns]
             avg_success = sum(success_rates) / len(success_rates)
 
             side_effects = []
@@ -227,10 +211,7 @@ class CounterfactualReasoner:
                 reasoning=f"Causal: {len(applicable_patterns)} patterns matched "
                 f"({', '.join(p.get('name', 'unknown') for p in applicable_patterns)})",
                 prediction_source="causal",
-                supporting_evidence=[
-                    {"type": "pattern", "name": p.get("name")}
-                    for p in applicable_patterns
-                ],
+                supporting_evidence=[{"type": "pattern", "name": p.get("name")} for p in applicable_patterns],
             )
 
         except Exception as e:
@@ -321,16 +302,12 @@ class CounterfactualReasoner:
             reasoning=f"Heuristic default: {decision_option} typically succeeds "
             f"{base_success_rate:.1%} in {context.decision_type.value} decisions",
             prediction_source="heuristic",
-            supporting_evidence=[
-                {"type": "action_confidence", "value": action_details.get("confidence")}
-            ],
+            supporting_evidence=[{"type": "action_confidence", "value": action_details.get("confidence")}],
             fallback_risk=fallback_risk,
             estimated_latency_ms=latency_estimate,
         )
 
-    def _pattern_matches_context(
-        self, pattern: Dict[str, Any], context: DecisionContext
-    ) -> bool:
+    def _pattern_matches_context(self, pattern: Dict[str, Any], context: DecisionContext) -> bool:
         """Check if a causal pattern applies to current context."""
         conditions = pattern.get("conditions", {})
 
@@ -352,9 +329,7 @@ class CounterfactualReasoner:
         # Match context type presence by metadata type
         if "required_context_types" in conditions:
             # Look for elements with matching metadata type
-            context_metadata_types = {
-                ce.metadata.get("type") for ce in context.context_elements
-            }
+            context_metadata_types = {ce.metadata.get("type") for ce in context.context_elements}
             required = set(conditions["required_context_types"])
             if not required.issubset(context_metadata_types):
                 return False
@@ -383,20 +358,14 @@ class CounterfactualReasoner:
         else:
             return "low"
 
-    async def predict_retry_outcome(
-        self, context: DecisionContext
-    ) -> InterventionOutcome:
+    async def predict_retry_outcome(self, context: DecisionContext) -> InterventionOutcome:
         """Convenience method: Predict outcome of retry decision."""
         return await self.what_if("retry", context, {"confidence": 0.6})
 
-    async def predict_escalation_outcome(
-        self, context: DecisionContext
-    ) -> InterventionOutcome:
+    async def predict_escalation_outcome(self, context: DecisionContext) -> InterventionOutcome:
         """Convenience method: Predict outcome of escalation decision."""
         return await self.what_if("escalate", context, {"confidence": 0.9})
 
-    async def predict_automation_outcome(
-        self, context: DecisionContext
-    ) -> InterventionOutcome:
+    async def predict_automation_outcome(self, context: DecisionContext) -> InterventionOutcome:
         """Convenience method: Predict outcome of automation decision."""
         return await self.what_if("automate", context, {"confidence": 0.7})

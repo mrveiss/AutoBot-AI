@@ -8,6 +8,7 @@ Codebase statistics endpoints
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -15,6 +16,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import parse_utc_iso
 from utils.chromadb_client import get_all_paginated
 
 from ..analyzers import normalize_hardcode_record
@@ -109,8 +111,6 @@ def _is_task_stale(task_info: dict) -> bool:
         return False
 
     try:
-        from autobot_shared.time_utils import parse_utc_iso
-
         start_time = parse_utc_iso(started_at)
         elapsed = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
         return elapsed > _STALE_TASK_TIMEOUT_SECONDS

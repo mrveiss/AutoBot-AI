@@ -71,9 +71,7 @@ class VLLMProvider:
             logger.info("Initializing vLLM with model: %s", self.model_name)
 
             # Initialize vLLM in a thread to avoid blocking
-            self.llm = await asyncio.get_running_loop().run_in_executor(
-                None, self._create_vllm_instance
-            )
+            self.llm = await asyncio.get_running_loop().run_in_executor(None, self._create_vllm_instance)
 
             self.is_initialized = True
             logger.info("vLLM model %s initialized successfully", self.model_name)
@@ -94,9 +92,7 @@ class VLLMProvider:
             enable_chunked_prefill=self.enable_chunked_prefill,
         )
 
-    def _format_completion_response(
-        self, output: Any, generation_time: float
-    ) -> Dict[str, Any]:
+    def _format_completion_response(self, output: Any, generation_time: float) -> Dict[str, Any]:
         """
         Format vLLM output into standardized response dict.
 
@@ -113,9 +109,7 @@ class VLLMProvider:
             "usage": {
                 "prompt_tokens": len(output.prompt_token_ids),
                 "completion_tokens": len(output.outputs[0].token_ids),
-                "total_tokens": (
-                    len(output.prompt_token_ids) + len(output.outputs[0].token_ids)
-                ),
+                "total_tokens": (len(output.prompt_token_ids) + len(output.outputs[0].token_ids)),
             },
             "model": self.model_name,
             "provider": "vllm",
@@ -123,9 +117,7 @@ class VLLMProvider:
             "finish_reason": output.outputs[0].finish_reason,
         }
 
-    async def chat_completion(
-        self, messages: List[Dict[str, str]], **kwargs
-    ) -> Dict[str, Any]:
+    async def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
         """
         Generate chat completion using vLLM.
 
@@ -155,9 +147,7 @@ class VLLMProvider:
             if not outputs:
                 raise RuntimeError("No output generated")
 
-            return self._format_completion_response(
-                outputs[0], time.time() - start_time
-            )
+            return self._format_completion_response(outputs[0], time.time() - start_time)
 
         except Exception as e:
             logger.error("vLLM completion error: %s", e)
@@ -167,9 +157,7 @@ class VLLMProvider:
         """Generate completion (runs in thread)"""
         return self.llm.generate([prompt], sampling_params)
 
-    def _messages_to_prompt(
-        self, messages: List[Dict[str, str]], chat_template: str = DEFAULT_TEMPLATE
-    ) -> str:
+    def _messages_to_prompt(self, messages: List[Dict[str, str]], chat_template: str = DEFAULT_TEMPLATE) -> str:
         """Convert messages to a prompt string using a Jinja2 chat template.
 
         Args:
@@ -296,11 +284,7 @@ class VLLMModelManager:
             model_id: {
                 "config": config,
                 "loaded": model_id in self.models,
-                "initialized": (
-                    self.models[model_id].is_initialized
-                    if model_id in self.models
-                    else False
-                ),
+                "initialized": (self.models[model_id].is_initialized if model_id in self.models else False),
             }
             for model_id, config in self.model_configs.items()
         }

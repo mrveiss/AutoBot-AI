@@ -31,9 +31,7 @@ class ITaskStorage(Protocol):
         """Retrieve single task by ID"""
         ...
 
-    async def get_task_history(
-        self, filters: Dict[str, Any]
-    ) -> List[TaskExecutionRecord]:
+    async def get_task_history(self, filters: Dict[str, Any]) -> List[TaskExecutionRecord]:
         """Query task history with filters"""
         ...
 
@@ -54,9 +52,7 @@ class IGeneralStorage(Protocol):
         """Store a memory entry"""
         ...
 
-    async def retrieve(
-        self, category: Union[MemoryCategory, str], filters: Dict[str, Any]
-    ) -> List[MemoryEntry]:
+    async def retrieve(self, category: Union[MemoryCategory, str], filters: Dict[str, Any]) -> List[MemoryEntry]:
         """Retrieve memories by category and filters"""
         ...
 

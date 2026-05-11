@@ -20,10 +20,6 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 
-from auth_middleware import check_admin_permission
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.time_utils import now_utc, utc_timestamp
-from services.llm_cost_tracker import MODEL_PRICING, get_cost_tracker
 from api.schemas_analytics import (
     AgentBudgetRequest,
     AgentBudgetSetResponse,
@@ -43,6 +39,10 @@ from api.schemas_analytics import (
     SingleAgentCostResponse,
     UsageRecentResponse,
 )
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import now_utc, utc_timestamp
+from services.llm_cost_tracker import MODEL_PRICING, get_cost_tracker
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cost", tags=["analytics", "cost"])
@@ -60,9 +60,7 @@ router = APIRouter(prefix="/cost", tags=["analytics", "cost"])
     error_code_prefix="ANALYTICS_COST",
 )
 async def get_cost_summary(
-    days: int = Query(
-        default=30, ge=1, le=365, description="Number of days to analyze"
-    ),
+    days: int = Query(default=30, ge=1, le=365, description="Number of days to analyze"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -109,9 +107,7 @@ async def get_cost_by_model(
     by_model = summary.get("by_model", {})
 
     # Sort by cost descending
-    sorted_models = sorted(
-        by_model.items(), key=lambda x: x[1].get("cost_usd", 0), reverse=True
-    )
+    sorted_models = sorted(by_model.items(), key=lambda x: x[1].get("cost_usd", 0), reverse=True)
 
     return {
         "timestamp": utc_timestamp(),
@@ -122,11 +118,7 @@ async def get_cost_by_model(
                 "input_tokens": data.get("input_tokens", 0),
                 "output_tokens": data.get("output_tokens", 0),
                 "call_count": data.get("call_count", 0),
-                "avg_cost_per_call": (
-                    round(
-                        data.get("cost_usd", 0) / max(data.get("call_count", 1), 1), 6
-                    )
-                ),
+                "avg_cost_per_call": (round(data.get("cost_usd", 0) / max(data.get("call_count", 1), 1), 6)),
             }
             for model, data in sorted_models
         ],
@@ -176,9 +168,7 @@ async def get_cost_by_session(
     error_code_prefix="ANALYTICS_COST",
 )
 async def get_cost_trends(
-    days: int = Query(
-        default=30, ge=7, le=365, description="Number of days to analyze"
-    ),
+    days: int = Query(default=30, ge=7, le=365, description="Number of days to analyze"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -209,9 +199,7 @@ async def get_cost_trends(
     error_code_prefix="ANALYTICS_COST",
 )
 async def get_cost_forecast(
-    days_to_forecast: int = Query(
-        default=30, ge=1, le=90, description="Days to forecast"
-    ),
+    days_to_forecast: int = Query(default=30, ge=1, le=90, description="Days to forecast"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -272,9 +260,7 @@ async def get_cost_forecast(
     error_code_prefix="ANALYTICS_COST",
 )
 async def get_recent_usage(
-    limit: int = Query(
-        default=100, ge=1, le=1000, description="Number of records to return"
-    ),
+    limit: int = Query(default=100, ge=1, le=1000, description="Number of records to return"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -478,11 +464,7 @@ def _calculate_alert_status(name: str, alert: dict, current_costs: dict) -> dict
         "threshold_usd": threshold,
         "current_usd": current,
         "percent_used": round(percent_used, 2),
-        "status": (
-            "exceeded"
-            if percent_used >= 100
-            else "warning" if percent_used >= 75 else "ok"
-        ),
+        "status": ("exceeded" if percent_used >= 100 else "warning" if percent_used >= 75 else "ok"),
         "remaining_usd": max(threshold - current, 0),
     }
 
@@ -540,10 +522,7 @@ async def get_budget_status(
     current_costs = await _get_current_costs(tracker, today)
 
     # Calculate status for each alert (Issue #620: uses helper)
-    statuses = [
-        _calculate_alert_status(name_str, alert, current_costs)
-        for name_str, alert in alerts_map.items()
-    ]
+    statuses = [_calculate_alert_status(name_str, alert, current_costs) for name_str, alert in alerts_map.items()]
 
     return {
         "timestamp": today.isoformat(),

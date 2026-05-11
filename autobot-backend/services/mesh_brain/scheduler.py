@@ -103,8 +103,7 @@ class MeshBrainScheduler:
         self._running: bool = False
         self._tasks: dict[str, asyncio.Task] = {}
         self._jobs: dict[str, JobStatus] = {
-            name: JobStatus(name=name, schedule=cfg["cron"])
-            for name, cfg in self.SCHEDULE.items()
+            name: JobStatus(name=name, schedule=cfg["cron"]) for name, cfg in self.SCHEDULE.items()
         }
 
     async def start(self) -> None:
@@ -117,9 +116,7 @@ class MeshBrainScheduler:
     def _maybe_start_realtime_consumer(self) -> None:
         """Launch the edge_learner realtime consumer task if component is present."""
         if self._components.get("edge_learner"):
-            self._tasks["edge_learner"] = asyncio.create_task(
-                self._run_realtime_consumer()
-            )
+            self._tasks["edge_learner"] = asyncio.create_task(self._run_realtime_consumer())
 
     def _start_periodic_jobs(self) -> None:
         """Launch asyncio tasks for each periodic job whose component is present."""
@@ -177,17 +174,14 @@ class MeshBrainScheduler:
     async def _log_job_failure(self, name: str, exc: Exception) -> None:
         """Write job failure to mesh_evolution_log if mesh_db is available."""
         if self._mesh_db:
-            await self._mesh_db.log_evolution(
-                "job_failed", None, None, {"error": str(exc)}, name
-            )
+            await self._mesh_db.log_evolution("job_failed", None, None, {"error": str(exc)}, name)
 
     def get_status(self) -> dict:
         """Return a snapshot of all job statuses for the health API endpoint."""
         return {
             "running": self._running,
             "jobs": {
-                name: _job_to_dict(job, self._components.get(name) is not None)
-                for name, job in self._jobs.items()
+                name: _job_to_dict(job, self._components.get(name) is not None) for name, job in self._jobs.items()
             },
         }
 

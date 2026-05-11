@@ -8,6 +8,7 @@ from typing import Any, Awaitable, Callable, Dict, Optional
 
 import yaml
 
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.path_constants import PATH
 
@@ -19,12 +20,8 @@ class EventManager:
 
     def __init__(self):
         """Initialize event manager with empty listeners and no WebSocket callback."""
-        self._listeners: Dict[
-            str, list[Callable[[Dict[str, Any]], Awaitable[None]]]
-        ] = {}
-        self._websocket_broadcast_callback: Optional[
-            Callable[[Dict[str, Any]], Awaitable[None]]
-        ] = None
+        self._listeners: Dict[str, list[Callable[[Dict[str, Any]], Awaitable[None]]]] = {}
+        self._websocket_broadcast_callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None
         self._config = self._load_config()  # Load config on init
 
     def _load_config(self):
@@ -32,28 +29,20 @@ class EventManager:
         # Use centralized PathConstants (Issue #380)
         config_path = PATH.CONFIG_DIR / "config.yaml"
         if not config_path.exists():
-            logger.warning(
-                f"Config file not found at {config_path}. "
-                "Using default debug_mode=False."
-            )
+            logger.warning(f"Config file not found at {config_path}. " "Using default debug_mode=False.")
             return {"agent_behavior": {"debug_mode": False}}
         try:
             with open(str(config_path), "r", encoding="utf-8") as f:
                 return yaml.safe_load(f)
         except Exception as e:
-            logger.error(
-                f"Error loading config file {config_path}: {e}. "
-                "Using default debug_mode=False."
-            )
+            logger.error(f"Error loading config file {config_path}: {e}. " "Using default debug_mode=False.")
             return {"agent_behavior": {"debug_mode": False}}
 
     def _is_debug_mode(self):
         """Check if debug mode is enabled in configuration."""
         return self._config.get("agent_behavior", {}).get("debug_mode", False)
 
-    def register_websocket_broadcast(
-        self, callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]]
-    ):
+    def register_websocket_broadcast(self, callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]]):
         """Registers a callback function to broadcast events via WebSocket."""
         self._websocket_broadcast_callback = callback
 
@@ -83,17 +72,13 @@ class EventManager:
         else:
             logger.debug("Debug event '%s' not published (debug mode off).", event_type)
 
-    def subscribe(
-        self, event_type: str, listener: Callable[[Dict[str, Any]], Awaitable[None]]
-    ):
+    def subscribe(self, event_type: str, listener: Callable[[Dict[str, Any]], Awaitable[None]]):
         """Subscribes a listener function to a specific event type."""
         if event_type not in self._listeners:
             self._listeners[event_type] = []
         self._listeners[event_type].append(listener)
 
-    def unsubscribe(
-        self, event_type: str, listener: Callable[[Dict[str, Any]], Awaitable[None]]
-    ):
+    def unsubscribe(self, event_type: str, listener: Callable[[Dict[str, Any]], Awaitable[None]]):
         """Unsubscribes a listener function from a specific event type."""
         if event_type in self._listeners and listener in self._listeners[event_type]:
             self._listeners[event_type].remove(listener)
@@ -127,9 +112,7 @@ if __name__ == "__main__":
                 "description": "Doing something",
             },
         )
-        await get_event_manager().publish(
-            "log_message", {"level": "INFO", "message": "Agent started."}
-        )
+        await get_event_manager().publish("log_message", {"level": "INFO", "message": "Agent started."})
         await get_event_manager().publish(
             "task_update",
             {
@@ -140,8 +123,6 @@ if __name__ == "__main__":
         )
 
         # Test debug publish
-        await get_event_manager().debug_publish(
-            "debug_info", {"message": "This is a debug message."}
-        )
+        await get_event_manager().debug_publish("debug_info", {"message": "This is a debug message."})
 
-    asyncio.run(main())
+    run_or_schedule(main())

@@ -108,6 +108,20 @@ jobs:
             echo "first_run=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Upload generated baselines on first run
+        # When --update-snapshots ran (no committed baselines yet), expose
+        # the generated PNGs as an artifact so a maintainer can pull them
+        # locally and commit. Without this step the warning message
+        # "Pull this branch + commit the generated baselines" is
+        # unactionable since the screenshots never escape the CI runner.
+        if: steps.visual.outputs.first_run == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-regression-generated-baselines-${{ github.run_id }}
+          path: autobot-frontend/tests/visual/__screenshots__/
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload Playwright HTML report on failure
         if: failure() || steps.visual.outcome == 'failure'
         uses: actions/upload-artifact@v7

@@ -177,9 +177,7 @@ class TestEmitFullPromptReady:
 
         get_extension_manager().register(watcher)
 
-        result = await _emit_full_prompt_ready(
-            "System prompt\n\nUser: hello\n\nAssistant:", {}, {}
-        )
+        result = await _emit_full_prompt_ready("System prompt\n\nUser: hello\n\nAssistant:", {}, {})
         assert result == modified
 
     @pytest.mark.asyncio

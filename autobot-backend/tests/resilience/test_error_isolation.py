@@ -9,6 +9,7 @@ Tests verify that isolated errors are handled gracefully.
 """
 
 import asyncio
+
 import pytest
 
 from services.resilience.error_isolation import (

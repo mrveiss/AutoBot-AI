@@ -44,72 +44,42 @@ async def final_workflow_test():
 
     # Test 4: Workflow Orchestration Decision
     print("4. Workflow Orchestration Test:")  # noqa: print
-    should_orchestrate = await orchestrator.should_use_workflow_orchestration(
-        user_message
-    )
-    print(  # noqa: print
-        f"   ✅ Should use workflow orchestration: {should_orchestrate}"
-    )  # noqa: print
+    should_orchestrate = await orchestrator.should_use_workflow_orchestration(user_message)
+    print(f"   ✅ Should use workflow orchestration: {should_orchestrate}")  # noqa: print  # noqa: print
     assert should_orchestrate, "Should use workflow orchestration for COMPLEX requests"
 
     # Test 5: Workflow Response Creation
     print("5. Workflow Response Creation Test:")  # noqa: print
     workflow_response = await orchestrator.create_workflow_response(user_message)
     response_steps = workflow_response.get("workflow_steps", [])
-    print(
-        f"   ✅ Workflow response contains {len(response_steps)} steps"
-    )  # noqa: print
+    print(f"   ✅ Workflow response contains {len(response_steps)} steps")  # noqa: print
     assert len(response_steps) > 0, "Workflow response should contain steps"
-    assert (
-        len(response_steps) == 8
-    ), f"Expected 8 steps in response, got {len(response_steps)}"
+    assert len(response_steps) == 8, f"Expected 8 steps in response, got {len(response_steps)}"
 
     # Test 6: Workflow Step Details
     print("6. Workflow Step Details Test:")  # noqa: print
     first_step = response_steps[0]
-    print(  # noqa: print
-        f"   ✅ First step: {first_step.agent_type} - {first_step.action}"
-    )  # noqa: print
+    print(f"   ✅ First step: {first_step.agent_type} - {first_step.action}")  # noqa: print  # noqa: print
     print(f"   ✅ Step has ID: {first_step.id}")  # noqa: print
     print(f"   ✅ Step type: {type(first_step)}")  # noqa: print
 
     # Test 7: Workflow Metadata
     print("7. Workflow Metadata Test:")  # noqa: print
-    print(  # noqa: print
-        f"   ✅ Classification: {workflow_response.get('message_classification')}"
-    )  # noqa: print
-    print(  # noqa: print
-        f"   ✅ Planned steps: {workflow_response.get('planned_steps')}"
-    )  # noqa: print
-    print(  # noqa: print
-        f"   ✅ Agents involved: {workflow_response.get('agents_involved')}"
-    )  # noqa: print
-    print(  # noqa: print
-        f"   ✅ User approvals needed: {workflow_response.get('user_approvals_needed')}"
-    )
-    print(  # noqa: print
-        f"   ✅ Estimated duration: {workflow_response.get('estimated_duration')}"
-    )  # noqa: print
+    print(f"   ✅ Classification: {workflow_response.get('message_classification')}")  # noqa: print  # noqa: print
+    print(f"   ✅ Planned steps: {workflow_response.get('planned_steps')}")  # noqa: print  # noqa: print
+    print(f"   ✅ Agents involved: {workflow_response.get('agents_involved')}")  # noqa: print  # noqa: print
+    print(f"   ✅ User approvals needed: {workflow_response.get('user_approvals_needed')}")  # noqa: print
+    print(f"   ✅ Estimated duration: {workflow_response.get('estimated_duration')}")  # noqa: print  # noqa: print
 
     print()  # noqa: print
     print("🎉 ALL TESTS PASSED!")  # noqa: print
     print("The workflow orchestration system is now working correctly:")  # noqa: print
-    print(  # noqa: print
-        "   • Classification agent properly identifies COMPLEX requests"
-    )  # noqa: print
-    print(  # noqa: print
-        "   • Workflow planning generates 8-step multi-agent coordination"
-    )  # noqa: print
+    print("   • Classification agent properly identifies COMPLEX requests")  # noqa: print  # noqa: print
+    print("   • Workflow planning generates 8-step multi-agent coordination")  # noqa: print  # noqa: print
     print("   • Tool registry is properly initialized")  # noqa: print
-    print(  # noqa: print
-        "   • Enum definitions are unified (no more comparison failures)"
-    )  # noqa: print
-    print(  # noqa: print
-        "   • Classification results are cached to avoid LLM inconsistency"
-    )  # noqa: print
-    print(  # noqa: print
-        "   • Workflow responses include all necessary metadata and steps"
-    )  # noqa: print
+    print("   • Enum definitions are unified (no more comparison failures)")  # noqa: print  # noqa: print
+    print("   • Classification results are cached to avoid LLM inconsistency")  # noqa: print  # noqa: print
+    print("   • Workflow responses include all necessary metadata and steps")  # noqa: print  # noqa: print
 
 
 if __name__ == "__main__":

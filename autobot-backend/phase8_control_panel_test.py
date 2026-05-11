@@ -26,22 +26,16 @@ def test_api_connectivity():
 
     try:
         # Test health endpoint
-        response = requests.get(
-            get_test_backend_url() + "/api/control/system/health", timeout=5
-        )
+        response = requests.get(get_test_backend_url() + "/api/control/system/health", timeout=5)
         if response.status_code == 200:
             health_data = response.json()
-            print(  # noqa: print
-                f"✅ API accessible - Status: {health_data.get('status', 'unknown')}"
-            )  # noqa: print
+            print(f"✅ API accessible - Status: {health_data.get('status', 'unknown')}")  # noqa: print  # noqa: print
             return True
         else:
             print(f"❌ API returned status code: {response.status_code}")  # noqa: print
             return False
     except requests.exceptions.ConnectionError:
-        print(
-            f"❌ Cannot connect to backend API at {get_test_backend_url()}"
-        )  # noqa: print
+        print(f"❌ Cannot connect to backend API at {get_test_backend_url()}")  # noqa: print
         return False
     except Exception as e:
         print(f"❌ API connectivity test failed: {e}")  # noqa: print
@@ -75,15 +69,11 @@ async def test_desktop_streaming_manager():
             print(f"✅ Session created: {session_info['session_id']}")  # noqa: print
 
             # Test session termination
-            success = await desktop_streaming.terminate_streaming_session(
-                session_info["session_id"]
-            )
+            success = await desktop_streaming.terminate_streaming_session(session_info["session_id"])
             print(f"✅ Session terminated: {success}")  # noqa: print
 
         except Exception as e:
-            print(  # noqa: print
-                f"⚠️ Session creation test skipped (requires X server): {e}"
-            )  # noqa: print
+            print(f"⚠️ Session creation test skipped (requires X server): {e}")  # noqa: print  # noqa: print
     else:
         print("⚠️ VNC not available - skipping session tests")  # noqa: print
 
@@ -186,9 +176,7 @@ def test_api_endpoints():
             capabilities = response.json()
             print(f"✅ Streaming capabilities: {capabilities}")  # noqa: print
         else:
-            print(
-                f"❌ Capabilities check failed: {response.status_code}"
-            )  # noqa: print
+            print(f"❌ Capabilities check failed: {response.status_code}")  # noqa: print
     except Exception as e:
         print(f"❌ Capabilities check error: {e}")  # noqa: print
 
@@ -210,9 +198,7 @@ def test_api_endpoints():
         response = requests.get(f"{base_url}/system/status")  # nosec B113
         if response.status_code == 200:
             system_status = response.json()
-            print(  # noqa: print
-                f"✅ System status retrieved with {len(system_status)} fields"
-            )  # noqa: print
+            print(f"✅ System status retrieved with {len(system_status)} fields")  # noqa: print  # noqa: print
         else:
             print(f"❌ System status failed: {response.status_code}")  # noqa: print
     except Exception as e:
@@ -224,9 +210,7 @@ def test_api_endpoints():
         response = requests.get(f"{base_url}/")  # nosec B113
         if response.status_code == 200:
             api_info = response.json()
-            print(  # noqa: print
-                f"✅ API info: {api_info['name']} v{api_info['version']}"
-            )  # noqa: print
+            print(f"✅ API info: {api_info['name']} v{api_info['version']}")  # noqa: print  # noqa: print
             print(f"   Features: {', '.join(api_info['features'])}")  # noqa: print
         else:
             print(f"❌ API info failed: {response.status_code}")  # noqa: print
@@ -279,9 +263,7 @@ async def test_integration():
 
     # Check that the request is properly tracked
     pending = takeover_manager.get_pending_requests()
-    integration_request = next(
-        (req for req in pending if req["request_id"] == request_id), None
-    )
+    integration_request = next((req for req in pending if req["request_id"] == request_id), None)
 
     if integration_request:
         print("✅ Cross-component request properly tracked")  # noqa: print
@@ -315,9 +297,7 @@ async def main():
             endpoint_result = test_api_endpoints()
             test_results.append(("API Endpoints", endpoint_result))
         else:
-            print(  # noqa: print
-                "\n⚠️ Skipping API endpoint tests - backend not available"
-            )  # noqa: print
+            print("\n⚠️ Skipping API endpoint tests - backend not available")  # noqa: print  # noqa: print
 
         # Test integration
         integration_result = await test_integration()
@@ -339,13 +319,9 @@ async def main():
             print("All components are functioning correctly.")  # noqa: print
 
             if not api_available:
-                print(  # noqa: print
-                    "\n💡 Note: Start the backend with './run_agent.sh' to test API endpoints"
-                )
+                print("\n💡 Note: Start the backend with './run_agent.sh' to test API endpoints")  # noqa: print
         else:
-            print(  # noqa: print
-                "\n⚠️ Some tests failed. Check logs above for details."
-            )  # noqa: print
+            print("\n⚠️ Some tests failed. Check logs above for details.")  # noqa: print  # noqa: print
 
         return all_passed
 

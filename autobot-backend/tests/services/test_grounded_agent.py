@@ -25,16 +25,13 @@ This module contains 40+ tests verifying:
 """
 
 import json
-from dataclasses import dataclass
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from services.grounded_agent import (
     Claim,
     ClaimStatus,
-    Conflict,
-    ConflictResolution,
     GroundedAgent,
     GroundedResponse,
     VerifiedClaim,

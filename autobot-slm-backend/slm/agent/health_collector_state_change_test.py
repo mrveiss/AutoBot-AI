@@ -4,9 +4,7 @@
 """Unit tests for HealthCollector state-change pub/sub logic (#3404)."""
 
 import json
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from slm.agent.health_collector import _STATE_CHANGE_CHANNEL_TEMPLATE, HealthCollector
 
