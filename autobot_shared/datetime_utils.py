@@ -8,7 +8,7 @@ See #7436 (GitHub) and MVA-48 (Paperclip) for the migration plan.
 
 from datetime import datetime, timezone
 
-from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
+from autobot_shared.time_utils import now_utc, utc_timestamp
 
 # Canonical aliases matching MVA-48 naming convention
 datetime_now = now_utc
