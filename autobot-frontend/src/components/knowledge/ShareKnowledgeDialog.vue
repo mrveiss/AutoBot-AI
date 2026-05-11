@@ -205,14 +205,14 @@ const fetchEntityName = async (id: string, type: 'user' | 'group'): Promise<stri
       response = await apiService.getGroupById(id)
     }
 
-    // Extract name from response
+    // Extract name from response — apiService returns parsed JSON directly (no .data envelope)
     let displayName = id
-    if (response && response.data) {
+    if (response) {
       if (type === 'user') {
-        const userData = response.data as { display_name?: string; email?: string; username?: string }
+        const userData = response as unknown as { display_name?: string; email?: string; username?: string }
         displayName = userData.display_name || userData.email || userData.username || id
       } else {
-        const groupData = response.data as { name?: string }
+        const groupData = response as unknown as { name?: string }
         displayName = groupData.name || id
       }
     }
