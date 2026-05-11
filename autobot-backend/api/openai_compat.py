@@ -41,11 +41,20 @@ from api.schemas_code import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from llm_interface_pkg.models import LLMRequest
+from llm_interface_pkg.tiered_routing.tier_router import get_tiered_router
 from llm_providers.provider_registry import get_provider_registry
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["openai-compat"])
+
+# ---------------------------------------------------------------------------
+# Reserved model names for server-side tiered routing (#6592)
+# ---------------------------------------------------------------------------
+# Callers may pass these instead of a concrete model name to opt into
+# AutoBot's tiered routing.  "auto" uses TieredModelRouter complexity scoring;
+# "auto-fast" forces the simple tier; "auto-quality" forces the complex tier.
+_AUTO_MODEL_NAMES = frozenset({"auto", "auto-fast", "auto-quality"})
 
 # ---------------------------------------------------------------------------
 # Rate limiting — per-IP sliding window via shared IPRateLimiter (#7271)
@@ -97,12 +106,25 @@ def _get_user(request: Request) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def _build_llm_request(body: ChatCompletionRequest) -> LLMRequest:
+async def _resolve_auto_model(model: str, messages: list) -> str:
+    """Resolve an auto-* model alias to a concrete model name via TieredModelRouter."""
+    router = get_tiered_router()
+    if model == "auto-fast":
+        return router.get_model_for_tier("simple")
+    if model == "auto-quality":
+        return router.get_model_for_tier("complex")
+    # "auto" — complexity-scored routing
+    selected, _ = router.route(messages, requested_model=model)
+    return selected
+
+
+def _build_llm_request(body: ChatCompletionRequest, resolved_model: Optional[str] = None) -> LLMRequest:
     """Convert OpenAI-format request to AutoBot LLMRequest."""
     messages = [{"role": m.role, "content": m.content} for m in body.messages]
+    effective_model = resolved_model or (body.model if body.model != "autobot-default" else None)
     return LLMRequest(
         messages=messages,
-        model_name=body.model if body.model != "autobot-default" else None,
+        model_name=effective_model,
         temperature=body.temperature,
         max_tokens=body.max_tokens,
         top_p=body.top_p,
@@ -234,8 +256,17 @@ async def chat_completions(
     _get_user(request)
     await _oai_limiter.check_or_429(_remote_addr(request))
 
+    # Resolve auto-* model aliases to concrete model names via tiered routing (#6592)
+    if body.model in _AUTO_MODEL_NAMES:
+        messages_raw = [{"role": m.role, "content": m.content} for m in body.messages]
+        resolved_model = await _resolve_auto_model(body.model, messages_raw)
+    elif body.model == "autobot-default":
+        resolved_model = None  # will be set from provider name below
+    else:
+        resolved_model = body.model
+
     registry = get_provider_registry()
-    llm_request = _build_llm_request(body)
+    llm_request = _build_llm_request(body, resolved_model=resolved_model)
 
     provider = await registry.get_provider_for_request(request=llm_request)
     if provider is None:
@@ -246,8 +277,9 @@ async def chat_completions(
         raise ValueError(f"Provider {provider.provider_name!r} stream_completion must be an async generator function")
 
     completion_id = _make_completion_id()
-    # Use resolved provider name as model echo when caller sent "autobot-default"
-    resolved_model = body.model if body.model != "autobot-default" else provider.provider_name
+    # Echo the concrete model name; fall back to provider name for autobot-default
+    if resolved_model is None:
+        resolved_model = provider.provider_name
 
     if body.stream:
         include_usage = bool(body.stream_options and body.stream_options.include_usage)
@@ -334,5 +366,13 @@ async def list_models(request: Request) -> OAIModelListResponse:
     # Always include a sentinel entry so the list is non-empty
     if not model_cards:
         model_cards.append(OAIModelCard(id="autobot-default", created=created))
+
+    # Prepend reserved auto-routing aliases (#6592)
+    auto_cards = [
+        OAIModelCard(id="auto", created=created, owned_by="autobot"),
+        OAIModelCard(id="auto-fast", created=created, owned_by="autobot"),
+        OAIModelCard(id="auto-quality", created=created, owned_by="autobot"),
+    ]
+    model_cards = auto_cards + [c for c in model_cards if c.id not in _AUTO_MODEL_NAMES]
 
     return OAIModelListResponse(data=model_cards)
