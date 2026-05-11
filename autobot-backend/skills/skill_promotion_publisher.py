@@ -57,9 +57,7 @@ def publish_skill_promoted(skill_name: str, tools: Optional[List[str]] = None) -
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
-        logger.debug(
-            "no running event loop; skipping skill_promoted publish for %s", skill_name
-        )
+        logger.debug("no running event loop; skipping skill_promoted publish for %s", skill_name)
         return
     loop.create_task(_publish_async(payload))
 

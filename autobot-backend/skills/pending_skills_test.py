@@ -137,9 +137,7 @@ async def test_trigger_gap_fill_invokes_router_in_background():
         invocations.append(intent)
         return {"success": True, "build_triggered": True}
 
-    binding = await trigger_gap_fill(
-        "translate French", "p1", "t1", router_call=fake_router
-    )
+    binding = await trigger_gap_fill("translate French", "p1", "t1", router_call=fake_router)
     # Yield to let the create_task background coroutine run
     await asyncio.sleep(0)
     await asyncio.sleep(0)
@@ -152,12 +150,11 @@ async def test_trigger_gap_fill_invokes_router_in_background():
 async def test_trigger_gap_fill_swallows_router_failures():
     """A failing background router_call must not crash the planner — the
     binding stays in the registry so observability surfaces stuck IDs."""
+
     async def failing_router(intent: str):
         raise RuntimeError("LLM down")
 
-    binding = await trigger_gap_fill(
-        "stuck intent", "p1", "t1", router_call=failing_router
-    )
+    binding = await trigger_gap_fill("stuck intent", "p1", "t1", router_call=failing_router)
     # Drain the background task
     await asyncio.sleep(0)
     await asyncio.sleep(0)

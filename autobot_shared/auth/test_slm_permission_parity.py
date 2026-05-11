@@ -111,9 +111,8 @@ def _all_role_perm_values() -> set[str]:
 def test_every_permission_assigned_to_at_least_one_role():
     """Every Permission enum value must appear in ROLE_PERMISSIONS for at least one role."""
     uncovered = _all_perm_values() - _all_role_perm_values()
-    assert not uncovered, (
-        "Permissions defined in the enum but not assigned to any role:\n"
-        + "\n".join(f"  {p}" for p in sorted(uncovered))
+    assert not uncovered, "Permissions defined in the enum but not assigned to any role:\n" + "\n".join(
+        f"  {p}" for p in sorted(uncovered)
     )
 
 
@@ -131,14 +130,11 @@ def test_all_roles_have_role_permissions_entry():
 
 def test_admin_role_contains_all_permissions():
     """ROLE_PERMISSIONS[Role.ADMIN] must cover every Permission except SHELL_EXECUTE."""
-    admin_values = {
-        p.value if isinstance(p, Permission) else p for p in ROLE_PERMISSIONS[Role.ADMIN]
-    }
+    admin_values = {p.value if isinstance(p, Permission) else p for p in ROLE_PERMISSIONS[Role.ADMIN]}
     required = _all_perm_values() - {Permission.SHELL_EXECUTE.value}
     missing = required - admin_values
-    assert not missing, (
-        "ROLE_PERMISSIONS[Role.ADMIN] is missing permissions:\n"
-        + "\n".join(f"  {p}" for p in sorted(missing))
+    assert not missing, "ROLE_PERMISSIONS[Role.ADMIN] is missing permissions:\n" + "\n".join(
+        f"  {p}" for p in sorted(missing)
     )
 
 
@@ -171,9 +167,8 @@ def test_slm_admin_role_covers_all_shared_permissions(slm_role):
     admin_perms = set(slm_role.SYSTEM_ROLES["admin"]["permissions"])
     required = _all_perm_values() - {Permission.SHELL_EXECUTE.value}
     missing = required - admin_perms
-    assert not missing, (
-        "SLM SYSTEM_ROLES['admin'] missing shared permissions:\n"
-        + "\n".join(f"  {p}" for p in sorted(missing))
+    assert not missing, "SLM SYSTEM_ROLES['admin'] missing shared permissions:\n" + "\n".join(
+        f"  {p}" for p in sorted(missing)
     )
 
 
@@ -184,9 +179,7 @@ def test_slm_system_roles_reference_only_known_permissions(slm_role):
     for role_def in slm_role.SYSTEM_ROLES.values():
         all_role_perm_names.update(role_def.get("permissions", []))
     unknown = all_role_perm_names - slm_names
-    assert not unknown, (
-        f"SYSTEM_ROLES references permission names not in SYSTEM_PERMISSIONS: {unknown}"
-    )
+    assert not unknown, f"SYSTEM_ROLES references permission names not in SYSTEM_PERMISSIONS: {unknown}"
 
 
 def test_slm_role_permissions_align_with_shared(slm_role):
@@ -208,9 +201,7 @@ def test_slm_role_permissions_align_with_shared(slm_role):
     for shared_role, slm_key in role_name_map.items():
         if slm_key not in slm_role.SYSTEM_ROLES:
             continue
-        shared_perms = {
-            p.value if isinstance(p, Permission) else p for p in ROLE_PERMISSIONS[shared_role]
-        }
+        shared_perms = {p.value if isinstance(p, Permission) else p for p in ROLE_PERMISSIONS[shared_role]}
         slm_perms = set(slm_role.SYSTEM_ROLES[slm_key]["permissions"])
         missing_in_slm = shared_perms - slm_perms
         if missing_in_slm:

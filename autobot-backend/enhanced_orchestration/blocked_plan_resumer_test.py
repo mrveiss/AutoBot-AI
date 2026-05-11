@@ -157,9 +157,7 @@ async def test_handle_event_resumes_all_blocked_plans():
 async def test_handle_event_isolates_per_plan_failures():
     plans = {"p1": _plan_stub("blocked"), "p2": _plan_stub("blocked")}
     runner = _runner_with_plans(plans)
-    runner.try_resume_blocked_plan = AsyncMock(
-        side_effect=[RuntimeError("boom"), {"resumed": True, "result": {}}]
-    )
+    runner.try_resume_blocked_plan = AsyncMock(side_effect=[RuntimeError("boom"), {"resumed": True, "result": {}}])
     resumer = BlockedPlanResumer(runner)
 
     payload = json.dumps({"event": "skill_promoted", "skill_name": "x"})

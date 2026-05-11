@@ -191,9 +191,7 @@ async def test_no_winner_triggers_async_gap_fill_and_pending_id(planner, plan_da
     planner triggers Phase 3 async gap-fill and attaches a pending_skill_id
     to each unbound task."""
     fake_router = MagicMock()
-    fake_router.execute = AsyncMock(
-        return_value={"success": True, "enabled_skill": None}
-    )
+    fake_router.execute = AsyncMock(return_value={"success": True, "enabled_skill": None})
     planner._skill_router_skill = fake_router
 
     plan = await planner.build_workflow_plan("goal", plan_data)
@@ -210,9 +208,7 @@ async def test_no_winner_triggers_async_gap_fill_and_pending_id(planner, plan_da
 async def test_plan_status_blocked_when_any_task_pending(planner, plan_data) -> None:
     """A plan with at least one pending_skill_id is constructed in BLOCKED state."""
     fake_router = MagicMock()
-    fake_router.execute = AsyncMock(
-        return_value={"success": True, "enabled_skill": None}
-    )
+    fake_router.execute = AsyncMock(return_value={"success": True, "enabled_skill": None})
     planner._skill_router_skill = fake_router
 
     plan = await planner.build_workflow_plan("goal", plan_data)
@@ -223,9 +219,7 @@ async def test_plan_status_blocked_when_any_task_pending(planner, plan_data) -> 
 async def test_plan_status_pending_when_all_tasks_resolve(planner, plan_data) -> None:
     """When every task gets a skill, plan.status stays at default 'pending'."""
     fake_router = MagicMock()
-    fake_router.execute = AsyncMock(
-        return_value={"success": True, "enabled_skill": "good_skill", "method": "llm"}
-    )
+    fake_router.execute = AsyncMock(return_value={"success": True, "enabled_skill": "good_skill", "method": "llm"})
     planner._skill_router_skill = fake_router
 
     plan = await planner.build_workflow_plan("goal", plan_data)
@@ -241,9 +235,7 @@ async def test_pending_binding_recorded_in_registry(planner, plan_data) -> None:
     from skills.pending_skills import get_pending_skills_registry
 
     fake_router = MagicMock()
-    fake_router.execute = AsyncMock(
-        return_value={"success": True, "enabled_skill": None}
-    )
+    fake_router.execute = AsyncMock(return_value={"success": True, "enabled_skill": None})
     planner._skill_router_skill = fake_router
 
     plan = await planner.build_workflow_plan("goal", plan_data)
@@ -256,18 +248,14 @@ async def test_pending_binding_recorded_in_registry(planner, plan_data) -> None:
 
 
 @pytest.mark.asyncio
-async def test_no_match_unsuccessful_response_does_not_trigger_gap_fill(
-    planner, plan_data
-) -> None:
+async def test_no_match_unsuccessful_response_does_not_trigger_gap_fill(planner, plan_data) -> None:
     """success=False (router error) does NOT fire gap-fill — pending_skill_id stays None.
     Phase 3 is only triggered on the explicit "found no skill" outcome
     (success=True, enabled_skill=None), not on router errors."""
     from skills.pending_skills import get_pending_skills_registry
 
     fake_router = MagicMock()
-    fake_router.execute = AsyncMock(
-        return_value={"success": False, "error": "no match"}
-    )
+    fake_router.execute = AsyncMock(return_value={"success": False, "error": "no match"})
     planner._skill_router_skill = fake_router
 
     plan = await planner.build_workflow_plan("goal", plan_data)

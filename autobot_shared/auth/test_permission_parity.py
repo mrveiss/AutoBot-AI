@@ -18,7 +18,6 @@ import pytest
 
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -54,9 +53,7 @@ def test_every_permission_assigned_to_at_least_one_role():
 def test_role_permissions_only_reference_known_values():
     """ROLE_PERMISSIONS must not contain strings absent from the Permission enum."""
     unknown = _all_role_perm_values() - _all_perm_values()
-    assert not unknown, (
-        f"ROLE_PERMISSIONS references strings not in Permission enum: {unknown}"
-    )
+    assert not unknown, f"ROLE_PERMISSIONS references strings not in Permission enum: {unknown}"
 
 
 def test_all_roles_have_role_permissions_entry():
@@ -67,14 +64,11 @@ def test_all_roles_have_role_permissions_entry():
 
 def test_admin_role_contains_all_permissions():
     """ROLE_PERMISSIONS[Role.ADMIN] must cover every Permission except SHELL_EXECUTE."""
-    admin_values = {
-        p.value if isinstance(p, Permission) else p for p in ROLE_PERMISSIONS[Role.ADMIN]
-    }
+    admin_values = {p.value if isinstance(p, Permission) else p for p in ROLE_PERMISSIONS[Role.ADMIN]}
     required = _all_perm_values() - {Permission.SHELL_EXECUTE.value}
     missing = required - admin_values
-    assert not missing, (
-        f"ROLE_PERMISSIONS[Role.ADMIN] is missing permissions:\n"
-        + "\n".join(f"  {p}" for p in sorted(missing))
+    assert not missing, f"ROLE_PERMISSIONS[Role.ADMIN] is missing permissions:\n" + "\n".join(
+        f"  {p}" for p in sorted(missing)
     )
 
 
