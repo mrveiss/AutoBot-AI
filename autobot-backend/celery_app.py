@@ -148,6 +148,49 @@ celery_app.autodiscover_tasks(["tasks"])
 
 
 # =========================================================================
+# Issue #6970: Plugin extension-point dispatch via AsyncSyncBridge
+# =========================================================================
+
+# Celery's worker_init signal is sync; we use AsyncSyncBridge to invoke
+# the async dispatcher so plugin authors write uniform `async def` handlers.
+from celery.signals import worker_init
+
+
+@worker_init.connect
+def _on_worker_init_dispatch_plugin_tasks(sender, **kwargs):
+    """Dispatch CELERY_TASK_REGISTER hook at worker startup.
+
+    Each Celery worker process fires its own dispatch. Plugins should
+    register tasks idempotently. Failures are isolated per-plugin (via
+    dispatch_extension_point) and logged; worker startup continues.
+    """
+    try:
+        from plugin_manager import get_plugin_manager
+        from plugin_sdk.async_bridge import AsyncSyncBridge
+        from plugin_sdk.hooks import Hook
+
+        plugin_manager = get_plugin_manager()
+
+        async def _dispatch():
+            if not plugin_manager.is_started:
+                await plugin_manager.startup()
+            await plugin_manager.dispatch_extension_point(
+                Hook.CELERY_TASK_REGISTER, sender.app
+            )
+
+        AsyncSyncBridge().run_coro(_dispatch())
+    except Exception as exc:
+        # Don't abort worker startup — plugin tasks are optional.
+        import logging
+
+        logging.getLogger(__name__).error(
+            "Celery plugin extension-point dispatch failed: %s",
+            exc,
+            exc_info=True,
+        )
+
+
+# =========================================================================
 # Issue #4455: Periodic knowledge-base cleanup schedule
 # =========================================================================
 

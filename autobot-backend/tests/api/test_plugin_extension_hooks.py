@@ -155,3 +155,66 @@ async def test_api_router_register_failure_isolation():
     # Failing plugin is marked ERROR; OK plugin stays ENABLED
     assert p_fail.status == PluginStatus.ERROR
     assert p_ok.status == PluginStatus.ENABLED
+
+
+def test_celery_task_register_dispatch_via_async_bridge():
+    """Stub plugin's async CELERY_TASK_REGISTER handler registers a Celery
+    task via the AsyncSyncBridge (sync-to-async invocation)."""
+    import asyncio
+
+    from celery import Celery
+
+    from plugin_sdk.async_bridge import AsyncSyncBridge
+    from plugin_sdk.base import (
+        BasePlugin,
+        PluginManifest,
+        PluginRegistry,
+        PluginStatus,
+    )
+    from plugin_sdk.hooks import Hook, HookRegistry
+    from plugin_sdk.plugin_manager import PluginManager
+
+    HookRegistry().clear()
+    PluginRegistry().clear()
+    AsyncSyncBridge.reset_for_tests()
+
+    fake_celery_app = Celery("test")
+
+    class StubCeleryPlugin(BasePlugin):
+        async def initialize(self):
+            self.register_extension_point(
+                Hook.CELERY_TASK_REGISTER, self._on_register
+            )
+
+        async def shutdown(self):
+            pass
+
+        async def _on_register(self, celery_app):
+            @celery_app.task(name="stub.from_plugin")
+            def stub_task():
+                return "ok"
+
+    manifest = PluginManifest(
+        name="stub-celery",
+        version="1.0.0",
+        display_name="Stub Celery",
+        description="Stub for #6970 test.",
+        author="test",
+        entry_point="test.module",
+    )
+    plugin = StubCeleryPlugin(manifest)
+    asyncio.run(plugin.initialize())
+    plugin.status = PluginStatus.ENABLED
+    PluginRegistry().register(plugin)
+
+    pm = PluginManager(plugin_dirs=[])
+
+    async def _dispatch():
+        await pm.dispatch_extension_point(
+            Hook.CELERY_TASK_REGISTER, fake_celery_app
+        )
+
+    AsyncSyncBridge().run_coro(_dispatch())
+
+    assert "stub.from_plugin" in fake_celery_app.tasks
+    AsyncSyncBridge.reset_for_tests()
