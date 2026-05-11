@@ -136,6 +136,7 @@
     - name: Update system packages (since we're setting up VMs)
       apt:
         update_cache: yes
+        cache_valid_time: 3600
         upgrade: dist
         autoremove: yes
         autoclean: yes
@@ -170,6 +171,7 @@
           - ntp
         state: present
         update_cache: yes
+        cache_valid_time: 3600
 
     - name: Configure NTP for time synchronization
       service:
