@@ -16,8 +16,9 @@ Tests cover:
 import os
 import sys
 import tempfile
-from datetime import datetime
 from unittest.mock import AsyncMock, patch
+
+from autobot_shared.datetime_utils import datetime_now
 
 import pytest
 
@@ -183,7 +184,7 @@ async def test_detect_changes_all_added():
 async def test_detect_changes_incremental_still_returns_all():
     """Audio sources are immutable — incremental sync re-indexes them."""
     connector = AudioConnector(_make_config(sources=["https://youtu.be/abc"]))
-    changes = await connector.detect_changes(since=datetime.utcnow())
+    changes = await connector.detect_changes(since=datetime_now())
     assert len(changes) == 1
 
 

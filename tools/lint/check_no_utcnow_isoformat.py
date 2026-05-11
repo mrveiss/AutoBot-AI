@@ -85,9 +85,10 @@ def _suggestion_for(rel_path: str) -> str:
     return "`utc_timestamp()` from `autobot_shared.time_utils`."
 
 
-# Patterns are intentionally precise — this hook only prevents regression
-# of the #5178 migration, not the broader datetime.utcnow() backlog
-# tracked by #5211.
+# Patterns prevent regression of prior migrations (#5178) and enforce the
+# canonical UTC helper going forward (#7436). The bare datetime.utcnow()
+# pattern (#7436) was added to replace the deprecated Python 3.12 call
+# with the tz-aware canonical helper from autobot_shared.datetime_utils.
 PATTERNS: List[Tuple[str, re.Pattern[str], str]] = [
     (
         "isoformat",
@@ -111,6 +112,12 @@ PATTERNS: List[Tuple[str, re.Pattern[str], str]] = [
         re.compile(r'time\.strftime\(\s*["\']%Y-%m-%dT[^"\']*["\']\s*\)'),
         "`time.strftime(\"%Y-%m-%dT...\")` with no time argument defaults to "
         "`time.localtime()` (LOCAL time, mislabeled as UTC) (#5178 audit).",
+    ),
+    (
+        "bare-utcnow",
+        re.compile(r"datetime\.utcnow\(\)"),
+        "`datetime.utcnow()` is deprecated (Python 3.12) and returns tz-naive datetimes. "
+        "Use `datetime_now()` from `autobot_shared.datetime_utils` instead (#7436).",
     ),
 ]
 
