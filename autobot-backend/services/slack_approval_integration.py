@@ -23,9 +23,9 @@ Usage::
 import json
 import logging
 import time
-from enum import Enum
 from typing import Any, Dict, Optional
 
+from agents.agent_orchestration.types import CircuitState
 from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -36,14 +36,6 @@ _APPROVAL_THREAD_PREFIX = "approval_thread"
 _CHANNEL_MAPPING_PREFIX = "slack_channel_mapping"
 _APPROVAL_CIRCUIT_BREAKER_PREFIX = "approval_redis_circuit"
 _APPROVAL_TTL_SECONDS = 86400  # 24 hours
-
-
-class CircuitState(str, Enum):
-    """Circuit breaker states for Redis failures."""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Failures detected, skip Redis ops
-    HALF_OPEN = "half_open"  # Testing if Redis recovered
 
 
 class SlackApprovalManager:
