@@ -52,6 +52,10 @@ export interface WorkflowTask {
   error: string | null;
   start_time: number | null;
   end_time: number | null;
+  skill_name: string | null;
+  skill_action: string | null;
+  skill_resolution_method: string | null;
+  pending_skill_id: string | null;
   metadata: Record<string, unknown>;
 }
 
