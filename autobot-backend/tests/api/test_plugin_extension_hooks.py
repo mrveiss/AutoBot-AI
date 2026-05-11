@@ -74,3 +74,84 @@ async def test_api_router_register_dispatch_mounts_plugin_routes():
 
     paths = [r.path for r in app.routes]
     assert "/api/stub/from-plugin" in paths
+
+
+@pytest.mark.asyncio
+async def test_api_router_register_failure_isolation():
+    """One plugin's handler raises; other plugins still mount their routes.
+    Failed plugin's status is set to ERROR; others remain ENABLED."""
+    from plugin_sdk.base import (
+        BasePlugin,
+        PluginManifest,
+        PluginRegistry,
+        PluginStatus,
+    )
+    from plugin_sdk.hooks import Hook, HookRegistry
+    from plugin_sdk.plugin_manager import PluginManager
+
+    HookRegistry().clear()
+    PluginRegistry().clear()
+
+    app = FastAPI()
+
+    ok_router = APIRouter()
+
+    @ok_router.get("/from-ok-plugin")
+    async def from_ok():
+        return {"ok": True}
+
+    class FailingPlugin(BasePlugin):
+        async def initialize(self):
+            self.register_extension_point(Hook.API_ROUTER_REGISTER, self._fail)
+
+        async def shutdown(self):
+            pass
+
+        async def _fail(self, app):
+            raise RuntimeError("intentional failure during route registration")
+
+    class OkPlugin(BasePlugin):
+        async def initialize(self):
+            self.register_extension_point(Hook.API_ROUTER_REGISTER, self._mount)
+
+        async def shutdown(self):
+            pass
+
+        async def _mount(self, app):
+            app.include_router(ok_router, prefix="/api/ok")
+
+    def _mk(cls, name):
+        m = PluginManifest(
+            name=name,
+            version="1.0.0",
+            display_name=name,
+            description="Stub.",
+            author="test",
+            entry_point="test.module",
+        )
+        return cls(m)
+
+    p_fail = _mk(FailingPlugin, "plugin-fail")
+    p_ok = _mk(OkPlugin, "plugin-ok")
+
+    # Order matters — failing plugin's initialize() must register FIRST so it
+    # dispatches first. Otherwise the test doesn't prove the loop continues
+    # after a raise.
+    await p_fail.initialize()
+    p_fail.status = PluginStatus.ENABLED
+    PluginRegistry().register(p_fail)
+
+    await p_ok.initialize()
+    p_ok.status = PluginStatus.ENABLED
+    PluginRegistry().register(p_ok)
+
+    pm = PluginManager(plugin_dirs=[])
+    await pm.dispatch_extension_point(Hook.API_ROUTER_REGISTER, app)
+
+    # OK plugin's route is mounted despite the first plugin raising
+    paths = [r.path for r in app.routes]
+    assert "/api/ok/from-ok-plugin" in paths
+
+    # Failing plugin is marked ERROR; OK plugin stays ENABLED
+    assert p_fail.status == PluginStatus.ERROR
+    assert p_ok.status == PluginStatus.ENABLED

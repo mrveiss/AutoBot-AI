@@ -1388,9 +1388,13 @@ async def _dispatch_api_router_register(app: FastAPI) -> None:
         await plugin_manager.dispatch_extension_point(
             Hook.API_ROUTER_REGISTER, app
         )
+        handler_count = len(
+            plugin_manager.hook_registry._hooks.get(
+                Hook.API_ROUTER_REGISTER.value, []
+            )
+        )
         logger.info(
-            "API_ROUTER_REGISTER dispatch complete: %d plugin(s) considered",
-            len(plugin_manager.plugin_registry.get_all_plugins()),
+            "API_ROUTER_REGISTER dispatch complete: %d handler(s) fired", handler_count
         )
     except Exception as exc:  # noqa: BLE001
         logger.error(
