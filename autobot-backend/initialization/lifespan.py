@@ -98,15 +98,9 @@ def warn_if_dev_auth_bypass_enabled() -> None:
         return
     banner = "=" * 72
     logger.warning(banner)
-    logger.warning(
-        "⚠️  AUTOBOT_DEV_AUTH_BYPASS=true — /api/auth/login will mint an admin"
-    )
-    logger.warning(
-        "    JWT for ANY credentials in single_user mode. DO NOT use in"
-    )
-    logger.warning(
-        "    production. Unset the flag or switch AUTOBOT_USER_MODE away from"
-    )
+    logger.warning("⚠️  AUTOBOT_DEV_AUTH_BYPASS=true — /api/auth/login will mint an admin")
+    logger.warning("    JWT for ANY credentials in single_user mode. DO NOT use in")
+    logger.warning("    production. Unset the flag or switch AUTOBOT_USER_MODE away from")
     logger.warning("    single_user to disable. See issue #6838.")
     logger.warning(banner)
 

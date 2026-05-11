@@ -90,9 +90,7 @@ class TestSingleUserLoginWithExplicitBypass:
             patch("api.auth.get_auth_middleware", return_value=fake_auth),
             patch("api.auth._emit_event"),
         ):
-            response = await login(
-                request=_make_request(), login_data=_login_req("admin", "abc")
-            )
+            response = await login(request=_make_request(), login_data=_login_req("admin", "abc"))
         assert response.success is True
         assert response.token == "dummy-token"
         assert response.user["role"] == "admin"
@@ -112,7 +110,5 @@ class TestMultiUserModeRejectsWrongPassword:
             patch("api.auth._authenticate_and_build_user_data", side_effect=_fail_auth),
         ):
             with pytest.raises(HTTPException) as excinfo:
-                await login(
-                    request=_make_request(), login_data=_login_req("alice", "bad")
-                )
+                await login(request=_make_request(), login_data=_login_req("alice", "bad"))
         assert excinfo.value.status_code == 401
