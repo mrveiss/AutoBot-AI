@@ -112,6 +112,7 @@ class LLMResponse:
     error: Optional[str] = None
     fallback_used: bool = False
     provider_metadata: Optional[Dict[str, Any]] = None
+    hidden_params: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

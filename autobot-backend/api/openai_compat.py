@@ -18,13 +18,14 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import logging
 import time
 from typing import Any, AsyncIterator, Dict, List
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.schemas_code import (
     ChatCompletionChunk,
@@ -42,6 +43,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from llm_interface_pkg.models import LLMRequest
 from llm_providers.provider_registry import get_provider_registry
+from services.llm_cost_tracker import get_cost_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -192,9 +194,10 @@ async def _stream_generator(
     yield f"data: {final_chunk.model_dump_json()}\n\n"
 
     # Usage chunk (OpenAI spec: emit only when stream_options.include_usage=true)
+    prompt_tokens = _estimate_tokens(prompt_text)
+    completion_tokens = _estimate_tokens("".join(completion_text_parts))
+
     if include_usage:
-        prompt_tokens = _estimate_tokens(prompt_text)
-        completion_tokens = _estimate_tokens("".join(completion_text_parts))
         usage_chunk = ChatCompletionChunk(
             id=completion_id,
             created=created,
@@ -207,6 +210,13 @@ async def _stream_generator(
             ),
         )
         yield f"data: {usage_chunk.model_dump_json()}\n\n"
+
+    # Cost chunk - emit in final SSE event (estimated from streaming tokens)
+    tracker = get_cost_tracker()
+    cost_usd = tracker.calculate_cost(model_name, prompt_tokens, completion_tokens)
+    if cost_usd > 0:
+        cost_chunk = {"cost": cost_usd}
+        yield f"data: {json.dumps(cost_chunk)}\n\n"
 
     yield "data: [DONE]\n\n"
 
@@ -252,6 +262,9 @@ async def chat_completions(
     if body.stream:
         include_usage = bool(body.stream_options and body.stream_options.include_usage)
         prompt_text = "\n".join(m.content for m in body.messages)
+        # For streaming, cost cannot be determined accurately until stream completes
+        # (token counts are not known upfront). Per acceptance criteria, header is
+        # absent when cost cannot be determined. Non-streaming path includes the header.
         return StreamingResponse(
             _stream_generator(
                 provider,
@@ -281,7 +294,16 @@ async def chat_completions(
         total_tokens=tokens.get("total_tokens", llm_response.tokens_used or 0),
     )
 
-    return ChatCompletionResponse(
+    # Calculate cost and store in response hidden params
+    tracker = get_cost_tracker()
+    cost_usd = tracker.calculate_cost(
+        resolved_model,
+        usage.prompt_tokens,
+        usage.completion_tokens,
+    )
+    llm_response.hidden_params["response_cost"] = cost_usd
+
+    response = ChatCompletionResponse(
         id=completion_id,
         created=int(time.time()),
         model=resolved_model,
@@ -296,6 +318,14 @@ async def chat_completions(
             )
         ],
         usage=usage,
+    )
+
+    # Extract cost from hidden params and add as header
+    response_cost = llm_response.hidden_params.get("response_cost", 0)
+    headers = {"x-llm-cost": str(response_cost)} if response_cost > 0 else {}
+    return JSONResponse(
+        content=response.model_dump(),
+        headers=headers,
     )
 
 
