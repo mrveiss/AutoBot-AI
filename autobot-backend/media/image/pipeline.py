@@ -154,7 +154,7 @@ class ImagePipeline(BasePipeline):
             input_id=media_input.media_id,
             modality_type=ModalityType.IMAGE,
             data=pil_image,
-            intent=ProcessingIntent.ANALYSIS,
+            intent=ProcessingIntent.VISUAL_QA,
         )
         try:
             vp_result = await vp.process(mm_input)
