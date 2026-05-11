@@ -130,12 +130,10 @@ class LinkPipeline(BasePipeline):
     # HTTP fetch
     # ------------------------------------------------------------------
 
-    # SSRF guard moved to ``autobot_shared.url_safety`` (#7477) so
-    # ``web_fetch.fetcher`` can call it directly instead of reaching into
-    # ``LinkPipeline`` via a ``__new__`` hack + lazy import (which was
-    # the last leg of the ``pipeline.py`` ↔ ``fetcher.py`` cycle). The
-    # methods below are preserved as thin wrappers so existing callers
-    # (this class + ``pipeline_test.py``) keep working unchanged.
+    # SSRF guard moved to ``autobot_shared.url_safety`` (#7477).
+    # The consolidated SSRF module is ``autobot_shared.security.ssrf_guard``
+    # (#6533); url_safety feeds into it. Thin wrappers below preserve the
+    # LinkPipeline call-site API (used by pipeline_test.py / web_fetch.fetcher).
 
     @staticmethod
     def _ip_is_public(ip: ipaddress._BaseAddress) -> bool:

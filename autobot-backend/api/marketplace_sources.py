@@ -10,8 +10,6 @@ catalog URLs alongside the built-in AutoBot marketplace.
 
 from __future__ import annotations
 
-import asyncio
-import ipaddress
 import json
 import logging
 import re
@@ -23,6 +21,8 @@ from urllib.parse import urlparse
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, status
+
+from autobot_shared.security.ssrf_guard import SSRFError, resolve_safe_ip, safe_aiohttp_resolver
 
 from api.schemas_workflows import (
     CatalogDocument,
@@ -99,50 +99,6 @@ def _validate_source_name(name: str) -> str:
     return name
 
 
-async def _resolve_safe_ip(host: str) -> str:
-    """SSRF guard: resolve `host` and reject anything that isn't a global
-    public address. Returns a single IP literal that the caller should
-    connect to directly so a TOCTOU DNS rebind cannot redirect the
-    follow-up request to a private address.
-
-    Blocks: loopback, RFC1918, link-local (incl. AWS metadata
-    169.254.169.254), unique-local IPv6, multicast, reserved.
-    """
-    try:
-        infos = await asyncio.get_event_loop().getaddrinfo(host, None, type=socket.SOCK_STREAM)
-    except (socket.gaierror, OSError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Could not resolve marketplace host: {exc}",
-        ) from exc
-    safe_ip: Optional[str] = None
-    for info in infos:
-        ip_str = info[4][0]
-        try:
-            ip = ipaddress.ip_address(ip_str)
-        except ValueError:
-            continue
-        if (
-            ip.is_loopback
-            or ip.is_private
-            or ip.is_link_local
-            or ip.is_multicast
-            or ip.is_reserved
-            or ip.is_unspecified
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Marketplace URL resolves to a non-public address",
-            )
-        # Pick the first global address; we'll connect to it explicitly.
-        if safe_ip is None:
-            safe_ip = ip_str
-    if safe_ip is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Marketplace host has no usable IP",
-        )
-    return safe_ip
 
 
 @router.get(
@@ -256,22 +212,16 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
         )
     # Resolve to a public IP and connect to it directly. The Host header still
     # carries the original hostname for TLS SNI / virtual hosting; the
-    # connector resolution map prevents DNS rebinding between resolve and connect.
-    safe_ip = await _resolve_safe_ip(host)
+    # pinned resolver prevents DNS rebinding between resolve and connect.
+    try:
+        safe_ip = await resolve_safe_ip(host)
+    except SSRFError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     timeout = aiohttp.ClientTimeout(total=_FETCH_TIMEOUT_SECONDS)
-    resolver_map = {
-        host: [{"hostname": host, "host": safe_ip, "port": port, "family": socket.AF_INET, "proto": 0, "flags": 0}]
-    }
-
-    class _PinnedResolver(aiohttp.abc.AbstractResolver):
-        async def resolve(self, hostname, port_, family=socket.AF_INET):
-            return resolver_map.get(hostname, [])
-
-        async def close(self):
-            return None
-
-    connector = aiohttp.TCPConnector(resolver=_PinnedResolver(), use_dns_cache=False)
+    connector = aiohttp.TCPConnector(
+        resolver=safe_aiohttp_resolver(host, safe_ip, port), use_dns_cache=False
+    )
     try:
         async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
             # allow_redirects=False — a redirect to an internal IP would bypass

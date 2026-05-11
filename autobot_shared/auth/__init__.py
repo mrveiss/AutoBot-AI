@@ -19,6 +19,7 @@ from autobot_shared.auth.jwt_core import (
     hash_password,
     verify_password,
 )
+from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role  # GH #6511
 
 __all__ = [
     "decode_jwt",
@@ -27,4 +28,7 @@ __all__ = [
     "verify_password",
     "JWTDecodeError",
     "JWTExpiredError",
+    "Permission",
+    "Role",
+    "ROLE_PERMISSIONS",
 ]

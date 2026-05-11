@@ -953,29 +953,28 @@ async def _fetch_and_extract_url(validated_url: str, fallback_title: str) -> "tu
     """Fetch HTML from a validated URL and return (content, title). Ref: #2735.
 
     Raises HTTPException on HTTP error or connection failure.
-    Prevents SSRF via redirect (#1721).
+    SSRF-hardened via fetch_safe_url (#6533): DNS pin + allow_redirects=False.
     """
     import aiohttp
 
+    from autobot_shared.security.ssrf_guard import SSRFError, fetch_safe_url
+
     try:
-        # validated_url comes from validate_url(allow_private=False) + inline
-        # scheme/host guard in add_url_to_knowledge; redirect disabled.
-        # codeql[py/full-ssrf] - SSRF mitigated: scheme/host validated, no redirects
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                validated_url,
-                timeout=aiohttp.ClientTimeout(total=30),
-                allow_redirects=False,  # Prevent SSRF via redirect (#1721)
-            ) as response:
-                if response.status != 200:
-                    raise HTTPException(status_code=400, detail=f"HTTP {response.status}")
-                html_content = await response.text()
-                # Use safe HTML parser instead of regex (Issue #549 Code Review)
-                content, extracted_title = _sanitize_html_content(html_content)
-                title = fallback_title or extracted_title or validated_url
-                return content, title
+        # codeql[py/full-ssrf] - SSRF mitigated by fetch_safe_url (DNS pin, no redirects)
+        status_code, body = await fetch_safe_url(validated_url, timeout_s=30.0)
+    except SSRFError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except aiohttp.ClientError:
         raise HTTPException(status_code=400, detail="Failed to fetch URL")
+
+    if status_code != 200:
+        raise HTTPException(status_code=400, detail=f"HTTP {status_code}")
+
+    html_content = body.decode("utf-8", errors="replace")
+    # Use safe HTML parser instead of regex (Issue #549 Code Review)
+    content, extracted_title = _sanitize_html_content(html_content)
+    title = fallback_title or extracted_title or validated_url
+    return content, title
 
 
 @router.post("/url", response_model=AddUrlResponse)
@@ -995,10 +994,6 @@ async def add_url_to_knowledge(
     Issue #549: Created to match KnowledgeRepository.ts POST /api/knowledge_base/url
     Issue #744: Requires admin authentication.
     """
-    from urllib.parse import urlparse
-
-    from autobot_shared.security.input_sanitizer import validate_url
-
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
@@ -1009,19 +1004,12 @@ async def add_url_to_knowledge(
         autobot_kb_degradation_total.labels(endpoint="url_add", reason="kb_uninit").inc()
         raise InternalError("Knowledge base not initialized")
 
-    try:
-        validated_url = validate_url(request.url, allow_private=False)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Request failed")
+    # SSRF validation (scheme, DNS-resolved private-IP check, redirect guard)
+    # is applied inside _fetch_and_extract_url via fetch_safe_url (#6533).
+    url = str(request.url)
+    logger.info("Fetching content from URL: %s", url)
 
-    # Inline SSRF guard so static analysis can trace the sanitization (#1733)
-    parsed = urlparse(validated_url)
-    if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        raise HTTPException(status_code=400, detail="Request failed")
-
-    logger.info("Fetching content from URL: %s", validated_url)
-
-    content, title = await _fetch_and_extract_url(validated_url, request.title or "")
+    content, title = await _fetch_and_extract_url(url, request.title or "")
 
     url_metadata: dict = {
         "title": title,
