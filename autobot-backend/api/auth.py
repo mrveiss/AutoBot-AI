@@ -8,6 +8,7 @@ Provides login, logout, and session management functionality
 
 import datetime
 import logging
+import os
 from collections import defaultdict
 from time import time
 from typing import Dict, List
@@ -44,6 +45,20 @@ logger = logging.getLogger(__name__)
 # Rate limiting for password change endpoint (stricter limits for security)
 PASSWORD_CHANGE_RATE_WINDOW = 300  # 5 minutes
 PASSWORD_CHANGE_MAX_ATTEMPTS = 5  # max attempts per window
+
+# Issue #6838: explicit opt-in for the single_user synthetic-admin login shortcut.
+# When unset, /login in single_user mode rejects all credentials (matches prod modes).
+_DEV_AUTH_BYPASS_TRUTHY = frozenset({"1", "true", "yes", "on"})
+
+
+def _dev_auth_bypass_enabled() -> bool:
+    """Return True only when AUTOBOT_DEV_AUTH_BYPASS is explicitly truthy.
+
+    Gates the single_user synthetic-admin login shortcut so the unsafe behavior
+    is opt-in. Without the flag, /login behaves like production modes and
+    refuses to mint tokens without a real user store backing the request.
+    """
+    return os.getenv("AUTOBOT_DEV_AUTH_BYPASS", "").strip().lower() in _DEV_AUTH_BYPASS_TRUTHY
 
 
 async def _enrich_user_with_org_context(user_data: Dict) -> Dict:
@@ -150,10 +165,21 @@ async def login(request: Request, login_data: LoginRequest):
 
         # Issue #2953: In single_user mode, skip PostgreSQL and return synthetic admin.
         # The /me and /check endpoints already do this; login must be consistent.
+        # Issue #6838: the bypass is now gated behind AUTOBOT_DEV_AUTH_BYPASS=true so
+        # the default deployment cannot mint admin JWTs without credentials.
         from user_management.config import DeploymentMode, get_deployment_config
 
         deploy_cfg = get_deployment_config()
         if deploy_cfg.mode == DeploymentMode.SINGLE_USER:
+            if not _dev_auth_bypass_enabled():
+                logger.warning(
+                    "Rejected login for %s from %s: AUTOBOT_USER_MODE=single_user "
+                    "without AUTOBOT_DEV_AUTH_BYPASS=true. Set the flag for local "
+                    "dev only, or switch to a real user mode (#6838).",
+                    login_data.username,
+                    ip_address,
+                )
+                raise HTTPException(status_code=401, detail=ERR_INVALID_CREDENTIALS)
             admin_data = {
                 "username": "admin",
                 "user_id": "admin",

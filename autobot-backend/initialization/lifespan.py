@@ -84,6 +84,33 @@ def configure_logging():
     logger.info("📊 Logging level set to: %s (%s)", LOG_LEVEL, LOG_LEVEL_VALUE)
 
 
+def warn_if_dev_auth_bypass_enabled() -> None:
+    """Loud boot-time warning when AUTOBOT_DEV_AUTH_BYPASS=true (Issue #6838).
+
+    The single_user synthetic-admin login shortcut is opt-in. When the flag is
+    set, /api/auth/login mints an admin JWT for any credential pair — which is
+    intended for local development only. Surfaced loudly so operators notice
+    if it leaks into a production deployment.
+    """
+    from api.auth import _dev_auth_bypass_enabled
+
+    if not _dev_auth_bypass_enabled():
+        return
+    banner = "=" * 72
+    logger.warning(banner)
+    logger.warning(
+        "⚠️  AUTOBOT_DEV_AUTH_BYPASS=true — /api/auth/login will mint an admin"
+    )
+    logger.warning(
+        "    JWT for ANY credentials in single_user mode. DO NOT use in"
+    )
+    logger.warning(
+        "    production. Unset the flag or switch AUTOBOT_USER_MODE away from"
+    )
+    logger.warning("    single_user to disable. See issue #6838.")
+    logger.warning(banner)
+
+
 async def _init_cache_coordinator() -> None:
     """Register caches with CacheCoordinator for memory optimization.
 
@@ -1499,6 +1526,7 @@ def create_lifespan_manager():
         # Configure logging
         configure_logging()
         logger.info("🚀 AutoBot Backend starting up...")
+        warn_if_dev_auth_bypass_enabled()
 
         # Create bounded thread pool executor to prevent thread explosion
         # This replaces the default unbounded asyncio executor
