@@ -75,6 +75,28 @@ class WorkflowRunner:
 
     async def execute_workflow(self, plan: WorkflowPlan, _depth: int = 0) -> Dict[str, Any]:
         """Execute a WorkflowPlan through the strategy handler."""
+        # #7431 Phase 3: refuse to execute a plan blocked on async skill
+        # generation. The resume path (BlockedPlanResumer subscriber, lands
+        # in a forthcoming commit) re-invokes execute_workflow once the
+        # awaited skill is promoted via the skill_promoted Redis pub-sub
+        # event. Returning a structured response (rather than raising) lets
+        # the caller decide whether to retry, surface to user, or wait.
+        if plan.status == "blocked":
+            pending_ids = [t.pending_skill_id for t in plan.tasks if t.pending_skill_id]
+            logger.info(
+                "workflow %s is blocked on %d pending skill(s); refusing to execute",
+                plan.plan_id,
+                len(pending_ids),
+            )
+            return {
+                "plan_id": plan.plan_id,
+                "success": False,
+                "status": "blocked",
+                "reason": "blocked_on_skill_generation",
+                "pending_skill_ids": pending_ids,
+                "results": {},
+            }
+
         logger.info("Executing workflow %s strategy=%s", plan.plan_id, plan.strategy.value)
         start_time = time.time()
         results: Dict[str, Any] = {}
@@ -91,6 +113,86 @@ class WorkflowRunner:
 
     async def get_agent_recommendations(self, capabilities_needed: Set) -> List[str]:
         return await self._agent_router.get_agent_recommendations(capabilities_needed)
+
+    async def try_resume_blocked_plan(self, plan_id: str) -> Dict[str, Any]:
+        """Re-attempt skill binding on a BLOCKED plan and execute if it unblocks.
+
+        ADR-006 §Q1 manual resume API. Triggered by:
+        - The auto-subscriber (forthcoming) when a ``skill_promoted`` event
+          fires on Redis pub-sub (registry.register publishes it).
+        - Periodic retry workers, dashboards, or operator commands.
+
+        Behavior:
+        - Plan unknown to active_workflows → ``{"resumed": False, "reason": "plan_not_found"}``.
+        - Plan not BLOCKED → ``{"resumed": False, "reason": "plan_not_blocked"}`` (no-op).
+        - Plan BLOCKED: clear all pending_skill_id values + matching
+          PendingSkillsRegistry entries, set plan.status="pending",
+          re-invoke ``StrategyPlanner.build_workflow_plan`` against the
+          original plan_data — but since plan_data isn't retained, we
+          instead re-run the per-task ``_bind_skill_to_task`` against the
+          current router state. If any task is still unresolved, the plan
+          re-blocks. Otherwise execute_workflow runs.
+        """
+        plan = self.active_workflows.get(plan_id)
+        if plan is None:
+            return {"resumed": False, "reason": "plan_not_found"}
+        if plan.status != "blocked":
+            return {"resumed": False, "reason": "plan_not_blocked"}
+
+        # Clear pending state on every task that was waiting; bind_skill
+        # will be re-attempted below against the current registry.
+        try:
+            from skills.pending_skills import get_pending_skills_registry
+
+            pending_registry = get_pending_skills_registry()
+        except ImportError:
+            pending_registry = None
+        for task in plan.tasks:
+            if task.pending_skill_id:
+                if pending_registry is not None:
+                    pending_registry.clear(task.pending_skill_id)
+                task.pending_skill_id = None
+        plan.status = "pending"
+
+        # Re-attempt skill binding against the current registry. If the
+        # promoted skill addresses the previously-unresolved intent, the
+        # task gets bound; otherwise it goes back to BLOCKED via the
+        # planner's gap-fill path (no infinite loop — gap-fill only fires
+        # when a fresh skill_router lookup still finds no winner).
+        await self._rebind_blocked_tasks(plan)
+
+        if plan.status == "blocked":
+            return {
+                "resumed": False,
+                "reason": "still_missing_skills",
+                "pending_skill_ids": [
+                    t.pending_skill_id for t in plan.tasks if t.pending_skill_id
+                ],
+            }
+
+        result = await self.execute_workflow(plan)
+        return {"resumed": True, "result": result}
+
+    async def _rebind_blocked_tasks(self, plan: WorkflowPlan) -> None:
+        """Re-run ``_bind_skill_to_task`` for every task in a freshly-unblocked
+        plan. Used by ``try_resume_blocked_plan`` to reconcile the plan with
+        the current SkillRegistry contents (which may have grown since the
+        plan was originally constructed)."""
+        any_pending = False
+        for task in plan.tasks:
+            # Reset only the binding fields; leave inputs/dependencies/etc alone.
+            task.skill_name = None
+            task.skill_action = None
+            task.skill_resolution_method = None
+            await self._strategy_planner._bind_skill_to_task(
+                task,
+                {"task": task.action or task.task_id, "skill_action": task.skill_action},
+                plan.goal,
+            )
+            if task.pending_skill_id:
+                any_pending = True
+        if any_pending:
+            plan.status = "blocked"
 
     def get_performance_report(self) -> Dict[str, Any]:
         return {
