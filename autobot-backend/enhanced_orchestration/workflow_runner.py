@@ -52,6 +52,13 @@ class WorkflowRunner:
         self.resource_semaphore: asyncio.Semaphore = asyncio.Semaphore(max_parallel_tasks)
         self._criteria_evaluator = criteria_evaluator or SuccessCriteriaEvaluator()
         self._strategy_handler: Optional[ExecutionStrategyHandler] = None
+        # #7431 ADR-006 §Q1: subscriber that wakes blocked plans when
+        # skill_promoted events arrive on Redis pub-sub. Lazy-constructed
+        # via get_blocked_plan_resumer(); not started automatically — the
+        # orchestrator (or whichever caller owns the lifecycle) must call
+        # start() / stop() to enable auto-resume. Tests that don't need
+        # auto-resume never construct the resumer (zero overhead).
+        self._resumer: Optional[Any] = None
 
     # ------------------------------------------------------------------ helpers
 
@@ -113,6 +120,22 @@ class WorkflowRunner:
 
     async def get_agent_recommendations(self, capabilities_needed: Set) -> List[str]:
         return await self._agent_router.get_agent_recommendations(capabilities_needed)
+
+    def get_blocked_plan_resumer(self) -> Any:
+        """Return the BlockedPlanResumer for this runner (lazy-constructed).
+
+        Caller is responsible for the resumer's lifecycle: call
+        ``await resumer.start()`` to begin auto-resume, ``await
+        resumer.stop()`` for graceful shutdown. The resumer subscribes to
+        the ``skill_promoted`` Redis pub-sub channel and calls
+        ``try_resume_blocked_plan`` for each BLOCKED plan whenever a new
+        skill is promoted. #7431, ADR-006 §Q1.
+        """
+        if self._resumer is None:
+            from enhanced_orchestration.blocked_plan_resumer import BlockedPlanResumer
+
+            self._resumer = BlockedPlanResumer(self)
+        return self._resumer
 
     async def try_resume_blocked_plan(self, plan_id: str) -> Dict[str, Any]:
         """Re-attempt skill binding on a BLOCKED plan and execute if it unblocks.
