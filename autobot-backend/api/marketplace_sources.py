@@ -99,8 +99,6 @@ def _validate_source_name(name: str) -> str:
     return name
 
 
-
-
 @router.get(
     "",
     response_model=MarketplaceSourcesResponse,
@@ -219,9 +217,7 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     timeout = aiohttp.ClientTimeout(total=_FETCH_TIMEOUT_SECONDS)
-    connector = aiohttp.TCPConnector(
-        resolver=safe_aiohttp_resolver(host, safe_ip, port), use_dns_cache=False
-    )
+    connector = aiohttp.TCPConnector(resolver=safe_aiohttp_resolver(host, safe_ip, port), use_dns_cache=False)
     try:
         async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
             # allow_redirects=False — a redirect to an internal IP would bypass
