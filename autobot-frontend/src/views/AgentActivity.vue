@@ -11,7 +11,7 @@
  */
 
 import { ref, onMounted } from 'vue'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('AgentActivity')
@@ -38,7 +38,7 @@ interface SummaryResponse {
   }
 }
 
-const api = useApi()
+const api = useApiClient()
 
 const agents = ref<AgentSummary[]>([])
 const isLoading = ref(false)

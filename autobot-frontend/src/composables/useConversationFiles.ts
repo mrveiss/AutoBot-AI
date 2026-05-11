@@ -6,7 +6,7 @@
  */
 
 import { ref, computed } from 'vue'
-import { useApi } from './useApi'
+import { useApiClient } from '@/plugins/api'
 import { useBatchSelection } from './useBatchSelection'
 import { createLogger } from '@/utils/debugUtils'
 import { extractApiErrorMessage } from '@/utils/errorExtract'
@@ -55,7 +55,7 @@ export interface UploadProgressEvent {
  * @param sessionId - Chat session ID for file operations
  */
 export function useConversationFiles(sessionId: string) {
-  const api = useApi()
+  const api = useApiClient()
 
   // Reactive state
   const files = ref<ConversationFile[]>([])

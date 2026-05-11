@@ -20,7 +20,7 @@
  */
 
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useCodeGenerationData')
@@ -74,7 +74,7 @@ interface RefactoringTypesRaw {
 }
 
 export function useCodeGenerationData(withSourceId: (url: string) => string) {
-  const api = useApi()
+  const api = useApiClient()
 
   // GET: /code-generation/stats — scoped to source via withSourceId (#3436)
   const statsEndpoint = useFetchEndpoint<CodeGenerationStats, CodeGenerationStats>(

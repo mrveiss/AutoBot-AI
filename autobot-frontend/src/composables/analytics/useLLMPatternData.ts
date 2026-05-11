@@ -11,7 +11,7 @@
 
 import { computed } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useLLMPatternData')
@@ -97,7 +97,7 @@ interface CacheOpportunitiesRaw {
 }
 
 export function useLLMPatternData() {
-  const api = useApi()
+  const api = useApiClient()
 
   const statsEndpoint = useFetchEndpoint<StatsRaw, LLMPatternStats>(
     {

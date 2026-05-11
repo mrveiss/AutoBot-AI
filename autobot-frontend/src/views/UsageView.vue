@@ -171,14 +171,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { getApiBase } from '@/config/ssot-config'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('UsageView')
-const api = useApi()
+const api = useApiClient()
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.isAdmin)
 
