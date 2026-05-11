@@ -19,6 +19,7 @@ from typing import Any, Dict, List
 # Add project root to path for imports  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.error_boundaries import ErrorContext  # noqa: E402
 from autobot_shared.error_boundaries import (
     RecoveryStrategy,
@@ -28,7 +29,6 @@ from autobot_shared.error_boundaries import (
     with_error_boundary,
 )
 from constants.threshold_constants import TimingConstants  # noqa: E402
-from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 

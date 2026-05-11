@@ -14,9 +14,9 @@ import logging
 import time
 from typing import Callable
 
-from autobot_shared.async_compat import run_or_schedule
 from fastapi import HTTPException
 
+from autobot_shared.async_compat import run_or_schedule
 from constants.threshold_constants import RetryConfig, exponential_backoff_delay
 
 from .boundary_manager import get_error_boundary_manager
