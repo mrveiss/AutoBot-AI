@@ -7,9 +7,10 @@ Feedback Tracker Tests (Issue #905)
 Tests for feedback tracking and learning loop.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
+from autobot_shared.datetime_utils import datetime_now
 from models.code_pattern import CodePattern
 from models.completion_feedback import CompletionFeedback
 
@@ -17,7 +18,7 @@ from models.completion_feedback import CompletionFeedback
 def test_completion_feedback_model():
     """Test CompletionFeedback model creation."""
     feedback = CompletionFeedback(
-        timestamp=datetime.utcnow(),
+        timestamp=datetime_now(),
         user_id="user123",
         context="def calculate_",
         suggestion="sum(numbers)",
@@ -35,7 +36,7 @@ def test_completion_feedback_to_dict():
     """Test feedback serialization."""
     feedback = CompletionFeedback(
         id=1,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime_now(),
         context="def test():",
         suggestion="pass",
         action="rejected",
