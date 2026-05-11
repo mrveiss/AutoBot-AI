@@ -5,7 +5,6 @@
 Backward Compatibility Wrappers - Drop-in replacements for legacy APIs
 """
 
-import asyncio
 import hashlib
 import logging
 from datetime import datetime, timedelta, timezone

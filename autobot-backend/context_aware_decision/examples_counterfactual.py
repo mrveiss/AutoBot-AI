@@ -10,7 +10,6 @@ to preview consequences before committing to decisions.
 Not included in package; for development and documentation only.
 """
 
-import asyncio
 import time
 
 from autobot_shared.async_compat import run_or_schedule

@@ -17,12 +17,9 @@ Usage:
 """
 
 import argparse
-import asyncio
 import json
 import sys
 import time
-
-from autobot_shared.async_compat import run_or_schedule
 
 from .service_registry import ServiceStatus, get_service_registry, get_service_url
 

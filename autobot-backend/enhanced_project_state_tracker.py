@@ -12,7 +12,6 @@ Part of Issue #381 - God Class Refactoring
 Original file: 1,505 lines → Package with focused modules
 """
 
-import asyncio
 import sys
 
 from autobot_shared.async_compat import run_or_schedule

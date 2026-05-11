@@ -36,9 +36,9 @@ import ipaddress
 import logging
 import re
 import time
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urljoin, urlparse
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+from urllib.parse import urljoin
 
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from media.core.pipeline import BasePipeline
