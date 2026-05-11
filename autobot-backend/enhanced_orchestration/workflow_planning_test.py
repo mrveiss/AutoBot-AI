@@ -168,3 +168,110 @@ async def test_router_unavailable_silent_fallback(monkeypatch, planner, plan_dat
     assert len(plan.tasks) == 2
     for task in plan.tasks:
         assert task.skill_name is None  # legacy capability-based routing intact
+
+
+# ---------------------------------------------------------------------------
+# #7431 Phase 3 — async gap-fill + BLOCKED plan state
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _fresh_pending_skills():
+    """Each Phase 3 test starts with an empty PendingSkillsRegistry."""
+    from skills.pending_skills import reset_pending_skills_registry_for_tests
+
+    reset_pending_skills_registry_for_tests()
+    yield
+    reset_pending_skills_registry_for_tests()
+
+
+@pytest.mark.asyncio
+async def test_no_winner_triggers_async_gap_fill_and_pending_id(planner, plan_data) -> None:
+    """When skill_router returns success=True with enabled_skill=None, the
+    planner triggers Phase 3 async gap-fill and attaches a pending_skill_id
+    to each unbound task."""
+    fake_router = MagicMock()
+    fake_router.execute = AsyncMock(
+        return_value={"success": True, "enabled_skill": None}
+    )
+    planner._skill_router_skill = fake_router
+
+    plan = await planner.build_workflow_plan("goal", plan_data)
+
+    for task in plan.tasks:
+        assert task.skill_name is None
+        assert task.pending_skill_id is not None
+        # IDs are unique per task
+    pids = [t.pending_skill_id for t in plan.tasks]
+    assert len(pids) == len(set(pids))
+
+
+@pytest.mark.asyncio
+async def test_plan_status_blocked_when_any_task_pending(planner, plan_data) -> None:
+    """A plan with at least one pending_skill_id is constructed in BLOCKED state."""
+    fake_router = MagicMock()
+    fake_router.execute = AsyncMock(
+        return_value={"success": True, "enabled_skill": None}
+    )
+    planner._skill_router_skill = fake_router
+
+    plan = await planner.build_workflow_plan("goal", plan_data)
+    assert plan.status == "blocked"
+
+
+@pytest.mark.asyncio
+async def test_plan_status_pending_when_all_tasks_resolve(planner, plan_data) -> None:
+    """When every task gets a skill, plan.status stays at default 'pending'."""
+    fake_router = MagicMock()
+    fake_router.execute = AsyncMock(
+        return_value={"success": True, "enabled_skill": "good_skill", "method": "llm"}
+    )
+    planner._skill_router_skill = fake_router
+
+    plan = await planner.build_workflow_plan("goal", plan_data)
+    assert plan.status == "pending"
+    for task in plan.tasks:
+        assert task.skill_name == "good_skill"
+        assert task.pending_skill_id is None
+
+
+@pytest.mark.asyncio
+async def test_pending_binding_recorded_in_registry(planner, plan_data) -> None:
+    """Each pending_skill_id corresponds to a registered binding in PendingSkillsRegistry."""
+    from skills.pending_skills import get_pending_skills_registry
+
+    fake_router = MagicMock()
+    fake_router.execute = AsyncMock(
+        return_value={"success": True, "enabled_skill": None}
+    )
+    planner._skill_router_skill = fake_router
+
+    plan = await planner.build_workflow_plan("goal", plan_data)
+    registry = get_pending_skills_registry()
+
+    for task in plan.tasks:
+        binding = registry.get(task.pending_skill_id)
+        assert binding is not None
+        assert binding.task_id == task.task_id
+
+
+@pytest.mark.asyncio
+async def test_no_match_unsuccessful_response_does_not_trigger_gap_fill(
+    planner, plan_data
+) -> None:
+    """success=False (router error) does NOT fire gap-fill — pending_skill_id stays None.
+    Phase 3 is only triggered on the explicit "found no skill" outcome
+    (success=True, enabled_skill=None), not on router errors."""
+    from skills.pending_skills import get_pending_skills_registry
+
+    fake_router = MagicMock()
+    fake_router.execute = AsyncMock(
+        return_value={"success": False, "error": "no match"}
+    )
+    planner._skill_router_skill = fake_router
+
+    plan = await planner.build_workflow_plan("goal", plan_data)
+    for task in plan.tasks:
+        assert task.pending_skill_id is None
+    assert plan.status == "pending"  # not blocked
+    assert get_pending_skills_registry().size() == 0

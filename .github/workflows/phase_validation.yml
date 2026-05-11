@@ -101,8 +101,14 @@ jobs:
       run: |
         echo "Running AutoBot Phase Validation System..."
 
-        # Run the validation system
-        python3 autobot-infrastructure/shared/scripts/phase_validation_system.py --output-format json > phase_validation_results.json || echo '{"overall_maturity": 0, "phases": []}' > phase_validation_results.json
+        # Run the validation system in CI mode (#7496): skips
+        # endpoint/service/feature checks that require a live backend stack
+        # (the workflow doesn't ``docker compose up`` first). Structural
+        # file/directory presence is what we can measure pre-deploy.
+        python3 autobot-infrastructure/shared/scripts/phase_validation_system.py \
+          --ci-mode --output-format json \
+          > phase_validation_results.json \
+          || echo '{"overall_maturity": 0, "phases": []}' > phase_validation_results.json
 
         # Display results summary
         echo "## Phase Validation Results" >> $GITHUB_STEP_SUMMARY

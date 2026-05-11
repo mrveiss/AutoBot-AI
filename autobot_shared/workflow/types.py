@@ -128,10 +128,20 @@ class WorkflowTask:
     # ``skill_name`` is the registered skill name; ``skill_action`` is the
     # action to invoke at execute time; ``skill_resolution_method`` records
     # how it was resolved (``"keyword"`` / ``"llm"`` / ``None``).
-    # WorkflowExecutor consumption of these fields is Phase 2 — deferred.
+    # WorkflowExecutor consumes ``skill_name``/``skill_action`` since #7430.
     skill_name: Optional[str] = None
     skill_action: Optional[str] = None
     skill_resolution_method: Optional[str] = None
+
+    # Async gap-fill marker (#7431 Phase 3, ADR-006). Set when the planner
+    # found no matching skill for the task's intent and triggered Phase 3
+    # of ``skill_router`` (research → autonomous-skill-development) as a
+    # background job. The enclosing ``WorkflowPlan.status`` flips to
+    # ``"blocked"`` while at least one task carries this id. Cleared when
+    # the resume path re-binds the task (clears + re-runs ``bind_skills``).
+    # ``skill_name`` and ``pending_skill_id`` are mutually exclusive on a
+    # skill-binding step.
+    pending_skill_id: Optional[str] = None
 
     metadata: Dict[str, Any] = field(default_factory=dict)
 

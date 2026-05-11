@@ -389,6 +389,17 @@ class Orchestrator:
                 raise Exception(f"Failed to connect to Ollama: {ollama_error or 'unknown error'}")
             logger.info("✅ Ollama connection established")
             await self._ensure_working_llm_model()
+            # #7431 ADR-006 §Q1: start the BlockedPlanResumer so plans
+            # blocked on Phase 3 skill generation auto-resume when the
+            # generated skill is promoted (skill_promoted Redis pub-sub).
+            # Best-effort — failures here log but do not block startup
+            # (manual try_resume_blocked_plan still works without the
+            # auto-subscriber).
+            try:
+                await self._runner.get_blocked_plan_resumer().start()
+                logger.info("✅ Blocked-plan resumer subscribed")
+            except Exception as resumer_exc:
+                logger.warning("Blocked-plan resumer failed to start: %s", resumer_exc)
             self.is_running = True
             self.start_time = datetime.now(tz=timezone.utc)
             logger.info("✅ Consolidated Orchestrator initialization complete")
@@ -402,6 +413,12 @@ class Orchestrator:
         if self.active_tasks:
             logger.info("Waiting for %d active tasks to complete...", len(self.active_tasks))
             await asyncio.sleep(TimingConstants.STANDARD_DELAY)
+        # #7431 ADR-006 §Q1: cancel the BlockedPlanResumer subscriber.
+        # Best-effort — never block shutdown on resumer plumbing.
+        try:
+            await self._runner.get_blocked_plan_resumer().stop()
+        except Exception as resumer_exc:
+            logger.debug("Blocked-plan resumer stop warning: %s", resumer_exc)
         try:
             # #6983: LLMService has no cleanup() (provider lifecycle managed elsewhere); drop the call
             await asyncio.gather(

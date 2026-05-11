@@ -385,3 +385,43 @@ def test_lifecycle_methods_inherited_by_subclasses_and_aliases():
     # Smoke-checked by importer; can't run from autobot_shared without deps.
 
     # Subclass would also work — covered by enhanced_orchestration tests.
+
+
+# ---------------------------------------------------------------------------
+# #7431 — pending_skill_id field (async Phase 3 gap-fill marker)
+# ---------------------------------------------------------------------------
+
+
+def test_workflow_task_pending_skill_id_defaults_none():
+    """Default leaves pending_skill_id unset — no behavior change for tasks
+    that never went through Phase 3 gap-fill."""
+    t = WorkflowTask(task_id="t1")
+    assert t.pending_skill_id is None
+
+
+def test_workflow_task_pending_skill_id_explicit_value():
+    """Constructor accepts pending_skill_id directly (planner uses this)."""
+    t = WorkflowTask(task_id="t1", pending_skill_id="gen-abc-123")
+    assert t.pending_skill_id == "gen-abc-123"
+
+
+def test_workflow_task_pending_skill_id_round_trip():
+    """to_dict / from_dict preserves the async gap-fill marker so plans
+    can be persisted while blocked and resumed after restart."""
+    t = WorkflowTask(task_id="t1", pending_skill_id="gen-abc-123")
+    restored = WorkflowTask.from_dict(t.to_dict())
+    assert restored.pending_skill_id == "gen-abc-123"
+
+
+def test_workflow_task_pending_skill_id_independent_of_skill_name():
+    """skill_name and pending_skill_id are independent fields. In practice
+    they are mutually exclusive (planner sets one OR the other) but the
+    dataclass doesn't enforce that — the constraint lives in the planner."""
+    t = WorkflowTask(
+        task_id="t1",
+        skill_name="translation",
+        skill_action="translate",
+        pending_skill_id=None,
+    )
+    assert t.skill_name == "translation"
+    assert t.pending_skill_id is None
