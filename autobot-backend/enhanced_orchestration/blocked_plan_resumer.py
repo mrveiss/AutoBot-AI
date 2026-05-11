@@ -139,9 +139,7 @@ class BlockedPlanResumer:
         # Snapshot blocked plan IDs so concurrent execute_workflow calls
         # can't grow the iteration set mid-loop.
         blocked_plan_ids = [
-            pid
-            for pid, plan in self._runner.active_workflows.items()
-            if getattr(plan, "status", None) == "blocked"
+            pid for pid, plan in self._runner.active_workflows.items() if getattr(plan, "status", None) == "blocked"
         ]
         for plan_id in blocked_plan_ids:
             try:

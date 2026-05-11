@@ -100,9 +100,7 @@ class StrategyPlanner:
         # flip the plan to BLOCKED so the executor refuses to run it. The
         # resume path (BlockedPlanResumer subscriber) re-binds and unblocks
         # once the awaited skill is promoted via skill_promoted Redis pub-sub.
-        plan_status = (
-            "blocked" if any(t.pending_skill_id for t in tasks) else "pending"
-        )
+        plan_status = "blocked" if any(t.pending_skill_id for t in tasks) else "pending"
         if plan_status == "blocked":
             blocked_count = sum(1 for t in tasks if t.pending_skill_id)
             logger.info(

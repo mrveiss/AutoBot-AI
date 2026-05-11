@@ -55,9 +55,7 @@ class PendingSkillsRegistry:
         self._bindings: Dict[str, PendingSkillBinding] = {}
         self._lock = threading.Lock()
 
-    def register(
-        self, intent: str, plan_id: str, task_id: str, **metadata: Any
-    ) -> PendingSkillBinding:
+    def register(self, intent: str, plan_id: str, task_id: str, **metadata: Any) -> PendingSkillBinding:
         """Generate a pending_skill_id and record the binding.
 
         Returns the constructed ``PendingSkillBinding`` so callers can

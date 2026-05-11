@@ -188,9 +188,7 @@ class WorkflowRunner:
             return {
                 "resumed": False,
                 "reason": "still_missing_skills",
-                "pending_skill_ids": [
-                    t.pending_skill_id for t in plan.tasks if t.pending_skill_id
-                ],
+                "pending_skill_ids": [t.pending_skill_id for t in plan.tasks if t.pending_skill_id],
             }
 
         result = await self.execute_workflow(plan)
