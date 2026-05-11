@@ -56,7 +56,7 @@ from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
-from utils.chat_exceptions import get_exceptions_lazy
+from exceptions import get_exceptions_lazy
 
 # Import reusable chat utilities - Phase 1 Utility Extraction
 from utils.chat_utils import (

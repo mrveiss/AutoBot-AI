@@ -45,7 +45,7 @@ from services.audit import AuditAction, audit_record
 from type_defs.common import Metadata
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
-from utils.chat_exceptions import get_exceptions_lazy
+from exceptions import get_exceptions_lazy
 
 # Import reusable chat utilities
 from utils.chat_utils import (
