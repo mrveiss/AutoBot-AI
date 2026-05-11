@@ -297,3 +297,170 @@ async def test_bound_skill_default_action_is_execute():
 
     args, _ = fake_skill.execute.call_args
     assert args[0] == "execute"
+
+
+# ---------------------------------------------------------------------------
+# #7431 Phase 3 — BLOCKED plan refusal + try_resume_blocked_plan
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def _fresh_pending_skills():
+    from skills.pending_skills import reset_pending_skills_registry_for_tests
+
+    reset_pending_skills_registry_for_tests()
+    yield
+    reset_pending_skills_registry_for_tests()
+
+
+@pytest.mark.asyncio
+async def test_execute_workflow_refuses_blocked_plan():
+    """A plan with status='blocked' is refused — strategy handler not invoked."""
+    runner = _make_runner()
+    task = AgentTask(
+        task_id="t1",
+        agent_type="x",
+        action="a",
+        pending_skill_id="pending-abc-123",
+    )
+    plan = _plan(tasks=[task])
+    plan.status = "blocked"
+
+    with patch.object(runner, "_get_strategy_handler") as mock_handler_fn:
+        mock_handler = AsyncMock()
+        mock_handler.execute_by_strategy = AsyncMock(return_value={})
+        mock_handler_fn.return_value = mock_handler
+
+        result = await runner.execute_workflow(plan)
+
+    assert result["success"] is False
+    assert result["status"] == "blocked"
+    assert result["reason"] == "blocked_on_skill_generation"
+    assert result["pending_skill_ids"] == ["pending-abc-123"]
+    mock_handler.execute_by_strategy.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_execute_workflow_collects_all_pending_ids():
+    runner = _make_runner()
+    t1 = AgentTask(task_id="t1", pending_skill_id="pid-1")
+    t2 = AgentTask(task_id="t2", pending_skill_id="pid-2")
+    t3 = AgentTask(task_id="t3", agent_type="x", action="a")
+    plan = _plan(tasks=[t1, t2, t3])
+    plan.status = "blocked"
+
+    result = await runner.execute_workflow(plan)
+    assert result["pending_skill_ids"] == ["pid-1", "pid-2"]
+
+
+@pytest.mark.asyncio
+async def test_try_resume_returns_not_found_for_unknown_plan():
+    runner = _make_runner()
+    result = await runner.try_resume_blocked_plan("no-such-plan")
+    assert result == {"resumed": False, "reason": "plan_not_found"}
+
+
+@pytest.mark.asyncio
+async def test_try_resume_no_op_for_non_blocked_plan():
+    runner = _make_runner()
+    task = AgentTask(task_id="t1", agent_type="x", action="a")
+    plan = _plan(tasks=[task])  # default status='pending'
+    runner.active_workflows[plan.plan_id] = plan
+
+    result = await runner.try_resume_blocked_plan(plan.plan_id)
+    assert result == {"resumed": False, "reason": "plan_not_blocked"}
+
+
+@pytest.mark.asyncio
+async def test_try_resume_clears_pending_re_binds_and_executes(_fresh_pending_skills):
+    """Resume clears pending_skill_ids, re-binds via _bind_skill_to_task,
+    transitions to pending, then executes."""
+    runner = _make_runner()
+    task = AgentTask(
+        task_id="t1",
+        agent_type="x",
+        action="do",
+        pending_skill_id="pid-old-123",
+    )
+    plan = _plan(tasks=[task])
+    plan.status = "blocked"
+    runner.active_workflows[plan.plan_id] = plan
+
+    # Stub strategy_planner._bind_skill_to_task to simulate a successful
+    # re-bind on the previously-blocked task
+    async def fake_bind(t, td, goal):
+        t.skill_name = "newly_promoted"
+        t.skill_action = "execute"
+        t.skill_resolution_method = "llm"
+    runner._strategy_planner._bind_skill_to_task = AsyncMock(side_effect=fake_bind)
+
+    with patch.object(runner, "_get_strategy_handler") as mock_handler_fn:
+        mock_handler = AsyncMock()
+        mock_handler.execute_by_strategy = AsyncMock(
+            return_value={"t1": {"status": "completed"}}
+        )
+        mock_handler_fn.return_value = mock_handler
+
+        with patch("enhanced_orchestration.workflow_runner._get_event_manager") as mock_em:
+            mock_em.return_value.publish = AsyncMock()
+            result = await runner.try_resume_blocked_plan(plan.plan_id)
+
+    assert result["resumed"] is True
+    assert "result" in result
+    assert task.pending_skill_id is None
+    assert task.skill_name == "newly_promoted"
+
+
+@pytest.mark.asyncio
+async def test_try_resume_stays_blocked_when_rebind_finds_no_skill(_fresh_pending_skills):
+    """If re-bind doesn't resolve, plan stays blocked + pending IDs surface."""
+    runner = _make_runner()
+    task = AgentTask(task_id="t1", agent_type="x", action="a", pending_skill_id="pid-old")
+    plan = _plan(tasks=[task])
+    plan.status = "blocked"
+    runner.active_workflows[plan.plan_id] = plan
+
+    # Re-bind sets a new pending_skill_id (still no skill match)
+    async def fake_bind(t, td, goal):
+        t.pending_skill_id = "pid-new-456"
+    runner._strategy_planner._bind_skill_to_task = AsyncMock(side_effect=fake_bind)
+
+    result = await runner.try_resume_blocked_plan(plan.plan_id)
+    assert result["resumed"] is False
+    assert result["reason"] == "still_missing_skills"
+    assert result["pending_skill_ids"] == ["pid-new-456"]
+
+
+@pytest.mark.asyncio
+async def test_try_resume_clears_pending_skills_registry_entry(_fresh_pending_skills):
+    """Clearing pending_skill_id on the task also clears the binding in
+    PendingSkillsRegistry so observability doesn't leak stale entries."""
+    from skills.pending_skills import get_pending_skills_registry
+
+    runner = _make_runner()
+    binding = get_pending_skills_registry().register("intent", "plan-x", "task-x")
+    task = AgentTask(
+        task_id="task-x",
+        agent_type="x",
+        action="a",
+        pending_skill_id=binding.pending_skill_id,
+    )
+    plan = _plan(tasks=[task])
+    plan.plan_id = "plan-x"
+    plan.status = "blocked"
+    runner.active_workflows[plan.plan_id] = plan
+
+    async def fake_bind(t, td, goal):
+        t.skill_name = "good"
+        t.skill_action = "execute"
+    runner._strategy_planner._bind_skill_to_task = AsyncMock(side_effect=fake_bind)
+
+    with patch.object(runner, "_get_strategy_handler") as mock_handler_fn:
+        mock_handler = AsyncMock()
+        mock_handler.execute_by_strategy = AsyncMock(return_value={})
+        mock_handler_fn.return_value = mock_handler
+        with patch("enhanced_orchestration.workflow_runner._get_event_manager") as mock_em:
+            mock_em.return_value.publish = AsyncMock()
+            await runner.try_resume_blocked_plan(plan.plan_id)
+
+    assert get_pending_skills_registry().get(binding.pending_skill_id) is None
