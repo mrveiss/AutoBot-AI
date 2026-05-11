@@ -701,6 +701,11 @@ class UserService(BaseService):
         self.session.add(user_role)
         await self.session.flush()
 
+        # Lazy import avoids the circular dependency: rbac_middleware → UserService → rbac_middleware
+        from user_management.middleware.rbac_middleware import rbac_middleware as _rbac  # noqa: PLC0415
+
+        await _rbac.clear_cache(user_id)
+
         await self._audit_log(
             action=AuditAction.ROLE_ASSIGNED,
             resource_type=AuditResourceType.USER,
@@ -730,6 +735,11 @@ class UserService(BaseService):
 
         await self.session.delete(user_role)
         await self.session.flush()
+
+        # Lazy import avoids the circular dependency: rbac_middleware → UserService → rbac_middleware
+        from user_management.middleware.rbac_middleware import rbac_middleware as _rbac  # noqa: PLC0415
+
+        await _rbac.clear_cache(user_id)
 
         await self._audit_log(
             action=AuditAction.ROLE_REVOKED,
