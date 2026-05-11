@@ -1391,6 +1391,37 @@ class AntiPatternDetector:
             return False
         return bool(set(a.base_classes) & set(b.base_classes))
 
+    @staticmethod
+    def _is_parent_child_pair(a: ClassInfo, b: ClassInfo) -> bool:
+        """#7501: True when one class inherits from the other.
+
+        AST-resolution is local-only — we match by simple class name
+        against the other's ``base_classes`` list. That catches the
+        common direct-inheritance case (``class Child(Parent):``)
+        which is the bulk of the false positives in #6755.
+
+        Indirect inheritance (Parent → Mid → Child) and bases imported
+        under an alias are not caught here; those need cross-file
+        symbol resolution beyond what ``ClassInfo`` records today.
+        """
+        return a.name in b.base_classes or b.name in a.base_classes
+
+    @staticmethod
+    def _is_protocol_impl_pair(a: ClassInfo, b: ClassInfo) -> bool:
+        """#7501: True when one of the pair is a ``typing.Protocol``.
+
+        ``Protocol`` is structural-by-design — any class with matching
+        method names is intended to satisfy it (PEP 544). Flagging this
+        as ``duplicate_class_shape`` produces false positives (e.g.
+        ``ITaskStorage`` Protocol vs ``TaskStorage`` impl in #6755).
+
+        We match "Protocol" anywhere in either class's base_classes
+        list, which covers both the bare ``Protocol`` and the common
+        ``Protocol[T]`` parametrised form (parser drops the subscript
+        and records the bare name).
+        """
+        return "Protocol" in a.base_classes or "Protocol" in b.base_classes
+
     async def _detect_duplicate_enums(self) -> List[AntiPatternInstance]:
         """Cluster enum classes whose value sets overlap above threshold.
 
@@ -1491,6 +1522,17 @@ class AntiPatternDetector:
         for i, (full_a, cls_a, names_a) in enumerate(candidates):
             for full_b, cls_b, names_b in candidates[i + 1 :]:
                 if self._shares_base_class(cls_a, cls_b):
+                    continue
+                # #7501: skip parent ↔ child inheritance pairs. Subclass
+                # method-name overlap with parent is by construction
+                # (override), not a missing-base-class smell.
+                if self._is_parent_child_pair(cls_a, cls_b):
+                    continue
+                # #7501: skip Protocol + structural-impl pairs. ``Protocol``
+                # is designed to be satisfied by structural matching (PEP 544);
+                # an impl class sharing the Protocol's method names is the
+                # intended relationship, not a duplicate.
+                if self._is_protocol_impl_pair(cls_a, cls_b):
                     continue
                 similarity = self._jaccard(names_a, names_b)
                 if similarity < self._SHAPE_JACCARD_THRESHOLD:
