@@ -8,7 +8,10 @@ This module defines specific exception types for better error handling
 and debugging across the AutoBot platform.
 """
 
-from typing import Any, Dict, Optional
+import logging
+from typing import Any, Callable, Dict, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 class AutoBotError(Exception):
@@ -234,6 +237,111 @@ class InternalError(AutoBotError):
         return "An internal error occurred"
 
 
+class NetworkError(AutoBotError):
+    """Base class for network-related errors."""
+
+    def __init__(
+        self,
+        message: str,
+        service: Optional[str] = None,
+        url: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ):
+        """Initialize network error with message, service name, URL, and details."""
+        super().__init__(message, details)
+        self.service = service
+        self.url = url
+        if service:
+            self.details["service"] = service
+        if url:
+            self.details["url"] = url
+
+
+class ServiceUnavailableError(NetworkError):
+    """Raised when an upstream service is unavailable or unreachable."""
+
+
+class ServiceTimeoutError(NetworkError):
+    """Raised when a service request times out."""
+
+
+class HTTPClientError(NetworkError):
+    """Raised for HTTP 4xx client errors from backend services."""
+
+    def __init__(
+        self,
+        message: str,
+        status_code: int,
+        service: Optional[str] = None,
+        url: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ):
+        """Initialize HTTP client error with status code and network details."""
+        super().__init__(message, service, url, details)
+        self.status_code = status_code
+        self.details["status_code"] = status_code
+
+
+class HTTPServerError(NetworkError):
+    """Raised for HTTP 5xx server errors from backend services."""
+
+    def __init__(
+        self,
+        message: str,
+        status_code: int,
+        service: Optional[str] = None,
+        url: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ):
+        """Initialize HTTP server error with status code and network details."""
+        super().__init__(message, service, url, details)
+        self.status_code = status_code
+        self.details["status_code"] = status_code
+
+
+class SubprocessError(AutoBotError):
+    """Raised when a subprocess operation fails."""
+
+    def __init__(
+        self,
+        message: str,
+        command: Optional[str] = None,
+        return_code: Optional[int] = None,
+        stdout: Optional[str] = None,
+        stderr: Optional[str] = None,
+    ):
+        """Initialize subprocess error with command details and output."""
+        super().__init__(message)
+        self.command = command
+        self.return_code = return_code
+        self.stdout = stdout
+        self.stderr = stderr
+        if command:
+            self.details["command"] = command
+        if return_code is not None:
+            self.details["return_code"] = return_code
+
+
+class FileOperationError(AutoBotError):
+    """Raised when a file I/O operation fails."""
+
+    def __init__(
+        self,
+        message: str,
+        file_path: Optional[str] = None,
+        operation: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ):
+        """Initialize file operation error with path, operation type, and details."""
+        super().__init__(message, details)
+        self.file_path = file_path
+        self.operation = operation
+        if file_path:
+            self.details["file_path"] = file_path
+        if operation:
+            self.details["operation"] = operation
+
+
 # Error code mapping for API responses
 ERROR_CODES = {
     ValidationError: 400,
@@ -254,3 +362,28 @@ def get_error_code(error: AutoBotError) -> int:
         if isinstance(error, error_class):
             return code
     return 500  # Default to internal server error
+
+
+def get_exceptions_lazy() -> Tuple[type, type, type, type, Callable[[str], str]]:
+    """
+    Return the canonical exception classes as a tuple.
+
+    Maintained for backward compatibility with callers that use tuple unpacking.
+    New code should import exception classes directly.
+
+    Returns:
+        Tuple of (AutoBotError, InternalError, ResourceNotFoundError,
+                  ValidationError, get_error_code)
+    """
+    return (
+        AutoBotError,
+        InternalError,
+        ResourceNotFoundError,
+        ValidationError,
+        get_error_code,
+    )
+
+
+def log_exception(error: Exception, context: str = "chat") -> None:
+    """Log an exception with context label."""
+    logger.error("[%s] Exception: %s", context, str(error))

@@ -392,13 +392,12 @@ async def test_try_resume_clears_pending_re_binds_and_executes(_fresh_pending_sk
         t.skill_name = "newly_promoted"
         t.skill_action = "execute"
         t.skill_resolution_method = "llm"
+
     runner._strategy_planner._bind_skill_to_task = AsyncMock(side_effect=fake_bind)
 
     with patch.object(runner, "_get_strategy_handler") as mock_handler_fn:
         mock_handler = AsyncMock()
-        mock_handler.execute_by_strategy = AsyncMock(
-            return_value={"t1": {"status": "completed"}}
-        )
+        mock_handler.execute_by_strategy = AsyncMock(return_value={"t1": {"status": "completed"}})
         mock_handler_fn.return_value = mock_handler
 
         with patch("enhanced_orchestration.workflow_runner._get_event_manager") as mock_em:
@@ -423,6 +422,7 @@ async def test_try_resume_stays_blocked_when_rebind_finds_no_skill(_fresh_pendin
     # Re-bind sets a new pending_skill_id (still no skill match)
     async def fake_bind(t, td, goal):
         t.pending_skill_id = "pid-new-456"
+
     runner._strategy_planner._bind_skill_to_task = AsyncMock(side_effect=fake_bind)
 
     result = await runner.try_resume_blocked_plan(plan.plan_id)
@@ -453,6 +453,7 @@ async def test_try_resume_clears_pending_skills_registry_entry(_fresh_pending_sk
     async def fake_bind(t, td, goal):
         t.skill_name = "good"
         t.skill_action = "execute"
+
     runner._strategy_planner._bind_skill_to_task = AsyncMock(side_effect=fake_bind)
 
     with patch.object(runner, "_get_strategy_handler") as mock_handler_fn:
