@@ -9,6 +9,9 @@ decorators and FastAPI dependencies. It integrates with the existing SecurityLay
 for permission checks and audit logging.
 
 Issue #744: Phase 6 - RBAC permission decorators for API endpoints.
+Issue #6511: Permission/Role/ROLE_PERMISSIONS moved to autobot_shared.auth.permissions
+             for cross-service consistency.  This module re-exports them so all
+             existing callers (``from auth_rbac import Permission``) continue to work.
 
 Usage:
     from auth_rbac import require_permission, require_role, Permission
@@ -29,12 +32,16 @@ Usage:
 """
 
 import logging
-from enum import Enum
 from typing import Callable, List, Union
 
 from fastapi import Request
 
 from auth_middleware import get_auth_middleware
+from autobot_shared.auth.permissions import (  # noqa: F401 — re-exported for callers
+    ROLE_PERMISSIONS,
+    Permission,
+    Role,
+)
 from autobot_shared.singleton_factory import lazy_singleton
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
@@ -42,230 +49,6 @@ from utils.catalog_http_exceptions import raise_auth_error
 logger = logging.getLogger(__name__)
 
 _get_security_layer = lazy_singleton(SecurityLayer)
-
-
-class Permission(str, Enum):
-    """
-    Enumeration of all API permissions in the system.
-
-    Naming convention: CATEGORY_RESOURCE_ACTION
-    - CATEGORY: The functional area (API, KNOWLEDGE, ANALYTICS, etc.)
-    - RESOURCE: The specific resource being accessed
-    - ACTION: The operation (READ, WRITE, EXECUTE, DELETE, MANAGE)
-
-    Issue #744: Comprehensive permission definitions for RBAC.
-    """
-
-    # === API Core Permissions ===
-    API_READ = "api.read"
-    API_WRITE = "api.write"
-    API_ADMIN = "api.admin"
-
-    # === Knowledge Base Permissions ===
-    KNOWLEDGE_READ = "knowledge.read"
-    KNOWLEDGE_WRITE = "knowledge.write"
-    KNOWLEDGE_DELETE = "knowledge.delete"
-    KNOWLEDGE_MANAGE = "knowledge.manage"
-
-    # === Analytics Permissions ===
-    ANALYTICS_VIEW = "analytics.view"
-    ANALYTICS_EXPORT = "analytics.export"
-    ANALYTICS_MANAGE = "analytics.manage"
-    ANALYTICS_LOGS = "analytics.logs"
-
-    # === Agent Permissions ===
-    AGENT_VIEW = "agent.view"
-    AGENT_EXECUTE = "agent.execute"
-    AGENT_MANAGE = "agent.manage"
-    AGENT_TERMINAL = "agent.terminal"
-
-    # === Workflow Permissions ===
-    WORKFLOW_VIEW = "workflow.view"
-    WORKFLOW_CREATE = "workflow.create"
-    WORKFLOW_EXECUTE = "workflow.execute"
-    WORKFLOW_MANAGE = "workflow.manage"
-
-    # === File Operations Permissions ===
-    FILES_VIEW = "files.view"
-    FILES_DOWNLOAD = "files.download"
-    FILES_UPLOAD = "files.upload"
-    FILES_DELETE = "files.delete"
-    FILES_MANAGE = "files.manage"
-
-    # === Security Permissions ===
-    SECURITY_VIEW = "security.view"
-    SECURITY_AUDIT = "security.audit"
-    SECURITY_MANAGE = "security.manage"
-
-    # === System Administration Permissions ===
-    ADMIN_USERS_READ = "admin.users.read"
-    ADMIN_USERS_WRITE = "admin.users.write"
-    ADMIN_CONFIG_READ = "admin.config.read"
-    ADMIN_CONFIG_WRITE = "admin.config.write"
-    ADMIN_SYSTEM = "admin.system"
-
-    # === MCP (Model Context Protocol) Permissions ===
-    MCP_READ = "mcp.read"
-    MCP_EXECUTE = "mcp.execute"
-    MCP_MANAGE = "mcp.manage"
-
-    # === Batch Job Permissions ===
-    BATCH_VIEW = "batch.view"
-    BATCH_CREATE = "batch.create"
-    BATCH_EXECUTE = "batch.execute"
-    BATCH_MANAGE = "batch.manage"
-
-    # === Sandbox Permissions ===
-    SANDBOX_VIEW = "sandbox.view"
-    SANDBOX_EXECUTE = "sandbox.execute"
-    SANDBOX_MANAGE = "sandbox.manage"
-
-    # === Shell Execution (Dangerous) ===
-    SHELL_EXECUTE = "allow_shell_execute"
-
-
-class Role(str, Enum):
-    """
-    Standard roles in the AutoBot system.
-
-    Issue #744: Role definitions for RBAC.
-    """
-
-    ADMIN = "admin"
-    OPERATOR = "operator"
-    ANALYST = "analyst"
-    EDITOR = "editor"
-    USER = "user"
-    READONLY = "readonly"
-
-
-# Role-to-permission mappings
-# These extend the SecurityLayer defaults with API-specific permissions
-ROLE_PERMISSIONS: dict = {
-    Role.ADMIN: [
-        # Admin has all permissions
-        Permission.API_READ,
-        Permission.API_WRITE,
-        Permission.API_ADMIN,
-        Permission.KNOWLEDGE_READ,
-        Permission.KNOWLEDGE_WRITE,
-        Permission.KNOWLEDGE_DELETE,
-        Permission.KNOWLEDGE_MANAGE,
-        Permission.ANALYTICS_VIEW,
-        Permission.ANALYTICS_EXPORT,
-        Permission.ANALYTICS_MANAGE,
-        Permission.ANALYTICS_LOGS,
-        Permission.AGENT_VIEW,
-        Permission.AGENT_EXECUTE,
-        Permission.AGENT_MANAGE,
-        Permission.AGENT_TERMINAL,
-        Permission.WORKFLOW_VIEW,
-        Permission.WORKFLOW_CREATE,
-        Permission.WORKFLOW_EXECUTE,
-        Permission.WORKFLOW_MANAGE,
-        Permission.FILES_VIEW,
-        Permission.FILES_DOWNLOAD,
-        Permission.FILES_UPLOAD,
-        Permission.FILES_DELETE,
-        Permission.FILES_MANAGE,
-        Permission.SECURITY_VIEW,
-        Permission.SECURITY_AUDIT,
-        Permission.SECURITY_MANAGE,
-        Permission.ADMIN_USERS_READ,
-        Permission.ADMIN_USERS_WRITE,
-        Permission.ADMIN_CONFIG_READ,
-        Permission.ADMIN_CONFIG_WRITE,
-        Permission.ADMIN_SYSTEM,
-        Permission.MCP_READ,
-        Permission.MCP_EXECUTE,
-        Permission.MCP_MANAGE,
-        Permission.BATCH_VIEW,
-        Permission.BATCH_CREATE,
-        Permission.BATCH_EXECUTE,
-        Permission.BATCH_MANAGE,
-        Permission.SANDBOX_VIEW,
-        Permission.SANDBOX_EXECUTE,
-        Permission.SANDBOX_MANAGE,
-        Permission.SHELL_EXECUTE,
-    ],
-    Role.OPERATOR: [
-        # Operators can execute but not manage
-        Permission.API_READ,
-        Permission.API_WRITE,
-        Permission.KNOWLEDGE_READ,
-        Permission.KNOWLEDGE_WRITE,
-        Permission.ANALYTICS_VIEW,
-        Permission.ANALYTICS_EXPORT,
-        Permission.AGENT_VIEW,
-        Permission.AGENT_EXECUTE,
-        Permission.WORKFLOW_VIEW,
-        Permission.WORKFLOW_CREATE,
-        Permission.WORKFLOW_EXECUTE,
-        Permission.FILES_VIEW,
-        Permission.FILES_DOWNLOAD,
-        Permission.FILES_UPLOAD,
-        Permission.MCP_READ,
-        Permission.MCP_EXECUTE,
-        Permission.BATCH_VIEW,
-        Permission.BATCH_CREATE,
-        Permission.BATCH_EXECUTE,
-        Permission.SANDBOX_VIEW,
-        Permission.SANDBOX_EXECUTE,
-    ],
-    Role.ANALYST: [
-        # Analysts focus on analytics and viewing
-        Permission.API_READ,
-        Permission.KNOWLEDGE_READ,
-        Permission.ANALYTICS_VIEW,
-        Permission.ANALYTICS_EXPORT,
-        Permission.ANALYTICS_LOGS,
-        Permission.AGENT_VIEW,
-        Permission.WORKFLOW_VIEW,
-        Permission.FILES_VIEW,
-        Permission.FILES_DOWNLOAD,
-        Permission.SECURITY_VIEW,
-        Permission.MCP_READ,
-        Permission.BATCH_VIEW,
-    ],
-    Role.EDITOR: [
-        # Editors can create and modify content
-        Permission.API_READ,
-        Permission.API_WRITE,
-        Permission.KNOWLEDGE_READ,
-        Permission.KNOWLEDGE_WRITE,
-        Permission.ANALYTICS_VIEW,
-        Permission.AGENT_VIEW,
-        Permission.WORKFLOW_VIEW,
-        Permission.WORKFLOW_CREATE,
-        Permission.FILES_VIEW,
-        Permission.FILES_DOWNLOAD,
-        Permission.FILES_UPLOAD,
-        Permission.MCP_READ,
-        Permission.BATCH_VIEW,
-        Permission.BATCH_CREATE,
-    ],
-    Role.USER: [
-        # Standard users have basic access
-        Permission.API_READ,
-        Permission.KNOWLEDGE_READ,
-        Permission.ANALYTICS_VIEW,
-        Permission.AGENT_VIEW,
-        Permission.WORKFLOW_VIEW,
-        Permission.FILES_VIEW,
-        Permission.FILES_DOWNLOAD,
-        Permission.MCP_READ,
-        Permission.BATCH_VIEW,
-    ],
-    Role.READONLY: [
-        # Readonly users can only view
-        Permission.API_READ,
-        Permission.KNOWLEDGE_READ,
-        Permission.ANALYTICS_VIEW,
-        Permission.AGENT_VIEW,
-        Permission.WORKFLOW_VIEW,
-        Permission.FILES_VIEW,
-    ],
-}
 
 
 def _get_user_permissions(user_role: str) -> List[str]:

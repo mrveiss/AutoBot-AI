@@ -2,13 +2,15 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Shared authentication utilities for AutoBot (#3840).
+Shared authentication utilities for AutoBot (#3840, #6511).
 
-Provides the JWT encode/decode core and bcrypt password helpers used by
-both autobot-backend and autobot-slm-backend to eliminate duplication.
+Provides the JWT encode/decode core, bcrypt password helpers, and the
+canonical Permission/Role/ROLE_PERMISSIONS definitions used by both
+autobot-backend and autobot-slm-backend.
 
 Usage:
     from autobot_shared.auth import decode_jwt, encode_jwt, hash_password, verify_password
+    from autobot_shared.auth import Permission, Role, ROLE_PERMISSIONS
 """
 
 from autobot_shared.auth.jwt_core import (
@@ -19,6 +21,11 @@ from autobot_shared.auth.jwt_core import (
     hash_password,
     verify_password,
 )
+from autobot_shared.auth.permissions import (
+    ROLE_PERMISSIONS,
+    Permission,
+    Role,
+)
 
 __all__ = [
     "decode_jwt",
@@ -27,4 +34,7 @@ __all__ = [
     "verify_password",
     "JWTDecodeError",
     "JWTExpiredError",
+    "Permission",
+    "Role",
+    "ROLE_PERMISSIONS",
 ]
