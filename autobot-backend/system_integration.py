@@ -8,8 +8,6 @@ import platform
 import subprocess  # nosec B404 - required for system commands
 from typing import Any, Dict, List, Optional
 
-import aiohttp  # Import aiohttp for async web fetching
-
 # #7166: markdownify is an optional dependency. Hard-import made the whole
 # module unimportable in any environment that didn't install it (any module
 # that imports SystemIntegration inherited the requirement). Use the
@@ -21,7 +19,6 @@ from autobot_shared.missing_dep import optional_import
 globals().update(optional_import("markdownify", ["markdownify"]))
 md = markdownify  # type: ignore[name-defined]  # noqa: F821 — populated by optional_import
 
-from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 

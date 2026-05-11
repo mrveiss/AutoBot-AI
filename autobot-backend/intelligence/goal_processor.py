@@ -8,7 +8,6 @@ This module processes natural language goals and converts them into
 structured intents for the intelligent agent system.
 """
 
-import asyncio
 import logging
 import re
 from dataclasses import dataclass, field

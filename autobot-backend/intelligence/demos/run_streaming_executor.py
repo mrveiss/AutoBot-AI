@@ -25,7 +25,6 @@ for _p in (_BACKEND, _REPO_ROOT):
         sys.path.insert(0, _ps)
 # ---------------------------------------------------------------------------
 
-import asyncio  # noqa: E402  (must follow sys.path bootstrap)
 import logging  # noqa: E402
 
 from autobot_shared.async_compat import run_or_schedule

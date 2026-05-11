@@ -20,7 +20,6 @@ Usage:
 """
 
 import argparse
-import asyncio
 import logging
 import sys
 from pathlib import Path
@@ -31,7 +30,6 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from autobot_shared.async_compat import run_or_schedule
 from pki.manager import PKIManager, setup_pki
 
 logging.basicConfig(

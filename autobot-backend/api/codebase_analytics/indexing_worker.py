@@ -12,7 +12,6 @@ Usage (internal — called by _run_indexing_subprocess):
     python indexing_worker.py <task_id> <root_path> [source_id]
 """
 
-import asyncio
 import logging
 import os
 import sys
