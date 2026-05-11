@@ -31,6 +31,7 @@ from models.heartbeat import (
     HeartbeatRunStatus,
     WakeupTrigger,
 )
+from services.run_jwt import mint_run_jwt, revoke_run_jwt
 
 logger = logging.getLogger(__name__)
 
@@ -149,12 +150,12 @@ class HeartbeatScheduler:
 
     async def _run_once(self, agent_id: str, trigger: WakeupTrigger) -> None:
         """Execute one heartbeat run for agent_id (#1407)."""
-        run_id, state_id, timeout = await self._start_run(agent_id, trigger)
-        final_status, error_msg, usage = await self._invoke_agent(agent_id, state_id, run_id, timeout)
-        await self._finalize_run(agent_id, run_id, state_id, final_status, error_msg, usage)
+        run_id, state_id, timeout, run_jwt = await self._start_run(agent_id, trigger)
+        final_status, error_msg, usage = await self._invoke_agent(agent_id, state_id, run_id, timeout, run_jwt)
+        await self._finalize_run(agent_id, run_id, state_id, final_status, error_msg, usage, run_jwt)
 
-    async def _start_run(self, agent_id: str, trigger: WakeupTrigger) -> Tuple[uuid.UUID, uuid.UUID, int]:
-        """Create HeartbeatRun row; consume any pending wakeup request (#1407)."""
+    async def _start_run(self, agent_id: str, trigger: WakeupTrigger) -> Tuple[uuid.UUID, uuid.UUID, int, str]:
+        """Create HeartbeatRun row; consume any pending wakeup request; mint run JWT (#1407, SEC-2)."""
         async with self._session_factory() as session:
             state = await _get_or_create_state(session, agent_id)
             wakeup_req = await _consume_top_wakeup(session, agent_id)
@@ -175,13 +176,21 @@ class HeartbeatScheduler:
             timeout = state.max_run_duration_seconds or _DEFAULT_MAX_DURATION_SECONDS
             await _append_event(session, run_id, "run_started", "Heartbeat run started")
             await session.commit()
+
+        # Mint run-scoped JWT (SEC-2 #6473)
+        try:
+            run_jwt = await mint_run_jwt(run_id, uuid.UUID(agent_id))
+        except Exception as exc:
+            logger.error(f"Failed to mint run JWT for run {run_id}: {exc}")
+            run_jwt = ""
+
         logger.info("Heartbeat run %s started for agent %s", run_id, agent_id)
         await publish_live_event(
             f"heartbeat:{agent_id}",
             HEARTBEAT_RUN_STARTED,
             {"run_id": str(run_id), "agent_id": agent_id, "trigger": trigger.value},
         )
-        return run_id, state_id, timeout
+        return run_id, state_id, timeout, run_jwt
 
     async def _invoke_agent(
         self,
@@ -189,10 +198,11 @@ class HeartbeatScheduler:
         state_id: uuid.UUID,
         run_id: uuid.UUID,
         timeout: int,
+        run_jwt: str,
     ) -> Tuple[str, Optional[str], Dict[str, Any]]:
         """Run _execute_agent with timeout; return (status, error, usage) (#1407)."""
         try:
-            result = await asyncio.wait_for(self._execute_agent(agent_id, state_id, run_id), timeout=timeout)
+            result = await asyncio.wait_for(self._execute_agent(agent_id, state_id, run_id, run_jwt), timeout=timeout)
             return HeartbeatRunStatus.COMPLETED.value, None, result or {}
         except asyncio.TimeoutError:
             logger.warning("Heartbeat run %s timed out for agent %s", run_id, agent_id)
@@ -213,8 +223,16 @@ class HeartbeatScheduler:
         final_status: str,
         error_msg: Optional[str],
         usage: Dict[str, Any],
+        run_jwt: str,
     ) -> None:
-        """Persist run outcome and update agent runtime state (#1407)."""
+        """Persist run outcome and update agent runtime state; revoke run JWT (SEC-2)."""
+        # Revoke the run JWT to prevent reuse (SEC-2 #6473)
+        if run_jwt:
+            try:
+                await revoke_run_jwt(run_jwt)
+            except Exception as exc:
+                logger.warning(f"Failed to revoke run JWT for run {run_id}: {exc}")
+
         async with self._session_factory() as session:
             run_row = await session.get(HeartbeatRun, run_id)
             if run_row:
@@ -251,14 +269,16 @@ class HeartbeatScheduler:
         )
         logger.info("Run %s finished: status=%s agent=%s", run_id, final_status, agent_id)
 
-    async def _execute_agent(self, agent_id: str, state_id: uuid.UUID, run_id: uuid.UUID) -> Dict[str, Any]:
+    async def _execute_agent(self, agent_id: str, state_id: uuid.UUID, run_id: uuid.UUID, run_jwt: str) -> Dict[str, Any]:
         """
         Execute agent work for one heartbeat tick (#1407).
 
         Integration point for process adapter execution (see #1406).
+        Passes run-scoped JWT via AUTOBOT_RUN_JWT env var (SEC-2 #6473).
         Returns dict with optional: tokens_used, cost_usd, model, provider, session_params.
         """
         logger.debug("Agent %s tick (run %s) - no adapter bound", agent_id, run_id)
+        # Adapter execution will pass run_jwt via AUTOBOT_RUN_JWT env var
         return {}
 
 
