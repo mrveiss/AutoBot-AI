@@ -12,7 +12,6 @@ import logging
 import os
 import platform
 import subprocess  # nosec B404 - hardware detection requires subprocess
-from enum import Enum
 from typing import Any, Dict
 
 import psutil
@@ -65,12 +64,13 @@ def _parse_nvidia_smi_output(output: str) -> Dict[str, Dict[str, Any]]:
     return devices
 
 
-class AccelerationType(Enum):
-    """Hardware acceleration types in priority order."""
-
-    NPU = "npu"
-    GPU = "gpu"
-    CPU = "cpu"
+# #6755 round 3: ``AccelerationType`` was a duplicate of
+# ``ai_hardware_accelerator.HardwareDevice`` (Jaccard 1.0 — same
+# NPU/GPU/CPU values, just different class name). Re-export the canonical
+# type so the two surfaces stay in sync. ``AccelerationType.NPU`` etc.
+# at call sites continue to work unchanged because ``AccelerationType``
+# IS ``HardwareDevice`` after this re-export.
+from ai_hardware_accelerator import HardwareDevice as AccelerationType  # noqa: E402
 
 
 class HardwareAccelerationManager:

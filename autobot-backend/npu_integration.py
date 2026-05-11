@@ -14,7 +14,6 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
-from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
 
 import yaml
@@ -22,7 +21,12 @@ import yaml
 if TYPE_CHECKING:
     from utils.service_client import ServiceHTTPClient
 
+# #6755 round 3: CircuitState was duplicated here (Jaccard 1.0 vs
+# circuit_breaker.CircuitState — same CLOSED/OPEN/HALF_OPEN values).
+# Re-export the canonical type instead of redefining locally so callers
+# keep working unchanged and worker-health code shares one source of truth.
 from autobot_shared.http_client import HTTPClientManager, get_http_client
+from circuit_breaker import CircuitState
 from constants.threshold_constants import LLMDefaults, TimingConstants
 from utils.service_registry import get_service_url
 
@@ -33,12 +37,10 @@ logger = logging.getLogger(__name__)
 USE_AUTHENTICATED_CLIENT = True
 
 
-class CircuitState(Enum):
-    """Circuit breaker states for worker health management"""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Worker failed, blocking requests
-    HALF_OPEN = "half_open"  # Testing recovery
+# #6755 round 3: ``CircuitState`` is now re-exported from
+# ``circuit_breaker`` at module top — same enum values (closed / open /
+# half_open), used here for worker health management. The local
+# redefinition was flagged Jaccard 1.0 by the cross-file analyzer.
 
 
 @dataclass
