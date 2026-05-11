@@ -27,8 +27,8 @@ from urllib.parse import urlparse
 
 import aiohttp
 
-from autobot_shared.http_client import get_http_client
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 

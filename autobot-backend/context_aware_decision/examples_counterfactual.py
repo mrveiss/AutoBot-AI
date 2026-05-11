@@ -13,11 +13,12 @@ Not included in package; for development and documentation only.
 import asyncio
 import time
 
+from autobot_shared.async_compat import run_or_schedule
+
 from .counterfactual_reasoner import CounterfactualReasoner
 from .decision_engine import DecisionEngine
 from .models import ContextElement, DecisionContext
 from .types import ContextType, DecisionType
-from autobot_shared.async_compat import run_or_schedule
 
 # =============================================================================
 # Example 1: Network Timeout Scenario

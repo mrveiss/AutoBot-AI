@@ -23,6 +23,7 @@ import redis.asyncio as redis
 from fastapi import APIRouter, BackgroundTasks, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from autobot_shared.async_compat import run_or_schedule
 from constants.network_constants import ServiceURLs
 from constants.threshold_constants import TimingConstants
 from utils.catalog_http_exceptions import (
@@ -40,7 +41,6 @@ from .long_running_operations_framework import (
     execute_codebase_indexing,
     execute_comprehensive_test_suite,
 )
-from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 

@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 
 from agents.classification_agent import ClassificationResult
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.http_client import get_http_client
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import (
@@ -25,7 +26,6 @@ from workflow_classifier import WorkflowClassifier
 
 from .base_agent import AgentRequest
 from .standardized_agent import StandardizedAgent
-from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 

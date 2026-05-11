@@ -15,9 +15,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_24_HOURS
-from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 

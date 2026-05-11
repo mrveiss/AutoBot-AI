@@ -130,7 +130,7 @@ class TestSetCachedResult:
 
 class TestMaxBytesResolver:
     def test_default_max_bytes(self) -> None:
-        from web_fetch.cache import _resolve_max_bytes, _DEFAULT_MAX_BYTES
+        from web_fetch.cache import _DEFAULT_MAX_BYTES, _resolve_max_bytes
 
         with patch.dict(os.environ, {}, clear=False):
             env = {k: v for k, v in os.environ.items() if k != "AUTOBOT_WEB_FETCH_MAX_BYTES"}
@@ -146,7 +146,7 @@ class TestMaxBytesResolver:
         assert result == 5242880
 
     def test_invalid_falls_back(self) -> None:
-        from web_fetch.cache import _resolve_max_bytes, _DEFAULT_MAX_BYTES
+        from web_fetch.cache import _DEFAULT_MAX_BYTES, _resolve_max_bytes
 
         with patch.dict(os.environ, {"AUTOBOT_WEB_FETCH_MAX_BYTES": "nope"}):
             result = _resolve_max_bytes()

@@ -18,6 +18,8 @@ import logging
 import time
 from typing import Any, Dict, List
 
+from autobot_shared.async_compat import run_or_schedule
+
 # Issue #394: Import from architectural_analysis package
 from .architectural_analysis import (
     ArchitecturalComponent,
@@ -28,7 +30,6 @@ from .architectural_analysis import (
     IssueDetector,
     PatternDetector,
 )
-from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 

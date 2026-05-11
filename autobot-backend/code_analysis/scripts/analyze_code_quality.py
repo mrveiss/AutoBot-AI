@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 
 from code_quality_dashboard import CodeQualityDashboard
+
 from autobot_shared.async_compat import run_or_schedule
 
 

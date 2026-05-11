@@ -19,8 +19,8 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
-from constants.threshold_constants import TimingConstants
 from autobot_shared.async_compat import run_or_schedule
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 

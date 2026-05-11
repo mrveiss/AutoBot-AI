@@ -15,6 +15,7 @@ import logging
 from pathlib import Path
 
 from code_analyzer import CodeAnalyzer
+
 from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
