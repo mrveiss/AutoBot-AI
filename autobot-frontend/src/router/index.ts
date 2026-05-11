@@ -686,6 +686,18 @@ export const routes: RouteRecordRaw[] = [
       requiresAuth: true,
     },
   },
+  // Issue #6590: Virtual LLM API Keys admin view
+  {
+    path: '/admin/llm-keys',
+    name: 'llm-api-keys',
+    component: () => import('@/views/LLMApiKeysView.vue'),
+    meta: {
+      title: 'LLM API Keys',
+      description: 'Manage virtual LLM API keys with per-key budgets',
+      requiresAuth: true,
+      admin: true,
+    },
+  },
   // Issue #1801: Admin User Management
   {
     path: '/admin/users',

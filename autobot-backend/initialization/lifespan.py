@@ -1143,6 +1143,24 @@ async def _init_voice_interface(app: FastAPI) -> None:
         app.state.voice_interface = None
 
 
+async def _init_llm_key_rotation_scheduler(app: FastAPI) -> None:
+    """Start LLM API key expiry rotation scheduler (issue #6590).
+
+    NON-CRITICAL: key expiry rotation not required for request handling.
+    """
+    logger.info("[100%%] LLM Key Rotation: Initializing...")
+    try:
+        from services.llm_key_rotation_scheduler import get_llm_key_rotation_scheduler
+
+        scheduler = get_llm_key_rotation_scheduler()
+        await scheduler.start()
+        app.state.llm_key_rotation_scheduler = scheduler
+        logger.info("[100%%] LLM Key Rotation: Scheduler started")
+    except Exception as e:
+        logger.warning("LLM key rotation scheduler initialization failed (non-critical): %s", e)
+        app.state.llm_key_rotation_scheduler = None
+
+
 async def _init_backup_scheduler(app: FastAPI) -> None:
     """Start the knowledge-base backup scheduler (issue #3294).
 
@@ -1380,6 +1398,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_web_researcher(app)
         await _init_plugin_manager(app)
         await _init_backup_scheduler(app)
+        await _init_llm_key_rotation_scheduler(app)
         await _start_autonomous_loop(app)
         await _start_community_clustering_loop(app)
 
@@ -1457,6 +1476,11 @@ async def cleanup_services(app: FastAPI):
         if hasattr(app.state, "backup_scheduler") and app.state.backup_scheduler:
             await app.state.backup_scheduler.stop()
             logger.info("✅ Backup scheduler stopped")
+
+        # Issue #6590: Stop LLM key rotation scheduler
+        if hasattr(app.state, "llm_key_rotation_scheduler") and app.state.llm_key_rotation_scheduler:
+            await app.state.llm_key_rotation_scheduler.stop()
+            logger.info("✅ LLM key rotation scheduler stopped")
 
         # Issue #4946: Cancel community clustering background task
         task = getattr(app.state, "community_cluster_task", None)
