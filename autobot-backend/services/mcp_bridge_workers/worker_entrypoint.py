@@ -46,6 +46,54 @@ _JWT_ENFORCE = os.environ.get("MCP_RUN_JWT_ENFORCE", "1") == "1"
 
 _JSONRPC = "2.0"
 
+# Maps each known MCP tool name to the JWT scope it requires.
+# Tools absent from this dict are unrestricted (no scope check performed).
+TOOL_REQUIRED_SCOPE: Dict[str, str] = {
+    # mcp:filesystem — local filesystem bridge
+    "read_text_file": "mcp:filesystem",
+    "read_media_file": "mcp:filesystem",
+    "read_multiple_files": "mcp:filesystem",
+    "write_file": "mcp:filesystem",
+    "edit_file": "mcp:filesystem",
+    "create_directory": "mcp:filesystem",
+    "list_directory": "mcp:filesystem",
+    "list_directory_with_sizes": "mcp:filesystem",
+    "list_allowed_directories": "mcp:filesystem",
+    "move_file": "mcp:filesystem",
+    "search_files": "mcp:filesystem",
+    "directory_tree": "mcp:filesystem",
+    "get_file_info": "mcp:filesystem",
+    # mcp:knowledge — knowledge-base bridge
+    "search_knowledge_base": "mcp:knowledge",
+    "add_to_knowledge_base": "mcp:knowledge",
+    "get_knowledge_stats": "mcp:knowledge",
+    "summarize_knowledge_topic": "mcp:knowledge",
+    "vector_similarity_search": "mcp:knowledge",
+    "langchain_qa_chain": "mcp:knowledge",
+    "extract_structured_data": "mcp:knowledge",
+    "redis_vector_operations": "mcp:knowledge",
+    # mcp:web_fetch — outbound web / browser bridge
+    "scrape_url": "mcp:web_fetch",
+    "crawl_site": "mcp:web_fetch",
+    "map_site": "mcp:web_fetch",
+    "get": "mcp:web_fetch",
+    "post": "mcp:web_fetch",
+    "put": "mcp:web_fetch",
+    "patch": "mcp:web_fetch",
+    "delete": "mcp:web_fetch",
+    "head": "mcp:web_fetch",
+    "navigate": "mcp:web_fetch",
+    "click": "mcp:web_fetch",
+    "fill": "mcp:web_fetch",
+    "screenshot": "mcp:web_fetch",
+    "evaluate": "mcp:web_fetch",
+    "wait_for_selector": "mcp:web_fetch",
+    "get_text": "mcp:web_fetch",
+    "get_attribute": "mcp:web_fetch",
+    "select": "mcp:web_fetch",
+    "hover": "mcp:web_fetch",
+}
+
 
 def _apply_rlimits() -> None:
     """Apply RLIMIT_CPU, RLIMIT_AS, RLIMIT_NOFILE from env (#3229)."""
@@ -142,7 +190,7 @@ async def _handle_request(bridge: Any, req: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     try:
-        await _validate_run_jwt_param(params)
+        claims = await _validate_run_jwt_param(params)
     except PermissionError as exc:
         logger.warning("worker: JWT auth rejected: %s", exc)
         return {
@@ -153,6 +201,27 @@ async def _handle_request(bridge: Any, req: Dict[str, Any]) -> Dict[str, Any]:
 
     tool = params.get("tool")
     args = params.get("arguments") or {}
+
+    if claims is not None:
+        required_scope = TOOL_REQUIRED_SCOPE.get(tool)
+        if required_scope is not None:
+            token_scopes = claims.get("scope") or []
+            if required_scope not in token_scopes:
+                logger.warning(
+                    "worker: insufficient scope for tool %r (need %r, have %r)",
+                    tool,
+                    required_scope,
+                    token_scopes,
+                )
+                return {
+                    "jsonrpc": _JSONRPC,
+                    "id": req_id,
+                    "error": {
+                        "code": -32001,
+                        "message": f"insufficient scope: {required_scope} required for {tool}",
+                    },
+                }
+
     try:
         result = await _invoke_tool(bridge, tool, args)
         return {"jsonrpc": _JSONRPC, "id": req_id, "result": result}
