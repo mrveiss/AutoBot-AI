@@ -1,8 +1,11 @@
 /**
  * Vue Composable for API Client Access
  *
- * This composable provides a clean way to access the centralized API client
- * in Vue 3 Composition API, with TypeScript support and error handling.
+ * @deprecated This composable family is deprecated. Migrate to the canonical alternatives:
+ * - Data loading (GET): use `useFetchEndpoint` from `@/composables/api/useFetchEndpoint`
+ * - Imperative HTTP calls (POST/DELETE/mutations): use `useApiClient()` from `@/plugins/api`
+ *
+ * Sunset: Q3 2026. See GitHub issue #6487 for migration guide.
  */
 
 import { inject } from 'vue'
@@ -16,6 +19,9 @@ const logger = createLogger('useApi')
 
 /**
  * Composable to access the centralized API client
+ *
+ * @deprecated Use `useApiClient()` from `@/plugins/api` for imperative HTTP calls,
+ * or `useFetchEndpoint` from `@/composables/api/useFetchEndpoint` for data loading.
  *
  * @returns {ApiClientType} The configured API client instance
  * @throws {Error} If API client is not available (plugin not installed)
@@ -35,6 +41,8 @@ export function useApi(): ApiClientType {
 
 /**
  * Composable for API calls with built-in error handling and loading states
+ *
+ * @deprecated Use `useFetchEndpoint({ onError, fallbackData })` from `@/composables/api/useFetchEndpoint`.
  *
  * @returns Object with API client and utility functions
  */
@@ -134,6 +142,8 @@ export function useApiWithState() {
 /**
  * Composable for chat-related API calls
  *
+ * @deprecated Use `useFetchEndpoint` for data loading or `useApiClient()` for imperative calls.
+ *
  * @returns Object with chat-specific API methods
  */
 export function useChatApi() {
@@ -224,6 +234,8 @@ export function useChatApi() {
 /**
  * Composable for settings-related API calls
  *
+ * @deprecated Use `useFetchEndpoint` for data loading or `useApiClient()` for imperative calls.
+ *
  * @returns Object with settings-specific API methods
  */
 export function useSettingsApi() {
@@ -286,6 +298,8 @@ export function useSettingsApi() {
 
 /**
  * Composable for knowledge base API calls
+ *
+ * @deprecated Use `useFetchEndpoint` for data loading or `useApiClient()` for imperative calls.
  */
 export function useKnowledgeApi() {
   const { api, withErrorHandling } = useApiWithState()
@@ -352,6 +366,8 @@ export function useKnowledgeApi() {
 
 /**
  * Composable for connection testing and status
+ *
+ * @deprecated Use `useApiClient()` from `@/plugins/api` for direct API access.
  */
 export function useConnectionStatus() {
   const { api, withErrorHandling } = useApiWithState()
@@ -404,6 +420,8 @@ export function useConnectionStatus() {
 
 /**
  * Composable for file management operations
+ *
+ * @deprecated Use `useFetchEndpoint` for data loading or `useApiClient()` for imperative calls.
  */
 export function useFileApi() {
   const { api, withErrorHandling } = useApiWithState()

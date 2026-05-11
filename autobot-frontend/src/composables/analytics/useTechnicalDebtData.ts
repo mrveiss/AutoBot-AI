@@ -16,7 +16,7 @@
 
 import { ref } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useTechnicalDebtData')
@@ -82,7 +82,7 @@ interface ReportRaw {
 export function useTechnicalDebtData() {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
-  const api = useApi()
+  const api = useApiClient()
 
   // ---- Summary ------------------------------------------------------------
   // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*

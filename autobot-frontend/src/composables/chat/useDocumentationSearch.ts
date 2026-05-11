@@ -13,7 +13,7 @@
  */
 
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -95,7 +95,7 @@ export interface UseDocumentationSearchReturn {
 }
 
 export function useDocumentationSearch(): UseDocumentationSearchReturn {
-  const api = useApi()
+  const api = useApiClient()
 
   /**
    * Execute a hybrid knowledge-base search.

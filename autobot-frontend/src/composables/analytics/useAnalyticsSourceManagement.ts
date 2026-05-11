@@ -20,7 +20,7 @@
 
 import { ref } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import type { CodeSource } from '@/types/analytics'
 
@@ -49,7 +49,7 @@ interface QueueStatusRaw {
 export function useAnalyticsSourceManagement() {
   const isLoadingSources = ref(false)
   const sourcesError = ref<string | null>(null)
-  const api = useApi()
+  const api = useApiClient()
 
   // ---- Sources endpoint ---------------------------------------------------
 

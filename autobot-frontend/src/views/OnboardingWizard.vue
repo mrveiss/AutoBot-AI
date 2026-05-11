@@ -14,12 +14,12 @@ OnboardingWizard.vue — First-run UX wizard (Issue #5061)
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('OnboardingWizard')
 const router = useRouter()
-const api = useApi()
+const api = useApiClient()
 
 // ---------------------------------------------------------------------------
 // State

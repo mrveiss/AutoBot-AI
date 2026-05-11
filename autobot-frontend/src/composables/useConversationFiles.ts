@@ -55,7 +55,7 @@ export interface UploadProgressEvent {
  * @param sessionId - Chat session ID for file operations
  */
 export function useConversationFiles(sessionId: string) {
-  const api = useApi()
+  const api = useApiClient()
 
   // Reactive state
   const files = ref<ConversationFile[]>([])

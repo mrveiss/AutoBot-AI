@@ -62,6 +62,25 @@ export default defineConfigWithVueTs(
       'vue/no-undef-components': ['error', {
         ignorePatterns: ['RouterLink', 'RouterView', 'Transition', 'TransitionGroup', 'KeepAlive', 'Teleport', 'Suspense'],
       }],
+      // Issue #6487: block new imports of deprecated useApi composable family.
+      // Migrate to useFetchEndpoint (data loading) or useApiClient from @/plugins/api (mutations).
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@/composables/useApi',
+              message: 'useApi is deprecated (#6487). Use useFetchEndpoint from @/composables/api/useFetchEndpoint for data loading, or useApiClient() from @/plugins/api for imperative HTTP calls.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['*/composables/useApi'],
+              message: 'useApi is deprecated (#6487). Use useFetchEndpoint from @/composables/api/useFetchEndpoint for data loading, or useApiClient() from @/plugins/api for imperative HTTP calls.',
+            },
+          ],
+        },
+      ],
       // Issue #6784: block hardcoded VM-IP fallbacks in `||` / `??` expressions
       // and any other literal/template containing the deployment range.
       // Use SSOT (window.location.hostname / VITE_*_HOST env vars) instead.

@@ -9,7 +9,7 @@
 
 import { ref, computed } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import { usePreferences } from '@/composables/usePreferences'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
