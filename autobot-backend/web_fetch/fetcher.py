@@ -129,6 +129,13 @@ def _fail(url: str, code: str, retryable: bool = False, status: Optional[int] = 
 
 
 async def _fetch_jina(url: str, timeout: float) -> Optional[str]:
+    """Fetch markdown via Jina Reader fast-path. SSRF guard enforced inline."""
+    if not await _is_public_url(url):
+        return None
+    return await _fetch_jina_impl(url, timeout)
+
+
+async def _fetch_jina_impl(url: str, timeout: float) -> Optional[str]:
     """Fetch via Jina Reader. Returns raw text or None on failure."""
     import aiohttp
 
@@ -152,8 +159,15 @@ async def _fetch_bs4(url: str, timeout: float) -> tuple[Optional[str], Optional[
     bodies — the prior implementation issued a 1-byte probe request and
     then re-fetched the full URL, doubling HTTP load on every fast-path
     attempt.
+
+    SSRF guard is enforced inline (defense in depth) so any caller —
+    including ``WebFetcher.fetch_raw_html`` which intentionally bypasses
+    the public ``fetch()`` pipeline — cannot reach private IPs.
     """
     import aiohttp
+
+    if not await _is_public_url(url):
+        return None, None
 
     headers = {"User-Agent": _USER_AGENT}
     try:
@@ -183,7 +197,15 @@ async def _fetch_bs4(url: str, timeout: float) -> tuple[Optional[str], Optional[
 
 
 async def _fetch_playwright(url: str, timeout: float) -> Optional[str]:
-    """Fetch via Playwright bridge (services/playwright_service.py)."""
+    """Fetch via Playwright bridge (services/playwright_service.py).
+
+    SSRF guard enforced inline (defense in depth) — the Playwright service
+    runs in a separate container with potential network reach to private IPs,
+    so the URL must be validated even though the public ``WebFetcher.fetch``
+    pipeline already checks.
+    """
+    if not await _is_public_url(url):
+        return None
     try:
         from services.playwright_service import get_playwright_service
 
@@ -257,9 +279,13 @@ class WebFetcher:
         before deciding render mode. Closes the #7476 gap where 3 production
         modules reached into the private ``_fetch_bs4`` to get raw HTML.
 
-        Bypasses cache, robots, SSRF check, semaphores, and the AUTO render
-        cascade — this is a low-level "give me the bytes" primitive. Callers
-        that need the full FetchResult pipeline should use ``fetch()``.
+        Bypasses cache, robots, semaphores, and the AUTO render cascade —
+        this is a low-level "give me the bytes" primitive. Callers that need
+        the full FetchResult pipeline should use ``fetch()``.
+
+        SSRF guard IS still enforced (inline in ``_fetch_bs4`` since the
+        critical alert from CodeQL on PR #7514) so callers cannot reach
+        private IPs even though the public pipeline is bypassed.
 
         Args:
             url: Absolute URL to fetch.

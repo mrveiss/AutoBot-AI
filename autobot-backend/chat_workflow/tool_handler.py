@@ -133,6 +133,98 @@ WEB_SEARCH_SCHEMA: dict = {
     "required": ["query"],
 }
 
+# Issue #7509: Web research tool schemas — scrape, crawl, map, extract.
+# Agents have admin-grade power: no server-side caps on depth/pages/robots.
+SCRAPE_URL_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "url": {"type": "string", "description": "Absolute URL to fetch and convert to markdown."},
+        "render": {
+            "type": "string",
+            "enum": ["auto", "fast", "playwright"],
+            "default": "auto",
+            "description": "Render mode: auto (Jina+BS4+Playwright), fast (Jina+BS4), playwright (JS render).",
+        },
+    },
+    "required": ["url"],
+}
+
+CRAWL_SITE_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "seed_urls": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Starting URLs for the BFS crawl.",
+        },
+        "max_depth": {
+            "type": "integer",
+            "default": 1,
+            "description": "Link-hop depth (1 = seed URLs only, 2 = seeds + 1 hop).",
+        },
+        "max_pages": {
+            "type": "integer",
+            "default": 100,
+            "description": "Hard cap on total pages fetched across all seeds.",
+        },
+        "respect_robots": {
+            "type": "boolean",
+            "default": True,
+            "description": "Honour robots.txt. Set false to override.",
+        },
+        "ingest": {
+            "type": "boolean",
+            "default": False,
+            "description": "Write successful pages to the knowledge base.",
+        },
+        "same_origin": {
+            "type": "boolean",
+            "default": True,
+            "description": "Restrict crawl to same scheme+host per seed.",
+        },
+    },
+    "required": ["seed_urls"],
+}
+
+MAP_SITE_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "domain": {
+            "type": "string",
+            "description": "Domain to map (bare or with scheme, e.g. 'example.com').",
+        },
+        "max_urls": {
+            "type": "integer",
+            "default": 500,
+            "description": "Hard cap on returned URLs.",
+        },
+        "respect_robots": {
+            "type": "boolean",
+            "default": True,
+            "description": "Honour robots.txt during crawl fallback.",
+        },
+    },
+    "required": ["domain"],
+}
+
+EXTRACT_STRUCTURED_DATA_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "url": {"type": "string", "description": "Absolute URL to fetch."},
+        "schema": {
+            "type": "object",
+            "description": "JSON Schema (draft 2020-12) describing the desired output.",
+        },
+        "render": {
+            "type": "string",
+            "enum": ["auto", "fast", "playwright"],
+            "default": "auto",
+            "description": "Render mode.",
+        },
+    },
+    "required": ["url", "schema"],
+}
+
 # Browser tool schemas — co-located with BROWSER_TOOL_NAMES (Issue #4726).
 NAVIGATE_SCHEMA: dict = {
     "type": "object",
@@ -225,6 +317,11 @@ _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
     # (Issue #4562).  All future built-in tool schemas should follow this pattern:
     # define the schema constant in the tool module and import it here.
     "code_interpreter": CODE_INTERPRETER_SCHEMA["parameters"],
+    # Issue #7509: Web research tools — direct internal dispatch via web_fetch package.
+    "scrape_url": SCRAPE_URL_SCHEMA,
+    "crawl_site": CRAWL_SITE_SCHEMA,
+    "map_site": MAP_SITE_SCHEMA,
+    "extract_structured_data": EXTRACT_STRUCTURED_DATA_SCHEMA,
 }
 
 
@@ -695,6 +792,44 @@ def _format_full_search_results(query: str, entries: list[dict]) -> str:
         else:
             lines.append("")
     return "\n".join(lines)
+
+
+def _format_crawl_results(seed_urls: list, results: list) -> str:
+    """Format BFS crawl FetchResults into a markdown index. Issue #7509.
+
+    Successful pages are rendered as `### <url> (depth N)\\n<first 2000 chars>`.
+    Failed pages appear as a single-line error note.
+    """
+    seed_str = ", ".join(seed_urls[:3])
+    if len(seed_urls) > 3:
+        seed_str += f" (+{len(seed_urls) - 3} more)"
+    successes = [r for r in results if r.success]
+    header = f"## Crawled {len(successes)} pages from {seed_str}\n\n"
+    lines = [header]
+    for r in results:
+        if r.success:
+            preview = (r.markdown or "")[:2000]
+            lines.append(f"### {r.url}\n\n{preview}\n\n---\n")
+        else:
+            lines.append(f"- **FAILED** {r.url} — {r.error_code}\n")
+    return "".join(lines)
+
+
+def _format_map_results(site_result) -> str:
+    """Format SiteMapResult into a markdown URL list grouped by depth. Issue #7509."""
+    total = len(site_result.entries)
+    header = f"## Mapped {total} URLs from {site_result.domain} (source: {site_result.source})\n\n"
+    lines = [header]
+    by_depth: dict = {}
+    for entry in site_result.entries:
+        by_depth.setdefault(entry.depth, []).append(entry.url)
+    for depth in sorted(by_depth.keys()):
+        urls = by_depth[depth]
+        lines.append(f"### Depth {depth} ({len(urls)} URLs)\n\n")
+        for url in urls:
+            lines.append(f"- {url}\n")
+        lines.append("\n")
+    return "".join(lines)
 
 
 class ToolHandlerMixin:
@@ -1907,6 +2042,121 @@ class ToolHandlerMixin:
                 metadata={"tool": "web_search", "error": True},
             )
 
+    # ------------------------------------------------------------------
+    # Issue #7509: Web research tool handlers
+    # ------------------------------------------------------------------
+
+    async def _handle_web_research_tool(
+        self,
+        tool_name: str,
+        tool_call: dict[str, Any],
+        execution_results: list[dict[str, Any]],
+        session_id: str = "",
+    ):
+        """Dispatch one of the 4 web research tools. Issue #7509.
+
+        Routes to _exec_scrape_url, _exec_crawl_site, _exec_map_site, or
+        _exec_extract_structured_data based on tool_name.  Yields WorkflowMessages
+        for execution stages and final output.
+        """
+        params = tool_call.get("params", {})
+        logger.info("[Issue #7509] Web research tool: %s params=%s", tool_name, list(params.keys()))
+
+        yield WorkflowMessage(
+            type="tool_execution",
+            content=f"Executing {tool_name}...",
+            metadata={"tool": tool_name},
+        )
+
+        _handlers = {
+            "scrape_url": self._exec_scrape_url,
+            "crawl_site": self._exec_crawl_site,
+            "map_site": self._exec_map_site,
+            "extract_structured_data": self._exec_extract_structured_data,
+        }
+        try:
+            result = await _handlers[tool_name](params)
+            execution_results.append({"tool": tool_name, "status": "success", "output": result})
+            yield WorkflowMessage(
+                type="command_output",
+                content=result,
+                metadata={"tool": tool_name, "status": "success"},
+            )
+        except Exception as exc:
+            logger.error("[Issue #7509] %s failed: %s", tool_name, exc)
+            execution_results.append({"tool": tool_name, "status": "error", "error": str(exc)})
+            yield WorkflowMessage(
+                type="error",
+                content=f"{tool_name} failed: {exc}",
+                metadata={"tool": tool_name, "error": True},
+            )
+
+    async def _exec_scrape_url(self, params: dict) -> str:
+        """Fetch a URL and return markdown content. Issue #7509."""
+        from web_fetch import RenderMode, WebFetcher
+
+        url = params.get("url", "").strip()
+        render_str = params.get("render", "auto")
+        render = RenderMode(render_str)
+        result = await WebFetcher.fetch(url, render=render)
+        if not result.success:
+            return f"## Fetch failed\n\nURL: {url}\nError: {result.error_code}"
+        title = f"# {result.title}\n\n" if result.title else ""
+        header = f"## Scraped: {url} (status {result.status_code}, source: {result.source})\n\n"
+        return header + title + (result.markdown or "*(no content)*")
+
+    async def _exec_crawl_site(self, params: dict) -> str:
+        """BFS crawl seed URLs and return a markdown index. Issue #7509."""
+        from knowledge.connectors.models import ConnectorConfig
+        from knowledge.connectors.web_crawler import WebCrawlerConnector
+
+        seed_urls: list = params.get("seed_urls", [])
+        max_depth: int = int(params.get("max_depth", 1))
+        max_pages: int = int(params.get("max_pages", 100))
+        respect_robots: bool = bool(params.get("respect_robots", True))
+        ingest: bool = bool(params.get("ingest", False))
+        same_origin: bool = bool(params.get("same_origin", True))
+
+        cfg = ConnectorConfig(
+            connector_id="agent_crawl",
+            connector_type="web_crawler",
+            name="agent_crawl",
+            config={"urls": seed_urls, "max_depth": max_depth, "max_pages": max_pages},
+        )
+        connector = WebCrawlerConnector(cfg)
+        results = await connector.crawl(
+            seed_urls=seed_urls,
+            max_depth=max_depth,
+            max_pages=max_pages,
+            respect_robots=respect_robots,
+            ingest=ingest,
+            same_origin=same_origin,
+        )
+        return _format_crawl_results(seed_urls, results)
+
+    async def _exec_map_site(self, params: dict) -> str:
+        """Discover URLs for a domain via sitemap or BFS. Issue #7509."""
+        from web_fetch.site_mapper import SiteMapper
+
+        domain = params.get("domain", "").strip()
+        max_urls: int = int(params.get("max_urls", 500))
+        respect_robots: bool = bool(params.get("respect_robots", True))
+        site_result = await SiteMapper.map_site(domain, max_urls=max_urls, respect_robots=respect_robots)
+        return _format_map_results(site_result)
+
+    async def _exec_extract_structured_data(self, params: dict) -> str:
+        """Extract structured data from a URL using JSON Schema + LLM. Issue #7509."""
+        import json
+
+        from web_fetch.extractors import extract_url
+
+        url = params.get("url", "").strip()
+        schema = params.get("schema", {})
+        render = params.get("render", "auto")
+        result = await extract_url(url=url, schema=schema, render=render)
+        json_str = json.dumps(result["data"], indent=2, ensure_ascii=False)
+        return f"## Extracted data from {url}\n\n```json\n{json_str}\n```"
+
     async def _execute_web_search(self, query: str, max_pages: int = 5) -> str:
         """Run a web search and return formatted results. Issue #2306.
 
@@ -2038,7 +2288,20 @@ class ToolHandlerMixin:
         execution_results: list[dict[str, Any]],
     ) -> WorkflowMessage:
         """Build error message for an unknown tool call (#2305, #2310)."""
-        known_tools = sorted({"respond", "delegate", "execute_command", "web_search"} | BROWSER_TOOL_NAMES)
+        # Issue #7509: Added web research tools to known_tools hint.
+        known_tools = sorted(
+            {
+                "respond",
+                "delegate",
+                "execute_command",
+                "web_search",
+                "scrape_url",
+                "crawl_site",
+                "map_site",
+                "extract_structured_data",
+            }
+            | BROWSER_TOOL_NAMES
+        )
         if ctx is not None:
             ctx.consecutive_invalid_tool_calls += 1
         consecutive = ctx.consecutive_invalid_tool_calls if ctx is not None else 0
@@ -2127,6 +2390,26 @@ class ToolHandlerMixin:
                 yield validation_msg
                 return
             async for msg in self._handle_web_search_tool(tool_call, execution_results, session_id):
+                yield msg
+            return
+
+        # Issue #7509: Web research tools — direct internal dispatch.
+        if tool_name in ("scrape_url", "crawl_site", "map_site", "extract_structured_data"):
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
+            validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
+            if validation_msg is not None:
+                execution_results.append(
+                    {
+                        "tool": tool_name,
+                        "status": "schema_error",
+                        "error": validation_msg.content,
+                        "schema_validation_failed": True,
+                    }
+                )
+                yield validation_msg
+                return
+            async for msg in self._handle_web_research_tool(tool_name, tool_call, execution_results, session_id):
                 yield msg
             return
 
