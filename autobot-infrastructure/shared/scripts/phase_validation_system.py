@@ -23,7 +23,7 @@ import requests
 
 # Import centralized Redis client
 from autobot_shared.network_constants import ServiceURLs
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client, get_redis_client  # noqa: F401
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -33,6 +33,11 @@ logger = logging.getLogger(__name__)
 class PhaseValidationCriteria:
     """Defines validation criteria for each development phase"""
 
+    # Paths refreshed for the current ``autobot-backend/`` + ``autobot-frontend/``
+    # + ``autobot_shared/`` + ``autobot-infrastructure/`` layout (#7496). The
+    # pre-reorganization layout (``src/``, ``backend/``, ``autobot-vue/``) is
+    # gone and references to it produced a 22.63% maturity score that masked
+    # real progress.
     PHASE_CRITERIA = {
         "Phase 1: Core Infrastructure": {
             "description": "Establish foundational system architecture",
@@ -49,12 +54,12 @@ class PhaseValidationCriteria:
                 "Error handling framework in place",
             ],
             "files": [
-                "main.py",
-                "src/config.py",
-                "backend/app_factory.py",
-                "requirements.txt",
+                "autobot-backend/main.py",
+                "autobot-backend/app_factory.py",
+                "autobot-backend/requirements.txt",
+                "autobot_shared/ssot_config.py",
             ],
-            "directories": ["src/", "backend/", "data/"],
+            "directories": ["autobot-backend/", "autobot_shared/", "autobot-infrastructure/"],
             "endpoints": ["/api/system/health", "/api/system/status"],
             "services": ["backend"],
             "weight": 100,
@@ -73,10 +78,9 @@ class PhaseValidationCriteria:
                 "Memory context preservation",
                 "Redis background task processing",
             ],
-            "files": [
-                "src/knowledge_base.py",
-                "src/enhanced_memory_manager.py",
-                "data/knowledge_base.db",
+            "directories": [
+                "autobot-backend/knowledge/",
+                "autobot-backend/memory/",
             ],
             "endpoints": [
                 "/api/system/health",  # Use system health
@@ -100,7 +104,11 @@ class PhaseValidationCriteria:
                 "Monitor LLM service health",
                 "Handle LLM timeout and error scenarios",
             ],
-            "files": ["src/llm_interface.py", "src/prompt_manager.py"],
+            "files": [
+                "autobot-backend/llm_multi_provider.py",
+                "autobot-backend/prompt_manager.py",
+            ],
+            "directories": ["autobot-backend/llm_interface_pkg/"],
             "endpoints": ["/api/llm/status", "/api/llm/status/comprehensive"],
             "services": ["ollama"],
             "weight": 85,
@@ -123,8 +131,8 @@ class PhaseValidationCriteria:
                 "Enforce access controls",
             ],
             "files": [
-                "src/security_layer.py",
-                "src/enhanced_security_layer.py",
+                "autobot-backend/security_layer.py",
+                "autobot-backend/enhanced_security_layer.py",
                 ".github/workflows/security.yml",
                 ".bandit",
             ],
@@ -154,10 +162,10 @@ class PhaseValidationCriteria:
                 "Resolve agent conflicts",
             ],
             "files": [
-                "src/orchestrator.py",
-                "src/lightweight_orchestrator.py",
-                "backend/api/orchestration.py",
+                "autobot-backend/orchestrator.py",
+                "autobot-backend/api/orchestration.py",
             ],
+            "directories": ["autobot-backend/enhanced_orchestration/"],
             "endpoints": ["/api/orchestration/status"],
             "orchestration_features": [
                 "task_planning",
@@ -184,10 +192,10 @@ class PhaseValidationCriteria:
                 "Handle user interactions",
             ],
             "files": [
-                "autobot-vue/src/App.vue",
-                "autobot-vue/package.json",
-                "autobot-vue/src/components/",
+                "autobot-frontend/src/App.vue",
+                "autobot-frontend/package.json",
             ],
+            "directories": ["autobot-frontend/src/components/"],
             "endpoints": [ServiceURLs.FRONTEND_LOCAL],
             "ui_features": ["chat_interface", "terminal_interface", "settings_panel"],
             "weight": 75,
@@ -209,10 +217,8 @@ class PhaseValidationCriteria:
                 "Generate test reports",
                 "Ensure code quality standards",
             ],
-            "files": [
-                "tests/",
-                "scripts/automated_testing_procedure.py",
-                "scripts/comprehensive_code_profiler.py",
+            "directories": [
+                "autobot-backend/tests/",
             ],
             "endpoints": ["/api/system/health"],
             "testing_features": [
@@ -241,12 +247,11 @@ class PhaseValidationCriteria:
                 "Provide performance dashboards",
             ],
             "files": [
-                "src/utils/database_pool.py",
-                "src/utils/advanced_cache_manager.py",
-                "src/utils/memory_optimization.py",
-                "scripts/monitoring_system.py",
-                "scripts/performance_dashboard.py",
+                "autobot-backend/utils/database_pool.py",
+                "autobot-backend/utils/advanced_cache_manager.py",
+                "autobot-backend/utils/cache_manager.py",
             ],
+            "directories": ["autobot-backend/utils/", "autobot-backend/services/"],
             "endpoints": ["/api/metrics/system/health"],
             "performance_metrics": {
                 "api_response_time": 100,  # ms
@@ -278,16 +283,19 @@ class PhaseValidationCriteria:
                 "Handle complex AI workflows",
             ],
             "files": [
-                "src/agents/",
-                "src/hardware_acceleration.py",
-                "src/worker_node.py",
-                "src/llm_self_awareness.py",
-                "src/phase_progression_manager.py",
+                "autobot-backend/hardware_acceleration.py",
+                "autobot-backend/worker_node.py",
+                "autobot-backend/llm_self_awareness.py",
+                "autobot-backend/phase_progression_manager.py",
             ],
+            "directories": ["autobot-backend/agents/", "autobot-npu-worker/"],
             "endpoints": [
                 "/api/intelligent-agent/health",
                 "/api/code_search/status",
-                "/api/phase_management/status",
+                # ``/api/phase_management/status`` was removed in the
+                # reorganization — phase tracking lives in
+                # ``phase_progression_manager.py`` without a dedicated
+                # endpoint. Re-add if the endpoint is re-exposed.
             ],
             "ai_features": [
                 "multimodal_ai",
@@ -299,7 +307,12 @@ class PhaseValidationCriteria:
             "weight": 65,
         },
         "Phase 10: Production Readiness": {
-            "files": ["docker-compose.yml", "Dockerfile", ".dockerignore"],
+            "files": [
+                "docker-compose.yml",
+                "docker-compose.override.example.yml",
+                ".dockerignore",
+            ],
+            "directories": ["docker/", "autobot-infrastructure/", "autobot-slm-backend/"],
             "production_features": [
                 "containerization",
                 "scalability",
@@ -313,11 +326,26 @@ class PhaseValidationCriteria:
 class PhaseValidator:
     """Comprehensive phase validation system"""
 
-    def __init__(self, project_root: Path = None):
-        """Initialize phase validator with project root and backend/frontend URLs."""
-        self.project_root = project_root or Path(__file__).parent.parent
+    def __init__(self, project_root: Path = None, ci_mode: bool = False):
+        """Initialize phase validator with project root and backend/frontend URLs.
+
+        ``ci_mode`` (#7496): when True, skip endpoint/service/feature checks
+        that require a live backend stack. CI runs the validator on a fresh
+        checkout without ``docker compose up`` — counting those unreachable
+        checks as failures dragged the maturity score to 22.6% and made the
+        gate meaningless. Structural-only mode validates that files and
+        directories are present, which is what the workflow can actually
+        measure pre-deploy.
+        """
+        # #7496: this file lives at
+        # ``autobot-infrastructure/shared/scripts/phase_validation_system.py``,
+        # so the repo root is THREE parents up — not two. The old default
+        # resolved to ``autobot-infrastructure/shared/``, so every
+        # ``project_root / "autobot-backend/main.py"`` lookup missed.
+        self.project_root = project_root or Path(__file__).resolve().parents[3]
         self.validation_results = {}
         self.overall_score = 0
+        self.ci_mode = ci_mode
         self.backend_url = ServiceURLs.BACKEND_LOCAL
         self.frontend_url = ServiceURLs.FRONTEND_LOCAL
 
@@ -453,20 +481,26 @@ class PhaseValidator:
                 total_checks += vr["total"]
                 passed_checks += vr["passed"]
 
-        async_validation_map = {
-            "endpoints": self._validate_endpoints,
-            "services": self._validate_services,
-        }
-        for key, validator in async_validation_map.items():
-            if key in criteria:
-                vr = await validator(criteria[key])
-                results["validations"][key] = vr
-                total_checks += vr["total"]
-                passed_checks += vr["passed"]
+        # #7496: live-stack checks (endpoints/services/features) are skipped
+        # in CI mode — the workflow doesn't ``docker compose up`` before
+        # running, so they'd count 0/N and drag the score below the
+        # threshold. Structural file/directory checks are the only signal
+        # that's meaningful pre-deploy.
+        if not self.ci_mode:
+            async_validation_map = {
+                "endpoints": self._validate_endpoints,
+                "services": self._validate_services,
+            }
+            for key, validator in async_validation_map.items():
+                if key in criteria:
+                    vr = await validator(criteria[key])
+                    results["validations"][key] = vr
+                    total_checks += vr["total"]
+                    passed_checks += vr["passed"]
 
-        ft, fp = await self._validate_phase_features(criteria, results)
-        total_checks += ft
-        passed_checks += fp
+            ft, fp = await self._validate_phase_features(criteria, results)
+            total_checks += ft
+            passed_checks += fp
 
         if total_checks > 0:
             results["completion_percentage"] = round((passed_checks / total_checks) * 100, 2)
@@ -584,22 +618,21 @@ class PhaseValidator:
         return False
 
     def _check_redis_service(self) -> bool:
-        """Check if Redis is accessible (Issue #315: extracted helper)."""
+        """Check if Redis is accessible (Issue #315: extracted helper).
+
+        #7496: rewritten to use the sync ``get_redis_client`` directly. The
+        previous async-in-sync-via-new-event-loop pattern was broken — it
+        passed ``"main"`` as the first positional argument (which is
+        ``async_client: bool``, not ``database: str``), then spawned a new
+        event loop to await the call. Inside an already-running async
+        context this triggered "coroutine was never awaited" warnings.
+        """
         try:
-
-            async def check_redis():
-                """Check Redis connectivity using centralized client."""
-                redis_client = await get_redis_client("main")
-                if redis_client:
-                    await redis_client.ping()
-                    return True
+            redis_client = get_redis_client(database="main")
+            if redis_client is None:
                 return False
-
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(check_redis())
-            loop.close()
-            return result
+            redis_client.ping()
+            return True
         except Exception:
             return False
 
@@ -849,7 +882,10 @@ def _output_json_results(results: Dict[str, Any], output_file: str = None):
                 "name": phase_name,
                 "status": phase_data.get("status", "unknown"),
                 "completion_percentage": phase_data.get("completion_percentage", 0),
-                "validation_details": phase_data.get("validation_details", {}),
+                # #7496: ``_validate_phase`` stores per-check details under
+                # ``validations`` (plural). The old key ``validation_details``
+                # silently defaulted to ``{}`` in every report.
+                "validation_details": phase_data.get("validations", {}),
             }
         )
 
@@ -909,7 +945,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    validator = PhaseValidator()
+    validator = PhaseValidator(ci_mode=args.ci_mode)
 
     try:
         results = asyncio.run(validator.validate_all_phases())
