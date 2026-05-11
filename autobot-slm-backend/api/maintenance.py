@@ -31,7 +31,8 @@ from models.schemas import (
     MaintenanceWindowResponse,
     MaintenanceWindowUpdate,
 )
-from services.auth import get_current_user, require_admin
+from autobot_shared.auth.permissions import Permission
+from services.auth import get_current_user, require_permission
 from services.database import get_db
 
 logger = logging.getLogger(__name__)
@@ -165,7 +166,7 @@ async def get_maintenance_window(
 async def create_maintenance_window(
     window_data: MaintenanceWindowCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[dict, Depends(require_admin)],
+    user: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> MaintenanceWindowResponse:
     """Create a new maintenance window (admin only)."""
     # Validate time range
@@ -230,7 +231,7 @@ async def update_maintenance_window(
     window_id: str,
     window_data: MaintenanceWindowUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> MaintenanceWindowResponse:
     """Update a maintenance window (admin only)."""
     result = await db.execute(select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id))
@@ -284,7 +285,7 @@ async def update_maintenance_window(
 async def delete_maintenance_window(
     window_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> None:
     """Delete a maintenance window (admin only)."""
     result = await db.execute(select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id))
@@ -310,7 +311,7 @@ async def delete_maintenance_window(
 async def activate_maintenance_window(
     window_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> MaintenanceWindowResponse:
     """Manually activate a scheduled maintenance window (admin only)."""
     result = await db.execute(select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id))
@@ -345,7 +346,7 @@ async def activate_maintenance_window(
 async def complete_maintenance_window(
     window_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> MaintenanceWindowResponse:
     """Manually complete an active maintenance window (admin only)."""
     result = await db.execute(select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id))

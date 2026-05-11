@@ -13,7 +13,6 @@ from collections import defaultdict
 from time import time
 from typing import Dict, List
 
-import jwt as pyjwt
 from fastapi import APIRouter, HTTPException, Request
 
 from api.schemas_agent import (
@@ -30,6 +29,7 @@ from api.schemas_agent import (
 )
 from api.schemas_common import DataResponse
 from auth_middleware import get_auth_middleware
+from autobot_shared.auth.jwt_core import JWTDecodeError, decode_jwt_no_verify_exp
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import config as ssot_config
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
@@ -554,13 +554,8 @@ def _decode_refresh_token(token: str) -> Dict:
     Helper for refresh_token (#827).
     """
     try:
-        payload = pyjwt.decode(
-            token,
-            get_auth_middleware().jwt_secret,
-            algorithms=[get_auth_middleware().jwt_algorithm],
-            options={"verify_exp": False},
-        )
-    except pyjwt.InvalidTokenError as exc:
+        payload = decode_jwt_no_verify_exp(token, get_auth_middleware().jwt_secret)
+    except JWTDecodeError as exc:
         raise HTTPException(status_code=401, detail=ERR_INVALID_TOKEN) from exc
 
     exp = payload.get("exp")

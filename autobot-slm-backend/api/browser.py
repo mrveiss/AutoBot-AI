@@ -17,7 +17,8 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from services.auth import get_current_user, require_admin
+from autobot_shared.auth.permissions import Permission
+from services.auth import get_current_user, require_permission
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ async def browser_status(
 @router.post("/navigate")
 async def browser_navigate(
     body: NavigateRequest,
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> dict:
     """Navigate the persistent browser page to a URL.
 
@@ -74,7 +75,7 @@ async def browser_navigate(
 
 @router.post("/screenshot")
 async def browser_screenshot(
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> dict:
     """Capture a screenshot of the current browser page as base64 PNG."""
     try:

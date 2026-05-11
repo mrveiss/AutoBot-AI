@@ -116,6 +116,108 @@ class Role(str, Enum):
 # Canonical role-to-permission mappings.
 # Both autobot-backend (auth_rbac.py) and autobot-slm-backend import this dict
 # so that a permission added here is enforced by both services automatically.
+# Default system permissions for database seeding.
+# Tuple layout: (name, resource, action, description)
+SYSTEM_PERMISSIONS: List[tuple] = [
+    # User management
+    ("users:read", "users", "read", "View users"),
+    ("users:create", "users", "create", "Create users"),
+    ("users:update", "users", "update", "Update users"),
+    ("users:delete", "users", "delete", "Delete users"),
+    # Team management
+    ("teams:read", "teams", "read", "View teams"),
+    ("teams:create", "teams", "create", "Create teams"),
+    ("teams:manage", "teams", "manage", "Manage team members"),
+    ("teams:delete", "teams", "delete", "Delete teams"),
+    # Knowledge base
+    ("knowledge:read", "knowledge", "read", "View knowledge base"),
+    ("knowledge:write", "knowledge", "write", "Add/edit knowledge"),
+    ("knowledge:delete", "knowledge", "delete", "Delete knowledge entries"),
+    # Chat
+    ("chat:use", "chat", "use", "Use chat functionality"),
+    ("chat:history", "chat", "history", "View chat history"),
+    # Files
+    ("files:view", "files", "view", "View files"),
+    ("files:upload", "files", "upload", "Upload files"),
+    ("files:download", "files", "download", "Download files"),
+    ("files:delete", "files", "delete", "Delete files"),
+    # Settings
+    ("settings:read", "settings", "read", "View settings"),
+    ("settings:write", "settings", "write", "Modify settings"),
+    # Admin
+    ("admin:access", "admin", "access", "Access admin panel"),
+    ("admin:users", "admin", "users", "Manage all users"),
+    ("admin:organization", "admin", "organization", "Manage organization"),
+    # Audit (Issue #683: Role-Based Access Control)
+    ("audit:read", "audit", "read", "View audit logs"),
+    ("audit:write", "audit", "write", "Manage audit logs (cleanup)"),
+]
+
+# Default system roles with their permissions for database seeding.
+SYSTEM_ROLES: Dict[str, Dict] = {
+    "admin": {
+        "description": "Full administrative access",
+        "priority": 100,
+        "permissions": [
+            "users:read",
+            "users:create",
+            "users:update",
+            "users:delete",
+            "teams:read",
+            "teams:create",
+            "teams:manage",
+            "teams:delete",
+            "knowledge:read",
+            "knowledge:write",
+            "knowledge:delete",
+            "chat:use",
+            "chat:history",
+            "files:view",
+            "files:upload",
+            "files:download",
+            "files:delete",
+            "settings:read",
+            "settings:write",
+            "admin:access",
+            "admin:users",
+            "admin:organization",
+            "audit:read",
+            "audit:write",
+        ],
+    },
+    "user": {
+        "description": "Standard user access",
+        "priority": 50,
+        "permissions": [
+            "users:read",
+            "teams:read",
+            "knowledge:read",
+            "knowledge:write",
+            "chat:use",
+            "chat:history",
+            "files:view",
+            "files:upload",
+            "files:download",
+            "settings:read",
+        ],
+    },
+    "readonly": {
+        "description": "Read-only access",
+        "priority": 10,
+        "permissions": [
+            "users:read",
+            "teams:read",
+            "knowledge:read",
+            "chat:history",
+            "files:view",
+            "files:download",
+            "settings:read",
+        ],
+    },
+    # Issue #744: Guest role REMOVED - security vulnerability
+    # Unauthenticated requests must be rejected, not assigned guest permissions
+}
+
 ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
     Role.ADMIN: [
         Permission.API_READ,

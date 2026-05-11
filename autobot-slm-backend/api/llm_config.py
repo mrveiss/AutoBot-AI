@@ -19,7 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from models.database import Node, Setting
-from services.auth import require_admin
+from autobot_shared.auth.permissions import Permission
+from services.auth import require_permission
 from services.database import get_db
 from services.encryption import decrypt_data, encrypt_data
 from services.playbook_executor import get_playbook_executor
@@ -171,7 +172,7 @@ async def _upsert_setting(db: AsyncSession, key: str, value: str, desc: str) -> 
 @router.get("", response_model=LLMConfigResponse)
 async def get_llm_config(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_READ))],
 ) -> LLMConfigResponse:
     """Get current LLM configuration (admin only).
 
@@ -188,7 +189,7 @@ async def get_llm_config(
 async def save_llm_config(
     config: LLMConfig,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_WRITE))],
 ) -> LLMConfigResponse:
     """Save LLM configuration (admin only).
 
@@ -292,7 +293,7 @@ async def _test_cloud_provider(provider: str, endpoint: str, api_key: str) -> LL
 @router.post("/test", response_model=LLMTestResponse)
 async def test_llm_connection(
     request: LLMTestRequest,
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_READ))],
 ) -> LLMTestResponse:
     """Test LLM provider connection (admin only)."""
     provider = request.provider.lower()
@@ -313,7 +314,7 @@ async def test_llm_connection(
 async def apply_llm_config(
     request: LLMApplyRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_WRITE))],
 ) -> LLMApplyResponse:
     """Push LLM config to fleet nodes via Ansible (admin only)."""
     config = await _load_llm_config(db)

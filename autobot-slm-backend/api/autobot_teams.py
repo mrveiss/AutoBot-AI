@@ -15,7 +15,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.auth import require_admin
+from autobot_shared.auth.permissions import Permission
+from services.auth import require_permission
 from user_management.database import get_autobot_session
 from user_management.services import TeamService, TenantContext
 
@@ -78,7 +79,7 @@ async def get_autobot_db():
 @router.post("", response_model=TeamResponse, status_code=status.HTTP_201_CREATED)
 async def create_team(
     team_data: TeamCreate,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
 ) -> TeamResponse:
     """Create a new AutoBot team."""
@@ -103,7 +104,7 @@ async def list_teams(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     search: str = Query(None),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
 ) -> TeamListResponse:
     """List AutoBot teams with pagination and search."""
@@ -123,7 +124,7 @@ async def list_teams(
 @router.get("/{team_id}", response_model=TeamResponse)
 async def get_team(
     team_id: uuid.UUID,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
 ) -> TeamResponse:
     """Get AutoBot team by ID."""
@@ -140,7 +141,7 @@ async def get_team(
 async def update_team(
     team_id: uuid.UUID,
     updates: TeamUpdate,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
 ) -> TeamResponse:
     """Update AutoBot team."""
@@ -163,7 +164,7 @@ async def update_team(
 @router.delete("/{team_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_team(
     team_id: uuid.UUID,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
 ) -> None:
     """Delete AutoBot team."""
@@ -182,7 +183,7 @@ async def delete_team(
 async def add_team_member(
     team_id: uuid.UUID,
     member: TeamMemberAdd,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
 ) -> dict:
     """Add a member to an AutoBot team."""
@@ -206,7 +207,7 @@ async def add_team_member(
 async def remove_team_member(
     team_id: uuid.UUID,
     user_id: uuid.UUID,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
 ) -> None:
     """Remove a member from an AutoBot team."""
