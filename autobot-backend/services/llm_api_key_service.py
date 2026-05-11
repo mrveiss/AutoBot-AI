@@ -16,20 +16,20 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import secrets
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
 # Rotation grace period: after a key is rotated the old hash remains valid for
 # this many seconds so in-flight requests finish cleanly.
-import os
-
 _ROTATION_GRACE_SECS = int(os.environ.get("AUTOBOT_LLM_KEY_ROTATION_GRACE_SECS", "86400"))
 
 _KEY_TTL_STREAM_SECS = 7 * 24 * 3600  # usage stream events retained 7 days
@@ -109,8 +109,11 @@ def _spend_key(key_id: str) -> str:
 class LLMApiKeyService:
     """Manages virtual LLM API keys backed by Redis MAIN database."""
 
-    def __init__(self) -> None:
-        self._redis = get_redis_client()
+    async def _r(self):
+        redis = await get_async_redis_client(database="main")
+        if redis is None:
+            raise RuntimeError("Redis MAIN unavailable")
+        return redis
 
     # ------------------------------------------------------------------
     # CRUD
@@ -142,7 +145,8 @@ class LLMApiKeyService:
             prev_key_hash=None,
             revoked=False,
         )
-        pipe = self._redis.pipeline()
+        redis = await self._r()
+        pipe = redis.pipeline()
         pipe.hset(f"llm:apikey:{key_id}", mapping=record.to_redis_hash())
         pipe.sadd("llm:apikeys:all", key_id)
         pipe.sadd(f"llm:apikeys:team:{team_id}", key_id)
@@ -152,18 +156,20 @@ class LLMApiKeyService:
 
     async def revoke_key(self, key_id: str) -> bool:
         """Mark a key as revoked. Returns True if found."""
+        redis = await self._r()
         redis_key = f"llm:apikey:{key_id}"
-        exists = await self._redis.exists(redis_key)
+        exists = await redis.exists(redis_key)
         if not exists:
             return False
-        await self._redis.hset(redis_key, "revoked", "1")
+        await redis.hset(redis_key, "revoked", "1")
         logger.info("Revoked LLM API key %s", key_id)
         return True
 
     async def rotate_key(self, key_id: str) -> Optional[tuple[LLMApiKeyRecord, str]]:
         """Issue a new raw key for key_id, keeping old hash valid for grace period."""
+        redis = await self._r()
         redis_key = f"llm:apikey:{key_id}"
-        data = await self._redis.hgetall(redis_key)
+        data = await redis.hgetall(redis_key)
         if not data:
             return None
         record = LLMApiKeyRecord.from_redis_hash(data)
@@ -175,25 +181,39 @@ class LLMApiKeyService:
         record.prev_key_hash = record.key_hash
         record.key_hash = new_hash
         record.rotated_at = time.time()
-        await self._redis.hset(redis_key, mapping=record.to_redis_hash())
+        await redis.hset(redis_key, mapping=record.to_redis_hash())
         logger.info("Rotated LLM API key %s", key_id)
         return record, new_raw
 
     async def list_keys(self, team_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """List keys with current month spend."""
+        redis = await self._r()
         if team_id:
-            key_ids = list(await self._redis.smembers(f"llm:apikeys:team:{team_id}"))
+            key_ids = list(await redis.smembers(f"llm:apikeys:team:{team_id}"))
         else:
-            key_ids = list(await self._redis.smembers("llm:apikeys:all"))
+            key_ids = list(await redis.smembers("llm:apikeys:all"))
+
+        kid_strs = [kid if isinstance(kid, str) else kid.decode() for kid in key_ids]
+        if not kid_strs:
+            return []
+
+        # Batch all hgetall + spend reads in a single pipeline round-trip.
+        pipe = redis.pipeline()
+        for kid_str in kid_strs:
+            pipe.hgetall(f"llm:apikey:{kid_str}")
+        for kid_str in kid_strs:
+            pipe.get(_spend_key(kid_str))
+        responses = await pipe.execute()
+
+        n = len(kid_strs)
+        hgetalls = responses[:n]
+        spends = responses[n:]
 
         result = []
-        for kid in key_ids:
-            kid_str = kid if isinstance(kid, str) else kid.decode()
-            data = await self._redis.hgetall(f"llm:apikey:{kid_str}")
+        for kid_str, data, spend_raw in zip(kid_strs, hgetalls, spends):
             if not data:
                 continue
             record = LLMApiKeyRecord.from_redis_hash(data)
-            spend_raw = await self._redis.get(_spend_key(kid_str))
             spend = float(spend_raw) if spend_raw else 0.0
             result.append({
                 "key_id": record.key_id,
@@ -218,7 +238,8 @@ class LLMApiKeyService:
         key_id = _parse_key_id_from_bearer(raw_key)
         if not key_id:
             return None
-        data = await self._redis.hgetall(f"llm:apikey:{key_id}")
+        redis = await self._r()
+        data = await redis.hgetall(f"llm:apikey:{key_id}")
         if not data:
             return None
         record = LLMApiKeyRecord.from_redis_hash(data)
@@ -242,7 +263,8 @@ class LLMApiKeyService:
         """Return (allowed, remaining_usd). remaining=-1 means unlimited."""
         if record.monthly_budget_usd <= 0:
             return True, -1.0
-        spend_raw = await self._redis.get(_spend_key(record.key_id))
+        redis = await self._r()
+        spend_raw = await redis.get(_spend_key(record.key_id))
         spend = float(spend_raw) if spend_raw else 0.0
         remaining = record.monthly_budget_usd - spend
         return remaining > 0, max(remaining, 0.0)
@@ -251,7 +273,8 @@ class LLMApiKeyService:
         """Increment per-key monthly spend counter."""
         if cost_usd <= 0:
             return
-        await self._redis.incrbyfloat(_spend_key(record.key_id), cost_usd)
+        redis = await self._r()
+        await redis.incrbyfloat(_spend_key(record.key_id), cost_usd)
 
     @staticmethod
     def model_allowed(record: LLMApiKeyRecord, model: str) -> bool:
@@ -281,6 +304,7 @@ class LLMApiKeyService:
     ) -> None:
         """Publish a usage event to llm:usage:stream. Errors are swallowed."""
         try:
+            redis = await self._r()
             event: Dict[str, str] = {
                 "key_id": record.key_id,
                 "team_id": record.team_id,
@@ -290,7 +314,7 @@ class LLMApiKeyService:
                 "cost_usd": str(cost_usd),
                 "ts": str(time.time()),
             }
-            await self._redis.xadd("llm:usage:stream", event, maxlen=10000, approximate=True)
+            await redis.xadd("llm:usage:stream", event, maxlen=10000, approximate=True)
         except Exception as exc:
             logger.warning("Failed to publish LLM usage event: %s", exc)
 
@@ -300,29 +324,23 @@ class LLMApiKeyService:
 
     async def rotate_expired_keys(self) -> int:
         """Revoke keys whose expires_at has passed. Returns count revoked."""
+        redis = await self._r()
         now = time.time()
-        key_ids = await self._redis.smembers("llm:apikeys:all")
+        key_ids = await redis.smembers("llm:apikeys:all")
         revoked_count = 0
         for kid in key_ids:
             kid_str = kid if isinstance(kid, str) else kid.decode()
-            data = await self._redis.hgetall(f"llm:apikey:{kid_str}")
+            data = await redis.hgetall(f"llm:apikey:{kid_str}")
             if not data:
                 continue
             record = LLMApiKeyRecord.from_redis_hash(data)
             if record.revoked:
                 continue
             if record.expires_at and record.expires_at < now:
-                await self._redis.hset(f"llm:apikey:{kid_str}", "revoked", "1")
+                await redis.hset(f"llm:apikey:{kid_str}", "revoked", "1")
                 revoked_count += 1
                 logger.info("Auto-revoked expired LLM API key %s", kid_str)
         return revoked_count
 
 
-_service_instance: Optional[LLMApiKeyService] = None
-
-
-def get_llm_api_key_service() -> LLMApiKeyService:
-    global _service_instance
-    if _service_instance is None:
-        _service_instance = LLMApiKeyService()
-    return _service_instance
+get_llm_api_key_service = lazy_singleton(LLMApiKeyService)
