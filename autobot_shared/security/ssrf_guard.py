@@ -87,9 +87,7 @@ async def resolve_safe_ip(host: str) -> str:
             ip = ip.ipv4_mapped
 
         if not _ip_is_public(ip):
-            raise SSRFError(
-                f"Host {host!r} resolves to non-public address {ip_str} — request blocked"
-            )
+            raise SSRFError(f"Host {host!r} resolves to non-public address {ip_str} — request blocked")
         if safe_ip is None:
             safe_ip = ip_str
 
