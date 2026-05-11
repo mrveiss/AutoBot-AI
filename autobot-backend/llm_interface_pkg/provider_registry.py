@@ -35,7 +35,17 @@ from typing import Any, Dict, List, Optional
 from llm_interface_pkg.models import LLMRequest
 
 from .base_provider import BaseProvider
-from .model_param_registry import apply_model_defaults, apply_prompt_prefix
+
+# Temporary: model_param_registry remains in llm_providers until full consolidation
+try:
+    from llm_providers.model_param_registry import apply_model_defaults, apply_prompt_prefix
+except ImportError:
+    # Fallback if llm_providers is deleted before model_param_registry is moved
+    def apply_model_defaults(model: str, provider: str, kwargs: dict) -> dict:
+        return kwargs
+
+    def apply_prompt_prefix(model: str, messages: list) -> None:
+        pass
 
 logger = logging.getLogger(__name__)
 
@@ -333,14 +343,16 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
 
     from autobot_shared.ssot_config import get_config as get_ssot_config
 
-    from .anthropic_provider import AnthropicProvider
-    from .custom_openai_provider import CustomOpenAIProvider
-    from .groq_provider import GroqProvider
-    from .huggingface_provider import HuggingFaceProvider
-    from .nous_portal_provider import NousPortalProvider
-    from .openai_provider import OpenAIProvider
-    from .openrouter_provider import OpenRouterProvider
-    from .vllm_base_provider import VLLMBaseProvider
+    # Temporary: provider implementations remain in llm_providers/ until Phase 3
+    # Once providers are moved to llm_interface_pkg/providers/, update these imports
+    from llm_providers.anthropic_provider import AnthropicProvider
+    from llm_providers.custom_openai_provider import CustomOpenAIProvider
+    from llm_providers.groq_provider import GroqProvider
+    from llm_providers.huggingface_provider import HuggingFaceProvider
+    from llm_providers.nous_portal_provider import NousPortalProvider
+    from llm_providers.openai_provider import OpenAIProvider
+    from llm_providers.openrouter_provider import OpenRouterProvider
+    from llm_providers.vllm_base_provider import VLLMBaseProvider
 
     fallback: List[str] = []
 

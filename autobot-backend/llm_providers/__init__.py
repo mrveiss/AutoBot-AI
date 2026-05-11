@@ -22,8 +22,12 @@ Registry:
   get_provider_registry — process-level singleton accessor
 """
 
+# MVA-62 Consolidation: core infrastructure now in llm_interface_pkg
+# This module is maintained as a backward-compat re-export shim
+from llm_interface_pkg import BaseProvider, ProviderRegistry, get_provider_registry
+
+# Provider implementations remain here (Phase 3 consolidation will move these)
 from .anthropic_provider import AnthropicProvider
-from .base_provider import BaseProvider
 from .custom_openai_provider import CustomOpenAIProvider
 from .groq_provider import GroqProvider
 from .huggingface_provider import HuggingFaceProvider
@@ -31,7 +35,6 @@ from .nous_portal_provider import NousPortalProvider
 from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAIProvider
 from .openrouter_provider import OpenRouterProvider
-from .provider_registry import ProviderRegistry, get_provider_registry
 from .vllm_provider import RECOMMENDED_MODELS, VLLMModelManager, VLLMProvider
 
 __all__ = [
