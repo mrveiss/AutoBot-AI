@@ -47,6 +47,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-backend/requirements*.txt
+            autobot-slm-backend/requirements*.txt
 
       - name: Run audit (dry-run, JSON output)
         id: scan
