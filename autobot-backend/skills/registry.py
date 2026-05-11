@@ -48,6 +48,28 @@ class SkillRegistry:
             self._skills[name] = instance
             self._skill_classes[name] = skill_class
             logger.info("Registered skill: %s v%s", name, manifest.version)
+        # #7431 ADR-006: publish skill_promoted so blocked plans waiting on
+        # a matching capability can be re-routed and resumed via the
+        # BlockedPlanResumer subscriber. Fire-and-forget; never raises if
+        # Redis is unavailable (logged at debug).
+        self._publish_skill_promoted(name, manifest.tools)
+
+    @staticmethod
+    def _publish_skill_promoted(name: str, tools: List[str]) -> None:
+        """Best-effort publish of skill_promoted to Redis pub-sub (#7431).
+
+        Lazy import keeps SkillRegistry independent of the publisher module
+        at load time. Silent on import failure or Redis unavailability:
+        skill registration must succeed even if the resume path is offline.
+        """
+        try:
+            from skills.skill_promotion_publisher import publish_skill_promoted
+        except ImportError:
+            return
+        try:
+            publish_skill_promoted(name, tools)
+        except Exception as exc:  # never let publish plumbing break the registry
+            logger.debug("skill_promoted publish failed: %s", exc)
 
     def reload(self) -> int:
         """Re-discover builtin skills, registering any newly added modules.
