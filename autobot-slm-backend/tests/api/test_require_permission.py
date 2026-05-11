@@ -21,11 +21,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "autobot_sha
 
 from autobot_shared.auth.permissions import Permission, Role, ROLE_PERMISSIONS
 
-
 # ---------------------------------------------------------------------------
 # Replicate the role-derivation logic from services/auth.py::require_permission
 # so the tests are independent of the FastAPI import chain.
 # ---------------------------------------------------------------------------
+
 
 def _derive_role(user_payload: dict) -> Role:
     role_str = user_payload.get("role")
@@ -48,13 +48,14 @@ def _has_permission(user_payload: dict, permission: Permission) -> bool:
 
 ADMIN_USER = {"sub": "admin_user", "admin": True, "role": Role.ADMIN.value}
 REGULAR_USER = {"sub": "regular_user", "admin": False, "role": Role.USER.value}
-LEGACY_ADMIN = {"sub": "old_admin", "admin": True}      # no 'role' field
-LEGACY_USER = {"sub": "old_user", "admin": False}        # no 'role' field
+LEGACY_ADMIN = {"sub": "old_admin", "admin": True}  # no 'role' field
+LEGACY_USER = {"sub": "old_user", "admin": False}  # no 'role' field
 
 
 # ---------------------------------------------------------------------------
 # Scenario 1: admin.system permission
 # ---------------------------------------------------------------------------
+
 
 class TestScenario1AdminSystem:
     """Non-admin JWT must be denied admin.system endpoints."""
@@ -70,6 +71,7 @@ class TestScenario1AdminSystem:
 # Scenario 2: security.manage permission
 # ---------------------------------------------------------------------------
 
+
 class TestScenario2SecurityManage:
     """Non-admin JWT must be denied security.manage endpoints."""
 
@@ -84,6 +86,7 @@ class TestScenario2SecurityManage:
 # Scenario 3: admin.users.write permission
 # ---------------------------------------------------------------------------
 
+
 class TestScenario3AdminUsersWrite:
     """Non-admin JWT must be denied admin.users.write endpoints."""
 
@@ -97,6 +100,7 @@ class TestScenario3AdminUsersWrite:
 # ---------------------------------------------------------------------------
 # Additional denial coverage: config endpoints
 # ---------------------------------------------------------------------------
+
 
 class TestAdminConfigPermissions:
     def test_non_admin_denied_config_read(self):
@@ -116,6 +120,7 @@ class TestAdminConfigPermissions:
 # Legacy token fallback (admin boolean, no 'role' field)
 # ---------------------------------------------------------------------------
 
+
 class TestLegacyTokenFallback:
     def test_legacy_admin_token_derives_admin_role(self):
         assert _derive_role(LEGACY_ADMIN) == Role.ADMIN
@@ -133,6 +138,7 @@ class TestLegacyTokenFallback:
 # ---------------------------------------------------------------------------
 # Invalid / injected role strings
 # ---------------------------------------------------------------------------
+
 
 class TestInvalidRoleHandling:
     def test_unknown_role_string_falls_back_to_user(self):
@@ -155,6 +161,7 @@ class TestInvalidRoleHandling:
 # ---------------------------------------------------------------------------
 # ROLE_PERMISSIONS mapping integrity
 # ---------------------------------------------------------------------------
+
 
 class TestRolePermissionsMapping:
     def test_admin_role_has_all_endpoint_permissions(self):
@@ -199,6 +206,6 @@ class TestRolePermissionsMapping:
             content = f.read_text()
             # imports of require_admin should not exist (only definition in services/auth.py)
             if "from services.auth import" in content:
-                assert "require_admin" not in content, (
-                    f"{f.name} still imports require_admin — should use require_permission"
-                )
+                assert (
+                    "require_admin" not in content
+                ), f"{f.name} still imports require_admin — should use require_permission"
