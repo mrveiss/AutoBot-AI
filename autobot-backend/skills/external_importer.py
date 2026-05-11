@@ -207,8 +207,13 @@ class ExternalSkillImporter:
             List of catalog entry dicts.
 
         Raises:
-            RuntimeError: On HTTP error or unexpected response shape.
+            RuntimeError: On HTTP error, SSRF guard rejection, or unexpected response shape.
         """
+        from autobot_shared.url_safety import is_public_url_async
+
+        if not await is_public_url_async(url):
+            raise RuntimeError(f"Catalog URL blocked by SSRF guard: {url}")
+
         params = {"page": page, "page_size": page_size}
         timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession(timeout=timeout) as session:
