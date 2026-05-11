@@ -34,12 +34,14 @@ class TestSharedPermissionEnumIsCanonical:
 
     def test_auth_rbac_re_exports_match_shared(self):
         """auth_rbac.py must re-export the identical objects, not local copies."""
-        import sys
         import os
+        import sys
 
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
         try:
-            from auth_rbac import Permission as RbacPerm, Role as RbacRole, ROLE_PERMISSIONS as RbacRP
+            from auth_rbac import ROLE_PERMISSIONS as RbacRP
+            from auth_rbac import Permission as RbacPerm
+            from auth_rbac import Role as RbacRole
 
             assert RbacPerm is Permission, "auth_rbac.Permission must be the same object as shared Permission"
             assert RbacRole is Role, "auth_rbac.Role must be the same object as shared Role"

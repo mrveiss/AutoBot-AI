@@ -37,15 +37,15 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 # Import session lifecycle hooks (Issue #4260)
 from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
 
+# Import shared exception classes (Issue #292 - Eliminate duplicate code)
+from exceptions import get_exceptions_lazy
+
 # CRITICAL SECURITY FIX: Import session ownership validation
 from security.session_ownership import validate_session_ownership
 
 # Issue #6559: Wire audit_record into session create/delete/export endpoints
 from services.audit import AuditAction, audit_record
 from type_defs.common import Metadata
-
-# Import shared exception classes (Issue #292 - Eliminate duplicate code)
-from exceptions import get_exceptions_lazy
 
 # Import reusable chat utilities
 from utils.chat_utils import (

@@ -16,8 +16,8 @@ import aiohttp
 
 from autobot_shared.http_client import get_http_client
 from constants.network_constants import NetworkConstants, ServiceURLs
-from type_defs.common import Metadata
 from exceptions import ServiceUnavailableError
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 

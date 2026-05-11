@@ -50,13 +50,13 @@ from constants.threshold_constants import TimingConstants
 # Import dependencies and utilities - Using available dependencies
 from dependencies import get_config, get_knowledge_base
 
+# Import shared exception classes (Issue #292 - Eliminate duplicate code)
+from exceptions import get_exceptions_lazy
+
 # CRITICAL SECURITY FIX: Import session ownership validation
 from security.session_ownership import validate_session_ownership
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
-
-# Import shared exception classes (Issue #292 - Eliminate duplicate code)
-from exceptions import get_exceptions_lazy
 
 # Import reusable chat utilities - Phase 1 Utility Extraction
 from utils.chat_utils import (
