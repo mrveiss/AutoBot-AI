@@ -37,9 +37,17 @@ denylist self-expires and never grows unbounded.
 
 Configuration
 -------------
-``RUN_JWT_SECRET``       – HMAC signing secret (32+ char recommended).
-                           Falls back to ``AUTOBOT_JWT_SECRET`` / ``SECRET_KEY``.
-``RUN_JWT_TTL_SECONDS``  – Token lifetime in seconds (default 300).
+``RUN_JWT_SECRET``          – HMAC signing secret (32+ char recommended).
+                              Falls back to ``AUTOBOT_JWT_SECRET``.
+                              ``SECRET_KEY`` is intentionally excluded — a
+                              general app secret would allow any service that
+                              knows it to forge run JWTs.
+``RUN_JWT_TTL_SECONDS``     – Token lifetime in seconds (default 300).
+``RUN_JWT_REDIS_FAIL_OPEN`` – Set to ``"1"`` to allow validation when Redis is
+                              unreachable (fail-open).  Default is fail-closed:
+                              if Redis cannot be reached the JTI denylist check
+                              raises ``JWTDecodeError`` so revoked tokens are
+                              never silently accepted during an outage.
 """
 
 from __future__ import annotations
@@ -65,6 +73,7 @@ logger = logging.getLogger(__name__)
 
 _ENV_SECRET = "RUN_JWT_SECRET"
 _ENV_TTL = "RUN_JWT_TTL_SECONDS"
+_ENV_FAIL_OPEN = "RUN_JWT_REDIS_FAIL_OPEN"
 _DEFAULT_TTL = 300
 _DENYLIST_PREFIX = "run_jwt:revoked:"
 
@@ -82,13 +91,18 @@ VALID_SCOPES: frozenset[str] = frozenset(
 
 
 def _secret() -> str:
-    """Resolve the signing secret from environment variables, in priority order."""
-    for var in (_ENV_SECRET, "AUTOBOT_JWT_SECRET", "SECRET_KEY"):
+    """Resolve the signing secret from environment variables, in priority order.
+
+    ``SECRET_KEY`` is deliberately excluded from the fallback chain.  A
+    general-purpose app secret that is known to multiple services would allow
+    any of those services to forge run JWTs, undermining the isolation goal.
+    """
+    for var in (_ENV_SECRET, "AUTOBOT_JWT_SECRET"):
         val = os.environ.get(var, "")
         if val:
             return val
     raise RuntimeError(
-        "No JWT signing secret configured.  Set RUN_JWT_SECRET (or AUTOBOT_JWT_SECRET)."
+        "No run-JWT signing secret configured.  Set RUN_JWT_SECRET (or AUTOBOT_JWT_SECRET)."
     )
 
 
@@ -178,10 +192,28 @@ async def _add_to_denylist(jti: str, remaining_ttl: int) -> None:
 
 
 async def _is_denied(jti: str) -> bool:
-    """Return True if the JTI is present in the Redis denylist."""
+    """Return True if the JTI is present in the Redis denylist.
+
+    When Redis is unavailable the default policy is **fail-closed**: raises
+    ``JWTDecodeError`` so that a revoked token cannot be used during an outage.
+    Set ``RUN_JWT_REDIS_FAIL_OPEN=1`` to allow validation when Redis is down
+    (only appropriate for environments where Redis availability is more critical
+    than the revocation guarantee).
+
+    Raises:
+        JWTDecodeError: Redis is unavailable and fail-closed mode is active.
+    """
     redis = await get_async_redis_client(database="main")
     if redis is None:
-        return False
+        if os.environ.get(_ENV_FAIL_OPEN) == "1":
+            logger.warning(
+                "run_jwt: Redis unavailable — denylist check skipped (RUN_JWT_REDIS_FAIL_OPEN=1)"
+            )
+            return False
+        raise JWTDecodeError(
+            "run_jwt: Redis unavailable — cannot verify JTI revocation status "
+            "(set RUN_JWT_REDIS_FAIL_OPEN=1 to allow fail-open)"
+        )
     return bool(await redis.exists(_DENYLIST_PREFIX + jti))
 
 
@@ -215,34 +247,22 @@ async def validate_run_jwt(token: str) -> Dict[str, object]:
     return claims
 
 
-def revoke_run_jwt(token: str, agent_id: Optional[str] = None) -> None:
-    """Revoke a run-scoped JWT by adding its JTI to the Redis denylist.
-
-    The denylist entry TTL equals the remaining token lifetime so it
-    self-expires and never accumulates indefinitely.  Silently skips
-    tokens that have already expired (nothing to revoke).
-
-    Args:
-        token: JWT string to revoke (returned by ``mint_run_jwt``).
-        agent_id: Optional caller identity for the audit record (defaults to
-            the ``agent_id`` claim embedded in the token).
-    """
+def _extract_revoke_claims(token: str) -> Optional[Dict[str, object]]:
+    """Decode token for revocation; returns None when already expired/invalid."""
     try:
-        claims = decode_jwt(token, _secret())
+        return decode_jwt(token, _secret())
     except JWTExpiredError:
         logger.debug("run_jwt: revoke called on already-expired token — noop")
-        return
+        return None
     except JWTDecodeError as exc:
         logger.warning("run_jwt: revoke called on invalid token: %s", exc)
-        return
+        return None
 
-    jti = str(claims.get("jti", ""))
-    exp = claims.get("exp")
-    remaining = max(0, int(exp) - int(time.time())) if exp else _ttl()
 
-    run_redis_write(_add_to_denylist(jti, remaining), label="run_jwt_revoke")
-
+def _emit_revoke_audit(claims: Dict[str, object], agent_id: Optional[str], remaining: int) -> None:
+    """Fire audit record for a revocation event."""
     effective_agent = agent_id or str(claims.get("agent_id", "unknown"))
+    jti = str(claims.get("jti", ""))
     audit_record(
         user_id=effective_agent,
         action=AuditAction.RUN_JWT_REVOKE,
@@ -261,3 +281,56 @@ def revoke_run_jwt(token: str, agent_id: Optional[str] = None) -> None:
         claims.get("run_id"),
         remaining,
     )
+
+
+async def revoke_run_jwt_async(token: str, agent_id: Optional[str] = None) -> None:
+    """Revoke a run-scoped JWT — async variant with guaranteed Redis write.
+
+    Prefer this over ``revoke_run_jwt`` in async contexts (e.g. breach-response
+    handlers) where you need confirmation that the JTI has been written to the
+    denylist before proceeding.  The sync variant uses fire-and-forget which
+    has a small race window between the call returning and the actual Redis write.
+
+    Args:
+        token: JWT string to revoke.
+        agent_id: Optional caller identity for the audit record.
+    """
+    claims = _extract_revoke_claims(token)
+    if claims is None:
+        return
+
+    jti = str(claims.get("jti", ""))
+    exp = claims.get("exp")
+    remaining = max(0, int(exp) - int(time.time())) if exp else _ttl()
+
+    await _add_to_denylist(jti, remaining)
+    _emit_revoke_audit(claims, agent_id, remaining)
+
+
+def revoke_run_jwt(token: str, agent_id: Optional[str] = None) -> None:
+    """Revoke a run-scoped JWT by adding its JTI to the Redis denylist.
+
+    Uses fire-and-forget for the Redis write — safe for end-of-run cleanup
+    where a small async race is acceptable.  For breach-response or any
+    context where you need the revocation confirmed before continuing, use
+    ``revoke_run_jwt_async`` instead.
+
+    The denylist entry TTL equals the remaining token lifetime so it
+    self-expires and never accumulates indefinitely.  Silently skips
+    tokens that have already expired (nothing to revoke).
+
+    Args:
+        token: JWT string to revoke (returned by ``mint_run_jwt``).
+        agent_id: Optional caller identity for the audit record (defaults to
+            the ``agent_id`` claim embedded in the token).
+    """
+    claims = _extract_revoke_claims(token)
+    if claims is None:
+        return
+
+    jti = str(claims.get("jti", ""))
+    exp = claims.get("exp")
+    remaining = max(0, int(exp) - int(time.time())) if exp else _ttl()
+
+    run_redis_write(_add_to_denylist(jti, remaining), label="run_jwt_revoke")
+    _emit_revoke_audit(claims, agent_id, remaining)
