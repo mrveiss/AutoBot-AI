@@ -502,6 +502,64 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
             logger.error("Error extracting response content: %s", e)
             return "Error extracting response content"
 
+    async def generate_response(
+        self,
+        query: str,
+        context: str = "",
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Synthesize a RAG response from a free-form context string.
+
+        Caller contract (see `api/knowledge_search_scoped.py`):
+        - kwargs `query` and `context` (already-joined fact text).
+        - Returns a dict with a `response` key holding the synthesized answer text.
+
+        Never raises — on LLM/runtime failure, returns a status="error" payload
+        with a generic message so callers (and ultimately end users) do not see
+        stack traces or internal error details.
+        """
+        try:
+            if not isinstance(query, str) or not query.strip():
+                return {
+                    "status": "error",
+                    "response": "Query is required for RAG response generation.",
+                    "agent_type": "rag",
+                    "model_used": self.model_name,
+                }
+
+            context_block = context if isinstance(context, str) and context.strip() else "(no context provided)"
+            messages = [
+                {"role": "system", "content": self._get_rag_system_prompt()},
+                {"role": "system", "content": f"Retrieved Context:\n{context_block}"},
+                {"role": "user", "content": query},
+            ]
+
+            llm_response = await self.llm_interface.chat(
+                messages=messages,
+                llm_type="rag",
+                temperature=kwargs.get("temperature", 0.5),
+                max_tokens=kwargs.get("max_tokens", LLMDefaults.SYNTHESIS_MAX_TOKENS),
+                top_p=kwargs.get("top_p", LLMDefaults.DEFAULT_TOP_P),
+            )
+
+            synthesis = self._extract_synthesis_response(llm_response)
+            return {
+                "status": "success",
+                "response": synthesis.get("response", ""),
+                "confidence_score": synthesis.get("confidence", 0.8),
+                "agent_type": "rag",
+                "model_used": self.model_name,
+            }
+
+        except Exception as exc:
+            logger.error("RAGAgent.generate_response failed: %s", exc)
+            return {
+                "status": "error",
+                "response": "Unable to synthesize a response at this time.",
+                "agent_type": "rag",
+                "model_used": self.model_name,
+            }
+
     def is_rag_appropriate(self, message: str, has_documents: bool = False) -> bool:
         """
         Determine if a message requires RAG processing.
