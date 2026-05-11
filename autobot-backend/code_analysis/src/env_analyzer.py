@@ -19,8 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from autobot_shared.ssot_config import QUALITY_MODEL
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.ssot_config import QUALITY_MODEL
 
 # Issue #542: Handle imports for both standalone execution and backend import
 # When imported from backend, project root is in sys.path

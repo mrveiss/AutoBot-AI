@@ -18,8 +18,8 @@ Usage:
 import asyncio
 import sys
 
-from mcp.autobot_server import AutoBotMCPServer
 from autobot_shared.async_compat import run_or_schedule
+from mcp.autobot_server import AutoBotMCPServer
 
 
 async def main() -> None:

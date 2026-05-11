@@ -13,10 +13,10 @@ from typing import Optional, Union
 
 from redis.exceptions import RedisError
 
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 
 from .async_redis_manager import get_redis_manager
-from autobot_shared.async_compat import run_or_schedule
 
 logger = get_logger(__name__, "backend")
 

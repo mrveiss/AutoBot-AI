@@ -36,8 +36,8 @@ class GoalCategory(Enum):
     UNKNOWN = "unknown"
 
 
-from autobot_shared.status_enums import RiskLevel  # noqa: E402  # #6689 consolidation
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.status_enums import RiskLevel  # noqa: E402  # #6689 consolidation
 
 
 @dataclass

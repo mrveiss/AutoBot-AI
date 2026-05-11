@@ -626,6 +626,7 @@ class ManPageKnowledgeIntegrator:
 
 # Global integrator instance (thread-safe)
 import asyncio as _asyncio_lock
+
 from autobot_shared.async_compat import run_or_schedule
 
 _integrator_instance: Optional[ManPageKnowledgeIntegrator] = None

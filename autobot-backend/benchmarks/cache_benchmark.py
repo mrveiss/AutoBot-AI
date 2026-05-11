@@ -14,8 +14,8 @@ import statistics
 import time
 from typing import Any, Dict, List
 
-from llm_interface_pkg.cache import CachedResponse, LLMResponseCache
 from autobot_shared.async_compat import run_or_schedule
+from llm_interface_pkg.cache import CachedResponse, LLMResponseCache
 
 logger = logging.getLogger(__name__)
 

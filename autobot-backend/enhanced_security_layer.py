@@ -14,10 +14,11 @@ import os
 from datetime import timezone
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.async_compat import run_or_schedule
+
 # Import the centralized ConfigManager
 from config import config as global_config_manager
 from secure_command_executor import CommandRisk, SecureCommandExecutor, SecurityPolicy
-from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 

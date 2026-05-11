@@ -13,9 +13,9 @@ import sys
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from tests.fixtures import make_async_redis, make_redis_pipeline
-
 import pytest
+
+from tests.fixtures import make_async_redis, make_redis_pipeline
 
 # Stub heavy/optional imports that are pulled in by the models package on collection.
 # These are unavailable in the dev venv; the tests do not exercise SQLAlchemy code.

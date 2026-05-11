@@ -50,6 +50,7 @@ await stop_monitoring()
 import logging
 from typing import Any, Dict, List
 
+from autobot_shared.async_compat import run_or_schedule
 from utils.performance_monitoring.analyzers import (
     AlertAnalyzer,
     RecommendationGenerator,
@@ -80,7 +81,6 @@ from utils.performance_monitoring.types import (
     DEFAULT_PERFORMANCE_BASELINES,
     DEFAULT_RETENTION_HOURS,
 )
-from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 

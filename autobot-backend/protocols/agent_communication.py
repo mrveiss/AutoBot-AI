@@ -53,9 +53,10 @@ def _parse_priority(priority: Any) -> "MessagePriority":
     return MessagePriority.NORMAL
 
 
+from autobot_shared.async_compat import run_or_schedule
+
 # noqa: E402
 from autobot_shared.redis_client import get_redis_client  # noqa: E402
-from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 

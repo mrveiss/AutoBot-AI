@@ -32,11 +32,11 @@ import aiofiles
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_llm_logger
 from constants.threshold_constants import TimingConstants
 from knowledge_base import KnowledgeBase
 from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
-from autobot_shared.async_compat import run_or_schedule
 
 logger = get_llm_logger("knowledge_sync_incremental")
 

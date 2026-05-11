@@ -19,9 +19,10 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import psutil
 
+from autobot_shared.async_compat import run_or_schedule
+
 # Import existing monitoring infrastructure
 from constants.api_constants import PATH_API_HEALTH
-from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 

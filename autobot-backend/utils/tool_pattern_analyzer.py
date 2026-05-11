@@ -843,6 +843,7 @@ class ToolPatternAnalyzer:
 
 # Global analyzer instance (thread-safe)
 import threading
+
 from autobot_shared.async_compat import run_or_schedule
 
 _global_analyzer: Optional[ToolPatternAnalyzer] = None

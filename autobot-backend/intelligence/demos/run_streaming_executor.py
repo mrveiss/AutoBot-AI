@@ -28,6 +28,7 @@ for _p in (_BACKEND, _REPO_ROOT):
 import asyncio  # noqa: E402  (must follow sys.path bootstrap)
 import logging  # noqa: E402
 
+from autobot_shared.async_compat import run_or_schedule
 from constants.network_constants import NetworkConstants  # noqa: E402
 from intelligence.streaming_executor import (  # noqa: E402
     ChunkType,
@@ -37,7 +38,6 @@ from tests.fixtures.mocks import (  # noqa: E402
     MockCommandValidator,
     MockLLMService,
 )
-from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger("intelligence.demos.run_streaming_executor")
 

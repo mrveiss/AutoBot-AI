@@ -22,8 +22,9 @@ import json
 import sys
 import time
 
-from .service_registry import ServiceStatus, get_service_registry, get_service_url
 from autobot_shared.async_compat import run_or_schedule
+
+from .service_registry import ServiceStatus, get_service_registry, get_service_url
 
 
 def print_header(title: str):

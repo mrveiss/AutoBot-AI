@@ -719,9 +719,10 @@ class TodoWriteInterceptor:
         return success_count > 0
 
 
+from autobot_shared.async_compat import run_or_schedule
+
 # Global optimizer instance for easy access (thread-safe)
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.async_compat import run_or_schedule
 
 _global_optimizer = lazy_singleton(TodoWriteOptimizer)
 

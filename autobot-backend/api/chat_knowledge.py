@@ -61,6 +61,7 @@ from api.schemas_knowledge import (
     SessionFactsResponse,
 )
 from api.system_health import ComponentHealth, register_health_probe
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from chat_history import ChatHistoryManager
 
@@ -68,7 +69,6 @@ from chat_history import ChatHistoryManager
 from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
 from type_defs.common import Metadata
-from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 

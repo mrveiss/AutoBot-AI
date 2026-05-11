@@ -845,6 +845,7 @@ class ClaudeAPIOptimizationSuite:
 
 # Global optimization suite instance (thread-safe)
 import threading
+
 from autobot_shared.async_compat import run_or_schedule
 
 _global_optimization_suite: Optional[ClaudeAPIOptimizationSuite] = None
