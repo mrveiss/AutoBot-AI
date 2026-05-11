@@ -11,6 +11,7 @@ This module provides a centralized interface for communicating with the AI Stack
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 from typing import Dict, List, Optional
@@ -152,6 +153,14 @@ class AIStackClient:
             base_url = f"http://{host}:{port}"
         self.base_url = base_url.rstrip("/")
         self.http_client = get_http_client()
+
+        # Ollama backing URL: when the dedicated AI Stack service is absent,
+        # use the local Ollama instance for health/capability signalling (#6228).
+        _ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST", "")
+        _ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT", "11434")
+        self._ollama_url: Optional[str] = (
+            f"http://{_ollama_host}:{_ollama_port}" if _ollama_host else None
+        )
 
         # Get timeout, retry, and connection configuration from config
         timeout_seconds = ai_stack_config.get("timeout", 60)
@@ -325,8 +334,32 @@ class AIStackClient:
         return await self._make_request("POST", endpoint, data=request_body)
 
     async def health_check(self) -> Metadata:
-        """Check AI Stack health status and update connection_status."""
+        """Check AI Stack health — uses Ollama as backing service when configured (#6228)."""
+        if self._ollama_url:
+            try:
+                async with aiohttp.ClientSession() as _sess:
+                    async with _sess.get(
+                        f"{self._ollama_url}/api/tags",
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            models = [m["name"] for m in data.get("models", [])]
+                            if self.connection_status != "connected":
+                                logger.info("Ollama backing connected at %s", self._ollama_url)
+                            self.connection_status = "connected"
+                            return {
+                                "status": "healthy",
+                                "models": models,
+                                "model_count": len(models),
+                                "backend": "ollama",
+                                "timestamp": utc_timestamp(),
+                            }
+            except Exception as exc:
+                logger.debug("Ollama health probe failed: %s", exc)
+
         try:
+            # Fallback: try the dedicated AI Stack service directly.
             # AI Stack exposes /health (#6649) — /api/v2 is the ChromaDB heartbeat
             # path and was wrongly applied here, producing a 404 every poll.
             response = await self._make_request("GET", "/health")
@@ -355,13 +388,35 @@ class AIStackClient:
             }
 
     async def list_available_agents(self) -> Metadata:
-        """Get list of available AI agents."""
+        """List available agents — from Ollama models when configured (#6228), else AI Stack."""
+        if self._ollama_url:
+            try:
+                async with aiohttp.ClientSession() as _sess:
+                    async with _sess.get(
+                        f"{self._ollama_url}/api/tags",
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            agents = [
+                                {
+                                    "type": m["name"].replace(":", "_").replace(".", "_"),
+                                    "name": m["name"],
+                                    "status": "ready",
+                                    "provider": "ollama",
+                                    "parameters": m.get("details", {}).get("parameter_size", ""),
+                                }
+                                for m in data.get("models", [])
+                            ]
+                            return {"agents": agents, "total": len(agents), "source": "ollama"}
+            except Exception as exc:
+                logger.debug("Ollama agent list failed: %s", exc)
+
         try:
             response = await self._make_request("GET", "/agents")
             return response
         except AIStackError as e:
             logger.warning("Cannot list AI Stack agents: %s", e.message)
-            # Fallback: return configured agents
             return {
                 "agents": list(self.agent_endpoints.keys()),
                 "total": len(self.agent_endpoints),

@@ -977,6 +977,17 @@ async def _init_background_llm_sync(app: FastAPI):
             ai_stack_health = await ai_stack_client.health_check()
             if ai_stack_health.get("status") == "healthy":
                 logger.info("✅ [ 90%] AI Stack: AI Stack fully available")
+                try:
+                    agents_info = await ai_stack_client.list_available_agents()
+                    if agents_info.get("agents"):
+                        app.state.ai_stack_agents = agents_info
+                        logger.info(
+                            "✅ [ 90%] AI Stack: %d agents registered from %s",
+                            len(agents_info["agents"]),
+                            agents_info.get("source", "ai_stack"),
+                        )
+                except Exception as agents_exc:
+                    logger.warning("AI Stack agent listing failed: %s", agents_exc)
             else:
                 logger.warning(
                     "AI Stack API unreachable at %s — agent routing disabled",
