@@ -632,9 +632,10 @@ You should be aware of your current capabilities and limitations based on the sy
         return output_path
 
 
+from autobot_shared.async_compat import run_or_schedule
+
 # Global instance (thread-safe)
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.async_compat import run_or_schedule
 
 _llm_self_awareness = lazy_singleton(LLMSelfAwareness)
 

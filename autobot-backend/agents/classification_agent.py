@@ -14,6 +14,7 @@ from typing import Any, Dict, List
 
 from agents.json_formatter_agent import CLASSIFICATION_SCHEMA, json_formatter
 from agents.llm_failsafe_agent import get_robust_llm_response
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
@@ -26,7 +27,6 @@ from workflow_classifier import WorkflowClassifier
 
 from .base_agent import AgentRequest
 from .standardized_agent import StandardizedAgent
-from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 

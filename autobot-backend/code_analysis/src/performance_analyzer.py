@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from constants.ttl_constants import TTL_1_HOUR
 from autobot_shared.async_compat import run_or_schedule
+from constants.ttl_constants import TTL_1_HOUR
 
 logger = logging.getLogger(__name__)
 

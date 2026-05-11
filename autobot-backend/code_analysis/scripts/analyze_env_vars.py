@@ -9,8 +9,8 @@ from pathlib import Path
 
 from env_analyzer import EnvironmentAnalyzer
 
-from constants.network_constants import NetworkConstants
 from autobot_shared.async_compat import run_or_schedule
+from constants.network_constants import NetworkConstants
 
 
 def _print_analysis_summary(results: dict) -> None:

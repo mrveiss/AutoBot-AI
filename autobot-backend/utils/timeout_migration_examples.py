@@ -30,6 +30,8 @@ from constants.threshold_constants import TimingConstants
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))
 
+from autobot_shared.async_compat import run_or_schedule
+
 from .long_running_operations_framework import (
     LongRunningOperationManager,
     OperationExecutionContext,
@@ -37,7 +39,6 @@ from .long_running_operations_framework import (
     OperationType,
 )
 from .operation_timeout_integration import operation_integration_manager
-from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 

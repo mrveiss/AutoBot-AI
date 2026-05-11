@@ -10,6 +10,7 @@ from pathlib import Path
 
 from automated_fix_generator import AutomatedFixGenerator
 from code_quality_dashboard import CodeQualityDashboard
+
 from autobot_shared.async_compat import run_or_schedule
 
 

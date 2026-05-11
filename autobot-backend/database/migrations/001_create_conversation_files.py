@@ -12,9 +12,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from autobot_shared.async_compat import run_or_schedule
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
-from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger(__name__)
 

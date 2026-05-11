@@ -34,6 +34,7 @@ import os
 import resource
 import sys
 from typing import Any, Dict
+
 from autobot_shared.async_compat import run_or_schedule
 
 logger = logging.getLogger("mcp_worker")

@@ -20,11 +20,11 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from autobot_shared.async_compat import run_or_schedule
 from user_management.config import get_deployment_config
 
 # Import models to register with SQLAlchemy
 from user_management.models import Base
-from autobot_shared.async_compat import run_or_schedule
 
 # this is the Alembic Config object
 config = context.config

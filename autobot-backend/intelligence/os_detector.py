@@ -495,8 +495,8 @@ class OSDetector:
         return None
 
 
-from autobot_shared.singleton_factory import async_lazy_singleton
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.singleton_factory import async_lazy_singleton
 
 get_os_detector = async_lazy_singleton(OSDetector)
 
