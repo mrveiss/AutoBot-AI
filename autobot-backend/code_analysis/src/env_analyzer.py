@@ -9,7 +9,6 @@ Analyzes codebase for hardcoded values that should be environment variables
 from __future__ import annotations
 
 import ast
-import asyncio
 import json
 import logging
 import re

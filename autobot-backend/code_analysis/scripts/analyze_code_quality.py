@@ -10,7 +10,6 @@ NOTE: run_comprehensive_quality_analysis (~145 lines) is an ACCEPTABLE EXCEPTION
 per Issue #490 - analysis dashboard with sequential report generation. Low priority.
 """
 
-import asyncio
 import json
 from pathlib import Path
 

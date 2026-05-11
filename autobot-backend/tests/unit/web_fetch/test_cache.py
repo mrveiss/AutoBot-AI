@@ -16,7 +16,6 @@ from web_fetch.cache import (
     get_cached_result,
     set_cached_result,
 )
-from web_fetch.types import RenderMode
 
 
 class TestTTLResolver:

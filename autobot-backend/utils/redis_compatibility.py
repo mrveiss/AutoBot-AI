@@ -6,7 +6,6 @@ Redis Compatibility Layer for AutoBot
 Provides backward compatibility for existing code while transitioning to async Redis manager
 """
 
-import asyncio
 import threading
 import warnings
 from typing import Optional, Union

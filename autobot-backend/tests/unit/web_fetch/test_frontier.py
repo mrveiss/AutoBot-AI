@@ -3,7 +3,6 @@
 # Author: mrveiss
 """Tests for web_fetch.frontier — dedup, depth, same-origin, max_pages."""
 
-import pytest
 
 from web_fetch.frontier import Frontier, _same_origin, _url_key, extract_links
 

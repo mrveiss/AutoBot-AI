@@ -390,7 +390,6 @@ Respond with valid JSON:
 # CLI test tool
 if __name__ == "__main__":
     import argparse
-    import asyncio
 
     parser = argparse.ArgumentParser(description="Test Gemma Classification Agent")
     parser.add_argument("message", nargs="?", help="Message to classify")

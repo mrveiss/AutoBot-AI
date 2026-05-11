@@ -4,7 +4,6 @@ Analyzes codebase for performance bottlenecks, memory leaks, and processing inef
 """
 
 import ast
-import asyncio
 import json
 import logging
 import re

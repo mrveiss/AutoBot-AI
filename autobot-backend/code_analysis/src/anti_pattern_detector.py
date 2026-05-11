@@ -1717,7 +1717,7 @@ async def run_analysis(root_path: str = ".") -> AntiPatternReport:
 
 
 if __name__ == "__main__":
-    import asyncio
+    pass
 
     async def main():
         """Example usage"""

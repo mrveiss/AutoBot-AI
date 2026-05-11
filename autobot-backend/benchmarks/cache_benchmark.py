@@ -8,7 +8,6 @@ Inspired by flash-moe's "Trust the OS" finding (removing custom cache = +38%).
 Usage: python -m benchmarks.cache_benchmark
 """
 
-import asyncio
 import logging
 import statistics
 import time

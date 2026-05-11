@@ -4,7 +4,6 @@ Analyzes API endpoints for consistency, patterns, and best practices
 """
 
 import ast
-import asyncio
 import json
 import logging
 import re

@@ -3,9 +3,8 @@
 # Author: mrveiss
 """Tests for web_fetch.fetcher — render mode selection, SPA detection, fallback chain."""
 
-import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -20,7 +19,6 @@ from web_fetch.types import (
     ERR_CIRCUIT_OPEN,
     ERR_ROBOTS_BLOCKED,
     ERR_SSRF_BLOCKED,
-    FetchResult,
     RenderMode,
 )
 

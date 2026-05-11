@@ -35,7 +35,7 @@ API contract::
 """
 
 import logging
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -126,7 +126,7 @@ async def crawl_url_endpoint(request: CrawlRequest) -> CrawlResponse:
     round-trip per URL keeps link extraction and content extraction in sync).
     The field is accepted on the wire for forward-compatibility.
     """
-    _render_mode = RenderMode(request.render)  # validate enum; surfaced in future connector update
+    RenderMode(request.render)  # validate enum; surfaced in future connector update
 
     connector = _make_connector(request)
     try:

@@ -11,7 +11,6 @@ Analyzes codebase for:
 - Team coverage analysis
 """
 
-import asyncio
 import json
 import logging
 import subprocess

@@ -3,7 +3,6 @@
 Focused analysis for critical hardcoded environment variables
 """
 
-import asyncio
 import logging
 import re
 from pathlib import Path

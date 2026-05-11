@@ -7,7 +7,6 @@ Alembic Environment Configuration
 This module configures Alembic migrations for the User Management System.
 """
 
-import asyncio
 import os
 import sys
 from logging.config import fileConfig

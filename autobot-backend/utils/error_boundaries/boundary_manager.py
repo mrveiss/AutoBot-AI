@@ -8,7 +8,6 @@ Issue #381: Extracted from error_boundaries.py god class refactoring.
 Contains the central error boundary management system.
 """
 
-import asyncio
 import json
 import logging
 import threading

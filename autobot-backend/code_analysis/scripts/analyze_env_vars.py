@@ -3,7 +3,6 @@
 Analyze AutoBot codebase for hardcoded environment variables and generate config recommendations
 """
 
-import asyncio
 import json
 from pathlib import Path
 

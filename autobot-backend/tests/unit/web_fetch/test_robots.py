@@ -3,7 +3,7 @@
 # Author: mrveiss
 """Tests for web_fetch.robots — parser, cache hit/miss, override behavior."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

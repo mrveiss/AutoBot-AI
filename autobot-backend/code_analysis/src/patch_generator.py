@@ -3,7 +3,6 @@ Automated Fix Recommendation Generator
 Generates specific code fixes and patches based on analysis results from all analyzers
 """
 
-import asyncio
 import json
 import logging
 import re

@@ -4,7 +4,6 @@ Generate Automated Code Fixes
 Uses analysis results to generate specific, actionable code fixes
 """
 
-import asyncio
 import json
 from pathlib import Path
 

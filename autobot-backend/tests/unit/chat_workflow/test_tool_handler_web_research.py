@@ -19,7 +19,7 @@ import pytest
 
 def test_scrape_url_schema_registered() -> None:
     """SCRAPE_URL_SCHEMA is present in _BUILTIN_TOOL_SCHEMAS."""
-    from chat_workflow.tool_handler import SCRAPE_URL_SCHEMA, _BUILTIN_TOOL_SCHEMAS
+    from chat_workflow.tool_handler import _BUILTIN_TOOL_SCHEMAS, SCRAPE_URL_SCHEMA
 
     assert "scrape_url" in _BUILTIN_TOOL_SCHEMAS
     assert _BUILTIN_TOOL_SCHEMAS["scrape_url"] is SCRAPE_URL_SCHEMA
@@ -27,7 +27,7 @@ def test_scrape_url_schema_registered() -> None:
 
 def test_crawl_site_schema_registered() -> None:
     """CRAWL_SITE_SCHEMA is present in _BUILTIN_TOOL_SCHEMAS."""
-    from chat_workflow.tool_handler import CRAWL_SITE_SCHEMA, _BUILTIN_TOOL_SCHEMAS
+    from chat_workflow.tool_handler import _BUILTIN_TOOL_SCHEMAS, CRAWL_SITE_SCHEMA
 
     assert "crawl_site" in _BUILTIN_TOOL_SCHEMAS
     assert _BUILTIN_TOOL_SCHEMAS["crawl_site"] is CRAWL_SITE_SCHEMA
@@ -35,7 +35,7 @@ def test_crawl_site_schema_registered() -> None:
 
 def test_map_site_schema_registered() -> None:
     """MAP_SITE_SCHEMA is present in _BUILTIN_TOOL_SCHEMAS."""
-    from chat_workflow.tool_handler import MAP_SITE_SCHEMA, _BUILTIN_TOOL_SCHEMAS
+    from chat_workflow.tool_handler import _BUILTIN_TOOL_SCHEMAS, MAP_SITE_SCHEMA
 
     assert "map_site" in _BUILTIN_TOOL_SCHEMAS
     assert _BUILTIN_TOOL_SCHEMAS["map_site"] is MAP_SITE_SCHEMA
@@ -43,7 +43,7 @@ def test_map_site_schema_registered() -> None:
 
 def test_extract_structured_data_schema_registered() -> None:
     """EXTRACT_STRUCTURED_DATA_SCHEMA is present in _BUILTIN_TOOL_SCHEMAS."""
-    from chat_workflow.tool_handler import EXTRACT_STRUCTURED_DATA_SCHEMA, _BUILTIN_TOOL_SCHEMAS
+    from chat_workflow.tool_handler import _BUILTIN_TOOL_SCHEMAS, EXTRACT_STRUCTURED_DATA_SCHEMA
 
     assert "extract_structured_data" in _BUILTIN_TOOL_SCHEMAS
     assert _BUILTIN_TOOL_SCHEMAS["extract_structured_data"] is EXTRACT_STRUCTURED_DATA_SCHEMA
@@ -51,7 +51,7 @@ def test_extract_structured_data_schema_registered() -> None:
 
 def test_web_search_schema_unchanged() -> None:
     """Regression: WEB_SEARCH_SCHEMA still present and has required 'query'."""
-    from chat_workflow.tool_handler import WEB_SEARCH_SCHEMA, _BUILTIN_TOOL_SCHEMAS
+    from chat_workflow.tool_handler import _BUILTIN_TOOL_SCHEMAS, WEB_SEARCH_SCHEMA
 
     assert "web_search" in _BUILTIN_TOOL_SCHEMAS
     assert "query" in WEB_SEARCH_SCHEMA["properties"]

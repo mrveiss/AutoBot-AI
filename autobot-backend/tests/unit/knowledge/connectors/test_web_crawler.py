@@ -23,7 +23,7 @@ from knowledge.connectors.web_crawler import (
     _get_domain,
     _url_to_source_id,
 )
-from web_fetch.types import ERR_ROBOTS_BLOCKED, FetchResult, RenderMode
+from web_fetch.types import FetchResult, RenderMode
 
 # ---------------------------------------------------------------------------
 # Fixture static site — HTML so extract_links works correctly
