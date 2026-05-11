@@ -33,11 +33,16 @@ import logging
 import os
 import resource
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
 
 logger = logging.getLogger("mcp_worker")
+
+# When set to "1" the worker enforces run-scoped JWT on every ``call`` request.
+# Workers spawned without JWT support can opt out by leaving this unset.
+_JWT_ENFORCE = os.environ.get("MCP_RUN_JWT_ENFORCE", "1") == "1"
 
 _JSONRPC = "2.0"
 
@@ -93,6 +98,32 @@ async def _invoke_tool(bridge: Any, tool_name: str, arguments: Dict[str, Any]) -
     raise RuntimeError(f"tool {tool_name} not found on bridge {bridge.__name__}")
 
 
+async def _validate_run_jwt_param(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Validate the ``run_jwt`` field in RPC params, returning claims or None.
+
+    Returns ``None`` when JWT enforcement is disabled (``MCP_RUN_JWT_ENFORCE``
+    is not ``"1"``).  Raises ``PermissionError`` with a descriptive message
+    when enforcement is on but the token is absent, expired, or revoked.
+    """
+    if not _JWT_ENFORCE:
+        return None
+
+    token = params.get("run_jwt") or os.environ.get("MCP_RUN_JWT", "")
+    if not token:
+        raise PermissionError("run_jwt: no token provided and MCP_RUN_JWT is unset")
+
+    # Import lazily — keeps the module importable even when the service layer
+    # is not on PYTHONPATH (e.g. unit tests that mock validate_run_jwt).
+    from services.run_jwt import validate_run_jwt
+
+    try:
+        return await validate_run_jwt(token)
+    except JWTExpiredError as exc:
+        raise PermissionError(f"run_jwt: token expired — {exc}") from exc
+    except JWTDecodeError as exc:
+        raise PermissionError(f"run_jwt: invalid token — {exc}") from exc
+
+
 async def _handle_request(bridge: Any, req: Dict[str, Any]) -> Dict[str, Any]:
     """Process a single JSON-RPC request object."""
     req_id = req.get("id")
@@ -108,6 +139,16 @@ async def _handle_request(bridge: Any, req: Dict[str, Any]) -> Dict[str, Any]:
             "jsonrpc": _JSONRPC,
             "id": req_id,
             "error": {"code": -32601, "message": f"unknown method {method}"},
+        }
+
+    try:
+        await _validate_run_jwt_param(params)
+    except PermissionError as exc:
+        logger.warning("worker: JWT auth rejected: %s", exc)
+        return {
+            "jsonrpc": _JSONRPC,
+            "id": req_id,
+            "error": {"code": -32001, "message": str(exc)},
         }
 
     tool = params.get("tool")
