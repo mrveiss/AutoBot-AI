@@ -204,9 +204,7 @@ class WorkflowRunner:
         except Exception as e:
             return self._handle_task_exception(task, e)
 
-    async def _dispatch_via_skill(
-        self, task: AgentTask, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _dispatch_via_skill(self, task: AgentTask, context: Dict[str, Any]) -> Dict[str, Any]:
         """Dispatch task via the bound skill (#7430 Phase 2 of #7268 / ADR-006).
 
         Caller already holds ``self.resource_semaphore`` and called

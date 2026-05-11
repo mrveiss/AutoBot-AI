@@ -352,6 +352,11 @@ class PhaseValidator:
         # Calculate overall system maturity
         overall_completion = (total_weighted_score / total_weight) * 100 if total_weight > 0 else 0
 
+        # Top-level alias (#7496) — `_output_json_results` and the CI gate read
+        # `results["overall_maturity"]`; without this key the gate always saw 0
+        # and tripped the 60% threshold even when validation succeeded.
+        validation_results["overall_maturity"] = round(overall_completion, 2)
+
         validation_results["overall_assessment"] = {
             "system_maturity_score": round(overall_completion, 2),
             "development_stage": self._determine_development_stage(overall_completion),
