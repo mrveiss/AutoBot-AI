@@ -96,6 +96,21 @@ class StrategyPlanner:
         except ValueError:
             strategy = ExecutionStrategy.SEQUENTIAL
 
+        # #7431 Phase 3: if any task is awaiting an async-generated skill,
+        # flip the plan to BLOCKED so the executor refuses to run it. The
+        # resume path (BlockedPlanResumer subscriber) re-binds and unblocks
+        # once the awaited skill is promoted via skill_promoted Redis pub-sub.
+        plan_status = (
+            "blocked" if any(t.pending_skill_id for t in tasks) else "pending"
+        )
+        if plan_status == "blocked":
+            blocked_count = sum(1 for t in tasks if t.pending_skill_id)
+            logger.info(
+                "plan %s constructed in BLOCKED state: %d task(s) awaiting Phase 3 skill generation",
+                plan_id,
+                blocked_count,
+            )
+
         return WorkflowPlan(
             plan_id=plan_id,
             goal=goal,
@@ -105,6 +120,7 @@ class StrategyPlanner:
             estimated_total_duration_seconds=plan_data.get("estimated_duration", 60.0),
             resource_requirements=plan_data.get("resource_requirements", {}),
             success_criteria=plan_data.get("success_criteria", ["All tasks completed"]),
+            status=plan_status,
         )
 
     def _get_skill_router(self) -> Optional[Any]:
@@ -158,6 +174,12 @@ class StrategyPlanner:
 
         skill_name = result.get("enabled_skill")
         if not skill_name:
+            # #7431 Phase 3: no skill matched — fire async gap-fill in the
+            # background and attach a pending_skill_id so the plan can flip
+            # to BLOCKED. The forthcoming resume path re-binds the task
+            # when the generated skill is promoted (skill_promoted Redis
+            # pub-sub event from registry.register).
+            await self._trigger_async_gap_fill(task, task_desc)
             return
 
         # Action defaults to ``"execute"`` — Phase 2 (WorkflowExecutor
@@ -170,6 +192,48 @@ class StrategyPlanner:
             skill_name,
             task.task_id,
             task.skill_resolution_method,
+        )
+
+    async def _trigger_async_gap_fill(self, task: "AgentTask", intent: str) -> None:
+        """Fire Phase 3 gap-fill in background; attach pending_skill_id (#7431).
+
+        Best-effort: when the pending_skills module isn't importable the
+        task stays unbound (legacy capability dispatch continues). This
+        keeps planner behavior compatible with stripped-down environments
+        that don't ship the gap-fill pipeline.
+        """
+        try:
+            from skills.pending_skills import trigger_gap_fill
+        except ImportError:
+            logger.debug("pending_skills module unavailable; gap-fill skipped")
+            return
+
+        router = self._get_skill_router()
+        if router is None:
+            logger.debug("skill_router unavailable; gap-fill skipped for task %s", task.task_id)
+            return
+
+        async def _router_call(task_intent: str) -> Dict[str, Any]:
+            # No dry_run → Phase 3 (research → autonomous-skill-development
+            # → governance → register) runs. Result returned here is just
+            # informational; the resume path listens on skill_promoted via
+            # Redis pub-sub for the eventual outcome.
+            return await router.execute("find_skill", {"task": task_intent})
+
+        # plan_id is not yet known here (binding happens before plan
+        # construction completes) — record placeholder and reconcile in
+        # build_workflow_plan via the post-loop pass that flips status.
+        binding = await trigger_gap_fill(
+            intent=intent,
+            plan_id="<pending-plan>",
+            task_id=task.task_id,
+            router_call=_router_call,
+        )
+        task.pending_skill_id = binding.pending_skill_id
+        logger.info(
+            "task %s blocked on Phase 3 skill generation (pending_skill_id=%s)",
+            task.task_id,
+            binding.pending_skill_id,
         )
 
     def create_fallback_plan(self, goal: str) -> Dict[str, Any]:
