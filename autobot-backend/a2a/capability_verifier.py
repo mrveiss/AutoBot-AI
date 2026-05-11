@@ -135,51 +135,33 @@ async def verify_remote_card(remote_url: str) -> CapabilityReport:
 
 async def _fetch_and_verify(remote_url: str) -> CapabilityReport:
     """Perform the actual HTTP fetch and verification."""
-    from urllib.parse import urlparse
+    import json
 
     import aiohttp
 
-    from autobot_shared.security.input_sanitizer import validate_url
+    from autobot_shared.security.ssrf_guard import SSRFError, fetch_safe_url
+
+    well_known = remote_url.rstrip("/") + "/.well-known/agent.json"
 
     try:
-        validated_url = validate_url(remote_url, allow_private=False)
-    except ValueError as exc:
+        # fetch_safe_url enforces: scheme validation, DNS resolution to public IPs,
+        # pinned resolver (defeats DNS-rebind), allow_redirects=False (#1721, #6533).
+        status, body_bytes, _ = await fetch_safe_url(well_known, timeout=5.0)
+    except SSRFError as exc:
+        return CapabilityReport(verified=False, warnings=[f"Invalid agent URL: {exc}"])
+    except aiohttp.ClientError as exc:
+        return CapabilityReport(verified=False, warnings=[f"Agent card fetch error: {exc}"])
+
+    if status != 200:
         return CapabilityReport(
             verified=False,
-            warnings=[f"Invalid agent URL: {exc}"],
-        )
-
-    well_known = validated_url.rstrip("/") + "/.well-known/agent.json"
-
-    # Inline SSRF guard so static analysis can trace the sanitization (#1733)
-    parsed = urlparse(well_known)
-    if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        return CapabilityReport(
-            verified=False,
-            warnings=[f"Invalid agent URL scheme or host: {well_known}"],
+            warnings=[f"Agent card fetch failed: HTTP {status}"],
         )
 
     try:
-        # URL is validated via validate_url(allow_private=False) above and the
-        # inline scheme+hostname guard at lines 157-162; redirect disabled.
-        # codeql[py/full-ssrf] - SSRF mitigated: scheme/host validated, no redirects
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                well_known,
-                timeout=aiohttp.ClientTimeout(total=5),
-                allow_redirects=False,  # Prevent SSRF via redirect (#1721)
-            ) as resp:
-                if resp.status != 200:
-                    return CapabilityReport(
-                        verified=False,
-                        warnings=[f"Agent card fetch failed: HTTP {resp.status}"],
-                    )
-                data = await resp.json()
-    except Exception as exc:
-        return CapabilityReport(
-            verified=False,
-            warnings=[f"Agent card fetch error: {exc}"],
-        )
+        data = json.loads(body_bytes)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        return CapabilityReport(verified=False, warnings=[f"Agent card is not valid JSON: {exc}"])
 
     return _check_card_skills(data)
 
