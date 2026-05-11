@@ -73,6 +73,19 @@
     - "{{ ai_data_dir }}"
     - "{{ ai_data_dir }}/chromadb"
 
+# ============================================================
+# MVA-79: Stop ChromaDB before venv operations.
+# The chroma binary lives inside the venv; wiping the venv while the service
+# is running causes an outage (reported in MVA-28 and MVA-66).
+# failed_when: false handles fresh installs where the unit does not exist yet.
+# ============================================================
+- name: "AI Stack | Stop ChromaDB before venv recreation (MVA-79)"
+  ansible.builtin.systemd:
+    name: autobot-chromadb
+    state: stopped
+  failed_when: false
+  tags: ['ai', 'venv']
+
 - name: Check existing venv Python version (#3534)
   ansible.builtin.command:
     cmd: "{{ ai_install_dir }}/venv/bin/python --version"
