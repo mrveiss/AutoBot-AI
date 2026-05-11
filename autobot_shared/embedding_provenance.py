@@ -126,7 +126,7 @@ def provenance_from_metadata(metadata: Optional[Dict[str, Any]]) -> Optional[Emb
     if not isinstance(model_name, str) or not model_name:
         return None
     try:
-        dim = int(dim_raw)
+        dim = int(dim_raw)  # type: ignore[arg-type]  # GH#7105: dim_raw from metadata dict is Any at runtime
     except (TypeError, ValueError):
         return None
     if dim <= 0:

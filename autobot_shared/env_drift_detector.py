@@ -149,7 +149,7 @@ def _collect_ssot_field_defaults() -> Dict[str, str]:
 
             # First definition wins — avoids AutoBotConfig sub-field duplication
             if alias not in result:
-                result[alias] = default
+                result[alias] = default or ""
 
     return result
 

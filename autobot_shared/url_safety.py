@@ -99,7 +99,7 @@ def is_public_url(url: str) -> bool:
         for info in infos:
             addr = info[4][0]
             # Strip IPv6 scope id (e.g. "fe80::1%eth0") before parsing.
-            addr = addr.split("%", 1)[0]
+            addr = addr.split("%", 1)[0]  # type: ignore[union-attr]  # GH#7105: info[4] is always (str, ...) tuple for TCP/UDP
             if not _ip_is_public(ipaddress.ip_address(addr)):
                 return False
         return True
