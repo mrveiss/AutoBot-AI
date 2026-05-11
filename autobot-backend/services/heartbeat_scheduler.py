@@ -31,7 +31,7 @@ from models.heartbeat import (
     HeartbeatRunStatus,
     WakeupTrigger,
 )
-from services.run_jwt import mint_run_jwt, revoke_run_jwt
+from services.run_jwt import mint_run_jwt, revoke_run_jwt_async
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +179,15 @@ class HeartbeatScheduler:
 
         # Mint run-scoped JWT (SEC-2 #6473)
         try:
-            run_jwt = await mint_run_jwt(run_id, uuid.UUID(agent_id))
+            task_id = state.current_task_id or "default"
+            tenant_id = "default"
+            run_jwt = mint_run_jwt(
+                str(run_id),
+                task_id,
+                agent_id,
+                tenant_id,
+                ["task:read", "task:write", "agent:invoke"],
+            )
         except Exception as exc:
             logger.error(f"Failed to mint run JWT for run {run_id}: {exc}")
             run_jwt = ""
@@ -229,7 +237,7 @@ class HeartbeatScheduler:
         # Revoke the run JWT to prevent reuse (SEC-2 #6473)
         if run_jwt:
             try:
-                await revoke_run_jwt(run_jwt)
+                await revoke_run_jwt_async(run_jwt)
             except Exception as exc:
                 logger.warning(f"Failed to revoke run JWT for run {run_id}: {exc}")
 

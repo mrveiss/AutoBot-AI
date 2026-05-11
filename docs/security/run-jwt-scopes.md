@@ -18,60 +18,64 @@ Scopes use the format `<domain>:<action>` for clarity and extensibility.
 | Scope | Action | Use Case |
 |-------|--------|----------|
 | `mcp:knowledge` | Read KB embeddings, search documents | RAG queries during planning |
-| `mcp:file` | Read/write execution workspace files | Code scaffolding, artifact storage |
+| `mcp:web_fetch` | Outbound web-fetch bridge | Fetch external content |
+| `mcp:filesystem` | Read-only local filesystem access | Read workspace files |
 
 ### Task Management
 
 | Scope | Action | Use Case |
 |-------|--------|----------|
 | `task:read` | Read task state, comments, decisions | Status checks, context gathering |
-| `task:update` | Update task status, post comments | Progress tracking, blockers |
+| `task:write` | Update task status, post comments | Progress tracking, blockers |
 
 ### Execution
 
 | Scope | Action | Use Case |
 |-------|--------|----------|
-| `workspace:manage` | Create/manage execution workspaces | Browser QA, preview servers |
+| `agent:invoke` | Call sub-agents | Multi-agent workflows |
 
 ## Default Scopes
 
-When `mint_run_jwt()` is called without explicit scopes, the agent receives:
+When `mint_run_jwt()` is called in heartbeat execution, the agent receives:
 
 ```python
-["task:read", "workspace:manage"]
+["task:read", "task:write", "agent:invoke"]
 ```
 
 This allows agents to:
 - Read task details (requirements, acceptance criteria)
-- Manage their own execution workspace (preview servers, QA browsers)
+- Update task status and post comments
+- Invoke sub-agents for complex workflows
 
 But NOT:
-- Directly update task status (requires explicit grant or code review path)
 - Access knowledge base (requires explicit grant for RAG)
+- Directly access workspace files (requires explicit grant for mcp:filesystem)
 
 ## Granting Additional Scopes
 
 When a specific run requires additional access:
 
 ```python
-token = await mint_run_jwt(
-    run_id,
-    agent_id,
-    scopes=["task:read", "task:update", "mcp:knowledge", "workspace:manage"]
+token = mint_run_jwt(
+    run_id=str(run_id),
+    task_id=task_id,
+    agent_id=agent_id,
+    tenant_id=tenant_id,
+    scope=["task:read", "task:write", "mcp:knowledge", "agent:invoke"]
 )
 ```
 
 Examples:
-- **Code review agents**: add `task:update` to post decisions
+- **Code review agents**: add `task:write` to post decisions
 - **Research agents**: add `mcp:knowledge` for KB access
-- **File-manipulation agents**: add `mcp:file` for workspace I/O
+- **File-reading agents**: add `mcp:filesystem` for workspace I/O
 
 ## Implementation Checklist
 
 - [x] `mint_run_jwt()` encodes scopes into JWT payload
-- [x] MCP bridges validate scopes before fulfilling requests
-- [x] Agent code checks scopes before taking actions
-- [x] Scope validation is DEFENSIVE: reject if scope missing, don't assume
+- [ ] MCP bridges validate scopes before fulfilling requests (deferred)
+- [ ] Agent code checks scopes before taking actions (deferred)
+- [ ] Scope validation is DEFENSIVE: reject if scope missing, don't assume (deferred)
 - [ ] Agent execution path docs include required scopes per agent type
 - [ ] Logging includes scope grants and scope-denied events
 - [ ] Audit logs track every scope use
@@ -82,12 +86,13 @@ When implementing scope checks in agent code:
 
 ```python
 async def some_task_mutation(token: str, operation: str):
-    claims = await validate_run_jwt(token)
-    if not claims:
+    try:
+        claims = await validate_run_jwt(token)
+    except JWTDecodeError:
         raise PermissionError("Invalid or expired run JWT")
     
-    if "task:update" not in claims.get("scopes", "").split(","):
-        raise PermissionError(f"Scope 'task:update' required for {operation}")
+    if "task:write" not in claims.get("scope", []):
+        raise PermissionError(f"Scope 'task:write' required for {operation}")
     
     # Proceed with operation
 ```
@@ -97,10 +102,10 @@ async def some_task_mutation(token: str, operation: str):
 When a run completes or is cancelled, its JWT is immediately revoked by adding its JTI (JWT ID) to the Redis denylist:
 
 ```python
-await revoke_run_jwt(token)  # Adds JTI to denylist, TTL = remaining JWT lifetime
+await revoke_run_jwt_async(token)  # Adds JTI to denylist, TTL = remaining JWT lifetime
 ```
 
-Revoked tokens are rejected by `validate_run_jwt()` even if signature is valid. The denylist is Redis-backed for high-throughput rejection checks.
+Revoked tokens are rejected by `validate_run_jwt()` even if signature is valid. The denylist is Redis-backed for high-throughput rejection checks. Use `revoke_run_jwt_async()` in async contexts for guaranteed Redis write; `revoke_run_jwt()` is a sync fire-and-forget variant for non-critical cleanup paths.
 
 ## Security Properties
 
