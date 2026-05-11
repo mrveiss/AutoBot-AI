@@ -4,7 +4,6 @@ Analyzes codebase for duplicate functions and refactoring opportunities
 """
 
 import ast
-import asyncio
 import hashlib
 import json
 import logging

@@ -9,17 +9,15 @@ All HTTP fetches are mocked — no network calls.
 
 from __future__ import annotations
 
-from typing import List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Optional
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from web_fetch.site_mapper import (
     SiteMapEntry,
     SiteMapper,
-    SiteMapResult,
     _domain_to_seed,
-    _fetch_single_urlset,
     _parse_sitemapindex,
     _parse_urlset,
     _resolve_sitemap_urls,

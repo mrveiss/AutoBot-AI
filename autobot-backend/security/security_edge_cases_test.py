@@ -234,7 +234,7 @@ class TestSecurityEdgeCases:
             # role-permissions mapping — there's no separate "actual user"
             # to override it. Auth/login decides which role to pass in,
             # which is upstream of this layer.
-            _has_permission = self.security.check_permission(claimed_role, "allow_shell_execute")
+            self.security.check_permission(claimed_role, "allow_shell_execute")
 
             if user != "admin":
                 # Non-admin users shouldn't get admin permissions regardless of claimed role

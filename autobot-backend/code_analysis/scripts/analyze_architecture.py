@@ -9,7 +9,6 @@ NOTE: generate_architecture_recommendations (~155 lines) is an ACCEPTABLE EXCEPT
 per Issue #490 - analysis output generator with sequential logic. Low priority.
 """
 
-import asyncio
 import json
 from pathlib import Path
 

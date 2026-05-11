@@ -3,7 +3,6 @@
 Analyze frontend code for JavaScript, TypeScript, Vue, React, Angular, and other frontend technologies
 """
 
-import asyncio
 import json
 import sys
 from pathlib import Path

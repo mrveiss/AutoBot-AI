@@ -157,7 +157,7 @@ async def test_router_unavailable_silent_fallback(monkeypatch, planner, plan_dat
     # Force the lazy init to fail by monkeypatching the import path
     import enhanced_orchestration.workflow_planning as wp
 
-    original = wp.StrategyPlanner._get_skill_router
+    wp.StrategyPlanner._get_skill_router
 
     def _stub(self):
         return None

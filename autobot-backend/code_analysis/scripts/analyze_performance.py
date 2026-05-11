@@ -3,7 +3,6 @@
 Analyze AutoBot codebase for performance issues, memory leaks, and processing inefficiencies
 """
 
-import asyncio
 import json
 from pathlib import Path
 
