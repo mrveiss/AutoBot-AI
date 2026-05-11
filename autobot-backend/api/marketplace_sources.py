@@ -22,8 +22,6 @@ from urllib.parse import urlparse
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from autobot_shared.security.ssrf_guard import SSRFError, resolve_safe_ip, safe_aiohttp_resolver
-
 from api.schemas_workflows import (
     CatalogDocument,
     MarketplaceSource,
@@ -33,6 +31,7 @@ from api.schemas_workflows import (
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.security.ssrf_guard import SSRFError, resolve_safe_ip, safe_aiohttp_resolver
 
 logger = logging.getLogger(__name__)
 
