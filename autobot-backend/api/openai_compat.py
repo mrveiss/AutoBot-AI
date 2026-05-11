@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import json
 import logging
 import time
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
@@ -243,10 +242,14 @@ async def _stream_generator(
     )
     yield f"data: {final_chunk.model_dump_json()}\n\n"
 
-    # Usage chunk (OpenAI spec: emit only when stream_options.include_usage=true)
     prompt_tokens = _estimate_tokens(prompt_text)
     completion_tokens = _estimate_tokens("".join(completion_text_parts))
+    tracker = get_cost_tracker()
+    cost_usd = tracker.calculate_cost(model_name, prompt_tokens, completion_tokens)
 
+    # Usage chunk (OpenAI spec: emit only when stream_options.include_usage=true)
+    # Cost is embedded here when available; a standalone cost chunk is emitted
+    # when include_usage is false so clients get cost info in a valid chunk (#7610).
     if include_usage:
         usage_chunk = ChatCompletionChunk(
             id=completion_id,
@@ -257,16 +260,19 @@ async def _stream_generator(
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 total_tokens=prompt_tokens + completion_tokens,
+                cost_usd=cost_usd if cost_usd > 0 else None,
             ),
         )
-        yield f"data: {usage_chunk.model_dump_json()}\n\n"
-
-    # Cost chunk - emit in final SSE event (estimated from streaming tokens)
-    tracker = get_cost_tracker()
-    cost_usd = tracker.calculate_cost(model_name, prompt_tokens, completion_tokens)
-    if cost_usd > 0:
-        cost_chunk = {"cost": cost_usd}
-        yield f"data: {json.dumps(cost_chunk)}\n\n"
+        yield f"data: {usage_chunk.model_dump_json(exclude_none=True)}\n\n"
+    elif cost_usd > 0:
+        cost_chunk = ChatCompletionChunk(
+            id=completion_id,
+            created=created,
+            model=model_name,
+            choices=[],
+            usage=OAIUsage(cost_usd=cost_usd),
+        )
+        yield f"data: {cost_chunk.model_dump_json(exclude_none=True)}\n\n"
 
     yield "data: [DONE]\n\n"
 
