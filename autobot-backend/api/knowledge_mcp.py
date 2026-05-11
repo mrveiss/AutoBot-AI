@@ -243,6 +243,79 @@ def _create_extract_tool() -> McpToolsResponse:
     )
 
 
+def _create_scrape_url_tool() -> McpToolsResponse:
+    """Create MCP tool descriptor for POST /mcp/scrape_url. Issue #7509."""
+    return McpToolsResponse(
+        name="scrape_url",
+        description=(
+            "Fetch a single URL and return its full markdown content. "
+            "Supports Jina fast-path, BS4, and Playwright render modes. "
+            "Returns markdown with a status header."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Absolute URL to fetch"},
+                "render": {
+                    "type": "string",
+                    "enum": ["auto", "fast", "playwright"],
+                    "default": "auto",
+                    "description": "Render mode",
+                },
+            },
+            "required": ["url"],
+        },
+    )
+
+
+def _create_crawl_site_tool() -> McpToolsResponse:
+    """Create MCP tool descriptor for POST /mcp/crawl_site. Issue #7509."""
+    return McpToolsResponse(
+        name="crawl_site",
+        description=(
+            "BFS crawl one or more seed URLs up to max_depth hops. "
+            "Returns a markdown index of crawled pages. "
+            "Set ingest=true to write successful pages to the knowledge base."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "seed_urls": {"type": "array", "items": {"type": "string"}, "description": "Starting URLs"},
+                "max_depth": {"type": "integer", "default": 1, "description": "Link-hop depth"},
+                "max_pages": {"type": "integer", "default": 100, "description": "Hard cap on pages fetched"},
+                "respect_robots": {"type": "boolean", "default": True, "description": "Honour robots.txt"},
+                "ingest": {"type": "boolean", "default": False, "description": "Write pages to knowledge base"},
+                "same_origin": {"type": "boolean", "default": True, "description": "Restrict to same scheme+host"},
+            },
+            "required": ["seed_urls"],
+        },
+    )
+
+
+def _create_map_site_tool() -> McpToolsResponse:
+    """Create MCP tool descriptor for POST /mcp/map_site. Issue #7509."""
+    return McpToolsResponse(
+        name="map_site",
+        description=(
+            "Discover all URLs for a domain via sitemap.xml, falling back to BFS crawl. "
+            "Returns a markdown list of URLs grouped by depth."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string", "description": "Domain to map (bare or with scheme)"},
+                "max_urls": {"type": "integer", "default": 500, "description": "Hard cap on returned URLs"},
+                "respect_robots": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Honour robots.txt during crawl fallback",
+                },
+            },
+            "required": ["domain"],
+        },
+    )
+
+
 def _get_knowledge_search_tools() -> List[McpToolsResponse]:
     """
     Get MCP tools for knowledge base search and retrieval operations.
@@ -251,6 +324,7 @@ def _get_knowledge_search_tools() -> List[McpToolsResponse]:
     and improve maintainability of tool definitions by category.
     Issue #665: Further refactored to reduce from 102 lines to below 20 lines.
     Issue #7405: Added extract_structured_data tool.
+    Issue #7509: Added scrape_url, crawl_site, map_site tools.
 
     Returns:
         List of McpToolsResponse definitions for search/retrieval operations
@@ -261,6 +335,9 @@ def _get_knowledge_search_tools() -> List[McpToolsResponse]:
         _create_vector_search_tool(),
         _create_qa_chain_tool(),
         _create_extract_tool(),
+        _create_scrape_url_tool(),
+        _create_crawl_site_tool(),
+        _create_map_site_tool(),
     ]
 
 
@@ -672,6 +749,119 @@ async def mcp_extract_structured_data(
         return {"success": False, "error_code": "schema_invalid", "details": str(exc)}
     except Exception as exc:
         logger.error("mcp_extract_structured_data unexpected error: %s", exc)
+        return {"success": False, "error": "Internal server error"}
+
+
+@router.post("/mcp/scrape_url")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_scrape_url",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def mcp_scrape_url(
+    request: Metadata,
+    current_user: dict = Depends(get_current_user),
+):
+    """MCP tool: Fetch a URL and return its markdown content. Issue #7509."""
+    url = request.get("url")
+    render = request.get("render", "auto")
+
+    if not url:
+        return {"success": False, "error": "url is required"}
+
+    try:
+        from web_fetch import RenderMode, WebFetcher
+
+        fetch_result = await WebFetcher.fetch(url, render=RenderMode(render))
+        if not fetch_result.success:
+            return {"success": False, "error_code": fetch_result.error_code, "url": url}
+        title = f"# {fetch_result.title}\n\n" if fetch_result.title else ""
+        header = f"## Scraped: {url} (status {fetch_result.status_code}, source: {fetch_result.source})\n\n"
+        return {
+            "success": True,
+            "url": fetch_result.url,
+            "markdown": header + title + (fetch_result.markdown or "*(no content)*"),
+        }
+    except Exception as exc:
+        logger.error("mcp_scrape_url failed for %s: %s", url, exc)
+        return {"success": False, "error": "Internal server error"}
+
+
+@router.post("/mcp/crawl_site")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_crawl_site",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def mcp_crawl_site(
+    request: Metadata,
+    current_user: dict = Depends(get_current_user),
+):
+    """MCP tool: BFS crawl seed URLs and return a markdown index. Issue #7509."""
+    seed_urls = request.get("seed_urls", [])
+    max_depth = int(request.get("max_depth", 1))
+    max_pages = int(request.get("max_pages", 100))
+    respect_robots = bool(request.get("respect_robots", True))
+    ingest = bool(request.get("ingest", False))
+    same_origin = bool(request.get("same_origin", True))
+
+    if not seed_urls:
+        return {"success": False, "error": "seed_urls is required"}
+
+    try:
+        from chat_workflow.tool_handler import _format_crawl_results
+        from knowledge.connectors.models import ConnectorConfig
+        from knowledge.connectors.web_crawler import WebCrawlerConnector
+
+        cfg = ConnectorConfig(
+            connector_id="mcp_crawl", connector_type="web_crawler", name="mcp_crawl", config={"urls": seed_urls}
+        )
+        connector = WebCrawlerConnector(cfg)
+        results = await connector.crawl(
+            seed_urls=seed_urls,
+            max_depth=max_depth,
+            max_pages=max_pages,
+            respect_robots=respect_robots,
+            ingest=ingest,
+            same_origin=same_origin,
+        )
+        return {"success": True, "page_count": len(results), "markdown": _format_crawl_results(seed_urls, results)}
+    except Exception as exc:
+        logger.error("mcp_crawl_site failed: %s", exc)
+        return {"success": False, "error": "Internal server error"}
+
+
+@router.post("/mcp/map_site")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_map_site",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def mcp_map_site(
+    request: Metadata,
+    current_user: dict = Depends(get_current_user),
+):
+    """MCP tool: Discover all URLs for a domain via sitemap or BFS. Issue #7509."""
+    domain = request.get("domain", "").strip()
+    max_urls = int(request.get("max_urls", 500))
+    respect_robots = bool(request.get("respect_robots", True))
+
+    if not domain:
+        return {"success": False, "error": "domain is required"}
+
+    try:
+        from chat_workflow.tool_handler import _format_map_results
+        from web_fetch.site_mapper import SiteMapper
+
+        site_result = await SiteMapper.map_site(domain, max_urls=max_urls, respect_robots=respect_robots)
+        return {
+            "success": True,
+            "url_count": len(site_result.entries),
+            "source": site_result.source,
+            "markdown": _format_map_results(site_result),
+        }
+    except Exception as exc:
+        logger.error("mcp_map_site failed for %s: %s", domain, exc)
         return {"success": False, "error": "Internal server error"}
 
 

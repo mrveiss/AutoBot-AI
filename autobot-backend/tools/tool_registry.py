@@ -185,6 +185,124 @@ class ToolRegistry:
             "status": result.get("status", "success"),
         }
 
+    # Issue #7509: Web research tools — direct internal dispatch via web_fetch package.
+
+    async def scrape_url(self, url: str, render: str = "auto") -> Dict[str, Any]:
+        """Fetch a URL and return its markdown content."""
+        from web_fetch import RenderMode, WebFetcher
+
+        try:
+            fetch_result = await WebFetcher.fetch(url, render=RenderMode(render))
+            if not fetch_result.success:
+                return {
+                    "tool_name": "scrape_url",
+                    "tool_args": {"url": url},
+                    "result": f"Fetch failed: {fetch_result.error_code}",
+                    "status": "error",
+                }
+            title = f"# {fetch_result.title}\n\n" if fetch_result.title else ""
+            header = f"## Scraped: {url} (status {fetch_result.status_code}, source: {fetch_result.source})\n\n"
+            return {
+                "tool_name": "scrape_url",
+                "tool_args": {"url": url},
+                "result": header + title + (fetch_result.markdown or "*(no content)*"),
+                "status": "success",
+            }
+        except Exception as exc:
+            self.logger.error("scrape_url failed for %s: %s", url, exc)
+            return {"tool_name": "scrape_url", "tool_args": {"url": url}, "result": f"Error: {exc}", "status": "error"}
+
+    async def crawl_site(
+        self,
+        seed_urls: List[str],
+        max_depth: int = 1,
+        max_pages: int = 100,
+        respect_robots: bool = True,
+        ingest: bool = False,
+        same_origin: bool = True,
+    ) -> Dict[str, Any]:
+        """BFS crawl seed URLs and return a markdown index of fetched pages."""
+        from chat_workflow.tool_handler import _format_crawl_results
+        from knowledge.connectors.models import ConnectorConfig
+        from knowledge.connectors.web_crawler import WebCrawlerConnector
+
+        try:
+            cfg = ConnectorConfig(
+                connector_id="registry_crawl",
+                connector_type="web_crawler",
+                name="registry_crawl",
+                config={"urls": seed_urls},
+            )
+            connector = WebCrawlerConnector(cfg)
+            results = await connector.crawl(
+                seed_urls=seed_urls,
+                max_depth=max_depth,
+                max_pages=max_pages,
+                respect_robots=respect_robots,
+                ingest=ingest,
+                same_origin=same_origin,
+            )
+            return {
+                "tool_name": "crawl_site",
+                "tool_args": {"seed_urls": seed_urls},
+                "result": _format_crawl_results(seed_urls, results),
+                "status": "success",
+            }
+        except Exception as exc:
+            self.logger.error("crawl_site failed: %s", exc)
+            return {
+                "tool_name": "crawl_site",
+                "tool_args": {"seed_urls": seed_urls},
+                "result": f"Error: {exc}",
+                "status": "error",
+            }
+
+    async def map_site(self, domain: str, max_urls: int = 500, respect_robots: bool = True) -> Dict[str, Any]:
+        """Discover URLs for a domain via sitemap.xml or BFS crawl fallback."""
+        from chat_workflow.tool_handler import _format_map_results
+        from web_fetch.site_mapper import SiteMapper
+
+        try:
+            site_result = await SiteMapper.map_site(domain, max_urls=max_urls, respect_robots=respect_robots)
+            return {
+                "tool_name": "map_site",
+                "tool_args": {"domain": domain},
+                "result": _format_map_results(site_result),
+                "status": "success",
+            }
+        except Exception as exc:
+            self.logger.error("map_site failed for %s: %s", domain, exc)
+            return {
+                "tool_name": "map_site",
+                "tool_args": {"domain": domain},
+                "result": f"Error: {exc}",
+                "status": "error",
+            }
+
+    async def extract_structured_data(self, url: str, schema: Dict[str, Any], render: str = "auto") -> Dict[str, Any]:
+        """Extract structured data from a URL using a JSON Schema and LLM."""
+        import json
+
+        from web_fetch.extractors import extract_url
+
+        try:
+            result = await extract_url(url=url, schema=schema, render=render)
+            json_str = json.dumps(result["data"], indent=2, ensure_ascii=False)
+            return {
+                "tool_name": "extract_structured_data",
+                "tool_args": {"url": url},
+                "result": f"## Extracted data from {url}\n\n```json\n{json_str}\n```",
+                "status": "success",
+            }
+        except Exception as exc:
+            self.logger.error("extract_structured_data failed for %s: %s", url, exc)
+            return {
+                "tool_name": "extract_structured_data",
+                "tool_args": {"url": url},
+                "result": f"Error: {exc}",
+                "status": "error",
+            }
+
     # Knowledge Base Tools
 
     async def search_knowledge_base(self, query: str, n_results: int = 5) -> Dict[str, Any]:
@@ -471,6 +589,26 @@ class ToolRegistry:
             "codeinterpreter": lambda args: self.execute_code_tool(
                 args.get("code", ""), args.get("timeout_seconds", 30)
             ),
+            # Issue #7509: Web research tools
+            "scrapeurl": lambda args: self.scrape_url(args.get("url", ""), args.get("render", "auto")),
+            "crawlsite": lambda args: self.crawl_site(
+                args.get("seed_urls", []),
+                args.get("max_depth", 1),
+                args.get("max_pages", 100),
+                args.get("respect_robots", True),
+                args.get("ingest", False),
+                args.get("same_origin", True),
+            ),
+            "mapsite": lambda args: self.map_site(
+                args.get("domain", ""),
+                args.get("max_urls", 500),
+                args.get("respect_robots", True),
+            ),
+            "extractstructureddata": lambda args: self.extract_structured_data(
+                args.get("url", ""),
+                args.get("schema", {}),
+                args.get("render", "auto"),
+            ),
         }
         return dispatch.get(tool_name)
 
@@ -620,6 +758,11 @@ class ToolRegistry:
             "ask_user_for_manual",
             "respond_conversationally",
             "code_interpreter",
+            # Issue #7509: Web research tools
+            "scrape_url",
+            "crawl_site",
+            "map_site",
+            "extract_structured_data",
         ]
         # Issue #1368/#2609: Browser tools are defined once in BROWSER_TOOL_NAMES
         # and imported here so the two lists cannot drift independently.
