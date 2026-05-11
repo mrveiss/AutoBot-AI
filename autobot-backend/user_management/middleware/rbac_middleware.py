@@ -5,16 +5,20 @@
 RBAC Middleware
 
 Role-Based Access Control middleware for FastAPI endpoints.
-Provides database-driven permission checking with caching.
+Provides database-driven permission checking with Redis-backed caching.
 """
 
+import asyncio
+import json
 import logging
+import time
 import uuid
 from functools import wraps
 from typing import Callable, List, Optional, Set
 
 from fastapi import HTTPException, Request, status
 
+from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_5_MINUTES
 from user_management.config import get_deployment_config
 from user_management.database import db_session_context
@@ -22,10 +26,51 @@ from user_management.services import TenantContext, UserService
 
 logger = logging.getLogger(__name__)
 
-# Permission cache (user_id -> permissions set)
-# In production, use Redis for distributed caching
+_PUBSUB_CHANNEL = "autobot:rbac:invalidate"
+_REDIS_KEY_PREFIX = "rbac:perm:"
+
+# L1 per-worker cache — invalidated immediately on this worker via clear_cache,
+# and on all other workers via the pub/sub listener below.
 _permission_cache: dict[str, tuple[Set[str], float]] = {}
 CACHE_TTL_SECONDS = TTL_5_MINUTES
+
+_listener_task: Optional[asyncio.Task] = None
+
+
+async def _run_invalidation_listener() -> None:
+    """Subscribe to the RBAC invalidation channel and clear L1 on each message."""
+    while True:
+        try:
+            redis = await get_async_redis_client()
+            if redis is None:
+                await asyncio.sleep(5)
+                continue
+            pubsub = redis.pubsub()
+            await pubsub.subscribe(_PUBSUB_CHANNEL)
+            logger.info("RBAC cache: subscribed to %s", _PUBSUB_CHANNEL)
+            async for message in pubsub.listen():
+                if message["type"] != "message":
+                    continue
+                try:
+                    data = json.loads(message["data"])
+                    user_id_str = data.get("user_id")
+                    if user_id_str:
+                        _permission_cache.pop(user_id_str, None)
+                    else:
+                        _permission_cache.clear()
+                except Exception:
+                    logger.exception("RBAC invalidation listener: error processing message")
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            logger.exception("RBAC invalidation listener: reconnecting in 5s")
+            await asyncio.sleep(5)
+
+
+async def _ensure_listener_started() -> None:
+    global _listener_task
+    if _listener_task is None or _listener_task.done():
+        _listener_task = asyncio.ensure_future(_run_invalidation_listener())
 
 
 class RBACMiddleware:
@@ -58,16 +103,26 @@ class RBACMiddleware:
         if not user_id:
             return set()
 
-        # Check cache first
+        await _ensure_listener_started()
+
         cache_key = str(user_id)
+
+        # L1: check local per-worker cache
         if cache_key in _permission_cache:
             permissions, timestamp = _permission_cache[cache_key]
-            import time
-
             if time.time() - timestamp < CACHE_TTL_SECONDS:
                 return permissions
 
-        # Fetch from database
+        # L2: check Redis shared cache
+        redis = await get_async_redis_client()
+        if redis is not None:
+            raw = await redis.get(f"{_REDIS_KEY_PREFIX}{cache_key}")
+            if raw is not None:
+                permissions = set(json.loads(raw))
+                _permission_cache[cache_key] = (permissions, time.time())
+                return permissions
+
+        # Fetch from database and populate both caches
         if self._config.postgres_enabled:
             try:
                 async with db_session_context() as session:
@@ -75,10 +130,13 @@ class RBACMiddleware:
                     user_service = UserService(session, context)
                     permissions = await user_service.get_user_permissions(user_id)
 
-                    # Cache the result
-                    import time
-
                     _permission_cache[cache_key] = (permissions, time.time())
+                    if redis is not None:
+                        await redis.setex(
+                            f"{_REDIS_KEY_PREFIX}{cache_key}",
+                            CACHE_TTL_SECONDS,
+                            json.dumps(list(permissions)),
+                        )
                     return permissions
 
             except Exception as e:
@@ -151,19 +209,33 @@ class RBACMiddleware:
             return True
         return set(permissions).issubset(user_permissions)
 
-    def clear_cache(self, user_id: Optional[uuid.UUID] = None):
+    async def clear_cache(self, user_id: Optional[uuid.UUID] = None) -> None:
         """
-        Clear permission cache.
+        Clear permission cache for one user or all users.
+
+        Deletes from the L1 local dict, the Redis L2 key, and publishes an
+        invalidation message so all other uvicorn workers clear their L1.
 
         Args:
             user_id: If provided, clear only for this user. Otherwise clear all.
         """
+        # Clear L1
         if user_id:
-            cache_key = str(user_id)
-            if cache_key in _permission_cache:
-                del _permission_cache[cache_key]
+            _permission_cache.pop(str(user_id), None)
         else:
             _permission_cache.clear()
+
+        # Clear Redis L2 and notify other workers
+        redis = await get_async_redis_client()
+        if redis is not None:
+            if user_id:
+                await redis.delete(f"{_REDIS_KEY_PREFIX}{user_id}")
+            else:
+                async for key in redis.scan_iter(f"{_REDIS_KEY_PREFIX}*"):
+                    await redis.delete(key)
+            payload = json.dumps({"user_id": str(user_id)} if user_id else {})
+            await redis.publish(_PUBSUB_CHANNEL, payload)
+            logger.debug("RBAC cache invalidated for user=%s", user_id)
 
 
 # Global RBAC middleware instance
