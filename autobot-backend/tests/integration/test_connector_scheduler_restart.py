@@ -24,9 +24,9 @@ from unittest.mock import patch
 import pytest
 
 from knowledge.connectors.scheduler import (
-    ConnectorScheduler,
     _LEADER_KEY,
     _SCHEDULE_PREFIX,
+    ConnectorScheduler,
 )
 
 # ---------------------------------------------------------------------------
