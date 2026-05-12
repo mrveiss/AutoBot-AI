@@ -101,9 +101,7 @@ def _secret() -> str:
         val = os.environ.get(var, "")
         if val:
             return val
-    raise RuntimeError(
-        "No run-JWT signing secret configured.  Set RUN_JWT_SECRET (or AUTOBOT_JWT_SECRET)."
-    )
+    raise RuntimeError("No run-JWT signing secret configured.  Set RUN_JWT_SECRET (or AUTOBOT_JWT_SECRET).")
 
 
 def _ttl() -> int:
@@ -206,9 +204,7 @@ async def _is_denied(jti: str) -> bool:
     redis = await get_async_redis_client(database="main")
     if redis is None:
         if os.environ.get(_ENV_FAIL_OPEN) == "1":
-            logger.warning(
-                "run_jwt: Redis unavailable — denylist check skipped (RUN_JWT_REDIS_FAIL_OPEN=1)"
-            )
+            logger.warning("run_jwt: Redis unavailable — denylist check skipped (RUN_JWT_REDIS_FAIL_OPEN=1)")
             return False
         raise JWTDecodeError(
             "run_jwt: Redis unavailable — cannot verify JTI revocation status "

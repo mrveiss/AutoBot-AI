@@ -27,7 +27,6 @@ from api.auth import login
 from api.schemas_agent import LoginRequest
 from user_management.config import DeploymentConfig, DeploymentMode, FeatureFlags
 
-
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 

@@ -39,11 +39,11 @@ class SecurityConstants:
 
     # IPv6 blocked ranges (SSRF prevention — mirrors autobot_shared.url_safety)
     BLOCKED_IPV6_RANGES: List[str] = [
-        "::1/128",         # RFC 4291 - Loopback
-        "fc00::/7",        # RFC 4193 - Unique Local Addresses (ULA)
-        "fe80::/10",       # RFC 4291 - Link-local
-        "ff00::/8",        # RFC 4291 - Multicast
-        "::ffff:0:0/96",   # RFC 4291 - IPv4-mapped IPv6 (e.g. ::ffff:10.0.0.1)
+        "::1/128",  # RFC 4291 - Loopback
+        "fc00::/7",  # RFC 4193 - Unique Local Addresses (ULA)
+        "fe80::/10",  # RFC 4291 - Link-local
+        "ff00::/8",  # RFC 4291 - Multicast
+        "::ffff:0:0/96",  # RFC 4291 - IPv4-mapped IPv6 (e.g. ::ffff:10.0.0.1)
     ]
 
     # Private TLDs blocked without DNS resolution (SSRF prevention)

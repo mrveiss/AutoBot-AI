@@ -134,10 +134,7 @@ class URLValidator:
         """
         try:
             loop = asyncio.get_event_loop()
-            infos = await asyncio.wait_for(
-                loop.getaddrinfo(host, None, type=socket.SOCK_STREAM),
-                timeout=timeout
-            )
+            infos = await asyncio.wait_for(loop.getaddrinfo(host, None, type=socket.SOCK_STREAM), timeout=timeout)
         except asyncio.TimeoutError as exc:
             raise ValueError(f"DNS resolution timeout for {host}") from exc
         except (socket.gaierror, OSError) as exc:
@@ -159,9 +156,7 @@ class URLValidator:
                 or ip.is_reserved
                 or ip.is_unspecified
             ):
-                raise ValueError(
-                    f"Hostname {host} resolves to a non-public address: {ip_str}"
-                )
+                raise ValueError(f"Hostname {host} resolves to a non-public address: {ip_str}")
 
             # Pick the first global address; caller will connect to it explicitly
             if safe_ip is None:

@@ -45,9 +45,9 @@ class TestSharedPermissionEnumIsCanonical:
 
             assert RbacPerm is Permission, "auth_rbac.Permission must be the same object as shared Permission"
             assert RbacRole is Role, "auth_rbac.Role must be the same object as shared Role"
-            assert RbacRP is ROLE_PERMISSIONS, (
-                "auth_rbac.ROLE_PERMISSIONS must be the same object as shared ROLE_PERMISSIONS"
-            )
+            assert (
+                RbacRP is ROLE_PERMISSIONS
+            ), "auth_rbac.ROLE_PERMISSIONS must be the same object as shared ROLE_PERMISSIONS"
         except ImportError:
             pass  # Backend deps not installed — shared-module check above is sufficient
 
@@ -92,9 +92,9 @@ class TestRolePermissionsCoverage:
     def test_shell_execute_not_granted_to_unprivileged_roles(self):
         unprivileged = {Role.USER, Role.READONLY, Role.ANALYST}
         for role in unprivileged:
-            assert Permission.SHELL_EXECUTE not in ROLE_PERMISSIONS[role], (
-                f"SHELL_EXECUTE must not be granted to {role}"
-            )
+            assert (
+                Permission.SHELL_EXECUTE not in ROLE_PERMISSIONS[role]
+            ), f"SHELL_EXECUTE must not be granted to {role}"
 
     def test_each_permission_granted_to_at_least_one_role(self):
         all_granted = {p for perms in ROLE_PERMISSIONS.values() for p in perms}

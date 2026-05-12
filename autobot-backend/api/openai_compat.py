@@ -280,9 +280,7 @@ async def _stream_generator(
     if api_key_record is not None:
         svc = get_llm_api_key_service()
         await svc.record_spend(api_key_record, cost_usd)
-        await svc.publish_usage_event(
-            api_key_record, model_name, prompt_tokens, completion_tokens, cost_usd
-        )
+        await svc.publish_usage_event(api_key_record, model_name, prompt_tokens, completion_tokens, cost_usd)
 
 
 # ---------------------------------------------------------------------------

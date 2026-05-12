@@ -35,9 +35,7 @@ router = APIRouter(tags=["onboarding"])
 # ---------------------------------------------------------------------------
 
 
-@router.get(
-    "/presets", response_model=DataResponse, dependencies=[Depends(get_current_user)]
-)
+@router.get("/presets", response_model=DataResponse, dependencies=[Depends(get_current_user)])
 async def list_presets() -> DataResponse:
     """Return all curated starter presets.
 
@@ -49,9 +47,7 @@ async def list_presets() -> DataResponse:
     return DataResponse(data=presets)
 
 
-@router.get(
-    "/doctor", response_model=DataResponse, dependencies=[Depends(get_current_user)]
-)
+@router.get("/doctor", response_model=DataResponse, dependencies=[Depends(get_current_user)])
 async def doctor_report() -> DataResponse:
     """
     Run onboarding doctor scan.
@@ -79,9 +75,7 @@ async def apply_preset(body: ApplyPresetRequest) -> DataResponse:
     """
     preset = get_preset(body.preset_name)
     if preset is None:
-        raise HTTPException(
-            status_code=404, detail=f"Preset '{body.preset_name}' not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Preset '{body.preset_name}' not found")
 
     merged = {**preset, **body.overrides}
     agent_ids: list[str] = merged.get("agents", [])
@@ -201,17 +195,13 @@ async def _activate_skills(skill_names: list[str], rollback_stack: list) -> list
             if skill:
                 prev_state = skill.enabled
                 skill.enabled = True
-                rollback_stack.append(
-                    ("skill_enabled", manager, skill_name, prev_state)
-                )
+                rollback_stack.append(("skill_enabled", manager, skill_name, prev_state))
                 activated.append(skill_name)
                 logger.debug("Activated skill: %s", skill_name)
             else:
                 logger.debug("Skill '%s' not found in registry — skipping", skill_name)
         except Exception as exc:
-            logger.warning(
-                "Could not activate skill '%s': %s (continuing)", skill_name, exc
-            )
+            logger.warning("Could not activate skill '%s': %s (continuing)", skill_name, exc)
 
     return activated
 

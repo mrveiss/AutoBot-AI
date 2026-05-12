@@ -28,7 +28,6 @@ from autobot_shared.security.ssrf_guard import (
     safe_aiohttp_resolver,
 )
 
-
 # ---------------------------------------------------------------------------
 # resolve_safe_ip — delegates to resolve_safe_ip_async and normalises errors
 # ---------------------------------------------------------------------------
@@ -229,9 +228,7 @@ async def test_fetch_safe_url_truncates_at_max_bytes() -> None:
 
     with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            _, body, _ = await fetch_safe_url(
-                "https://example.com/large", max_bytes=100
-            )
+            _, body, _ = await fetch_safe_url("https://example.com/large", max_bytes=100)
 
     assert len(body) == 100
 

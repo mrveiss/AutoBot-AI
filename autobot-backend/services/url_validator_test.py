@@ -23,9 +23,7 @@ class TestResolveSafeIP:
         """Resolving a public IPv4 should succeed."""
         with patch("asyncio.get_event_loop") as mock_loop:
             mock_getaddrinfo = AsyncMock()
-            mock_getaddrinfo.return_value = [
-                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 0))
-            ]
+            mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 0))]
             mock_loop.return_value.getaddrinfo = mock_getaddrinfo
 
             result = await URLValidator.resolve_safe_ip("google.com")
@@ -60,9 +58,7 @@ class TestResolveSafeIP:
         """Resolving to 127.0.0.0/8 should be rejected."""
         with patch("asyncio.get_event_loop") as mock_loop:
             mock_getaddrinfo = AsyncMock()
-            mock_getaddrinfo.return_value = [
-                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0))
-            ]
+            mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0))]
             mock_loop.return_value.getaddrinfo = mock_getaddrinfo
 
             with pytest.raises(ValueError, match="non-public address"):
@@ -72,9 +68,7 @@ class TestResolveSafeIP:
         """Resolving to ::1 should be rejected."""
         with patch("asyncio.get_event_loop") as mock_loop:
             mock_getaddrinfo = AsyncMock()
-            mock_getaddrinfo.return_value = [
-                (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::1", 0, 0, 0))
-            ]
+            mock_getaddrinfo.return_value = [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::1", 0, 0, 0))]
             mock_loop.return_value.getaddrinfo = mock_getaddrinfo
 
             with pytest.raises(ValueError, match="non-public address"):
@@ -84,9 +78,7 @@ class TestResolveSafeIP:
         """Resolving to 10.0.0.0/8 should be rejected."""
         with patch("asyncio.get_event_loop") as mock_loop:
             mock_getaddrinfo = AsyncMock()
-            mock_getaddrinfo.return_value = [
-                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.5", 0))
-            ]
+            mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.5", 0))]
             mock_loop.return_value.getaddrinfo = mock_getaddrinfo
 
             with pytest.raises(ValueError, match="non-public address"):
@@ -96,9 +88,7 @@ class TestResolveSafeIP:
         """Resolving to 172.16.0.0/12 should be rejected."""
         with patch("asyncio.get_event_loop") as mock_loop:
             mock_getaddrinfo = AsyncMock()
-            mock_getaddrinfo.return_value = [
-                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("172.16.0.5", 0))
-            ]
+            mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("172.16.0.5", 0))]
             mock_loop.return_value.getaddrinfo = mock_getaddrinfo
 
             with pytest.raises(ValueError, match="non-public address"):
@@ -108,9 +98,7 @@ class TestResolveSafeIP:
         """Resolving to 192.168.0.0/16 should be rejected."""
         with patch("asyncio.get_event_loop") as mock_loop:
             mock_getaddrinfo = AsyncMock()
-            mock_getaddrinfo.return_value = [
-                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.1.1", 0))
-            ]
+            mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.1.1", 0))]
             mock_loop.return_value.getaddrinfo = mock_getaddrinfo
 
             with pytest.raises(ValueError, match="non-public address"):
@@ -120,9 +108,7 @@ class TestResolveSafeIP:
         """Resolving to 169.254.169.254 (AWS metadata) should be rejected."""
         with patch("asyncio.get_event_loop") as mock_loop:
             mock_getaddrinfo = AsyncMock()
-            mock_getaddrinfo.return_value = [
-                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("169.254.169.254", 0))
-            ]
+            mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("169.254.169.254", 0))]
             mock_loop.return_value.getaddrinfo = mock_getaddrinfo
 
             with pytest.raises(ValueError, match="non-public address"):
@@ -132,9 +118,7 @@ class TestResolveSafeIP:
         """Resolving to fe80::/10 should be rejected."""
         with patch("asyncio.get_event_loop") as mock_loop:
             mock_getaddrinfo = AsyncMock()
-            mock_getaddrinfo.return_value = [
-                (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("fe80::1", 0, 0, 0))
-            ]
+            mock_getaddrinfo.return_value = [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("fe80::1", 0, 0, 0))]
             mock_loop.return_value.getaddrinfo = mock_getaddrinfo
 
             with pytest.raises(ValueError, match="non-public address"):
@@ -144,9 +128,7 @@ class TestResolveSafeIP:
         """Resolving to fc00::/7 (IPv6 ULA) should be rejected."""
         with patch("asyncio.get_event_loop") as mock_loop:
             mock_getaddrinfo = AsyncMock()
-            mock_getaddrinfo.return_value = [
-                (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("fc00::1", 0, 0, 0))
-            ]
+            mock_getaddrinfo.return_value = [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("fc00::1", 0, 0, 0))]
             mock_loop.return_value.getaddrinfo = mock_getaddrinfo
 
             with pytest.raises(ValueError, match="non-public address"):
@@ -168,9 +150,7 @@ class TestResolveSafeIP:
         """Resolving to 224.0.0.0/4 should be rejected."""
         with patch("asyncio.get_event_loop") as mock_loop:
             mock_getaddrinfo = AsyncMock()
-            mock_getaddrinfo.return_value = [
-                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("224.0.0.1", 0))
-            ]
+            mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("224.0.0.1", 0))]
             mock_loop.return_value.getaddrinfo = mock_getaddrinfo
 
             with pytest.raises(ValueError, match="non-public address"):
@@ -180,9 +160,7 @@ class TestResolveSafeIP:
         """Resolving to ff00::/8 should be rejected."""
         with patch("asyncio.get_event_loop") as mock_loop:
             mock_getaddrinfo = AsyncMock()
-            mock_getaddrinfo.return_value = [
-                (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("ff02::1", 0, 0, 0))
-            ]
+            mock_getaddrinfo.return_value = [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("ff02::1", 0, 0, 0))]
             mock_loop.return_value.getaddrinfo = mock_getaddrinfo
 
             with pytest.raises(ValueError, match="non-public address"):
@@ -192,9 +170,7 @@ class TestResolveSafeIP:
         """Resolving to 240.0.0.0/4 should be rejected."""
         with patch("asyncio.get_event_loop") as mock_loop:
             mock_getaddrinfo = AsyncMock()
-            mock_getaddrinfo.return_value = [
-                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("240.0.0.1", 0))
-            ]
+            mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("240.0.0.1", 0))]
             mock_loop.return_value.getaddrinfo = mock_getaddrinfo
 
             with pytest.raises(ValueError, match="non-public address"):
@@ -204,9 +180,7 @@ class TestResolveSafeIP:
         """Resolving to 0.0.0.0 should be rejected."""
         with patch("asyncio.get_event_loop") as mock_loop:
             mock_getaddrinfo = AsyncMock()
-            mock_getaddrinfo.return_value = [
-                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("0.0.0.0", 0))
-            ]
+            mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("0.0.0.0", 0))]
             mock_loop.return_value.getaddrinfo = mock_getaddrinfo
 
             with pytest.raises(ValueError, match="non-public address"):
@@ -216,9 +190,7 @@ class TestResolveSafeIP:
         """Resolving to :: should be rejected."""
         with patch("asyncio.get_event_loop") as mock_loop:
             mock_getaddrinfo = AsyncMock()
-            mock_getaddrinfo.return_value = [
-                (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::", 0, 0, 0))
-            ]
+            mock_getaddrinfo.return_value = [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::", 0, 0, 0))]
             mock_loop.return_value.getaddrinfo = mock_getaddrinfo
 
             with pytest.raises(ValueError, match="non-public address"):

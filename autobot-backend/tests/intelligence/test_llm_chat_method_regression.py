@@ -46,9 +46,7 @@ class _ChatOnlyLLM:
         self.chat_calls: list = []
 
     async def chat(self, messages, temperature=0.5, max_tokens=100, **kwargs):
-        self.chat_calls.append(
-            {"messages": messages, "temperature": temperature, "max_tokens": max_tokens}
-        )
+        self.chat_calls.append({"messages": messages, "temperature": temperature, "max_tokens": max_tokens})
         resp = MagicMock()
         resp.content = self._content
         return resp
@@ -110,9 +108,7 @@ class TestIntelligentAgentGetLLMAnalysis:
         result = await agent._get_llm_analysis("list running processes")
 
         assert llm.chat_calls, "_get_llm_analysis() must call llm_interface.chat()"
-        assert result == "Analysis result from chat()", (
-            f"Expected content from chat(), got: {result!r}"
-        )
+        assert result == "Analysis result from chat()", f"Expected content from chat(), got: {result!r}"
 
     @pytest.mark.asyncio
     async def test_chat_receives_messages_list(self):
@@ -131,9 +127,7 @@ class TestIntelligentAgentGetLLMAnalysis:
         assert len(llm.chat_calls) == 1
         call = llm.chat_calls[0]
         assert isinstance(call["messages"], list), "chat() must receive a messages list"
-        assert any(m.get("role") for m in call["messages"]), (
-            "Each message in the list must have a 'role' key"
-        )
+        assert any(m.get("role") for m in call["messages"]), "Each message in the list must have a 'role' key"
 
 
 # ── GH #6876 regression: StreamingCommandExecutor commentary methods ──────────
@@ -203,9 +197,7 @@ class TestStreamingExecutorCommentaryMethods:
         executor, llm = self._make_executor()
 
         chunks = []
-        async for chunk in executor._provide_progress_commentary(
-            recent_output="   ", user_goal="install numpy"
-        ):
+        async for chunk in executor._provide_progress_commentary(recent_output="   ", user_goal="install numpy"):
             chunks.append(chunk)
 
         assert not chunks, "Empty output must not produce any commentary chunks."

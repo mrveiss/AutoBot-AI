@@ -277,7 +277,9 @@ class HeartbeatScheduler:
         )
         logger.info("Run %s finished: status=%s agent=%s", run_id, final_status, agent_id)
 
-    async def _execute_agent(self, agent_id: str, state_id: uuid.UUID, run_id: uuid.UUID, run_jwt: str) -> Dict[str, Any]:
+    async def _execute_agent(
+        self, agent_id: str, state_id: uuid.UUID, run_id: uuid.UUID, run_jwt: str
+    ) -> Dict[str, Any]:
         """
         Execute agent work for one heartbeat tick (#1407).
 
