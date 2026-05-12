@@ -29,10 +29,10 @@ if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 
 from knowledge.connectors.scheduler import (
-    ConnectorScheduler,
     _LEADER_KEY,
     _LEADER_TTL_MS,
     _SCHEDULE_PREFIX,
+    ConnectorScheduler,
     _parse_interval_seconds,
     get_connector_scheduler,
 )
