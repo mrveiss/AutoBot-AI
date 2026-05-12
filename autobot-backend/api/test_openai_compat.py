@@ -108,6 +108,38 @@ async def test_chat_completions_non_streaming_returns_oai_shape():
 
 
 @pytest.mark.asyncio
+async def test_non_streaming_usage_omits_cost_usd():
+    """Non-streaming usage object must NOT include cost_usd (GH#7639 / MVA-202).
+
+    Strict OAI clients (LiteLLM, openai-python strict mode) reject unknown fields.
+    cost_usd must be absent entirely when None, not serialized as null.
+    """
+    mock_registry = _make_mock_registry("Hello from AutoBot")
+
+    with (
+        patch("api.openai_compat.get_provider_registry", return_value=mock_registry),
+        patch("api.openai_compat._get_user", return_value=_SYNTHETIC_USER),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/v1/chat/completions",
+                json={
+                    "model": "autobot-model-1",
+                    "messages": [{"role": "user", "content": "Hi"}],
+                    "stream": False,
+                },
+            )
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert "usage" in data
+    assert "cost_usd" not in data["usage"], (
+        "cost_usd must be absent from the non-streaming usage object; "
+        "strict OAI clients reject unknown fields"
+    )
+
+
+@pytest.mark.asyncio
 async def test_list_models_returns_model_list():
     """GET /v1/models must return {object: 'list', data: [{id, object, ...}]}."""
     mock_registry = _make_mock_registry(models=["gpt-autobot-1", "gpt-autobot-2"])
