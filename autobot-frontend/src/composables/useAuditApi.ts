@@ -127,10 +127,9 @@ export function useAuditApi() {
     ): Promise<AuditQueryResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get<any>(
+          return await api.get<any>(
             `${getApiBase()}/audit/failures?hours=${hours}&result_filter=${resultFilter}`
           )
-          return await response.json()
         },
         {
           errorMessage: 'Failed to load failed operations',
