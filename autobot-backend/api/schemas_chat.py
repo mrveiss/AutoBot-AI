@@ -399,7 +399,7 @@ class ChatMessage(BaseModel):
         pattern="^(user|assistant|system)$",
         description="Message role",
     )
-    session_id: Optional[str] = Field(None, description="Chat session ID")
+    session_id: str = Field(..., description="Chat session ID")
     message_type: Optional[str] = Field("text", description="Message type")
     metadata: Optional[Metadata] = Field(default_factory=dict, description="Additional metadata")
     language: Optional[str] = Field(
@@ -439,7 +439,7 @@ class EnhancedChatMessage(BaseModel):
         pattern="^(user|assistant|system)$",
         description="Message role",
     )
-    session_id: Optional[str] = Field(None, description="Chat session ID")
+    session_id: str = Field(..., description="Chat session ID")
     message_type: Optional[str] = Field("text", description="Message type")
     metadata: Optional[Metadata] = Field(default_factory=dict, description="Additional metadata")
     language: Optional[str] = Field(
