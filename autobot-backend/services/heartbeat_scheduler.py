@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from autobot_shared.time_utils import now_utc
 from events.event_types import HEARTBEAT_RUN_COMPLETED, HEARTBEAT_RUN_STARTED
 from live_event_manager import publish_live_event
+from models.agent import Agent
 from models.heartbeat import (
     AgentRuntimeState,
     AgentWakeupRequest,
@@ -31,7 +32,7 @@ from models.heartbeat import (
     HeartbeatRunStatus,
     WakeupTrigger,
 )
-from services.run_jwt import mint_run_jwt, revoke_run_jwt_async
+from services.run_jwt import get_run_jwt_scopes, mint_run_jwt, revoke_run_jwt_async
 
 logger = logging.getLogger(__name__)
 
@@ -175,9 +176,14 @@ class HeartbeatScheduler:
             run_id, state_id = run.id, state.id
             timeout = state.max_run_duration_seconds or _DEFAULT_MAX_DURATION_SECONDS
             await _append_event(session, run_id, "run_started", "Heartbeat run started")
+
+            # Resolve agent_type for least-privilege scope selection (MVA-204)
+            agent_result = await session.execute(select(Agent).where(Agent.agent_id == agent_id))
+            agent_row = agent_result.scalar_one_or_none()
+            agent_type = agent_row.agent_type if agent_row else "worker"
             await session.commit()
 
-        # Mint run-scoped JWT (SEC-2 #6473)
+        # Mint run-scoped JWT with minimum required scopes (SEC-2 #6473, MVA-204)
         try:
             task_id = state.current_task_id or "default"
             tenant_id = "default"
@@ -186,7 +192,7 @@ class HeartbeatScheduler:
                 task_id,
                 agent_id,
                 tenant_id,
-                ["task:read", "task:write", "agent:invoke"],
+                get_run_jwt_scopes(agent_type),
             )
         except Exception as exc:
             logger.error(f"Failed to mint run JWT for run {run_id}: {exc}")
