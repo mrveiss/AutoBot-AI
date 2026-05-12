@@ -9,6 +9,7 @@ Provides unified interface for agents running locally or in containers
 import asyncio
 import json
 import logging
+import os
 import threading
 import uuid
 from abc import ABC, abstractmethod
@@ -535,6 +536,24 @@ class BaseAgent(ABC):
                 logger.info("Agent %s communication shutdown", self.agent_id)
             except Exception as e:
                 logger.error("Error shutting down communication: %s", e)
+
+    def get_mcp_token(self) -> str:
+        """Return the auth token to use for MCP JSON-RPC calls (SEC-2 Phase 2, #6473).
+
+        Prefers the run-scoped JWT set by the heartbeat scheduler via
+        ``AUTOBOT_RUN_JWT``.  Falls back to the long-lived ``AUTOBOT_MCP_TOKEN``
+        for direct user-driven calls that run outside a scheduled heartbeat.
+
+        Usage::
+
+            token = self.get_mcp_token()
+            params = {"name": tool, "arguments": args}
+            if token.count(".") == 2:  # JWT format
+                params["run_jwt"] = token
+            else:
+                auth = token  # legacy bearer token
+        """
+        return os.environ.get("AUTOBOT_RUN_JWT", "") or os.environ.get("AUTOBOT_MCP_TOKEN", "")
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get performance statistics for this agent (thread-safe)"""
