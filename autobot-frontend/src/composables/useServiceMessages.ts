@@ -80,8 +80,7 @@ export function useServiceMessages() {
         if (params?.msg_type) sp.append('msg_type', params.msg_type)
         const qs = sp.toString()
         const url = `${getApiBase()}/service-messages/latest${qs ? `?${qs}` : ''}`
-        const resp = await api.get<any>(url)
-        const result = (await resp.json()) as LatestMessagesResponse
+        const result = await api.get<LatestMessagesResponse>(url)
         if (result && result.success) {
           messages.value = result.messages
         }
@@ -99,8 +98,7 @@ export function useServiceMessages() {
     msgId: string
   ): Promise<SingleMessageResponse | null> {
     try {
-      const resp = await api.get<any>(`${getApiBase()}/service-messages/${msgId}`)
-      return (await resp.json()) as SingleMessageResponse
+      return await api.get<SingleMessageResponse>(`${getApiBase()}/service-messages/${msgId}`)
     } catch (e: unknown) {
       logger.error('Failed to fetch service message', e)
       showSubtleErrorNotification('Error', 'Failed to fetch service message', 'error')
@@ -114,10 +112,9 @@ export function useServiceMessages() {
     error.value = null
     return wrap(async () => {
       try {
-        const resp = await api.get<any>(
+        const result = await api.get<CorrelationChainResponse>(
           `${getApiBase()}/service-messages/chain/${correlationId}`
         )
-        const result = (await resp.json()) as CorrelationChainResponse
         if (result && result.success) {
           chainMessages.value = result.messages
         }

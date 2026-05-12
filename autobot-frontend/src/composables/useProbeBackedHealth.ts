@@ -70,8 +70,7 @@ export function useProbeBackedHealth<R>(
 
   return async (): Promise<R | null> => {
     try {
-      const response = (await api.get<any>(`${getApiBase()}/system/health`)) as Response
-      const payload = await response.json()
+      const payload = await api.get<any>(`${getApiBase()}/system/health`)
       const probe = await findProbeByName<ProbeResponse>(payload?.probes, options.probeName)
       if (!probe) {
         return options.buildUnavailable(`${options.probeName} probe not registered`)
