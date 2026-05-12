@@ -118,7 +118,6 @@ def _ttl() -> int:
         return _DEFAULT_TTL
 
 
-
 def _audience() -> str:
     """Resolve the expected ``aud`` claim from ``RUN_JWT_AUDIENCE``, defaulting to ``_DEFAULT_AUDIENCE``."""
     val = os.environ.get(_ENV_AUDIENCE, "")
