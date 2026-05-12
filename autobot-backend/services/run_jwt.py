@@ -69,6 +69,15 @@ from autobot_shared.fire_and_forget import run_redis_write
 from autobot_shared.redis_client import get_async_redis_client
 from services.audit.audit_log import AuditAction, audit_record
 
+
+class JWTRefreshConflictError(Exception):
+    """Raised when a concurrent refresh loses the SET NX race.
+
+    Treat as HTTP 409: the caller should use the token returned by the
+    winning concurrent request rather than retrying with the same old token.
+    """
+
+
 logger = logging.getLogger(__name__)
 
 _ENV_SECRET = "RUN_JWT_SECRET"
@@ -90,6 +99,35 @@ VALID_SCOPES: frozenset[str] = frozenset(
         "agent:invoke",
     }
 )
+
+# Minimum scopes required per agent type — least privilege first.
+# Unknown agent types receive only task:read.
+_AGENT_TYPE_SCOPES: dict[str, list[str]] = {
+    "chat_agent": ["task:read", "mcp:knowledge"],
+    "worker": ["task:read", "task:write"],
+    "automation_agent": ["task:read", "task:write", "mcp:knowledge", "mcp:web_fetch"],
+    "system_agent": ["task:read", "task:write", "agent:invoke", "mcp:filesystem"],
+    "admin_agent": ["task:read", "task:write", "agent:invoke", "mcp:knowledge", "mcp:web_fetch", "mcp:filesystem"],
+}
+_FALLBACK_SCOPES: list[str] = ["task:read"]
+
+
+def get_run_jwt_scopes(agent_type: str, task_type: Optional[str] = None) -> list[str]:
+    """Resolve the minimum required JWT scopes for an agent type.
+
+    Args:
+        agent_type: Value of ``Agent.agent_type`` (e.g. ``"worker"``, ``"chat_agent"``).
+        task_type: Optional hint from the task payload. Pass ``"read_only"`` to
+            strip write and invoke scopes even for higher-privilege agent types.
+
+    Returns:
+        List of scope strings, each guaranteed to be in ``VALID_SCOPES``.
+        Unknown agent types receive the safest minimum: ``["task:read"]``.
+    """
+    scopes = list(_AGENT_TYPE_SCOPES.get(agent_type, _FALLBACK_SCOPES))
+    if task_type == "read_only":
+        scopes = [s for s in scopes if s not in ("task:write", "agent:invoke")]
+    return scopes
 
 
 def _secret() -> str:
@@ -345,8 +383,10 @@ async def refresh_run_jwt(token: str, run_id: str) -> str:
 
     Validates that the presented JWT is not expired and not revoked, checks
     that its ``run_id`` claim matches the *run_id* path parameter, then
-    atomically revokes the old token and mints a fresh one with the same
-    claims and a new ``jti``.
+    uses a Redis SET NX on the old JTI to atomically claim the revocation
+    right before minting a fresh token.  A concurrent refresh on the same
+    token will lose the SET NX and receive ``JWTRefreshConflictError``
+    (→ HTTP 409) instead of yielding a second live token.
 
     Args:
         token: Current valid run JWT (must not be expired or revoked).
@@ -359,7 +399,9 @@ async def refresh_run_jwt(token: str, run_id: str) -> str:
     Raises:
         JWTExpiredError: The presented token has already expired.
         JWTDecodeError: The token is invalid, revoked, or its ``run_id``
-            claim does not match *run_id*.
+            claim does not match *run_id*, or Redis is unavailable.
+        JWTRefreshConflictError: A concurrent refresh already claimed this
+            token; caller should use the token from the winning request.
     """
     claims = await validate_run_jwt(token)
 
@@ -371,9 +413,22 @@ async def refresh_run_jwt(token: str, run_id: str) -> str:
     agent_id = str(claims.get("agent_id", ""))
     tenant_id = str(claims.get("tenant_id", ""))
     old_jti = str(claims.get("jti", ""))
+    exp = claims.get("exp")
+    remaining = max(1, int(exp) - int(time.time())) if exp else _ttl()
 
-    await revoke_run_jwt_async(token, agent_id=agent_id)
+    # Atomic SET NX: only the first concurrent caller succeeds in writing the
+    # denylist entry.  The loser sees SET NX return falsy and raises
+    # JWTRefreshConflictError instead of minting a second live token.
+    redis = await get_async_redis_client(database="main")
+    if redis is None:
+        raise JWTDecodeError("run_jwt: Redis unavailable — cannot perform atomic refresh")
+    acquired = await redis.set(_DENYLIST_PREFIX + old_jti, "1", ex=remaining, nx=True)
+    if not acquired:
+        raise JWTRefreshConflictError(
+            f"run_jwt: concurrent refresh detected for jti={old_jti} — " "use the token from the winning request"
+        )
 
+    _emit_revoke_audit(claims, agent_id, remaining)
     new_token = mint_run_jwt(run_id, task_id, agent_id, tenant_id, scope)
 
     audit_record(
