@@ -22,8 +22,8 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 
 from autobot_shared.security.path_validator import validate_relative_path
-from chat_history.cache import _CHAT_SESSION_CACHE_TTL
 from chat_history.file_io import run_in_chat_io_executor
+from constants.redis_constants import REDIS_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -329,8 +329,12 @@ class SessionMixin:
             await self._async_cache_session(cache_key, chat_data)
             # Update recent chats sorted set for fast listing
             # Issue #361 - avoid blocking
-            await run_in_chat_io_executor(self.redis_client.zadd, "chat:recent", {session_id: time.time()})
-            await run_in_chat_io_executor(self.redis_client.expire, "chat:recent", _CHAT_SESSION_CACHE_TTL)
+            # Cap the set to max_session_files entries; EXPIRE would reset TTL on every save (sliding window)
+            # and allow unbounded growth under active load.  ZREMRANGEBYRANK removes excess oldest entries.
+            await run_in_chat_io_executor(self.redis_client.zadd, REDIS_KEY.CHAT_RECENT, {session_id: time.time()})
+            await run_in_chat_io_executor(
+                self.redis_client.zremrangebyrank, REDIS_KEY.CHAT_RECENT, 0, -(self.max_session_files + 1)
+            )
             logger.debug("Cached session %s in Redis", session_id)
         except Exception as e:
             logger.error("Failed to cache session in Redis: %s", e)
@@ -659,7 +663,7 @@ class SessionMixin:
             cache_key = f"chat:session:{session_id}"
             # Issue #361 - avoid blocking
             await run_in_chat_io_executor(self.redis_client.delete, cache_key)
-            await run_in_chat_io_executor(self.redis_client.zrem, "chat:recent", session_id)
+            await run_in_chat_io_executor(self.redis_client.zrem, REDIS_KEY.CHAT_RECENT, session_id)
             logger.debug("Cleared Redis cache for session %s", session_id)
         except Exception as e:
             logger.error("Failed to clear Redis cache: %s", e)
