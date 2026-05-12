@@ -10,15 +10,11 @@ Jan.ai, and similar projects.
 
 Configuration (via settings dict or environment variables):
 
-  - ``base_url`` / ``CUSTOM_OPENAI_BASE_URL``   — required base URL, e.g.
-      ``http://localhost:8000/v1``
+  - ``base_url`` / ``CUSTOM_OPENAI_BASE_URL``   — required base URL
   - ``api_key``  / ``CUSTOM_OPENAI_API_KEY``    — optional (defaults to "none")
   - ``default_model``                            — model to use when not specified
-      in a request (required for servers that need an explicit model name)
 
-A single AutoBot instance can hold multiple CustomOpenAIProvider instances with
-different ``base_url`` values.  The ``provider_registry`` identifies each by the
-``instance_name`` kwarg supplied at construction time (defaults to "custom_openai").
+Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
 from __future__ import annotations
@@ -30,7 +26,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 
-from .base_provider import BaseProvider
+from ..base_provider import BaseProvider
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +40,6 @@ class CustomOpenAIProvider(BaseProvider):
     async streaming support without extra dependencies.
     """
 
-    #: Override at construction time via ``instance_name`` to register
-    #: multiple custom endpoints in the same registry.
     provider_name = "custom_openai"
 
     def __init__(
@@ -53,15 +47,6 @@ class CustomOpenAIProvider(BaseProvider):
         settings: Optional[Dict[str, Any]] = None,
         instance_name: Optional[str] = None,
     ) -> None:
-        """
-        Initialize a custom OpenAI-compatible provider.
-
-        Args:
-            settings: Provider settings dict.  Recognised keys:
-                ``base_url``, ``api_key``, ``default_model``.
-            instance_name: Override for ``provider_name`` to allow multiple
-                custom endpoints coexisting in the same registry.
-        """
         super().__init__(settings)
         if instance_name:
             self.provider_name = instance_name
@@ -146,11 +131,7 @@ class CustomOpenAIProvider(BaseProvider):
             )
         except Exception as exc:
             self._total_errors += 1
-            logger.error(
-                "CustomOpenAI (%s) chat_completion error: %s",
-                self.provider_name,
-                exc,
-            )
+            logger.error("CustomOpenAI (%s) chat_completion error: %s", self.provider_name, exc)
             return LLMResponse(
                 content="",
                 model=model,
@@ -175,11 +156,7 @@ class CustomOpenAIProvider(BaseProvider):
                         yield delta
         except Exception as exc:
             self._total_errors += 1
-            logger.error(
-                "CustomOpenAI (%s) stream_completion error: %s",
-                self.provider_name,
-                exc,
-            )
+            logger.error("CustomOpenAI (%s) stream_completion error: %s", self.provider_name, exc)
             raise
 
     async def is_available(self) -> bool:

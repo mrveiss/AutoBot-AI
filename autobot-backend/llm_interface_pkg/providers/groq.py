@@ -14,6 +14,8 @@ API key is read (in priority order) from:
   2. Environment variable ``GROQ_API_KEY``
 
 API keys are never logged.
+
+Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
 from __future__ import annotations
@@ -34,11 +36,11 @@ from constants.model_constants import (
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 
-from .base_provider import BaseProvider
+from ..base_provider import BaseProvider
 
 logger = logging.getLogger(__name__)
 
-_GROQ_MODELS: List[str] = [
+GROQ_MODELS: List[str] = [
     GROQ_LLAMA33_70B,
     GROQ_LLAMA3_70B,
     GROQ_LLAMA31_8B,
@@ -47,7 +49,6 @@ _GROQ_MODELS: List[str] = [
     GROQ_GEMMA2_9B,
 ]
 
-# Default model: fastest general-purpose option
 _DEFAULT_MODEL = GROQ_LLAMA31_8B
 
 
@@ -85,17 +86,14 @@ class GroqProvider(BaseProvider):
         api_key = self._resolve_api_key()
         if not api_key:
             raise ValueError(
-                "Groq API key not configured. " "Set GROQ_API_KEY or provide api_key in provider settings."
+                "Groq API key not configured. "
+                "Set GROQ_API_KEY or provide api_key in provider settings."
             )
         self._client = groq.AsyncGroq(api_key=api_key)
         return self._client
 
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
-        """Execute a non-streaming chat completion via Groq.
-
-        Errors are returned via ``LLMResponse.error`` so the registry can
-        perform fallback to the next provider in the chain.
-        """
+        """Execute a non-streaming chat completion via Groq."""
         self._total_requests += 1
         start = time.time()
         model = request.model_name or self._get_setting("default_model", _DEFAULT_MODEL)
@@ -183,7 +181,7 @@ class GroqProvider(BaseProvider):
             model_list = await client.models.list()
             return [m.id for m in model_list.data]
         except Exception:
-            return list(_GROQ_MODELS)
+            return list(GROQ_MODELS)
 
 
-__all__ = ["GroqProvider"]
+__all__ = ["GroqProvider", "GROQ_MODELS"]

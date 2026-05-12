@@ -41,6 +41,15 @@ from .mock_providers import LocalLLM, MockPalm, local_llm, palm
 
 # Models
 from .models import ChatMessage, LLMRequest, LLMResponse, LLMSettings
+from .model_param_registry import (
+    apply_model_defaults,
+    apply_prompt_prefix,
+    get_model_kwargs,
+    get_prompt_prefix,
+    get_provider_model_id,
+    resolve_model_name,
+)
+from .ollama_helpers import call_ollama_generate
 from .provider_registry import ProviderRegistry, get_provider_registry
 
 # Provider implementations (legacy — kept as shared infra for ollama back-edge)
@@ -93,4 +102,13 @@ __all__ = [
     "BaseProvider",
     "ProviderRegistry",
     "get_provider_registry",
+    # Model parameter registry (MVA-178)
+    "resolve_model_name",
+    "get_model_kwargs",
+    "get_provider_model_id",
+    "apply_model_defaults",
+    "get_prompt_prefix",
+    "apply_prompt_prefix",
+    # Ollama helpers (MVA-178)
+    "call_ollama_generate",
 ]

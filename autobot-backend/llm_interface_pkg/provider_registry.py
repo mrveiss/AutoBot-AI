@@ -36,16 +36,7 @@ from llm_interface_pkg.models import LLMRequest
 
 from .base_provider import BaseProvider
 
-# Temporary: model_param_registry remains in llm_providers until full consolidation
-try:
-    from llm_providers.model_param_registry import apply_model_defaults, apply_prompt_prefix
-except ImportError:
-    # Fallback if llm_providers is deleted before model_param_registry is moved
-    def apply_model_defaults(model: str, provider: str, kwargs: dict) -> dict:
-        return kwargs
-
-    def apply_prompt_prefix(model: str, messages: list) -> None:
-        pass
+from llm_interface_pkg.model_param_registry import apply_model_defaults, apply_prompt_prefix
 
 
 logger = logging.getLogger(__name__)
@@ -344,16 +335,14 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
 
     from autobot_shared.ssot_config import get_config as get_ssot_config
 
-    # Temporary: provider implementations remain in llm_providers/ until Phase 3
-    # Once providers are moved to llm_interface_pkg/providers/, update these imports
-    from llm_providers.anthropic_provider import AnthropicProvider
-    from llm_providers.custom_openai_provider import CustomOpenAIProvider
-    from llm_providers.groq_provider import GroqProvider
-    from llm_providers.huggingface_provider import HuggingFaceProvider
-    from llm_providers.nous_portal_provider import NousPortalProvider
-    from llm_providers.openai_provider import OpenAIProvider
-    from llm_providers.openrouter_provider import OpenRouterProvider
-    from llm_providers.vllm_base_provider import VLLMBaseProvider
+    from llm_interface_pkg.providers.anthropic import AnthropicProvider
+    from llm_interface_pkg.providers.custom_openai import CustomOpenAIProvider
+    from llm_interface_pkg.providers.groq import GroqProvider
+    from llm_interface_pkg.providers.huggingface import HuggingFaceProvider
+    from llm_interface_pkg.providers.nous_portal import NousPortalProvider
+    from llm_interface_pkg.providers.openai import OpenAIProvider
+    from llm_interface_pkg.providers.openrouter import OpenRouterProvider
+    from llm_interface_pkg.providers.vllm_base import VLLMBaseProvider
 
     fallback: List[str] = []
 
@@ -361,7 +350,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     try:
         ssot = get_ssot_config()
         ollama_url = ssot.ollama_url if ssot else os.getenv("AUTOBOT_OLLAMA_ENDPOINT", "http://127.0.0.1:11434")
-        from llm_providers.ollama_provider import OllamaProvider
+        from llm_interface_pkg.providers.ollama_provider import OllamaProvider
 
         ollama_provider = OllamaProvider(settings={"base_url": ollama_url})
         registry.register(ollama_provider)

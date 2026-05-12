@@ -3,7 +3,9 @@
 # Author: mrveiss
 """
 vLLM Provider for AutoBot
-High-performance inference for HuggingFace models using vLLM
+High-performance inference for HuggingFace models using vLLM.
+
+Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
 import asyncio
@@ -32,18 +34,6 @@ class VLLMProvider:
     """
 
     def __init__(self, config: Dict[str, Any]):
-        """
-        Initialize vLLM provider.
-
-        Args:
-            config: Provider configuration dict
-                - model: HuggingFace model name/path
-                - tensor_parallel_size: Number of GPUs to use
-                - gpu_memory_utilization: GPU memory fraction (0.0-1.0)
-                - max_model_len: Maximum model length
-                - trust_remote_code: Whether to trust remote code
-                - dtype: Model data type (auto, half, float16, bfloat16)
-        """
         if not VLLM_AVAILABLE:
             raise ImportError("vLLM not available. Install with: pip install vllm")
 
@@ -52,7 +42,6 @@ class VLLMProvider:
         self.llm: Optional[LLM] = None
         self.is_initialized = False
 
-        # vLLM configuration
         self.tensor_parallel_size = config.get("tensor_parallel_size", 1)
         self.gpu_memory_utilization = config.get("gpu_memory_utilization", 0.9)
         self.max_model_len = config.get("max_model_len", None)
@@ -63,16 +52,13 @@ class VLLMProvider:
         logger.info("vLLM provider configured for model: %s", self.model_name)
 
     async def initialize(self):
-        """Initialize the vLLM model"""
+        """Initialize the vLLM model."""
         if self.is_initialized:
             return
 
         try:
             logger.info("Initializing vLLM with model: %s", self.model_name)
-
-            # Initialize vLLM in a thread to avoid blocking
             self.llm = await asyncio.get_running_loop().run_in_executor(None, self._create_vllm_instance)
-
             self.is_initialized = True
             logger.info("vLLM model %s initialized successfully", self.model_name)
 
@@ -81,7 +67,7 @@ class VLLMProvider:
             raise
 
     def _create_vllm_instance(self) -> LLM:
-        """Create vLLM instance (runs in thread)"""
+        """Create vLLM instance (runs in thread)."""
         return LLM(
             model=self.model_name,
             tensor_parallel_size=self.tensor_parallel_size,
@@ -93,16 +79,7 @@ class VLLMProvider:
         )
 
     def _format_completion_response(self, output: Any, generation_time: float) -> Dict[str, Any]:
-        """
-        Format vLLM output into standardized response dict.
-
-        Args:
-            output: vLLM generation output object
-            generation_time: Time taken for generation in seconds
-
-        Returns:
-            Formatted response dictionary. Issue #620.
-        """
+        """Format vLLM output into standardized response dict. Issue #620."""
         generated_text = output.outputs[0].text
         return {
             "message": {"role": "assistant", "content": generated_text.strip()},
@@ -118,18 +95,10 @@ class VLLMProvider:
         }
 
     async def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
-        """
-        Generate chat completion using vLLM.
+        """Generate chat completion using vLLM.
 
-        Args:
-            messages: List of message dicts with 'role' and 'content'
-            **kwargs: Additional parameters (temperature, max_tokens, etc.).
-                      Accepts ``chat_template`` (str) to select the Jinja2
-                      prompt template (chatml/zephyr/vicuna).  Defaults to
-                      the loader DEFAULT_TEMPLATE.
-
-        Returns:
-            Dict with completion response
+        Accepts ``chat_template`` (str) to select the Jinja2 prompt template
+        (chatml/zephyr/vicuna).  Issue #4524: only apply when explicitly set.
         """
         if not self.is_initialized:
             await self.initialize()
@@ -154,46 +123,27 @@ class VLLMProvider:
             raise
 
     def _generate_completion(self, prompt: str, sampling_params: SamplingParams):
-        """Generate completion (runs in thread)"""
+        """Generate completion (runs in thread)."""
         return self.llm.generate([prompt], sampling_params)
 
     def _messages_to_prompt(self, messages: List[Dict[str, str]], chat_template: str = DEFAULT_TEMPLATE) -> str:
-        """Convert messages to a prompt string using a Jinja2 chat template.
-
-        Args:
-            messages: List of role/content dicts.
-            chat_template: Template name (chatml, zephyr, vicuna).
-                           Unknown values fall back to DEFAULT_TEMPLATE with a
-                           warning logged by render_chat_template.
-
-        Returns:
-            Formatted prompt string ready for vLLM generation.
-        """
+        """Convert messages to a prompt string using a Jinja2 chat template."""
         return render_chat_template(messages, chat_template)
 
     def _create_sampling_params(self, **kwargs) -> SamplingParams:
-        """Create vLLM sampling parameters"""
-        # Extract parameters with defaults
-        temperature = kwargs.get("temperature", 0.7)
-        max_tokens = kwargs.get("max_tokens", 512)
-        top_p = kwargs.get("top_p", 0.95)
-        top_k = kwargs.get("top_k", -1)  # -1 means disabled
-        frequency_penalty = kwargs.get("frequency_penalty", 0.0)
-        presence_penalty = kwargs.get("presence_penalty", 0.0)
-        stop = kwargs.get("stop", None)
-
+        """Create vLLM sampling parameters."""
         return SamplingParams(
-            temperature=temperature,
-            max_tokens=max_tokens,
-            top_p=top_p,
-            top_k=top_k,
-            frequency_penalty=frequency_penalty,
-            presence_penalty=presence_penalty,
-            stop=stop,
+            temperature=kwargs.get("temperature", 0.7),
+            max_tokens=kwargs.get("max_tokens", 512),
+            top_p=kwargs.get("top_p", 0.95),
+            top_k=kwargs.get("top_k", -1),
+            frequency_penalty=kwargs.get("frequency_penalty", 0.0),
+            presence_penalty=kwargs.get("presence_penalty", 0.0),
+            stop=kwargs.get("stop", None),
         )
 
     async def get_model_info(self) -> Dict[str, Any]:
-        """Get information about the loaded model"""
+        """Get information about the loaded model."""
         if not self.is_initialized:
             await self.initialize()
 
@@ -208,17 +158,13 @@ class VLLMProvider:
         }
 
     async def cleanup(self):
-        """Cleanup vLLM resources.
+        """Clean up vLLM resources.
 
         In vLLM 0.8+, destroy_model_parallel() was removed from the public API.
         The LLM engine now tears down parallel state in its own __del__ handler.
-        Releasing the reference and calling torch.cuda.empty_cache() is the
-        supported replacement pattern. See issue #1571.
         """
         if self.llm:
             try:
-                # Release the LLM instance; vLLM 0.8+ handles parallel-state
-                # teardown internally when the object is garbage-collected.
                 del self.llm
                 self.llm = None
                 self.is_initialized = False
@@ -235,23 +181,19 @@ class VLLMProvider:
 
 
 class VLLMModelManager:
-    """
-    Manages multiple vLLM models for different tasks.
-    Allows loading/unloading models on demand.
-    """
+    """Manages multiple vLLM models for different tasks."""
 
     def __init__(self):
-        """Initialize vLLM model manager with empty model registry."""
         self.models: Dict[str, VLLMProvider] = {}
         self.model_configs: Dict[str, Dict[str, Any]] = {}
 
     def register_model(self, model_id: str, config: Dict[str, Any]):
-        """Register a model configuration"""
+        """Register a model configuration."""
         self.model_configs[model_id] = config
         logger.info("Registered vLLM model config: %s", model_id)
 
     async def load_model(self, model_id: str) -> VLLMProvider:
-        """Load a model if not already loaded"""
+        """Load a model if not already loaded."""
         if model_id in self.models:
             return self.models[model_id]
 
@@ -264,22 +206,21 @@ class VLLMModelManager:
 
         self.models[model_id] = provider
         logger.info("Loaded vLLM model: %s", model_id)
-
         return provider
 
     async def unload_model(self, model_id: str):
-        """Unload a model to free memory"""
+        """Unload a model to free memory."""
         if model_id in self.models:
             await self.models[model_id].cleanup()
             del self.models[model_id]
             logger.info("Unloaded vLLM model: %s", model_id)
 
     async def get_model(self, model_id: str) -> VLLMProvider:
-        """Get a model, loading it if necessary"""
+        """Get a model, loading it if necessary."""
         return await self.load_model(model_id)
 
     def list_models(self) -> Dict[str, Dict[str, Any]]:
-        """List all registered models and their status"""
+        """List all registered models and their status."""
         return {
             model_id: {
                 "config": config,
@@ -290,14 +231,12 @@ class VLLMModelManager:
         }
 
     async def cleanup_all(self):
-        """Cleanup all loaded models"""
+        """Cleanup all loaded models."""
         for model_id in list(self.models.keys()):
             await self.unload_model(model_id)
 
 
-# Recommended model configurations
 RECOMMENDED_MODELS = {
-    # Small models for fast inference
     "phi-3-mini": {
         "model": "microsoft/Phi-3-mini-4k-instruct",
         "tensor_parallel_size": 1,
@@ -306,7 +245,6 @@ RECOMMENDED_MODELS = {
         "trust_remote_code": True,
         "dtype": "hal",
     },
-    # Medium models for balanced performance
     "llama-3.2-3b": {
         "model": "meta-llama/Llama-3.2-3B-Instruct",
         "tensor_parallel_size": 1,
@@ -315,7 +253,6 @@ RECOMMENDED_MODELS = {
         "trust_remote_code": False,
         "dtype": "hal",
     },
-    # Code-focused models
     "codellama-7b": {
         "model": "codellama/CodeLlama-7b-Instruct-h",
         "tensor_parallel_size": 1,
@@ -324,7 +261,6 @@ RECOMMENDED_MODELS = {
         "trust_remote_code": False,
         "dtype": "hal",
     },
-    # Large models for complex tasks (requires more GPU memory)
     "llama-3.1-8b": {
         "model": "meta-llama/Meta-Llama-3.1-8B-Instruct",
         "tensor_parallel_size": 1,
@@ -334,3 +270,5 @@ RECOMMENDED_MODELS = {
         "dtype": "half",
     },
 }
+
+__all__ = ["VLLMProvider", "VLLMModelManager", "RECOMMENDED_MODELS"]

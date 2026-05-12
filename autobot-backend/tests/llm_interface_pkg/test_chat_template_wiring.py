@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llm_providers.chat_template_loader import (
+from llm_interface_pkg.providers.chat_template_loader import (
     SUPPORTED_TEMPLATES,
     render_chat_template,
 )
@@ -137,7 +137,7 @@ async def test_ollama_stream_uses_prompt_payload_when_template_set():
     """When chat_template is in request.metadata, stream_completion must use
     the rendered ``prompt`` key (generate API) instead of ``messages``."""
     from llm_interface_pkg.models import LLMRequest
-    from llm_providers.ollama_provider import OllamaProvider
+    from llm_interface_pkg.providers.ollama_provider import OllamaProvider
 
     provider = OllamaProvider(settings={"base_url": "http://localhost:11434"})
 
@@ -187,7 +187,7 @@ async def test_ollama_stream_uses_prompt_payload_when_template_set():
 async def test_ollama_stream_uses_messages_payload_without_template():
     """Without chat_template, stream_completion must keep the messages payload."""
     from llm_interface_pkg.models import LLMRequest
-    from llm_providers.ollama_provider import OllamaProvider
+    from llm_interface_pkg.providers.ollama_provider import OllamaProvider
 
     provider = OllamaProvider(settings={"base_url": "http://localhost:11434"})
 
@@ -238,7 +238,7 @@ async def test_ollama_chat_completion_pre_renders_when_template_set():
     the generate endpoint with a rendered ``prompt`` key containing template
     markers (e.g. ``<|im_start|>``) instead of forwarding to the delegate."""
     from llm_interface_pkg.models import LLMRequest
-    from llm_providers.ollama_provider import OllamaProvider
+    from llm_interface_pkg.providers.ollama_provider import OllamaProvider
 
     provider = OllamaProvider(settings={"base_url": "http://localhost:11434"})
 
@@ -305,7 +305,7 @@ async def test_ollama_chat_completion_passes_through_without_template():
     """Without chat_template in metadata, chat_completion must delegate to the
     llm_interface_pkg OllamaProvider (messages passed through unchanged)."""
     from llm_interface_pkg.models import LLMRequest, LLMResponse
-    from llm_providers.ollama_provider import OllamaProvider
+    from llm_interface_pkg.providers.ollama_provider import OllamaProvider
 
     provider = OllamaProvider(settings={"base_url": "http://localhost:11434"})
 

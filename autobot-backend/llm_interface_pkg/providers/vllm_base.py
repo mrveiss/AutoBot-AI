@@ -2,13 +2,11 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-vLLM Base Provider - Wraps vLLM in BaseProvider interface for registry integration.
+vLLM Base Provider - Wraps VLLMProvider in BaseProvider interface for registry integration.
 
 Issue #4341: Model Provider Flexibility & Vendor-Agnostic Switching
 
-This wrapper adapts the vLLMProvider to the standardized BaseProvider interface,
-enabling vLLM models to participate in fallback chains, health checks, and
-runtime provider switching without code changes.
+Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
 from __future__ import annotations
@@ -20,8 +18,8 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 
-from .base_provider import BaseProvider
-from .vllm_provider import VLLMProvider
+from ..base_provider import BaseProvider
+from .vllm import VLLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -30,28 +28,13 @@ class VLLMBaseProvider(BaseProvider):
     """
     Standardized BaseProvider wrapper for vLLM.
 
-    Wraps the existing VLLMProvider (which handles model loading and inference)
-    and adapts it to the BaseProvider interface for integration with the
-    provider registry, fallback chains, and health monitoring.
-
-    Provider name: "vllm"
+    Wraps VLLMProvider and adapts it to the BaseProvider interface for
+    integration with the provider registry, fallback chains, and health monitoring.
     """
 
     provider_name = ProviderType.VLLM.value
 
     def __init__(self, settings: Optional[Dict[str, Any]] = None) -> None:
-        """
-        Initialize the vLLM wrapper.
-
-        Args:
-            settings: Configuration dict passed to VLLMProvider.
-                     Must include "model" key with HuggingFace model path.
-                     See VLLMProvider for full list of options.
-
-        Raises:
-            ImportError: If vLLM is not installed.
-            ValueError: If "model" is not in settings.
-        """
         super().__init__(settings)
         if not self.settings or "model" not in self.settings:
             raise ValueError('VLLMBaseProvider requires "model" in settings')
@@ -77,26 +60,14 @@ class VLLMBaseProvider(BaseProvider):
                 raise
 
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
-        """
-        Execute a chat completion request via vLLM.
-
-        Args:
-            request: Standardized LLM request.
-
-        Returns:
-            LLMResponse with content populated or error field set.
-        """
+        """Execute a chat completion request via vLLM."""
         try:
             self._total_requests += 1
             await self._ensure_initialized()
 
-            # Convert LLMRequest to vLLM format
             messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
-            # Extract inference parameters from request metadata
-            # Issue #4524: only apply chat_template when explicitly set — never default
-            # to DEFAULT_TEMPLATE, as models with native tokenizer templates would
-            # receive double-templated prompts.
+            # Issue #4524: only apply chat_template when explicitly set
             api_kwargs = request.metadata.get("api_kwargs", {})
             chat_template = request.metadata.get("chat_template")
             inference_kwargs = {
@@ -111,7 +82,6 @@ class VLLMBaseProvider(BaseProvider):
             if chat_template:
                 inference_kwargs["chat_template"] = chat_template
 
-            # Run inference in executor to avoid blocking
             response = await asyncio.get_running_loop().run_in_executor(
                 None,
                 self._vllm_provider.chat_completion,
@@ -119,7 +89,6 @@ class VLLMBaseProvider(BaseProvider):
                 inference_kwargs,
             )
 
-            # Adapt vLLM response to LLMResponse
             # Issue #4527: LLMResponse fields are `model` and `provider`, not model_name/provider_name
             return LLMResponse(
                 content=response["message"]["content"],
@@ -144,27 +113,13 @@ class VLLMBaseProvider(BaseProvider):
             )
 
     async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
-        """
-        Stream a chat completion response from vLLM.
-
-        vLLM's streaming requires special handling. This implementation
-        generates the full response in the executor and yields it in chunks
-        to maintain the streaming interface.
-
-        Args:
-            request: Standardized LLM request.
-
-        Yields:
-            String chunks of the generated text.
-        """
+        """Stream a chat completion response from vLLM."""
         try:
             self._total_requests += 1
             await self._ensure_initialized()
 
-            # Convert to vLLM format
             messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
-            # Issue #4524: only apply chat_template when explicitly set
             api_kwargs = request.metadata.get("api_kwargs", {})
             chat_template = request.metadata.get("chat_template")
             inference_kwargs = {
@@ -176,7 +131,6 @@ class VLLMBaseProvider(BaseProvider):
             if chat_template:
                 inference_kwargs["chat_template"] = chat_template
 
-            # Run inference in executor
             response = await asyncio.get_running_loop().run_in_executor(
                 None,
                 self._vllm_provider.chat_completion,
@@ -184,9 +138,7 @@ class VLLMBaseProvider(BaseProvider):
                 inference_kwargs,
             )
 
-            # Yield content in chunks to simulate streaming
             content = response["message"]["content"]
-            # Simple chunking: yield ~20 characters at a time
             chunk_size = 20
             for i in range(0, len(content), chunk_size):
                 yield content[i : i + chunk_size]
@@ -197,15 +149,7 @@ class VLLMBaseProvider(BaseProvider):
             yield f"Error: {exc}"
 
     async def is_available(self) -> bool:
-        """
-        Check if vLLM provider is available and healthy.
-
-        Performs a lightweight health check by attempting initialization
-        if not already done.
-
-        Returns:
-            True if provider is reachable and configured, False otherwise.
-        """
+        """Check if vLLM provider is available and healthy."""
         try:
             if not self._initialized:
                 await self._ensure_initialized()
@@ -215,17 +159,9 @@ class VLLMBaseProvider(BaseProvider):
             return False
 
     async def list_models(self) -> List[str]:
-        """
-        List available models for vLLM.
-
-        Returns the currently loaded model plus recommended models
-        from the vLLM module.
-
-        Returns:
-            List of model identifiers.
-        """
+        """List available models for vLLM."""
         try:
-            from .vllm_provider import RECOMMENDED_MODELS
+            from .vllm import RECOMMENDED_MODELS
 
             if self._initialized and self._vllm_provider:
                 current_model = self._vllm_provider.model_name
@@ -237,12 +173,7 @@ class VLLMBaseProvider(BaseProvider):
             return []
 
     def get_stats(self) -> Dict[str, Any]:
-        """
-        Get provider statistics including model info.
-
-        Returns:
-            Dict with request counts, error rates, and model metadata.
-        """
+        """Get provider statistics including model info."""
         stats = super().get_stats()
         if self._initialized and self._vllm_provider:
             stats.update(

@@ -13,6 +13,8 @@ API key is read (in priority order) from:
   3. ConfigManager (backward-compatible path)
 
 API keys are never logged.
+
+Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
 from __future__ import annotations
@@ -37,11 +39,11 @@ from constants.model_constants import (
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 
-from .base_provider import BaseProvider
+from ..base_provider import BaseProvider
 
 logger = logging.getLogger(__name__)
 
-# Issue #697: tracer for LLM operations — mirrors llm_interface_pkg/providers/openai_provider.py
+# Issue #697: tracer for LLM operations
 _tracer = trace.get_tracer("autobot.llm.openai", "2.0.0")
 
 _OPENAI_MODELS = [
@@ -50,7 +52,7 @@ _OPENAI_MODELS = [
     OPENAI_GPT4_TURBO,
     OPENAI_GPT4,
     OPENAI_GPT35_TURBO,
-    "o1-preview",  # not yet in model_constants — preview variant
+    "o1-preview",
     OPENAI_O1_MINI,
 ]
 
@@ -80,7 +82,6 @@ class OpenAIProvider(BaseProvider):
             try:
                 from autobot_shared.ssot_config import config as _ssot_config
 
-                # ssot_config reads OPENAI_API_KEY from .env (Issue #3829)
                 key = _ssot_config.llm.openai_api_key
             except Exception:
                 pass
@@ -98,7 +99,8 @@ class OpenAIProvider(BaseProvider):
         api_key = self._resolve_api_key()
         if not api_key:
             raise ValueError(
-                "OpenAI API key not configured. " "Set OPENAI_API_KEY or provide api_key in provider settings."
+                "OpenAI API key not configured. "
+                "Set OPENAI_API_KEY or provide api_key in provider settings."
             )
         base_url = self._get_setting("base_url") or os.getenv("OPENAI_API_BASE_URL")
         kwargs: Dict[str, Any] = {"api_key": api_key}

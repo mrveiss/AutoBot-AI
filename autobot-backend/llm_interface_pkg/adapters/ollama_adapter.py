@@ -42,7 +42,7 @@ class OllamaAdapter(AdapterBase):
     def _ensure_provider(self):
         """Lazily construct the canonical OllamaProvider."""
         if self._provider is None:
-            from llm_providers.ollama_provider import OllamaProvider
+            from llm_interface_pkg.providers.ollama_provider import OllamaProvider
 
             base_url = self.config.settings.get("base_url")
             settings = {"base_url": base_url} if base_url else {}

@@ -6,15 +6,12 @@ Nous Portal Provider - Access Nous Research's curated open-source LLM models.
 
 Issue #4341: Model Provider Flexibility & Vendor-Agnostic Switching
 
-Nous Portal (https://huggingface.co/Nous) provides access to high-quality
-open-source models including Hermes, Nous-Hermes, and fine-tuned variants
-of popular models. This provider streams models through the OpenAI-compatible
-Hugging Face Inference API or custom deployment endpoints.
-
 Configuration:
   - api_key: HuggingFace API token or custom endpoint key
   - base_url: Custom API base URL (e.g., for self-hosted Nous models)
-  - default_model: Default model name (e.g., "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO")
+  - default_model: Default model name
+
+Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
 from __future__ import annotations
@@ -29,12 +26,11 @@ from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 
-from .base_provider import BaseProvider
+from ..base_provider import BaseProvider
 
 logger = logging.getLogger(__name__)
 _tracer = trace.get_tracer("autobot.llm.nous", "1.0.0")
 
-# Popular Nous Research models
 NOUS_MODELS = [
     "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO",
     "NousResearch/Nous-Hermes-2-Mistral-7B-DPO",
@@ -48,17 +44,7 @@ class NousPortalProvider(BaseProvider):
     """
     Nous Portal provider implementation.
 
-    Provides access to curated open-source LLM models from Nous Research,
-    including:
-    - Nous-Hermes (fine-tuned Llama variants)
-    - Nous-Hermes-2 (Mixtral and Mistral fine-tunes)
-    - Vision models
-
-    Can be used with:
-    1. HuggingFace Inference API endpoints
-    2. Custom self-hosted Nous model servers
-    3. OpenAI-compatible API wrappers
-
+    Provides access to curated open-source LLM models from Nous Research.
     Requires: openai package (pip install openai)
               HF_TOKEN or custom API key in environment
     """
@@ -91,7 +77,7 @@ class NousPortalProvider(BaseProvider):
         url = (
             self._get_setting("base_url")
             or os.getenv("NOUS_API_BASE_URL")
-            or "https://api-inference.huggingface.co/v1"  # HF Inference API
+            or "https://api-inference.huggingface.co/v1"
         )
         self._base_url = url
         return url
@@ -115,24 +101,14 @@ class NousPortalProvider(BaseProvider):
         logger.info("Nous Portal client initialized with base_url: %s", base_url)
 
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
-        """
-        Execute a chat completion via Nous models.
-
-        Args:
-            request: Standardized LLM request.
-
-        Returns:
-            LLMResponse with content populated or error field set.
-        """
+        """Execute a chat completion via Nous models."""
         with _tracer.start_as_current_span("nous.chat_completion", kind=SpanKind.CLIENT) as span:
             try:
                 self._total_requests += 1
                 self._ensure_client()
 
-                # Convert to OpenAI format
                 messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
-                # Merge API kwargs
                 api_kwargs = request.metadata.get("api_kwargs", {})
                 chat_kwargs = {
                     "model": request.model_name or self._get_setting("default_model", NOUS_MODELS[0]),
@@ -142,7 +118,6 @@ class NousPortalProvider(BaseProvider):
                     "top_p": api_kwargs.get("top_p", 0.95),
                 }
 
-                # Optional parameters
                 if "presence_penalty" in api_kwargs:
                     chat_kwargs["presence_penalty"] = api_kwargs["presence_penalty"]
                 if "frequency_penalty" in api_kwargs:
@@ -154,7 +129,6 @@ class NousPortalProvider(BaseProvider):
                 response = await self._client.chat.completions.create(**chat_kwargs)
                 latency = time.monotonic() - start_time
 
-                # Extract response content
                 content = response.choices[0].message.content or ""
                 usage = {
                     "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
@@ -192,15 +166,7 @@ class NousPortalProvider(BaseProvider):
                 )
 
     async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
-        """
-        Stream a chat completion from Nous models.
-
-        Args:
-            request: Standardized LLM request.
-
-        Yields:
-            String chunks of the generated text.
-        """
+        """Stream a chat completion from Nous models."""
         with _tracer.start_as_current_span("nous.stream_completion", kind=SpanKind.CLIENT) as span:
             try:
                 self._total_requests += 1
@@ -240,16 +206,9 @@ class NousPortalProvider(BaseProvider):
                 yield f"Error: {exc}"
 
     async def is_available(self) -> bool:
-        """
-        Check if Nous Portal is reachable and properly configured.
-
-        Returns:
-            True if provider is reachable, False otherwise.
-        """
+        """Check if Nous Portal is reachable and properly configured."""
         try:
             self._ensure_client()
-            # Try to make a simple health check
-            # For HF Inference API, this verifies the token and endpoint
             await self._client.models.list()
             return True
         except Exception as exc:
@@ -257,22 +216,12 @@ class NousPortalProvider(BaseProvider):
             return False
 
     async def list_models(self) -> List[str]:
-        """
-        List available Nous Research models.
-
-        Returns the curated set of popular Nous models plus any
-        custom models configured via environment.
-
-        Returns:
-            List of model identifiers.
-        """
+        """List available Nous Research models."""
         try:
-            # Try to get from API if available
             self._ensure_client()
             response = await self._client.models.list()
             return [model.id for model in response.data] if response.data else NOUS_MODELS
         except Exception:
-            # Fall back to known Nous models
             logger.debug("Could not fetch Nous models from API; using defaults")
             return NOUS_MODELS
 
