@@ -78,16 +78,14 @@ def _resolve_chat_recent_max_entries() -> int:
         value = int(raw)
     except ValueError:
         logger.warning(
-            "AUTOBOT_CHAT_RECENT_MAX_ENTRIES=%r is not an integer; "
-            "falling back to %d",
+            "AUTOBOT_CHAT_RECENT_MAX_ENTRIES=%r is not an integer; " "falling back to %d",
             raw,
             _CHAT_RECENT_MAX_ENTRIES_DEFAULT,
         )
         return _CHAT_RECENT_MAX_ENTRIES_DEFAULT
     if value <= 0:
         logger.warning(
-            "AUTOBOT_CHAT_RECENT_MAX_ENTRIES=%d must be positive; "
-            "falling back to %d",
+            "AUTOBOT_CHAT_RECENT_MAX_ENTRIES=%d must be positive; " "falling back to %d",
             value,
             _CHAT_RECENT_MAX_ENTRIES_DEFAULT,
         )
