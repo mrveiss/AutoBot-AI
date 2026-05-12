@@ -542,7 +542,7 @@ async def _get_status_for_config(cfg: ConnectorConfig) -> Dict[str, Any]:
             "last_sync_status": status.last_sync_status,
             "documents_indexed": status.documents_indexed,
             "last_error": status.last_error,
-            "scheduled": scheduler.is_running(cfg.connector_id),
+            "scheduled": await scheduler.is_running(cfg.connector_id),
         }
     except Exception as exc:
         logger.warning("get_status failed for %s: %s", cfg.connector_id, exc)
