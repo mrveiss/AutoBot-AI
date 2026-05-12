@@ -127,6 +127,9 @@ class RedisKeyConstants:
     INVALIDATED_FACTS_INDEX: str = "invalidated_facts_index"
     INVALIDATION_SCHEDULE: str = "invalidation_schedule"
 
+    # Chat history
+    CHAT_RECENT: str = "chat:recent"
+
     # LLM caching
     LLM_MODELS_CACHE: str = "llm_models"
 
