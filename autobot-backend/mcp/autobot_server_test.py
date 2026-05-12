@@ -202,8 +202,22 @@ async def test_unknown_method_returns_error():
 # Run JWT auth (SEC-2 Phase 2, #6473)
 # ---------------------------------------------------------------------------
 
-_FAKE_KB_CLAIMS = {"jti": "test-jti", "run_id": "r1", "task_id": "t1", "agent_id": "a1", "tenant_id": "x", "scope": ["mcp:knowledge"]}
-_FAKE_AGENT_CLAIMS = {"jti": "test-jti2", "run_id": "r2", "task_id": "t2", "agent_id": "a2", "tenant_id": "x", "scope": ["agent:invoke"]}
+_FAKE_KB_CLAIMS = {
+    "jti": "test-jti",
+    "run_id": "r1",
+    "task_id": "t1",
+    "agent_id": "a1",
+    "tenant_id": "x",
+    "scope": ["mcp:knowledge"],
+}
+_FAKE_AGENT_CLAIMS = {
+    "jti": "test-jti2",
+    "run_id": "r2",
+    "task_id": "t2",
+    "agent_id": "a2",
+    "tenant_id": "x",
+    "scope": ["agent:invoke"],
+}
 
 
 @pytest.mark.asyncio

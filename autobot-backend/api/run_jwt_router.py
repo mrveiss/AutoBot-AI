@@ -67,9 +67,7 @@ async def refresh_run_jwt_endpoint(run_id: str, request: Request) -> RunJwtRefre
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
     except JWTDecodeError as exc:
-        logger.info(
-            "run_jwt: refresh denied — invalid/revoked token for run_id=%s: %s", run_id, exc
-        )
+        logger.info("run_jwt: refresh denied — invalid/revoked token for run_id=%s: %s", run_id, exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="JWT is invalid or has been revoked",

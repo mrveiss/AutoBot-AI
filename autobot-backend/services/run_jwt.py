@@ -356,9 +356,7 @@ async def refresh_run_jwt(token: str, run_id: str) -> str:
     claims = await validate_run_jwt(token)
 
     if str(claims.get("run_id", "")) != run_id:
-        raise JWTDecodeError(
-            f"run_jwt: run_id mismatch — token has {claims.get('run_id')!r}, expected {run_id!r}"
-        )
+        raise JWTDecodeError(f"run_jwt: run_id mismatch — token has {claims.get('run_id')!r}, expected {run_id!r}")
 
     scope = list(claims.get("scope", []))
     task_id = str(claims.get("task_id", ""))
