@@ -73,8 +73,10 @@ logger = logging.getLogger(__name__)
 
 _ENV_SECRET = "RUN_JWT_SECRET"
 _ENV_TTL = "RUN_JWT_TTL_SECONDS"
+_ENV_AUDIENCE = "RUN_JWT_AUDIENCE"
 _ENV_FAIL_OPEN = "RUN_JWT_REDIS_FAIL_OPEN"
 _DEFAULT_TTL = 300
+_DEFAULT_AUDIENCE = "autobot:run-validator"
 _DENYLIST_PREFIX = "run_jwt:revoked:"
 
 #: Allowed scopes for run JWTs (minimum-privilege model, documented in module docstring).
@@ -116,6 +118,12 @@ def _ttl() -> int:
         return _DEFAULT_TTL
 
 
+
+def _audience() -> str:
+    """Resolve the expected ``aud`` claim from ``RUN_JWT_AUDIENCE``, defaulting to ``_DEFAULT_AUDIENCE``."""
+    return os.environ.get(_ENV_AUDIENCE, "") or _DEFAULT_AUDIENCE
+
+
 def mint_run_jwt(
     run_id: str,
     task_id: str,
@@ -147,6 +155,7 @@ def mint_run_jwt(
     jti = str(uuid.uuid4())
     payload: Dict[str, object] = {
         "jti": jti,
+        "aud": _audience(),
         "run_id": run_id,
         "task_id": task_id,
         "agent_id": agent_id,
@@ -231,7 +240,7 @@ async def validate_run_jwt(token: str) -> Dict[str, object]:
         JWTDecodeError: Token has an invalid signature, is malformed, or its
             JTI has been explicitly revoked.
     """
-    claims = decode_jwt(token, _secret())
+    claims = decode_jwt(token, _secret(), audience=_audience())
 
     jti = claims.get("jti")
     if not jti:
