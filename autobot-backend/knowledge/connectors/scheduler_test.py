@@ -37,7 +37,6 @@ from knowledge.connectors.scheduler import (
     get_connector_scheduler,
 )
 
-
 # ---------------------------------------------------------------------------
 # _parse_interval_seconds
 # ---------------------------------------------------------------------------
@@ -165,7 +164,9 @@ class TestConnectorSchedulerRedis:
         assert _SCHEDULE_PREFIX + "c1" not in store
 
     async def test_stop_removes_redis_key(self):
-        store = {_SCHEDULE_PREFIX + "c1": json.dumps({"connector_id": "c1", "schedule": "*/5", "interval_seconds": 300})}
+        store = {
+            _SCHEDULE_PREFIX + "c1": json.dumps({"connector_id": "c1", "schedule": "*/5", "interval_seconds": 300})
+        }
         mock_redis, store = _make_redis_mock(store)
 
         with patch(
@@ -213,7 +214,9 @@ class TestConnectorSchedulerRedis:
 
     async def test_stop_all_does_not_delete_redis_keys(self):
         """stop_all cancels local asyncio tasks but leaves Redis schedules intact."""
-        store = {_SCHEDULE_PREFIX + "c1": json.dumps({"connector_id": "c1", "schedule": "*/5", "interval_seconds": 300})}
+        store = {
+            _SCHEDULE_PREFIX + "c1": json.dumps({"connector_id": "c1", "schedule": "*/5", "interval_seconds": 300})
+        }
         mock_redis, _ = _make_redis_mock(store)
 
         with patch(
@@ -236,7 +239,8 @@ class TestConnectorSchedulerRedis:
         """Simulates worker restart: new scheduler leader picks up existing Redis schedules."""
         store = {
             _SCHEDULE_PREFIX + "c1": json.dumps({"connector_id": "c1", "schedule": "*/5", "interval_seconds": 300}),
-            _SCHEDULE_PREFIX + "c2": json.dumps({"connector_id": "c2", "schedule": "@hourly", "interval_seconds": 3600}),
+            _SCHEDULE_PREFIX
+            + "c2": json.dumps({"connector_id": "c2", "schedule": "@hourly", "interval_seconds": 3600}),
         }
         mock_redis, _ = _make_redis_mock(store)
 
