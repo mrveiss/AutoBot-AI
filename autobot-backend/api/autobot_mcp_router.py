@@ -71,6 +71,8 @@ async def mcp_tool_call(request: Request) -> JSONResponse:
         code = response["error"].get("code", -32000)
         if code == -32001:
             status = 401
+        elif code == -32003:
+            status = 403
         elif code == -32029:
             status = 429
 
