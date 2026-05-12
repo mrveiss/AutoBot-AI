@@ -75,9 +75,9 @@ def _parse_interval_seconds(schedule: str) -> Optional[int]:
 
 _SCHEDULE_PREFIX = "connector:schedule:"
 _LEADER_KEY = "connector:scheduler:leader"
-_LEADER_TTL_MS = 30_000   # leader lease - 30 seconds
-_LEADER_REFRESH_S = 10    # leader refreshes its lease every 10 s
-_LEADER_POLL_S = 15       # non-leaders poll for an open slot every 15 s
+_LEADER_TTL_MS = 30_000  # leader lease - 30 seconds
+_LEADER_REFRESH_S = 10  # leader refreshes its lease every 10 s
+_LEADER_POLL_S = 15  # non-leaders poll for an open slot every 15 s
 
 
 def _decode(val: object) -> str:

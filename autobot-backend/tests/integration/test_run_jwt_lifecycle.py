@@ -341,8 +341,9 @@ async def test_run_jwt_blocked_on_non_allowed_path(jwt_secret, monkeypatch):
 
     middleware = AuthenticationMiddleware.__new__(AuthenticationMiddleware)
 
-    with patch("auth_middleware.get_auth_middleware", return_value=middleware), patch.object(
-        middleware, "get_user_from_request", return_value=None
+    with (
+        patch("auth_middleware.get_auth_middleware", return_value=middleware),
+        patch.object(middleware, "get_user_from_request", return_value=None),
     ):
         with pytest.raises(HTTPException) as exc_info:
             await get_current_user(request)
@@ -375,8 +376,9 @@ async def test_run_jwt_allowed_on_refresh_path(jwt_secret, monkeypatch):
 
     middleware = AuthenticationMiddleware.__new__(AuthenticationMiddleware)
 
-    with patch("auth_middleware.get_auth_middleware", return_value=middleware), patch.object(
-        middleware, "get_user_from_request", return_value=None
+    with (
+        patch("auth_middleware.get_auth_middleware", return_value=middleware),
+        patch.object(middleware, "get_user_from_request", return_value=None),
     ):
         user = await get_current_user(request)
     assert user["auth_method"] == "run_jwt"

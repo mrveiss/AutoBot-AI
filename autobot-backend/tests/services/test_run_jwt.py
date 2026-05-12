@@ -157,7 +157,6 @@ class TestValidateRunJwtValid:
                 await validate_run_jwt(bad_token)
 
 
-
 # ---------------------------------------------------------------------------
 # aud claim enforcement (MVA-155)
 # ---------------------------------------------------------------------------
@@ -214,6 +213,7 @@ class TestValidateAudClaim:
             token = mint_run_jwt(_RUN_ID, _TASK_ID, _AGENT_ID, _TENANT_ID, _SCOPE)
             claims = await validate_run_jwt(token)
         assert claims["aud"] == "custom:validator"
+
 
 # ---------------------------------------------------------------------------
 # Blast radius test: expired JWT → access denied

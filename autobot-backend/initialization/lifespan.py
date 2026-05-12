@@ -682,6 +682,7 @@ async def _init_heartbeat_scheduler(app: FastAPI) -> None:
         logger.warning("Heartbeat scheduler initialization failed: %s", hb_error)
         app.state.heartbeat_scheduler = None
 
+
 async def _start_connector_scheduler() -> None:
     """Start the Redis-backed connector scheduler leader-election loop (NON-CRITICAL).
 
@@ -698,8 +699,6 @@ async def _start_connector_scheduler() -> None:
         logger.info("Connector scheduler: leader-election loop started")
     except Exception as cs_error:
         logger.warning("Connector scheduler initialization failed: %s", cs_error)
-
-
 
 
 async def _init_trigger_service(app: FastAPI) -> None:
