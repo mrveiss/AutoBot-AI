@@ -58,6 +58,46 @@ def _resolve_chat_session_cache_ttl() -> int:
 _CHAT_SESSION_CACHE_TTL = _resolve_chat_session_cache_ttl()
 
 
+# #7570: chat:recent sorted set max-entries cap.
+#
+# The sorted set had no TTL and would grow without bound as sessions accumulated.
+# We trim to the N most-recent entries immediately after each ZADD using
+# ZREMRANGEBYRANK so the set never exceeds this limit.
+#
+# 1000 is well above any realistic concurrent-session count; lower it under
+# memory pressure via AUTOBOT_CHAT_RECENT_MAX_ENTRIES.
+_CHAT_RECENT_MAX_ENTRIES_DEFAULT = 1000
+
+
+def _resolve_chat_recent_max_entries() -> int:
+    """Return max members for the chat:recent sorted set."""
+    raw = os.getenv("AUTOBOT_CHAT_RECENT_MAX_ENTRIES")
+    if raw is None:
+        return _CHAT_RECENT_MAX_ENTRIES_DEFAULT
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_CHAT_RECENT_MAX_ENTRIES=%r is not an integer; "
+            "falling back to %d",
+            raw,
+            _CHAT_RECENT_MAX_ENTRIES_DEFAULT,
+        )
+        return _CHAT_RECENT_MAX_ENTRIES_DEFAULT
+    if value <= 0:
+        logger.warning(
+            "AUTOBOT_CHAT_RECENT_MAX_ENTRIES=%d must be positive; "
+            "falling back to %d",
+            value,
+            _CHAT_RECENT_MAX_ENTRIES_DEFAULT,
+        )
+        return _CHAT_RECENT_MAX_ENTRIES_DEFAULT
+    return value
+
+
+_CHAT_RECENT_MAX_ENTRIES = _resolve_chat_recent_max_entries()
+
+
 class CacheMixin:
     """
     Mixin providing Redis caching operations for chat sessions.

@@ -130,6 +130,9 @@ class RedisKeyConstants:
     # LLM caching
     LLM_MODELS_CACHE: str = "llm_models"
 
+    # Chat session listing index (#7570)
+    CHAT_RECENT: str = "chat:recent"
+
     @classmethod
     def get_key(cls, key_pattern: str, *args) -> str:
         """Build Redis key with dynamic parts"""

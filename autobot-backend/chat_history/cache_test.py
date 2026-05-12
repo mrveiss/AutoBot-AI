@@ -72,3 +72,57 @@ def test_no_3600_literal_in_module_source():
 
     src = inspect.getsource(cache_mod.CacheMixin._async_cache_session)
     assert "3600" not in src, "TTL must not be a 3600 literal in _async_cache_session"
+
+
+# ---------------------------------------------------------------------------
+# _CHAT_RECENT_MAX_ENTRIES resolution tests (#7570)
+# ---------------------------------------------------------------------------
+
+
+def _reload_cache_with_recent_env(env_value):
+    """Reload cache module with AUTOBOT_CHAT_RECENT_MAX_ENTRIES set or unset."""
+    if env_value is None:
+        os.environ.pop("AUTOBOT_CHAT_RECENT_MAX_ENTRIES", None)
+    else:
+        os.environ["AUTOBOT_CHAT_RECENT_MAX_ENTRIES"] = env_value
+    import chat_history.cache as cache_mod
+
+    importlib.reload(cache_mod)
+    return cache_mod
+
+
+@pytest.fixture(autouse=False)
+def _restore_recent_env():
+    saved = os.environ.get("AUTOBOT_CHAT_RECENT_MAX_ENTRIES")
+    yield
+    if saved is None:
+        os.environ.pop("AUTOBOT_CHAT_RECENT_MAX_ENTRIES", None)
+    else:
+        os.environ["AUTOBOT_CHAT_RECENT_MAX_ENTRIES"] = saved
+    import chat_history.cache as cache_mod
+
+    importlib.reload(cache_mod)
+
+
+def test_recent_default_max_entries_is_1000(_restore_recent_env):
+    cache_mod = _reload_cache_with_recent_env(None)
+    assert cache_mod._CHAT_RECENT_MAX_ENTRIES == 1000
+
+
+def test_recent_env_var_override_accepts_positive_int(_restore_recent_env):
+    cache_mod = _reload_cache_with_recent_env("500")
+    assert cache_mod._CHAT_RECENT_MAX_ENTRIES == 500
+
+
+def test_recent_env_var_non_integer_falls_back_with_warning(_restore_recent_env, caplog):
+    with caplog.at_level(logging.WARNING, logger="chat_history.cache"):
+        cache_mod = _reload_cache_with_recent_env("not-a-number")
+    assert cache_mod._CHAT_RECENT_MAX_ENTRIES == 1000
+    assert any("not an integer" in r.getMessage() for r in caplog.records)
+
+
+def test_recent_env_var_zero_falls_back_with_warning(_restore_recent_env, caplog):
+    with caplog.at_level(logging.WARNING, logger="chat_history.cache"):
+        cache_mod = _reload_cache_with_recent_env("0")
+    assert cache_mod._CHAT_RECENT_MAX_ENTRIES == 1000
+    assert any("must be positive" in r.getMessage() for r in caplog.records)
