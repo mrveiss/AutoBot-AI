@@ -33,7 +33,10 @@ import json
 import logging
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
+from services.run_jwt import validate_run_jwt
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +47,21 @@ logger = logging.getLogger(__name__)
 _RATE_LIMIT = 50  # requests per 60-second window per token
 _WINDOW_SECONDS = 60.0
 
-# Scope → tool prefixes
+# Legacy scope → tool prefix (simple token format "secret:kb,memory,agents")
 _SCOPE_MAP: Dict[str, str] = {
     "kb": "kb.",
     "memory": "memory.",
     "agents": "agents.",
+}
+
+# Run JWT scope → tool prefixes (SEC-2 Phase 2, #6473)
+_RUN_JWT_SCOPE_TO_PREFIXES: Dict[str, List[str]] = {
+    "mcp:knowledge": ["kb", "memory"],
+    "agent:invoke": ["agents"],
+    "mcp:filesystem": ["filesystem"],
+    "mcp:web_fetch": ["web_fetch"],
+    "task:read": ["task"],
+    "task:write": ["task"],
 }
 
 # ---------------------------------------------------------------------------
@@ -255,6 +268,35 @@ class AutoBotMCPServer:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _map_run_jwt_scopes(jwt_scopes: List[str]) -> List[str]:
+        """Convert run JWT scope claims into the tool-prefix list used by _check_scope."""
+        granted: List[str] = []
+        for scope in jwt_scopes:
+            for prefix in _RUN_JWT_SCOPE_TO_PREFIXES.get(scope, []):
+                if prefix not in granted:
+                    granted.append(prefix)
+        return granted
+
+    @staticmethod
+    async def _resolve_run_jwt(token: str) -> Tuple[Optional[List[str]], Optional[str]]:
+        """Validate a run JWT and return (tool_prefixes, error_message).
+
+        Returns (prefixes, None) on success, (None, error) on failure.
+        Callers should map None prefixes to a -32001 auth error.
+        """
+        try:
+            claims = await validate_run_jwt(token)
+        except JWTExpiredError:
+            return None, "Forbidden: run JWT has expired"
+        except JWTDecodeError as exc:
+            return None, f"Forbidden: {exc}"
+        jwt_scopes = claims.get("scope") or []
+        if not isinstance(jwt_scopes, list):
+            jwt_scopes = []
+        prefixes = AutoBotMCPServer._map_run_jwt_scopes([str(s) for s in jwt_scopes])
+        return prefixes, None
+
+    @staticmethod
     def _validate_token(token: str) -> Optional[List[str]]:
         """Return the list of granted scopes for *token*, or None if invalid.
 
@@ -320,12 +362,25 @@ class AutoBotMCPServer:
         Returns:
             JSON-RPC response dict (always includes ``jsonrpc`` and ``id``).
         """
-        scopes = self._validate_token(auth_token)
-        if scopes is None:
-            return _err(-32001, "Unauthorized: invalid or missing token", req_id)
+        # SEC-2 Phase 2 (#6473): prefer run JWT over legacy static token.
+        # Agents pass run_jwt as a top-level JSON-RPC param; the scheduler also
+        # exposes it via AUTOBOT_RUN_JWT for in-process callers (base_agent.get_mcp_token).
+        run_jwt_token = params.pop("run_jwt", None) if isinstance(params, dict) else None
 
-        token_key = auth_token[:16]  # use prefix for rate-limit bucket key
-        if self._is_rate_limited(token_key):
+        using_run_jwt = False
+        if run_jwt_token:
+            scopes, error = await self._resolve_run_jwt(run_jwt_token)
+            if error:
+                return _err(-32001, error, req_id)
+            using_run_jwt = True
+            rate_key = run_jwt_token[:16]
+        else:
+            scopes = self._validate_token(auth_token)
+            if scopes is None:
+                return _err(-32001, "Unauthorized: invalid or missing token", req_id)
+            rate_key = auth_token[:16]
+
+        if self._is_rate_limited(rate_key):
             return _err(-32029, "Rate limit exceeded (50 req/min)", req_id)
 
         if method in ("initialize", "tools/list"):
@@ -343,7 +398,7 @@ class AutoBotMCPServer:
         if method == "tools/call":
             tool_name = params.get("name", "")
             arguments = params.get("arguments", {})
-            return await self._dispatch_tool(tool_name, arguments, scopes, req_id)
+            return await self._dispatch_tool(tool_name, arguments, scopes, req_id, using_run_jwt=using_run_jwt)
 
         return _err(-32601, f"Method not found: {method}", req_id)
 
@@ -357,10 +412,14 @@ class AutoBotMCPServer:
         arguments: Dict[str, Any],
         scopes: List[str],
         req_id: Any,
+        using_run_jwt: bool = False,
     ) -> Dict[str, Any]:
         if tool_name not in self.TOOLS:
             return _err(-32602, f"Unknown tool: {tool_name}", req_id)
         if not self._check_scope(scopes, tool_name):
+            if using_run_jwt:
+                # 403 Forbidden: valid run JWT but insufficient scope for this tool
+                return _err(-32003, f"Forbidden: run JWT lacks scope for tool: {tool_name}", req_id)
             return _err(-32001, f"Scope denied for tool: {tool_name}", req_id)
 
         t0 = time.monotonic()
@@ -598,6 +657,8 @@ class AutoBotMCPServer:
                 code = response["error"].get("code", -32000)
                 if code == -32001:
                     status = 401
+                elif code == -32003:
+                    status = 403
                 elif code == -32029:
                     status = 429
             return web.Response(

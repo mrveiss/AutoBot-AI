@@ -330,3 +330,57 @@ def revoke_run_jwt(token: str, agent_id: Optional[str] = None) -> None:
 
     run_redis_write(_add_to_denylist(jti, remaining), label="run_jwt_revoke")
     _emit_revoke_audit(claims, agent_id, remaining)
+
+
+async def refresh_run_jwt(token: str, run_id: str) -> str:
+    """Refresh a run-scoped JWT, returning a new token with the same scope.
+
+    Validates that the presented JWT is not expired and not revoked, checks
+    that its ``run_id`` claim matches the *run_id* path parameter, then
+    atomically revokes the old token and mints a fresh one with the same
+    claims and a new ``jti``.
+
+    Args:
+        token: Current valid run JWT (must not be expired or revoked).
+        run_id: Expected ``run_id`` from the URL path — must match the
+            claim in *token* to prevent cross-run token swaps.
+
+    Returns:
+        New signed JWT string with a fresh TTL and a new ``jti``.
+
+    Raises:
+        JWTExpiredError: The presented token has already expired.
+        JWTDecodeError: The token is invalid, revoked, or its ``run_id``
+            claim does not match *run_id*.
+    """
+    claims = await validate_run_jwt(token)
+
+    if str(claims.get("run_id", "")) != run_id:
+        raise JWTDecodeError(
+            f"run_jwt: run_id mismatch — token has {claims.get('run_id')!r}, expected {run_id!r}"
+        )
+
+    scope = list(claims.get("scope", []))
+    task_id = str(claims.get("task_id", ""))
+    agent_id = str(claims.get("agent_id", ""))
+    tenant_id = str(claims.get("tenant_id", ""))
+    old_jti = str(claims.get("jti", ""))
+
+    await revoke_run_jwt_async(token, agent_id=agent_id)
+
+    new_token = mint_run_jwt(run_id, task_id, agent_id, tenant_id, scope)
+
+    audit_record(
+        user_id=agent_id,
+        action=AuditAction.RUN_JWT_REFRESH,
+        resource_type="run_jwt",
+        resource_id=old_jti,
+        metadata={
+            "run_id": run_id,
+            "task_id": task_id,
+            "tenant_id": tenant_id,
+            "scope": scope,
+        },
+    )
+    logger.info("run_jwt: refreshed jti=%s run_id=%s agent=%s", old_jti, run_id, agent_id)
+    return new_token

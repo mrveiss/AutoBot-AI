@@ -101,7 +101,7 @@ class AuthenticationMiddleware:
         try:
             # Update the config in memory using the correct method
             config.set_nested("security_config.jwt_secret", secure_secret)
-            logger.info("Generated and stored secure JWT secret")  # codeql[py/clear-text-logging-sensitive-data]
+            logger.info("Generated and stored secure JWT secret")  # noqa: codeql[py/clear-text-logging-sensitive-data]
             return secure_secret
         except Exception as e:
             # codeql[py/clear-text-logging-sensitive-data]
@@ -461,6 +461,43 @@ class AuthenticationMiddleware:
             "auth_method": "development",
         }
 
+    async def _extract_user_from_run_jwt(self, request: Request) -> Optional[Dict]:
+        """Try to authenticate the request with a run-scoped JWT (SEC-2 #6473).
+
+        Called as a fallback when user-JWT and session auth both fail.
+        Uses the run JWT secret (separate from the user JWT secret) so
+        forged tokens from one domain cannot authenticate in the other.
+
+        Scope validation is intentionally NOT enforced here — the run JWT
+        proves identity; individual endpoints apply scope checks if needed.
+
+        Returns:
+            Synthetic user dict with ``auth_method="run_jwt"`` on success,
+            or ``None`` if the Bearer token is absent or not a valid run JWT.
+        """
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return None
+
+        token = auth_header.split(" ", 1)[1]
+        try:
+            from services.run_jwt import validate_run_jwt
+
+            claims = await validate_run_jwt(token)
+        except Exception:
+            return None
+
+        run_id = str(claims.get("run_id", ""))
+        agent_id = str(claims.get("agent_id", ""))
+        return {
+            "username": f"run:{run_id}",
+            "role": "run_jwt",
+            "run_id": run_id,
+            "agent_id": agent_id,
+            "scope": list(claims.get("scope", [])),
+            "auth_method": "run_jwt",
+        }
+
     def get_user_from_request(self, request: Request) -> Optional[Dict]:
         """
         Extract and validate user from request using multiple authentication methods.
@@ -607,13 +644,17 @@ class AuthenticationMiddleware:
 get_auth_middleware = lazy_singleton(AuthenticationMiddleware)
 
 
-def get_current_user(request: Request) -> Dict:
+async def get_current_user(request: Request) -> Dict:
     """
     Dependency for FastAPI endpoints to get current authenticated user.
 
     Issue #1779: Also accepts X-Internal-API-Key header for
     service-to-service calls (e.g. SLM frontend via nginx proxy).
     Returns a synthetic admin user dict when the internal key matches.
+
+    SEC-2 #6473: Also accepts a run-scoped JWT (``Bearer <run-jwt>``) so
+    MCP bridge workers and long-running tasks can authenticate without a
+    full user session.  Scope enforcement is left to individual endpoints.
 
     Raises HTTPException if authentication fails.
     """
@@ -622,10 +663,19 @@ def get_current_user(request: Request) -> Dict:
     if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
         return {"username": "service:slm", "role": "admin", "service": True}
 
-    user_data = get_auth_middleware().get_user_from_request(request)
-    if not user_data:
-        raise_auth_error("AUTH_0002", "Authentication required")
-    return user_data
+    middleware = get_auth_middleware()
+
+    # Primary: user JWT / session / dev-header auth (sync, no Redis needed)
+    user_data = middleware.get_user_from_request(request)
+    if user_data:
+        return user_data
+
+    # Fallback: run-scoped JWT — async because it hits the Redis denylist
+    run_user = await middleware._extract_user_from_run_jwt(request)
+    if run_user:
+        return run_user
+
+    raise_auth_error("AUTH_0002", "Authentication required")
 
 
 def check_admin_permission(request: Request) -> bool:

@@ -13,16 +13,21 @@ Tests:
   - validate_run_jwt() fail-open path when Redis unavailable
   - mint_run_jwt() rejects unknown scopes
   - mint_run_jwt() accepts all VALID_SCOPES
+  - refresh_run_jwt() extends access for long-running tasks (SEC-2 Phase 3)
+  - refresh_run_jwt() rejects expired JWTs (SEC-2 Phase 3)
+  - backward-compat: user JWT still authenticates via auth middleware
 """
 
 import asyncio
 import uuid
-
+from datetime import timedelta
 import pytest
 
+from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError, encode_jwt
 from services.run_jwt import (
     VALID_SCOPES,
     mint_run_jwt,
+    refresh_run_jwt,
     revoke_run_jwt_async,
     validate_run_jwt,
 )
@@ -180,3 +185,120 @@ def test_mint_run_jwt_with_all_valid_scopes(jwt_secret):
     token = mint_run_jwt(run_id, task_id, agent_id, tenant_id, list(VALID_SCOPES))
     assert isinstance(token, str)
     assert len(token) > 0
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: refresh endpoint integration tests
+# ---------------------------------------------------------------------------
+
+_LONG_SIGNING_KEY = "a" * 40  # deterministic test key ≥32 chars
+_ALT_SIGNING_KEY = "b" * 40  # different key to prove secret isolation
+
+
+def _make_redis_store():
+    """Return a (store dict, async factory) backed by that store."""
+    store: dict = {}
+
+    class FakeRedis:
+        async def set(self, key, value, ex=None):
+            store[key] = value
+
+        async def exists(self, key):
+            return 1 if key in store else 0
+
+    async def factory(*args, **kwargs):
+        return FakeRedis()
+
+    return store, factory
+
+
+@pytest.mark.asyncio
+async def test_refresh_extends_access_for_long_running_task(jwt_secret, monkeypatch):
+    """Integration: refresh grants a fresh JWT that validates after original is revoked.
+
+    Simulates the heartbeat scheduler refreshing a JWT mid-run so the task
+    continues to have valid credentials beyond the initial 5-min window.
+    """
+    store, factory = _make_redis_store()
+    monkeypatch.setattr("services.run_jwt.get_async_redis_client", factory)
+
+    run_id = str(uuid.uuid4())
+    original = mint_run_jwt(run_id, "task-1", "agent-1", "tenant-1", ["task:read", "task:write"])
+
+    # Refresh returns a new valid token
+    refreshed = await refresh_run_jwt(original, run_id)
+    assert refreshed != original
+
+    # New token must validate successfully
+    claims = await validate_run_jwt(refreshed)
+    assert claims["run_id"] == run_id
+    assert set(claims["scope"]) == {"task:read", "task:write"}
+
+    # Original token must be revoked after refresh
+    with pytest.raises(JWTDecodeError):
+        await validate_run_jwt(original)
+
+
+@pytest.mark.asyncio
+async def test_expired_jwt_cannot_be_refreshed(jwt_secret, monkeypatch):
+    """Integration: an expired JWT is rejected by refresh, not silently renewed.
+
+    Verifies the blast-radius boundary — once a token has passed its exp
+    timestamp there is no way to extend it; a new run JWT must be minted.
+    """
+    store, factory = _make_redis_store()
+    monkeypatch.setattr("services.run_jwt.get_async_redis_client", factory)
+
+    run_id = str(uuid.uuid4())
+    expired_token = encode_jwt(
+        {
+            "jti": str(uuid.uuid4()),
+            "run_id": run_id,
+            "task_id": "task-1",
+            "agent_id": "agent-1",
+            "tenant_id": "tenant-1",
+            "scope": ["task:read"],
+        },
+        secret=jwt_secret,
+        expires_delta=timedelta(seconds=-1),
+    )
+
+    with pytest.raises(JWTExpiredError):
+        await refresh_run_jwt(expired_token, run_id)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: backward-compat — user JWT auth unaffected by run JWT changes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_user_jwt_auth_unaffected_by_run_jwt_fallback(monkeypatch):
+    """Integration: _extract_user_from_run_jwt returns None for a user JWT.
+
+    A user JWT signed with a different key must not validate in the run JWT
+    path — proving the two secrets remain isolated.
+    """
+    from unittest.mock import MagicMock
+
+    from autobot_shared.auth.jwt_core import encode_jwt as _encode_jwt
+
+    monkeypatch.setenv("RUN_JWT_SECRET", _LONG_SIGNING_KEY)
+    monkeypatch.delenv("AUTOBOT_JWT_SECRET", raising=False)
+
+    # Mint a user JWT signed with a completely different key
+    user_token = _encode_jwt(
+        {"username": "alice", "role": "admin"},
+        secret=_ALT_SIGNING_KEY,
+        expiry_hours=1,
+    )
+
+    request = MagicMock()
+    request.headers.get = lambda k, d="": f"Bearer {user_token}" if k == "Authorization" else d
+
+    from auth_middleware import AuthenticationMiddleware
+
+    middleware = AuthenticationMiddleware.__new__(AuthenticationMiddleware)
+    result = await middleware._extract_user_from_run_jwt(request)
+    # A JWT signed with ALT_SIGNING_KEY must not validate against LONG_SIGNING_KEY
+    assert result is None

@@ -19,7 +19,6 @@ Integration test coverage:
 from __future__ import annotations
 
 import asyncio
-import os
 import time
 import uuid
 from datetime import timedelta
@@ -31,6 +30,7 @@ from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError, encode
 from services.run_jwt import (
     VALID_SCOPES,
     mint_run_jwt,
+    refresh_run_jwt,
     revoke_run_jwt,
     revoke_run_jwt_async,
     validate_run_jwt,
@@ -259,6 +259,87 @@ class TestRevokeRunJwt:
     def test_revoke_noop_on_invalid_token(self, _no_audit, _no_redis):
         """Calling revoke on a garbage token must not raise."""
         revoke_run_jwt("not.a.token")  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# refresh_run_jwt
+# ---------------------------------------------------------------------------
+
+
+class TestRefreshRunJwt:
+    @pytest.mark.asyncio
+    async def test_refresh_returns_new_token(self, _no_audit):
+        """Refreshed token must be a different string with the same claims."""
+        store, client = _make_store()
+        with patch("services.run_jwt.get_async_redis_client", side_effect=client):
+            original = mint_run_jwt(_RUN_ID, _TASK_ID, _AGENT_ID, _TENANT_ID, _SCOPE)
+            refreshed = await refresh_run_jwt(original, _RUN_ID)
+        assert isinstance(refreshed, str)
+        assert refreshed != original
+        assert refreshed.count(".") == 2
+
+    @pytest.mark.asyncio
+    async def test_refresh_preserves_scope(self, _no_audit):
+        """Refreshed token must carry the same scope as the original."""
+        from autobot_shared.auth.jwt_core import decode_jwt
+
+        store, client = _make_store()
+        with patch("services.run_jwt.get_async_redis_client", side_effect=client):
+            original = mint_run_jwt(_RUN_ID, _TASK_ID, _AGENT_ID, _TENANT_ID, _SCOPE)
+            refreshed = await refresh_run_jwt(original, _RUN_ID)
+        claims = decode_jwt(refreshed, _SECRET)
+        assert claims["scope"] == _SCOPE
+        assert claims["run_id"] == _RUN_ID
+        assert claims["agent_id"] == _AGENT_ID
+
+    @pytest.mark.asyncio
+    async def test_refresh_revokes_old_token(self, _no_audit):
+        """After refresh, the original token must be rejected."""
+        store, client = _make_store()
+        with patch("services.run_jwt.get_async_redis_client", side_effect=client):
+            original = mint_run_jwt(_RUN_ID, _TASK_ID, _AGENT_ID, _TENANT_ID, _SCOPE)
+            await refresh_run_jwt(original, _RUN_ID)
+            with pytest.raises(JWTDecodeError, match="revoked"):
+                await validate_run_jwt(original)
+
+    @pytest.mark.asyncio
+    async def test_refresh_denied_on_expired_token(self, _no_audit):
+        """Expired tokens must not be refreshable."""
+        expired = encode_jwt(
+            {
+                "jti": str(uuid.uuid4()),
+                "run_id": _RUN_ID,
+                "task_id": _TASK_ID,
+                "agent_id": _AGENT_ID,
+                "tenant_id": _TENANT_ID,
+                "scope": _SCOPE,
+            },
+            secret=_SECRET,
+            expires_delta=timedelta(seconds=-1),
+        )
+        store, client = _make_store()
+        with patch("services.run_jwt.get_async_redis_client", side_effect=client):
+            with pytest.raises(JWTExpiredError):
+                await refresh_run_jwt(expired, _RUN_ID)
+
+    @pytest.mark.asyncio
+    async def test_refresh_denied_on_run_id_mismatch(self, _no_audit):
+        """Refresh must reject tokens whose run_id does not match the path param."""
+        store, client = _make_store()
+        with patch("services.run_jwt.get_async_redis_client", side_effect=client):
+            token = mint_run_jwt(_RUN_ID, _TASK_ID, _AGENT_ID, _TENANT_ID, _SCOPE)
+            with pytest.raises(JWTDecodeError, match="run_id mismatch"):
+                await refresh_run_jwt(token, "completely-different-run-id")
+
+    @pytest.mark.asyncio
+    async def test_refresh_denied_on_revoked_token(self, _no_audit):
+        """Already-revoked tokens must not be refreshable."""
+        store, client = _make_store()
+        with patch("services.run_jwt.get_async_redis_client", side_effect=client):
+            token = mint_run_jwt(_RUN_ID, _TASK_ID, _AGENT_ID, _TENANT_ID, _SCOPE)
+            await revoke_run_jwt_async(token)
+            with pytest.raises(JWTDecodeError, match="revoked"):
+                await refresh_run_jwt(token, _RUN_ID)
 
 
 # ---------------------------------------------------------------------------

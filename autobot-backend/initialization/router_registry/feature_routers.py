@@ -134,6 +134,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # Security and sandbox
     ("api.sandbox", "/sandbox", ["sandbox"], "sandbox"),
     ("api.security", "/security", ["security"], "security"),
+    # SEC-2 Phase 3 (#6473): run-JWT refresh endpoint
+    ("api.run_jwt_router", "", ["security", "run-jwt"], "run_jwt"),
     (
         "api.security_assessment",
         "",
