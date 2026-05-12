@@ -341,6 +341,26 @@ class TestRefreshRunJwt:
             with pytest.raises(JWTDecodeError, match="revoked"):
                 await refresh_run_jwt(token, _RUN_ID)
 
+    @pytest.mark.asyncio
+    async def test_old_token_survives_mint_failure(self, _no_audit):
+        """Regression: MVA-170 — old token must remain valid when minting fails.
+
+        If mint_run_jwt raises (e.g. bad scope or secret misconfiguration),
+        refresh_run_jwt must not have revoked the original token yet.  The
+        agent must be able to continue using the old token.
+        """
+        store, client = _make_store()
+        with patch("services.run_jwt.get_async_redis_client", side_effect=client):
+            token = mint_run_jwt(_RUN_ID, _TASK_ID, _AGENT_ID, _TENANT_ID, _SCOPE)
+
+            with patch("services.run_jwt.mint_run_jwt", side_effect=RuntimeError("mint failure")):
+                with pytest.raises(RuntimeError, match="mint failure"):
+                    await refresh_run_jwt(token, _RUN_ID)
+
+            # Old token must still be valid — revoke must not have run
+            claims = await validate_run_jwt(token)
+            assert claims["run_id"] == _RUN_ID
+
 
 # ---------------------------------------------------------------------------
 # VALID_SCOPES completeness check

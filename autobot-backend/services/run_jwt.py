@@ -364,9 +364,11 @@ async def refresh_run_jwt(token: str, run_id: str) -> str:
     tenant_id = str(claims.get("tenant_id", ""))
     old_jti = str(claims.get("jti", ""))
 
-    await revoke_run_jwt_async(token, agent_id=agent_id)
-
+    # Mint first so the agent retains a valid token if minting fails.
+    # Only revoke the old token after the new one is in hand.
     new_token = mint_run_jwt(run_id, task_id, agent_id, tenant_id, scope)
+
+    await revoke_run_jwt_async(token, agent_id=agent_id)
 
     audit_record(
         user_id=agent_id,
