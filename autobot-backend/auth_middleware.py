@@ -14,7 +14,7 @@ import secrets
 from datetime import timezone
 from typing import Dict, Optional, Tuple
 
-from fastapi import Request
+from fastapi import HTTPException, Request, status
 
 from autobot_shared.auth.jwt_core import (
     decode_jwt_or_none,
@@ -670,9 +670,18 @@ async def get_current_user(request: Request) -> Dict:
     if user_data:
         return user_data
 
-    # Fallback: run-scoped JWT — async because it hits the Redis denylist
+    # Fallback: run-scoped JWT — async because it hits the Redis denylist.
+    # SEC-2 #6473: run JWTs are valid ONLY on the refresh endpoint and MCP
+    # bridge routes. Presenting a run JWT to any other REST endpoint returns
+    # 403 so a scoped token cannot reach chat/knowledge/LLM write paths.
     run_user = await middleware._extract_user_from_run_jwt(request)
     if run_user:
+        _RUN_JWT_ALLOWED_PREFIXES = ("/api/runs/", "/api/mcp/")
+        if not any(request.url.path.startswith(p) for p in _RUN_JWT_ALLOWED_PREFIXES):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Run JWT not permitted on this endpoint",
+            )
         return run_user
 
     raise_auth_error("AUTH_0002", "Authentication required")

@@ -303,3 +303,81 @@ async def test_user_jwt_auth_unaffected_by_run_jwt_fallback(monkeypatch):
     result = await middleware._extract_user_from_run_jwt(request)
     # A JWT signed with ALT_SIGNING_KEY must not validate against LONG_SIGNING_KEY
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: path-prefix guard — run JWT blocked on non-allowed paths (SEC-2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_jwt_blocked_on_non_allowed_path(jwt_secret, monkeypatch):
+    """Integration: get_current_user raises 403 for run JWT on a non-allowed path.
+
+    A run JWT must not be usable on arbitrary REST endpoints (e.g. /api/llm/chat).
+    The path-prefix guard ensures that even a valid, non-revoked run JWT returns
+    403 Forbidden when presented outside /api/runs/ and /api/mcp/.
+    """
+    from unittest.mock import MagicMock, patch
+
+    from fastapi import HTTPException
+
+    store, factory = _make_redis_store()
+    monkeypatch.setattr("services.run_jwt.get_async_redis_client", factory)
+    # Disable single-user mode so the run JWT fallback path is reached
+    monkeypatch.setenv("AUTOBOT_SINGLE_USER_MODE", "false")
+
+    run_id = str(uuid.uuid4())
+    token = mint_run_jwt(run_id, "task-1", "agent-1", "tenant-1", ["task:read"])
+
+    request = MagicMock()
+    request.headers = MagicMock()
+    request.headers.get = lambda k, d="": f"Bearer {token}" if k == "Authorization" else d
+    request.url.path = "/api/llm/chat"
+    request.cookies = {}
+    request.state = MagicMock(spec=[])
+
+    from auth_middleware import AuthenticationMiddleware, get_current_user
+
+    middleware = AuthenticationMiddleware.__new__(AuthenticationMiddleware)
+
+    with patch("auth_middleware.get_auth_middleware", return_value=middleware), patch.object(
+        middleware, "get_user_from_request", return_value=None
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_user(request)
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_run_jwt_allowed_on_refresh_path(jwt_secret, monkeypatch):
+    """Integration: get_current_user accepts run JWT on /api/runs/ paths.
+
+    The refresh endpoint lives under /api/runs/{run_id}/jwt/refresh — confirming
+    the path-prefix guard allows the token through on this prefix.
+    """
+    from unittest.mock import MagicMock, patch
+
+    store, factory = _make_redis_store()
+    monkeypatch.setattr("services.run_jwt.get_async_redis_client", factory)
+
+    run_id = str(uuid.uuid4())
+    token = mint_run_jwt(run_id, "task-1", "agent-1", "tenant-1", ["task:read"])
+
+    request = MagicMock()
+    request.headers = MagicMock()
+    request.headers.get = lambda k, d="": f"Bearer {token}" if k == "Authorization" else d
+    request.url.path = f"/api/runs/{run_id}/jwt/refresh"
+    request.cookies = {}
+    request.state = MagicMock(spec=[])
+
+    from auth_middleware import AuthenticationMiddleware, get_current_user
+
+    middleware = AuthenticationMiddleware.__new__(AuthenticationMiddleware)
+
+    with patch("auth_middleware.get_auth_middleware", return_value=middleware), patch.object(
+        middleware, "get_user_from_request", return_value=None
+    ):
+        user = await get_current_user(request)
+    assert user["auth_method"] == "run_jwt"
+    assert user["run_id"] == run_id
