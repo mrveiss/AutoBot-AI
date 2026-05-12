@@ -208,7 +208,9 @@ class AuthenticationMiddleware:
             details={"ip": ip_address, "reason": reason},
         )
 
-    def _build_successful_auth_response(self, username: str, user_config: Dict, ip_address: str) -> Dict:
+    def _build_successful_auth_response(
+        self, username: str, user_config: Dict, ip_address: str
+    ) -> Dict:
         """Issue #665: Extracted from authenticate_user to reduce function length.
 
         Build and return successful authentication response.
@@ -230,7 +232,9 @@ class AuthenticationMiddleware:
             "last_login": user_config["last_login"],
         }
 
-    def authenticate_user(self, username: str, password: str, ip_address: str = "unknown") -> Optional[Dict]:
+    def authenticate_user(
+        self, username: str, password: str, ip_address: str = "unknown"
+    ) -> Optional[Dict]:
         """Authenticate user with enhanced security measures.
 
         Returns:
@@ -605,7 +609,9 @@ class AuthenticationMiddleware:
             },
         )
 
-    def check_file_permissions(self, request: Request, operation: str) -> Tuple[bool, Optional[Dict]]:
+    def check_file_permissions(
+        self, request: Request, operation: str
+    ) -> Tuple[bool, Optional[Dict]]:
         """
         Enhanced permission checking with comprehensive security measures.
 
@@ -630,7 +636,9 @@ class AuthenticationMiddleware:
             )
 
             if not has_permission:
-                self._log_file_access_denied(username, operation, user_role, user_data, request, ip_address)
+                self._log_file_access_denied(
+                    username, operation, user_role, user_data, request, ip_address
+                )
                 return False, user_data
 
             self._log_file_access_granted(username, operation, user_role, user_data, ip_address)
