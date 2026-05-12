@@ -742,10 +742,18 @@ async def mcp_extract_structured_data(
         return {"success": True, **result}
     except RuntimeError as exc:
         logger.warning("mcp_extract_structured_data fetch failed for %s: %s", url, exc)
-        return {"success": False, "error_code": "fetch_failed", "details": str(exc)}  # codeql[py/stack-trace-exposure] MCP returns structured errors to the AI agent, not public web users
+        return {
+            "success": False,
+            "error_code": "fetch_failed",
+            "details": str(exc),
+        }  # codeql[py/stack-trace-exposure] MCP returns structured errors to the AI agent, not public web users
     except ValueError as exc:
         logger.warning("mcp_extract_structured_data schema invalid for %s: %s", url, exc)
-        return {"success": False, "error_code": "schema_invalid", "details": str(exc)}  # codeql[py/stack-trace-exposure] MCP returns structured errors to the AI agent, not public web users
+        return {
+            "success": False,
+            "error_code": "schema_invalid",
+            "details": str(exc),
+        }  # codeql[py/stack-trace-exposure] MCP returns structured errors to the AI agent, not public web users
     except Exception as exc:
         logger.error("mcp_extract_structured_data unexpected error: %s", exc)
         return {"success": False, "error": "Internal server error"}

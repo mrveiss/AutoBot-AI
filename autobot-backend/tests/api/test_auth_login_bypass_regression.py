@@ -97,6 +97,7 @@ def _ensure_pkg(name: str) -> types.ModuleType:
     if mod is not None:
         return mod
     import os as _os
+
     mod = types.ModuleType(name)
     # Point __path__ at the real directory so downstream tests can load real submodules.
     top_name = name.split(".")[0]
@@ -142,6 +143,7 @@ sys.modules["api.schemas_agent"] = _schemas_agent_stub
 # other test files that need the full set of exports (SuccessDataResponse, etc.).
 if "api.schemas_common" not in sys.modules:
     import importlib.util as _ilu
+
     _sc_spec = _ilu.spec_from_file_location(
         "api.schemas_common",
         str(__file__).replace(
@@ -156,6 +158,7 @@ if "api.schemas_common" not in sys.modules:
             _sc_spec.loader.exec_module(_sc_mod)
         except Exception:
             pass  # fall back to empty stub if load fails
+
 
 # Passthrough error-handling decorator
 def _passthrough(**_kw):
@@ -183,7 +186,9 @@ def _passthrough_sync(**_kw):
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
             return fn(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -213,8 +218,12 @@ _constants_pkg = _ensure_pkg("constants")
 # Add commonly imported names to the constants stub so transitive imports in
 # other test modules (loaded in the same pytest session) don't fail.
 for _const_name in (
-    "CircuitBreakerDefaults", "SecurityThresholds", "AgentThresholds",
-    "RetryConfig", "TimeoutDefaults", "RateLimitDefaults",
+    "CircuitBreakerDefaults",
+    "SecurityThresholds",
+    "AgentThresholds",
+    "RetryConfig",
+    "TimeoutDefaults",
+    "RateLimitDefaults",
 ):
     if not hasattr(_constants_pkg, _const_name):
         setattr(_constants_pkg, _const_name, MagicMock())
@@ -229,11 +238,7 @@ _register_stub(
 _ensure_pkg("utils")
 _register_stub(
     "utils.catalog_http_exceptions",
-    {
-        "raise_auth_error": MagicMock(
-            side_effect=HTTPException(status_code=401, detail="Auth error")
-        )
-    },
+    {"raise_auth_error": MagicMock(side_effect=HTTPException(status_code=401, detail="Auth error"))},
 )
 
 if "auth_middleware" not in sys.modules:
@@ -247,9 +252,7 @@ if "auth_middleware" not in sys.modules:
             "get_auth_middleware": MagicMock(return_value=_mw),
             "check_admin_permission": MagicMock(return_value=True),
             "get_current_user": MagicMock(return_value={"username": "admin", "role": "admin"}),
-            "raise_auth_error": MagicMock(
-                side_effect=HTTPException(status_code=401, detail="Auth error")
-            ),
+            "raise_auth_error": MagicMock(side_effect=HTTPException(status_code=401, detail="Auth error")),
         },
     )
 
@@ -264,11 +267,7 @@ if not hasattr(_config_pkg, "config"):
     _config_pkg.get_config_manager = MagicMock(return_value=MagicMock(get=MagicMock(return_value={})))
 _register_stub(
     "config.manager",
-    {
-        "get_config_manager": MagicMock(
-            return_value=MagicMock(get=MagicMock(return_value={}))
-        )
-    },
+    {"get_config_manager": MagicMock(return_value=MagicMock(get=MagicMock(return_value={})))},
 )
 
 # Stub user_management.database without blocking user_management filesystem lookup
@@ -348,9 +347,7 @@ async def test_single_user_wrong_credential_rejected_without_bypass():
                             f"Returned success={result.success}."
                         )
                     except HTTPException as exc:
-                        assert exc.status_code == 401, (
-                            f"Expected HTTP 401 for wrong credential, got {exc.status_code}."
-                        )
+                        assert exc.status_code == 401, f"Expected HTTP 401 for wrong credential, got {exc.status_code}."
 
 
 @pytest.mark.asyncio
@@ -369,9 +366,7 @@ async def test_single_user_dev_bypass_allows_any_credential():
                         LoginRequest(username="admin", password=_ANY_CREDENTIAL),
                     )
 
-    assert result.success is True, (
-        "Dev bypass (AUTOBOT_DEV_AUTH_BYPASS=true) must allow any-credential auth."
-    )
+    assert result.success is True, "Dev bypass (AUTOBOT_DEV_AUTH_BYPASS=true) must allow any-credential auth."
     assert result.token, "A valid token must be returned when dev bypass is active."
 
 

@@ -84,9 +84,7 @@ class TestPresetsAuth:
     def test_authenticated_user_can_list_presets(self):
         app = _build_app()
         _grant_user(app)
-        with patch(
-            "api.onboarding.get_all_presets", return_value=[{"name": "starter"}]
-        ):
+        with patch("api.onboarding.get_all_presets", return_value=[{"name": "starter"}]):
             resp = TestClient(app).get("/api/onboarding/presets")
         assert resp.status_code == 200
         assert resp.json()["data"] == [{"name": "starter"}]
@@ -116,18 +114,14 @@ class TestApplyAuth:
     def test_unauthenticated_request_rejected(self):
         app = _build_app()
         _deny_admin(app)
-        resp = TestClient(app).post(
-            "/api/onboarding/apply", json={"preset_name": "starter"}
-        )
+        resp = TestClient(app).post("/api/onboarding/apply", json={"preset_name": "starter"})
         # FastAPI maps the 403 raised by the dep to 403; 401 raise would map to 401.
         assert resp.status_code in (401, 403)
 
     def test_non_admin_user_cannot_apply(self):
         app = _build_app()
         _deny_admin(app)
-        resp = TestClient(app).post(
-            "/api/onboarding/apply", json={"preset_name": "starter"}
-        )
+        resp = TestClient(app).post("/api/onboarding/apply", json={"preset_name": "starter"})
         assert resp.status_code in (401, 403)
 
     def test_admin_can_apply_preset(self):
@@ -138,9 +132,7 @@ class TestApplyAuth:
         mock_redis = _make_mock_redis(pipe)
 
         with (
-            patch(
-                "api.onboarding.get_preset", return_value={"agents": [], "skills": []}
-            ),
+            patch("api.onboarding.get_preset", return_value={"agents": [], "skills": []}),
             patch("api.onboarding._activate_skills", new=AsyncMock(return_value=[])),
             patch(
                 "autobot_shared.redis_client.get_async_redis_client",
@@ -161,11 +153,7 @@ class TestStatusStaysUnauthenticated:
 
     def test_no_auth_dependency_attached_to_status_route(self):
         # The route must not have either auth dependency in its dependency list.
-        status_route = next(
-            r
-            for r in onboarding_api.router.routes
-            if getattr(r, "path", None) == "/status"
-        )
+        status_route = next(r for r in onboarding_api.router.routes if getattr(r, "path", None) == "/status")
         dep_callables = [d.dependency for d in (status_route.dependencies or [])]
         assert get_current_user not in dep_callables
         assert check_admin_permission not in dep_callables
@@ -177,9 +165,7 @@ class TestStatusStaysUnauthenticated:
         async def _no_redis(**_kw):
             return None
 
-        with patch(
-            "autobot_shared.redis_client.get_async_redis_client", side_effect=_no_redis
-        ):
+        with patch("autobot_shared.redis_client.get_async_redis_client", side_effect=_no_redis):
             resp = TestClient(app).get("/api/onboarding/status")
         assert resp.status_code == 200
         # Fail-open semantics: when Redis is unavailable, return preset_applied=True
@@ -192,9 +178,7 @@ class TestRouteDependenciesPinned:
 
     @staticmethod
     def _dep_callables_for(path: str):
-        route = next(
-            r for r in onboarding_api.router.routes if getattr(r, "path", None) == path
-        )
+        route = next(r for r in onboarding_api.router.routes if getattr(r, "path", None) == path)
         return [d.dependency for d in (route.dependencies or [])]
 
     def test_presets_requires_get_current_user(self):
@@ -240,9 +224,7 @@ class TestApplyPresetTransaction:
                 new=AsyncMock(return_value=mock_redis),
             ),
         ):
-            resp = TestClient(self._app()).post(
-                "/api/onboarding/apply", json={"preset_name": "starter"}
-            )
+            resp = TestClient(self._app()).post("/api/onboarding/apply", json={"preset_name": "starter"})
 
         assert resp.status_code == 200
         mock_redis.pipeline.assert_called_once_with(transaction=True)
@@ -266,9 +248,7 @@ class TestApplyPresetTransaction:
                 new=AsyncMock(return_value=mock_redis),
             ),
         ):
-            TestClient(self._app()).post(
-                "/api/onboarding/apply", json={"preset_name": "starter"}
-            )
+            TestClient(self._app()).post("/api/onboarding/apply", json={"preset_name": "starter"})
 
         # 2 agents + system_prompt + llm_tier + preset_applied + preset_name = 6 keys
         assert pipe.set.call_count == 6
@@ -293,9 +273,7 @@ class TestApplyPresetTransaction:
         rollback_calls: list[str] = []
 
         async def _fake_activate(skill_names, rollback_stack):
-            rollback_stack.append(
-                ("skill_enabled", _FakeManager(rollback_calls), "my-skill", False)
-            )
+            rollback_stack.append(("skill_enabled", _FakeManager(rollback_calls), "my-skill", False))
             return ["my-skill"]
 
         with (
@@ -309,9 +287,7 @@ class TestApplyPresetTransaction:
                 new=AsyncMock(return_value=mock_redis),
             ),
         ):
-            resp = TestClient(self._app()).post(
-                "/api/onboarding/apply", json={"preset_name": "starter"}
-            )
+            resp = TestClient(self._app()).post("/api/onboarding/apply", json={"preset_name": "starter"})
 
         assert resp.status_code == 500
         # Skill rollback was triggered
@@ -335,9 +311,7 @@ class TestApplyPresetTransaction:
                 new=AsyncMock(return_value=mock_redis),
             ),
         ):
-            resp = TestClient(self._app()).post(
-                "/api/onboarding/apply", json={"preset_name": "starter"}
-            )
+            resp = TestClient(self._app()).post("/api/onboarding/apply", json={"preset_name": "starter"})
 
         assert resp.status_code == 500
         # set() was called (keys were queued) but execute() raised before any write landed

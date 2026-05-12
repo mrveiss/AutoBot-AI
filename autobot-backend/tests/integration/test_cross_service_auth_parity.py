@@ -106,15 +106,9 @@ def _all_permission_role_pairs() -> List[tuple]:
 class TestStructuralImports:
     """Confirm that neither backend defines its own Permission enum or mapping."""
 
-    SHARED_IMPORT_PATTERN = re.compile(
-        r"from\s+autobot_shared\.auth\.permissions\s+import"
-    )
-    LOCAL_PERMISSION_PATTERN = re.compile(
-        r"^class\s+Permission\s*\(", re.MULTILINE
-    )
-    LOCAL_ROLE_PERMISSIONS_PATTERN = re.compile(
-        r"^ROLE_PERMISSIONS\s*[:=]", re.MULTILINE
-    )
+    SHARED_IMPORT_PATTERN = re.compile(r"from\s+autobot_shared\.auth\.permissions\s+import")
+    LOCAL_PERMISSION_PATTERN = re.compile(r"^class\s+Permission\s*\(", re.MULTILINE)
+    LOCAL_ROLE_PERMISSIONS_PATTERN = re.compile(r"^ROLE_PERMISSIONS\s*[:=]", re.MULTILINE)
 
     def _read(self, path: Path) -> str:
         return path.read_text(encoding="utf-8")
@@ -125,8 +119,7 @@ class TestStructuralImports:
         """auth_rbac.py must import Permission from autobot_shared."""
         src = self._read(_AUTOBOT_BACKEND / "auth_rbac.py")
         assert self.SHARED_IMPORT_PATTERN.search(src), (
-            "auth_rbac.py must import from autobot_shared.auth.permissions — "
-            "found no such import"
+            "auth_rbac.py must import from autobot_shared.auth.permissions — " "found no such import"
         )
 
     def test_backend_auth_rbac_has_no_local_permission_enum(self):
@@ -151,8 +144,7 @@ class TestStructuralImports:
         """services/auth.py must import Permission from autobot_shared."""
         src = self._read(_AUTOBOT_SLM / "services" / "auth.py")
         assert self.SHARED_IMPORT_PATTERN.search(src), (
-            "slm services/auth.py must import from autobot_shared.auth.permissions — "
-            "found no such import"
+            "slm services/auth.py must import from autobot_shared.auth.permissions — " "found no such import"
         )
 
     def test_slm_auth_service_has_no_local_permission_enum(self):
@@ -173,9 +165,7 @@ class TestStructuralImports:
 
     def test_slm_rbac_middleware_imports_shared(self):
         """rbac_middleware.py must not redefine Permission locally."""
-        src = self._read(
-            _AUTOBOT_SLM / "user_management" / "middleware" / "rbac_middleware.py"
-        )
+        src = self._read(_AUTOBOT_SLM / "user_management" / "middleware" / "rbac_middleware.py")
         assert not self.LOCAL_PERMISSION_PATTERN.search(src), (
             "rbac_middleware.py defines a local Permission enum — "
             "it must import from autobot_shared.auth.permissions"
@@ -185,9 +175,9 @@ class TestStructuralImports:
         """No file under autobot-backend/api/ should define class Permission."""
         for py_file in (_AUTOBOT_BACKEND / "api").glob("**/*.py"):
             src = py_file.read_text(encoding="utf-8")
-            assert not self.LOCAL_PERMISSION_PATTERN.search(src), (
-                f"{py_file.relative_to(_REPO_ROOT)} defines a local Permission enum"
-            )
+            assert not self.LOCAL_PERMISSION_PATTERN.search(
+                src
+            ), f"{py_file.relative_to(_REPO_ROOT)} defines a local Permission enum"
 
     def test_no_local_permission_enum_in_slm_api(self):
         """No file under autobot-slm-backend/api/ should define class Permission."""
@@ -196,9 +186,9 @@ class TestStructuralImports:
             pytest.skip("autobot-slm-backend/api/ not present")
         for py_file in slm_api.glob("**/*.py"):
             src = py_file.read_text(encoding="utf-8")
-            assert not self.LOCAL_PERMISSION_PATTERN.search(src), (
-                f"{py_file.relative_to(_REPO_ROOT)} defines a local Permission enum"
-            )
+            assert not self.LOCAL_PERMISSION_PATTERN.search(
+                src
+            ), f"{py_file.relative_to(_REPO_ROOT)} defines a local Permission enum"
 
 
 # ---------------------------------------------------------------------------
@@ -237,11 +227,7 @@ class TestPermissionCompleteness:
     @pytest.mark.parametrize("permission", list(Permission))
     def test_permission_granted_by_at_least_one_role(self, permission: Permission):
         """A permission that no role can ever grant is unreachable dead code."""
-        granted_by = [
-            role.value
-            for role, perms in ROLE_PERMISSIONS.items()
-            if permission in perms
-        ]
+        granted_by = [role.value for role, perms in ROLE_PERMISSIONS.items() if permission in perms]
         assert granted_by, (
             f"Permission {permission.value!r} is not granted to any role in "
             f"ROLE_PERMISSIONS — add it to at least one role or remove the enum member."

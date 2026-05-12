@@ -177,7 +177,7 @@ async def test_resolve_safe_ip_no_usable_ip() -> None:
     """resolve_safe_ip_async raises ValueError if all resolved IPs are private."""
     fake_infos = [
         (2, 1, 6, "", ("192.168.1.1", 0)),  # Private
-        (2, 1, 6, "", ("10.0.0.1", 0)),     # Private
+        (2, 1, 6, "", ("10.0.0.1", 0)),  # Private
     ]
     with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
         with pytest.raises(ValueError, match="non-public"):

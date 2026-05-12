@@ -158,9 +158,7 @@ class AIStackClient:
         # use the local Ollama instance for health/capability signalling (#6228).
         _ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST", "")
         _ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT", "11434")
-        self._ollama_url: Optional[str] = (
-            f"http://{_ollama_host}:{_ollama_port}" if _ollama_host else None
-        )
+        self._ollama_url: Optional[str] = f"http://{_ollama_host}:{_ollama_port}" if _ollama_host else None
 
         # Get timeout, retry, and connection configuration from config
         timeout_seconds = ai_stack_config.get("timeout", 60)

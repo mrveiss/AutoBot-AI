@@ -19,9 +19,7 @@ from services.llm_api_key_service import get_llm_api_key_service
 
 logger = logging.getLogger(__name__)
 
-_ROTATION_INTERVAL_MINUTES = int(
-    os.environ.get("AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES", "60")
-)
+_ROTATION_INTERVAL_MINUTES = int(os.environ.get("AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES", "60"))
 
 
 class LLMKeyRotationScheduler:
@@ -37,9 +35,7 @@ class LLMKeyRotationScheduler:
             replace_existing=True,
         )
         self._scheduler.start()
-        logger.info(
-            "LLM key rotation scheduler started (interval=%dm)", _ROTATION_INTERVAL_MINUTES
-        )
+        logger.info("LLM key rotation scheduler started (interval=%dm)", _ROTATION_INTERVAL_MINUTES)
 
     async def stop(self) -> None:
         if self._scheduler.running:

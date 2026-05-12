@@ -115,9 +115,7 @@ async def test_issue_key():
     mock_pipe2.execute = AsyncMock(return_value=[1, 1, 1])
     mock_redis.pipeline.return_value = mock_pipe2
 
-    record, raw_key = await svc.issue_key(
-        team_id="t1", label="test", monthly_budget_usd=5.0, allowed_models=["gpt-4"]
-    )
+    record, raw_key = await svc.issue_key(team_id="t1", label="test", monthly_budget_usd=5.0, allowed_models=["gpt-4"])
     assert raw_key.startswith("sk-")
     assert record.team_id == "t1"
     assert record.monthly_budget_usd == 5.0

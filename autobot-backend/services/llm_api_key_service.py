@@ -215,18 +215,20 @@ class LLMApiKeyService:
                 continue
             record = LLMApiKeyRecord.from_redis_hash(data)
             spend = float(spend_raw) if spend_raw else 0.0
-            result.append({
-                "key_id": record.key_id,
-                "key_prefix": f"sk-{record.key_id[:8]}-...",
-                "team_id": record.team_id,
-                "label": record.label,
-                "monthly_budget_usd": record.monthly_budget_usd,
-                "spend_usd_this_month": spend,
-                "allowed_models": record.allowed_models,
-                "created_at": record.created_at,
-                "expires_at": record.expires_at,
-                "revoked": record.revoked,
-            })
+            result.append(
+                {
+                    "key_id": record.key_id,
+                    "key_prefix": f"sk-{record.key_id[:8]}-...",
+                    "team_id": record.team_id,
+                    "label": record.label,
+                    "monthly_budget_usd": record.monthly_budget_usd,
+                    "spend_usd_this_month": spend,
+                    "allowed_models": record.allowed_models,
+                    "created_at": record.created_at,
+                    "expires_at": record.expires_at,
+                    "revoked": record.revoked,
+                }
+            )
         return result
 
     # ------------------------------------------------------------------

@@ -69,9 +69,7 @@ class TestShimReexports:
         assert chat_exc.FileOperationError is exc.FileOperationError
 
     def test_get_exceptions_lazy_returns_canonical_classes(self):
-        (AutoBotError, InternalError, ResourceNotFoundError, ValidationError, get_error_code) = (
-            exc.get_exceptions_lazy()
-        )
+        AutoBotError, InternalError, ResourceNotFoundError, ValidationError, get_error_code = exc.get_exceptions_lazy()
         assert AutoBotError is exc.AutoBotError
         assert InternalError is exc.InternalError
         assert ResourceNotFoundError is exc.ResourceNotFoundError
@@ -122,8 +120,7 @@ class TestInstantiation:
         canonical_names = {
             name: getattr(exc, name)
             for name in dir(exc)
-            if isinstance(getattr(exc, name), type)
-            and issubclass(getattr(exc, name), Exception)
+            if isinstance(getattr(exc, name), type) and issubclass(getattr(exc, name), Exception)
         }
         # All names must map to exactly one class (no shadowing)
         seen = {}

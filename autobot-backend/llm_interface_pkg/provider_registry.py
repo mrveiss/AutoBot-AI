@@ -47,6 +47,7 @@ except ImportError:
     def apply_prompt_prefix(model: str, messages: list) -> None:
         pass
 
+
 logger = logging.getLogger(__name__)
 
 # Cache health results for 30 s to avoid a health check on every request.
