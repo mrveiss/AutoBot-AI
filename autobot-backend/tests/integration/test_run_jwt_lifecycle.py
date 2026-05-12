@@ -21,6 +21,7 @@ Tests:
 import asyncio
 import uuid
 from datetime import timedelta
+
 import pytest
 
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError, encode_jwt
