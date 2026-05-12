@@ -51,6 +51,16 @@ jobs:
         python -m pip install --upgrade pip
         # Pin versions to match .pre-commit-config.yaml (Issue #2128)
         python -m pip install black==26.3.1 isort==8.0.1 flake8==7.3.0 autoflake==2.3.3 'bandit[toml]==1.9.4'
+        # mypy and stubs (GH#7105)
+        python -m pip install \
+          mypy==1.16.0 \
+          pydantic-settings \
+          types-redis \
+          types-requests \
+          types-PyYAML \
+          types-setuptools \
+          opentelemetry-api \
+          opentelemetry-sdk
 
     - name: Check code formatting with Black
       run: |
@@ -154,6 +164,27 @@ jobs:
           echo "Update the doc to point to the current file path."
           exit 1
         }
+
+    - name: Type-check autobot_shared (required)
+      run: |
+        # autobot_shared is the shared library and must be strictly typed.
+        # Errors in the backends are tracked in GH#7105.
+        python3 -m mypy autobot_shared/ || {
+          echo "mypy found type errors in autobot_shared/"
+          echo "Fix the errors above or suppress with '# type: ignore[code]  # GH#7105'"
+          exit 1
+        }
+
+    - name: Type-check autobot-backend (informational)
+      run: |
+        # Non-blocking: surfaces new regressions in trend output.
+        # 4133 pre-existing errors tracked for resolution in GH#7105.
+        python3 -m mypy autobot-backend/ 2>&1 | tail -5 || true
+
+    - name: Type-check autobot-slm-backend (informational)
+      run: |
+        # Non-blocking: 1281 SQLAlchemy Column[T] errors tracked in GH#7105.
+        python3 -m mypy autobot-slm-backend/ 2>&1 | tail -5 || true
 
     - name: Code quality summary
       if: always()

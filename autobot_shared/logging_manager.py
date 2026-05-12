@@ -11,7 +11,7 @@ import logging.handlers
 import os
 import threading
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Dict, Optional
 
 if TYPE_CHECKING:
     from config.manager import ConfigManager
@@ -30,7 +30,7 @@ def _get_config_manager() -> "ConfigManager":
     logging_manager -> config -> manager -> loader -> model_constants -> (back).
     Ref: issue #1862.
     """
-    from config import config_manager as _cm  # noqa: PLC0415
+    from config import config_manager as _cm  # type: ignore[attr-defined]  # GH#7105: local backend import  # noqa: PLC0415
 
     return _cm
 
@@ -41,7 +41,7 @@ class LoggingManager:
     """
 
     _initialized = False
-    _loggers = {}
+    _loggers: Dict[str, logging.Logger] = {}
     _lock = threading.Lock()
 
     @classmethod

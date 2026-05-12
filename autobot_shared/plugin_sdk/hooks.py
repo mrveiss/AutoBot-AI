@@ -62,7 +62,7 @@ class HookRegistry:
     """
 
     _instance: Optional["HookRegistry"] = None
-    _hooks: Dict[str, List[Callable]] = {}
+    _hooks: Dict[str, List[Any]] = {}  # Each entry is a dict with callback and plugin_name keys
 
     def __new__(cls):
         """Singleton pattern."""
