@@ -1011,7 +1011,7 @@ async def add_url_to_knowledge(
 
     url_metadata: dict = {
         "title": title,
-        "source": validated_url,
+        "source": request.url,
         "category": request.category,
         "tags": request.tags,
         "type": "url",
