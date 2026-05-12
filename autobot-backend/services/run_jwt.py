@@ -120,7 +120,15 @@ def _ttl() -> int:
 
 def _audience() -> str:
     """Resolve the expected ``aud`` claim from ``RUN_JWT_AUDIENCE``, defaulting to ``_DEFAULT_AUDIENCE``."""
-    return os.environ.get(_ENV_AUDIENCE, "") or _DEFAULT_AUDIENCE
+    val = os.environ.get(_ENV_AUDIENCE, "")
+    if not val:
+        logger.warning(
+            "%s is not set; using default audience %r — set it explicitly in production",
+            _ENV_AUDIENCE,
+            _DEFAULT_AUDIENCE,
+        )
+        return _DEFAULT_AUDIENCE
+    return val
 
 
 def mint_run_jwt(
@@ -254,7 +262,7 @@ async def validate_run_jwt(token: str) -> Dict[str, object]:
 def _extract_revoke_claims(token: str) -> Optional[Dict[str, object]]:
     """Decode token for revocation; returns None when already expired/invalid."""
     try:
-        return decode_jwt(token, _secret())
+        return decode_jwt(token, _secret(), audience=_audience())
     except JWTExpiredError:
         logger.debug("run_jwt: revoke called on already-expired token — noop")
         return None

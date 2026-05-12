@@ -88,37 +88,37 @@ class TestEnhancedChatMessage422:
 
 
 # ---------------------------------------------------------------------------
-# 3. chat:recent TTL is set after each zadd
+# 3. chat:recent is capped via ZREMRANGEBYRANK (not sliding-window EXPIRE)
 # ---------------------------------------------------------------------------
 
 
-class TestChatRecentTTL:
-    """_update_redis_cache_on_save must call expire on chat:recent after zadd."""
+class TestChatRecentZremrangebyrank:
+    """_update_redis_cache_on_save must cap chat:recent with ZREMRANGEBYRANK, not EXPIRE."""
 
     @pytest.mark.asyncio
-    async def test_expire_called_after_zadd_on_chat_recent(self):
-        from chat_history.cache import _CHAT_SESSION_CACHE_TTL
+    async def test_zremrangebyrank_called_after_zadd_on_chat_recent(self):
         from chat_history.session import SessionMixin
+        from constants.redis_constants import REDIS_KEY
 
-        # Minimal concrete class that satisfies SessionMixin's redis dependency.
         class _StubManager(SessionMixin):
             def __init__(self):
                 self.redis_client = MagicMock()
                 self._async_cache_session = AsyncMock()
+                self.max_session_files = 50
 
         mgr = _StubManager()
 
-        # Use list of (name, args) tuples to record executor calls in order.
         call_log: list[tuple] = []
 
-        # zadd_fn and expire_fn captured after mgr is constructed so identity checks work.
         zadd_fn = mgr.redis_client.zadd
-        expire_fn = mgr.redis_client.expire
+        zremrangebyrank_fn = mgr.redis_client.zremrangebyrank
 
         async def _fake_executor(fn, *args):
             if fn is zadd_fn:
                 call_log.append(("zadd", args))
-            elif fn is expire_fn:
+            elif fn is zremrangebyrank_fn:
+                call_log.append(("zremrangebyrank", args))
+            elif fn is mgr.redis_client.expire:
                 call_log.append(("expire", args))
 
         with patch("chat_history.session.run_in_chat_io_executor", side_effect=_fake_executor):
@@ -126,12 +126,14 @@ class TestChatRecentTTL:
 
         names = [e[0] for e in call_log]
         assert "zadd" in names, "zadd must be called"
-        assert "expire" in names, "expire must be called after zadd"
-        assert names.index("zadd") < names.index("expire"), "zadd must precede expire"
+        assert "zremrangebyrank" in names, "zremrangebyrank must be called to cap set size"
+        assert "expire" not in names, "expire must NOT be called (sliding-window anti-pattern)"
+        assert names.index("zadd") < names.index("zremrangebyrank"), "zadd must precede zremrangebyrank"
 
-        expire_args = next(e[1] for e in call_log if e[0] == "expire")
-        assert expire_args[0] == "chat:recent"
-        assert expire_args[1] == _CHAT_SESSION_CACHE_TTL
+        zrem_args = next(e[1] for e in call_log if e[0] == "zremrangebyrank")
+        assert zrem_args[0] == REDIS_KEY.CHAT_RECENT, "must use REDIS_KEY.CHAT_RECENT constant"
+        assert zrem_args[1] == 0, "must remove from rank 0"
+        assert zrem_args[2] == -(mgr.max_session_files + 1), "must keep max_session_files most recent entries"
 
 
 # ---------------------------------------------------------------------------
