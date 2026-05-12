@@ -73,6 +73,7 @@ class HTTPClientManager:
                 if self._session is None or self._session.closed:
                     await self._create_session()
 
+        assert self._session is not None  # _create_session() always sets it
         return self._session
 
     async def _create_session(self):

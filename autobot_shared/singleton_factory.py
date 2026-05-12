@@ -84,7 +84,7 @@ def async_lazy_singleton(factory: Callable[..., Any]) -> Callable[[], Awaitable[
 
     Issue #5632: extracted from ~7 repeated async double-checked locking patterns.
     """
-    instance: Optional[T] = None
+    instance: Optional[T] = None  # type: ignore[valid-type]  # GH#7105: T unbound in closure scope; async singleton pattern
     lock = asyncio.Lock()
 
     async def get() -> T:

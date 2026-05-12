@@ -161,7 +161,7 @@ class RedisConfigLoader:
         )
 
     @staticmethod
-    def load_from_yaml(yaml_path: str = None) -> Dict[str, RedisConfig]:
+    def load_from_yaml(yaml_path: Optional[str] = None) -> Dict[str, RedisConfig]:
         """
         Load configurations from YAML file.
 

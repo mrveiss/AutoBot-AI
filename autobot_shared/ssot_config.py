@@ -1173,7 +1173,7 @@ class AutoBotConfig(BaseSettings):
         model = config.llm.default_model  # qwen3.5:9b
     """
 
-    model_config = SettingsConfigDict(
+    model_config = SettingsConfigDict(  # type: ignore[typeddict-unknown-key]  # GH#7105: env_ignore is a valid pydantic-settings key not yet in stubs
         env_file=str(PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
