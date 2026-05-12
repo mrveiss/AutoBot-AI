@@ -19,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "autobot_shared"))
 
-from autobot_shared.auth.permissions import Permission, Role, ROLE_PERMISSIONS
+from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 
 # ---------------------------------------------------------------------------
 # Replicate the role-derivation logic from services/auth.py::require_permission

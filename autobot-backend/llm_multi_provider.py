@@ -21,15 +21,15 @@ import logging
 from typing import Any, Dict, List, Optional, Union
 
 # ---------------------------------------------------------------------------
+# Re-export the plugin registry and base classes from canonical location
+# ---------------------------------------------------------------------------
+from llm_interface_pkg import BaseProvider, ProviderRegistry, get_provider_registry
+
+# ---------------------------------------------------------------------------
 # Re-export canonical types from their authoritative modules
 # ---------------------------------------------------------------------------
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import LLMType, ProviderType
-
-# ---------------------------------------------------------------------------
-# Re-export the plugin registry and base classes from canonical location
-# ---------------------------------------------------------------------------
-from llm_interface_pkg import BaseProvider, ProviderRegistry, get_provider_registry
 from llm_providers import (
     AnthropicProvider,
     CustomOpenAIProvider,

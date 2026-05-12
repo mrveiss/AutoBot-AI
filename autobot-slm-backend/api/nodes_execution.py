@@ -35,8 +35,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.database import EventSeverity, EventType, Node, NodeEvent, NodeStatus
 from autobot_shared.auth.permissions import Permission
+from models.database import EventSeverity, EventType, Node, NodeEvent, NodeStatus
 from services.auth import require_permission
 from services.database import get_db
 

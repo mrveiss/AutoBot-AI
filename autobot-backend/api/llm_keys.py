@@ -18,8 +18,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.llm_api_key_service import get_llm_api_key_service
 
 router = APIRouter(tags=["llm-keys"])

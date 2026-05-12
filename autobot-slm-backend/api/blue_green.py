@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.auth.permissions import Permission
 from models.schemas import (
     BlueGreenActionResponse,
     BlueGreenCreate,
@@ -23,7 +24,6 @@ from models.schemas import (
     RolePurgeRequest,
     RolePurgeResponse,
 )
-from autobot_shared.auth.permissions import Permission
 from services.auth import get_current_user, require_permission
 from services.blue_green import blue_green_service
 from services.database import get_db

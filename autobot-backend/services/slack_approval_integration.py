@@ -25,8 +25,8 @@ import logging
 import time
 from typing import Any, Dict, Optional
 
-from circuit_breaker import CircuitState
 from autobot_shared.redis_client import get_redis_client
+from circuit_breaker import CircuitState
 
 logger = logging.getLogger(__name__)
 

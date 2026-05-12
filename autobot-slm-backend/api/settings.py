@@ -15,9 +15,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.auth.permissions import Permission
 from models.database import Node, Setting
 from models.schemas import SettingResponse, SettingUpdate
-from autobot_shared.auth.permissions import Permission
 from services.auth import get_current_user, require_permission
 from services.database import get_db
 from services.playbook_executor import get_playbook_executor

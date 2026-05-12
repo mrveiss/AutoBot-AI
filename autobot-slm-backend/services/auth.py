@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.jwt_core import decode_jwt_or_none, encode_jwt, hash_password
-from autobot_shared.auth.permissions import Permission, Role, ROLE_PERMISSIONS
+from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 from config import settings
 from models.schemas import TokenResponse, UserCreate, UserResponse
 from user_management.models.user import User

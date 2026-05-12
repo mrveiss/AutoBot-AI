@@ -26,6 +26,10 @@ What remains here is shared infra reused across the new stack:
 # Adapter registry (Issue #1403)
 from .adapters import AdapterBase, AdapterRegistry, get_adapter_registry
 
+# Provider registry and base (canonical imports for MVA-62 consolidation)
+# These were in llm_providers/ but are now consolidated in llm_interface_pkg
+from .base_provider import BaseProvider
+
 # Issue #551: L1/L2 dual-tier caching
 from .cache import CachedResponse, LLMResponseCache, get_llm_cache
 
@@ -37,6 +41,7 @@ from .mock_providers import LocalLLM, MockPalm, local_llm, palm
 
 # Models
 from .models import ChatMessage, LLMRequest, LLMResponse, LLMSettings
+from .provider_registry import ProviderRegistry, get_provider_registry
 
 # Provider implementations (legacy — kept as shared infra for ollama back-edge)
 from .providers import (
@@ -51,11 +56,6 @@ from .streaming import StreamingManager
 
 # Types
 from .types import LLMType, ProviderType
-
-# Provider registry and base (canonical imports for MVA-62 consolidation)
-# These were in llm_providers/ but are now consolidated in llm_interface_pkg
-from .base_provider import BaseProvider
-from .provider_registry import ProviderRegistry, get_provider_registry
 
 __all__ = [
     # Types

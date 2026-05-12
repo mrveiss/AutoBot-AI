@@ -11,8 +11,8 @@ consistency across the codebase per #6533.
 from typing import List, Optional
 from urllib.parse import urlparse
 
-from constants.network_constants import NetworkConstants
 from autobot_shared.url_safety import is_public_url
+from constants.network_constants import NetworkConstants
 
 # Issue #380: Module-level tuple for URL scheme validation
 _VALID_URL_SCHEMES = ("http://", "https://")

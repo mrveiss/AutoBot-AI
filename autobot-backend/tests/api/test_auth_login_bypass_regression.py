@@ -292,8 +292,8 @@ _register_stub(
 
 # ── import after stubs ────────────────────────────────────────────────────────
 
-from user_management.config import DeploymentMode  # noqa: E402
 from api.auth import login  # noqa: E402
+from user_management.config import DeploymentMode  # noqa: E402
 
 # ── test fixtures ─────────────────────────────────────────────────────────────
 

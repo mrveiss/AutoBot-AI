@@ -30,7 +30,9 @@ def _get_config_manager() -> "ConfigManager":
     logging_manager -> config -> manager -> loader -> model_constants -> (back).
     Ref: issue #1862.
     """
-    from config import config_manager as _cm  # type: ignore[attr-defined]  # GH#7105: local backend import  # noqa: PLC0415
+    from config import (  # type: ignore[attr-defined]  # GH#7105: local backend import  # noqa: PLC0415
+        config_manager as _cm,
+    )
 
     return _cm
 

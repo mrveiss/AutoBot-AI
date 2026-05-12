@@ -18,9 +18,9 @@ import sys
 import tempfile
 from unittest.mock import AsyncMock, patch
 
-from autobot_shared.datetime_utils import datetime_now
-
 import pytest
+
+from autobot_shared.datetime_utils import datetime_now
 
 # ---------------------------------------------------------------------------
 # Ensure the autobot-backend package root is on sys.path

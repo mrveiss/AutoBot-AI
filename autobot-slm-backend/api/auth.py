@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from api.security import create_audit_log
+from autobot_shared.auth.permissions import Permission
 from autobot_shared.proxy_utils import get_client_ip
 from config import settings
 from models.schemas import (
@@ -27,7 +28,6 @@ from models.schemas import (
     UserCreate,
     UserResponse,
 )
-from autobot_shared.auth.permissions import Permission
 from services.auth import auth_service, get_current_user, get_slm_db, require_permission
 from services.database import get_db
 from user_management.models.user import User

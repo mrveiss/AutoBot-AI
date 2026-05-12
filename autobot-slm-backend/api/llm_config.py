@@ -18,8 +18,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
-from models.database import Node, Setting
 from autobot_shared.auth.permissions import Permission
+from models.database import Node, Setting
 from services.auth import require_permission
 from services.database import get_db
 from services.encryption import decrypt_data, encrypt_data

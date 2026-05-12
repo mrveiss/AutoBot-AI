@@ -17,6 +17,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.auth.permissions import Permission
 from models.database import (
     EventSeverity,
     EventType,
@@ -31,7 +32,6 @@ from models.schemas import (
     MaintenanceWindowResponse,
     MaintenanceWindowUpdate,
 )
-from autobot_shared.auth.permissions import Permission
 from services.auth import get_current_user, require_permission
 from services.database import get_db
 

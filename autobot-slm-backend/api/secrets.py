@@ -16,9 +16,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.auth.permissions import Permission
 from models.database import SystemSecret
 from models.schemas import SecretCreate, SecretResponse, SecretUpdate
-from autobot_shared.auth.permissions import Permission
 from services.auth import require_permission
 from services.database import get_db
 from services.encryption import decrypt_data, encrypt_data
