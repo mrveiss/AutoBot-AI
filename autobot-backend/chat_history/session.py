@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 
 from autobot_shared.security.path_validator import validate_relative_path
+from chat_history.cache import _CHAT_SESSION_CACHE_TTL
 from chat_history.file_io import run_in_chat_io_executor
 
 logger = logging.getLogger(__name__)
@@ -329,6 +330,7 @@ class SessionMixin:
             # Update recent chats sorted set for fast listing
             # Issue #361 - avoid blocking
             await run_in_chat_io_executor(self.redis_client.zadd, "chat:recent", {session_id: time.time()})
+            await run_in_chat_io_executor(self.redis_client.expire, "chat:recent", _CHAT_SESSION_CACHE_TTL)
             logger.debug("Cached session %s in Redis", session_id)
         except Exception as e:
             logger.error("Failed to cache session in Redis: %s", e)
