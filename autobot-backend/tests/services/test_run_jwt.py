@@ -29,6 +29,7 @@ import pytest
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError, encode_jwt
 from services.run_jwt import (
     VALID_SCOPES,
+    get_run_jwt_scopes,
     mint_run_jwt,
     refresh_run_jwt,
     revoke_run_jwt,
@@ -430,3 +431,55 @@ class TestValidScopes:
     def test_minimum_required_scopes_present(self):
         required = {"mcp:knowledge", "task:read"}
         assert required.issubset(VALID_SCOPES)
+
+
+# ---------------------------------------------------------------------------
+# get_run_jwt_scopes — scope resolution (MVA-204)
+# ---------------------------------------------------------------------------
+
+
+class TestGetRunJwtScopes:
+    def test_chat_agent_read_only(self):
+        scopes = get_run_jwt_scopes("chat_agent")
+        assert "task:read" in scopes
+        assert "task:write" not in scopes
+        assert "agent:invoke" not in scopes
+
+    def test_worker_has_write_not_invoke(self):
+        scopes = get_run_jwt_scopes("worker")
+        assert "task:read" in scopes
+        assert "task:write" in scopes
+        assert "agent:invoke" not in scopes
+
+    def test_automation_agent_no_invoke(self):
+        scopes = get_run_jwt_scopes("automation_agent")
+        assert "task:write" in scopes
+        assert "agent:invoke" not in scopes
+
+    def test_system_agent_has_invoke(self):
+        scopes = get_run_jwt_scopes("system_agent")
+        assert "agent:invoke" in scopes
+
+    def test_admin_agent_has_all_scopes(self):
+        scopes = set(get_run_jwt_scopes("admin_agent"))
+        assert scopes == VALID_SCOPES
+
+    def test_unknown_agent_type_gets_minimum(self):
+        scopes = get_run_jwt_scopes("totally_unknown_type")
+        assert scopes == ["task:read"]
+
+    def test_all_returned_scopes_are_valid(self):
+        for agent_type in ("chat_agent", "worker", "automation_agent", "system_agent", "admin_agent", "unknown"):
+            for scope in get_run_jwt_scopes(agent_type):
+                assert scope in VALID_SCOPES, f"invalid scope {scope!r} for agent_type={agent_type!r}"
+
+    def test_read_only_task_type_strips_write_and_invoke(self):
+        scopes = get_run_jwt_scopes("system_agent", task_type="read_only")
+        assert "task:write" not in scopes
+        assert "agent:invoke" not in scopes
+        assert "task:read" in scopes
+
+    def test_read_only_task_type_on_chat_agent_is_idempotent(self):
+        base = get_run_jwt_scopes("chat_agent")
+        with_hint = get_run_jwt_scopes("chat_agent", task_type="read_only")
+        assert with_hint == base  # chat_agent has no write/invoke to strip
