@@ -203,15 +203,13 @@ class SkillManager:
             RuntimeError: If the underlying import fails (e.g. git not available).
         """
         from sqlalchemy import select
-        from sqlalchemy.ext.asyncio import AsyncSession
 
         from autobot_shared.time_utils import now_utc
-        from skills.db import get_skills_engine
+        from skills.db import skills_session_context
         from skills.external_importer import ExternalSkillImporter
         from skills.models import RepoType, SkillPackage, SkillRepo
 
-        engine = get_skills_engine()
-        async with AsyncSession(engine) as session:
+        async with skills_session_context() as session:
             result = await session.execute(select(SkillRepo).where(SkillRepo.id == repo_id))
             repo = result.scalar_one_or_none()
             if repo is None:
@@ -246,7 +244,6 @@ class SkillManager:
 
             repo.skill_count = len(imported)
             repo.last_synced = now_utc()
-            await session.commit()
 
         logger.info(
             "sync_external_repo: imported %d package(s) from repo %s",

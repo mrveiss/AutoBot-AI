@@ -134,13 +134,10 @@ async def _persist_approval(approval_id: str, skill_id: str, requested_by: str, 
     Helper for GovernanceEngine._create_pending_approval (Issue #951).
     """
     try:
-        from sqlalchemy.ext.asyncio import AsyncSession
-
-        from skills.db import get_skills_engine
+        from skills.db import skills_session_context
         from skills.models import SkillApproval
 
-        engine = get_skills_engine()
-        async with AsyncSession(engine) as session:
+        async with skills_session_context() as session:
             session.add(
                 SkillApproval(
                     id=approval_id,
@@ -149,7 +146,6 @@ async def _persist_approval(approval_id: str, skill_id: str, requested_by: str, 
                     reason=reason,
                 )
             )
-            await session.commit()
         logger.debug("SkillApproval %s persisted to DB", approval_id)
     except Exception as exc:
         logger.warning("Failed to persist SkillApproval to DB: %s", exc)
