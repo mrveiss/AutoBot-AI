@@ -8,9 +8,10 @@
  */
 
 import { ref, computed } from 'vue'
-import { useApiWithState } from './useApi'
+import { useApiClient } from '@/plugins/api'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('SecretsAuditApi')
@@ -47,7 +48,7 @@ interface AuditQueryResponse {
  * Composable for fetching audit logs
  */
 export function useSecretsAuditApi() {
-  const { api, withErrorHandling } = useApiWithState()
+  const api = useApiClient()
 
   const { isLoading: loading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
@@ -104,29 +105,27 @@ export function useSecretsAuditApi() {
     params.append('limit', String(limit))
     params.append('offset', String(offset))
 
-    return wrap(async () =>
-      withErrorHandling(
-        async () => {
-          const data = await api.get<AuditQueryResponse>(
-            `${getApiBase()}/audit/logs?${params.toString()}`
-          )
+    return wrap(async () => {
+      try {
+        const data = await api.get<AuditQueryResponse>(
+          `${getApiBase()}/audit/logs?${params.toString()}`
+        )
 
-          if (!data.success) {
-            throw new Error('Failed to fetch audit logs')
-          }
-
-          entries.value = data.entries
-          hasMore.value = data.has_more
-          totalCount.value = data.total_returned
-
-          return data
-        },
-        {
-          errorMessage: 'Failed to fetch audit logs',
-          showErrorToast: true
+        if (!data.success) {
+          throw new Error('Failed to fetch audit logs')
         }
-      )
-    )
+
+        entries.value = data.entries
+        hasMore.value = data.has_more
+        totalCount.value = data.total_returned
+
+        return data
+      } catch (err: unknown) {
+        logger.error('Failed to fetch audit logs', err)
+        showSubtleErrorNotification('Error', 'Failed to fetch audit logs', 'error')
+        return null
+      }
+    })
   }
 
   /**

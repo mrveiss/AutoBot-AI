@@ -170,7 +170,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getBackendUrl } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { createLogger } from '@/utils/logger'
+import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
 const logger = createLogger('LLMApiKeysView')
@@ -213,8 +213,9 @@ function spendClass(key: KeyRow): string {
 async function loadKeys(): Promise<void> {
   loading.value = true
   try {
-    const data = await fetchWithAuth(getBackendUrl() + '/api/llm-keys/list')
-    keys.value = (data as { keys: KeyRow[] }).keys ?? []
+    const resp = await fetchWithAuth(getBackendUrl() + '/api/llm-keys/list')
+    const data = (await resp.json()) as { keys: KeyRow[] }
+    keys.value = data.keys ?? []
   } catch (err) {
     logger.error('Failed to load LLM API keys', err)
   } finally {
@@ -233,7 +234,7 @@ async function handleIssue(): Promise<void> {
       ? new Date(form.expires_at_str).getTime() / 1000
       : null
 
-    const result = await fetchWithAuth(getBackendUrl() + '/api/llm-keys/issue', {
+    const issueResp = await fetchWithAuth(getBackendUrl() + '/api/llm-keys/issue', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -244,7 +245,8 @@ async function handleIssue(): Promise<void> {
         expires_at,
       }),
     })
-    newRawKey.value = (result as { raw_key: string }).raw_key
+    const result = (await issueResp.json()) as { raw_key: string }
+    newRawKey.value = result.raw_key
     showIssueModal.value = false
     Object.assign(form, { team_id: '', label: '', monthly_budget_usd: 0, allowed_models_raw: '', expires_at_str: '' })
     await loadKeys()
@@ -275,12 +277,13 @@ async function handleRevoke(): Promise<void> {
 
 async function handleRotate(keyId: string): Promise<void> {
   try {
-    const result = await fetchWithAuth(getBackendUrl() + '/api/llm-keys/rotate', {
+    const rotateResp = await fetchWithAuth(getBackendUrl() + '/api/llm-keys/rotate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key_id: keyId }),
     })
-    newRawKey.value = (result as { new_raw_key: string }).new_raw_key
+    const result = (await rotateResp.json()) as { new_raw_key: string }
+    newRawKey.value = result.new_raw_key
     await loadKeys()
   } catch (err) {
     logger.error('Failed to rotate LLM API key', err)

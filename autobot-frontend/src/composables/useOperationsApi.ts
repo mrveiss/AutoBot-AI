@@ -8,8 +8,9 @@
  */
 
 import { ref, computed } from 'vue'
-import { useApiWithState } from './useApi'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLoadingState } from '@/composables/useLoadingState'
 import type {
@@ -31,78 +32,72 @@ const logger = createLogger('useOperationsApi')
  * Composable for long-running operations API calls
  */
 export function useOperationsApi() {
-  const { api, withErrorHandling } = useApiWithState()
+  const api = useApiClient()
 
   return {
     /**
      * List all operations with optional filtering
      */
     async listOperations(filter?: OperationsFilter): Promise<OperationsListResponse | null> {
-      return withErrorHandling(
-        async () => {
-          const params = new URLSearchParams()
-          if (filter?.status) params.append('status', filter.status)
-          if (filter?.operation_type) params.append('operation_type', filter.operation_type)
-          if (filter?.limit) params.append('limit', filter.limit.toString())
+      try {
+        const params = new URLSearchParams()
+        if (filter?.status) params.append('status', filter.status)
+        if (filter?.operation_type) params.append('operation_type', filter.operation_type)
+        if (filter?.limit) params.append('limit', filter.limit.toString())
 
-          const queryString = params.toString()
-          const url = `${getApiBase()}/long-running/${queryString ? `?${queryString}` : ''}`
-          return await api.get<any>(url)
-        },
-        {
-          errorMessage: 'Failed to load operations',
-          fallbackValue: {
-            operations: [],
-            total_count: 0,
-            active_count: 0,
-            completed_count: 0,
-            failed_count: 0
-          }
+        const queryString = params.toString()
+        const url = `${getApiBase()}/long-running/${queryString ? `?${queryString}` : ''}`
+        return await api.get<any>(url)
+      } catch (error: unknown) {
+        logger.error('Failed to load operations', error)
+        showSubtleErrorNotification('Error', 'Failed to load operations', 'error')
+        return {
+          operations: [],
+          total_count: 0,
+          active_count: 0,
+          completed_count: 0,
+          failed_count: 0
         }
-      )
+      }
     },
 
     /**
      * Get single operation status
      */
     async getOperation(operationId: string): Promise<Operation | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.get<any>(`${getApiBase()}/long-running/${operationId}`)
-        },
-        {
-          errorMessage: 'Failed to get operation status',
-          fallbackValue: null
-        }
-      )
+      try {
+        return await api.get<any>(`${getApiBase()}/long-running/${operationId}`)
+      } catch (error: unknown) {
+        logger.error('Failed to get operation status', error)
+        showSubtleErrorNotification('Error', 'Failed to get operation status', 'error')
+        return null
+      }
     },
 
     /**
      * Cancel a running operation
      */
     async cancelOperation(operationId: string): Promise<CancelOperationResponse | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.post<any>(`${getApiBase()}/long-running/${operationId}/cancel`)
-        },
-        {
-          errorMessage: 'Failed to cancel operation'
-        }
-      )
+      try {
+        return await api.post<any>(`${getApiBase()}/long-running/${operationId}/cancel`)
+      } catch (error: unknown) {
+        logger.error('Failed to cancel operation', error)
+        showSubtleErrorNotification('Error', 'Failed to cancel operation', 'error')
+        return null
+      }
     },
 
     /**
      * Resume a failed/paused operation from checkpoint
      */
     async resumeOperation(operationId: string): Promise<ResumeOperationResponse | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.post<any>(`${getApiBase()}/long-running/${operationId}/resume`)
-        },
-        {
-          errorMessage: 'Failed to resume operation'
-        }
-      )
+      try {
+        return await api.post<any>(`${getApiBase()}/long-running/${operationId}/resume`)
+      } catch (error: unknown) {
+        logger.error('Failed to resume operation', error)
+        showSubtleErrorNotification('Error', 'Failed to resume operation', 'error')
+        return null
+      }
     },
 
     /**

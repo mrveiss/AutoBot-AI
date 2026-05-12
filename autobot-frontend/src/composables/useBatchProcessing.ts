@@ -8,8 +8,9 @@
  */
 
 import { ref, computed } from 'vue'
-import { useApiWithState } from './useApi'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLoadingState } from '@/composables/useLoadingState'
 import type {
@@ -38,208 +39,190 @@ const logger = createLogger('useBatchProcessing')
  * Composable for batch processing API calls
  */
 export function useBatchProcessingApi() {
-  const { api, withErrorHandling } = useApiWithState()
+  const api = useApiClient()
 
   return {
     /**
      * List all batch jobs with optional filtering
      */
     async listJobs(filter?: BatchJobsFilter): Promise<BatchJobsListResponse | null> {
-      return withErrorHandling(
-        async () => {
-          const params = new URLSearchParams()
-          if (filter?.status) params.append('status', filter.status)
-          if (filter?.job_type) params.append('job_type', filter.job_type)
-          if (filter?.limit) params.append('limit', filter.limit.toString())
+      try {
+        const params = new URLSearchParams()
+        if (filter?.status) params.append('status', filter.status)
+        if (filter?.job_type) params.append('job_type', filter.job_type)
+        if (filter?.limit) params.append('limit', filter.limit.toString())
 
-          const queryString = params.toString()
-          const url = `${getApiBase()}/batch-jobs${queryString ? `?${queryString}` : ''}`
-          return await api.get<any>(url)
-        },
-        {
-          errorMessage: 'Failed to load batch jobs',
-          fallbackValue: {
-            jobs: [],
-            total_count: 0,
-            pending_count: 0,
-            running_count: 0,
-            completed_count: 0,
-            failed_count: 0
-          }
+        const queryString = params.toString()
+        const url = `${getApiBase()}/batch-jobs${queryString ? `?${queryString}` : ''}`
+        return await api.get<any>(url)
+      } catch (error: unknown) {
+        logger.error('Failed to load batch jobs', error)
+        showSubtleErrorNotification('Error', 'Failed to load batch jobs', 'error')
+        return {
+          jobs: [],
+          total_count: 0,
+          pending_count: 0,
+          running_count: 0,
+          completed_count: 0,
+          failed_count: 0
         }
-      )
+      }
     },
 
     /**
      * Get single batch job by ID
      */
     async getJob(jobId: string): Promise<BatchJob | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.get<any>(`${getApiBase()}/batch-jobs/${jobId}`)
-        },
-        {
-          errorMessage: 'Failed to get batch job',
-          fallbackValue: null
-        }
-      )
+      try {
+        return await api.get<any>(`${getApiBase()}/batch-jobs/${jobId}`)
+      } catch (error: unknown) {
+        logger.error('Failed to get batch job', error)
+        showSubtleErrorNotification('Error', 'Failed to get batch job', 'error')
+        return null
+      }
     },
 
     /**
      * Create a new batch job
      */
     async createJob(request: CreateBatchJobRequest): Promise<CreateBatchJobResponse | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.post<any>(`${getApiBase()}/batch-jobs`, request)
-        },
-        {
-          errorMessage: 'Failed to create batch job'
-        }
-      )
+      try {
+        return await api.post<any>(`${getApiBase()}/batch-jobs`, request)
+      } catch (error: unknown) {
+        logger.error('Failed to create batch job', error)
+        showSubtleErrorNotification('Error', 'Failed to create batch job', 'error')
+        return null
+      }
     },
 
     /**
      * Delete a batch job
      */
     async deleteJob(jobId: string): Promise<{ status: string } | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.delete<any>(`${getApiBase()}/batch-jobs/${jobId}`)
-        },
-        {
-          errorMessage: 'Failed to delete batch job'
-        }
-      )
+      try {
+        return await api.delete<any>(`${getApiBase()}/batch-jobs/${jobId}`)
+      } catch (error: unknown) {
+        logger.error('Failed to delete batch job', error)
+        showSubtleErrorNotification('Error', 'Failed to delete batch job', 'error')
+        return null
+      }
     },
 
     /**
      * Cancel a running batch job
      */
     async cancelJob(jobId: string): Promise<{ status: string } | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.post<any>(`${getApiBase()}/batch-jobs/${jobId}/cancel`)
-        },
-        {
-          errorMessage: 'Failed to cancel batch job'
-        }
-      )
+      try {
+        return await api.post<any>(`${getApiBase()}/batch-jobs/${jobId}/cancel`)
+      } catch (error: unknown) {
+        logger.error('Failed to cancel batch job', error)
+        showSubtleErrorNotification('Error', 'Failed to cancel batch job', 'error')
+        return null
+      }
     },
 
     /**
      * Get batch job logs
      */
     async getJobLogs(jobId: string): Promise<BatchJobLogsResponse | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.get<any>(`${getApiBase()}/batch-jobs/${jobId}/logs`)
-        },
-        {
-          errorMessage: 'Failed to get batch job logs',
-          fallbackValue: { job_id: jobId, logs: [] }
-        }
-      )
+      try {
+        return await api.get<any>(`${getApiBase()}/batch-jobs/${jobId}/logs`)
+      } catch (error: unknown) {
+        logger.error('Failed to get batch job logs', error)
+        showSubtleErrorNotification('Error', 'Failed to get batch job logs', 'error')
+        return { job_id: jobId, logs: [] }
+      }
     },
 
     /**
      * List all batch templates
      */
     async listTemplates(): Promise<BatchTemplatesListResponse | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.get<any>(`${getApiBase()}/batch-templates`)
-        },
-        {
-          errorMessage: 'Failed to load batch templates',
-          fallbackValue: { templates: [], total_count: 0 }
-        }
-      )
+      try {
+        return await api.get<any>(`${getApiBase()}/batch-templates`)
+      } catch (error: unknown) {
+        logger.error('Failed to load batch templates', error)
+        showSubtleErrorNotification('Error', 'Failed to load batch templates', 'error')
+        return { templates: [], total_count: 0 }
+      }
     },
 
     /**
      * Create a new batch template
      */
     async createTemplate(request: CreateBatchTemplateRequest): Promise<BatchTemplate | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.post<any>(`${getApiBase()}/batch-templates`, request)
-        },
-        {
-          errorMessage: 'Failed to create batch template'
-        }
-      )
+      try {
+        return await api.post<any>(`${getApiBase()}/batch-templates`, request)
+      } catch (error: unknown) {
+        logger.error('Failed to create batch template', error)
+        showSubtleErrorNotification('Error', 'Failed to create batch template', 'error')
+        return null
+      }
     },
 
     /**
      * Delete a batch template
      */
     async deleteTemplate(templateId: string): Promise<{ status: string } | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.delete<any>(`${getApiBase()}/batch-templates/${templateId}`)
-        },
-        {
-          errorMessage: 'Failed to delete batch template'
-        }
-      )
+      try {
+        return await api.delete<any>(`${getApiBase()}/batch-templates/${templateId}`)
+      } catch (error: unknown) {
+        logger.error('Failed to delete batch template', error)
+        showSubtleErrorNotification('Error', 'Failed to delete batch template', 'error')
+        return null
+      }
     },
 
     /**
      * List all batch schedules
      */
     async listSchedules(): Promise<BatchSchedulesListResponse | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.get<any>(`${getApiBase()}/batch-schedules`)
-        },
-        {
-          errorMessage: 'Failed to load batch schedules',
-          fallbackValue: { schedules: [], total_count: 0 }
-        }
-      )
+      try {
+        return await api.get<any>(`${getApiBase()}/batch-schedules`)
+      } catch (error: unknown) {
+        logger.error('Failed to load batch schedules', error)
+        showSubtleErrorNotification('Error', 'Failed to load batch schedules', 'error')
+        return { schedules: [], total_count: 0 }
+      }
     },
 
     /**
      * Create a new batch schedule
      */
     async createSchedule(request: CreateBatchScheduleRequest): Promise<BatchSchedule | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.post<any>(`${getApiBase()}/batch-schedules`, request)
-        },
-        {
-          errorMessage: 'Failed to create batch schedule'
-        }
-      )
+      try {
+        return await api.post<any>(`${getApiBase()}/batch-schedules`, request)
+      } catch (error: unknown) {
+        logger.error('Failed to create batch schedule', error)
+        showSubtleErrorNotification('Error', 'Failed to create batch schedule', 'error')
+        return null
+      }
     },
 
     /**
      * Toggle schedule enabled state
      */
     async toggleSchedule(scheduleId: string, enabled: boolean): Promise<BatchSchedule | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.patch(`${getApiBase()}/batch-schedules/${scheduleId}`, { enabled })
-        },
-        {
-          errorMessage: 'Failed to update batch schedule'
-        }
-      )
+      try {
+        return await api.patch(`${getApiBase()}/batch-schedules/${scheduleId}`, { enabled })
+      } catch (error: unknown) {
+        logger.error('Failed to update batch schedule', error)
+        showSubtleErrorNotification('Error', 'Failed to update batch schedule', 'error')
+        return null
+      }
     },
 
     /**
      * Delete a batch schedule
      */
     async deleteSchedule(scheduleId: string): Promise<{ status: string } | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.delete<any>(`${getApiBase()}/batch-schedules/${scheduleId}`)
-        },
-        {
-          errorMessage: 'Failed to delete batch schedule'
-        }
-      )
+      try {
+        return await api.delete<any>(`${getApiBase()}/batch-schedules/${scheduleId}`)
+      } catch (error: unknown) {
+        logger.error('Failed to delete batch schedule', error)
+        showSubtleErrorNotification('Error', 'Failed to delete batch schedule', 'error')
+        return null
+      }
     },
 
     /**

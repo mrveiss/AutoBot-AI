@@ -8,8 +8,9 @@
  */
 
 import { ref, computed } from 'vue'
-import { useApiWithState } from './useApi'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLoadingState } from '@/composables/useLoadingState'
 import type {
@@ -33,71 +34,65 @@ const logger = createLogger('useAuditApi')
  * Composable for audit logging API calls
  */
 export function useAuditApi() {
-  const { api, withErrorHandling } = useApiWithState()
+  const api = useApiClient()
 
   return {
     /**
      * Query audit logs with filters
      */
     async queryLogs(params?: AuditQueryParams): Promise<AuditQueryResponse | null> {
-      return withErrorHandling(
-        async () => {
-          const searchParams = new URLSearchParams()
-          if (params?.start_time) searchParams.append('start_time', params.start_time)
-          if (params?.end_time) searchParams.append('end_time', params.end_time)
-          if (params?.operation) searchParams.append('operation', params.operation)
-          if (params?.user_id) searchParams.append('user_id', params.user_id)
-          if (params?.session_id) searchParams.append('session_id', params.session_id)
-          if (params?.vm_name) searchParams.append('vm_name', params.vm_name)
-          if (params?.result) searchParams.append('result', params.result)
-          if (params?.limit) searchParams.append('limit', params.limit.toString())
-          if (params?.offset) searchParams.append('offset', params.offset.toString())
+      try {
+        const searchParams = new URLSearchParams()
+        if (params?.start_time) searchParams.append('start_time', params.start_time)
+        if (params?.end_time) searchParams.append('end_time', params.end_time)
+        if (params?.operation) searchParams.append('operation', params.operation)
+        if (params?.user_id) searchParams.append('user_id', params.user_id)
+        if (params?.session_id) searchParams.append('session_id', params.session_id)
+        if (params?.vm_name) searchParams.append('vm_name', params.vm_name)
+        if (params?.result) searchParams.append('result', params.result)
+        if (params?.limit) searchParams.append('limit', params.limit.toString())
+        if (params?.offset) searchParams.append('offset', params.offset.toString())
 
-          const queryString = searchParams.toString()
-          const url = `${getApiBase()}/audit/logs${queryString ? `?${queryString}` : ''}`
-          return await api.get<any>(url)
-        },
-        {
-          errorMessage: 'Failed to load audit logs',
-          fallbackValue: {
-            success: false,
-            total_returned: 0,
-            has_more: false,
-            entries: [],
-            query: {}
-          }
+        const queryString = searchParams.toString()
+        const url = `${getApiBase()}/audit/logs${queryString ? `?${queryString}` : ''}`
+        return await api.get<any>(url)
+      } catch (error: unknown) {
+        logger.error('Failed to load audit logs', error)
+        showSubtleErrorNotification('Error', 'Failed to load audit logs', 'error')
+        return {
+          success: false,
+          total_returned: 0,
+          has_more: false,
+          entries: [],
+          query: {}
         }
-      )
+      }
     },
 
     /**
      * Get audit statistics
      */
     async getStatistics(): Promise<AuditStatisticsResponse | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.get<any>(`${getApiBase()}/audit/statistics`)
-        },
-        {
-          errorMessage: 'Failed to load audit statistics',
-          fallbackValue: null
-        }
-      )
+      try {
+        return await api.get<any>(`${getApiBase()}/audit/statistics`)
+      } catch (error: unknown) {
+        logger.error('Failed to load audit statistics', error)
+        showSubtleErrorNotification('Error', 'Failed to load audit statistics', 'error')
+        return null
+      }
     },
 
     /**
      * Get session audit trail
      */
     async getSessionAuditTrail(sessionId: string): Promise<AuditQueryResponse | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.get<any>(`${getApiBase()}/audit/session/${sessionId}`)
-        },
-        {
-          errorMessage: 'Failed to load session audit trail',
-          fallbackValue: null
-        }
-      )
+      try {
+        return await api.get<any>(`${getApiBase()}/audit/session/${sessionId}`)
+      } catch (error: unknown) {
+        logger.error('Failed to load session audit trail', error)
+        showSubtleErrorNotification('Error', 'Failed to load session audit trail', 'error')
+        return null
+      }
     },
 
     /**
@@ -107,15 +102,13 @@ export function useAuditApi() {
       userId: string,
       days: number = 7
     ): Promise<AuditQueryResponse | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.get<any>(`${getApiBase()}/audit/user/${userId}?days=${days}`)
-        },
-        {
-          errorMessage: 'Failed to load user audit trail',
-          fallbackValue: null
-        }
-      )
+      try {
+        return await api.get<any>(`${getApiBase()}/audit/user/${userId}?days=${days}`)
+      } catch (error: unknown) {
+        logger.error('Failed to load user audit trail', error)
+        showSubtleErrorNotification('Error', 'Failed to load user audit trail', 'error')
+        return null
+      }
     },
 
     /**
@@ -125,50 +118,45 @@ export function useAuditApi() {
       hours: number = 24,
       resultFilter: AuditResult = 'denied'
     ): Promise<AuditQueryResponse | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.get<any>(
-            `${getApiBase()}/audit/failures?hours=${hours}&result_filter=${resultFilter}`
-          )
-        },
-        {
-          errorMessage: 'Failed to load failed operations',
-          fallbackValue: null
-        }
-      )
+      try {
+        return await api.get<any>(
+          `${getApiBase()}/audit/failures?hours=${hours}&result_filter=${resultFilter}`
+        )
+      } catch (error: unknown) {
+        logger.error('Failed to load failed operations', error)
+        showSubtleErrorNotification('Error', 'Failed to load failed operations', 'error')
+        return null
+      }
     },
 
     /**
      * Cleanup old audit logs
      */
     async cleanupLogs(request: AuditCleanupRequest): Promise<AuditCleanupResponse | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.post<any>(`${getApiBase()}/audit/cleanup`, request)
-        },
-        {
-          errorMessage: 'Failed to cleanup audit logs'
-        }
-      )
+      try {
+        return await api.post<any>(`${getApiBase()}/audit/cleanup`, request)
+      } catch (error: unknown) {
+        logger.error('Failed to cleanup audit logs', error)
+        showSubtleErrorNotification('Error', 'Failed to cleanup audit logs', 'error')
+        return null
+      }
     },
 
     /**
      * Get available operation types
      */
     async getOperationTypes(): Promise<AuditOperationsResponse | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.get<any>(`${getApiBase()}/audit/operations`)
-        },
-        {
-          errorMessage: 'Failed to load operation types',
-          fallbackValue: {
-            success: false,
-            categories: {},
-            total_operations: 0
-          }
+      try {
+        return await api.get<any>(`${getApiBase()}/audit/operations`)
+      } catch (error: unknown) {
+        logger.error('Failed to load operation types', error)
+        showSubtleErrorNotification('Error', 'Failed to load operation types', 'error')
+        return {
+          success: false,
+          categories: {},
+          total_operations: 0
         }
-      )
+      }
     }
   }
 }
