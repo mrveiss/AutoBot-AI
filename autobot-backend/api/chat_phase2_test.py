@@ -17,7 +17,6 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 from pydantic import ValidationError
 
-
 # ---------------------------------------------------------------------------
 # 1. Schema-level enforcement: session_id is required (no fallback generation)
 # ---------------------------------------------------------------------------
@@ -33,9 +32,9 @@ class TestSessionIdRequired:
             ChatMessage(content="hello")
 
         errors = exc_info.value.errors()
-        assert any(e["loc"] == ("session_id",) for e in errors), (
-            "Pydantic must flag session_id as missing — FastAPI surfaces this as HTTP 422"
-        )
+        assert any(
+            e["loc"] == ("session_id",) for e in errors
+        ), "Pydantic must flag session_id as missing — FastAPI surfaces this as HTTP 422"
 
     def test_enhanced_chat_message_without_session_id_raises_422_schema_error(self):
         from api.schemas_chat import EnhancedChatMessage
@@ -190,6 +189,4 @@ class TestDiskWriteBeforeRedis:
         with patch("autobot_shared.security.path_validator.validate_relative_path", return_value="/tmp/s.json"):
             await mgr.save_session("sess-xyz")
 
-        assert call_order == ["disk", "redis"], (
-            f"Expected disk before redis, got {call_order}"
-        )
+        assert call_order == ["disk", "redis"], f"Expected disk before redis, got {call_order}"
