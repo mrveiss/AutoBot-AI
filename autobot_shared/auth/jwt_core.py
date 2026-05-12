@@ -90,12 +90,13 @@ def encode_jwt(
     return jwt.encode(to_encode, secret, algorithm=_ALGORITHM)
 
 
-def decode_jwt(token: str, secret: str) -> Dict[str, Any]:
+def decode_jwt(token: str, secret: str, audience: Optional[str] = None) -> Dict[str, Any]:
     """Decode and verify a signed HS256 JWT.
 
     Args:
         token: JWT string.
         secret: HMAC signing secret.
+        audience: When provided, the ``aud`` claim must exactly match this value.
 
     Returns:
         Decoded claims dict.
@@ -103,10 +104,13 @@ def decode_jwt(token: str, secret: str) -> Dict[str, Any]:
     Raises:
         JWTExpiredError: The token signature is valid but the token has expired.
         JWTDecodeError: The token is invalid for any other reason (bad signature,
-            malformed header/payload, unknown algorithm, etc.).
+            malformed header/payload, unknown algorithm, audience mismatch, etc.).
     """
     try:
-        return jwt.decode(token, secret, algorithms=[_ALGORITHM])
+        options = {"verify_aud": audience is not None}
+        return jwt.decode(
+            token, secret, algorithms=[_ALGORITHM], audience=audience, options=options
+        )
     except ExpiredSignatureError as exc:
         raise JWTExpiredError("JWT token has expired") from exc
     except InvalidTokenError as exc:

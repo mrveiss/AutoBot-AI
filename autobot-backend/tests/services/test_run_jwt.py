@@ -146,7 +146,7 @@ class TestValidateRunJwtValid:
     async def test_raises_when_jti_missing(self, _no_audit):
         """Token without jti claim must be rejected."""
         bad_token = encode_jwt(
-            {"run_id": _RUN_ID, "agent_id": _AGENT_ID},
+            {"aud": "heartbeat", "run_id": _RUN_ID, "agent_id": _AGENT_ID},
             secret=_SECRET,
             expires_delta=timedelta(seconds=300),
         )
@@ -154,6 +154,41 @@ class TestValidateRunJwtValid:
         with patch("services.run_jwt.get_async_redis_client", side_effect=client):
             with pytest.raises(JWTDecodeError, match="missing jti"):
                 await validate_run_jwt(bad_token)
+
+    @pytest.mark.asyncio
+    async def test_wrong_audience_rejected(self, _no_audit):
+        """Token with aud != 'heartbeat' must be rejected before JTI check."""
+        wrong_aud_token = encode_jwt(
+            {
+                "aud": "not-heartbeat",
+                "jti": str(uuid.uuid4()),
+                "run_id": _RUN_ID,
+                "agent_id": _AGENT_ID,
+            },
+            secret=_SECRET,
+            expires_delta=timedelta(seconds=300),
+        )
+        store, client = _make_store()
+        with patch("services.run_jwt.get_async_redis_client", side_effect=client):
+            with pytest.raises(JWTDecodeError):
+                await validate_run_jwt(wrong_aud_token)
+
+    @pytest.mark.asyncio
+    async def test_missing_audience_rejected(self, _no_audit):
+        """Token with no aud claim must be rejected."""
+        no_aud_token = encode_jwt(
+            {
+                "jti": str(uuid.uuid4()),
+                "run_id": _RUN_ID,
+                "agent_id": _AGENT_ID,
+            },
+            secret=_SECRET,
+            expires_delta=timedelta(seconds=300),
+        )
+        store, client = _make_store()
+        with patch("services.run_jwt.get_async_redis_client", side_effect=client):
+            with pytest.raises(JWTDecodeError):
+                await validate_run_jwt(no_aud_token)
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +207,7 @@ class TestBlastRadiusExpiry:
         """
         expired_token = encode_jwt(
             {
+                "aud": "heartbeat",
                 "jti": str(uuid.uuid4()),
                 "run_id": _RUN_ID,
                 "task_id": _TASK_ID,
@@ -287,7 +323,7 @@ class TestRefreshRunJwt:
         with patch("services.run_jwt.get_async_redis_client", side_effect=client):
             original = mint_run_jwt(_RUN_ID, _TASK_ID, _AGENT_ID, _TENANT_ID, _SCOPE)
             refreshed = await refresh_run_jwt(original, _RUN_ID)
-        claims = decode_jwt(refreshed, _SECRET)
+        claims = decode_jwt(refreshed, _SECRET, audience="heartbeat")
         assert claims["scope"] == _SCOPE
         assert claims["run_id"] == _RUN_ID
         assert claims["agent_id"] == _AGENT_ID
@@ -307,6 +343,7 @@ class TestRefreshRunJwt:
         """Expired tokens must not be refreshable."""
         expired = encode_jwt(
             {
+                "aud": "heartbeat",
                 "jti": str(uuid.uuid4()),
                 "run_id": _RUN_ID,
                 "task_id": _TASK_ID,

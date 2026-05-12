@@ -76,6 +76,7 @@ _ENV_TTL = "RUN_JWT_TTL_SECONDS"
 _ENV_FAIL_OPEN = "RUN_JWT_REDIS_FAIL_OPEN"
 _DEFAULT_TTL = 300
 _DENYLIST_PREFIX = "run_jwt:revoked:"
+_RUN_JWT_AUDIENCE = "heartbeat"
 
 #: Allowed scopes for run JWTs (minimum-privilege model, documented in module docstring).
 VALID_SCOPES: frozenset[str] = frozenset(
@@ -147,6 +148,7 @@ def mint_run_jwt(
     jti = str(uuid.uuid4())
     payload: Dict[str, object] = {
         "jti": jti,
+        "aud": _RUN_JWT_AUDIENCE,
         "run_id": run_id,
         "task_id": task_id,
         "agent_id": agent_id,
@@ -228,10 +230,10 @@ async def validate_run_jwt(token: str) -> Dict[str, object]:
 
     Raises:
         JWTExpiredError: Token has passed its ``exp`` timestamp.
-        JWTDecodeError: Token has an invalid signature, is malformed, or its
-            JTI has been explicitly revoked.
+        JWTDecodeError: Token has an invalid signature, is malformed, its
+            ``aud`` claim is not ``"heartbeat"``, or its JTI has been revoked.
     """
-    claims = decode_jwt(token, _secret())
+    claims = decode_jwt(token, _secret(), audience=_RUN_JWT_AUDIENCE)
 
     jti = claims.get("jti")
     if not jti:
