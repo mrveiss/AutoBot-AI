@@ -209,13 +209,13 @@ onMounted(() => {
       <div class="address-row">
         <!-- Back / Forward / Reload -->
         <div class="nav-controls">
-          <button @click="goBack" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.back')">
+          <button @click="goBack" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.back')" :aria-label="$t('common.back')">
             <i class="fas fa-arrow-left"></i>
           </button>
-          <button @click="goForward" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.forward')">
+          <button @click="goForward" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.forward')" :aria-label="$t('common.forward')">
             <i class="fas fa-arrow-right"></i>
           </button>
-          <button @click="reload" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.reload')">
+          <button @click="reload" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.reload')" :aria-label="$t('common.refresh')">
             <i class="fas fa-redo" :class="{ 'fa-spin': loading }"></i>
           </button>
         </div>
@@ -233,13 +233,13 @@ onMounted(() => {
         </div>
 
         <!-- Go button -->
-        <button @click="navigate" :disabled="loading" class="go-btn">
+        <button @click="navigate" :disabled="loading" class="go-btn" :aria-label="$t('common.search')">
           <i class="fas fa-search" v-if="!loading"></i>
           <i class="fas fa-spinner fa-spin" v-else></i>
         </button>
 
         <!-- Screenshot button -->
-        <button @click="captureScreenshot" :disabled="!isConnected || loading" class="nav-btn screenshot-btn" :title="$t('chat.visualBrowser.refreshScreenshot')">
+        <button @click="captureScreenshot" :disabled="!isConnected || loading" class="nav-btn screenshot-btn" :title="$t('chat.visualBrowser.refreshScreenshot')" :aria-label="$t('chat.visualBrowser.refreshScreenshot')">
           <i class="fas fa-camera"></i>
         </button>
 
@@ -249,6 +249,7 @@ onMounted(() => {
           class="nav-btn automation-toggle-btn"
           :class="{ 'automation-active': showAutomation }"
           :title="$t('chat.visualBrowser.toggleAutomation')"
+          :aria-label="$t('chat.visualBrowser.toggleAutomation')"
         >
           <i class="fas fa-robot"></i>
         </button>
@@ -259,7 +260,7 @@ onMounted(() => {
     <div v-if="error" class="error-banner">
       <i class="fas fa-exclamation-triangle"></i>
       <span>{{ error }}</span>
-      <button @click="error = null" class="error-dismiss"><i class="fas fa-times"></i></button>
+      <button @click="error = null" class="error-dismiss" :aria-label="$t('common.dismiss')"><i class="fas fa-times"></i></button>
     </div>
 
     <!-- Content Area (viewport + optional automation panel) (#1242) -->
