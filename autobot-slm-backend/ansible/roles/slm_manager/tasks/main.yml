@@ -317,6 +317,8 @@
       {{ slm_admin_password
          if (slm_admin_password | default('') | length > 0)
          else lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
+    slm_auth_token: >-
+      {{ lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
   when: not slm_secrets_stat.stat.exists
   no_log: true
   tags: ['slm', 'secrets']
@@ -329,6 +331,33 @@
     group: "{{ slm_group }}"
     mode: "0600"
   when: not slm_secrets_stat.stat.exists
+  no_log: true
+  tags: ['slm', 'secrets']
+
+# #7689: On existing installations the secrets file already exists and the
+# template task above is skipped. Idempotently add SLM_AUTH_TOKEN when absent.
+- name: "SLM | Check if SLM_AUTH_TOKEN present in secrets file (#7689)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -q '^SLM_AUTH_TOKEN='
+      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
+  register: _slm_auth_tok_check
+  changed_when: false
+  failed_when: false
+  when: slm_secrets_stat.stat.exists
+  no_log: true
+  tags: ['slm', 'secrets']
+
+- name: "SLM | Add SLM_AUTH_TOKEN to existing secrets file (#7689)"
+  ansible.builtin.lineinfile:
+    path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
+    regexp: "^SLM_AUTH_TOKEN="
+    line: >-
+      SLM_AUTH_TOKEN={{ lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+    create: false
+  when:
+    - slm_secrets_stat.stat.exists
+    - _slm_auth_tok_check.rc != 0
   no_log: true
   tags: ['slm', 'secrets']
 

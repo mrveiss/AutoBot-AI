@@ -53,6 +53,8 @@ backend_cors_origins: "*"
 # Internal API key shared with SLM backend for proxy authentication (#1779, #3512).
 # REQUIRED for personality and voice proxies — set via Ansible Vault or inventory.
 autobot_internal_api_key: ""
+# SLM WebSocket auth bearer value — populated from /etc/autobot/slm-secrets.env at deploy time (#7689).
+backend_slm_auth_tok: ""
 
 # LLM Configuration (Issue #858)
 backend_llm_provider: "ollama"  # Default LLM provider for all agents
