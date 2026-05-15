@@ -41,7 +41,9 @@ class TestGetUserAsync:
         fake_user = {"id": "u1", "email": "test@example.com"}
 
         async def run():
-            with patch("api.openai_compat.get_current_user", new_callable=AsyncMock, return_value=fake_user) as mock_gcu:
+            with patch(
+                "api.openai_compat.get_current_user", new_callable=AsyncMock, return_value=fake_user
+            ) as mock_gcu:
                 result = await openai_compat._get_user(fake_request)
                 mock_gcu.assert_awaited_once_with(fake_request)
                 assert result == fake_user
@@ -52,7 +54,11 @@ class TestGetUserAsync:
         fake_request = MagicMock()
 
         async def run():
-            with patch("api.openai_compat.get_current_user", new_callable=AsyncMock, side_effect=HTTPException(status_code=401, detail="Unauthorized")):
+            with patch(
+                "api.openai_compat.get_current_user",
+                new_callable=AsyncMock,
+                side_effect=HTTPException(status_code=401, detail="Unauthorized"),
+            ):
                 with pytest.raises(HTTPException) as exc_info:
                     await openai_compat._get_user(fake_request)
                 assert exc_info.value.status_code == 401
@@ -63,7 +69,11 @@ class TestGetUserAsync:
         fake_request = MagicMock()
 
         async def run():
-            with patch("api.openai_compat.get_current_user", new_callable=AsyncMock, side_effect=RuntimeError("jwt decode failed")):
+            with patch(
+                "api.openai_compat.get_current_user",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("jwt decode failed"),
+            ):
                 with pytest.raises(HTTPException) as exc_info:
                     await openai_compat._get_user(fake_request)
                 assert exc_info.value.status_code == 401
