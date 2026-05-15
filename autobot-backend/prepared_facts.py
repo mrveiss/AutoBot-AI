@@ -12,12 +12,12 @@ Facts:
   SkillRoutingIndex  — compiled index of all skill facts; rebuilt on registry change
   ProviderRuntimeFact — per-provider capabilities precomputed at registration
 """
+
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, FrozenSet, List, Optional, Sequence, Tuple
-
 
 # ---------------------------------------------------------------------------
 # Internal tokenizer — same regex as skill_router._tokenize but returns a
@@ -129,9 +129,7 @@ class SkillRoutingIndex:
         frozen token sets — no regex is executed for individual skills.
         """
         task_tokens = _tok(task_text)
-        scored: List[Tuple[SkillTokenFact, float]] = [
-            (f, f.score(task_tokens)) for f in self._facts
-        ]
+        scored: List[Tuple[SkillTokenFact, float]] = [(f, f.score(task_tokens)) for f in self._facts]
         scored.sort(key=lambda x: x[1], reverse=True)
         result = []
         for fact, score in scored[:top_k]:
@@ -175,11 +173,7 @@ class ProviderRuntimeFact:
     def build_at_startup(cls, name: str, provider: Any) -> "ProviderRuntimeFact":
         """Build a fact for a provider instance."""
         settings: Dict[str, Any] = getattr(provider, "settings", {}) or {}
-        auth_configured = bool(
-            settings.get("api_key")
-            or settings.get("api_token")
-            or settings.get("base_url")
-        )
+        auth_configured = bool(settings.get("api_key") or settings.get("api_token") or settings.get("base_url"))
         is_local = name in {"ollama", "vllm"}
         return cls(name=name, auth_configured=auth_configured, is_local=is_local)
 

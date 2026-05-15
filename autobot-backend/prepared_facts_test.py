@@ -9,7 +9,6 @@ import pytest
 
 from prepared_facts import ProviderRuntimeFact, SkillRoutingIndex, SkillTokenFact
 
-
 # ---------------------------------------------------------------------------
 # SkillTokenFact
 # ---------------------------------------------------------------------------
