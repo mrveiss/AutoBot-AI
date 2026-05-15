@@ -4,6 +4,7 @@
     :class="buttonClasses"
     :disabled="disabled || loading"
     :type="htmlType"
+    :aria-label="ariaLabel || undefined"
     @click="handleClick"
     @touchstart="handleTouchStart"
     @touchend="handleTouchEnd"
@@ -20,7 +21,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, useSlots, Comment } from 'vue'
 
 interface Props {
   variant?: 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info' | 'light' | 'dark' | 'outline-solid' | 'ghost' | 'link'
@@ -30,6 +31,7 @@ interface Props {
   block?: boolean
   rounded?: boolean
   label?: string
+  ariaLabel?: string
   htmlType?: 'button' | 'submit' | 'reset'
   tag?: string
   to?: string | object
@@ -51,6 +53,22 @@ const props = withDefaults(defineProps<Props>(), {
   touchFeedback: true,
   hapticFeedback: true
 })
+
+const slots = useSlots()
+
+if (import.meta.env.DEV) {
+  onMounted(() => {
+    const hasVisibleText = !!props.label || !!slots.default?.()?.some(
+      (vnode: any) => vnode.type !== Comment && vnode.children
+    )
+    if (!hasVisibleText && !props.ariaLabel) {
+      console.warn(
+        '[BaseButton] Icon-only button rendered without ariaLabel prop. ' +
+        'This is a WCAG 4.1.2 failure. Add :ariaLabel="$t(\'common.actionName\')" to the button.'
+      )
+    }
+  })
+}
 
 const emit = defineEmits<{
   click: [event: MouseEvent]
