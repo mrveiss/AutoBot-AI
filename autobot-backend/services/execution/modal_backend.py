@@ -201,7 +201,7 @@ class ModalBackend(ExecutionBackend):
                     namespace = {"__name__": "__modal__"}
                     namespace.update(task.env_vars)
 
-                    exec(task.code, namespace)
+                    exec(task.code, namespace)  # nosec B102
 
                 stdout_output = stdout_capture.getvalue()
                 stderr_output = stderr_capture.getvalue()

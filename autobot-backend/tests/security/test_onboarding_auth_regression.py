@@ -23,7 +23,6 @@ import sys
 import types
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 
