@@ -9,7 +9,6 @@ Verifies that all exception types are importable from the canonical
 still exports them unchanged.
 """
 
-import pytest
 
 import exceptions as exc
 import utils.chat_exceptions as chat_exc
