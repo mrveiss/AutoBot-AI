@@ -28,6 +28,7 @@ from protocols.agent_communication import (
     StandardMessage,
     get_communication_manager,
 )
+from autobot_shared.status_enums import AgentStatus  # #7504 consolidation
 
 logger = logging.getLogger(__name__)
 
@@ -38,15 +39,6 @@ class DeploymentMode(Enum):
     LOCAL = "local"
     CONTAINER = "container"
     REMOTE = "remote"
-
-
-class AgentStatus(Enum):
-    """Agent health status"""
-
-    HEALTHY = "healthy"
-    DEGRADED = "degraded"
-    UNHEALTHY = "unhealthy"
-    OFFLINE = "offline"
 
 
 # Performance optimization: O(1) lookup for available agent statuses (Issue #326)

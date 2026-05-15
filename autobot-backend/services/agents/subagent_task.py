@@ -12,20 +12,11 @@ Defines task data structures for subagent spawning and execution:
 
 import time
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+from autobot_shared.status_enums import TaskPriority  # #7504 consolidation
 from autobot_shared.status_enums import TaskStatus  # #6973 consolidation
-
-
-class TaskPriority(str, Enum):
-    """Priority level for task execution."""
-
-    LOW = "low"
-    NORMAL = "normal"
-    HIGH = "high"
-    URGENT = "urgent"
 
 
 @dataclass

@@ -106,6 +106,7 @@ except ImportError:
 
 
 from autobot_shared.status_enums import WorkflowStatus  # #6973 consolidation
+from autobot_shared.status_enums import Priority as TaskPriority  # #7504 consolidation
 
 try:
     from workflow_templates import WorkflowStep
@@ -120,13 +121,6 @@ except ImportError:
         agent_type: str
         action: str
         description: str
-
-
-class TaskPriority(Enum):
-    LOW = "low"
-    NORMAL = "normal"
-    HIGH = "high"
-    URGENT = "urgent"
 
 
 class OrchestrationMode(Enum):
