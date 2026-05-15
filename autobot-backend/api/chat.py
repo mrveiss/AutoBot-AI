@@ -621,8 +621,7 @@ async def process_chat_message(
     Issue #3282: author_id for multi-user attribution, Issue #6502: typed return)."""
     _validate_session_id(message.session_id)
 
-    # Get or create session
-    session_id = message.session_id or generate_chat_session_id()
+    session_id = message.session_id
 
     # Store user message (Issue #281: uses helper, Issue #3282: author_id)
     await _store_and_log_user_message(message, session_id, chat_history_manager, author_id)
@@ -663,7 +662,7 @@ async def _generate_llm_stream(
 ):
     """Generate LLM streaming response chunks (Issue #398: extracted)."""
     try:
-        session_id = message.session_id or generate_chat_session_id()
+        session_id = message.session_id
         yield f"data: {json.dumps({'type': 'start', 'session_id': session_id})}\n\n"
 
         if hasattr(llm_service, "stream_response"):
@@ -1713,10 +1712,10 @@ async def process_enhanced_chat_message(
     intelligent chat agents for superior conversational experience.
     """
     try:
-        if message.session_id and not validate_chat_session_id(message.session_id):
-            raise HTTPException(status_code=400, detail="Invalid session ID format")
+        if not validate_chat_session_id(message.session_id):
+            raise HTTPException(status_code=422, detail="Invalid session ID format")
 
-        session_id = message.session_id or generate_chat_session_id()
+        session_id = message.session_id
 
         return await _execute_enhanced_chat_pipeline(
             message,
@@ -1727,6 +1726,8 @@ async def process_enhanced_chat_message(
             preferences,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error processing enhanced chat message: %s", e)
         raise HTTPException(status_code=500, detail="Failed to process enhanced chat message")
@@ -1811,7 +1812,7 @@ async def _generate_enhanced_stream(
 ):
     """Generate streaming response with AI Stack integration."""
     try:
-        session_id = message.session_id or generate_chat_session_id()
+        session_id = message.session_id
         yield _format_sse_event({"type": "start", "session_id": session_id, "enhanced": True})
 
         chat_history_manager = get_chat_history_manager(request)
