@@ -683,6 +683,24 @@ async def _init_heartbeat_scheduler(app: FastAPI) -> None:
         app.state.heartbeat_scheduler = None
 
 
+async def _start_connector_scheduler() -> None:
+    """Start the Redis-backed connector scheduler leader-election loop (NON-CRITICAL).
+
+    Issue #6556: Kicks off the per-worker background task that competes for the
+    connector-scheduler leader lock.  Whichever worker wins runs the asyncio sync
+    tasks; all workers answer is_running() consistently via Redis.
+    """
+    logger.info("Connector scheduler: starting leader-election loop...")
+    try:
+        from knowledge.connectors.scheduler import get_connector_scheduler
+
+        scheduler = get_connector_scheduler()
+        await scheduler.begin_leader_election()
+        logger.info("Connector scheduler: leader-election loop started")
+    except Exception as cs_error:
+        logger.warning("Connector scheduler initialization failed: %s", cs_error)
+
+
 async def _init_trigger_service(app: FastAPI) -> None:
     """Start TriggerService background loops for event-driven triggers (#3100)."""
     logger.info("Triggers: Starting trigger service...")
@@ -1395,6 +1413,7 @@ async def initialize_background_services(app: FastAPI):
         await _auto_index_documentation()
         await _init_log_forwarding()
         await _init_heartbeat_scheduler(app)
+        await _start_connector_scheduler()
         await _init_trigger_service(app)
         await _init_slm_reconciler(app)
         await _init_metrics_collection()
@@ -1442,6 +1461,15 @@ async def cleanup_services(app: FastAPI):
         if hasattr(app.state, "trigger_service") and app.state.trigger_service:
             await app.state.trigger_service.stop()
             logger.info("Trigger service stopped")
+
+        # Issue #6556: Stop connector scheduler local tasks
+        try:
+            from knowledge.connectors.scheduler import get_connector_scheduler
+
+            await get_connector_scheduler().stop_all()
+            logger.info("Connector scheduler stopped")
+        except Exception as _cs_err:
+            logger.warning("Connector scheduler shutdown failed: %s", _cs_err)
 
         # Issue #165: Stop documentation watcher
         try:
