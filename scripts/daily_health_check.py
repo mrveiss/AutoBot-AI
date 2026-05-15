@@ -19,7 +19,7 @@ class HealthCheck:
     def __init__(self):
         self.results = {}
         self.issues = []
-        self.backend_url = os.getenv('AUTOBOT_BACKEND_URL', 'http://localhost:8001')
+        self.backend_url = os.getenv('AUTOBOT_BACKEND_URL', 'http://10.255.255.254:8001')
         self.chromadb_url = os.getenv('CHROMADB_URL', 'http://localhost:8100')
         self.slm_url = os.getenv('SLM_URL', 'http://localhost:8000')
 
@@ -67,7 +67,7 @@ class HealthCheck:
         """Check 2: Backend API responding"""
         logger.info("Checking backend API...")
         try:
-            response = requests.get(f'{self.backend_url}/health', timeout=5)
+            response = requests.get(f'{self.backend_url}/api/health', timeout=5)
             is_healthy = response.status_code == 200
             self.results['backend_api'] = {
                 'status': 'OK' if is_healthy else f'FAILED ({response.status_code})',
@@ -91,7 +91,7 @@ class HealthCheck:
         logger.info("Checking ChromaDB...")
         try:
             # ChromaDB health endpoint
-            response = requests.get(f'{self.chromadb_url}/api/v1/heartbeat', timeout=5)
+            response = requests.get(f'{self.chromadb_url}/api/v2/heartbeat', timeout=5)
             is_healthy = response.status_code == 200
             self.results['chromadb'] = {
                 'status': 'OK' if is_healthy else f'FAILED ({response.status_code})',
@@ -114,7 +114,7 @@ class HealthCheck:
         """Check 4: SLM health"""
         logger.info("Checking SLM health...")
         try:
-            response = requests.get(f'{self.slm_url}/health', timeout=5)
+            response = requests.get(f'{self.slm_url}/api/health', timeout=5)
             is_healthy = response.status_code == 200
             self.results['slm_health'] = {
                 'status': 'OK' if is_healthy else f'FAILED ({response.status_code})',
