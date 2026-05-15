@@ -100,14 +100,12 @@ VALID_SCOPES: frozenset[str] = frozenset(
     }
 )
 
-# Minimum scopes required per agent type — least privilege first.
-# Unknown agent types receive only task:read.
+# Minimum scopes per agent_type — keys match agent_registry_service._tier_map values
+# ("coordinator", "specialist", "worker").  Unknown types fall to ["task:read"].
 _AGENT_TYPE_SCOPES: dict[str, list[str]] = {
-    "chat_agent": ["task:read", "mcp:knowledge"],
+    "coordinator": ["task:read", "task:write", "agent:invoke", "mcp:knowledge"],
+    "specialist": ["task:read", "task:write", "mcp:knowledge", "mcp:web_fetch"],
     "worker": ["task:read", "task:write"],
-    "automation_agent": ["task:read", "task:write", "mcp:knowledge", "mcp:web_fetch"],
-    "system_agent": ["task:read", "task:write", "agent:invoke", "mcp:filesystem"],
-    "admin_agent": ["task:read", "task:write", "agent:invoke", "mcp:knowledge", "mcp:web_fetch", "mcp:filesystem"],
 }
 _FALLBACK_SCOPES: list[str] = ["task:read"]
 
@@ -158,15 +156,7 @@ def _ttl() -> int:
 
 def _audience() -> str:
     """Resolve the expected ``aud`` claim from ``RUN_JWT_AUDIENCE``, defaulting to ``_DEFAULT_AUDIENCE``."""
-    val = os.environ.get(_ENV_AUDIENCE, "")
-    if not val:
-        logger.warning(
-            "%s is not set; using default audience %r — set it explicitly in production",
-            _ENV_AUDIENCE,
-            _DEFAULT_AUDIENCE,
-        )
-        return _DEFAULT_AUDIENCE
-    return val
+    return os.environ.get(_ENV_AUDIENCE, "") or _DEFAULT_AUDIENCE
 
 
 def mint_run_jwt(
@@ -300,7 +290,7 @@ async def validate_run_jwt(token: str) -> Dict[str, object]:
 def _extract_revoke_claims(token: str) -> Optional[Dict[str, object]]:
     """Decode token for revocation; returns None when already expired/invalid."""
     try:
-        return decode_jwt(token, _secret(), audience=_audience())
+        return decode_jwt(token, _secret())
     except JWTExpiredError:
         logger.debug("run_jwt: revoke called on already-expired token — noop")
         return None
@@ -424,11 +414,32 @@ async def refresh_run_jwt(token: str, run_id: str) -> str:
     exp = claims.get("exp")
     remaining = max(1, int(exp) - int(time.time())) if exp else _ttl()
 
-    # Mint first so the agent retains a valid token if minting fails.
-    # Only revoke the old token after the new one is in hand.
+    # Mint first so the agent retains a valid token even if the denylist
+    # write fails (MVA-170 regression prevention).
     new_token = mint_run_jwt(run_id, task_id, agent_id, tenant_id, scope)
 
-    await revoke_run_jwt_async(token, agent_id=agent_id)
+    # Atomic SET NX: only the first concurrent caller claims the revocation.
+    # The loser receives JWTRefreshConflictError and must reuse the winner's
+    # token.  Honours RUN_JWT_REDIS_FAIL_OPEN for environments where Redis
+    # availability is more critical than the revocation guarantee.
+    redis = await get_async_redis_client(database="main")
+    if redis is None:
+        if os.environ.get(_ENV_FAIL_OPEN) == "1":
+            logger.warning("run_jwt: Redis unavailable — refresh denylist skipped (RUN_JWT_REDIS_FAIL_OPEN=1)")
+        else:
+            raise JWTDecodeError(
+                "run_jwt: Redis unavailable — cannot perform atomic refresh "
+                "(set RUN_JWT_REDIS_FAIL_OPEN=1 to allow fail-open)"
+            )
+    else:
+        acquired = await redis.set(_DENYLIST_PREFIX + old_jti, "1", ex=remaining, nx=True)
+        if not acquired:
+            raise JWTRefreshConflictError(
+                f"run_jwt: concurrent refresh detected for jti={old_jti} — "
+                "use the token from the winning request"
+            )
+
+    _emit_revoke_audit(claims, agent_id, remaining)
 
     audit_record(
         user_id=agent_id,
