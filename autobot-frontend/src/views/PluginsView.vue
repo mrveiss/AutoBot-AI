@@ -7,7 +7,7 @@
           <h1 class="page-title">{{ $t('views.plugins.title') }}</h1>
           <p class="page-subtitle">{{ $t('views.plugins.subtitle') }}</p>
         </div>
-        <button v-if="!isMarketplaceActive" class="btn-refresh" :disabled="loading" @click="refresh" :title="$t('views.plugins.refresh')">
+        <button v-if="!isMarketplaceActive" class="btn-refresh" :disabled="loading" @click="refresh" :title="$t('views.plugins.refresh')" :aria-label="$t('views.plugins.refresh')">
           <svg
             class="refresh-icon"
             :class="{ spinning: loading }"

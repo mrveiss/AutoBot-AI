@@ -116,21 +116,21 @@
         </div>
         <div ref="cytoscapeContainer" class="cytoscape-container"></div>
         <div class="network-controls">
-          <button @click="zoomIn" :title="$t('charts.callGraph.controls.zoomIn')" :aria-label="$t('common.zoomIn')">
+          <button @click="zoomIn" :title="$t('charts.callGraph.controls.zoomIn')" :aria-label="$t('charts.callGraph.controls.zoomIn')">
             <i class="fas fa-plus"></i>
           </button>
           <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-          <button @click="zoomOut" :title="$t('charts.callGraph.controls.zoomOut')" :aria-label="$t('common.zoomOut')">
+          <button @click="zoomOut" :title="$t('charts.callGraph.controls.zoomOut')" :aria-label="$t('charts.callGraph.controls.zoomOut')">
             <i class="fas fa-minus"></i>
           </button>
-          <button @click="fitGraph" :title="$t('charts.callGraph.controls.fitToView')" :aria-label="$t('common.fitToView')">
+          <button @click="fitGraph" :title="$t('charts.callGraph.controls.fitToView')" :aria-label="$t('charts.callGraph.controls.fitToView')">
             <i class="fas fa-expand"></i>
           </button>
-          <button @click="toggleLayout" :title="$t('charts.callGraph.controls.toggleLayout')" :aria-label="$t('common.toggleLayout')">
+          <button @click="toggleLayout" :title="$t('charts.callGraph.controls.toggleLayout')" :aria-label="$t('charts.callGraph.controls.toggleLayout')">
             <i class="fas fa-th"></i>
           </button>
           <span class="control-separator">|</span>
-          <button @click="toggleFullscreen" :title="isFullscreen ? $t('charts.callGraph.controls.exitFullscreen') : $t('charts.callGraph.controls.fullscreen')" :aria-label="isFullscreen ? $t('common.exitFullscreen') : $t('common.fullscreen')">
+          <button @click="toggleFullscreen" :title="isFullscreen ? $t('charts.callGraph.controls.exitFullscreen') : $t('charts.callGraph.controls.fullscreen')" :aria-label="isFullscreen ? $t('charts.callGraph.controls.exitFullscreen') : $t('charts.callGraph.controls.fullscreen')">
             <i :class="isFullscreen ? 'fas fa-compress' : 'fas fa-expand-arrows-alt'"></i>
           </button>
         </div>
@@ -140,7 +140,7 @@
           <div class="detail-header">
             <span v-if="selectedNodeInfo.isAsync" class="async-badge">async</span>
             <span class="detail-name">{{ selectedNodeInfo.name }}</span>
-            <button class="close-btn" @click="selectedNodeInfo = null" :title="$t('charts.callGraph.controls.close')" :aria-label="$t('common.close')">
+            <button class="close-btn" @click="selectedNodeInfo = null" :title="$t('charts.callGraph.controls.close')" :aria-label="$t('charts.callGraph.controls.close')">
               <i class="fas fa-times"></i>
             </button>
           </div>
@@ -266,17 +266,17 @@
         </div>
         <div ref="clusterContainer" class="cluster-container"></div>
         <div class="network-controls cluster-controls">
-          <button @click="zoomInCluster" :title="$t('charts.callGraph.controls.zoomIn')" :aria-label="$t('common.zoomIn')">
+          <button @click="zoomInCluster" :title="$t('charts.callGraph.controls.zoomIn')" :aria-label="$t('charts.callGraph.controls.zoomIn')">
             <i class="fas fa-plus"></i>
           </button>
           <span class="zoom-level">{{ Math.round(clusterZoomLevel * 100) }}%</span>
-          <button @click="zoomOutCluster" :title="$t('charts.callGraph.controls.zoomOut')" :aria-label="$t('common.zoomOut')">
+          <button @click="zoomOutCluster" :title="$t('charts.callGraph.controls.zoomOut')" :aria-label="$t('charts.callGraph.controls.zoomOut')">
             <i class="fas fa-minus"></i>
           </button>
-          <button @click="fitClusterGraph" :title="$t('charts.callGraph.controls.fitToView')" :aria-label="$t('common.fitToView')">
+          <button @click="fitClusterGraph" :title="$t('charts.callGraph.controls.fitToView')" :aria-label="$t('charts.callGraph.controls.fitToView')">
             <i class="fas fa-expand"></i>
           </button>
-          <button @click="toggleClusterLayout" :title="$t('charts.callGraph.controls.toggleLayout')" :aria-label="$t('common.toggleLayout')">
+          <button @click="toggleClusterLayout" :title="$t('charts.callGraph.controls.toggleLayout')" :aria-label="$t('charts.callGraph.controls.toggleLayout')">
             <i class="fas fa-th"></i>
           </button>
         </div>
