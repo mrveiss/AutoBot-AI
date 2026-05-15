@@ -68,6 +68,8 @@ slm_frontend_build: true
 slm_secret_key: ""
 slm_encryption_key: ""
 slm_admin_password: ""
+# Service token for autobot-backend → SLM WebSocket auth (#7689)
+slm_auth_token: ""
 
 # ==========================================================
 # Main Backend Proxy (#1791)

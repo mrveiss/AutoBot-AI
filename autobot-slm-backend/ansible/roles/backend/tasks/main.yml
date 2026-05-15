@@ -95,6 +95,25 @@
     tls_cert_dir: /etc/autobot/certs
   tags: ['backend', 'config']
 
+# #7689: Read SLM_AUTH_TOKEN from /etc/autobot/slm-secrets.env on the target
+# host and expose it as backend_slm_auth_tok for the backend.env.j2 template.
+# The secrets file is written by the slm_manager role; on single-host deploys
+# it is already present before this role runs.
+- name: "Backend | Read SLM_AUTH_TOKEN from slm-secrets.env (#7689)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^SLM_AUTH_TOKEN=\K.*'
+      /etc/autobot/slm-secrets.env 2>/dev/null || true
+  register: _backend_slm_auth_tok
+  changed_when: false
+  failed_when: false
+  tags: ['backend', 'config']
+
+- name: "Backend | Set slm auth fact for env template (#7689)"
+  ansible.builtin.set_fact:
+    backend_slm_auth_tok: "{{ _backend_slm_auth_tok.stdout | default('') | trim }}"
+  tags: ['backend', 'config']
+
 - name: "Backend | Deploy /etc/autobot/autobot-backend.env"
   ansible.builtin.template:
     src: backend.env.j2
