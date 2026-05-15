@@ -31,13 +31,10 @@ def post_to_github(issue_number, comment_body):
         logger.error(f"Error posting to GitHub: {e}")
         return False
 
-def file_issue(title, body, labels=None):
+def file_issue(title, body):
     """File a new GitHub issue"""
     try:
         cmd = ['gh', 'issue', 'create', '--title', title, '--body', body]
-        if labels:
-            cmd.extend(['--label', ','.join(labels)])
-
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if result.returncode == 0:
             logger.info(f"Filed issue: {title}")
@@ -88,7 +85,7 @@ def main():
         logger.info("MVA-12 not found in GitHub, creating standalone health check report")
         # Create a new discovery issue with the report instead
         report_title = "discovery(health-check): Daily health check report"
-        file_issue(report_title, report, ['health-check', 'daily-report'])
+        file_issue(report_title, report)
 
     # File issues for each detected anomaly
     if issues and has_failures:
@@ -97,7 +94,7 @@ def main():
             # File discovery issue for each anomaly
             title = f"discovery(health-check): {issue[:60]}"
             body = f"Detected by daily health check:\n\n**Issue:** {issue}\n\n**Timestamp:** {datetime.now().isoformat()}\n\nPlease investigate and fix the underlying cause."
-            file_issue(title, body, ['health-check', 'tech-debt'])
+            file_issue(title, body)
     else:
         logger.info("No critical issues detected")
 
