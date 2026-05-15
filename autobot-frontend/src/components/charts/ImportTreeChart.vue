@@ -89,21 +89,21 @@
           </div>
           <div ref="cytoscapeContainer" class="cytoscape-container"></div>
           <div class="network-controls">
-            <button @click="zoomIn" :title="$t('charts.importTree.controls.zoomIn')">
+            <button @click="zoomIn" :title="$t('charts.importTree.controls.zoomIn')" :aria-label="$t('common.zoomIn')">
               <i class="fas fa-plus"></i>
             </button>
             <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-            <button @click="zoomOut" :title="$t('charts.importTree.controls.zoomOut')">
+            <button @click="zoomOut" :title="$t('charts.importTree.controls.zoomOut')" :aria-label="$t('common.zoomOut')">
               <i class="fas fa-minus"></i>
             </button>
-            <button @click="fitGraph" :title="$t('charts.importTree.controls.fitToView')">
+            <button @click="fitGraph" :title="$t('charts.importTree.controls.fitToView')" :aria-label="$t('common.fitToView')">
               <i class="fas fa-expand"></i>
             </button>
-            <button @click="toggleLayout" :title="$t('charts.importTree.controls.toggleLayout')">
+            <button @click="toggleLayout" :title="$t('charts.importTree.controls.toggleLayout')" :aria-label="$t('common.toggleLayout')">
               <i class="fas fa-th"></i>
             </button>
             <span class="control-separator">|</span>
-            <button @click="toggleFullscreen" :title="isFullscreen ? $t('charts.importTree.controls.exitFullscreen') : $t('charts.importTree.controls.fullscreen')">
+            <button @click="toggleFullscreen" :title="isFullscreen ? $t('charts.importTree.controls.exitFullscreen') : $t('charts.importTree.controls.fullscreen')" :aria-label="isFullscreen ? $t('common.exitFullscreen') : $t('common.fullscreen')">
               <i :class="isFullscreen ? 'fas fa-compress' : 'fas fa-expand-arrows-alt'"></i>
             </button>
           </div>
@@ -113,7 +113,7 @@
             <div class="detail-header">
               <span class="detail-icon">{{ getFileIcon(selectedNode.path) }}</span>
               <span class="detail-name">{{ selectedNode.shortName }}</span>
-              <button class="close-btn" @click="selectedNode = null" :title="$t('charts.importTree.controls.close')">
+              <button class="close-btn" @click="selectedNode = null" :title="$t('charts.importTree.controls.close')" :aria-label="$t('common.close')">
                 <i class="fas fa-times"></i>
               </button>
             </div>
