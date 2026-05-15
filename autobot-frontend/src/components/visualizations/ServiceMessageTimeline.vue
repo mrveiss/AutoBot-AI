@@ -11,18 +11,18 @@
     <div class="smt-header">
       <h3>{{ t('serviceMessages.title') }}</h3>
       <div class="smt-controls">
-        <select v-model="senderFilter" class="smt-select" @change="refresh">
+        <select v-model="senderFilter" class="smt-select" aria-label="Filter by sender" @change="refresh">
           <option value="">{{ t('serviceMessages.allSenders') }}</option>
           <option v-for="s in senderOptions" :key="s" :value="s">{{ s }}</option>
         </select>
-        <select v-model="typeFilter" class="smt-select" @change="refresh">
+        <select v-model="typeFilter" class="smt-select" aria-label="Filter by message type" @change="refresh">
           <option value="">{{ t('serviceMessages.allTypes') }}</option>
           <option v-for="mt in typeOptions" :key="mt" :value="mt">{{ mt }}</option>
         </select>
-        <button class="smt-btn" :class="{ active: isPolling }" @click="togglePolling">
+        <button class="smt-btn" :class="{ active: isPolling }" :aria-label="isPolling ? t('serviceMessages.stopPolling') : t('serviceMessages.startPolling')" @click="togglePolling">
           <i :class="isPolling ? 'fas fa-pause' : 'fas fa-play'"></i>
         </button>
-        <button class="smt-btn" @click="refresh">
+        <button class="smt-btn" :aria-label="t('common.refresh')" @click="refresh">
           <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
         </button>
       </div>
@@ -62,7 +62,7 @@
     <div v-if="selected" class="smt-detail">
       <div class="smt-detail-head">
         <strong>{{ t('serviceMessages.messageDetail') }}</strong>
-        <button class="smt-btn" @click="selected = null"><i class="fas fa-times"></i></button>
+        <button class="smt-btn" :aria-label="t('common.close')" @click="selected = null"><i class="fas fa-times"></i></button>
       </div>
       <table class="smt-table">
         <tr><td>ID</td><td><code>{{ selected.msg_id }}</code></td></tr>
@@ -71,7 +71,7 @@
         <tr><td>{{ t('serviceMessages.type') }}</td><td><span class="smt-badge" :class="`t-${selected.msg_type}`">{{ selected.msg_type }}</span></td></tr>
         <tr>
           <td>{{ t('serviceMessages.correlationId') }}</td>
-          <td><code class="smt-link" @click="loadChain(selected!.correlation_id)">{{ selected.correlation_id.slice(0, 12) }}… <i class="fas fa-link"></i></code></td>
+          <td><button class="smt-link-btn" :aria-label="`View correlation chain for ${selected.correlation_id.slice(0, 12)}`" @click="loadChain(selected!.correlation_id)"><code>{{ selected.correlation_id.slice(0, 12) }}…</code> <i class="fas fa-link"></i></button></td>
         </tr>
       </table>
       <pre class="smt-pre">{{ formatPayload(selected.content) }}</pre>
@@ -193,6 +193,7 @@ onMounted(() => refresh())
 .smt-table td:last-child { color:var(--text-primary,#e0e0ff); }
 .smt-table code { font-family:'JetBrains Mono',monospace; font-size: var(--text-xs); background:var(--bg-primary,#1a1a2e); padding:var(--spacing-0-5) var(--spacing-1-5); border-radius: var(--radius-default); }
 .smt-link { cursor:pointer; } .smt-link:hover { color:var(--accent-color,#4a90d9)!important; }
+.smt-link-btn { background:none; border:none; cursor:pointer; color:var(--text-primary,#e0e0ff); padding:0; font-family:inherit; font-size:inherit; align-items:center; gap:var(--spacing-1); display:inline-flex; } .smt-link-btn:hover { color:var(--accent-color,#4a90d9)!important; } .smt-link-btn code { font-family:'JetBrains Mono',monospace; font-size: var(--text-xs); }
 .smt-pre { background:var(--bg-primary,#1a1a2e); padding:var(--spacing-2) var(--spacing-3); border-radius: var(--radius-default); font-size: var(--text-xs); font-family:'JetBrains Mono',monospace; color:var(--text-secondary,#a0a0c0); overflow-x:auto; max-height:120px; margin:var(--spacing-2) var(--spacing-0) var(--spacing-0); }
 .smt-chain { margin-top:var(--spacing-3); border-top:1px solid var(--border-color,#2a2a4a); padding-top:var(--spacing-2); }
 .smt-chain strong { font-size: var(--text-sm); color:var(--text-primary,#e0e0ff); }
