@@ -18,6 +18,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.status_enums import AgentStatus  # #7504 consolidation
+
 # Import communication protocol
 from constants.threshold_constants import TimingConstants
 from protocols.agent_communication import (
@@ -28,7 +30,6 @@ from protocols.agent_communication import (
     StandardMessage,
     get_communication_manager,
 )
-from autobot_shared.status_enums import AgentStatus  # #7504 consolidation
 
 logger = logging.getLogger(__name__)
 

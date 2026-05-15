@@ -32,11 +32,10 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
+from llm_interface_pkg.model_param_registry import apply_model_defaults, apply_prompt_prefix
 from llm_interface_pkg.models import LLMRequest
 
 from .base_provider import BaseProvider
-
-from llm_interface_pkg.model_param_registry import apply_model_defaults, apply_prompt_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -333,7 +332,6 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     import os
 
     from autobot_shared.ssot_config import get_config as get_ssot_config
-
     from llm_interface_pkg.providers.anthropic import AnthropicProvider
     from llm_interface_pkg.providers.custom_openai import CustomOpenAIProvider
     from llm_interface_pkg.providers.groq import GroqProvider

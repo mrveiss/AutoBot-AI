@@ -33,23 +33,23 @@ Legacy shared infra (retained from #3185):
 
 # Cloud API providers (Phase 2 — moved from llm_providers/)
 from .anthropic import AnthropicProvider
-from .custom_openai import CustomOpenAIProvider
-from .groq import GROQ_MODELS, GroqProvider
-from .huggingface import HuggingFaceProvider
-from .nous_portal import NOUS_MODELS, NousPortalProvider
-from .openai import OpenAIProvider
-from .openrouter import OpenRouterProvider
-
-# Local/self-hosted providers
-from .mock_handler import LocalHandler, MockHandler
-from .ollama import OllamaProvider as _InnerOllamaProvider  # inner delegate
-from .ollama_provider import OllamaProvider  # registry-facing
-from .transformers_provider import TransformersProvider
-from .vllm import RECOMMENDED_MODELS, VLLMModelManager, VLLMProvider
-from .vllm_base import VLLMBaseProvider
 
 # Utilities
 from .chat_template_loader import DEFAULT_TEMPLATE, render_chat_template
+from .custom_openai import CustomOpenAIProvider
+from .groq import GROQ_MODELS, GroqProvider
+from .huggingface import HuggingFaceProvider
+
+# Local/self-hosted providers
+from .mock_handler import LocalHandler, MockHandler
+from .nous_portal import NOUS_MODELS, NousPortalProvider
+from .ollama import OllamaProvider as _InnerOllamaProvider  # inner delegate
+from .ollama_provider import OllamaProvider  # registry-facing
+from .openai import OpenAIProvider
+from .openrouter import OpenRouterProvider
+from .transformers_provider import TransformersProvider
+from .vllm import RECOMMENDED_MODELS, VLLMModelManager, VLLMProvider
+from .vllm_base import VLLMBaseProvider
 
 __all__ = [
     # Cloud API providers

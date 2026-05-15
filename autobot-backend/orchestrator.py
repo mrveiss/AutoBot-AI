@@ -105,8 +105,8 @@ except ImportError:
             return {"error": "Agent manager not available", "agent_name": agent_name}
 
 
-from autobot_shared.status_enums import WorkflowStatus  # #6973 consolidation
 from autobot_shared.status_enums import Priority as TaskPriority  # #7504 consolidation
+from autobot_shared.status_enums import WorkflowStatus  # #6973 consolidation
 
 try:
     from workflow_templates import WorkflowStep

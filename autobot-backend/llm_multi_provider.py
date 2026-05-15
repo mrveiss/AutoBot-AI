@@ -30,7 +30,6 @@ from llm_interface_pkg import BaseProvider, ProviderRegistry, get_provider_regis
 # Re-export canonical types from their authoritative modules
 # ---------------------------------------------------------------------------
 from llm_interface_pkg.models import LLMRequest, LLMResponse
-from llm_interface_pkg.types import LLMType, ProviderType
 from llm_interface_pkg.providers import (
     AnthropicProvider,
     CustomOpenAIProvider,
@@ -42,6 +41,7 @@ from llm_interface_pkg.providers import (
     OpenRouterProvider,
     VLLMProvider,
 )
+from llm_interface_pkg.types import LLMType, ProviderType
 
 logger = logging.getLogger(__name__)
 

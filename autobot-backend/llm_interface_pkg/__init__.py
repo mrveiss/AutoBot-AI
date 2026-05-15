@@ -38,9 +38,6 @@ from .hardware import TORCH_AVAILABLE, HardwareDetector
 
 # Mock providers
 from .mock_providers import LocalLLM, MockPalm, local_llm, palm
-
-# Models
-from .models import ChatMessage, LLMRequest, LLMResponse, LLMSettings
 from .model_param_registry import (
     apply_model_defaults,
     apply_prompt_prefix,
@@ -49,6 +46,9 @@ from .model_param_registry import (
     get_provider_model_id,
     resolve_model_name,
 )
+
+# Models
+from .models import ChatMessage, LLMRequest, LLMResponse, LLMSettings
 from .ollama_helpers import call_ollama_generate
 from .provider_registry import ProviderRegistry, get_provider_registry
 
