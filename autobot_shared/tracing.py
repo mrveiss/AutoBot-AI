@@ -80,7 +80,7 @@ def _create_tracer_provider(service_name: str, service_version: Optional[str]):
     resource = Resource.create(
         {
             "service.name": service_name,
-            "service.version": version,  # type: ignore[dict-item]  # GH#7105: OTel stubs expect int|float|Sequence but str is valid at runtime
+            "service.version": version,  # type: ignore[dict-item]  # GH#7105: OTel stubs expect int|float|Sequence but str is valid at runtime  # noqa: E501
             "deployment.environment": os.getenv("AUTOBOT_ENVIRONMENT", "development"),
         }
     )
