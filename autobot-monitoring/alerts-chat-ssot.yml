@@ -2,18 +2,35 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
-# Phase 4 (#7590): Prometheus alert rules for chat SSOT observability.
-# These rules fire when the invariant established by Phases 2+3 is violated.
+# Phase 4 (#7590): Prometheus rules for chat SSOT observability.
+# Proves the invariant from Phases 2+3 holds in production.
+#
+# Thresholds:
+#   AUTOBOT_CHAT_SSOT_CARDINALITY_THRESHOLD — overrides the 200-session default
+#   (set this to expected_session_count * 2 for your deployment)
 ---
 
 groups:
-  - name: chat_ssot
+  - name: chat_ssot_recording
     interval: 1m
     rules:
-      # Fires when chat:recent sorted-set holds more than 2× the expected
-      # session count — indicates stale / leaked session entries.
-      # Tune `expected_session_count` via the recording rule below or an
-      # external label; start with the known-good steady-state value.
+      # Rolling send rate — useful for capacity planning alongside cardinality.
+      - record: autobot_chat_send_rate5m
+        expr: rate(autobot_chat_messages_sent_total{event_type="chat_send"}[5m])
+
+      # Ratio of stored responses to sends — should stay near 1.0 when SSOT holds.
+      # A value < 1.0 indicates lost responses; > 1.0 indicates duplicate stores.
+      - record: autobot_chat_response_store_ratio
+        expr: >
+          rate(autobot_chat_messages_sent_total{event_type="chat_response_stored"}[5m])
+          /
+          clamp_min(rate(autobot_chat_messages_sent_total{event_type="chat_send"}[5m]), 0.001)
+
+  - name: chat_ssot_alerts
+    interval: 1m
+    rules:
+      # Fires when chat:recent sorted-set holds more sessions than expected.
+      # Tune by setting AUTOBOT_CHAT_SSOT_CARDINALITY_THRESHOLD; default 200.
       - alert: ChatRecentCardinalityHigh
         expr: autobot_chat_recent_cardinality > 200
         for: 5m
@@ -24,13 +41,30 @@ groups:
         annotations:
           summary: "chat:recent cardinality is unexpectedly high"
           description: >
-            autobot_chat_recent_cardinality={{ $value }} exceeds threshold.
-            Expected: ≤ expected_session_count × 2.
-            Investigate for session leaks or missing ZREMRANGEBYRANK trim.
+            autobot_chat_recent_cardinality={{ $value }} has been above the threshold
+            for 5 minutes. Expected ≤ expected_session_count × 2.
+            Check for session leaks, missing ZREMRANGEBYRANK trim, or a deployment
+            that bypassed Phase 2 session-ID enforcement.
+          runbook_url: "https://github.com/mrveiss/AutoBot-AI/issues/7590"
 
-      # Fires when disk chat file count grows faster than 2× the 24-hour baseline.
-      # Populated by the nightly check_chat_disk_files.sh script which pushes
-      # the gauge via the Prometheus push gateway.
+      # Fires when the response/send ratio diverges from 1.0 — indicates AI responses
+      # are being stored to a different session than the originating send (SSOT violation).
+      - alert: ChatResponseSessionDrift
+        expr: autobot_chat_response_store_ratio < 0.9 or autobot_chat_response_store_ratio > 1.1
+        for: 5m
+        labels:
+          severity: warning
+          component: chat
+          phase: ssot-phase4
+        annotations:
+          summary: "Chat response/send ratio drifted from 1.0"
+          description: >
+            autobot_chat_response_store_ratio={{ $value }}.
+            Ratio should be 1.0 ± 0.1 when SSOT holds.
+            Values < 0.9 indicate dropped responses; > 1.1 indicate duplicate stores.
+
+      # Fires when disk chat file count grows faster than 2× the nightly baseline.
+      # Populated by scripts/check_chat_disk_files.sh via Prometheus Pushgateway.
       - alert: ChatDiskFileCountSpike
         expr: autobot_chat_disk_file_count > 2 * autobot_chat_disk_file_count_baseline
         for: 10m
@@ -39,8 +73,8 @@ groups:
           component: chat
           phase: ssot-phase4
         annotations:
-          summary: "Chat disk file count spiked >2× baseline"
+          summary: "Chat disk file count spiked > 2× baseline"
           description: >
             autobot_chat_disk_file_count={{ $value }}.
-            Baseline: {{ $labels.baseline }}.
-            Check data/chats/ for unexpected session files.
+            Check data/chats/ for unexpected session files or a runaway writer.
+          runbook_url: "https://github.com/mrveiss/AutoBot-AI/issues/7590"

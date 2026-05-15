@@ -20,7 +20,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-# Phase 4 (#7590): feature flag — default-off; enable in staging then flip to default-on
+# Phase 4 (#7590): feature flag — default-off; enable in staging then flip to default-on.
+# Reads env at import time (process restart required to change).
 _CHAT_SSOT_STRICT = os.environ.get("AUTOBOT_CHAT_SSOT_STRICT", "false").lower() == "true"
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
@@ -313,6 +314,12 @@ def _process_streaming_groups(merged: List[Dict]) -> List[Dict]:
 router = APIRouter(tags=["chat"])
 logger = logging.getLogger(__name__)
 
+# Phase 4 (#7590): log feature flag state at startup so operators know which mode is active
+logger.info(
+    "AUTOBOT_CHAT_SSOT_STRICT=%s",
+    "true" if _CHAT_SSOT_STRICT else "false (default — session_id enforcement via schema only)",
+)
+
 # Include session management router
 from api.chat_sessions import router as sessions_router
 
@@ -462,13 +469,17 @@ async def _store_and_log_user_message(
         },
     )
 
-    # Phase 4 (#7590): structured telemetry for SSOT cardinality query
-    # Enables: count(distinct session_id per chat_send) — P99 must be ≤ 1.0
+    # Phase 4 (#7590): structured JSON telemetry for SSOT cardinality query.
+    # Log query: count(distinct session_id where event="chat_send") per request — P99 ≤ 1.0.
     logger.info(
-        "telemetry event=chat_send session_id=%s message_id=%s",
-        session_id,
-        user_message_id,
+        json.dumps({"event": "chat_send", "session_id": session_id, "message_id": user_message_id})
     )
+    try:
+        from monitoring.prometheus_metrics import get_metrics_manager
+
+        get_metrics_manager().record_chat_message_sent("chat_send")
+    except Exception:
+        pass  # Metrics must never break message flow
 
     return user_message_id
 
@@ -620,12 +631,18 @@ async def _store_and_log_ai_response(
         },
     )
 
-    # Phase 4 (#7590): structured telemetry for SSOT response-store cardinality
+    # Phase 4 (#7590): structured JSON telemetry — mirrors chat_send shape for Loki correlation.
     logger.info(
-        "telemetry event=chat_response_stored session_id=%s message_id=%s",
-        session_id,
-        ai_message_id,
+        json.dumps(
+            {"event": "chat_response_stored", "session_id": session_id, "message_id": ai_message_id}
+        )
     )
+    try:
+        from monitoring.prometheus_metrics import get_metrics_manager
+
+        get_metrics_manager().record_chat_message_sent("chat_response_stored")
+    except Exception:
+        pass  # Metrics must never break message flow
 
     return ai_message_id
 

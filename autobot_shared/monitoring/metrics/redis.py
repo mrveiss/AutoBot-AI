@@ -152,12 +152,6 @@ class RedisMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # Phase 4 (#7590): SSOT cardinality gauge — alert when > expected * 2
-        self.chat_recent_cardinality = Gauge(
-            "autobot_chat_recent_cardinality",
-            "Number of sessions in the chat:recent sorted set",
-            registry=self.registry,
-        )
 
         self.keys_expired = Counter(
             "autobot_redis_keys_expired_total",
@@ -338,10 +332,6 @@ class RedisMetricsRecorder(BaseMetricsRecorder):
     def set_key_count(self, database: str, count: int) -> None:
         """Set total key count."""
         self.keys_total.labels(database=database).set(count)
-
-    def set_chat_recent_cardinality(self, count: int) -> None:
-        """Update the chat:recent sorted-set cardinality gauge (#7590)."""
-        self.chat_recent_cardinality.set(count)
 
     def record_key_expired(self, database: str) -> None:
         """Record a key expiration."""
