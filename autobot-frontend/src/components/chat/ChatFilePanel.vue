@@ -7,13 +7,13 @@
         <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('chat.filePanel.title') }}</h3>
       </div>
       <div class="flex items-center gap-1">
-        <button @click="showCreateDialog = true" class="action-btn" :title="$t('chat.filePanel.newFile')">
+        <button @click="showCreateDialog = true" class="action-btn" :title="$t('chat.filePanel.newFile')" :aria-label="$t('chat.filePanel.newFile')">
           <i class="fas fa-plus text-xs"></i>
         </button>
-        <button @click="viewMode = viewMode === 'list' ? 'grid' : 'list'" class="action-btn" :title="viewMode === 'list' ? $t('chat.filePanel.gridView') : $t('chat.filePanel.listView')">
+        <button @click="viewMode = viewMode === 'list' ? 'grid' : 'list'" class="action-btn" :title="viewMode === 'list' ? $t('chat.filePanel.gridView') : $t('chat.filePanel.listView')" :aria-label="viewMode === 'list' ? $t('chat.filePanel.gridView') : $t('chat.filePanel.listView')">
           <i :class="viewMode === 'list' ? 'fas fa-th' : 'fas fa-list'" class="text-xs"></i>
         </button>
-        <button @click="$emit('close')" class="action-btn" :title="$t('chat.filePanel.closePanel')">
+        <button @click="$emit('close')" class="action-btn" :title="$t('chat.filePanel.closePanel')" :aria-label="$t('chat.filePanel.closePanel')">
           <i class="fas fa-times text-xs"></i>
         </button>
       </div>
@@ -114,6 +114,7 @@
         <button
           @click="clearError"
           class="text-red-400 hover:text-red-600 transition-colors shrink-0"
+          :aria-label="$t('common.dismiss')"
         >
           <i class="fas fa-times text-xs"></i>
         </button>
@@ -199,6 +200,7 @@
               @click="handlePreview(file.file_id)"
               class="action-btn"
               :title="$t('chat.filePanel.preview')"
+              :aria-label="$t('chat.filePanel.preview')"
             >
               <i class="fas fa-eye text-xs"></i>
             </button>
@@ -207,6 +209,7 @@
               @click="startEdit(file.file_id, file.filename)"
               class="action-btn"
               :title="$t('common.edit')"
+              :aria-label="$t('common.edit')"
             >
               <i class="fas fa-edit text-xs"></i>
             </button>
@@ -214,6 +217,7 @@
               @click="handleDownload(file.file_id, file.filename)"
               class="action-btn"
               :title="$t('chat.filePanel.download')"
+              :aria-label="$t('common.download')"
             >
               <i class="fas fa-download text-xs"></i>
             </button>
@@ -221,6 +225,7 @@
               @click="handleDelete(file.file_id, file.filename)"
               class="action-btn text-red-400 hover:text-red-600"
               :title="$t('common.delete')"
+              :aria-label="$t('common.delete')"
             >
               <i class="fas fa-trash text-xs"></i>
             </button>
@@ -284,7 +289,7 @@
         <div class="bg-autobot-bg-card rounded-lg shadow-xl w-[480px] max-h-[80vh] flex flex-col p-4">
           <div class="flex items-center justify-between mb-3">
             <h4 class="text-sm font-semibold text-autobot-text-primary truncate">{{ editingFileName }}</h4>
-            <button @click="editingFileId = null" class="action-btn"><i class="fas fa-times text-xs"></i></button>
+            <button @click="editingFileId = null" class="action-btn" :aria-label="$t('common.close')"><i class="fas fa-times text-xs"></i></button>
           </div>
           <textarea
             v-model="editingContent"
