@@ -1,0 +1,46 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Phase 4 (#7590): Prometheus alert rules for chat SSOT observability.
+# These rules fire when the invariant established by Phases 2+3 is violated.
+---
+
+groups:
+  - name: chat_ssot
+    interval: 1m
+    rules:
+      # Fires when chat:recent sorted-set holds more than 2× the expected
+      # session count — indicates stale / leaked session entries.
+      # Tune `expected_session_count` via the recording rule below or an
+      # external label; start with the known-good steady-state value.
+      - alert: ChatRecentCardinalityHigh
+        expr: autobot_chat_recent_cardinality > 200
+        for: 5m
+        labels:
+          severity: warning
+          component: chat
+          phase: ssot-phase4
+        annotations:
+          summary: "chat:recent cardinality is unexpectedly high"
+          description: >
+            autobot_chat_recent_cardinality={{ $value }} exceeds threshold.
+            Expected: ≤ expected_session_count × 2.
+            Investigate for session leaks or missing ZREMRANGEBYRANK trim.
+
+      # Fires when disk chat file count grows faster than 2× the 24-hour baseline.
+      # Populated by the nightly check_chat_disk_files.sh script which pushes
+      # the gauge via the Prometheus push gateway.
+      - alert: ChatDiskFileCountSpike
+        expr: autobot_chat_disk_file_count > 2 * autobot_chat_disk_file_count_baseline
+        for: 10m
+        labels:
+          severity: warning
+          component: chat
+          phase: ssot-phase4
+        annotations:
+          summary: "Chat disk file count spiked >2× baseline"
+          description: >
+            autobot_chat_disk_file_count={{ $value }}.
+            Baseline: {{ $labels.baseline }}.
+            Check data/chats/ for unexpected session files.

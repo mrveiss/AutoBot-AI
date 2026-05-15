@@ -632,6 +632,10 @@ class PrometheusMetricsManager:
         """Set Redis total key count."""
         self._redis.set_key_count(database, count)
 
+    def set_chat_recent_cardinality(self, count: int) -> None:
+        """Update the chat:recent sorted-set cardinality gauge (#7590)."""
+        self._redis.set_chat_recent_cardinality(count)
+
     def set_redis_server_available(self, database: str, available: bool) -> None:
         """Set Redis server availability status."""
         self._redis.set_server_available(database, available)

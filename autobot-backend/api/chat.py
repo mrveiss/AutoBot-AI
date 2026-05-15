@@ -20,6 +20,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+# Phase 4 (#7590): feature flag — default-off; enable in staging then flip to default-on
+_CHAT_SSOT_STRICT = os.environ.get("AUTOBOT_CHAT_SSOT_STRICT", "false").lower() == "true"
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -334,6 +337,8 @@ def _validate_session_id(session_id: Optional[str]) -> None:
     Validate session ID format if provided.
 
     Issue #281: Extracted helper for session validation.
+    Phase 4 (#7590): in SSOT strict mode also reject missing session_id so
+    every message is tied to a known session (AUTOBOT_CHAT_SSOT_STRICT).
 
     Args:
         session_id: Session ID to validate
@@ -341,14 +346,18 @@ def _validate_session_id(session_id: Optional[str]) -> None:
     Raises:
         ValidationError: If session ID format is invalid
     """
+    (
+        AutoBotError,
+        InternalError,
+        ResourceNotFoundError,
+        ValidationError,
+        get_error_code,
+    ) = get_exceptions_lazy()
+
+    if _CHAT_SSOT_STRICT and not session_id:
+        raise ValidationError("session_id is required (AUTOBOT_CHAT_SSOT_STRICT)")
+
     if session_id and not validate_chat_session_id(session_id):
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
         raise ValidationError("Invalid session ID format")
 
 
@@ -451,6 +460,14 @@ async def _store_and_log_user_message(
             "content_length": len(message.content),
             "role": message.role,
         },
+    )
+
+    # Phase 4 (#7590): structured telemetry for SSOT cardinality query
+    # Enables: count(distinct session_id per chat_send) — P99 must be ≤ 1.0
+    logger.info(
+        "telemetry event=chat_send session_id=%s message_id=%s",
+        session_id,
+        user_message_id,
     )
 
     return user_message_id
@@ -601,6 +618,13 @@ async def _store_and_log_ai_response(
             "content_length": len(ai_response.get("content", "")),
             "request_id": request_id,
         },
+    )
+
+    # Phase 4 (#7590): structured telemetry for SSOT response-store cardinality
+    logger.info(
+        "telemetry event=chat_response_stored session_id=%s message_id=%s",
+        session_id,
+        ai_message_id,
     )
 
     return ai_message_id

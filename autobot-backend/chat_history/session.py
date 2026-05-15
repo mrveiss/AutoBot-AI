@@ -338,6 +338,23 @@ class SessionMixin:
                 0,
                 -(_CHAT_RECENT_MAX_ENTRIES + 1),
             )
+            # Phase 4 (#7590): emit cardinality gauge for SSOT observability
+            # Alert threshold: ZCARD > expected_session_count * 2
+            try:
+                cardinality = await run_in_chat_io_executor(
+                    self.redis_client.zcard, REDIS_KEY.CHAT_RECENT
+                )
+                logger.info(
+                    "telemetry event=chat_recent_cardinality value=%d", cardinality
+                )
+                try:
+                    from monitoring.prometheus_metrics import get_metrics_manager
+
+                    get_metrics_manager().set_chat_recent_cardinality(cardinality)
+                except Exception:
+                    pass  # Metrics export must never break session persistence
+            except Exception as card_err:
+                logger.warning("Failed to read chat:recent cardinality: %s", card_err)
             logger.debug("Cached session %s in Redis", session_id)
         except Exception as e:
             logger.error("Failed to cache session in Redis: %s", e)
