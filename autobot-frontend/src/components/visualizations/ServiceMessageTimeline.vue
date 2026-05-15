@@ -71,7 +71,7 @@
         <tr><td>{{ t('serviceMessages.type') }}</td><td><span class="smt-badge" :class="`t-${selected.msg_type}`">{{ selected.msg_type }}</span></td></tr>
         <tr>
           <td>{{ t('serviceMessages.correlationId') }}</td>
-          <td><button class="smt-link-btn" :aria-label="`View correlation chain for ${selected.correlation_id.slice(0, 12)}`" @click="loadChain(selected!.correlation_id)"><code>{{ selected.correlation_id.slice(0, 12) }}…</code> <i class="fas fa-link"></i></button></td>
+          <td><code class="smt-link" role="button" tabindex="0" :aria-label="`View correlation chain for ${selected.correlation_id.slice(0, 12)}`" @click="loadChain(selected!.correlation_id)" @keydown.enter="loadChain(selected!.correlation_id)" @keydown.space.prevent="loadChain(selected!.correlation_id)">{{ selected.correlation_id.slice(0, 12) }}… <i class="fas fa-link"></i></code></td>
         </tr>
       </table>
       <pre class="smt-pre">{{ formatPayload(selected.content) }}</pre>
@@ -193,7 +193,6 @@ onMounted(() => refresh())
 .smt-table td:last-child { color:var(--text-primary,#e0e0ff); }
 .smt-table code { font-family:'JetBrains Mono',monospace; font-size: var(--text-xs); background:var(--bg-primary,#1a1a2e); padding:var(--spacing-0-5) var(--spacing-1-5); border-radius: var(--radius-default); }
 .smt-link { cursor:pointer; } .smt-link:hover { color:var(--accent-color,#4a90d9)!important; }
-.smt-link-btn { background:none; border:none; cursor:pointer; color:var(--text-primary,#e0e0ff); padding:0; font-family:inherit; font-size:inherit; align-items:center; gap:var(--spacing-1); display:inline-flex; } .smt-link-btn:hover { color:var(--accent-color,#4a90d9)!important; } .smt-link-btn code { font-family:'JetBrains Mono',monospace; font-size: var(--text-xs); }
 .smt-pre { background:var(--bg-primary,#1a1a2e); padding:var(--spacing-2) var(--spacing-3); border-radius: var(--radius-default); font-size: var(--text-xs); font-family:'JetBrains Mono',monospace; color:var(--text-secondary,#a0a0c0); overflow-x:auto; max-height:120px; margin:var(--spacing-2) var(--spacing-0) var(--spacing-0); }
 .smt-chain { margin-top:var(--spacing-3); border-top:1px solid var(--border-color,#2a2a4a); padding-top:var(--spacing-2); }
 .smt-chain strong { font-size: var(--text-sm); color:var(--text-primary,#e0e0ff); }
