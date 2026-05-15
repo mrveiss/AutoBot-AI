@@ -34,6 +34,7 @@ from typing import Any, Dict, List, Optional
 
 from llm_interface_pkg.model_param_registry import apply_model_defaults, apply_prompt_prefix
 from llm_interface_pkg.models import LLMRequest
+from prepared_facts import ProviderRuntimeFact
 
 from .base_provider import BaseProvider
 
@@ -59,6 +60,7 @@ class ProviderRegistry:
         self._health_cache: Dict[str, tuple[bool, float]] = {}
         self._health_lock = asyncio.Lock()
         self._initialized = False
+        self._provider_facts: Dict[str, ProviderRuntimeFact] = {}
 
     # ------------------------------------------------------------------
     # Registration
@@ -77,6 +79,7 @@ class ProviderRegistry:
         if name in self._providers:
             logger.warning("Replacing existing provider: %s", name)
         self._providers[name] = provider
+        self._provider_facts[name] = ProviderRuntimeFact.build_at_startup(name, provider)
         logger.info("Registered provider: %s", name)
 
     def unregister(self, name: str) -> None:
@@ -84,6 +87,7 @@ class ProviderRegistry:
         if name in self._providers:
             del self._providers[name]
             self._health_cache.pop(name, None)
+            self._provider_facts.pop(name, None)
             logger.info("Unregistered provider: %s", name)
 
     def set_fallback_chain(self, chain: List[str]) -> None:
@@ -279,6 +283,10 @@ class ProviderRegistry:
         instead of accessing the private attribute directly.
         """
         return self._providers.get(name)
+
+    def get_provider_facts(self) -> Dict[str, ProviderRuntimeFact]:
+        """Return a snapshot of pre-computed provider capability facts (#7370)."""
+        return dict(self._provider_facts)
 
     def list_providers(self) -> List[Dict[str, object]]:
         """Return a serialisable summary of registered providers."""

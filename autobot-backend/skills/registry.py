@@ -15,6 +15,7 @@ import threading
 from typing import Any, Dict, List, Optional, Set, Type
 
 from autobot_shared.singleton_factory import lazy_singleton
+from prepared_facts import SkillRoutingIndex
 from skills.base_skill import BaseSkill, SkillHealth, SkillManifest, SkillStatus
 from skills.dependency_resolver import check_missing_dependencies, resolve_dependencies
 
@@ -31,6 +32,7 @@ class SkillRegistry:
         self._skills: Dict[str, BaseSkill] = {}
         self._skill_classes: Dict[str, Type[BaseSkill]] = {}
         self._lock = threading.Lock()
+        self._routing_index: Optional[SkillRoutingIndex] = None
 
     def register(self, skill_class: Type[BaseSkill]) -> None:
         """Register a skill class and create its instance.
@@ -53,6 +55,27 @@ class SkillRegistry:
         # BlockedPlanResumer subscriber. Fire-and-forget; never raises if
         # Redis is unavailable (logged at debug).
         self._publish_skill_promoted(name, manifest.tools)
+        self._rebuild_routing_index()
+
+    def _rebuild_routing_index(self) -> None:
+        """Rebuild the pre-tokenized skill routing index from current registry state.
+
+        Called after every register() and unregister() so hot-path lookups are
+        always O(1) dict access into a frozen snapshot — no per-request regex.
+        Acquires the lock only to snapshot the skill list; index construction
+        runs outside the lock so tokenization work does not block concurrents.
+        """
+        with self._lock:
+            skill_list = self.list_skills()
+        try:
+            self._routing_index = SkillRoutingIndex.build_at_startup(skill_list)
+        except Exception as exc:
+            logger.warning("Failed to rebuild routing index: %s", exc)
+            self._routing_index = None
+
+    def get_routing_index(self) -> Optional[SkillRoutingIndex]:
+        """Return the current pre-built skill routing index, or None if not built."""
+        return self._routing_index
 
     @staticmethod
     def _publish_skill_promoted(name: str, tools: List[str]) -> None:
@@ -100,7 +123,8 @@ class SkillRegistry:
             del self._skills[name]
             del self._skill_classes[name]
             logger.info("Unregistered skill: %s", name)
-            return True
+        self._rebuild_routing_index()
+        return True
 
     def get(self, name: str) -> Optional[BaseSkill]:
         """Get a skill instance by name."""
