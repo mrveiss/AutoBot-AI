@@ -373,7 +373,7 @@ class RedisConnectionManager:
 
         while (datetime.now() - start_time).total_seconds() < max_wait:
             try:
-                await client.ping()  # type: ignore[misc]  # GH#7105: redis ping() is Awaitable at runtime but stubs disagree
+                await client.ping()  # type: ignore[misc]  # GH#7105: ping() Awaitable at runtime; stubs disagree  # noqa: E501
                 logger.info("Redis database '%s' is ready", database_name)
                 return True
             except ResponseError as e:
@@ -542,7 +542,7 @@ class RedisConnectionManager:
         pool_params = {k: v for k, v in pool_params.items() if v is not None}
 
         logger.info(f"Created sync pool for '{database_name}' with TCP keepalive tuning")
-        return redis.ConnectionPool(**pool_params)  # type: ignore[arg-type]  # GH#7105: pool_params valid kwargs, stubs lack **kwargs model
+        return redis.ConnectionPool(**pool_params)  # type: ignore[arg-type]  # GH#7105: valid kwargs; stubs lack **kwargs model  # noqa: E501
 
     def _update_stats(self, database_name: str, success: bool, error: Optional[str] = None):
         """
