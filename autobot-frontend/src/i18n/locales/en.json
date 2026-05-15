@@ -555,7 +555,8 @@
       "navigationFailed": "Navigation failed",
       "backFailed": "Back navigation failed",
       "forwardFailed": "Forward navigation failed",
-      "reloadFailed": "Reload failed"
+      "reloadFailed": "Reload failed",
+      "go": "Navigate"
     },
     "voice": {
       "title": "Voice Chat",

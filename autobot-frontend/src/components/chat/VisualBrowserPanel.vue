@@ -209,13 +209,14 @@ onMounted(() => {
       <div class="address-row">
         <!-- Back / Forward / Reload -->
         <div class="nav-controls">
-          <button @click="goBack" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.back')" :aria-label="$t('common.back')">
+          <button @click="goBack" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.back')" :aria-label="$t('chat.visualBrowser.back')">
             <i class="fas fa-arrow-left"></i>
           </button>
-          <button @click="goForward" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.forward')" :aria-label="$t('common.forward')">
+          <button @click="goForward" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.forward')" :aria-label="$t('chat.visualBrowser.forward')">
             <i class="fas fa-arrow-right"></i>
           </button>
-          <button @click="reload" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.reload')" :aria-label="$t('common.refresh')">
+          <button @click="reload" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.reload')" :aria-label="$t('chat.visualBrowser.reload')">
+
             <i class="fas fa-redo" :class="{ 'fa-spin': loading }"></i>
           </button>
         </div>
@@ -233,7 +234,8 @@ onMounted(() => {
         </div>
 
         <!-- Go button -->
-        <button @click="navigate" :disabled="loading" class="go-btn" :aria-label="$t('common.search')">
+        <button @click="navigate" :disabled="loading" class="go-btn" :aria-label="$t('chat.visualBrowser.go')">
+
           <i class="fas fa-search" v-if="!loading"></i>
           <i class="fas fa-spinner fa-spin" v-else></i>
         </button>
