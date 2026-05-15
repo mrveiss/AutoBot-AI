@@ -4,7 +4,14 @@
     <div class="runner-sidebar">
       <div class="sidebar-header">
         <h4><i class="fas fa-tasks"></i> {{ $t('workflow.runner.activeWorkflows') }}</h4>
-        <button class="btn-refresh" @click="$emit('refresh')" :disabled="loading">
+        <button
+          class="btn-refresh"
+          @click="$emit('refresh')"
+          :disabled="loading"
+          :aria-label="$t('common.refresh')"
+          :title="$t('common.refresh')"
+          type="button"
+        >
           <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
         </button>
       </div>

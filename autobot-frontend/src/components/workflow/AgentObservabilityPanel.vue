@@ -5,7 +5,14 @@
         <i class="fas fa-users-cog"></i>
         {{ $t('workflow.agentObservability.title') }}
       </h3>
-      <button class="btn-refresh-sm" @click="$emit('refresh')" :disabled="loading">
+      <button
+        class="btn-refresh-sm"
+        @click="$emit('refresh')"
+        :disabled="loading"
+        :aria-label="$t('common.refresh')"
+        :title="$t('common.refresh')"
+        type="button"
+      >
         <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
       </button>
     </div>

@@ -132,7 +132,13 @@
         <div class="screenshot-content" @click.stop>
           <div class="screenshot-header">
             <h3 class="text-lg font-semibold text-autobot-text-primary">{{ $t('desktop.interface.screenshotTitle') }}</h3>
-            <button @click="showScreenshotModal = false" class="close-btn">×</button>
+            <button
+              @click="showScreenshotModal = false"
+              class="close-btn"
+              :aria-label="$t('common.close')"
+              :title="$t('common.close')"
+              type="button"
+            >×</button>
           </div>
           <div class="screenshot-body">
             <img v-if="screenshotData" :src="screenshotData" :alt="$t('desktop.interface.screenshotAlt')" class="screenshot-image" loading="lazy" />
@@ -153,7 +159,13 @@
         <div class="type-dialog-content" @click.stop>
           <div class="type-dialog-header">
             <h3 class="text-lg font-semibold text-autobot-text-primary">{{ $t('desktop.interface.typeTextTitle') }}</h3>
-            <button @click="showTypeDialog = false" class="close-btn">×</button>
+            <button
+              @click="showTypeDialog = false"
+              class="close-btn"
+              :aria-label="$t('common.close')"
+              :title="$t('common.close')"
+              type="button"
+            >×</button>
           </div>
           <div class="type-dialog-body">
             <textarea
