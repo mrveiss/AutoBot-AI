@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
-from services.run_jwt import _ttl, refresh_run_jwt
+from services.run_jwt import JWTRefreshConflictError, _ttl, refresh_run_jwt
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +59,12 @@ async def refresh_run_jwt_endpoint(run_id: str, request: Request) -> RunJwtRefre
     token = _bearer_token(request)
     try:
         new_token = await refresh_run_jwt(token, run_id)
+    except JWTRefreshConflictError as exc:
+        logger.info("run_jwt: refresh conflict — concurrent refresh for run_id=%s: %s", run_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Concurrent refresh detected — use the token from the winning request",
+        ) from exc
     except JWTExpiredError as exc:
         logger.info("run_jwt: refresh denied — expired token for run_id=%s: %s", run_id, exc)
         raise HTTPException(

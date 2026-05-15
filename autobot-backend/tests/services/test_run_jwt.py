@@ -29,6 +29,7 @@ import pytest
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError, encode_jwt
 from services.run_jwt import (
     VALID_SCOPES,
+    get_run_jwt_scopes,
     mint_run_jwt,
     refresh_run_jwt,
     revoke_run_jwt,
@@ -71,9 +72,15 @@ def _make_store():
     """Return a (store dict, async redis mock) pair backed by that store."""
     store: dict[str, str] = {}
 
+    def _set(k, v, ex=None, nx=False):
+        if nx and k in store:
+            return False
+        store[k] = v
+        return True
+
     async def _client(**_kwargs):
         mock = AsyncMock()
-        mock.set = AsyncMock(side_effect=lambda k, v, ex=None: store.update({k: v}))
+        mock.set = AsyncMock(side_effect=_set)
         mock.exists = AsyncMock(side_effect=lambda k: int(k in store))
         return mock
 
@@ -430,3 +437,48 @@ class TestValidScopes:
     def test_minimum_required_scopes_present(self):
         required = {"mcp:knowledge", "task:read"}
         assert required.issubset(VALID_SCOPES)
+
+
+# ---------------------------------------------------------------------------
+# get_run_jwt_scopes — scope resolution (MVA-204)
+# ---------------------------------------------------------------------------
+
+
+class TestGetRunJwtScopes:
+    def test_coordinator_has_invoke(self):
+        scopes = get_run_jwt_scopes("coordinator")
+        assert "task:read" in scopes
+        assert "task:write" in scopes
+        assert "agent:invoke" in scopes
+
+    def test_specialist_has_write_not_invoke(self):
+        scopes = get_run_jwt_scopes("specialist")
+        assert "task:read" in scopes
+        assert "task:write" in scopes
+        assert "agent:invoke" not in scopes
+
+    def test_worker_has_write_not_invoke(self):
+        scopes = get_run_jwt_scopes("worker")
+        assert "task:read" in scopes
+        assert "task:write" in scopes
+        assert "agent:invoke" not in scopes
+
+    def test_unknown_agent_type_gets_minimum(self):
+        scopes = get_run_jwt_scopes("totally_unknown_type")
+        assert scopes == ["task:read"]
+
+    def test_all_returned_scopes_are_valid(self):
+        for agent_type in ("coordinator", "specialist", "worker", "unknown"):
+            for scope in get_run_jwt_scopes(agent_type):
+                assert scope in VALID_SCOPES, f"invalid scope {scope!r} for agent_type={agent_type!r}"
+
+    def test_read_only_task_type_strips_write_and_invoke(self):
+        scopes = get_run_jwt_scopes("coordinator", task_type="read_only")
+        assert "task:write" not in scopes
+        assert "agent:invoke" not in scopes
+        assert "task:read" in scopes
+
+    def test_read_only_task_type_on_worker_is_idempotent(self):
+        with_hint = get_run_jwt_scopes("worker", task_type="read_only")
+        assert "task:write" not in with_hint
+        assert "task:read" in with_hint

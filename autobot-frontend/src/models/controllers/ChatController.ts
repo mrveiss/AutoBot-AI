@@ -613,13 +613,8 @@ export class ChatController {
 
       // Call backend immediately with the client-minted UUID
       try {
-        const backendSession = await chatRepository.createNewChat(title, undefined, sessionId)
+        await chatRepository.createNewChat(title, undefined, sessionId)
         logger.debug('New chat session created on backend:', sessionId)
-        // MVA-164: Validate backend echoed the same ID we sent.
-        // If the backend mints its own ID instead, the two sides would desync silently.
-        if (backendSession?.id && backendSession.id !== sessionId) {
-          logger.warn(`Backend returned a different session ID (${backendSession.id}); expected ${sessionId}. Using client-minted ID.`)
-        }
       } catch (error) {
         // Backend create failed - don't create local session if backend fails
         logger.error('Failed to create chat session on backend:', error)
@@ -628,7 +623,11 @@ export class ChatController {
       }
 
       // Backend succeeded - now create the local session with the same UUID
-      this.chatStore.createNewSession(title, sessionId)
+      const localSessionId = this.chatStore.createNewSession(title, sessionId)
+      if (localSessionId !== sessionId) {
+        // This shouldn't happen since we're passing the sessionId to createNewSession
+        logger.warn(`Session ID mismatch: generated ${sessionId}, store created ${localSessionId}`)
+      }
 
       return sessionId
     } catch (error: unknown) {
