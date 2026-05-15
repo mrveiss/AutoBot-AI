@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, FrozenSet, List, Optional, Sequence, Tuple
+from typing import Any, Dict, FrozenSet, List, Sequence, Tuple
 
 # ---------------------------------------------------------------------------
 # Internal tokenizer — same regex as skill_router._tokenize but returns a
