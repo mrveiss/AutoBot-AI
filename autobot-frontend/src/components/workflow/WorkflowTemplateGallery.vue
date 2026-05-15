@@ -45,8 +45,8 @@
           </div>
         </div>
         <div class="template-actions">
-          <button class="btn-icon" @click.stop="openPreview(template)" :title="$t('workflow.templates.preview')"><i class="fas fa-eye"></i></button>
-          <button class="btn-run" @click.stop="$emit('run-template', template)" :title="$t('workflow.templates.runNow')"><i class="fas fa-play"></i></button>
+          <button class="btn-icon" @click.stop="openPreview(template)" :title="$t('workflow.templates.preview')" :aria-label="$t('workflow.templates.preview')"><i class="fas fa-eye"></i></button>
+          <button class="btn-run" @click.stop="$emit('run-template', template)" :title="$t('workflow.templates.runNow')" :aria-label="$t('workflow.templates.runNow')"><i class="fas fa-play"></i></button>
         </div>
       </div>
     </div>
@@ -56,7 +56,7 @@
       <div v-if="previewTemplate" class="preview-panel">
         <div class="preview-header">
           <h3>{{ previewTemplate.name }}</h3>
-          <button @click="previewTemplate = null"><i class="fas fa-times"></i></button>
+          <button @click="previewTemplate = null" :aria-label="$t('common.close')"><i class="fas fa-times"></i></button>
         </div>
         <div class="preview-body">
           <p class="preview-desc">{{ previewTemplate.description }}</p>

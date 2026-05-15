@@ -48,10 +48,10 @@
           <div class="stat skipped" v-if="getSkippedCount(wf) > 0"><span>{{ getSkippedCount(wf) }}</span> {{ $t('workflow.history.skipped') }}</div>
         </div>
         <div class="item-actions">
-          <button class="btn-icon" @click.stop="$emit('view-workflow', wf.workflow_id)" :title="$t('workflow.history.viewDetails')">
+          <button class="btn-icon" @click.stop="$emit('view-workflow', wf.workflow_id)" :title="$t('workflow.history.viewDetails')" :aria-label="$t('workflow.history.viewDetails')">
             <i class="fas fa-eye"></i>
           </button>
-          <button class="btn-icon" @click.stop="$emit('re-run', wf.workflow_id)" :title="$t('workflow.history.reRun')">
+          <button class="btn-icon" @click.stop="$emit('re-run', wf.workflow_id)" :title="$t('workflow.history.reRun')" :aria-label="$t('workflow.history.reRun')">
             <i class="fas fa-redo"></i>
           </button>
         </div>
@@ -60,9 +60,9 @@
 
     <!-- Pagination -->
     <div v-if="totalPages > 1" class="pagination">
-      <button :disabled="currentPage === 1" @click="currentPage--"><i class="fas fa-chevron-left"></i></button>
+      <button :disabled="currentPage === 1" @click="currentPage--" :aria-label="$t('common.previous')"><i class="fas fa-chevron-left"></i></button>
       <span>{{ $t('workflow.history.pageOf', { current: currentPage, total: totalPages }) }}</span>
-      <button :disabled="currentPage === totalPages" @click="currentPage++"><i class="fas fa-chevron-right"></i></button>
+      <button :disabled="currentPage === totalPages" @click="currentPage++" :aria-label="$t('common.next')"><i class="fas fa-chevron-right"></i></button>
     </div>
   </div>
 </template>

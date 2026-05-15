@@ -26,17 +26,17 @@
           </div>
         </div>
         <div class="toolbar-divider"></div>
-        <button class="tool-btn" @click="clearCanvas" :title="$t('workflow.canvas.clear')">
+        <button class="tool-btn" @click="clearCanvas" :title="$t('workflow.canvas.clear')" :aria-label="$t('workflow.canvas.clear')">
           <i class="fas fa-trash-alt"></i>
         </button>
-        <button class="tool-btn" @click="autoLayout" :title="$t('workflow.canvas.autoLayout')">
+        <button class="tool-btn" @click="autoLayout" :title="$t('workflow.canvas.autoLayout')" :aria-label="$t('workflow.canvas.autoLayout')">
           <i class="fas fa-magic"></i>
         </button>
       </div>
       <div class="toolbar-right">
-        <button class="tool-btn" @click="zoomIn"><i class="fas fa-search-plus"></i></button>
-        <button class="tool-btn" @click="zoomOut"><i class="fas fa-search-minus"></i></button>
-        <button class="tool-btn" @click="resetZoom"><i class="fas fa-compress-arrows-alt"></i></button>
+        <button class="tool-btn" @click="zoomIn" :aria-label="$t('common.zoomIn')"><i class="fas fa-search-plus"></i></button>
+        <button class="tool-btn" @click="zoomOut" :aria-label="$t('common.zoomOut')"><i class="fas fa-search-minus"></i></button>
+        <button class="tool-btn" @click="resetZoom" :aria-label="$t('common.fitToView')"><i class="fas fa-compress-arrows-alt"></i></button>
         <div class="toolbar-divider"></div>
         <button class="tool-btn primary" @click="saveWorkflow" :disabled="nodes.length === 0">
           <i class="fas fa-save"></i> {{ $t('workflow.canvas.save') }}
@@ -66,7 +66,7 @@
           <div class="node-header">
             <i :class="nodeIcons[node.type]"></i>
             <span>{{ nodeLabels[node.type] }}</span>
-            <button class="delete-btn" @click.stop="deleteNode(node.id)"><i class="fas fa-times"></i></button>
+            <button class="delete-btn" @click.stop="deleteNode(node.id)" :aria-label="$t('common.delete')"><i class="fas fa-times"></i></button>
           </div>
           <div class="node-body">
             <template v-if="node.type === 'step'">

@@ -18,44 +18,44 @@
       <div class="flex items-center space-x-2">
         <!-- Browser Controls -->
         <div class="flex items-center space-x-1">
-          <button @click="refreshBrowser" class="browser-btn" :disabled="isRefreshing" :title="$t('desktop.popoutBrowser.refresh')">
+          <button @click="refreshBrowser" class="browser-btn" :disabled="isRefreshing" :title="$t('desktop.popoutBrowser.refresh')" :aria-label="$t('desktop.popoutBrowser.refresh')">
             <i class="fas fa-sync-alt" :class="{ 'fa-spin': isRefreshing }"></i>
           </button>
 
-          <button @click="navigateHome" class="browser-btn" :title="$t('desktop.popoutBrowser.home')">
+          <button @click="navigateHome" class="browser-btn" :title="$t('desktop.popoutBrowser.home')" :aria-label="$t('desktop.popoutBrowser.home')">
             <i class="fas fa-home"></i>
           </button>
 
-          <button @click="showDevTools = !showDevTools" class="browser-btn" :title="$t('desktop.popoutBrowser.devTools')">
+          <button @click="showDevTools = !showDevTools" class="browser-btn" :title="$t('desktop.popoutBrowser.devTools')" :aria-label="$t('desktop.popoutBrowser.devTools')">
             <i class="fas fa-code"></i>
           </button>
 
-          <button @click="openVncPopout" class="browser-btn" style="color: var(--color-primary)" :title="$t('desktop.popoutBrowser.openVnc')">
+          <button @click="openVncPopout" class="browser-btn" style="color: var(--color-primary)" :title="$t('desktop.popoutBrowser.openVnc')" :aria-label="$t('desktop.popoutBrowser.openVnc')">
             <i class="fas fa-desktop"></i>
           </button>
         </div>
 
         <!-- Playwright Automation Controls -->
         <div class="border-l border-autobot-border pl-2 flex items-center space-x-1">
-          <button @click="showPlaywrightPanel = !showPlaywrightPanel" class="browser-btn" :title="$t('desktop.popoutBrowser.playwrightAutomation')">
+          <button @click="showPlaywrightPanel = !showPlaywrightPanel" class="browser-btn" :title="$t('desktop.popoutBrowser.playwrightAutomation')" :aria-label="$t('desktop.popoutBrowser.playwrightAutomation')">
             <i class="fas fa-robot" :style="showPlaywrightPanel ? 'color: var(--color-primary)' : ''"></i>
           </button>
 
-          <button @click="runFrontendTest" class="browser-btn" :disabled="isTestingFrontend" :title="$t('desktop.popoutBrowser.testFrontend')">
+          <button @click="runFrontendTest" class="browser-btn" :disabled="isTestingFrontend" :title="$t('desktop.popoutBrowser.testFrontend')" :aria-label="$t('desktop.popoutBrowser.testFrontend')">
             <i class="fas fa-vials" :class="{ 'fa-spin': isTestingFrontend }"></i>
           </button>
 
-          <button @click="performWebSearch" class="browser-btn" :disabled="isSearching" :title="$t('desktop.popoutBrowser.webSearch')">
+          <button @click="performWebSearch" class="browser-btn" :disabled="isSearching" :title="$t('desktop.popoutBrowser.webSearch')" :aria-label="$t('desktop.popoutBrowser.webSearch')">
             <i class="fas fa-search" :class="{ 'fa-spin': isSearching }"></i>
           </button>
 
-          <button @click="sendTestMessage" class="browser-btn" :disabled="isSendingMessage" :title="$t('desktop.popoutBrowser.testMessage')">
+          <button @click="sendTestMessage" class="browser-btn" :disabled="isSendingMessage" :title="$t('desktop.popoutBrowser.testMessage')" :aria-label="$t('desktop.popoutBrowser.testMessage')">
             <i class="fas fa-paper-plane" :class="{ 'fa-spin': isSendingMessage }"></i>
           </button>
         </div>
 
         <div class="border-l border-autobot-border pl-2">
-          <button @click="$emit('close')" class="browser-btn text-red-600" :title="$t('desktop.popoutBrowser.close')">
+          <button @click="$emit('close')" class="browser-btn text-red-600" :title="$t('desktop.popoutBrowser.close')" :aria-label="$t('desktop.popoutBrowser.close')">
             <i class="fas fa-times"></i>
           </button>
         </div>
@@ -64,10 +64,10 @@
 
     <!-- Address Bar -->
     <div class="address-bar bg-autobot-bg-secondary border-b border-autobot-border p-3 flex items-center space-x-3">
-      <button @click="goBack" :disabled="!canGoBack || isGoingBack" class="nav-btn" :title="$t('desktop.popoutBrowser.back')">
+      <button @click="goBack" :disabled="!canGoBack || isGoingBack" class="nav-btn" :title="$t('desktop.popoutBrowser.back')" :aria-label="$t('desktop.popoutBrowser.back')">
         <i class="fas fa-arrow-left" :class="{ 'fa-pulse': isGoingBack }"></i>
       </button>
-      <button @click="goForward" :disabled="!canGoForward || isGoingForward" class="nav-btn" :title="$t('desktop.popoutBrowser.forward')">
+      <button @click="goForward" :disabled="!canGoForward || isGoingForward" class="nav-btn" :title="$t('desktop.popoutBrowser.forward')" :aria-label="$t('desktop.popoutBrowser.forward')">
         <i class="fas fa-arrow-right" :class="{ 'fa-pulse': isGoingForward }"></i>
       </button>
       <div class="flex-1 flex items-center bg-autobot-bg-tertiary rounded-lg px-3 py-2" :class="{ 'opacity-50': isNavigating }">
@@ -312,7 +312,7 @@
       <div v-if="showDevTools" class="absolute bottom-0 left-0 right-0 h-1/3 bg-gray-900 border-t border-gray-600">
         <div class="flex items-center justify-between bg-gray-800 p-2 text-white text-sm">
           <span>{{ $t('desktop.popoutBrowser.developerConsole') }}</span>
-          <button @click="showDevTools = false" class="text-gray-400 hover:text-white">
+          <button @click="showDevTools = false" class="text-gray-400 hover:text-white" :aria-label="$t('common.close')">
             <i class="fas fa-times"></i>
           </button>
         </div>
