@@ -60,7 +60,7 @@ def _create_redis_client_for_test(host: str, port: int, db: int) -> redis.Redis:
 
     Issue #620.
     """
-    return redis.Redis(
+    return redis.Redis(  # noqa: redis — diagnostic connectivity probe, not a production client (Issue #620)
         host=host,
         port=port,
         db=db,
