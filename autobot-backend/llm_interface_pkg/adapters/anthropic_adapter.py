@@ -4,10 +4,10 @@
 """
 Anthropic Adapter - Adapter for external Anthropic API (#1403).
 
-Delegates execution to ``llm_providers.AnthropicProvider`` which owns the
-canonical Claude implementation (extended thinking, beta headers, think-block
-stripping).  This adapter's sole responsibility is the ``test_environment()``
-diagnostic method used by ``api/adapters.py``.
+Delegates execution to ``llm_interface_pkg.providers.anthropic.AnthropicProvider``
+which owns the canonical Claude implementation (extended thinking, beta headers,
+think-block stripping, OTel tracing).  This adapter's sole responsibility is the
+``test_environment()`` diagnostic method used by ``api/adapters.py``.
 """
 
 import logging
@@ -15,9 +15,6 @@ import os
 import time
 from typing import List, Optional
 
-from constants.model_constants import ANTHROPIC_CLAUDE_OPUS4_6, ANTHROPIC_CLAUDE_SONNET4_6
-
-from ..base_provider import BaseProvider
 from ..models import LLMRequest, LLMResponse
 from .base import (
     AdapterBase,
@@ -28,14 +25,6 @@ from .base import (
 )
 
 logger = logging.getLogger(__name__)
-
-ANTHROPIC_MODELS = [
-    ANTHROPIC_CLAUDE_OPUS4_6,
-    ANTHROPIC_CLAUDE_SONNET4_6,
-    "claude-haiku-4-5-20251001",
-    "claude-sonnet-4-20250514",
-    "claude-3-5-haiku-20241022",
-]
 
 
 class AnthropicAdapter(AdapterBase):
@@ -52,7 +41,7 @@ class AnthropicAdapter(AdapterBase):
     def _ensure_provider(self):
         """Lazily construct the canonical AnthropicProvider."""
         if self._provider is None:
-            from llm_providers.anthropic_provider import AnthropicProvider
+            from llm_interface_pkg.providers.anthropic import AnthropicProvider
 
             api_key = self.config.settings.get("api_key") or os.getenv("ANTHROPIC_API_KEY", "")
             self._provider = AnthropicProvider(settings={"api_key": api_key} if api_key else {})
@@ -115,13 +104,19 @@ class AnthropicAdapter(AdapterBase):
             healthy=not has_error,
             adapter_type="anthropic_api",
             diagnostics=diagnostics,
-            models_available=ANTHROPIC_MODELS,
+            models_available=await self.list_models(),
             response_time=elapsed,
         )
 
     async def list_models(self) -> List[str]:
-        """Return known Anthropic models."""
-        return ANTHROPIC_MODELS
+        """Return known Anthropic models (delegated to provider)."""
+        try:
+            provider = self._ensure_provider()
+            return await provider.list_models()
+        except Exception:
+            from llm_interface_pkg.providers.anthropic import _ANTHROPIC_MODELS
+
+            return list(_ANTHROPIC_MODELS)
 
 
 __all__ = ["AnthropicAdapter"]

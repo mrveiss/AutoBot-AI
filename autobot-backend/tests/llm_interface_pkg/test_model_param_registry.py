@@ -44,7 +44,7 @@ if "xxhash" not in sys.modules:
 # Now safe to import the registry
 # ---------------------------------------------------------------------------
 
-from llm_providers.model_param_registry import (  # noqa: E402
+from llm_interface_pkg.model_param_registry import (  # noqa: E402
     _FALLBACK_KWARGS,
     _load_registry,
     apply_model_defaults,

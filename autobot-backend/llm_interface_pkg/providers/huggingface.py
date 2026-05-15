@@ -4,15 +4,14 @@
 """
 HuggingFace Inference API provider for the multi-provider LLM layer (#1806).
 
-Uses the HuggingFace Inference API (https://api-inference.huggingface.co)
-to run open models hosted on the Hub without local GPU resources.
-
 API token is read (in priority order) from:
   1. ``settings["api_token"]``
   2. Environment variable ``HF_TOKEN``
   3. Environment variable ``HUGGINGFACE_API_TOKEN`` (legacy name)
 
 API tokens are never logged.
+
+Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
 from __future__ import annotations
@@ -28,13 +27,12 @@ from autobot_shared.http_client import get_http_client
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 
-from .base_provider import BaseProvider
+from ..base_provider import BaseProvider
 
 logger = logging.getLogger(__name__)
 
 _HF_BASE_URL = "https://api-inference.huggingface.co"
 
-# Popular open models that work well with the chat-completion endpoint.
 _KNOWN_CHAT_MODELS: List[str] = [
     "meta-llama/Meta-Llama-3.1-8B-Instruct",
     "meta-llama/Llama-3.2-3B-Instruct",
@@ -51,8 +49,7 @@ class HuggingFaceProvider(BaseProvider):
     HuggingFace Inference API provider.
 
     Calls the serverless inference endpoint for text-generation models
-    via the OpenAI-compatible ``/v1/chat/completions`` route introduced
-    in the Inference API v3 (requires a valid HF token for gated models).
+    via the OpenAI-compatible ``/v1/chat/completions`` route.
     """
 
     provider_name = ProviderType.HUGGINGFACE.value
@@ -181,18 +178,11 @@ class HuggingFaceProvider(BaseProvider):
             raise
 
     async def is_available(self) -> bool:
-        """
-        Return True if the HF Inference API is reachable.
-
-        Sends a lightweight HEAD to the base URL; no inference is triggered.
-        """
+        """Return True if the HF Inference API is reachable."""
         try:
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=5.0)
-            async with await http_client.get(
-                f"{_HF_BASE_URL}/status",
-                timeout=timeout,
-            ) as resp:
+            async with await http_client.get(f"{_HF_BASE_URL}/status", timeout=timeout) as resp:
                 return resp.status < 500
         except Exception:
             return False

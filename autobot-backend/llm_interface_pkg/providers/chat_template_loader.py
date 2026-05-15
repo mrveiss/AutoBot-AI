@@ -1,7 +1,10 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Chat template loader for local LLM providers."""
+"""Chat template loader for local LLM providers.
+
+Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
+"""
 
 import logging
 import os
@@ -10,7 +13,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 logger = logging.getLogger(__name__)
 
-TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "..", "chat_templates")
+TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "chat_templates")
 SUPPORTED_TEMPLATES = {"chatml", "zephyr", "vicuna"}
 DEFAULT_TEMPLATE = "chatml"
 

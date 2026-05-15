@@ -15,8 +15,8 @@ import uuid
 from sqlalchemy import Column, String, Text
 from sqlalchemy.types import Uuid
 
-from user_management.models.base import Base
 from autobot_shared.status_enums import AgentLifecycleStatus as AgentStatus  # #7504 consolidation
+from user_management.models.base import Base
 
 
 class Agent(Base):

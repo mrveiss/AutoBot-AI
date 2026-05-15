@@ -15,15 +15,6 @@ import os
 import time
 from typing import List, Optional
 
-from constants.model_constants import (
-    GROQ_GEMMA2_9B,
-    GROQ_LLAMA3_8B,
-    GROQ_LLAMA3_70B,
-    GROQ_LLAMA31_8B,
-    GROQ_LLAMA33_70B,
-    GROQ_MIXTRAL_8X7B,
-)
-
 from ..models import LLMRequest, LLMResponse
 from .base import (
     AdapterBase,
@@ -34,15 +25,6 @@ from .base import (
 )
 
 logger = logging.getLogger(__name__)
-
-_GROQ_MODELS: List[str] = [
-    GROQ_LLAMA33_70B,
-    GROQ_LLAMA3_70B,
-    GROQ_LLAMA31_8B,
-    GROQ_LLAMA3_8B,
-    GROQ_MIXTRAL_8X7B,
-    GROQ_GEMMA2_9B,
-]
 
 
 class GroqAdapter(AdapterBase):
@@ -59,7 +41,7 @@ class GroqAdapter(AdapterBase):
     def _ensure_provider(self):
         """Lazily construct the canonical GroqProvider."""
         if self._provider is None:
-            from llm_providers.groq_provider import GroqProvider
+            from llm_interface_pkg.providers.groq import GroqProvider
 
             api_key = self.config.settings.get("api_key") or os.getenv("GROQ_API_KEY", "")
             self._provider = GroqProvider(settings={"api_key": api_key} if api_key else {})
@@ -123,7 +105,7 @@ class GroqAdapter(AdapterBase):
             healthy=not has_error,
             adapter_type="groq_api",
             diagnostics=diagnostics,
-            models_available=models or _GROQ_MODELS,
+            models_available=models or await self.list_models(),
             response_time=elapsed,
         )
 
@@ -133,7 +115,9 @@ class GroqAdapter(AdapterBase):
             provider = self._ensure_provider()
             return await provider.list_models()
         except Exception:
-            return list(_GROQ_MODELS)
+            from llm_interface_pkg.providers.groq import GROQ_MODELS
+
+            return list(GROQ_MODELS)
 
 
 __all__ = ["GroqAdapter"]

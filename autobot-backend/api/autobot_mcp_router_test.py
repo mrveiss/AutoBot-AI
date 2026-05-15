@@ -11,9 +11,9 @@ HTTP clients receive proper 4xx responses instead of opaque 200 OK payloads.
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from fastapi import FastAPI
 from api.autobot_mcp_router import router
 
 # ---------------------------------------------------------------------------

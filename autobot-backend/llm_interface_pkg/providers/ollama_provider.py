@@ -4,16 +4,18 @@
 """
 Ollama provider for the multi-provider LLM layer (#1806).
 
-Delegates chat_completion to ``llm_interface_pkg.providers.ollama.OllamaProvider``
-which carries OpenTelemetry tracing (Issue #697) and circuit breaker protection.
-stream_completion is implemented directly for true incremental chunk delivery
-(the delegate accumulates the full stream before returning).
+Registry-facing BaseProvider implementation that delegates chat_completion
+to ``llm_interface_pkg.providers.ollama.OllamaProvider`` (which carries
+OpenTelemetry tracing and circuit breaker protection) while implementing
+stream_completion directly for true incremental chunk delivery.
 
 The base URL is read (in priority order) from:
   1. ``settings["base_url"]``
   2. SSOT config (``autobot_shared.ssot_config.get_ollama_url()``)
   3. Environment variable ``AUTOBOT_OLLAMA_ENDPOINT``
   4. Hard default: ``http://127.0.0.1:11434``
+
+Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ from constants.api_constants import PATH_OLLAMA_CHAT, PATH_OLLAMA_GENERATE, PATH
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 
-from .base_provider import BaseProvider
+from ..base_provider import BaseProvider
 from .chat_template_loader import render_chat_template
 
 logger = logging.getLogger(__name__)
@@ -39,9 +41,9 @@ class OllamaProvider(BaseProvider):
     """
     Ollama provider implementation conforming to BaseProvider.
 
-    Delegates to the existing llm_interface_pkg OllamaProvider for actual
-    inference and streaming while exposing the uniform BaseProvider interface
-    required by the ProviderRegistry.
+    Delegates to the existing llm_interface_pkg OllamaProvider (the inner one
+    at providers/ollama.py) for actual inference and streaming while exposing
+    the uniform BaseProvider interface required by the ProviderRegistry.
     """
 
     provider_name = ProviderType.OLLAMA.value
@@ -59,12 +61,7 @@ class OllamaProvider(BaseProvider):
         return self._base_url
 
     def _ensure_delegate(self):
-        """
-        Lazily construct the llm_interface_pkg OllamaProvider delegate.
-
-        This avoids importing heavy modules at import time and respects the
-        lazy-init pattern used elsewhere in the codebase.
-        """
+        """Lazily construct the llm_interface_pkg OllamaProvider delegate."""
         if self._delegate is not None:
             return self._delegate
         from llm_interface_pkg.models import LLMSettings
@@ -77,16 +74,11 @@ class OllamaProvider(BaseProvider):
             settings=settings,
             streaming_manager=streaming_manager,
         )
-        # Patch the host so it respects our resolved URL
         self._delegate.ollama_host = self._resolve_base_url()
         return self._delegate
 
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
         """Delegate to llm_interface_pkg OllamaProvider (carries OTel tracing + circuit breaker).
-
-        The delegate's ``_prepare_chat_request`` calls ``get_host_from_env()``
-        which reads from SSOT config; we override ``ollama_host`` immediately
-        before the call so any settings["base_url"] override is honoured.
 
         When ``request.metadata["chat_template"]`` is set the messages are
         rendered via Jinja2 before being forwarded so local models receive a
@@ -97,10 +89,7 @@ class OllamaProvider(BaseProvider):
             chat_template = request.metadata.get("chat_template")
             if chat_template:
                 # Issue #4525: when a chat_template is set, render messages to a
-                # prompt string and POST to /api/generate directly.  Collapsing to a
-                # single {"role":"user"} message and forwarding to /api/chat is
-                # semantically wrong — it discards conversation structure.
-                # stream_completion already uses this pattern correctly.
+                # prompt string and POST to /api/generate directly.
                 base_url = self._resolve_base_url()
                 model = request.model_name or self._get_setting("default_model", "")
                 raw_messages = [
@@ -154,7 +143,6 @@ class OllamaProvider(BaseProvider):
                 )
 
             delegate = self._ensure_delegate()
-            # Override host so settings["base_url"] is respected over SSOT env default.
             delegate.ollama_host = self._resolve_base_url()
             response = await delegate.chat_completion(request)
             if response.error:
@@ -184,12 +172,7 @@ class OllamaProvider(BaseProvider):
             )
 
     async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
-        """
-        Stream from Ollama by issuing an SSE-style request directly.
-
-        The llm_interface_pkg OllamaProvider accumulates the full stream
-        internally; for true incremental streaming we post directly.
-        """
+        """Stream from Ollama by issuing an SSE-style request directly."""
         self._total_requests += 1
         base_url = self._resolve_base_url()
         model = request.model_name or self._get_setting("default_model", "")
@@ -197,7 +180,6 @@ class OllamaProvider(BaseProvider):
             raise ValueError("No model specified for Ollama streaming")
         chat_template = request.metadata.get("chat_template")
         if chat_template:
-            # Render messages via Jinja2 template and use raw prompt API.
             raw_messages = [
                 (
                     {"role": m["role"], "content": m["content"]}
@@ -222,7 +204,6 @@ class OllamaProvider(BaseProvider):
             }
         if request.max_tokens:
             payload["options"]["num_predict"] = request.max_tokens
-        # Issue #4524/#4525 follow-up: generate payload must go to /api/generate
         endpoint = PATH_OLLAMA_GENERATE if chat_template else PATH_OLLAMA_CHAT
         try:
             import json as _json
@@ -243,7 +224,6 @@ class OllamaProvider(BaseProvider):
                     if not decoded:
                         continue
                     chunk = _json.loads(decoded)
-                    # /api/chat returns message.content; /api/generate returns response
                     text = chunk.get("message", {}).get("content", "") or chunk.get("response", "")
                     if text:
                         yield text

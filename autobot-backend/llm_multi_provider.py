@@ -8,9 +8,10 @@ The plugin-per-provider architecture now lives in ``llm_providers/``.
 This module re-exports everything that external callers relied on so that
 no import sites need to change.
 
-New code should import directly from ``llm_providers``:
+New code should import directly from ``llm_interface_pkg.providers``:
 
-    from llm_providers import get_provider_registry, OllamaProvider, ...
+    from llm_interface_pkg.providers import OllamaProvider, ...
+    from llm_interface_pkg import get_provider_registry
     from llm_interface_pkg.models import LLMRequest, LLMResponse
     from llm_interface_pkg.types import ProviderType, LLMType
 """
@@ -29,8 +30,7 @@ from llm_interface_pkg import BaseProvider, ProviderRegistry, get_provider_regis
 # Re-export canonical types from their authoritative modules
 # ---------------------------------------------------------------------------
 from llm_interface_pkg.models import LLMRequest, LLMResponse
-from llm_interface_pkg.types import LLMType, ProviderType
-from llm_providers import (
+from llm_interface_pkg.providers import (
     AnthropicProvider,
     CustomOpenAIProvider,
     GroqProvider,
@@ -41,6 +41,7 @@ from llm_providers import (
     OpenRouterProvider,
     VLLMProvider,
 )
+from llm_interface_pkg.types import LLMType, ProviderType
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,7 @@ from abc import ABC, abstractmethod
 class LLMProvider(ABC):
     """Abstract base class for LLM providers (legacy shim).
 
-    New providers should subclass ``llm_providers.base_provider.BaseProvider``
+    New providers should subclass ``llm_interface_pkg.providers.base_provider.BaseProvider``
     instead.
     """
 

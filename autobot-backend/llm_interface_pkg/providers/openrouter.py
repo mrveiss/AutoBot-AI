@@ -6,16 +6,12 @@ OpenRouter Provider - Unified interface for 200+ LLM models via OpenRouter API.
 
 Issue #4341: Model Provider Flexibility & Vendor-Agnostic Switching
 
-OpenRouter provides a single API gateway to dozens of LLM providers
-(OpenAI, Anthropic, Meta, Mistral, etc.) enabling transparent provider
-switching without changing client code.
-
-API Reference: https://openrouter.ai/docs/api/v1
-
 Configuration:
   - api_key: OpenRouter API key (from environment: OPENROUTER_API_KEY)
   - base_url: Optional custom base URL (default: https://openrouter.ai/api/v1)
   - default_model: Default model name for completions
+
+Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
 from __future__ import annotations
@@ -31,7 +27,7 @@ from opentelemetry.trace import SpanKind, Status, StatusCode
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 
-from .base_provider import BaseProvider
+from ..base_provider import BaseProvider
 
 logger = logging.getLogger(__name__)
 _tracer = trace.get_tracer("autobot.llm.openrouter", "1.0.0")
@@ -42,12 +38,7 @@ class OpenRouterProvider(BaseProvider):
     OpenRouter provider implementation.
 
     Supports chat completion and streaming across 200+ models from:
-    - OpenAI (GPT-4, GPT-3.5)
-    - Anthropic (Claude)
-    - Meta (Llama)
-    - Mistral (Mistral, Mixtral)
-    - Google (Gemini, Palm)
-    - Cohere, Aleph Alpha, and more
+    OpenAI, Anthropic, Meta, Mistral, Google, Cohere, and more.
 
     Requires: openai package (pip install openai)
               OPENROUTER_API_KEY environment variable
@@ -89,31 +80,21 @@ class OpenRouterProvider(BaseProvider):
 
         api_key = self._resolve_api_key()
         if not api_key:
-            raise ValueError("OpenRouter API key not found. Set OPENROUTER_API_KEY or " "provide api_key in settings.")
+            raise ValueError("OpenRouter API key not found. Set OPENROUTER_API_KEY or provide api_key in settings.")
 
         base_url = self._resolve_base_url()
         self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         logger.info("OpenRouter client initialized")
 
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
-        """
-        Execute a chat completion via OpenRouter.
-
-        Args:
-            request: Standardized LLM request.
-
-        Returns:
-            LLMResponse with content populated or error field set.
-        """
+        """Execute a chat completion via OpenRouter."""
         with _tracer.start_as_current_span("openrouter.chat_completion", kind=SpanKind.CLIENT) as span:
             try:
                 self._total_requests += 1
                 self._ensure_client()
 
-                # Convert to OpenAI format
                 messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
-                # Merge API kwargs
                 api_kwargs = request.metadata.get("api_kwargs", {})
                 chat_kwargs = {
                     "model": request.model_name or self._get_setting("default_model", "gpt-3.5-turbo"),
@@ -123,7 +104,6 @@ class OpenRouterProvider(BaseProvider):
                     "top_p": api_kwargs.get("top_p", 0.95),
                 }
 
-                # Optional parameters
                 if "presence_penalty" in api_kwargs:
                     chat_kwargs["presence_penalty"] = api_kwargs["presence_penalty"]
                 if "frequency_penalty" in api_kwargs:
@@ -135,7 +115,6 @@ class OpenRouterProvider(BaseProvider):
                 response = await self._client.chat.completions.create(**chat_kwargs)
                 latency = time.monotonic() - start_time
 
-                # Extract response content
                 content = response.choices[0].message.content or ""
                 usage = {
                     "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
@@ -173,15 +152,7 @@ class OpenRouterProvider(BaseProvider):
                 )
 
     async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
-        """
-        Stream a chat completion from OpenRouter.
-
-        Args:
-            request: Standardized LLM request.
-
-        Yields:
-            String chunks of the generated text.
-        """
+        """Stream a chat completion from OpenRouter."""
         with _tracer.start_as_current_span("openrouter.stream_completion", kind=SpanKind.CLIENT) as span:
             try:
                 self._total_requests += 1
@@ -221,17 +192,9 @@ class OpenRouterProvider(BaseProvider):
                 yield f"Error: {exc}"
 
     async def is_available(self) -> bool:
-        """
-        Check if OpenRouter is reachable and properly configured.
-
-        Performs a lightweight health check by listing available models.
-
-        Returns:
-            True if provider is reachable, False otherwise.
-        """
+        """Check if OpenRouter is reachable and properly configured."""
         try:
             self._ensure_client()
-            # OpenRouter supports models endpoint
             models = await self._client.models.list()
             return models is not None and len(models.data) > 0
         except Exception as exc:
@@ -239,15 +202,7 @@ class OpenRouterProvider(BaseProvider):
             return False
 
     async def list_models(self) -> List[str]:
-        """
-        List available models via OpenRouter API.
-
-        Returns 200+ model identifiers available through OpenRouter,
-        including models from OpenAI, Anthropic, Meta, Mistral, Google, etc.
-
-        Returns:
-            List of model identifiers.
-        """
+        """List available models via OpenRouter API."""
         try:
             self._ensure_client()
             response = await self._client.models.list()
@@ -256,19 +211,5 @@ class OpenRouterProvider(BaseProvider):
             logger.error("Failed to list OpenRouter models: %s", exc)
             return []
 
-
-# Add to ProviderType enum if needed
-def _ensure_provider_type():
-    """Ensure OPENROUTER is in ProviderType enum."""
-    try:
-        from llm_interface_pkg.types import ProviderType
-
-        if not hasattr(ProviderType, "OPENROUTER"):
-            logger.info("ProviderType.OPENROUTER not defined; using string 'openrouter'")
-    except Exception:
-        pass
-
-
-_ensure_provider_type()
 
 __all__ = ["OpenRouterProvider"]

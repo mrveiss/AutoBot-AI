@@ -15,7 +15,6 @@ import os
 import time
 from typing import List, Optional
 
-from ..base_provider import BaseProvider
 from ..models import LLMRequest, LLMResponse
 from .base import (
     AdapterBase,
@@ -42,7 +41,7 @@ class OpenAIAdapter(AdapterBase):
     def _ensure_provider(self):
         """Lazily construct the canonical OpenAIProvider."""
         if self._provider is None:
-            from llm_providers.openai_provider import OpenAIProvider
+            from llm_interface_pkg.providers.openai import OpenAIProvider
 
             api_key = self._get_api_key()
             settings = {"api_key": api_key} if api_key else {}
