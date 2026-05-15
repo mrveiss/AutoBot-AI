@@ -17,7 +17,7 @@ import asyncio
 import json
 import os
 import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -30,11 +30,9 @@ if _BACKEND_DIR not in sys.path:
 
 from knowledge.connectors.scheduler import (
     _LEADER_KEY,
-    _LEADER_TTL_MS,
     _SCHEDULE_PREFIX,
     ConnectorScheduler,
     _parse_interval_seconds,
-    get_connector_scheduler,
 )
 
 # ---------------------------------------------------------------------------

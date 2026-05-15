@@ -16,7 +16,6 @@ Scenario covered:
   Worker B becomes leader, reconciles → asyncio tasks created without re-POSTing.
 """
 
-import asyncio
 import json
 from typing import Any, Dict, Iterator, Optional
 from unittest.mock import patch
