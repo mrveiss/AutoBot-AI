@@ -64,9 +64,9 @@ def test_error_code_maps_to_correct_http_status(error_code: int, expected_status
             json=_json_rpc_body(),
             headers={"Authorization": "Bearer test-token"},
         )
-    assert response.status_code == expected_status, (
-        f"error code {error_code} should map to HTTP {expected_status}, got {response.status_code}"
-    )
+    assert (
+        response.status_code == expected_status
+    ), f"error code {error_code} should map to HTTP {expected_status}, got {response.status_code}"
 
 
 def test_successful_tool_call_returns_200() -> None:
