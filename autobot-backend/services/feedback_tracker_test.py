@@ -7,7 +7,7 @@ Feedback Tracker Tests (Issue #905)
 Tests for feedback tracking and learning loop.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from autobot_shared.datetime_utils import datetime_now

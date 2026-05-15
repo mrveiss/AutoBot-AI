@@ -20,7 +20,7 @@ Public API::
 from __future__ import annotations
 
 import logging
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosec B405 — sitemap XML from crawled URLs; XXE risk accepted
 from typing import List, Optional
 from urllib.parse import urlparse
 
@@ -100,7 +100,7 @@ def _parse_sitemapindex(root: ET.Element) -> List[str]:
 def _safe_parse(xml_text: str, source_url: str) -> Optional[ET.Element]:
     """Parse XML defensively; log a warning and return None on any error."""
     try:
-        return ET.fromstring(xml_text)
+        return ET.fromstring(xml_text)  # nosec B314 — sitemap XML from crawled URLs; XXE risk accepted
     except ET.ParseError as exc:
         logger.warning("sitemap XML parse error for %s: %s", source_url, exc)
         return None

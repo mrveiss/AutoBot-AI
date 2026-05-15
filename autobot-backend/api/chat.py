@@ -62,7 +62,6 @@ from type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
 from utils.chat_utils import (
     create_chat_response,
     create_error_response,
-    generate_chat_session_id,
     generate_message_id,
     generate_request_id,
     get_chat_history_manager,

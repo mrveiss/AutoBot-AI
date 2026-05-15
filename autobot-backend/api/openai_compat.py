@@ -430,7 +430,7 @@ async def chat_completions(
         )
 
     return JSONResponse(
-        content=response.model_dump(),
+        content=response.model_dump(exclude_none=True),
         headers=headers,
     )
 

@@ -6,7 +6,7 @@
 > - **Phase 2 — Progress trackers** ([#6506](https://github.com/mrveiss/AutoBot-AI/issues/6506)): **landed**
 > - **Phase 3 — Periodic schedulers** ([#6507](https://github.com/mrveiss/AutoBot-AI/issues/6507)): partially landed
 >   - Beat deployment ([#6555](https://github.com/mrveiss/AutoBot-AI/issues/6555)): **landed (this PR)**
->   - ConnectorScheduler multi-worker fix ([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)): _pending design call_
+>   - ConnectorScheduler multi-worker fix ([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)): **landed**
 
 The async-work stack covers three sub-domains: **queue work → execute → report progress → schedule next**. Historically each had two or three parallel implementations; #6495 consolidates them onto one canonical primitive per sub-domain.
 
@@ -101,7 +101,7 @@ landscape has **three patterns**, not two:
 | Pattern | When to use | Implementation | Status |
 |---|---|---|---|
 | **Static cron** | Fixed schedules known at deploy time (knowledge cleanup, sync queue prune) | Celery Beat — `celery_app.conf.beat_schedule` | Deployed via `autobot-celery-beat.service` ([#6555](https://github.com/mrveiss/AutoBot-AI/issues/6555)) |
-| **Dynamic per-entity recurring** | Schedules created/edited/deleted at runtime via API (per-connector sync intervals) | `knowledge/connectors/scheduler.py` (`ConnectorScheduler`) | Has multi-worker bug ([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)) — needs design call before migration |
+| **Dynamic per-entity recurring** | Schedules created/edited/deleted at runtime via API (per-connector sync intervals) | `knowledge/connectors/scheduler.py` (`ConnectorScheduler`) — Redis-backed + leader election (Option A, [#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)) | Stable: schedules survive worker restart, status consistent across workers |
 | **Event-driven wakeup** | "Wake me when X happens" not "wake me every N minutes" (per-agent heartbeat with explicit wakeup events) | `services/heartbeat_scheduler.py` | Stable as-is, do not migrate |
 
 ### Why three, not two
@@ -112,9 +112,29 @@ config — they aren't. Connectors are CRUD'd at runtime via `POST/DELETE
 /knowledge_base/connectors/...`, each with its own interval. Beat reads
 schedules from a static dict at startup; supporting dynamic schedules
 requires either `celery-redbeat` (extra dependency) or coordinating Beat
-restarts on every connector edit (terrible UX). Until that decision lands
-([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)) the dynamic
-pattern stays separate.
+restarts on every connector edit (terrible UX). The chosen approach ([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)) is
+Option A: Redis-backed schedule persistence + leader election so any worker
+can answer status queries and the elected leader runs the asyncio tasks.
+
+
+### ConnectorScheduler — multi-worker design ([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556))
+
+**Problem:** with 4 uvicorn workers, each `POST /knowledge_base/connectors` call
+could land on a different worker. That worker's in-process singleton held the
+schedule; the other three workers did not. After a worker restart the schedule
+was silently lost.
+
+**Solution (Option A):** Redis-backed schedules + leader election.
+
+| Concern | Mechanism |
+|---|---|
+| Persist schedules | `connector:schedule:{id}` key in the `knowledge` Redis DB. `start()` writes; `stop()` deletes. |
+| Consistent `scheduled` status | `is_running()` reads Redis — not the local asyncio task dict. Any worker answers correctly. |
+| Single-flight execution | Leader key `connector:scheduler:leader` with 30 s TTL. One worker wins via `SET NX`; refreshes every 10 s via `GET`+`PEXPIRE`. |
+| Restart recovery | When a leader dies its key expires. Within 15 s a non-leader wins election, calls `_reconcile_schedules()`, and rehydrates all `connector:schedule:*` keys into local asyncio tasks. |
+
+All four workers call `begin_leader_election()` at startup
+(wired in `initialization/lifespan.py:_start_connector_scheduler`).
 
 ### Celery Beat ([#6555](https://github.com/mrveiss/AutoBot-AI/issues/6555))
 

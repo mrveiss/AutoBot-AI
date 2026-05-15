@@ -8,6 +8,9 @@ Delegates SSRF DNS-resolution checks to autobot_shared.url_safety for
 consistency across the codebase per #6533.
 """
 
+import asyncio
+import ipaddress
+import socket
 from typing import List, Optional
 from urllib.parse import urlparse
 

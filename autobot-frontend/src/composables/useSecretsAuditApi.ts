@@ -7,17 +7,15 @@
  * Handles filtering by operation type, user, and date range.
  */
 
-import { ref, computed } from 'vue'
-import { useApiWithState } from './useApi'
+import { ref } from 'vue'
+import { useApiClient } from '@/plugins/api'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('SecretsAuditApi')
 
-/**
- * Audit log entry from backend
- */
 export interface AuditLogEntry {
   id: string
   timestamp: string
@@ -32,9 +30,6 @@ export interface AuditLogEntry {
   metadata?: Record<string, unknown>
 }
 
-/**
- * Backend audit query response
- */
 interface AuditQueryResponse {
   success: boolean
   total_returned: number
@@ -43,11 +38,8 @@ interface AuditQueryResponse {
   query: Record<string, unknown>
 }
 
-/**
- * Composable for fetching audit logs
- */
 export function useSecretsAuditApi() {
-  const { api, withErrorHandling } = useApiWithState()
+  const api = useApiClient()
 
   const { isLoading: loading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
@@ -55,9 +47,6 @@ export function useSecretsAuditApi() {
   const hasMore = ref(false)
   const totalCount = ref(0)
 
-  /**
-   * Fetch audit logs with optional filters
-   */
   const fetchAuditLogs = async (options?: {
     operationFilter?: string
     userIdFilter?: string
@@ -70,9 +59,7 @@ export function useSecretsAuditApi() {
 
     const params = new URLSearchParams()
 
-    // Build query string with filters
     if (options?.operationFilter && options.operationFilter !== 'all') {
-      // Map frontend operation types to backend audit operation names
       const operationMap: Record<string, string> = {
         'access': 'secrets.access',
         'inject': 'secrets.inject',
@@ -91,47 +78,37 @@ export function useSecretsAuditApi() {
       params.append('user_id', options.userIdFilter)
     }
 
-    if (options?.startTime) {
-      params.append('start_time', options.startTime)
-    }
-
-    if (options?.endTime) {
-      params.append('end_time', options.endTime)
-    }
+    if (options?.startTime) params.append('start_time', options.startTime)
+    if (options?.endTime) params.append('end_time', options.endTime)
 
     const limit = options?.limit ?? 100
     const offset = options?.offset ?? 0
     params.append('limit', String(limit))
     params.append('offset', String(offset))
 
-    return wrap(async () =>
-      withErrorHandling(
-        async () => {
-          const data = await api.get<AuditQueryResponse>(
-            `${getApiBase()}/audit/logs?${params.toString()}`
-          )
+    return wrap(async () => {
+      try {
+        const data = await api.get<AuditQueryResponse>(
+          `${getApiBase()}/audit/logs?${params.toString()}`
+        )
 
-          if (!data.success) {
-            throw new Error('Failed to fetch audit logs')
-          }
-
-          entries.value = data.entries
-          hasMore.value = data.has_more
-          totalCount.value = data.total_returned
-
-          return data
-        },
-        {
-          errorMessage: 'Failed to fetch audit logs',
-          showErrorToast: true
+        if (!data.success) {
+          throw new Error('Failed to fetch audit logs')
         }
-      )
-    )
+
+        entries.value = data.entries
+        hasMore.value = data.has_more
+        totalCount.value = data.total_returned
+
+        return data
+      } catch (err: unknown) {
+        logger.error('Failed to fetch audit logs', err)
+        showSubtleErrorNotification('Error', 'Failed to fetch audit logs', 'error')
+        return null
+      }
+    })
   }
 
-  /**
-   * Clear audit logs cache
-   */
   const clearCache = () => {
     entries.value = []
     hasMore.value = false
@@ -140,14 +117,11 @@ export function useSecretsAuditApi() {
   }
 
   return {
-    // State
     loading,
     error,
     entries,
     hasMore,
     totalCount,
-
-    // Methods
     fetchAuditLogs,
     clearCache
   }
