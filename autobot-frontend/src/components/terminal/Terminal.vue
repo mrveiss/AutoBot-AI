@@ -18,15 +18,15 @@
       <div class="flex items-center space-x-2">
         <!-- Terminal Controls -->
         <div class="flex items-center space-x-1">
-          <button @click="toggleConnection" :class="connectionButtonClass" :disabled="isConnecting" class="terminal-btn" :title="connectionButtonText">
+          <button @click="toggleConnection" :class="connectionButtonClass" :disabled="isConnecting" class="terminal-btn" :title="connectionButtonText" :aria-label="connectionButtonText">
             <i :class="connectionIconClass"></i>
           </button>
 
-          <button @click="clearTerminal" class="terminal-btn" :title="$t('terminal.terminal.clearTerminal')">
+          <button @click="clearTerminal" class="terminal-btn" :title="$t('terminal.terminal.clearTerminal')" :aria-label="$t('terminal.terminal.clearTerminal')">
             <i class="fas fa-trash"></i>
           </button>
 
-          <button @click="copyTerminalOutput" class="terminal-btn" :title="$t('terminal.terminal.copyOutput')">
+          <button @click="copyTerminalOutput" class="terminal-btn" :title="$t('terminal.terminal.copyOutput')" :aria-label="$t('terminal.terminal.copyOutput')">
             <i class="fas fa-copy"></i>
           </button>
         </div>
