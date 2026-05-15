@@ -446,7 +446,7 @@ class RedisConnectionManager:
 
         client = async_redis.Redis(connection_pool=pool)
         ready = await self._wait_for_redis_ready(client, database_name)
-        await client.aclose()
+        await client.aclose()  # type: ignore[attr-defined]
 
         if not ready:
             await pool.disconnect()
@@ -1013,7 +1013,7 @@ class RedisConnectionManager:
             raise ValueError(f"No sync pool found for database '{database}'")
 
         try:
-            with pool._lock:
+            with pool._lock:  # type: ignore[attr-defined]
                 created = getattr(pool, "_created_connections", 0)
                 available_conns = getattr(pool, "_available_connections", [])
                 in_use_conns = getattr(pool, "_in_use_connections", [])
@@ -1090,7 +1090,7 @@ class RedisConnectionManager:
         try:
             cleaned_count = 0
 
-            with pool._lock:
+            with pool._lock:  # type: ignore[attr-defined]
                 available_conns = getattr(pool, "_available_connections", [])
                 connections_to_remove = self._identify_idle_connections(available_conns)
 
@@ -1148,7 +1148,7 @@ class RedisConnectionManager:
 
         for pool in self._async_pools.values():
             try:
-                await pool.aclose()
+                await pool.aclose()  # type: ignore[attr-defined]
             except Exception as e:
                 logger.warning("Error closing async pool: %s", e)
 
