@@ -9,17 +9,12 @@ import { useAuditApi } from '../useAuditApi'
 
 const mockGet = vi.fn()
 
-vi.mock('../useApi', () => ({
-  useApiWithState: () => ({
-    api: { get: mockGet },
-    withErrorHandling: async <T>(fn: () => Promise<T>) => {
-      try {
-        return await fn()
-      } catch {
-        return null
-      }
-    },
-  }),
+vi.mock('@/plugins/api', () => ({
+  useApiClient: () => ({ get: mockGet, post: vi.fn(), put: vi.fn(), delete: vi.fn(), patch: vi.fn() }),
+}))
+
+vi.mock('@/utils/cacheManagement', () => ({
+  showSubtleErrorNotification: vi.fn(),
 }))
 
 vi.mock('@/utils/debugUtils', () => ({
