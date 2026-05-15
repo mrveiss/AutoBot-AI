@@ -100,7 +100,8 @@
     "moreOptions": "More options",
     "exportJson": "Export as JSON",
     "exportCsv": "Export as CSV",
-    "download": "Download"
+    "download": "Download",
+    "filterByCategory": "Filter by category"
   },
   "chat": {
     "sendMessage": "Send a message...",

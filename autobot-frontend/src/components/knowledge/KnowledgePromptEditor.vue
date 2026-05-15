@@ -255,10 +255,11 @@ onBeforeUnmount(() => {
             v-model="searchQuery"
             type="text"
             :placeholder="$t('knowledge.promptEditor.searchPlaceholder')"
+            :aria-label="t('common.search')"
             class="search-input"
           />
         </div>
-        <select v-model="selectedCategory" class="category-filter">
+        <select v-model="selectedCategory" class="category-filter" :aria-label="t('common.filterByCategory')">
           <option value="all">{{ $t('knowledge.promptEditor.allCategories') }}</option>
           <option value="system">{{ $t('knowledge.promptEditor.filterSystem') }}</option>
           <option value="agents">{{ $t('knowledge.promptEditor.filterAgents') }}</option>
@@ -271,7 +272,7 @@ onBeforeUnmount(() => {
     <div v-if="error" class="alert alert-error">
       <i class="fas fa-exclamation-circle"></i>
       {{ error }}
-      <button @click="error = null" class="close-btn" :aria-label="$t('common.dismiss')"><i class="fas fa-times"></i></button>
+      <button @click="error = null" class="close-btn" :aria-label="t('common.close')"><i class="fas fa-times"></i></button>
     </div>
 
     <div v-if="successMessage" class="alert alert-success">
@@ -375,6 +376,7 @@ onBeforeUnmount(() => {
               v-model="editedContent"
               class="prompt-textarea"
               :placeholder="$t('knowledge.promptEditor.contentPlaceholder')"
+              :aria-label="`${t('common.edit')}: ${selectedPrompt.name}`"
               spellcheck="false"
             ></textarea>
           </div>
