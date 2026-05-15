@@ -99,8 +99,7 @@ class OpenAIProvider(BaseProvider):
         api_key = self._resolve_api_key()
         if not api_key:
             raise ValueError(
-                "OpenAI API key not configured. "
-                "Set OPENAI_API_KEY or provide api_key in provider settings."
+                "OpenAI API key not configured. " "Set OPENAI_API_KEY or provide api_key in provider settings."
             )
         base_url = self._get_setting("base_url") or os.getenv("OPENAI_API_BASE_URL")
         kwargs: Dict[str, Any] = {"api_key": api_key}

@@ -64,11 +64,7 @@ class OpenRouterProvider(BaseProvider):
         """Resolve base URL with default."""
         if self._base_url:
             return self._base_url
-        url = (
-            self._get_setting("base_url")
-            or os.getenv("OPENROUTER_API_BASE_URL")
-            or "https://openrouter.ai/api/v1"
-        )
+        url = self._get_setting("base_url") or os.getenv("OPENROUTER_API_BASE_URL") or "https://openrouter.ai/api/v1"
         self._base_url = url
         return url
 

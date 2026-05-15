@@ -62,11 +62,7 @@ class HuggingFaceProvider(BaseProvider):
         """Resolve HF token from settings or environment."""
         if self._api_token:
             return self._api_token
-        self._api_token = (
-            self._get_setting("api_token")
-            or os.getenv("HF_TOKEN")
-            or os.getenv("HUGGINGFACE_API_TOKEN")
-        )
+        self._api_token = self._get_setting("api_token") or os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_API_TOKEN")
         return self._api_token
 
     def _build_headers(self) -> Dict[str, str]:

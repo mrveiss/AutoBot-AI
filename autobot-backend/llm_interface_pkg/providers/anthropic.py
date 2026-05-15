@@ -178,8 +178,7 @@ class AnthropicProvider(BaseProvider):
         api_key = self._resolve_api_key()
         if not api_key:
             raise ValueError(
-                "Anthropic API key not configured. "
-                "Set ANTHROPIC_API_KEY or provide api_key in provider settings."
+                "Anthropic API key not configured. " "Set ANTHROPIC_API_KEY or provide api_key in provider settings."
             )
         self._client = anthropic.AsyncAnthropic(api_key=api_key)
         return self._client
@@ -331,4 +330,10 @@ class AnthropicProvider(BaseProvider):
         return list(_ANTHROPIC_MODELS)
 
 
-__all__ = ["AnthropicProvider", "_ANTHROPIC_MODELS", "_build_api_kwargs", "_extract_text_content", "_strip_think_blocks"]
+__all__ = [
+    "AnthropicProvider",
+    "_ANTHROPIC_MODELS",
+    "_build_api_kwargs",
+    "_extract_text_content",
+    "_strip_think_blocks",
+]

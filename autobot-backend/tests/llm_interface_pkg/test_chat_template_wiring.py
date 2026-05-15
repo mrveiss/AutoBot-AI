@@ -54,7 +54,7 @@ def test_render_vicuna_contains_user_label():
 
 
 def test_render_unknown_template_falls_back_to_default(caplog):
-    with caplog.at_level(logging.WARNING, logger="llm_providers.chat_template_loader"):
+    with caplog.at_level(logging.WARNING, logger="llm_interface_pkg.providers.chat_template_loader"):
         result = render_chat_template(MESSAGES, "unknown_tmpl")
     assert "Unknown chat template" in caplog.text
     # Should fall back to chatml
@@ -82,7 +82,7 @@ def _make_vllm_provider():
     # Re-import after patching so VLLM_AVAILABLE reflects mock
     import importlib
 
-    import llm_providers.vllm_provider as mod
+    import llm_interface_pkg.providers.vllm as mod
 
     importlib.reload(mod)
     provider = mod.VLLMProvider.__new__(mod.VLLMProvider)
@@ -121,7 +121,7 @@ def test_vllm_messages_to_prompt_default_is_chatml():
 
 def test_vllm_messages_to_prompt_unknown_falls_back(caplog):
     provider, _ = _make_vllm_provider()
-    with caplog.at_level(logging.WARNING, logger="llm_providers.chat_template_loader"):
+    with caplog.at_level(logging.WARNING, logger="llm_interface_pkg.providers.chat_template_loader"):
         result = provider._messages_to_prompt(MESSAGES, chat_template="nonexistent")
     assert "Unknown chat template" in caplog.text
     assert "<|im_start|>user" in result
@@ -168,7 +168,7 @@ async def test_ollama_stream_uses_prompt_payload_when_template_set():
         ctx.content = fake_content()
         return ctx
 
-    with patch("llm_providers.ollama_provider.get_http_client") as mock_client:
+    with patch("llm_interface_pkg.providers.ollama_provider.get_http_client") as mock_client:
         client = MagicMock()
         client.post = fake_post
         mock_client.return_value = client
@@ -213,7 +213,7 @@ async def test_ollama_stream_uses_messages_payload_without_template():
         ctx.content = fake_content()
         return ctx
 
-    with patch("llm_providers.ollama_provider.get_http_client") as mock_client:
+    with patch("llm_interface_pkg.providers.ollama_provider.get_http_client") as mock_client:
         client = MagicMock()
         client.post = fake_post
         mock_client.return_value = client
@@ -272,7 +272,7 @@ async def test_ollama_chat_completion_pre_renders_when_template_set():
         )
         return ctx
 
-    with patch("llm_providers.ollama_provider.get_http_client") as mock_client:
+    with patch("llm_interface_pkg.providers.ollama_provider.get_http_client") as mock_client:
         client = MagicMock()
         client.post = fake_post
         mock_client.return_value = client

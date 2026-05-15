@@ -79,7 +79,7 @@ from abc import ABC, abstractmethod
 class LLMProvider(ABC):
     """Abstract base class for LLM providers (legacy shim).
 
-    New providers should subclass ``llm_providers.base_provider.BaseProvider``
+    New providers should subclass ``llm_interface_pkg.providers.base_provider.BaseProvider``
     instead.
     """
 

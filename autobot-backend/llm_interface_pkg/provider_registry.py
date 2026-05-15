@@ -38,7 +38,6 @@ from .base_provider import BaseProvider
 
 from llm_interface_pkg.model_param_registry import apply_model_defaults, apply_prompt_prefix
 
-
 logger = logging.getLogger(__name__)
 
 # Cache health results for 30 s to avoid a health check on every request.

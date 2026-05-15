@@ -75,9 +75,7 @@ class NousPortalProvider(BaseProvider):
         if self._base_url:
             return self._base_url
         url = (
-            self._get_setting("base_url")
-            or os.getenv("NOUS_API_BASE_URL")
-            or "https://api-inference.huggingface.co/v1"
+            self._get_setting("base_url") or os.getenv("NOUS_API_BASE_URL") or "https://api-inference.huggingface.co/v1"
         )
         self._base_url = url
         return url
