@@ -79,6 +79,17 @@ _LEADER_TTL_MS = 30_000  # leader lease - 30 seconds
 _LEADER_REFRESH_S = 10  # leader refreshes its lease every 10 s
 _LEADER_POLL_S = 15  # non-leaders poll for an open slot every 15 s
 
+# Atomic compare-and-expire: refresh TTL only if the key still holds our worker_id.
+# A plain GET→PEXPIRE pair is non-atomic; a rival can replace the key between the
+# two commands, causing dual-leader under GC pause or network delay.
+_REFRESH_LUA = """
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+    return redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[2]))
+else
+    return 0
+end
+"""
+
 
 def _decode(val: object) -> str:
     """Decode bytes to str; pass-through str."""
@@ -220,23 +231,19 @@ class ConnectorScheduler:
                 await asyncio.sleep(_LEADER_POLL_S)
 
     async def _try_acquire_or_refresh(self) -> bool:
-        """Acquire leader lock via SETNX (new) or GET+PEXPIRE (refresh).
-
-        The GET->PEXPIRE refresh is not atomic but safe in practice: with a
-        30 s TTL and 10 s refresh interval there is a 20 s margin before
-        expiry, making the race window negligible on a healthy host.
-        """
+        """Acquire leader lock via SETNX (new) or atomic Lua refresh."""
         redis = await get_async_redis_client(database="knowledge")
         if redis is None:
             return False
         try:
             if self._is_leader:
-                # Refresh: extend TTL only if the key still holds our worker_id
-                current = await redis.get(_LEADER_KEY)
-                if current is not None and _decode(current) == self._worker_id:
-                    await redis.pexpire(_LEADER_KEY, _LEADER_TTL_MS)
-                    return True
-                return False
+                # Atomic refresh: Lua script compares and extends TTL in one
+                # round-trip, preventing dual-leader under GC pause or network
+                # delay that would split a plain GET->PEXPIRE pair.
+                result = await redis.eval(
+                    _REFRESH_LUA, 1, _LEADER_KEY, self._worker_id, str(_LEADER_TTL_MS)
+                )
+                return bool(result)
             else:
                 # New acquisition: SET only if key does not exist (NX)
                 result = await redis.set(_LEADER_KEY, self._worker_id, nx=True, px=_LEADER_TTL_MS)

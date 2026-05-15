@@ -113,12 +113,23 @@ def _make_redis_mock(store: dict | None = None):
             if fnmatch.fnmatch(k, match):
                 yield k.encode()
 
+    async def _redis_eval(script, numkeys, *args):
+        # Implements the _REFRESH_LUA contract: GET==ARGV[1] -> PEXPIRE 1
+        key = args[0].decode() if isinstance(args[0], bytes) else args[0]
+        expected = args[1].decode() if isinstance(args[1], bytes) else args[1]
+        current = store.get(key)
+        current_s = current.decode() if isinstance(current, bytes) else current
+        if current_s == expected:
+            return 1
+        return 0
+
     mock.get = _get
     mock.set = _set
     mock.exists = _exists
     mock.delete = _delete
     mock.pexpire = _pexpire
     mock.scan_iter = _scan_iter
+    mock.eval = _redis_eval
     return mock, store
 
 
@@ -339,6 +350,40 @@ class TestConnectorSchedulerRedis:
             result = await scheduler._try_acquire_or_refresh()
 
         assert result is False
+
+
+    async def test_no_dual_leader_after_atomic_race(self):
+        """Atomic Lua refresh prevents dual-leader when a rival re-acquires between cycles.
+
+        Scenario: worker A holds the lock, it expires, worker B re-acquires atomically.
+        Worker A tries to refresh — must fail because it no longer holds the key.
+        """
+        store = {}
+        mock_redis, _ = _make_redis_mock(store)
+
+        with patch(
+            "knowledge.connectors.scheduler.get_async_redis_client",
+            return_value=mock_redis,
+        ):
+            worker_a = ConnectorScheduler()
+            worker_b = ConnectorScheduler()
+            # Give distinct IDs so they behave as separate workers
+            worker_a._worker_id = "host-a-1"
+            worker_b._worker_id = "host-b-2"
+
+            # Worker A acquires leadership
+            assert await worker_a._try_acquire_or_refresh() is True
+            worker_a._is_leader = True
+
+            # Simulate GC pause: lock expires then worker B re-acquires atomically
+            del store[_LEADER_KEY]
+            assert await worker_b._try_acquire_or_refresh() is True
+            worker_b._is_leader = True
+
+            # Worker A refresh MUST fail — it no longer holds the key
+            assert await worker_a._try_acquire_or_refresh() is False
+            # Worker B refresh MUST succeed — it is the rightful leader
+            assert await worker_b._try_acquire_or_refresh() is True
 
 
 async def _sleeper(done: asyncio.Event) -> None:
