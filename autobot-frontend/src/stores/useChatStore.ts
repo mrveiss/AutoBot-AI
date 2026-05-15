@@ -493,10 +493,16 @@ export const useChatStore = defineStore('chat', () => {
         sessions.value.push(...sessionsToAdd)
       }
     } else {
-      // Explicit empty mode: backend confirmed 0 sessions (user deleted all)
+      // Explicit empty mode: backend confirmed 0 sessions (user deleted all / logout)
       logger.debug(`🔄 Explicit empty mode (intentionalEmpty=true): Clearing all sessions`)
       sessions.value = backendSessions // Replace with empty backend result
       currentSessionId.value = null
+      // MVA-164: Unconditionally reset transient UI state on logout — no active stream
+      // can survive a session wipe, so the streaming guard is meaningless here.
+      hasPendingApproval.value = false
+      isTyping.value = false
+      streamingPreview.value = ''
+      return
     }
 
     // Issue #709: Reset typing state after sync to clear any stale state
@@ -878,6 +884,7 @@ export const useChatStore = defineStore('chat', () => {
     currentMessages,
     sessionCount,
     hasActiveSessions,
+    sessionTitles,
 
     // Actions
     createNewSession,
@@ -924,7 +931,10 @@ export const useChatStore = defineStore('chat', () => {
   persist: {
     key: 'autobot-chat-store',
     storage: localStorage,
-    pick: ['currentSessionId', 'sidebarCollapsed', 'sessions'],
+    // MVA-164: Custom serializer handles field selection — do NOT combine with `pick`.
+    // In pinia-plugin-persistedstate v4, `pick` is applied before serialization in the
+    // default path but is bypassed when a custom serializer is provided.
+    // The serialize function below explicitly builds the minimal persisted shape.
     serializer: {
       deserialize: (value: string) => {
         try {
@@ -946,19 +956,20 @@ export const useChatStore = defineStore('chat', () => {
         }
       },
       serialize: (value: Record<string, unknown>) => {
-        const copy = { ...value }
-        // MVA-164: Strip message bodies before persisting
-        if (copy.sessions && Array.isArray(copy.sessions)) {
-          copy.sessions = (copy.sessions as Array<Record<string, unknown>>).map(session => ({
+        // MVA-164: Persist only the minimal shape — no message bodies, no secrets.
+        // Explicitly enumerate fields to avoid silently including new state properties.
+        const sessions = (value.sessions as Array<Record<string, unknown>> | undefined) ?? []
+        return JSON.stringify({
+          currentSessionId: value.currentSessionId,
+          sidebarCollapsed: value.sidebarCollapsed,
+          sessions: sessions.map(session => ({
             id: session.id,
             title: session.title,
             createdAt: session.createdAt,
             updatedAt: session.updatedAt,
             isActive: session.isActive
-            // Explicitly exclude: messages, owner, collaborators, activities, sessionSecrets, desktopSession
           }))
-        }
-        return JSON.stringify(copy)
+        })
       }
     }
   }

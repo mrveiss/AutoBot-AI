@@ -36,7 +36,7 @@ vi.mock('@/stores/useChatStore', () => ({
     updateSettings: vi.fn(),
     toggleSidebar: vi.fn(),
     isTyping: false,
-    settings: { autoSave: false, persistHistory: true }
+    settings: { model: 'gpt-4', temperature: 0.7, maxTokens: 2048, systemPrompt: '', persistHistory: true }
   }))
 }))
 
