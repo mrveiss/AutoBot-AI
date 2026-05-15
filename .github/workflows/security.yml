@@ -154,10 +154,34 @@ jobs:
         python3 -m bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ -f txt || true
 
     - name: Semgrep SAST Scan
+      # Blocking: exits non-zero when ERROR-severity findings are present.
+      # Custom rules (.semgrep/rules.yaml) cover AutoBot-specific patterns;
+      # p/python + p/secrets add community coverage.
       run: |
+        set -euo pipefail
         echo "## Semgrep Security Analysis" >> $GITHUB_STEP_SUMMARY
-        python3 -m semgrep --config=auto --json --output=semgrep-report.json autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
-        python3 -m semgrep --config=auto autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
+        python3 -m semgrep \
+          --config=.semgrep/rules.yaml \
+          --config=p/python \
+          --config=p/secrets \
+          --sarif \
+          --output=semgrep.sarif \
+          --error \
+          autobot-backend/ autobot-slm-backend/ autobot_shared/
+        python3 -m semgrep \
+          --config=.semgrep/rules.yaml \
+          --config=p/python \
+          --config=p/secrets \
+          --json \
+          --output=semgrep-report.json \
+          autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
+
+    - name: Upload Semgrep SARIF to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@4f3212b61783c3c68e8309a0f18a699764811cda  # v3
+      if: always()
+      with:
+        sarif_file: semgrep.sarif
+        category: semgrep
 
     - name: Python Code Quality Check
       run: |
@@ -211,6 +235,7 @@ jobs:
         path: |
           bandit-report.json
           semgrep-report.json
+          semgrep.sarif
           flake8-report.txt
         retention-days: 30
 
