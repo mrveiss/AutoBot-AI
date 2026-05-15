@@ -16,11 +16,11 @@ import traceback
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
-from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.status_enums import Priority as TaskPriority  # #7504 consolidation
 from autobot_shared.status_enums import TaskStatus
 from autobot_shared.time_utils import parse_utc_iso
 
@@ -47,15 +47,6 @@ ErrorCategory = None
 # except ImportError:
 def log_performance_metric(*args, **kwargs):
     """Log performance metric placeholder until logging_config module is created."""
-
-
-class TaskPriority(Enum):
-    """Task priority levels."""
-
-    LOW = 1
-    NORMAL = 2
-    HIGH = 3
-    CRITICAL = 4
 
 
 @dataclass
@@ -136,7 +127,9 @@ class Task:
     def from_dict(cls, data: Dict[str, Any]) -> "Task":
         """Create from dictionary."""
         if "priority" in data:
-            data["priority"] = TaskPriority(data["priority"])
+            val = data["priority"]
+            # Backward compat: old queue stored integer priority scores (1-4)
+            data["priority"] = TaskPriority.from_numeric(val) if isinstance(val, int) else TaskPriority(val)
         if "created_at" in data:
             data["created_at"] = parse_utc_iso(data["created_at"])
         if "scheduled_at" in data and data["scheduled_at"]:
@@ -270,7 +263,7 @@ class TaskQueue:
                 score = scheduled_at.timestamp()
                 await self.redis.zadd(self.scheduled_key, {task_id: score})
             else:
-                priority_score = priority.value * 1000000 + int(time.time())
+                priority_score = TaskPriority.to_numeric(priority) * 1000000 + int(time.time())
                 await self.redis.zadd(self.pending_key, {task_id: priority_score})
         except RedisError as e:
             self.logger.error("Failed to enqueue task %s: %s", task_id, e)
