@@ -62,9 +62,13 @@ class SkillRegistry:
 
         Called after every register() and unregister() so hot-path lookups are
         always O(1) dict access into a frozen snapshot — no per-request regex.
+        Acquires the lock only to snapshot the skill list; index construction
+        runs outside the lock so tokenization work does not block concurrents.
         """
+        with self._lock:
+            skill_list = self.list_skills()
         try:
-            self._routing_index = SkillRoutingIndex.build_at_startup(self.list_skills())
+            self._routing_index = SkillRoutingIndex.build_at_startup(skill_list)
         except Exception as exc:
             logger.warning("Failed to rebuild routing index: %s", exc)
             self._routing_index = None
