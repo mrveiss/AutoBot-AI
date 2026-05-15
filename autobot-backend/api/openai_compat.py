@@ -89,13 +89,13 @@ def _remote_addr(request: Request) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _get_user(request: Request) -> Dict[str, Any]:
+async def _get_user(request: Request) -> Dict[str, Any]:
     """Validate Bearer token and return AutoBot user dict.
 
     Raises HTTPException 401 if auth fails.
     """
     try:
-        return get_current_user(request)
+        return await get_current_user(request)
     except HTTPException:
         raise
     except Exception as exc:
@@ -125,7 +125,7 @@ async def _resolve_auth(request: Request) -> Tuple[Optional[Dict[str, Any]], Opt
             raise HTTPException(status_code=401, detail="Invalid or revoked API key")
         return None, record
     # Fall back to platform JWT
-    user = _get_user(request)
+    user = await _get_user(request)
     return user, None
 
 

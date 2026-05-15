@@ -95,12 +95,13 @@ class TestMintRunJwt:
         from autobot_shared.auth.jwt_core import decode_jwt
 
         token = mint_run_jwt(_RUN_ID, _TASK_ID, _AGENT_ID, _TENANT_ID, _SCOPE)
-        claims = decode_jwt(token, _SECRET)
+        claims = decode_jwt(token, _SECRET, audience="autobot:run-validator")
         assert claims["run_id"] == _RUN_ID
         assert claims["task_id"] == _TASK_ID
         assert claims["agent_id"] == _AGENT_ID
         assert claims["tenant_id"] == _TENANT_ID
         assert claims["scope"] == _SCOPE
+        assert claims["aud"] == "autobot:run-validator"
         assert "jti" in claims
         assert "exp" in claims
 
@@ -113,7 +114,7 @@ class TestMintRunJwt:
         from autobot_shared.auth.jwt_core import decode_jwt
 
         token = mint_run_jwt(_RUN_ID, _TASK_ID, _AGENT_ID, _TENANT_ID, _SCOPE)
-        claims = decode_jwt(token, _SECRET)
+        claims = decode_jwt(token, _SECRET, audience="autobot:run-validator")
         remaining = claims["exp"] - time.time()
         assert 55 <= remaining <= 65, f"expected ~60s TTL, got {remaining:.0f}s"
 
@@ -146,7 +147,7 @@ class TestValidateRunJwtValid:
     async def test_raises_when_jti_missing(self, _no_audit):
         """Token without jti claim must be rejected."""
         bad_token = encode_jwt(
-            {"run_id": _RUN_ID, "agent_id": _AGENT_ID},
+            {"aud": "autobot:run-validator", "run_id": _RUN_ID, "agent_id": _AGENT_ID},
             secret=_SECRET,
             expires_delta=timedelta(seconds=300),
         )
@@ -154,6 +155,64 @@ class TestValidateRunJwtValid:
         with patch("services.run_jwt.get_async_redis_client", side_effect=client):
             with pytest.raises(JWTDecodeError, match="missing jti"):
                 await validate_run_jwt(bad_token)
+
+
+# ---------------------------------------------------------------------------
+# aud claim enforcement (MVA-155)
+# ---------------------------------------------------------------------------
+
+
+class TestValidateAudClaim:
+    @pytest.mark.asyncio
+    async def test_rejects_wrong_aud(self, _no_audit):
+        """Token with a different aud value must be rejected — cross-validator reuse prevention."""
+        bad_token = encode_jwt(
+            {
+                "jti": str(uuid.uuid4()),
+                "aud": "some-other-validator",
+                "run_id": _RUN_ID,
+                "task_id": _TASK_ID,
+                "agent_id": _AGENT_ID,
+                "tenant_id": _TENANT_ID,
+                "scope": _SCOPE,
+            },
+            secret=_SECRET,
+            expires_delta=timedelta(seconds=300),
+        )
+        store, client = _make_store()
+        with patch("services.run_jwt.get_async_redis_client", side_effect=client):
+            with pytest.raises(JWTDecodeError):
+                await validate_run_jwt(bad_token)
+
+    @pytest.mark.asyncio
+    async def test_rejects_missing_aud(self, _no_audit):
+        """Token without an aud claim must be rejected."""
+        bad_token = encode_jwt(
+            {
+                "jti": str(uuid.uuid4()),
+                "run_id": _RUN_ID,
+                "task_id": _TASK_ID,
+                "agent_id": _AGENT_ID,
+                "tenant_id": _TENANT_ID,
+                "scope": _SCOPE,
+            },
+            secret=_SECRET,
+            expires_delta=timedelta(seconds=300),
+        )
+        store, client = _make_store()
+        with patch("services.run_jwt.get_async_redis_client", side_effect=client):
+            with pytest.raises(JWTDecodeError):
+                await validate_run_jwt(bad_token)
+
+    @pytest.mark.asyncio
+    async def test_aud_env_override(self, monkeypatch, _no_audit):
+        """RUN_JWT_AUDIENCE env var changes the expected audience for both mint and validate."""
+        monkeypatch.setenv("RUN_JWT_AUDIENCE", "custom:validator")
+        store, client = _make_store()
+        with patch("services.run_jwt.get_async_redis_client", side_effect=client):
+            token = mint_run_jwt(_RUN_ID, _TASK_ID, _AGENT_ID, _TENANT_ID, _SCOPE)
+            claims = await validate_run_jwt(token)
+        assert claims["aud"] == "custom:validator"
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +346,7 @@ class TestRefreshRunJwt:
         with patch("services.run_jwt.get_async_redis_client", side_effect=client):
             original = mint_run_jwt(_RUN_ID, _TASK_ID, _AGENT_ID, _TENANT_ID, _SCOPE)
             refreshed = await refresh_run_jwt(original, _RUN_ID)
-        claims = decode_jwt(refreshed, _SECRET)
+        claims = decode_jwt(refreshed, _SECRET, audience="autobot:run-validator")
         assert claims["scope"] == _SCOPE
         assert claims["run_id"] == _RUN_ID
         assert claims["agent_id"] == _AGENT_ID
