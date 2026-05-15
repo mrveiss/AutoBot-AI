@@ -84,7 +84,22 @@
     "page": "Page",
     "previous": "Previous",
     "optional": "optional",
-    "remove": "Remove"
+    "remove": "Remove",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fitToView": "Fit to view",
+    "toggleLayout": "Toggle layout",
+    "fullscreen": "Fullscreen",
+    "exitFullscreen": "Exit fullscreen",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "copyToClipboard": "Copy to clipboard",
+    "sortAscending": "Sort ascending",
+    "sortDescending": "Sort descending",
+    "moreOptions": "More options",
+    "exportJson": "Export as JSON",
+    "exportCsv": "Export as CSV",
+    "download": "Download"
   },
   "chat": {
     "sendMessage": "Send a message...",
