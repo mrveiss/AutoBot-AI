@@ -55,8 +55,6 @@ export class ChatController {
   } | null = null
   private _streamFlushTimer: ReturnType<typeof setTimeout> | null = null
   private _previewThrottleTimer: ReturnType<typeof setTimeout> | null = null
-  // Issue #3749: stored so disableAutoSave() can clearInterval()
-  private _autoSaveIntervalId: ReturnType<typeof setInterval> | null = null
   private static readonly STREAM_FLUSH_INTERVAL_MS = 80
   private static readonly PREVIEW_THROTTLE_MS = 200
 
@@ -609,20 +607,31 @@ export class ChatController {
   // Enhanced session operations with error handling
   async createNewSession(title?: string): Promise<string> {
     try {
-      // #6746: single-path create — local UUID is registered with the backend
-      // in one round-trip. No two-phase create with diverging IDs.
-      const sessionId = this.chatStore.createNewSession(title)
+      // MVA-164: Client-mint UUID before any API call (server-round-trip-first pattern)
+      // Generate UUID upfront
+      const sessionId = crypto.randomUUID()
+
+      // Call backend immediately with the client-minted UUID
       try {
-        await chatRepository.createNewChat(title, undefined, sessionId)
-        logger.debug('New chat session synced with backend:', sessionId)
+        const backendSession = await chatRepository.createNewChat(title, undefined, sessionId)
+        logger.debug('New chat session created on backend:', sessionId)
+        // MVA-164: Validate backend echoed the same ID we sent.
+        // If the backend mints its own ID instead, the two sides would desync silently.
+        if (backendSession?.id && backendSession.id !== sessionId) {
+          logger.warn(`Backend returned a different session ID (${backendSession.id}); expected ${sessionId}. Using client-minted ID.`)
+        }
       } catch (error) {
-        // Backend create failed but local session is usable — autosave / send-
-        // message paths will retry. Surface the warning and continue.
-        logger.warn('Failed to sync new chat with backend, continuing with local session:', error)
+        // Backend create failed - don't create local session if backend fails
+        logger.error('Failed to create chat session on backend:', error)
+        this.getAppStore()?.setGlobalError(`Failed to create chat: ${extractErrorMessage(error, 'Unknown error')}`)
+        throw error
       }
+
+      // Backend succeeded - now create the local session with the same UUID
+      this.chatStore.createNewSession(title, sessionId)
+
       return sessionId
     } catch (error: unknown) {
-      this.getAppStore()?.setGlobalError(`Failed to create chat: ${extractErrorMessage(error, 'Unknown error')}`)
       throw error
     }
   }
@@ -940,25 +949,6 @@ export class ChatController {
     return this.resetChat()
   }
 
-  // Auto-save functionality with error handling
-  enableAutoSave(intervalMs: number = 30000): void {
-    this.disableAutoSave()
-    this._autoSaveIntervalId = setInterval(() => {
-      if (this.chatStore.settings.autoSave && this.chatStore.currentSessionId) {
-        this.saveChatSession().catch(error => {
-          logger.warn('Auto-save failed:', error)
-          // Don't show global error for auto-save failures
-        })
-      }
-    }, intervalMs)
-  }
-
-  disableAutoSave(): void {
-    if (this._autoSaveIntervalId !== null) {
-      clearInterval(this._autoSaveIntervalId)
-      this._autoSaveIntervalId = null
-    }
-  }
 
   // Enhanced validation helpers
   validateMessage(content: string): { valid: boolean; error?: string } {

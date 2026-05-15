@@ -605,11 +605,6 @@ const handleShareComplete = (result: Record<string, unknown>) => {
 // Toggle setting handler
 const toggleSetting = (key: string, value: boolean) => {
   setSetting(key as any, value)
-
-  // Also update chat store settings for autoScroll
-  if (key === 'autoScroll') {
-    controller.updateChatSettings({ autoSave: value })
-  }
 }
 
 const reloadSystem = async () => {
