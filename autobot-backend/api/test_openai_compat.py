@@ -134,8 +134,7 @@ async def test_non_streaming_usage_omits_cost_usd():
     data = resp.json()
     assert "usage" in data
     assert "cost_usd" not in data["usage"], (
-        "cost_usd must be absent from the non-streaming usage object; "
-        "strict OAI clients reject unknown fields"
+        "cost_usd must be absent from the non-streaming usage object; " "strict OAI clients reject unknown fields"
     )
 
 
