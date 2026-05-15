@@ -43,7 +43,6 @@ from .huggingface import HuggingFaceProvider
 # Local/self-hosted providers
 from .mock_handler import LocalHandler, MockHandler
 from .nous_portal import NOUS_MODELS, NousPortalProvider
-from .ollama import OllamaProvider as _InnerOllamaProvider  # inner delegate
 from .ollama_provider import OllamaProvider  # registry-facing
 from .openai import OpenAIProvider
 from .openrouter import OpenRouterProvider
