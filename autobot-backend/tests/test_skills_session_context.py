@@ -9,7 +9,6 @@ Verifies that the canonical context manager:
 - always closes the session
 """
 
-from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
