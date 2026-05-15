@@ -3,10 +3,10 @@
     <div class="tree-header">
       <h3><i class="fas fa-folder-tree"></i> {{ $t('fileBrowser.treeView.title') }}</h3>
       <div class="tree-controls">
-        <button @click="$emit('expand-all')" :title="$t('fileBrowser.treeView.expandAll')">
+        <button @click="$emit('expand-all')" :title="$t('fileBrowser.treeView.expandAll')" :aria-label="$t('fileBrowser.treeView.expandAll')">
           <i class="fas fa-expand-alt"></i>
         </button>
-        <button @click="$emit('collapse-all')" :title="$t('fileBrowser.treeView.collapseAll')">
+        <button @click="$emit('collapse-all')" :title="$t('fileBrowser.treeView.collapseAll')" :aria-label="$t('fileBrowser.treeView.collapseAll')">
           <i class="fas fa-compress-alt"></i>
         </button>
       </div>

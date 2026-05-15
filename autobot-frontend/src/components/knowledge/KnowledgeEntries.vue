@@ -228,6 +228,7 @@
                 @click="viewEntry(entry)"
                 class="icon-btn"
                 :title="$t('knowledge.entries.viewBtn')"
+                :aria-label="$t('knowledge.entries.viewBtn')"
               >
                 <i class="fas fa-eye"></i>
               </BaseButton>
@@ -237,6 +238,7 @@
                 @click="editEntry(entry)"
                 class="icon-btn"
                 :title="$t('knowledge.entries.editBtn')"
+                :aria-label="$t('knowledge.entries.editBtn')"
               >
                 <i class="fas fa-edit"></i>
               </BaseButton>
@@ -246,6 +248,7 @@
                 @click="deleteEntry(entry)"
                 class="icon-btn danger"
                 :title="$t('knowledge.entries.deleteBtn')"
+                :aria-label="$t('knowledge.entries.deleteBtn')"
               >
                 <i class="fas fa-trash"></i>
               </BaseButton>

@@ -107,10 +107,10 @@
           <span class="subtitle">{{ t('security.secretsManager.credentialCount', { count: filteredSecrets.length }, filteredSecrets.length) }}</span>
         </div>
         <div class="header-actions">
-          <button @click="loadSecrets" class="btn-icon" :disabled="loading" :title="t('security.secretsManager.refresh')">
+          <button @click="loadSecrets" class="btn-icon" :disabled="loading" :title="t('security.secretsManager.refresh')" :aria-label="t('security.secretsManager.refresh')">
             <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
           </button>
-          <button @click="toggleView" class="btn-icon" :title="viewMode === 'grid' ? t('security.secretsManager.listView') : t('security.secretsManager.gridView')">
+          <button @click="toggleView" class="btn-icon" :title="viewMode === 'grid' ? t('security.secretsManager.listView') : t('security.secretsManager.gridView')" :aria-label="viewMode === 'grid' ? t('security.secretsManager.listView') : t('security.secretsManager.gridView')">
             <i :class="viewMode === 'grid' ? 'fas fa-list' : 'fas fa-th'"></i>
           </button>
         </div>
