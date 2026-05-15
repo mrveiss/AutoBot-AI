@@ -88,8 +88,6 @@ const mockController = {
   // Message handling
   sendMessage: vi.fn().mockResolvedValue(undefined),
   // Settings
-  enableAutoSave: vi.fn(),
-  disableAutoSave: vi.fn(),
   updateChatSettings: vi.fn(),
   // UI
   toggleSidebar: vi.fn(),
