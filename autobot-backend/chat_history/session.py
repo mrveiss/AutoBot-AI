@@ -338,6 +338,20 @@ class SessionMixin:
                 0,
                 -(_CHAT_RECENT_MAX_ENTRIES + 1),
             )
+            # Phase 4 (#7590): emit cardinality gauge for SSOT observability.
+            # Structured JSON so Loki can parse: {"event": "chat_recent_cardinality", "value": N}
+            # Alert fires when value > AUTOBOT_CHAT_SSOT_CARDINALITY_THRESHOLD (default 200).
+            try:
+                cardinality = await run_in_chat_io_executor(self.redis_client.zcard, REDIS_KEY.CHAT_RECENT)
+                logger.info(json.dumps({"event": "chat_recent_cardinality", "value": cardinality}))
+                try:
+                    from monitoring.prometheus_metrics import get_metrics_manager
+
+                    get_metrics_manager().set_chat_recent_cardinality(cardinality)
+                except Exception as e:
+                    logger.warning("chat:recent Prometheus cardinality update failed: %s", e)
+            except Exception as card_err:
+                logger.warning("chat:recent cardinality read failed: %s", card_err)
             logger.debug("Cached session %s in Redis", session_id)
         except Exception as e:
             logger.error("Failed to cache session in Redis: %s", e)

@@ -29,6 +29,9 @@ Package Structure:
 """
 
 from .base import BaseMetricsRecorder
+
+# Phase 4 (#7590): Chat SSOT observability recorder
+from .chat import ChatMetricsRecorder
 from .claude_api import ClaudeAPIMetricsRecorder
 
 # Issue #476: Frontend RUM metrics recorder
@@ -54,6 +57,8 @@ from .workflow import WorkflowMetricsRecorder
 
 __all__ = [
     "BaseMetricsRecorder",
+    # Phase 4 (#7590): Chat SSOT observability
+    "ChatMetricsRecorder",
     "WorkflowMetricsRecorder",
     "GitHubMetricsRecorder",
     "TaskMetricsRecorder",

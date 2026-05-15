@@ -30,7 +30,9 @@ from prometheus_client import (
 # Issue #470: Added KnowledgeBase, LLMProvider, WebSocket, Redis recorders
 # Issue #476: Added FrontendMetricsRecorder for RUM metrics
 # Issue #4109: Added MCPWorkerMetricsRecorder for worker restart monitoring
+# Phase 4 (#7590): Added ChatMetricsRecorder for SSOT observability
 from .metrics import (
+    ChatMetricsRecorder,
     ClaudeAPIMetricsRecorder,
     FrontendMetricsRecorder,
     GitHubMetricsRecorder,
@@ -114,6 +116,8 @@ class PrometheusMetricsManager:
         self._inference_profiler = InferenceProfilerMetricsRecorder(self.registry)
         # Issue #4109: Initialize MCP worker metrics recorder
         self._mcp_worker = MCPWorkerMetricsRecorder(self.registry)
+        # Phase 4 (#7590): Initialize chat SSOT observability recorder
+        self._chat = ChatMetricsRecorder(self.registry)
 
     # =========================================================================
     # Core Infrastructure Metrics Initialization
@@ -779,6 +783,22 @@ class PrometheusMetricsManager:
     def set_mcp_worker_permanently_failed(self, bridge: str, failed: bool) -> None:
         """Set permanent failure flag for a worker."""
         self._mcp_worker.set_permanently_failed(bridge, failed)
+
+    # =========================================================================
+    # Chat SSOT Observability Metrics (Phase 4, #7590)
+    # =========================================================================
+
+    def record_chat_message_sent(self, event_type: str) -> None:
+        """Increment autobot_chat_messages_sent_total for event_type."""
+        self._chat.record_message_sent(event_type)
+
+    def set_chat_recent_cardinality(self, count: int) -> None:
+        """Update autobot_chat_recent_cardinality gauge (ZCARD chat:recent)."""
+        self._chat.set_recent_cardinality(count)
+
+    def set_chat_disk_file_count(self, count: int) -> None:
+        """Update autobot_chat_disk_file_count gauge."""
+        self._chat.set_disk_file_count(count)
 
     # =========================================================================
     # Metrics Export

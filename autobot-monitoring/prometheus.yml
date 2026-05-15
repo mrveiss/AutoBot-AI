@@ -16,7 +16,8 @@ global:
 alerting:
   alertmanagers: []
 
-rule_files: []
+rule_files:
+  - "alerts-chat-ssot.yml"  # Phase 4 (#7590): SSOT cardinality + disk file alerts
 
 scrape_configs:
   # Prometheus self-monitoring

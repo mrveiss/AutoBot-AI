@@ -20,6 +20,10 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+# Phase 4 (#7590): feature flag — default-off; enable in staging then flip to default-on.
+# Reads env at import time (process restart required to change).
+_CHAT_SSOT_STRICT = os.environ.get("AUTOBOT_CHAT_SSOT_STRICT", "false").lower() == "true"
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -310,6 +314,12 @@ def _process_streaming_groups(merged: List[Dict]) -> List[Dict]:
 router = APIRouter(tags=["chat"])
 logger = logging.getLogger(__name__)
 
+# Phase 4 (#7590): log feature flag state at startup so operators know which mode is active
+logger.info(
+    "AUTOBOT_CHAT_SSOT_STRICT=%s",
+    "true" if _CHAT_SSOT_STRICT else "false (default — session_id enforcement via schema only)",
+)
+
 # Include session management router
 from api.chat_sessions import router as sessions_router
 
@@ -334,6 +344,8 @@ def _validate_session_id(session_id: Optional[str]) -> None:
     Validate session ID format if provided.
 
     Issue #281: Extracted helper for session validation.
+    Phase 4 (#7590): in SSOT strict mode also reject missing session_id so
+    every message is tied to a known session (AUTOBOT_CHAT_SSOT_STRICT).
 
     Args:
         session_id: Session ID to validate
@@ -341,14 +353,18 @@ def _validate_session_id(session_id: Optional[str]) -> None:
     Raises:
         ValidationError: If session ID format is invalid
     """
+    (
+        AutoBotError,
+        InternalError,
+        ResourceNotFoundError,
+        ValidationError,
+        get_error_code,
+    ) = get_exceptions_lazy()
+
+    if _CHAT_SSOT_STRICT and not session_id:
+        raise ValidationError("session_id is required (AUTOBOT_CHAT_SSOT_STRICT)")
+
     if session_id and not validate_chat_session_id(session_id):
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
         raise ValidationError("Invalid session ID format")
 
 
@@ -452,6 +468,16 @@ async def _store_and_log_user_message(
             "role": message.role,
         },
     )
+
+    # Phase 4 (#7590): structured JSON telemetry for SSOT cardinality query.
+    # Log query: count(distinct session_id where event="chat_send") per request — P99 ≤ 1.0.
+    logger.info(json.dumps({"event": "chat_send", "session_id": session_id, "message_id": user_message_id}))
+    try:
+        from monitoring.prometheus_metrics import get_metrics_manager
+
+        get_metrics_manager().record_chat_message_sent("chat_send")
+    except Exception as e:
+        logger.warning("chat_send Prometheus metrics update failed: %s", e)
 
     return user_message_id
 
@@ -602,6 +628,15 @@ async def _store_and_log_ai_response(
             "request_id": request_id,
         },
     )
+
+    # Phase 4 (#7590): structured JSON telemetry — mirrors chat_send shape for Loki correlation.
+    logger.info(json.dumps({"event": "chat_response_stored", "session_id": session_id, "message_id": ai_message_id}))
+    try:
+        from monitoring.prometheus_metrics import get_metrics_manager
+
+        get_metrics_manager().record_chat_message_sent("chat_response_stored")
+    except Exception as e:
+        logger.warning("chat_response_stored Prometheus metrics update failed: %s", e)
 
     return ai_message_id
 
