@@ -471,15 +471,13 @@ async def _store_and_log_user_message(
 
     # Phase 4 (#7590): structured JSON telemetry for SSOT cardinality query.
     # Log query: count(distinct session_id where event="chat_send") per request — P99 ≤ 1.0.
-    logger.info(
-        json.dumps({"event": "chat_send", "session_id": session_id, "message_id": user_message_id})
-    )
+    logger.info(json.dumps({"event": "chat_send", "session_id": session_id, "message_id": user_message_id}))
     try:
         from monitoring.prometheus_metrics import get_metrics_manager
 
         get_metrics_manager().record_chat_message_sent("chat_send")
-    except Exception:
-        pass  # Metrics must never break message flow
+    except Exception as e:
+        logger.warning("chat_send Prometheus metrics update failed: %s", e)
 
     return user_message_id
 
@@ -632,17 +630,13 @@ async def _store_and_log_ai_response(
     )
 
     # Phase 4 (#7590): structured JSON telemetry — mirrors chat_send shape for Loki correlation.
-    logger.info(
-        json.dumps(
-            {"event": "chat_response_stored", "session_id": session_id, "message_id": ai_message_id}
-        )
-    )
+    logger.info(json.dumps({"event": "chat_response_stored", "session_id": session_id, "message_id": ai_message_id}))
     try:
         from monitoring.prometheus_metrics import get_metrics_manager
 
         get_metrics_manager().record_chat_message_sent("chat_response_stored")
-    except Exception:
-        pass  # Metrics must never break message flow
+    except Exception as e:
+        logger.warning("chat_response_stored Prometheus metrics update failed: %s", e)
 
     return ai_message_id
 

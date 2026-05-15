@@ -152,7 +152,6 @@ class RedisMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-
         self.keys_expired = Counter(
             "autobot_redis_keys_expired_total",
             "Total expired keys",
