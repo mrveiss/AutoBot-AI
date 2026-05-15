@@ -240,9 +240,7 @@ class ConnectorScheduler:
                 # Atomic refresh: Lua script compares and extends TTL in one
                 # round-trip, preventing dual-leader under GC pause or network
                 # delay that would split a plain GET->PEXPIRE pair.
-                result = await redis.eval(
-                    _REFRESH_LUA, 1, _LEADER_KEY, self._worker_id, str(_LEADER_TTL_MS)
-                )
+                result = await redis.eval(_REFRESH_LUA, 1, _LEADER_KEY, self._worker_id, str(_LEADER_TTL_MS))
                 return bool(result)
             else:
                 # New acquisition: SET only if key does not exist (NX)
