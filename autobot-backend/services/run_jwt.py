@@ -435,8 +435,7 @@ async def refresh_run_jwt(token: str, run_id: str) -> str:
         acquired = await redis.set(_DENYLIST_PREFIX + old_jti, "1", ex=remaining, nx=True)
         if not acquired:
             raise JWTRefreshConflictError(
-                f"run_jwt: concurrent refresh detected for jti={old_jti} — "
-                "use the token from the winning request"
+                f"run_jwt: concurrent refresh detected for jti={old_jti} — " "use the token from the winning request"
             )
 
     _emit_revoke_audit(claims, agent_id, remaining)

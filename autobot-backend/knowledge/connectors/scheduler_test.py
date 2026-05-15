@@ -351,7 +351,6 @@ class TestConnectorSchedulerRedis:
 
         assert result is False
 
-
     async def test_no_dual_leader_after_atomic_race(self):
         """Atomic Lua refresh prevents dual-leader when a rival re-acquires between cycles.
 
