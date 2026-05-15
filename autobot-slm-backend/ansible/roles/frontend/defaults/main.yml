@@ -1,0 +1,42 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Frontend configuration defaults  (#926 Phase 4: service account created, migration in Phase 7)
+network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '' }}"
+frontend_service_account: autobot-frontend  # Phase 7: migrate service to run as this account
+frontend_user: autobot
+frontend_group: autobot
+frontend_install_dir: /opt/autobot
+frontend_log_dir: /var/log/autobot
+
+# Deployment
+frontend_repo_url: "https://github.com/mrveiss/AutoBot-AI.git"
+frontend_version: main
+frontend_deploy_from_git: true
+frontend_build_production: false
+
+# Node.js
+nodejs_version: "20.x"
+
+# Server settings
+frontend_port: 443
+nginx_http_port: 80
+
+# Backend connection (user backend on main machine)
+# Backend runs on HTTPS port 8443 with SSL certificates
+# backend_host and backend_port are set dynamically by
+# _build_infra_vars() in setup_wizard.py at provisioning time
+frontend_backend_url: "{{ backend_protocol | default('https') }}://{{ backend_host | default(ansible_facts['default_ipv4'].address | default(ansible_host)) }}:{{ backend_port | default(8443) }}"
+
+# Issue #1098: Backend upstream health tracking
+backend_max_fails: 3
+backend_fail_timeout: "30s"
+
+# TLS Configuration
+frontend_tls_cert_dir: /etc/autobot/certs
+frontend_tls_cert: "{{ frontend_tls_cert_dir }}/server-cert.pem"
+frontend_tls_key: "{{ frontend_tls_cert_dir }}/server-key.pem"
+
+# Frontend app directory
+frontend_dist_dir: "{{ frontend_install_dir }}/autobot-frontend/dist"

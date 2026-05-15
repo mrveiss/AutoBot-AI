@@ -1,0 +1,156 @@
+<!--
+  AutoBot - AI-Powered Automation Platform
+  Copyright (c) 2025 mrveiss
+  Author: mrveiss
+
+  PatternEvolutionChart.vue - Anti-pattern evolution visualization (Issue #243)
+-->
+<template>
+  <BaseChart
+    type="line"
+    :height="height"
+    :series="series"
+    :options="chartOptions"
+    :title="title ?? $t('charts.patternEvolution.title')"
+    :subtitle="subtitle ?? $t('charts.patternEvolution.subtitle')"
+    :loading="loading"
+    :error="error"
+  />
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import BaseChart from './BaseChart.vue'
+import type { ApexOptions } from 'apexcharts'
+import type { PatternEvolutionData } from '@/composables/useEvolution'
+
+const { t } = useI18n()
+
+interface Props {
+  data: PatternEvolutionData
+  height?: number | string
+  title?: string
+  subtitle?: string
+  loading?: boolean
+  error?: string
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  height: 400,
+  title: undefined,
+  subtitle: undefined,
+  loading: false,
+  error: '',
+})
+
+// Prepare series data for ApexCharts
+const series = computed(() => {
+  if (!props.data || Object.keys(props.data).length === 0) {
+    return []
+  }
+
+  return Object.entries(props.data).map(([patternType, occurrences]) => ({
+    name: formatPatternName(patternType),
+    data: occurrences.map((point) => ({
+      x: new Date(point.timestamp).getTime(),
+      y: point.count,
+    })),
+  }))
+})
+
+// Chart options
+const chartOptions = computed<ApexOptions>(() => ({
+  chart: {
+    type: 'line',
+    toolbar: {
+      show: true,
+      tools: {
+        download: true,
+        selection: true,
+        zoom: true,
+        zoomin: true,
+        zoomout: true,
+        pan: true,
+        reset: true,
+      },
+    },
+    zoom: {
+      enabled: true,
+    },
+    animations: {
+      enabled: true,
+      easing: 'easeinout',
+      speed: 800,
+    },
+  },
+  stroke: {
+    curve: 'smooth',
+    width: 2,
+  },
+  xaxis: {
+    type: 'datetime',
+    labels: {
+      datetimeUTC: false,
+      format: 'MMM dd',
+    },
+  },
+  yaxis: {
+    title: {
+      text: t('charts.patternEvolution.yAxisTitle'),
+    },
+    min: 0,
+    labels: {
+      formatter: (value: number) => Math.floor(value).toString(),
+    },
+  },
+  tooltip: {
+    shared: true,
+    intersect: false,
+    x: {
+      format: 'MMM dd, yyyy',
+    },
+  },
+  legend: {
+    position: 'top',
+    horizontalAlign: 'left',
+    markers: {
+      size: 12,
+      radius: 2,
+    },
+  },
+  grid: {
+    borderColor: 'var(--color-border, #2d3748)',
+    strokeDashArray: 4,
+  },
+  colors: [
+    '#ef4444', // red - critical patterns
+    '#f59e0b', // orange - warning patterns
+    '#3b82f6', // blue - info patterns
+    '#8b5cf6', // purple
+    '#10b981', // green
+    '#ec4899', // pink
+  ],
+  markers: {
+    size: 4,
+    hover: {
+      size: 6,
+    },
+  },
+}))
+
+function formatPatternName(pattern: string): string {
+  return pattern
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+</script>
+
+<style scoped>
+.base-chart {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+}
+</style>

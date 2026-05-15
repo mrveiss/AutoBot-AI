@@ -1,0 +1,58 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# centralized_logging role - Default variables
+
+# Loki configuration
+loki_version: "2.9.2"
+loki_port: 3100
+loki_data_dir: "/var/lib/autobot/loki"
+loki_config_dir: "/etc/autobot/loki"
+
+# Promtail configuration
+promtail_version: "2.9.2"
+promtail_config_dir: "/etc/autobot/promtail"
+promtail_positions_file: "/var/lib/autobot/promtail/positions.yaml"
+
+# Log directories
+log_base_dir: "/var/log/autobot"
+centralized_log_dir: "{{ log_base_dir }}/centralized"
+
+# VM-specific services to monitor
+vm_services:
+  frontend:
+    - nginx
+    - autobot-frontend
+  npu:
+    - autobot-npu-worker
+    - docker
+  redis:
+    - redis-stack-server
+    - autobot-redis
+  ai_stack:
+    - autobot-ai-stack
+    - autobot-backend
+  browser:
+    - autobot-playwright
+    - docker
+
+# Log retention
+log_retention_days: 30
+log_rotation_size: "100M"
+log_rotation_count: 10
+
+# Alerting
+enable_alerting: true
+alert_threshold_errors: 100  # per minute
+alert_threshold_warnings: 500  # per minute
+
+# Binary deployment (native, no Docker)
+loki_binary_url: "https://github.com/grafana/loki/releases/download/v{{ loki_version }}/loki-linux-amd64.zip"
+promtail_binary_url: "https://github.com/grafana/loki/releases/download/v{{ promtail_version }}/promtail-linux-amd64.zip"
+loki_binary_path: "/usr/local/bin/loki"
+promtail_binary_path: "/usr/local/bin/promtail"
+
+# User/Group
+logging_user: "autobot"
+logging_group: "autobot"

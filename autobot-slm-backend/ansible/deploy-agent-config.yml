@@ -1,0 +1,44 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Deploy agent configuration to fleet nodes
+#
+# Usage:
+#   ansible-playbook deploy-agent-config.yml                    # Deploy to all nodes
+#   ansible-playbook deploy-agent-config.yml --limit ai_stack   # Deploy to specific node
+#   ansible-playbook deploy-agent-config.yml --tags python      # Deploy specific components
+#
+# Available tags:
+#   - system_packages: Install system dependencies
+#   - python: Python environment and dependencies
+#   - openvino: OpenVINO installation
+#   - ollama: Ollama installation and model downloads
+#   - nodejs: Node.js installation
+#   - playwright: Playwright and browsers
+#   - config: Configuration files
+#   - service: Systemd service setup
+#   - verify: Verification tasks
+
+- name: Deploy agent configuration
+  hosts: slm_nodes
+  become: yes
+  gather_facts: yes
+
+  roles:
+    - role: agent_config
+      tags:
+        - agent
+        - agent_config
+
+  post_tasks:
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "Agent configuration deployed successfully"
+          - "Node: {{ inventory_hostname }}"
+          - "Role: {{ agent_role }}"
+          - "Service: autobot-agent"
+          - "Port: {{ agent_port }}"
+      tags:
+        - always

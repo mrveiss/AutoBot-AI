@@ -1,0 +1,25 @@
+{
+  "name": "kb-event-plugin",
+  "version": "1.0.0",
+  "display_name": "Knowledge Base Event Plugin",
+  "description": "Example plugin that hooks into chat and KB events for analytics and audit logging. Ships as SDK documentation for third-party developers.",
+  "author": "mrveiss",
+  "entry_point": "plugins.core_plugins.kb_event_plugin.main",
+  "dependencies": [],
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "log_messages": {
+        "type": "boolean",
+        "default": true,
+        "description": "Whether to log ON_MESSAGE_RECEIVED events"
+      },
+      "log_kb_searches": {
+        "type": "boolean",
+        "default": true,
+        "description": "Whether to log ON_KB_SEARCH events"
+      }
+    }
+  },
+  "hooks": ["on_message_received", "on_kb_search", "on_agent_complete"]
+}

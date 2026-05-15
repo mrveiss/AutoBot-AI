@@ -1,0 +1,9 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Nginx systemd override for SLM server
+# Issue #1103: Prevent nginx from starting without SSL cert
+[Service]
+ExecStartPre=/usr/bin/test -f {{ slm_tls_cert }}
+ExecStartPre=/usr/bin/test -f {{ slm_tls_key }}

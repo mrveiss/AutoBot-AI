@@ -1,0 +1,28 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Shared cleanup task: delete a directory iff a role-active fact is FALSE.
+#
+# Closes #7058 — replaces 23 near-identical wrong-node tasks across 6 role
+# clean.yml files (backend, frontend, ai-stack, browser, npu-worker,
+# slm_manager) with one parameterized task.
+#
+# Contract:
+#   caller_role     (str)  Display label for task name, e.g. "Backend".
+#   dir_name        (str)  Path tail under /opt/autobot/, e.g. "autobot-slm-frontend".
+#   role_check_fact (str)  Name of the role_*_active fact from
+#                          inventory/group_vars/all.yml (#7050) — task fires
+#                          when this fact is falsy.
+#
+# Behaviour matches the inlined form exactly:
+#   when: not (<role_check_fact> | bool)
+# `lookup('vars', name, default=false)` resolves the fact-by-name without
+# erroring if undefined (which would mean "role inactive" anyway).
+
+- name: "{{ caller_role }} | Clean: wrong-node {{ dir_name }} dir"
+  ansible.builtin.file:
+    path: "/opt/autobot/{{ dir_name }}"
+    state: absent
+  when: not (lookup('vars', role_check_fact, default=false) | bool)
+  tags: ['clean']

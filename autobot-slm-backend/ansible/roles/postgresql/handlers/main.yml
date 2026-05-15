@@ -1,0 +1,23 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# PostgreSQL Role Handlers
+---
+
+- name: Reload PostgreSQL
+  ansible.builtin.systemd:
+    name: "{{ postgresql_service }}"
+    state: reloaded
+  become: true
+
+- name: Restart PostgreSQL
+  ansible.builtin.systemd:
+    name: "{{ postgresql_service }}"
+    state: restarted
+  become: true
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true

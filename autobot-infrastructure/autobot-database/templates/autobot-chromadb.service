@@ -1,0 +1,56 @@
+# AutoBot ChromaDB - Systemd Service Unit
+# Deploys to: 172.16.168.23 (DB Stack VM)
+# Runs ChromaDB vector database for embeddings
+#
+# Installation:
+#   sudo cp autobot-chromadb.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable autobot-chromadb
+#   sudo systemctl start autobot-chromadb
+
+[Unit]
+Description=AutoBot ChromaDB - Vector Database
+Documentation=https://github.com/mrveiss/AutoBot-AI
+After=network.target
+
+[Service]
+Type=simple
+User=autobot
+Group=autobot
+WorkingDirectory=/opt/autobot/autobot-db-stack/chromadb
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+Environment="IS_PERSISTENT=TRUE"
+Environment="PERSIST_DIRECTORY=/opt/autobot/autobot-db-stack/chromadb/data"
+Environment="ANONYMIZED_TELEMETRY=FALSE"
+EnvironmentFile=-/opt/autobot/autobot-db-stack/.env
+
+# Start ChromaDB server
+ExecStart=/opt/autobot/autobot-db-stack/chromadb/venv/bin/chroma run \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --path /opt/autobot/autobot-db-stack/chromadb/data
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+# Resource limits
+MemoryMax=4G
+
+# Security
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/autobot/autobot-db-stack/chromadb/data
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-chromadb
+
+[Install]
+WantedBy=multi-user.target

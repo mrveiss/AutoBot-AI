@@ -1,0 +1,30 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Discover and catalog fleet nodes
+
+- name: Build fleet node inventory from Ansible groups
+  set_fact:
+    fleet_nodes: "{{ fleet_nodes | default([]) + [{
+      'name': item,
+      'host': hostvars[item]['ansible_host'],
+      'role': hostvars[item].get('agent_role', 'unknown'),
+      'port': hostvars[item].get('agent_port', 8090),
+      'health_endpoint': hostvars[item].get('health_endpoint', '/health')
+    }] }}"
+  loop: "{{ groups['slm_nodes'] | default([]) }}"
+  when: "'slm_nodes' in groups"
+
+- name: Display discovered fleet nodes
+  debug:
+    msg: "Discovered {{ fleet_nodes | length }} fleet nodes"
+
+- name: Create fleet nodes registry file
+  template:
+    src: fleet_registry.json.j2
+    dest: "{{ config_dir }}/fleet_registry.json"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0644'
+  when: fleet_nodes | length > 0

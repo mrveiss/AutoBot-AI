@@ -1,0 +1,39 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Service Authentication - Monitoring Configuration
+---
+- name: "ServiceAuth | Ensure log directory exists"
+  ansible.builtin.file:
+    path: /var/log/autobot
+    state: directory
+    owner: autobot
+    group: autobot
+    mode: "0755"
+  become: true
+
+- name: "ServiceAuth | Deploy auth audit log rotation config"
+  ansible.builtin.copy:
+    content: |
+      /var/log/autobot/service-auth-audit.log {
+          daily
+          missingok
+          rotate 30
+          compress
+          delaycompress
+          notifempty
+          copytruncate
+      }
+    dest: /etc/logrotate.d/autobot-service-auth
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
+- name: "ServiceAuth | Report monitoring configuration"
+  ansible.builtin.debug:
+    msg:
+      - "Service auth monitoring configured for {{ service_id | default('unknown') }}"
+      - "Audit log: /var/log/autobot/service-auth-audit.log"
+      - "Log rotation: 30 days, compressed"

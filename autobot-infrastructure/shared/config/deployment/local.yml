@@ -1,0 +1,59 @@
+# Local + Docker Hybrid Deployment Configuration (DEFAULT)
+# Backend/Frontend on host, Docker services exposed on localhost ports
+
+deployment:
+  mode: local
+  domain: localhost
+
+services:
+  redis:
+    host: localhost
+    port: 6379
+    scheme: redis
+    health_endpoint: "/"
+
+  backend:
+    host: localhost
+    port: 8001
+    scheme: http
+    health_endpoint: /api/system/health
+
+  frontend:
+    host: localhost
+    port: 5173
+    scheme: http
+    health_endpoint: /
+
+  ai-stack:
+    host: localhost
+    port: 8080
+    scheme: http
+    health_endpoint: /health
+
+  npu-worker:
+    host: localhost
+    port: 8081
+    scheme: http
+    health_endpoint: /health
+
+  playwright-vnc:
+    host: localhost
+    port: 3000
+    scheme: http
+    health_endpoint: /health
+
+# Environment variables for hybrid local + Docker deployment
+environment:
+  AUTOBOT_DEPLOYMENT_MODE: local
+  # Backend/Frontend run on host
+  BACKEND_HOST: localhost
+  BACKEND_PORT: 8001
+  FRONTEND_HOST: localhost
+  FRONTEND_PORT: 5173
+  # Docker services exposed on localhost ports
+  REDIS_HOST: localhost
+  REDIS_PORT: 6379         # Docker container: autobot-redis
+  AI_STACK_HOST: localhost
+  AI_STACK_PORT: 8080      # Docker container: autobot-ai-stack
+  NPU_WORKER_HOST: localhost
+  NPU_WORKER_PORT: 8081    # Docker container: autobot-npu-worker

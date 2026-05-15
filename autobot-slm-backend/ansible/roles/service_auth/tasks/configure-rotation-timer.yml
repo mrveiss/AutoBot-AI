@@ -1,0 +1,51 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Service Authentication - Automated Rotation Timer (#1734)
+# Deploys a systemd timer that triggers key rotation every N days.
+# Only installed on the SLM manager host (where Ansible runs from).
+---
+- name: "ServiceAuth | Deploy rotation service unit"
+  ansible.builtin.template:
+    src: autobot-key-rotation.service.j2
+    dest: /etc/systemd/system/autobot-key-rotation.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: reload systemd
+
+- name: "ServiceAuth | Deploy rotation timer unit"
+  ansible.builtin.template:
+    src: autobot-key-rotation.timer.j2
+    dest: /etc/systemd/system/autobot-key-rotation.timer
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: reload systemd
+
+- name: "ServiceAuth | Flush handlers to reload systemd"
+  ansible.builtin.meta: flush_handlers
+
+- name: "ServiceAuth | Enable and start rotation timer"
+  ansible.builtin.systemd:
+    name: autobot-key-rotation.timer
+    state: started
+    enabled: true
+  become: true
+
+- name: "ServiceAuth | Report timer status"
+  ansible.builtin.command:
+    cmd: systemctl list-timers autobot-key-rotation.timer --no-pager
+  register: _timer_status
+  changed_when: false
+
+- name: "ServiceAuth | Display rotation timer schedule"
+  ansible.builtin.debug:
+    msg:
+      - "Rotation timer installed and active"
+      - "Interval: every {{ service_auth_rotation_days }} days"
+      - "TTL: {{ service_auth_key_ttl_days }} days"
+      - "{{ _timer_status.stdout_lines | default(['(timer output unavailable)']) }}"

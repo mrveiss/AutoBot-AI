@@ -1,0 +1,107 @@
+# Logging Configuration
+# Contains all logging, monitoring, and debugging settings
+
+logging:
+  log_level: INFO
+  log_to_file: true
+  separate_log_files: true
+  log_directory: logs
+  max_log_size_mb: 10
+  backup_count: 5
+
+  # Main system logs
+  log_file_path: logs/system.log
+  log_files:
+    critical: logs/system.critical.log
+    debug: logs/system.debug.log
+    error: logs/system.error.log
+    info: logs/system.info.log
+    warning: logs/system.warning.log
+
+  # Backend logs
+  backend_log_file: logs/backend.log
+  backend_log_files:
+    critical: logs/backend.critical.log
+    debug: logs/backend.debug.log
+    error: logs/backend.error.log
+    info: logs/backend.info.log
+    warning: logs/backend.warning.log
+
+  # Frontend logs
+  frontend_log_file: logs/frontend.log
+  frontend_log_files:
+    critical: logs/frontend.critical.log
+    debug: logs/frontend.debug.log
+    error: logs/frontend.error.log
+    info: logs/frontend.info.log
+    warning: logs/frontend.warning.log
+
+  # Startup logs
+  startup_log_file: logs/startup.log
+  startup_log_files:
+    critical: logs/startup.critical.log
+    debug: logs/startup.debug.log
+    error: logs/startup.error.log
+    info: logs/startup.info.log
+    warning: logs/startup.warning.log
+
+  # Component-specific log levels
+  component_log_levels:
+    backend_api: INFO
+    cache_operations: DEBUG
+    frontend_proxy: WARNING
+    health_checks: WARNING
+    knowledge_base: INFO
+    llm_interface: INFO
+    seq_ingestion: ERROR
+    system_operations: INFO
+    websocket: WARNING
+
+  log_levels:
+    - debug
+    - info
+    - warning
+    - error
+    - critical
+
+  # Log rotation settings
+  log_rotation:
+    compress_backups: true
+    delete_old_logs_after_days: 30
+    enabled: true
+    max_backup_count: 7
+    max_file_size: 10MB
+    rotation_at_startup: false
+    rotation_interval: daily
+    rotation_type: size
+
+  startup_log_rotation:
+    backup_naming: timestamp
+    compress_backups: true
+    delete_old_logs_after_days: 90
+    enabled: true
+    max_backup_count: 10
+    rotate_on_startup: true
+
+developer:
+  debug_logging: true
+  enabled: true
+  endpoint_suggestions: true
+  enhanced_errors: true
+
+  rum:
+    debug_mode: false
+    enabled: false
+    error_tracking: true
+    interaction_tracking: false
+    log_level: info
+    log_to_backend: true
+    max_events_per_session: 1000
+    performance_monitoring: true
+    sample_rate: 100
+    session_recording: false
+
+monitoring:
+  health_check_interval: 30
+  performance_monitoring: true
+  error_tracking: true

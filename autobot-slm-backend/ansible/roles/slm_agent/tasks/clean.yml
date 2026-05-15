@@ -1,0 +1,46 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# SLM Agent role - Phase 1 CLEAN task (#926 Phase 4)
+# Removes stale agent code copied to wrong paths on any node.
+# The legacy autobot-agent.service is already cleaned in main.yml (#917).
+#
+# All deletions target LEGACY agent paths only (agent, slm-agent,
+# /opt/slm-agent). No cross-role directories are touched, so no
+# node_roles guards are needed (#2836).
+
+- name: "SLM Agent | Clean: legacy flat agent dir at /opt/autobot/agent"
+  ansible.builtin.file:
+    path: /opt/autobot/agent
+    state: absent
+  tags: ['clean']
+
+- name: "SLM Agent | Clean: legacy slm-agent dir at /opt/autobot/slm-agent"
+  ansible.builtin.file:
+    path: /opt/autobot/slm-agent
+    state: absent
+  tags: ['clean']
+
+# Issue #1163: Remove symlink workaround before deploying real directory
+- name: "SLM Agent | Clean: stat canonical agent dir (detect symlink)"
+  ansible.builtin.stat:
+    path: "{{ slm_agent_dir }}"
+    follow: false
+  register: slm_agent_dir_stat
+  tags: ['clean']
+
+- name: "SLM Agent | Clean: remove symlink at canonical path (replaced by real dir)"
+  ansible.builtin.file:
+    path: "{{ slm_agent_dir }}"
+    state: absent
+  when: slm_agent_dir_stat.stat.exists and slm_agent_dir_stat.stat.islnk
+  become: yes
+  tags: ['clean']
+
+- name: "SLM Agent | Clean: pre-#1129 flat install at /opt/slm-agent"
+  ansible.builtin.file:
+    path: /opt/slm-agent
+    state: absent
+  become: yes
+  tags: ['clean']

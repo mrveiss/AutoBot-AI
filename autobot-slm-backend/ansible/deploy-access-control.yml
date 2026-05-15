@@ -1,0 +1,49 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Deploy access control configuration
+#
+# Usage:
+#   ansible-playbook deploy-access-control.yml                    # Full deployment
+#   ansible-playbook deploy-access-control.yml --tags policies    # Policies only
+#   ansible-playbook deploy-access-control.yml --tags audit       # Audit logging only
+#   ansible-playbook deploy-access-control.yml --tags validation  # Validation only
+#
+# Available tags:
+#   - backup: Redis backup
+#   - policies: Access control policies
+#   - audit: Audit logging setup
+#   - sessions: Session ownership
+#   - rollout: Gradual rollout phases
+#   - monitoring: Access monitoring
+#   - validation: Validation tests
+#   - scripts: Management scripts
+
+- name: Deploy access control
+  hosts: slm_server
+  become: yes
+  gather_facts: yes
+
+  roles:
+    - role: access_control
+      tags:
+        - access_control
+
+  post_tasks:
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "Access control deployed successfully"
+          - "Mode: {{ access_control_mode }}"
+          - "Rollout phase: {{ rollout_phase }}"
+          - "Policies: {{ access_policies | length }} configured"
+          - "Audit logging: {{ 'Enabled' if enable_audit_logging else 'Disabled' }}"
+          - "Monitoring: {{ 'Enabled' if enable_access_monitoring else 'Disabled' }}"
+          - ""
+          - "Management scripts:"
+          - "  Status: {{ project_root }}/scripts/access_control/status.sh"
+          - "  Validate: {{ project_root }}/scripts/access_control/validate.sh"
+          - "  Rollback: {{ project_root }}/scripts/access_control/rollback.sh"
+      tags:
+        - always

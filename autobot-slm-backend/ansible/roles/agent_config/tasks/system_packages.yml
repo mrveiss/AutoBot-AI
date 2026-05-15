@@ -1,0 +1,21 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Install system dependencies
+
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: agent_config | Refresh apt cache (best-effort, bounded; #6719)
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+
+- name: Install system packages
+  package:
+    name: "{{ system_packages }}"
+    state: present

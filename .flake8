@@ -1,0 +1,94 @@
+# Flake8 configuration for AutoBot
+# This file ensures consistent linting between local development, pre-commit hooks, and CI/CD
+
+[flake8]
+# Set max line length to 120 characters (Black default, widely accepted)
+# At 100: 1,978 violations, at 120: 656 violations (67% reduction)
+max-line-length = 120
+
+# Extend ignores for Black compatibility, false positives, and intentional patterns
+# E203: whitespace before ':' (Black formatting)
+# W503: line break before binary operator (Black formatting)
+# E704: multiple statements on one line - false positive for Protocol stubs (def method(): ...)
+# E402: module level import not at top - intentional for:
+#       - Thread-safe singleton patterns (lock defined before import)
+#       - Circular import avoidance (delayed router imports)
+#       - Async lock patterns (asyncio.Lock() before dependent imports)
+extend-ignore = E203,W503,E704,E402
+
+# Exclude directories from linting
+exclude =
+    node_modules,
+    .venv,
+    venv,
+    __pycache__,
+    .git,
+    temp,
+    logs,
+    reports,
+    archive,
+    archives,
+    backups,
+    tests,
+    tools,
+    scripts,
+    monitoring,
+    mcp-tools,
+    .tox,
+    build,
+    dist,
+    *.egg-info,
+    # Auxiliary directories (not production code)
+    debug,
+    docker,
+    code-analysis-suite,
+    code_analysis,
+    resources,
+    analysis,
+    # Separate deployable components with own standards
+    slm-server,
+    slm-admin,
+    # Infrastructure contains tests, analysis, tools (not production code)
+    infrastructure,
+    autobot-infrastructure
+
+# Per-file ignores for intentional patterns
+per-file-ignores =
+    # Colocated test files (#734) - non-production code
+    *_test.py:E501,E303,W291,W293,E741,F841
+    *.e2e_test.py:E501,E303,W291,W293,E741,F841
+    *.integration_test.py:E501,E303,W291,W293,E741,F841
+    *.performance_test.py:E501,E303,W291,W293,E741,F841
+    *_benchmarks.py:E501,E303,W291,W293,E741,F841
+    # Agent config contains long documentation strings for each agent
+    autobot-backend/api/agent_config.py:E501
+    # Agent files with LLM prompt templates (intentionally long strings)
+    autobot-backend/agents/knowledge_retrieval_agent.py:E501
+    autobot-backend/agents/librarian_assistant_agent.py:E501
+    autobot-backend/agents/rag_agent.py:E501
+    # Judge files with LLM prompt templates (intentionally long strings)
+    autobot-backend/judges/__init__.py:E501
+    autobot-backend/judges/agent_response_judge.py:E501
+    autobot-backend/judges/multi_agent_arbitrator.py:E501
+    autobot-backend/judges/security_risk_judge.py:E501
+    autobot-backend/judges/workflow_step_judge.py:E501
+    # Intent detection and prompt management (intentionally long prompt strings)
+    autobot-backend/chat_intent_detector.py:E501
+    autobot-backend/llm_self_awareness.py:E501
+    autobot-backend/middleware/llm_awareness_middleware.py:E501
+    autobot-backend/planner/planner.py:E501
+    autobot-backend/prompt_manager.py:E501
+    # Dashboard/monitoring files with long command strings and JS templates
+    autobot-slm-backend/monitoring/performance_dashboard.py:E501
+    autobot-slm-backend/monitoring/performance_optimizer.py:E501
+    # Backward-compatibility re-export shims (intentionally long inline comments)
+    autobot-backend/context_aware_decision_system.py:E501
+    autobot-backend/enhanced_project_state_tracker.py:E501
+    autobot-backend/workflow_templates.py:E501
+
+# Statistics and verbosity
+statistics = True
+count = True
+
+# Enable showing source code for violations
+show-source = True

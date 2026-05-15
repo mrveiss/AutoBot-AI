@@ -1,0 +1,64 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Setup SSH Known Hosts for AutoBot Service User (Issue #5677)
+#
+# Populates ~/.ssh/known_hosts for the 'autobot' service user on the backend
+# host so that the SSH execution backend (RejectPolicy) can connect to fleet
+# nodes without a HostKey error.
+#
+# Run this playbook after enrolling new nodes or before first SSH execution.
+#
+# Prerequisites:
+#   - Inventory file with fleet nodes defined
+#   - SSH access to the backend host as a privileged user
+#
+# Usage:
+#   cd autobot-slm-backend/ansible
+#   ansible-playbook -i inventory/slm-nodes.yml playbooks/setup-ssh-known-hosts.yml
+---
+- name: Populate known_hosts for autobot SSH execution backend
+  hosts: "{{ backend_host | default('01-Backend') }}"
+  become: true
+
+  vars:
+    autobot_user: autobot
+    autobot_home: /opt/autobot
+    known_hosts_path: "{{ autobot_home }}/.ssh/known_hosts"
+
+  tasks:
+    - name: Ensure .ssh directory exists for autobot user
+      ansible.builtin.file:
+        path: "{{ autobot_home }}/.ssh"
+        state: directory
+        owner: "{{ autobot_user }}"
+        group: "{{ autobot_user }}"
+        mode: "0700"
+
+    - name: Ensure known_hosts file exists
+      ansible.builtin.file:
+        path: "{{ known_hosts_path }}"
+        state: touch
+        owner: "{{ autobot_user }}"
+        group: "{{ autobot_user }}"
+        mode: "0600"
+        modification_time: preserve
+        access_time: preserve
+
+    - name: Scan and add host keys for all fleet nodes
+      ansible.builtin.shell:
+        cmd: >
+          ssh-keyscan -H {{ hostvars[item]['ansible_host'] | default(item) }}
+          >> {{ known_hosts_path }}
+        creates: "{{ known_hosts_path }}"
+      loop: "{{ groups['all'] | difference([inventory_hostname]) }}"
+      when: hostvars[item]['ansible_host'] is defined or item != inventory_hostname
+      become_user: "{{ autobot_user }}"
+      changed_when: true
+
+    - name: Remove duplicate entries from known_hosts
+      ansible.builtin.shell:
+        cmd: "sort -u {{ known_hosts_path }} -o {{ known_hosts_path }}"
+      become_user: "{{ autobot_user }}"
+      changed_when: false

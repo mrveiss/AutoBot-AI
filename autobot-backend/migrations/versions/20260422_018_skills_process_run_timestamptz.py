@@ -1,0 +1,55 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""Convert naive DateTime columns to TIMESTAMPTZ in skills and process_run tables.
+
+skills_packages.created_at, skill_repos.last_synced, skill_approvals.requested_at,
+skill_approvals.reviewed_at, skill_approvals.promoted_at, process_runs.started_at,
+process_runs.completed_at, agent_sessions.expires_at.
+
+Revision ID: 20260422_018
+Revises: 20260324_017
+Issue #5538 — DateTime(timezone=True) for skills and process_run models.
+"""
+
+from typing import Sequence, Union
+
+import sqlalchemy as sa
+from alembic import op
+
+revision: str = "20260422_018"
+down_revision: Union[str, None] = "20260324_017"
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+_COLUMNS = [
+    ("skill_packages", "created_at"),
+    ("skill_packages", "promoted_at"),
+    ("skill_repos", "last_synced"),
+    ("skill_approvals", "requested_at"),
+    ("skill_approvals", "reviewed_at"),
+    ("process_runs", "started_at"),
+    ("process_runs", "completed_at"),
+    ("agent_sessions", "expires_at"),
+]
+
+
+def upgrade() -> None:
+    """Convert naive TIMESTAMP columns to TIMESTAMPTZ. Issue #5538."""
+    for table, column in _COLUMNS:
+        op.alter_column(
+            table,
+            column,
+            type_=sa.DateTime(timezone=True),
+            postgresql_using=f"{column} AT TIME ZONE 'UTC'",
+        )
+
+
+def downgrade() -> None:
+    """Revert TIMESTAMPTZ columns back to naive TIMESTAMP. Issue #5538."""
+    for table, column in _COLUMNS:
+        op.alter_column(
+            table,
+            column,
+            type_=sa.DateTime(timezone=False),
+        )

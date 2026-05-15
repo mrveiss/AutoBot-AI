@@ -1,0 +1,22 @@
+{
+  "name": "mcp-wrapper-plugin",
+  "version": "1.0.0",
+  "display_name": "MCP Wrapper Plugin",
+  "description": "Example plugin demonstrating MCP tool integration via plugin system",
+  "author": "AutoBot Team",
+  "entry_point": "plugins.core_plugins.mcp_wrapper_plugin.main",
+  "dependencies": [],
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "enabled_tools": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": ["memory", "filesystem"]
+      }
+    }
+  },
+  "hooks": []
+}

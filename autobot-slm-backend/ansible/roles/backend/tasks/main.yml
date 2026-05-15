@@ -1,0 +1,745 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Backend Role - FastAPI backend deployment for AutoBot
+---
+
+# ============================================================
+# Phase 1 CLEAN - remove legacy/wrong-node dirs  (#926 Phase 4)
+# ============================================================
+- name: "Backend | Include clean tasks"
+  ansible.builtin.import_tasks: clean.yml
+  tags: ['clean']
+
+# ============================================================
+# Per-role service account  (#926 Phase 4)
+# ============================================================
+- name: "Backend | Create per-role service account"
+  ansible.builtin.user:
+    name: "{{ backend_service_account }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    groups: "{{ backend_group }}"
+    append: true
+    comment: "AutoBot backend service account"
+    state: present
+  tags: ['backend', 'users']
+
+# ==========================================================
+# WSL2 auto-detection (#3503): 127.0.0.1 is ECONNREFUSED on
+# WSL2 mirrored networking — override backend_ai_stack_host
+# per-host at deploy time if it has not been explicitly set.
+# ==========================================================
+- name: "Backend | Read /proc/version to detect WSL2 (#3503)"
+  ansible.builtin.slurp:
+    src: /proc/version
+  register: _proc_version
+  changed_when: false
+  failed_when: false
+  tags: ['backend', 'config']
+
+- name: "Backend | Set backend_ai_stack_host=10.255.255.254 on WSL2 hosts (#3503)"
+  ansible.builtin.set_fact:
+    backend_ai_stack_host: "10.255.255.254"
+  when:
+    - _proc_version.content is defined
+    - (_proc_version.content | b64decode | lower) is search('microsoft')
+    - backend_ai_stack_host == '127.0.0.1'
+  tags: ['backend', 'config']
+
+- name: "Backend | Set backend_chromadb_host on WSL2 hosts (#3541, #4084, #4087)"
+  ansible.builtin.set_fact:
+    # ChromaDB always runs on the same host as AI Stack.
+    # On WSL2: use 127.0.0.1 when ai-stack is co-located on this node,
+    # otherwise mirror backend_ai_stack_host (already WSL2-adjusted above).
+    backend_chromadb_host: "{{ '127.0.0.1' if ('ai-stack' in node_roles | default([])) else backend_ai_stack_host }}"
+  when:
+    - _proc_version.content is defined
+    - (_proc_version.content | b64decode | lower) is search('microsoft')
+    - backend_chromadb_host == '127.0.0.1'
+  tags: ['backend', 'config']
+
+- name: "Backend | Set backend_host=10.255.255.254 on WSL2 hosts (#5608)"
+  ansible.builtin.set_fact:
+    backend_host: "10.255.255.254"
+  when:
+    - _proc_version.content is defined
+    - (_proc_version.content | b64decode | lower) is search('microsoft')
+    - backend_host == '127.0.0.1'
+  tags: ['backend', 'config']
+
+# ============================================================
+# Per-role env at /etc/autobot/  (#926 Phase 4)
+# ============================================================
+- name: "Backend | Ensure /etc/autobot dir exists"
+  ansible.builtin.file:
+    path: /etc/autobot
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  tags: ['backend', 'config']
+
+# #6677 + #7272: Stat the SLM TLS certs before rendering the env file.
+# The template only sets AUTOBOT_TLS_CA_PATH when the cert actually exists,
+# so installs without TLS (or where distribute-tls-certs.yml has not yet
+# run) don't ship a dangling env var that points at a missing file.
+# Now uses the shared _shared/tasks/stat_tls_certs.yml helper (#7272) —
+# the helper registers tls_server_cert/tls_server_key/tls_ca_cert; the
+# backend template only references tls_ca_cert.
+- name: "Backend | Stat SLM TLS certs (#6677/#7272)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/stat_tls_certs.yml
+  vars:
+    tls_cert_dir: /etc/autobot/certs
+  tags: ['backend', 'config']
+
+- name: "Backend | Deploy /etc/autobot/autobot-backend.env"
+  ansible.builtin.template:
+    src: backend.env.j2
+    dest: /etc/autobot/autobot-backend.env
+    mode: "0640"
+    owner: root
+    group: "{{ backend_service_account }}"
+  notify: restart backend
+  tags: ['backend', 'config']
+
+# Issue #2953: Write deployment.mode into config/config.yaml so the backend
+# config loader can read it without relying on env alone.
+- name: "Backend | Ensure config directory exists"
+  ansible.builtin.file:
+    path: "{{ backend_code_dir }}/config"
+    state: directory
+    mode: "0755"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+  tags: ['backend', 'config']
+
+- name: "Backend | Write deployment section to config/config.yaml (#2953)"
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ backend_code_dir }}/config/config.yaml"
+    mode: "0644"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+    force: false  # Never overwrite an existing config.yaml — it may have user customisations
+  tags: ['backend', 'config']
+
+# ============================================================
+# Backend-specific system dependencies (Python 3.12 now in shared Phase 0)
+# ============================================================
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: "Backend | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  tags: ['backend', 'packages']
+
+- name: "Backend | Install backend-specific system dependencies"
+  ansible.builtin.apt:
+    name:
+      - build-essential
+      - libssl-dev
+      - zlib1g-dev
+      - libbz2-dev
+      - libreadline-dev
+      - libsqlite3-dev
+      - libncursesw5-dev
+      - xz-utils
+      - tk-dev
+      - libxml2-dev
+      - libxmlsec1-dev
+      - libffi-dev
+      - liblzma-dev
+      - git
+      - curl
+      # GUI / display (VNC, xvfb headless, GUI automation)
+      - xvfb
+      - x11-utils
+      - x11-apps
+      # Audio / voice processing (PyAudio, librosa, Whisper)
+      - ffmpeg
+      - libsndfile1
+      - libsndfile1-dev
+      - portaudio19-dev
+      # OCR / CAPTCHA solver (tesseract, Issue #206)
+      - tesseract-ocr
+      - libtesseract-dev
+      # Matplotlib GUI backend
+      - python3-tk
+    state: present
+  tags: ['backend', 'packages']
+
+
+- name: Create autobot user
+  ansible.builtin.user:
+    name: "{{ backend_user }}"
+    shell: /bin/bash
+    create_home: true
+    state: present
+
+- name: Create backend directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+  loop:
+    - "{{ backend_install_dir }}"
+    - "{{ backend_log_dir }}"
+    - "{{ backend_data_dir }}"
+    - "{{ backend_data_dir }}/conversation_files"
+
+- name: Sync autobot-backend code from code_source
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-backend/"
+    dest: "{{ backend_code_dir }}/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=*.egg-info"
+      - "--exclude=.git"
+      - "--exclude=venv"
+  notify:
+    - restart backend
+    - restart celery
+  tags: ['backend', 'deploy']
+
+- name: Sync backend config directory from code_source
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-backend/config/"
+    dest: "{{ backend_code_dir }}/config/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+  notify: restart backend
+  tags: ['backend', 'deploy']
+
+- name: Sync autobot_shared to backend install dir
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot_shared/"
+    dest: "{{ backend_install_dir }}/autobot_shared/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=*.egg-info"
+      - "--exclude=.git"
+  notify:
+    - restart backend
+    - restart celery
+  tags: ['backend', 'deploy']
+
+# Issue #3649: Also sync to the standalone /opt/autobot/autobot_shared/ that workers
+# resolve via PYTHONPATH. The backend venv editable-install points at backend_install_dir
+# but Celery workers and other services import from the standalone copy — skipping this
+# sync caused ModuleNotFoundError when new modules were added (pagination.py, task_result.py).
+- name: "Backend | Sync autobot_shared to standalone PYTHONPATH dir (#3649)"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot_shared/"
+    dest: "{{ backend_shared_standalone_dir }}/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=*.egg-info"
+      - "--exclude=.git"
+      - "--delete"
+  notify:
+    - restart backend
+    - restart celery
+  tags: ['backend', 'deploy']
+
+- name: "Backend | Fix ownership of standalone autobot_shared (#3649)"
+  ansible.builtin.file:
+    path: "{{ backend_shared_standalone_dir }}"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+    recurse: true
+
+- name: "Backend | Sync docs directory from code_source (#4100)"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/docs/"
+    dest: "{{ backend_install_dir }}/../docs/"
+    delete: true
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=.git"
+      - "--exclude=archives"
+  tags: ['backend', 'deploy']
+
+- name: "Backend | Clear stale .pyc files after source sync (#6193)"
+  ansible.builtin.shell: |
+    find "{{ backend_code_dir }}" -name '*.pyc' -delete
+    find "{{ backend_install_dir }}/autobot_shared" -name '*.pyc' -delete 2>/dev/null || true
+    find "{{ backend_shared_standalone_dir }}" -name '*.pyc' -delete 2>/dev/null || true
+  changed_when: false
+  tags: ['backend', 'deploy']
+
+- name: Create backend symlink for imports
+  ansible.builtin.file:
+    src: "{{ backend_code_dir }}"
+    dest: "{{ backend_install_dir }}/backend"
+    state: link
+    force: true
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+
+# Issue #912: Deploy error catalog so it is always available on the VM.
+# path_constants.py resolves PROJECT_ROOT as 3 levels up from constants/,
+# putting CONFIG_DIR at /opt/autobot/infrastructure/shared/config/ which is
+# not synced by default. Deploying via Ansible ensures it is always present.
+- name: Create infrastructure shared config directory  # Issue #912
+  ansible.builtin.file:
+    path: "{{ backend_install_dir | dirname }}/infrastructure/shared/config"
+    state: directory
+    mode: "0755"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+
+- name: Deploy error catalog to infrastructure config path  # Issue #912
+  ansible.builtin.copy:
+    src: error_messages.yaml
+    dest: "{{ backend_install_dir | dirname }}/infrastructure/shared/config/error_messages.yaml"
+    mode: "0644"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+
+# Issue #3873: permission_rules.yaml is read from /opt/autobot/config/ at
+# runtime (three levels up from services/permission_matcher.py).  The clean
+# task that previously wiped /opt/autobot/config has been removed; this task
+# ensures the directory and file are always present after each deploy.
+- name: "Backend | Ensure /opt/autobot/config directory exists (#3873)"
+  ansible.builtin.file:
+    path: "{{ backend_install_dir | dirname }}/config"
+    state: directory
+    mode: "0755"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+  tags: ['backend', 'config']
+
+- name: "Backend | Deploy permission_rules.yaml to infrastructure config path (#3873)"
+  ansible.builtin.copy:
+    src: permission_rules.yaml
+    dest: "{{ backend_install_dir | dirname }}/config/permission_rules.yaml"
+    mode: "0644"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+  notify: restart backend
+  tags: ['backend', 'config']
+
+- name: Check if backend code already synced
+  ansible.builtin.stat:
+    path: "{{ backend_code_dir }}/main.py"
+  register: _backend_code_present
+
+- name: Clone/update AutoBot repository
+  ansible.builtin.git:
+    repo: "{{ backend_repo_url }}"
+    dest: "{{ backend_install_dir }}"
+    version: "{{ backend_version }}"
+    force: true
+  become_user: "{{ backend_user }}"
+  when:
+    - backend_deploy_from_git | default(true)
+    - not _backend_code_present.stat.exists
+
+- name: Check if venv directory itself is a symlink (legacy layout)
+  ansible.builtin.stat:
+    path: "{{ backend_code_dir }}/venv"
+  register: venv_check
+
+- name: Remove old/broken venv if the directory is a symlink
+  ansible.builtin.file:
+    path: "{{ backend_code_dir }}/venv"
+    state: absent
+  when: venv_check.stat.exists and venv_check.stat.islnk
+
+# #7052: Detect partially-corrupted venv from a prior failed install.
+# A venv with a working python3.12 binary but stale .pth files (e.g. from
+# an editable install whose finder module was removed during venv rebuild)
+# breaks pip on first import. The `Create venv` task below skips when
+# bin/activate exists, so without this check the corruption survives reinstall.
+- name: "Backend | Check venv health (pip importable, #7052)"
+  ansible.builtin.command:
+    cmd: "{{ backend_code_dir }}/venv/bin/python3.12 -c 'import pip'"
+  register: _venv_health
+  changed_when: false
+  failed_when: false
+  when: venv_check.stat.exists and venv_check.stat.isdir
+
+- name: "Backend | Remove broken venv when health check failed (#7052)"
+  ansible.builtin.file:
+    path: "{{ backend_code_dir }}/venv"
+    state: absent
+  when:
+    - venv_check.stat.exists and venv_check.stat.isdir
+    - (_venv_health.rc | default(0)) != 0
+
+- name: Create Python 3.12 virtual environment via deadsnakes
+  ansible.builtin.command:
+    cmd: "python3.12 -m venv {{ backend_code_dir }}/venv"
+    creates: "{{ backend_code_dir }}/venv/bin/activate"
+  become_user: "{{ backend_user }}"
+
+- name: Fix venv ownership
+  ansible.builtin.file:
+    path: "{{ backend_code_dir }}/venv"
+    state: directory
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+    recurse: true
+
+- name: Upgrade pip
+  ansible.builtin.pip:
+    name: pip
+    state: latest
+    virtualenv: "{{ backend_code_dir }}/venv"
+  become_user: "{{ backend_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang on network issues
+
+- name: Install autobot_shared as editable package
+  ansible.builtin.pip:
+    name: "{{ backend_install_dir }}/autobot_shared"
+    editable: true
+    virtualenv: "{{ backend_code_dir }}/venv"
+  become_user: "{{ backend_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang
+  when: backend_install_dir is defined
+  notify:
+    - restart backend
+    - restart celery
+
+- name: Create filtered backend requirements file
+  ansible.builtin.shell:
+    cmd: "grep -Ev '^-e.*autobot[-_]shared|^-r' {{ backend_code_dir }}/requirements.txt > /tmp/requirements-filtered.txt"
+  become_user: "{{ backend_user }}"
+
+# (#2872) Removed failed_when: false — pip install failures must surface.
+# The Ansible pip module raises on any pip error; the old bypass (Issue #892)
+# masked real dependency failures during deployment.
+- name: Install filtered backend requirements
+  ansible.builtin.pip:
+    requirements: "/tmp/requirements-filtered.txt"
+    virtualenv: "{{ backend_code_dir }}/venv"
+  become_user: "{{ backend_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+    PIP_USE_DEPRECATED: "legacy-resolver"  # Issue #858: Handle complex OpenTelemetry+ChromaDB dependency graph
+  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
+  register: pip_install_result
+
+- name: Deploy aioredis compatibility shim for Python 3.12
+  ansible.builtin.template:
+    src: aioredis_shim.py.j2
+    dest: "{{ backend_code_dir }}/venv/lib/python3.12/site-packages/aioredis.py"
+    mode: '0644'
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+
+- name: Reinstall autobot_shared to pick up ssot_config fixes
+  ansible.builtin.pip:
+    name: "{{ backend_install_dir }}/autobot_shared"
+    editable: true
+    virtualenv: "{{ backend_code_dir }}/venv"
+    state: forcereinstall
+    extra_args: "--no-deps"
+  become_user: "{{ backend_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang
+  when: backend_install_dir is defined
+  notify:
+    - restart backend
+    - restart celery
+
+# ==========================================================
+# PostgreSQL for User Management (Issue #2953)
+# Included only when backend_user_mode is not single_user.
+# Re-uses the shared postgresql role with autobot_users DB.
+# ==========================================================
+- name: "Backend | Configure PostgreSQL for user management (#2953)"
+  ansible.builtin.include_role:
+    name: postgresql
+  vars:
+    db_user: "{{ backend_postgres_user | default('autobot_app') }}"
+    db_env_prefix: "AUTOBOT"
+    db_host: "127.0.0.1"
+    databases:
+      - "{{ backend_postgres_db | default('autobot_users') }}"
+    postgresql_listen_addresses: "localhost"
+  when: (backend_user_mode | default('single_user')) != 'single_user'
+  tags: ['backend', 'postgresql']
+
+# ==========================================================
+# TLS Certificate Generation (Issue #892)
+# ==========================================================
+- name: Create TLS certificate directory
+  ansible.builtin.file:
+    path: /etc/autobot/certs
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Check if TLS certificate exists
+  ansible.builtin.stat:
+    path: /etc/autobot/certs/server-cert.pem
+  register: backend_cert_stat
+
+- name: Check certificate expiry
+  ansible.builtin.command:
+    cmd: openssl x509 -checkend 604800 -noout -in /etc/autobot/certs/server-cert.pem
+  register: backend_cert_valid
+  changed_when: false
+  # (#2872) Intentional: openssl exits rc=1 when cert expires within the
+  # check window — that is a valid "needs renewal" signal, not an error.
+  failed_when: false
+  when: backend_cert_stat.stat.exists
+
+- name: Generate self-signed TLS certificate
+  ansible.builtin.command:
+    cmd: >-
+      openssl req -x509 -nodes -days 365 -newkey rsa:2048
+      -keyout /etc/autobot/certs/server-key.pem
+      -out /etc/autobot/certs/server-cert.pem
+      -subj '/C=US/ST=State/L=City/O=AutoBot/CN=autobot-backend'
+  when: >-
+    not backend_cert_stat.stat.exists
+    or (backend_cert_valid.rc | default(1)) != 0
+  notify: restart backend
+
+- name: Set certificate key permissions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: "0600"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+  loop:
+    - /etc/autobot/certs/server-key.pem
+    - /etc/autobot/certs/server-cert.pem
+
+# Issue #2824: Deploy .env to backend_code_dir so the systemd
+# EnvironmentFile directive can find it.  Previous code deployed to
+# backend_install_dir which diverges when playbooks override
+# backend_code_dir (e.g. setup-user-backend.yml sets it to
+# backend_install_dir/autobot-backend).  The path expression here
+# mirrors the one used in autobot-backend.service.j2 line 15.
+- name: "Backend | Deploy .env to code dir (matches systemd EnvironmentFile) (#2824)"
+  ansible.builtin.template:
+    src: backend.env.j2
+    dest: "{{ backend_code_dir | default(backend_install_dir) }}/.env"
+    mode: "0600"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+    backup: true
+  notify: restart backend
+  tags: ['backend', 'config']
+
+- name: Deploy backend systemd service
+  ansible.builtin.template:
+    src: autobot-backend.service.j2
+    dest: /etc/systemd/system/autobot-backend.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart backend
+
+- name: Enable and start backend service
+  ansible.builtin.systemd:
+    name: autobot-backend
+    state: started
+    enabled: true
+    daemon_reload: true
+
+# Issue #863: Deploy Celery worker service for background tasks
+- name: Deploy Celery worker systemd service
+  ansible.builtin.template:
+    src: autobot-celery.service.j2
+    dest: /etc/systemd/system/autobot-celery.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart celery
+
+- name: Enable and start Celery worker service
+  ansible.builtin.systemd:
+    name: autobot-celery
+    state: started
+    enabled: true
+    daemon_reload: true
+
+# Issue #6555: Deploy Celery Beat — fires the periodic schedules
+# declared in celery_app.conf.beat_schedule (knowledge cleanup,
+# sync queue prune). Without Beat the schedules are dead config.
+- name: "Beat | Ensure schedule directory exists"
+  ansible.builtin.file:
+    path: "{{ celery_beat_schedule_file | default('/var/lib/autobot/celerybeat-schedule') | dirname }}"
+    state: directory
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+    mode: "0750"
+
+- name: "Beat | Deploy Celery Beat systemd service (#6555)"
+  ansible.builtin.template:
+    src: autobot-celery-beat.service.j2
+    dest: /etc/systemd/system/autobot-celery-beat.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart celery beat
+
+- name: "Beat | Enable and start Celery Beat service"
+  ansible.builtin.systemd:
+    name: autobot-celery-beat
+    state: started
+    enabled: true
+    daemon_reload: true
+
+# ==========================================================
+# nginx reverse proxy (Issue #957)
+# Holds port backend_nginx_port (8443) permanently so WDF
+# rule is evaluated once for nginx, not on every uvicorn restart.
+#
+# Co-located mode (#2829): When SLM and backend share a host,
+# the SLM nginx proxies directly to uvicorn (port 8001, HTTP).
+# The standalone backend nginx vhost is skipped to avoid a
+# redundant double-proxy (SLM:443 -> backend:8443 -> uvicorn:8001).
+# ==========================================================
+
+# Cleanup: disable standalone backend nginx when co-located with SLM
+- name: "Backend nginx | Disable standalone vhost when co-located with SLM (#2829)"
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/autobot-backend.conf
+    state: absent
+  notify: reload nginx backend
+  when: slm_colocated_frontend | default(false) | bool
+  tags: ['backend', 'nginx']
+
+- name: "Backend nginx | Deploy reverse-proxy vhost config"
+  ansible.builtin.template:
+    src: nginx-backend.conf.j2
+    dest: /etc/nginx/sites-available/autobot-backend.conf
+    mode: "0644"
+    owner: root
+    group: root
+  notify: reload nginx backend
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['backend', 'nginx']
+
+- name: "Backend nginx | Enable vhost (symlink)"
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/autobot-backend.conf
+    dest: /etc/nginx/sites-enabled/autobot-backend.conf
+    state: link
+  notify: reload nginx backend
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['backend', 'nginx']
+
+- name: "Backend nginx | Disable default vhost"
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: reload nginx backend
+  tags: ['backend', 'nginx']
+
+- name: "Backend nginx | Validate nginx config"
+  ansible.builtin.command: nginx -t
+  changed_when: false
+  tags: ['backend', 'nginx']
+
+- name: "Backend nginx | Enable and start nginx"
+  ansible.builtin.systemd:
+    name: nginx
+    state: started
+    enabled: true
+    daemon_reload: true
+  tags: ['backend', 'nginx']
+
+# ==========================================================
+# UFW loopback0 rule (WSL2 mirrored networking)
+# WSL2 mirrored networking routes 127.0.0.1 traffic through
+# the loopback0 interface, NOT lo. UFW's default lo accept
+# rule does NOT cover loopback0, so nginx->uvicorn (port 8001)
+# connections are dropped by UFW INPUT DROP policy.
+# This rule is harmless on non-WSL2 hosts (no loopback0 traffic).
+# ==========================================================
+- name: "Backend | Check if UFW is installed"
+  ansible.builtin.command: which ufw
+  register: _backend_ufw_check
+  changed_when: false
+  # (#2872) Intentional: UFW may not be installed on all hosts.
+  failed_when: false
+  tags: ['backend', 'ufw']
+
+- name: "Backend | Allow loopback0 interface (WSL2 mirrored networking)"
+  community.general.ufw:
+    rule: allow
+    interface: loopback0
+    direction: in
+  when: _backend_ufw_check.rc == 0
+  tags: ['backend', 'ufw']
+
+# ==========================================================
+# Cognition Store seed-on-deploy (#4679)
+# Pre-populates ChromaDB cognition_store collection with curated
+# foundational docs so new deployments avoid cold-start degradation.
+# Runs only when cognition_seed.yaml is present; non-fatal if it fails.
+# ==========================================================
+- name: "Backend | Check cognition_seed.yaml exists (#4679)"
+  ansible.builtin.stat:
+    path: "{{ backend_code_dir }}/cognition_seed.yaml"
+  register: _cognition_seed_manifest
+  tags: ['backend', 'cognition-seed']
+
+- name: "Backend | Seed Cognition Store from manifest (#4679)"
+  ansible.builtin.command:
+    cmd: >
+      {{ backend_code_dir }}/venv/bin/python -c
+      "import asyncio;
+      from services.knowledge.cognition_seeder import CognitionSeeder;
+      s = CognitionSeeder();
+      count = asyncio.run(s.seed_from_manifest('{{ backend_code_dir }}/cognition_seed.yaml'));
+      print('cognition_store seeded:', count, 'chunks')"
+    chdir: "{{ backend_code_dir }}"
+  environment:
+    PYTHONPATH: "{{ backend_code_dir }}:{{ backend_shared_standalone_dir }}"
+  become: true
+  become_user: "{{ backend_service_account }}"
+  when: _cognition_seed_manifest.stat.exists
+  failed_when: false
+  changed_when: false
+  tags: ['backend', 'cognition-seed']
+
+# ==========================================================
+# Post-deploy smoke test (#3687)
+# systemd reports active (running) even when all uvicorn
+# workers crash-loop because the master process stays alive.
+# Probing the TCP port and /api/health catches that case and
+# fails the play before the deploy is marked complete.
+# Issue #3856: flush handlers here so any pending restart fires
+# before the health check, not after.
+# ==========================================================
+- name: "Backend | Flush handlers before smoke test (#3856)"
+  ansible.builtin.meta: flush_handlers
+  tags: ['backend', 'smoke-test']
+
+- name: "Backend | Wait for backend to be healthy (#3687)"
+  ansible.builtin.uri:
+    url: "http://{{ backend_host }}:{{ backend_health_check_port }}/api/health"
+    status_code: 200
+  retries: "{{ backend_health_check_retries | default(60) }}"
+  delay: "{{ backend_health_check_delay | default(5) }}"
+  tags: ['backend', 'smoke-test']
+  register: backend_health_check
+  until: backend_health_check is succeeded

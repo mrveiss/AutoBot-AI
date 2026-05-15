@@ -1,0 +1,30 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# VNC Server systemd service - managed by Ansible
+
+[Unit]
+Description=TigerVNC Server for AutoBot
+After=syslog.target network.target
+
+[Service]
+Type=simple
+User={{ vnc_user }}
+Group={{ vnc_group }}
+
+# Clean up stale lock files
+ExecStartPre=/bin/sh -c '/usr/bin/vncserver -kill :{{ vnc_display }} 2>/dev/null || true'
+ExecStartPre=/bin/sh -c 'rm -f /tmp/.X{{ vnc_display }}-lock /tmp/.X11-unix/X{{ vnc_display }} 2>/dev/null || true'
+
+# Start VNC server
+ExecStart=/usr/bin/vncserver :{{ vnc_display }} -fg -localhost no
+
+# Stop VNC server
+ExecStop=/usr/bin/vncserver -kill :{{ vnc_display }}
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

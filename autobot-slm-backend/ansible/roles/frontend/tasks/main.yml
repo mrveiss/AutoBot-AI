@@ -1,0 +1,260 @@
+---
+# Frontend role - User frontend (autobot-frontend) deployment
+# Serves production build via nginx + SSL on Frontend VM (.21)
+
+# ============================================================
+# Phase 1 CLEAN - remove legacy/wrong-node dirs  (#926 Phase 4)
+# ============================================================
+- name: "Frontend | Include clean tasks"
+  ansible.builtin.import_tasks: clean.yml
+  tags: ['clean']
+
+# ============================================================
+# Per-role service account  (#926 Phase 4)
+# ============================================================
+- name: "Frontend | Create per-role service account"
+  ansible.builtin.user:
+    name: "{{ frontend_service_account }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    groups: "{{ frontend_group }}"
+    append: true
+    comment: "AutoBot frontend service account"
+    state: present
+  tags: ['frontend', 'users']
+
+# ============================================================
+# Per-role env at /etc/autobot/  (#926 Phase 4)
+# ============================================================
+- name: "Frontend | Ensure /etc/autobot dir exists"
+  ansible.builtin.file:
+    path: /etc/autobot
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  tags: ['frontend', 'config']
+
+- name: "Frontend | Deploy /etc/autobot/autobot-frontend.env"
+  ansible.builtin.template:
+    src: frontend.env.j2
+    dest: /etc/autobot/autobot-frontend.env
+    mode: "0640"
+    owner: root
+    group: "{{ frontend_service_account }}"
+  tags: ['frontend', 'config']
+
+# ============================================================
+# Node.js and nginx are installed by shared dependency roles
+# in Phase 0 (nodejs, nginx). No per-role install needed.
+# ============================================================
+
+- name: "Frontend | Verify Node.js installation"
+  command: node --version
+  register: node_version
+  changed_when: false
+  tags: ['frontend', 'validation']
+
+- name: "Frontend | Ensure frontend directory exists"
+  file:
+    path: "{{ frontend_install_dir }}/autobot-frontend"
+    state: directory
+    owner: "{{ frontend_user }}"
+    group: "{{ frontend_group }}"
+    mode: '0755'
+  become: yes
+  tags: ['frontend', 'directories']
+
+- name: "Frontend | Sync frontend code from code_source"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-frontend/"
+    dest: "{{ frontend_install_dir }}/autobot-frontend/"
+    rsync_opts:
+      - "--exclude=node_modules"
+      - "--exclude=dist"
+      - "--exclude=__pycache__"
+      - "--exclude=.git"
+  tags: ['frontend', 'deploy']
+
+- name: "Frontend | Fix frontend directory ownership after sync"
+  ansible.builtin.file:
+    path: "{{ frontend_install_dir }}/autobot-frontend"
+    state: directory
+    owner: "{{ frontend_user }}"
+    group: "{{ frontend_group }}"
+    recurse: true
+  tags: ['frontend', 'deploy']
+
+- name: "Frontend | Ensure TLS cert directory exists"
+  file:
+    path: "{{ frontend_tls_cert_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: yes
+  tags: ['frontend', 'tls']
+
+- name: "Frontend | Check existing TLS certificate"
+  stat:
+    path: "{{ frontend_tls_cert }}"
+  register: _tls_cert
+  tags: ['frontend', 'tls']
+
+- name: "Frontend | Generate self-signed TLS certificate"
+  command: >
+    openssl req -x509 -nodes
+    -newkey rsa:2048
+    -days 365
+    -keyout {{ frontend_tls_key }}
+    -out {{ frontend_tls_cert }}
+    -subj "/CN={{ ansible_host | default('127.0.0.1') }}/O=AutoBot/C=US"
+  become: yes
+  when: not _tls_cert.stat.exists
+  notify: restart nginx
+  tags: ['frontend', 'tls']
+
+- name: "Frontend | Set TLS key permissions"
+  file:
+    path: "{{ frontend_tls_key }}"
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+  when: not _tls_cert.stat.exists
+  tags: ['frontend', 'tls']
+
+- name: "Frontend | Check if package.json exists"
+  stat:
+    path: "{{ frontend_install_dir }}/autobot-frontend/package.json"
+  register: package_json_path
+  tags: ['frontend', 'npm']
+
+- name: "Frontend | Install npm dependencies"
+  ansible.builtin.command:
+    cmd: npm install --legacy-peer-deps
+    chdir: "{{ frontend_install_dir }}/autobot-frontend"
+  become: yes
+  become_user: "{{ frontend_user }}"
+  environment:
+    CYPRESS_INSTALL_BINARY: "0"
+  when: package_json_path.stat.exists
+  register: _npm_install
+  changed_when: _npm_install.rc == 0
+  tags: ['frontend', 'npm']
+
+- name: "Frontend | Install esbuild (required by vite/rolldown)"
+  ansible.builtin.command:
+    cmd: npm install esbuild --legacy-peer-deps
+    chdir: "{{ frontend_install_dir }}/autobot-frontend"
+  become: yes
+  become_user: "{{ frontend_user }}"
+  when: package_json_path.stat.exists
+  changed_when: true
+  tags: ['frontend', 'npm']
+
+- name: "Frontend | Build production frontend"
+  command: npx vite build
+  args:
+    chdir: "{{ frontend_install_dir }}/autobot-frontend"
+  become: yes
+  become_user: "{{ frontend_user }}"
+  when: package_json_path.stat.exists
+  tags: ['frontend', 'build']
+
+# Skip nginx config when co-located with SLM — SLM nginx handles both (#2829)
+- name: "Frontend | Configure nginx"
+  template:
+    src: nginx-frontend.conf.j2
+    dest: /etc/nginx/sites-available/autobot-frontend
+    mode: '0644'
+    backup: yes
+  become: yes
+  notify:
+    - test nginx config
+    - restart nginx
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['frontend', 'nginx']
+
+- name: "Frontend | Enable nginx site"
+  file:
+    src: /etc/nginx/sites-available/autobot-frontend
+    dest: /etc/nginx/sites-enabled/autobot-frontend
+    state: link
+  become: yes
+  notify: restart nginx
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['frontend', 'nginx']
+
+- name: "Frontend | Disable standalone nginx when co-located with SLM (#2829)"
+  file:
+    path: /etc/nginx/sites-enabled/autobot-frontend
+    state: absent
+  become: yes
+  notify: restart nginx
+  when: slm_colocated_frontend | default(false) | bool
+  tags: ['frontend', 'nginx']
+
+- name: "Frontend | Remove default nginx site"
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  become: yes
+  notify: restart nginx
+  tags: ['frontend', 'nginx']
+
+- name: "Frontend | Configure firewall - Allow HTTP"
+  ufw:
+    rule: allow
+    port: "{{ nginx_http_port }}"
+    proto: tcp
+    comment: "HTTP (redirects to HTTPS)"
+  become: yes
+  notify: reload firewall
+  tags: ['frontend', 'firewall']
+
+- name: "Frontend | Configure firewall - Allow HTTPS"
+  ufw:
+    rule: allow
+    port: "{{ frontend_port }}"
+    proto: tcp
+    comment: "HTTPS"
+  become: yes
+  notify: reload firewall
+  tags: ['frontend', 'firewall']
+
+- name: "Frontend | Enable and start nginx"
+  systemd:
+    name: nginx
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  become: yes
+  tags: ['frontend', 'service']
+
+- name: "Frontend | Check if legacy Vite dev server service exists"
+  ansible.builtin.stat:
+    path: /etc/systemd/system/autobot-frontend.service
+  register: _legacy_frontend_service
+  tags: ['frontend', 'cleanup']
+
+- name: "Frontend | Stop and disable legacy Vite dev server"
+  systemd:
+    name: autobot-frontend
+    state: stopped
+    enabled: no
+  become: yes
+  when: _legacy_frontend_service.stat.exists
+  tags: ['frontend', 'cleanup']
+
+- name: "Frontend | Display configuration summary"
+  debug:
+    msg:
+      - "=== Frontend Configuration Complete ==="
+      - "Node.js: {{ node_version.stdout }}"
+      - "Frontend URL: https://{{ ansible_facts['default_ipv4'].address }}"
+      - "TLS: Enabled ({{ frontend_tls_cert }})"
+      - "API Proxy: {{ backend_host | default(ansible_host) }}:{{ backend_port | default(8443) }}"
+      - "Nginx: Enabled (production build)"
+  tags: ['frontend', 'report']

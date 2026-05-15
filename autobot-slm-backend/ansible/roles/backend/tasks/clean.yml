@@ -1,0 +1,47 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Backend role - Phase 1 CLEAN task (#926 Phase 4)
+# Removes legacy and wrong-node directories from .20 (backend node).
+# Run via: ansible-playbook ... --tags clean
+# Safe to run any time; all removes are conditional.
+#
+# LEGACY directory deletions (npu-worker, browser-service, ai-stack,
+# autobot-user-backend) run unconditionally because NO current role
+# deploys to those paths — they are pre-rename leftovers.
+# NOTE: /opt/autobot/config is NOT removed here (#3873) — it holds
+# permission_rules.yaml which permission_matcher.py reads at runtime.
+#
+# Wrong-node deletions of CURRENT canonical dirs gate on the shared
+# `role_*_active` facts from inventory/group_vars/all.yml (#7050). These
+# facts mirror the provision gates' role-detection logic exactly, so
+# cleanup never wipes a role's dir on a host where that role is also
+# deployed (single-host or co-located).
+#
+# #7058: legacy/wrong-node tasks delegated to _shared/tasks/.
+
+- name: "Backend | Clean: legacy dirs (unconditional)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/clean_legacy_dir.yml
+  loop:
+    - npu-worker
+    - browser-service
+    - ai-stack
+    - autobot-user-backend
+  loop_control:
+    loop_var: _legacy_dir
+  vars:
+    caller_role: "Backend"
+    dir_name: "{{ _legacy_dir }}"
+
+- name: "Backend | Clean: wrong-node SLM dirs (gated on role_slm_active)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/clean_wrong_node_dir.yml
+  loop:
+    - autobot-slm-frontend
+    - autobot-slm-backend
+  loop_control:
+    loop_var: _wrong_node_dir
+  vars:
+    caller_role: "Backend"
+    dir_name: "{{ _wrong_node_dir }}"
+    role_check_fact: "role_slm_active"

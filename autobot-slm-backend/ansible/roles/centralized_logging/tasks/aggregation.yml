@@ -1,0 +1,26 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Set up log aggregation on main server
+
+- name: Create centralized log directory structure
+  file:
+    path: "{{ centralized_log_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ logging_user }}"
+    group: "{{ logging_group }}"
+    mode: '0755'
+  loop:
+    - frontend
+    - npu
+    - redis
+    - ai_stack
+    - browser
+    - main
+
+- name: Create log aggregation script
+  template:
+    src: aggregate-logs.sh.j2
+    dest: /usr/local/bin/aggregate-autobot-logs
+    mode: '0755'

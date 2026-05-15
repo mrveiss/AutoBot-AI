@@ -1,0 +1,216 @@
+# Error Message Migration Map
+#
+# Maps hardcoded error messages to error catalog codes
+# Use this guide when migrating from HTTPException(...) to catalog-based errors
+#
+# Format:
+#   hardcoded_pattern: "Original error message pattern"
+#   catalog_code: "CATALOG_CODE"
+#   files: ["list of files containing this pattern"]
+#   migration_example: "How to migrate this error"
+
+version: "1.0.0"
+created: "2025-11-09"
+
+# =============================================================================
+# AUTHENTICATION & AUTHORIZATION ERRORS
+# =============================================================================
+
+authentication_errors:
+  - hardcoded_pattern: "Authentication required"
+    catalog_code: "AUTH_0002"
+    files:
+      - "src/auth_middleware.py:519"
+    old_code: 'raise HTTPException(status_code=401, detail="Authentication required")'
+    new_code: |
+      from src.utils.error_catalog import get_error
+      error = get_error("AUTH_0002")
+      raise HTTPException(status_code=error.status_code, detail=error.message)
+
+  - hardcoded_pattern: "Missing authentication headers"
+    catalog_code: "AUTH_0002"
+    files:
+      - "backend/security/service_auth.py:123"
+    old_code: 'raise HTTPException(401, "Missing authentication headers")'
+    new_code: |
+      from src.utils.error_catalog import get_error
+      error = get_error("AUTH_0002")
+      raise HTTPException(status_code=error.status_code, detail=error.message)
+
+  - hardcoded_pattern: "Invalid credentials|Invalid signature"
+    catalog_code: "AUTH_0004"
+    files:
+      - "backend/security/service_auth.py:166"
+    old_code: 'raise HTTPException(401, "Invalid signature")'
+    new_code: |
+      from src.utils.error_catalog import get_error
+      error = get_error("AUTH_0004")
+      raise HTTPException(status_code=error.status_code, detail=error.message)
+
+  - hardcoded_pattern: "Insufficient permissions"
+    catalog_code: "AUTH_0003"
+    files:
+      - "backend/api/audit.py:78"
+      - "backend/api/audit.py:85"
+    old_code: 'raise HTTPException(status_code=403, detail="Insufficient permissions")'
+    new_code: |
+      from src.utils.error_catalog import get_error
+      error = get_error("AUTH_0003")
+      raise HTTPException(status_code=error.status_code, detail=error.message)
+
+# =============================================================================
+# API & VALIDATION ERRORS
+# =============================================================================
+
+api_errors:
+  - hardcoded_pattern: "Invalid request|Validation error"
+    catalog_code: "API_0001"
+    files:
+      - "backend/api/system_validation.py:104"
+    old_code: 'raise HTTPException(status_code=400, detail="Validation error")'
+    new_code: |
+      from src.utils.error_catalog import get_error
+      error = get_error("API_0001")
+      raise HTTPException(status_code=error.status_code, detail=error.message)
+
+  - hardcoded_pattern: ".*not found"
+    catalog_code: "API_0002"
+    files:
+      - "backend/api/validation_dashboard.py:368"
+      - "src/utils/operation_timeout_integration.py:174"
+      - "src/utils/operation_timeout_integration.py:230"
+      - "src/utils/operation_timeout_integration.py:271"
+    old_code: 'raise HTTPException(status_code=404, detail="Operation not found")'
+    new_code: |
+      from src.utils.error_catalog import get_error
+      error = get_error("API_0002")
+      raise HTTPException(status_code=error.status_code, detail=f"{error.message}: Operation")
+
+  - hardcoded_pattern: "Internal server error"
+    catalog_code: "API_0003"
+    files:
+      - "src/utils/operation_timeout_integration.py:167"
+    old_code: 'raise HTTPException(status_code=500, detail="Internal server error")'
+    new_code: |
+      from src.utils.error_catalog import get_error
+      error = get_error("API_0003")
+      raise HTTPException(status_code=error.status_code, detail=error.message)
+
+  - hardcoded_pattern: "Service.*unavailable|.*not available"
+    catalog_code: "API_0005"
+    files:
+      - "backend/api/validation_dashboard.py:237"
+      - "backend/api/validation_dashboard.py:432"
+      - "backend/api/validation_dashboard.py:493"
+      - "backend/api/validation_dashboard.py:523"
+      - "backend/api/validation_dashboard.py:562"
+      - "backend/api/validation_dashboard.py:605"
+    old_code: 'raise HTTPException(status_code=503, detail="Dashboard generator not available")'
+    new_code: |
+      from src.utils.error_catalog import get_error
+      error = get_error("API_0005")
+      raise HTTPException(status_code=error.status_code, detail=f"{error.message}: Dashboard generator")
+
+# =============================================================================
+# DATABASE ERRORS
+# =============================================================================
+
+database_errors:
+  - hardcoded_pattern: "Database.*error|Redis.*error"
+    catalog_code: "DB_0003"
+    files:
+      - "Various service files"
+    old_code: 'raise HTTPException(status_code=500, detail="Database operation failed")'
+    new_code: |
+      from src.utils.error_catalog import get_error
+      error = get_error("DB_0003")
+      raise HTTPException(status_code=error.status_code, detail=error.message)
+
+# =============================================================================
+# SETTINGS & CONFIGURATION ERRORS
+# =============================================================================
+
+settings_errors:
+  - hardcoded_pattern: "Error getting settings"
+    catalog_code: "API_0003"
+    files:
+      - "backend/api/settings.py:26"
+      - "backend/api/settings.py:41"
+    old_code: 'raise HTTPException(status_code=500, detail=f"Error getting settings: {str(e)}")'
+    new_code: |
+      from src.utils.error_catalog import get_error
+      error = get_error("API_0003")
+      raise HTTPException(status_code=error.status_code, detail=f"{error.message}: {str(e)}")
+
+  - hardcoded_pattern: "Error saving settings"
+    catalog_code: "API_0003"
+    files:
+      - "backend/api/settings.py:62"
+      - "backend/api/settings.py:83"
+    old_code: 'raise HTTPException(status_code=500, detail=f"Error saving settings: {str(e)}")'
+    new_code: |
+      from src.utils.error_catalog import get_error
+      error = get_error("API_0003")
+      raise HTTPException(status_code=error.status_code, detail=f"{error.message}: {str(e)}")
+
+# =============================================================================
+# KNOWLEDGE BASE ERRORS (to be added after migration)
+# =============================================================================
+
+knowledge_base_errors:
+  - hardcoded_pattern: "Knowledge.*sync.*error"
+    catalog_code: "KB_0004"
+    files:
+      - "src/services/knowledge_sync_service.py:387"
+      - "src/services/knowledge_sync_service.py:400"
+      - "src/services/knowledge_sync_service.py:413"
+      - "src/services/knowledge_sync_service.py:447"
+      - "src/services/knowledge_sync_service.py:473"
+      - "src/services/knowledge_sync_service.py:498"
+    old_code: 'raise HTTPException(status_code=500, detail=str(e))'
+    new_code: |
+      from src.utils.error_catalog import get_error
+      error = get_error("KB_0004")
+      raise HTTPException(status_code=error.status_code, detail=f"{error.message}: {str(e)}")
+
+# =============================================================================
+# MIGRATION STATISTICS
+# =============================================================================
+
+statistics:
+  total_hardcoded_instances: 67
+  unique_error_patterns: 15
+  files_requiring_migration: 12
+  estimated_effort_hours: 4
+
+# =============================================================================
+# MIGRATION PRIORITY
+# =============================================================================
+
+priority:
+  high:
+    - "Authentication errors (AUTH_*)"
+    - "API validation errors (API_0001)"
+    - "Service unavailable errors (API_0005)"
+
+  medium:
+    - "Settings errors"
+    - "Database errors"
+    - "Knowledge base errors"
+
+  low:
+    - "Dashboard-specific errors"
+    - "Audit log errors"
+    - "Operation timeout errors"
+
+# =============================================================================
+# MIGRATION GUIDELINES
+# =============================================================================
+
+guidelines:
+  - "Always import error catalog at module level"
+  - "Preserve original error context (e.g., exception message)"
+  - "Use catalog message as base, append context with colon"
+  - "Update tests to verify catalog error codes"
+  - "Remove hardcoded status codes where possible"
+  - "Maintain retry guidance from catalog"

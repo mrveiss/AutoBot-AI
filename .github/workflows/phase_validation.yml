@@ -1,0 +1,265 @@
+# Phase Validation Integration workflow
+
+name: Phase Validation Integration
+
+on:
+  push:
+    branches: [ main, Dev_new_gui ]
+    paths: &phase_paths
+      - 'autobot-backend/**/*.py'
+      - 'autobot-slm-backend/**/*.py'
+      - 'autobot_shared/**/*.py'
+      - '**/requirements*.txt'
+      - 'requirements-ci/**'
+      - 'pipeline-scripts/**'
+      - 'tools/lint/**'
+      - '.github/workflows/phase_validation.yml'
+  pull_request:
+    branches: [ main ]
+    paths: *phase_paths
+  workflow_dispatch:
+    inputs:
+      phase_filter:
+        description: 'Specific phase to validate (leave empty for all phases)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phase-validation:
+    name: AutoBot Phase Validation
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install aiohttp psutil requests pyyaml
+        # phase_validation_system.py imports autobot_shared.network_constants —
+        # install the package so the script doesn't crash at import (line 25)
+        # with ModuleNotFoundError, which masked overall_maturity as 0 and
+        # tripped the 60% gate. (#7496)
+        python -m pip install -e ./autobot_shared
+
+    - name: Create necessary directories and config files
+      run: |
+        mkdir -p data logs static config
+        touch data/.gitkeep logs/.gitkeep static/.gitkeep
+
+        # Create minimal config for validation
+        cat > config/config.yaml << 'EOF'
+        llm:
+          orchestrator_llm: "mock"
+          task_llm: "mock"
+          ollama:
+            model: "mock-model"
+            models: {}
+          unified:
+            embedding:
+              providers:
+                ollama:
+                  selected_model: "mock-embed"
+        deployment:
+          mode: "local"
+        data:
+          reliability_stats_file: "data/reliability_stats.json"
+        diagnostics:
+          enabled: false
+          use_llm_for_analysis: false
+          use_web_search_for_analysis: false
+          auto_apply_fixes: false
+        redis:
+          host: "localhost"
+          port: 6379
+          db: 0
+        EOF
+
+    - name: Run Phase Validation System
+      env:
+        # autobot_shared/network_constants.py:34 bare-imports `from config.registry`
+        # which lives in autobot-backend; add it to PYTHONPATH so the script can
+        # import autobot_shared without ModuleNotFoundError. (#7496 — architectural
+        # smell tracked separately as a discovery issue.)
+        PYTHONPATH: .:autobot-backend
+      run: |
+        echo "Running AutoBot Phase Validation System..."
+
+        # Run the validation system in CI mode (#7496): skips
+        # endpoint/service/feature checks that require a live backend stack
+        # (the workflow doesn't ``docker compose up`` first). Structural
+        # file/directory presence is what we can measure pre-deploy.
+        python3 autobot-infrastructure/shared/scripts/phase_validation_system.py \
+          --ci-mode --output-format json \
+          > phase_validation_results.json \
+          || echo '{"overall_maturity": 0, "phases": []}' > phase_validation_results.json
+
+        # Display results summary
+        echo "## Phase Validation Results" >> $GITHUB_STEP_SUMMARY
+        python3 -c 'import json; r=json.load(open("phase_validation_results.json")); print(f"**Overall System Maturity:** {r.get(\"overall_maturity\", 0):.1f}%")' >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "Results not available" >> $GITHUB_STEP_SUMMARY
+
+    - name: Generate Validation Dashboard
+      env:
+        # Same PYTHONPATH dependency as Run Phase Validation System (#7496).
+        PYTHONPATH: .:autobot-backend
+      run: |
+        echo "Generating validation dashboard..."
+        python3 autobot-infrastructure/shared/scripts/validation_dashboard_generator.py --ci-mode > validation_dashboard.html || echo "Dashboard generation failed"
+
+    - name: Phase Validation Gate
+      # Non-blocking until #7496 rewrites the legacy PHASE_CRITERIA paths
+      # (`src/`, `backend/`, `main.py`, …) to match the current
+      # `autobot-backend/` / `autobot-frontend/` reorganisation. The gate
+      # currently scores ~22% against stale criteria; gating on it would
+      # block every merge for reasons unrelated to the change under review.
+      continue-on-error: true
+      run: |
+        echo "Checking phase validation gate..."
+
+        # Extract overall maturity from results
+        MATURITY=$(python3 -c 'import json; f=open("phase_validation_results.json"); r=json.load(f); print(r.get("overall_maturity", 0))' 2>/dev/null || echo "0")
+
+        echo "System maturity: ${MATURITY}%"
+
+        # Set minimum maturity threshold for different branches
+        if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+          THRESHOLD=80
+          echo "Main branch - requiring ${THRESHOLD}% maturity"
+        else
+          THRESHOLD=60
+          echo "Development branch - requiring ${THRESHOLD}% maturity"
+        fi
+
+        # Compare maturity to threshold
+        if (( $(echo "$MATURITY >= $THRESHOLD" | bc -l) )); then
+          echo "Phase validation passed: ${MATURITY}% >= ${THRESHOLD}%"
+        else
+          echo "::error::Phase validation below threshold: ${MATURITY}% < ${THRESHOLD}%"
+          echo "## Phase Validation Below Threshold" >> $GITHUB_STEP_SUMMARY
+          echo "Current maturity (${MATURITY}%) is below threshold (${THRESHOLD}%)" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+
+    - name: Upload Validation Reports
+      uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: phase-validation-reports
+        path: |
+          phase_validation_results.json
+          validation_dashboard.html
+        retention-days: 30
+
+    - name: Comment Phase Status on PR
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v9
+      with:
+        script: |
+          const fs = require('fs');
+
+          try {
+            const results = JSON.parse(fs.readFileSync('phase_validation_results.json', 'utf8'));
+
+            let comment = '## AutoBot Phase Validation Results\n\n';
+            comment += `**System Maturity:** ${results.overall_maturity?.toFixed(1)}%\n\n`;
+            comment += '### Phase Status:\n\n';
+
+            for (const phase of results.phases || []) {
+              const emoji = phase.status === 'complete' ? 'PASS' :
+                           phase.status === 'in_progress' ? 'IN PROGRESS' : 'FAIL';
+              comment += `${emoji} **${phase.name}**: ${phase.completion_percentage?.toFixed(1)}%\n`;
+            }
+
+            comment += '\n### Recommendations:\n';
+            for (const rec of results.recommendations || []) {
+              comment += `- ${rec.title}: ${rec.action}\n`;
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          } catch (error) {
+            console.log('Could not post phase validation comment:', error.message);
+          }
+
+    - name: Phase Validation Summary
+      if: always()
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "Phase Validation Summary"
+        echo "=========================="
+        if [ -f "phase_validation_results.json" ]; then
+          echo "Phase validation results available"
+          cat phase_validation_results.json | python3 -m json.tool | head -20 || true
+        else
+          echo "No validation results found"
+        fi
+
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -rf .venv || true
+
+  integration-validation:
+    name: Integration Phase Validation
+    runs-on: ubuntu-latest
+    needs: phase-validation
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev_new_gui'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Download validation results
+      uses: actions/download-artifact@v8
+      with:
+        name: phase-validation-reports
+
+    - name: Integration readiness check
+      # Non-blocking until #7496 — same reason as Phase Validation Gate.
+      continue-on-error: true
+      run: |
+        echo "Checking integration readiness..."
+
+        # Check if validation results indicate system is ready for integration
+        MATURITY=$(python3 -c 'import json; f=open("phase_validation_results.json"); r=json.load(f); print(r.get("overall_maturity", 0))' 2>/dev/null || echo "0")
+
+        if (( $(echo "$MATURITY >= 70" | bc -l) )); then
+          echo "System ready for integration (${MATURITY}%)"
+          echo "## Integration Ready" >> $GITHUB_STEP_SUMMARY
+          echo "System maturity: ${MATURITY}% - Ready for integration testing" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "::error::System not ready for integration (${MATURITY}%)"
+          echo "## Integration Not Ready" >> $GITHUB_STEP_SUMMARY
+          echo "System maturity: ${MATURITY}% - Additional development required" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+
+    - name: Update phase progression status
+      run: |
+        echo "Updating phase progression status..."
+
+        # This could integrate with your phase progression system
+        # to automatically update the current system phase based on validation
+        echo "Phase validation completed at $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        echo "Results available in validation dashboard"

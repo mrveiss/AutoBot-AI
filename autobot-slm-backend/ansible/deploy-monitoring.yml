@@ -1,0 +1,19 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Ansible Playbook - Deploy Monitoring Stack
+---
+
+- name: Deploy Monitoring Stack
+  hosts: "{{ target_host | default('localhost') }}"
+  become: true
+  gather_facts: true
+
+  vars:
+    monitoring_install_prometheus: true
+    monitoring_install_grafana: true
+    monitoring_install_node_exporter: true
+
+  roles:
+    - role: monitoring

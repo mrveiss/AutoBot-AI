@@ -1,0 +1,60 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# access_control role - Main tasks
+
+- name: Backup Redis database
+  include_tasks: backup.yml
+  when: redis_backup_before_changes
+  tags:
+    - access_control
+    - backup
+
+- name: Configure access control policies
+  include_tasks: policies.yml
+  tags:
+    - access_control
+    - policies
+
+- name: Setup audit logging
+  include_tasks: audit_logging.yml
+  when: enable_audit_logging
+  tags:
+    - access_control
+    - audit
+
+- name: Configure session ownership
+  include_tasks: session_ownership.yml
+  when: enable_session_validation
+  tags:
+    - access_control
+    - sessions
+
+- name: Execute rollout phase
+  include_tasks: rollout.yml
+  when: rollout_phase is defined and rollout_phase > 0
+  tags:
+    - access_control
+    - rollout
+
+- name: Setup access monitoring
+  include_tasks: monitoring.yml
+  when: enable_access_monitoring
+  tags:
+    - access_control
+    - monitoring
+
+- name: Run validation tests
+  include_tasks: validation.yml
+  when: run_validation_tests
+  tags:
+    - access_control
+    - validation
+    - verify
+
+- name: Create management scripts
+  include_tasks: scripts.yml
+  tags:
+    - access_control
+    - scripts

@@ -1,0 +1,92 @@
+# Distributed Deployment Configuration
+# Services run across multiple machines/hosts
+
+deployment:
+  mode: distributed
+  domain: autobot.prod
+
+services:
+  redis:
+    host: redis-01.autobot.prod
+    port: 6379
+    scheme: redis
+    health_endpoint: "/"
+    timeout: 10
+    retries: 5
+
+  backend:
+    host: api-01.autobot.prod
+    port: 8001
+    scheme: http
+    health_endpoint: /api/system/health
+    timeout: 30
+
+  frontend:
+    host: web-01.autobot.prod
+    port: 3000
+    scheme: http
+    health_endpoint: /
+
+  ai-stack:
+    host: ai-worker-01.autobot.prod
+    port: 8080
+    scheme: http
+    health_endpoint: /health
+    timeout: 60
+    retries: 3
+
+  npu-worker:
+    host: npu-farm-01.autobot.prod
+    port: 8081
+    scheme: http
+    health_endpoint: /health
+    timeout: 60
+    retries: 3
+
+  playwright-vnc:
+    host: browser-01.autobot.prod
+    port: 3000
+    scheme: http
+    health_endpoint: /health
+
+# Load balancer configuration (optional)
+load_balancers:
+  api:
+    hosts:
+      - api-01.autobot.prod:8001
+      - api-02.autobot.prod:8001
+    health_check: /api/system/health
+
+  ai-workers:
+    hosts:
+      - ai-worker-01.autobot.prod:8080
+      - ai-worker-02.autobot.prod:8080
+      - ai-worker-03.autobot.prod:8080
+    health_check: /health
+    strategy: round_robin
+
+# Environment variables for distributed deployment
+environment:
+  AUTOBOT_DEPLOYMENT_MODE: distributed
+  AUTOBOT_DOMAIN: autobot.prod
+  AUTOBOT_DISTRIBUTED: "true"
+  REDIS_HOST: redis-01.autobot.prod
+  REDIS_PORT: 6379
+  BACKEND_HOST: api-01.autobot.prod
+  BACKEND_PORT: 8001
+
+# External service dependencies
+external_services:
+  database:
+    host: db-cluster.autobot.prod
+    port: 5432
+    scheme: postgresql
+
+  message_queue:
+    host: rabbitmq-cluster.autobot.prod
+    port: 5672
+    scheme: amqp
+
+  monitoring:
+    prometheus: http://monitoring.autobot.prod:9090
+    grafana: http://monitoring.autobot.prod:3001

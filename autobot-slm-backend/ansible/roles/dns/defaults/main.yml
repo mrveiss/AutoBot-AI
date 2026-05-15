@@ -1,0 +1,64 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# DNS role default variables
+
+# Fleet DNS configuration
+dns_domain: autobot.local
+dns_search_domains:
+  - autobot.local
+  - local
+
+# /etc/hosts management
+manage_etc_hosts: true
+hosts_marker_begin: "# AutoBot Fleet DNS - Start"
+hosts_marker_end: "# AutoBot Fleet DNS - End"
+create_short_aliases: true  # Create short names (e.g., redis → autobot-redis)
+
+# DNS caching
+install_dnsmasq: true
+dnsmasq_cache_size: 1000
+dnsmasq_port: 53
+dnsmasq_listen_address: 127.0.0.1
+
+# Hostname configuration
+set_hostname: true
+hostname_fqdn: true  # Set FQDN (e.g., redis.autobot.local)
+
+# DNS resolution testing
+test_dns_resolution: true
+dns_test_timeout: 5
+dns_test_required_nodes:
+  - redis
+  - slm_server
+
+# systemd-resolved configuration
+use_systemd_resolved: false  # Use systemd-resolved instead of dnsmasq
+systemd_resolved_dns_servers: []
+systemd_resolved_fallback_dns:
+  - 8.8.8.8
+  - 1.1.1.1
+
+# Fleet node mappings (auto-generated from inventory)
+fleet_host_entries: []  # Populated dynamically
+
+# Custom host entries (in addition to fleet)
+custom_host_entries: []
+# Example:
+#  - ip: "10.0.0.100"
+#    hostnames:
+#      - "custom.example.com"
+#      - "custom"
+
+# DNS test endpoints
+dns_test_endpoints:
+  - hostname: "{{ groups['slm_server'][0] if 'slm_server' in groups else 'localhost' }}"
+    port: 443
+    description: "SLM Server"
+  - hostname: "{{ groups['redis'][0] if 'redis' in groups else 'localhost' }}"
+    port: 6379
+    description: "Redis"
+
+# Logging
+log_level: INFO

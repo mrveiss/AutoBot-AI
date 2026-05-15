@@ -1,0 +1,55 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Deploy distributed configuration
+
+- name: Create distributed configuration directory
+  file:
+    path: "{{ config_dir }}/distributed"
+    state: directory
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'
+
+- name: Deploy distributed environment configuration
+  template:
+    src: distributed.env.j2
+    dest: "{{ config_dir }}/distributed/environment.env"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0640'
+
+- name: Deploy fleet topology configuration
+  template:
+    src: fleet_topology.yml.j2
+    dest: "{{ config_dir }}/distributed/fleet_topology.yml"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0644'
+
+- name: Deploy service discovery configuration
+  template:
+    src: service_discovery.yml.j2
+    dest: "{{ config_dir }}/distributed/service_discovery.yml"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0644'
+
+- name: Create coordinator configuration
+  template:
+    src: coordinator_config.yml.j2
+    dest: "{{ config_dir }}/distributed/coordinator.yml"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0644'
+  when: inventory_hostname == groups['slm_server'][0]
+
+- name: Set distributed mode in main configuration
+  lineinfile:
+    path: "{{ config_dir }}/autobot.env"
+    line: "AUTOBOT_DEPLOYMENT_MODE=distributed"
+    create: yes
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0640'

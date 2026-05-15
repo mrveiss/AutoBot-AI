@@ -1,0 +1,35 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Dependency Patching Role - Main Tasks
+# Issue #682: Ansible Rolling Update System for Dependency Patching
+#
+# This role implements oVirt-style rolling updates for Python dependencies:
+# 1. Pre-update: Backup venv, drain connections, enter maintenance mode
+# 2. Update: Install security patches via pip
+# 3. Post-update: Health check, restart service, verify
+# 4. Rollback: Automatic restore on failure
+
+- name: Include pre-update tasks
+  ansible.builtin.include_tasks: pre-update.yml
+  when: not dry_run
+
+- name: Include Python venv update tasks
+  ansible.builtin.include_tasks: update-venv.yml
+  when:
+    - service_definitions[group_names | first].has_python_venv | default(false)
+    - not dry_run
+
+- name: Include post-update tasks
+  ansible.builtin.include_tasks: post-update.yml
+  when: not dry_run
+
+- name: Dry run - show what would be updated
+  ansible.builtin.debug:
+    msg: |
+      DRY RUN - Would update the following packages on {{ inventory_hostname }}:
+      {% for pkg, version in python_security_updates.items() %}
+      - {{ pkg }} >= {{ version }}
+      {% endfor %}
+  when: dry_run

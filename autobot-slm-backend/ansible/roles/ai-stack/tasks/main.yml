@@ -1,0 +1,261 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# AI Stack Role - AI processing components for AutoBot
+---
+
+# ============================================================
+# Phase 1 CLEAN - remove legacy/wrong-node dirs  (#926 Phase 4)
+# ============================================================
+- name: "AI Stack | Include clean tasks"
+  ansible.builtin.import_tasks: clean.yml
+  tags: ['clean']
+
+# ============================================================
+# Service account setup (#926 Phase 4, #4091: unified autobot account)
+# ============================================================
+# AI Stack uses the existing autobot:autobot account created by backend role.
+# No separate account creation needed — all AutoBot services share autobot.
+
+# ============================================================
+# Per-role env at /etc/autobot/  (#926 Phase 4)
+# ============================================================
+- name: "AI Stack | Ensure /etc/autobot dir exists"
+  ansible.builtin.file:
+    path: /etc/autobot
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  tags: ['ai', 'config']
+
+- name: "AI Stack | Deploy /etc/autobot/autobot-ai-stack.env"
+  ansible.builtin.template:
+    src: ai-stack.env.j2
+    dest: /etc/autobot/autobot-ai-stack.env
+    mode: "0640"
+    owner: root
+    group: "{{ ai_group }}"
+  notify: restart ai-stack
+  tags: ['ai', 'config']
+
+# ============================================================
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: "AI Stack | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  tags: ['ai-stack', 'packages']
+
+- name: "AI Stack | Install build dependencies"
+  ansible.builtin.apt:
+    name:
+      - build-essential
+    state: present
+  tags: ['ai-stack', 'packages']
+
+- name: Create AI stack directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ ai_user }}"
+    group: "{{ ai_group }}"
+  loop:
+    - "{{ ai_install_dir }}"
+    - "{{ ai_log_dir }}"
+    - "{{ ai_data_dir }}"
+    - "{{ ai_data_dir }}/chromadb"
+
+# ============================================================
+# MVA-79: Stop ChromaDB before venv operations.
+# The chroma binary lives inside the venv; wiping the venv while the service
+# is running causes an outage (reported in MVA-28 and MVA-66).
+# failed_when: false handles fresh installs where the unit does not exist yet.
+# ============================================================
+- name: "AI Stack | Stop ChromaDB before venv recreation (MVA-79)"
+  ansible.builtin.systemd:
+    name: autobot-chromadb
+    state: stopped
+  failed_when: false
+  tags: ['ai', 'venv']
+
+- name: Check existing venv Python version (#3534)
+  ansible.builtin.command:
+    cmd: "{{ ai_install_dir }}/venv/bin/python --version"
+  register: _ai_venv_python_version
+  changed_when: false
+  failed_when: false
+
+- name: Remove stale venv if not Python 3.12 (#3534)
+  ansible.builtin.file:
+    path: "{{ ai_install_dir }}/venv"
+    state: absent
+  when:
+    - _ai_venv_python_version.rc == 0
+    - "'Python 3.12' not in _ai_venv_python_version.stdout"
+
+- name: Create Python virtual environment (#3534)
+  ansible.builtin.command:
+    cmd: python3.12 -m venv {{ ai_install_dir }}/venv
+    creates: "{{ ai_install_dir }}/venv/bin/python"
+
+- name: Fix venv ownership
+  ansible.builtin.file:
+    path: "{{ ai_install_dir }}/venv"
+    state: directory
+    owner: "{{ ai_user }}"
+    group: "{{ ai_group }}"
+    recurse: true
+
+- name: Create pip cache directory for ai user (#3535)
+  ansible.builtin.file:
+    path: "{{ ai_data_dir }}/.cache/pip"
+    state: directory
+    owner: "{{ ai_user }}"
+    group: "{{ ai_group }}"
+    mode: "0755"
+
+- name: Upgrade pip in venv
+  ansible.builtin.pip:
+    name: pip
+    virtualenv: "{{ ai_install_dir }}/venv"
+    state: latest
+  become_user: "{{ ai_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+    HOME: "{{ ai_data_dir }}"
+  timeout: 120  # Issue #2835: prevent indefinite hang on network issues
+
+- name: Check if requirements-ai.txt exists
+  ansible.builtin.stat:
+    path: "{{ ai_install_dir }}/requirements-ai.txt"
+  register: _ai_requirements_file
+
+- name: Install AI Python packages from requirements-ai.txt
+  ansible.builtin.pip:
+    requirements: "{{ ai_install_dir }}/requirements-ai.txt"
+    virtualenv: "{{ ai_install_dir }}/venv"
+    state: present
+    extra_args: "--timeout 300"
+  become_user: "{{ ai_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "300"
+    HOME: "{{ ai_data_dir }}"
+  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
+  when: _ai_requirements_file.stat.exists
+
+- name: Install AI Python packages (fallback list)
+  ansible.builtin.pip:
+    name:
+      - chromadb>=0.4.0
+      - langchain>=0.1.0
+      - langchain-community
+      - transformers>=4.30.0
+      - sentence-transformers
+      - torch>=2.0.0
+      - numpy
+      - pandas
+      - pillow
+      - openai
+      - anthropic
+      - fastapi>=0.115.0
+      - "uvicorn[standard]>=0.35.0"
+      - httpx
+      - pydantic>=2.0.0
+      - python-dotenv
+      - redis>=5.0.0
+      - sqlalchemy>=2.0.0
+      - aiosqlite
+    virtualenv: "{{ ai_install_dir }}/venv"
+    state: present
+    extra_args: "--timeout 300"
+  become_user: "{{ ai_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "300"
+    HOME: "{{ ai_data_dir }}"
+  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
+  when: not _ai_requirements_file.stat.exists
+
+- name: Deploy AI stack environment file
+  ansible.builtin.template:
+    src: ai-stack.env.j2
+    dest: "{{ ai_install_dir }}/.env"
+    mode: "0600"
+    owner: "{{ ai_user }}"
+    group: "{{ ai_group }}"
+  notify: restart ai-stack
+
+- name: Deploy AI Stack application source files
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ ai_install_dir }}/{{ item | basename }}"
+    owner: "{{ ai_user }}"
+    group: "{{ ai_group }}"
+    mode: "0644"
+  loop:
+    - "{{ playbook_dir }}/../../../autobot-infrastructure/shared/docker/ai-stack/ai_api_server.py"
+    - "{{ playbook_dir }}/../../../autobot-infrastructure/shared/docker/ai-stack/ai_container_main.py"
+    - "{{ playbook_dir }}/../../../autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt"
+  notify: restart ai-stack
+  tags: ['ai', 'deploy']
+
+- name: "AI Stack | Create src/ directory for backend module symlinks"
+  ansible.builtin.file:
+    path: "{{ ai_install_dir }}/src"
+    state: directory
+    mode: "0755"
+    owner: "{{ ai_user }}"
+    group: "{{ ai_group }}"
+  tags: ['ai', 'deploy']
+
+- name: Create src/ symlinks to backend modules (co-located deployment)
+  ansible.builtin.file:
+    src: "{{ backend_install_dir }}/{{ item }}"
+    dest: "{{ ai_install_dir }}/src/{{ item }}"
+    state: link
+    owner: "{{ ai_user }}"
+    group: "{{ ai_group }}"
+    force: true
+  loop:
+    - agents
+    - autobot_shared
+  tags: ['ai', 'deploy']
+
+- name: Deploy ChromaDB systemd service
+  ansible.builtin.template:
+    src: autobot-chromadb.service.j2
+    dest: /etc/systemd/system/autobot-chromadb.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart chromadb
+
+- name: Deploy AI Stack API systemd service
+  ansible.builtin.template:
+    src: autobot-ai-stack.service.j2
+    dest: /etc/systemd/system/autobot-ai-stack.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart ai-stack
+
+- name: Enable and start ChromaDB service
+  ansible.builtin.systemd:
+    name: autobot-chromadb
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Enable and start AI Stack API service
+  ansible.builtin.systemd:
+    name: autobot-ai-stack
+    state: started
+    enabled: true
+    daemon_reload: true

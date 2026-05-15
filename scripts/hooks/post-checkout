@@ -1,0 +1,148 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Post-checkout hook:
+#   1. Fix WSL2 symlink breakage (Issue #886)
+#   2. Fix pre-commit hook script permissions (Issue #1683)
+#   3. Auto-install prepare-commit-msg hook type (Issue #1679)
+#   4. Auto-install pre-commit branch guard wrapper (Issue #1689)
+#   5. Inject flock wrapper into pre-commit hook (Issue #1684)
+#   6. Self-sync: keep .git/hooks/post-checkout in sync (Issue #1692)
+
+# Skip file checkouts (e.g. stash pop) — only run on branch checkouts (#1705)
+# $3 = 1 for branch checkout, 0 for file checkout
+if [ "${3:-1}" = "0" ]; then
+    exit 0
+fi
+
+# Determine git root directory
+if [ -n "$GIT_DIR" ]; then
+    GIT_ROOT="$(cd "$GIT_DIR/.." 2>/dev/null && pwd)" || exit 0
+else
+    GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+fi
+
+# ---------------------------------------------------------------------------
+# 1. Fix WSL2 symlinks (Issue #886)
+# ---------------------------------------------------------------------------
+BACKEND_DIR="$GIT_ROOT/autobot-user-backend"
+BACKEND_SYMLINK="$BACKEND_DIR/backend"
+
+if [ -d "$BACKEND_DIR" ] && { [ ! -L "$BACKEND_SYMLINK" ] || [ ! -e "$BACKEND_SYMLINK" ]; }; then
+    if cd "$BACKEND_DIR" 2>/dev/null; then
+        echo "🔧 Fixing backend symlink..."
+        rm -f backend
+        ln -s . backend
+        echo "✅ Backend symlink restored: $BACKEND_SYMLINK -> ."
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Fix hook script permissions (Issue #1683)
+# ---------------------------------------------------------------------------
+HOOK_SCRIPTS_DIR="$GIT_ROOT/autobot-infrastructure/shared/scripts"
+FIXED=0
+if [ -d "$HOOK_SCRIPTS_DIR" ]; then
+    while IFS= read -r -d '' f; do
+        chmod +x "$f"
+        FIXED=$((FIXED + 1))
+    done < <(find "$HOOK_SCRIPTS_DIR/hooks" "$HOOK_SCRIPTS_DIR/utilities" \
+                  -type f \( -name "pre-commit-*" -o -name "post-commit-*" \
+                             -o -name "inject-*" -o -name "slm-*" \
+                             -o -name "*.sh" \) \
+                  -not -perm -u+x -print0 2>/dev/null)
+    if [ "$FIXED" -gt 0 ]; then
+        echo "✅ Fixed permissions on $FIXED hook script(s)"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 3. Auto-install prepare-commit-msg hook if missing (Issue #1679)
+# ---------------------------------------------------------------------------
+HOOKS_DIR="$(git rev-parse --git-dir 2>/dev/null)/hooks"
+if [ -d "$HOOKS_DIR" ] && [ ! -f "$HOOKS_DIR/prepare-commit-msg" ]; then
+    if command -v pre-commit > /dev/null 2>&1; then
+        pre-commit install --hook-type prepare-commit-msg > /dev/null 2>&1 || true
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 4. Auto-install pre-commit stash-free wrapper (Issue #2512, #1689, #2519)
+# ---------------------------------------------------------------------------
+# Replaces pre-commit's default hook with a wrapper that calls
+# `pre-commit run --files` (bypassing the stash cycle). Also retains
+# a branch guard as a safety net.
+#
+# Layout:
+#   .git/hooks/pre-commit                   → stash-free wrapper
+#   .git/hooks/pre-commit.pre-commit-framework → original pre-commit hook (backup)
+WRAPPER_SRC="$GIT_ROOT/scripts/hooks/pre-commit-branch-guard-wrapper"
+if [ -d "$HOOKS_DIR" ] && [ -f "$WRAPPER_SRC" ]; then
+    PRECOMMIT_HOOK="$HOOKS_DIR/pre-commit"
+    FRAMEWORK_HOOK="$HOOKS_DIR/pre-commit.pre-commit-framework"
+
+    # Install wrapper if no hook exists yet (fresh clone)
+    if [ ! -f "$PRECOMMIT_HOOK" ] && [ ! -f "$FRAMEWORK_HOOK" ]; then
+        if command -v pre-commit > /dev/null 2>&1; then
+            pre-commit install > /dev/null 2>&1 || true
+            if [ -f "$PRECOMMIT_HOOK" ]; then
+                mv "$PRECOMMIT_HOOK" "$FRAMEWORK_HOOK"
+                cp "$WRAPPER_SRC" "$PRECOMMIT_HOOK"
+                chmod +x "$PRECOMMIT_HOOK" "$FRAMEWORK_HOOK"
+            fi
+        fi
+    # Wrap if current hook is the raw pre-commit framework (no wrapper)
+    elif [ -f "$PRECOMMIT_HOOK" ] && ! grep -q "Issue #1689" "$PRECOMMIT_HOOK" 2>/dev/null; then
+        mv "$PRECOMMIT_HOOK" "$FRAMEWORK_HOOK"
+        cp "$WRAPPER_SRC" "$PRECOMMIT_HOOK"
+        chmod +x "$PRECOMMIT_HOOK" "$FRAMEWORK_HOOK"
+    # Update stale wrapper if source template has changed (#2519)
+    elif [ -f "$PRECOMMIT_HOOK" ] && grep -q "Issue #1689" "$PRECOMMIT_HOOK" 2>/dev/null; then
+        # Strip flock block before comparing (flock is injected separately)
+        _installed=$(sed '/^# --- AUTOBOT_FLOCK/,/^# --- END AUTOBOT_FLOCK/d' "$PRECOMMIT_HOOK")
+        _source=$(cat "$WRAPPER_SRC")
+        if [ "$_installed" != "$_source" ]; then
+            cp "$WRAPPER_SRC" "$PRECOMMIT_HOOK"
+            chmod +x "$PRECOMMIT_HOOK"
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Inject flock wrapper into pre-commit hook (Issue #1684)
+# ---------------------------------------------------------------------------
+# Git worktrees share .git/refs/stash. When multiple worktrees run
+# pre-commit hooks in parallel, the stash push/pop operations collide
+# and commits leak across branches. This injects an exclusive flock
+# that serializes pre-commit across all worktrees.
+#
+# The lock file lives in git-common-dir (shared across worktrees).
+# The fd (200) is inherited by the exec'd pre-commit process and
+# auto-released when pre-commit exits.
+INJECT_SCRIPT="$GIT_ROOT/autobot-infrastructure/shared/scripts/hooks/inject-flock-wrapper"
+if [ -x "$INJECT_SCRIPT" ]; then
+    "$INJECT_SCRIPT"
+elif [ -f "$INJECT_SCRIPT" ]; then
+    bash "$INJECT_SCRIPT"
+fi
+
+# ---------------------------------------------------------------------------
+# 6. Self-sync: keep .git/hooks/post-checkout in sync (Issue #1692)
+# ---------------------------------------------------------------------------
+# The canonical post-checkout hook lives in the tracked tree at
+# scripts/hooks/post-checkout. This section copies it into .git/hooks/
+# whenever the installed version differs, so developers always run the
+# latest version after checkout — even in worktrees.
+CANONICAL="$GIT_ROOT/scripts/hooks/post-checkout"
+COMMON_HOOKS="$(git rev-parse --git-common-dir 2>/dev/null)/hooks"
+INSTALLED="${COMMON_HOOKS}/post-checkout"
+if [ -f "$CANONICAL" ] && [ -d "$COMMON_HOOKS" ]; then
+    if [ ! -f "$INSTALLED" ] || ! diff -q "$CANONICAL" "$INSTALLED" > /dev/null 2>&1; then
+        cp "$CANONICAL" "$INSTALLED"
+        chmod +x "$INSTALLED"
+    fi
+fi
+
+exit 0

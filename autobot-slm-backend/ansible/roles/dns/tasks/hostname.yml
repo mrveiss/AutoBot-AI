@@ -1,0 +1,39 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Configure system hostname
+
+- name: Set hostname (short name)
+  hostname:
+    name: "{{ inventory_hostname }}"
+  when: not hostname_fqdn
+
+- name: Set hostname (FQDN)
+  hostname:
+    name: "{{ inventory_hostname }}.{{ dns_domain }}"
+  when: hostname_fqdn
+
+- name: Update /etc/hostname
+  copy:
+    content: "{{ inventory_hostname if not hostname_fqdn else inventory_hostname + '.' + dns_domain }}"
+    dest: /etc/hostname
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Ensure localhost entry in /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.0\.1\s+localhost'
+    line: "127.0.0.1 localhost {{ inventory_hostname }}"
+    state: present
+
+- name: Verify hostname configuration
+  command: hostname
+  register: hostname_check
+  changed_when: false
+
+- name: Display configured hostname
+  debug:
+    msg: "Hostname configured: {{ hostname_check.stdout }}"

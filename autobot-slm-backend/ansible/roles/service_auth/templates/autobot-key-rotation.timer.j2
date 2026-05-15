@@ -1,0 +1,14 @@
+# AutoBot Service Key Rotation Timer - Ansible Managed (#1734)
+# Triggers key rotation every 80 days (before 90-day TTL expires).
+# Check status: systemctl status autobot-key-rotation.timer
+# View schedule: systemctl list-timers autobot-key-rotation*
+[Unit]
+Description=AutoBot Service Key Rotation Timer (every {{ service_auth_rotation_days }} days)
+
+[Timer]
+OnCalendar=*-*-01/{{ service_auth_rotation_days }} 02:00:00
+RandomizedDelaySec=3600
+Persistent=true
+
+[Install]
+WantedBy=timers.target

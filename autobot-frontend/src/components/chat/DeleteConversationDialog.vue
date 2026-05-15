@@ -1,0 +1,408 @@
+<template>
+  <BaseModal
+    :model-value="visible"
+    :title="$t('chat.deleteDialog.title')"
+    size="medium"
+    @update:model-value="$emit('update:visible', $event)"
+    @close="handleCancel"
+  >
+    <template #default>
+        <div class="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+          <!-- Warning Message -->
+          <div class="flex items-start gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <i class="fas fa-exclamation-triangle text-yellow-600 mt-0.5"></i>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm text-yellow-800 font-medium">
+                {{ $t('chat.deleteDialog.cannotUndo') }}
+              </p>
+              <p class="text-xs text-yellow-700 mt-1">
+                {{ $t('chat.deleteDialog.permanentDelete') }}
+              </p>
+            </div>
+          </div>
+
+          <!-- Knowledge Base Facts Section (Issue #547) -->
+          <div v-if="kbFacts && kbFacts.length > 0" class="space-y-3">
+            <div class="flex items-center gap-2 p-3 bg-purple-50 rounded-lg">
+              <i class="fas fa-brain text-purple-600"></i>
+              <div class="flex-1">
+                <p class="text-sm font-medium text-purple-700">
+                  {{ $t('chat.deleteDialog.kbFactsCount', { count: kbFacts.length }) }}
+                </p>
+                <p class="text-xs text-purple-600">
+                  {{ $t('chat.deleteDialog.selectFactsToPreserve') }}
+                </p>
+              </div>
+            </div>
+
+            <!-- Facts List with Selection -->
+            <div class="space-y-2 max-h-48 overflow-y-auto border border-purple-200 rounded-lg p-2 bg-autobot-bg-card">
+              <div
+                v-for="fact in kbFacts"
+                :key="fact.id"
+                class="flex items-start gap-2 p-2 rounded hover:bg-purple-50 transition-colors cursor-pointer"
+                @click="toggleFactSelection(fact.id)"
+              >
+                <input
+                  type="checkbox"
+                  :checked="factSelection.isSelected(fact)"
+                  class="mt-1 rounded border-purple-300 text-purple-600 focus:ring-purple-500"
+                  @click.stop="toggleFactSelection(fact.id)"
+                />
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm text-autobot-text-primary line-clamp-2">{{ fact.content }}</p>
+                  <div class="flex items-center gap-2 mt-1">
+                    <span class="text-xs px-2 py-0.5 bg-autobot-bg-tertiary text-autobot-text-muted rounded">{{ fact.category }}</span>
+                    <span v-if="fact.important" class="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded">
+                      <i class="fas fa-star text-xs"></i> {{ $t('common.important') }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="flex items-center gap-2 text-xs">
+              <button
+                @click="selectAllFacts"
+                class="px-2 py-1 text-purple-700 hover:bg-purple-100 rounded transition-colors"
+              >
+                {{ $t('common.selectAll') }}
+              </button>
+              <span class="text-autobot-border">|</span>
+              <button
+                @click="deselectAllFacts"
+                class="px-2 py-1 text-autobot-text-muted hover:bg-autobot-bg-secondary rounded transition-colors"
+              >
+                {{ $t('common.deselectAll') }}
+              </button>
+              <span class="flex-1"></span>
+              <span class="text-autobot-text-muted">
+                {{ $t('chat.deleteDialog.selectedForPreservation', { count: factSelection.selectedCount.value }) }}
+              </span>
+            </div>
+          </div>
+
+          <!-- No KB Facts Message -->
+          <div v-else-if="kbFactsLoading" class="p-3 bg-purple-50 rounded-lg">
+            <p class="text-sm text-purple-600">
+              <i class="fas fa-spinner fa-spin mr-2"></i>
+              {{ $t('chat.deleteDialog.loadingFacts') }}
+            </p>
+          </div>
+
+          <!-- File Information -->
+          <div v-if="fileStats && fileStats.total_files > 0" class="space-y-3">
+            <div class="flex items-center gap-2 p-3 bg-autobot-bg-secondary rounded-lg">
+              <i class="fas fa-paperclip text-autobot-text-secondary"></i>
+              <div class="flex-1">
+                <p class="text-sm font-medium text-autobot-text-primary">
+                  {{ $t('chat.deleteDialog.attachedFiles', { count: fileStats.total_files }) }}
+                </p>
+                <p class="text-xs text-autobot-text-secondary">
+                  {{ $t('chat.deleteDialog.totalSize', { size: formatFileSize(fileStats.total_size_bytes) }) }}
+                </p>
+              </div>
+            </div>
+
+            <!-- File Action Options -->
+            <div class="space-y-2">
+              <p class="text-sm font-medium text-autobot-text-secondary">{{ $t('chat.deleteDialog.fileActionQuestion') }}</p>
+
+              <label class="flex items-start p-3 border rounded-lg cursor-pointer transition-colors"
+                     :class="fileAction === 'delete' ? 'border-red-500 bg-red-50' : 'border-autobot-border hover:border-autobot-text-muted'">
+                <input
+                  type="radio"
+                  v-model="fileAction"
+                  value="delete"
+                  class="mt-0.5 mr-3"
+                />
+                <div class="flex-1">
+                  <div class="flex items-center gap-2">
+                    <i class="fas fa-trash text-red-600"></i>
+                    <span class="text-sm font-medium text-autobot-text-primary">{{ $t('chat.deleteDialog.deleteFiles') }}</span>
+                  </div>
+                  <p class="text-xs text-autobot-text-secondary mt-1">
+                    {{ $t('chat.deleteDialog.deleteFilesDesc') }}
+                  </p>
+                </div>
+              </label>
+
+              <label class="flex items-start p-3 border rounded-lg cursor-pointer transition-colors"
+                     :class="fileAction === 'transfer_kb' ? 'border-autobot-primary bg-autobot-bg-tertiary' : 'border-autobot-border hover:border-autobot-text-muted'">
+                <input
+                  type="radio"
+                  v-model="fileAction"
+                  value="transfer_kb"
+                  class="mt-0.5 mr-3"
+                />
+                <div class="flex-1">
+                  <div class="flex items-center gap-2">
+                    <i class="fas fa-book text-autobot-primary"></i>
+                    <span class="text-sm font-medium text-autobot-text-primary">{{ $t('chat.deleteDialog.transferToKb') }}</span>
+                  </div>
+                  <p class="text-xs text-autobot-text-secondary mt-1">
+                    {{ $t('chat.deleteDialog.transferToKbDesc') }}
+                  </p>
+                </div>
+              </label>
+
+              <label class="flex items-start p-3 border rounded-lg cursor-pointer transition-colors"
+                     :class="fileAction === 'transfer_shared' ? 'border-green-500 bg-green-50' : 'border-autobot-border hover:border-autobot-text-muted'">
+                <input
+                  type="radio"
+                  v-model="fileAction"
+                  value="transfer_shared"
+                  class="mt-0.5 mr-3"
+                />
+                <div class="flex-1">
+                  <div class="flex items-center gap-2">
+                    <i class="fas fa-share-alt text-green-600"></i>
+                    <span class="text-sm font-medium text-autobot-text-primary">{{ $t('chat.deleteDialog.transferToShared') }}</span>
+                  </div>
+                  <p class="text-xs text-autobot-text-secondary mt-1">
+                    {{ $t('chat.deleteDialog.transferToSharedDesc') }}
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            <!-- Transfer Options (shown when KB transfer selected) -->
+            <div v-if="fileAction === 'transfer_kb'" class="space-y-3 p-3 bg-autobot-bg-tertiary rounded-lg border border-autobot-border">
+              <p class="text-sm font-medium text-autobot-text-primary">{{ $t('chat.deleteDialog.kbOptions') }}</p>
+
+              <div>
+                <label class="block text-xs font-medium text-autobot-text-secondary mb-1">
+                  {{ $t('chat.deleteDialog.categories') }}
+                </label>
+                <input
+                  v-model="kbCategories"
+                  type="text"
+                  class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+                  placeholder="e.g., research, documentation"
+                />
+              </div>
+
+              <label class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  v-model="extractText"
+                  class="rounded border-autobot-border text-autobot-primary focus:ring-autobot-primary"
+                />
+                <span class="text-xs text-autobot-text-secondary">{{ $t('chat.deleteDialog.extractText') }}</span>
+              </label>
+            </div>
+
+            <!-- Transfer Options (shown when shared transfer selected) -->
+            <div v-if="fileAction === 'transfer_shared'" class="space-y-3 p-3 bg-green-50 rounded-lg border border-green-200">
+              <p class="text-sm font-medium text-green-900">{{ $t('chat.deleteDialog.sharedOptions') }}</p>
+
+              <div>
+                <label class="block text-xs font-medium text-green-700 mb-1">
+                  {{ $t('chat.deleteDialog.targetFolder') }}
+                </label>
+                <input
+                  v-model="sharedPath"
+                  type="text"
+                  class="w-full px-3 py-2 text-sm border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="e.g., archive/2025/"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- No Files Message -->
+          <div v-else class="p-3 bg-autobot-bg-secondary rounded-lg">
+            <p class="text-sm text-autobot-text-secondary">
+              <i class="fas fa-info-circle mr-2"></i>
+              {{ $t('chat.deleteDialog.noAttachedFiles') }}
+            </p>
+          </div>
+
+          <!-- Confirmation Summary -->
+          <div class="p-3 bg-autobot-bg-secondary rounded-lg border border-autobot-border">
+            <p class="text-sm font-medium text-autobot-text-primary mb-2">{{ $t('chat.deleteDialog.actionSummary') }}</p>
+            <ul class="text-xs text-autobot-text-secondary space-y-1">
+              <li><i class="fas fa-check text-green-600 mr-2"></i>{{ $t('chat.deleteDialog.deleteConversation') }}</li>
+              <li v-if="kbFacts && kbFacts.length > 0">
+                <i class="fas fa-check text-green-600 mr-2"></i>
+                {{ getKBFactsSummary() }}
+              </li>
+              <li v-if="fileStats && fileStats.total_files > 0">
+                <i class="fas fa-check text-green-600 mr-2"></i>
+                {{ getFileActionSummary() }}
+              </li>
+            </ul>
+          </div>
+        </div>
+    </template>
+
+    <template #actions>
+      <button
+        @click="handleCancel"
+        class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-autobot-bg-card border border-autobot-border rounded-md hover:bg-autobot-bg-secondary transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-autobot-border"
+        :disabled="isDeleting"
+      >
+        {{ $t('common.cancel') }}
+      </button>
+      <button
+        @click="handleConfirm"
+        class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 flex items-center gap-2"
+        :disabled="isDeleting"
+      >
+        <i v-if="isDeleting" class="fas fa-spinner fa-spin"></i>
+        <i v-else class="fas fa-trash"></i>
+        {{ isDeleting ? $t('chat.deleteDialog.deleting') : $t('chat.deleteDialog.title') }}
+      </button>
+    </template>
+  </BaseModal>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import type { FileStats } from '@/composables/useConversationFiles'
+import type { SessionFact } from '@/models/repositories/ChatRepository'
+import { formatFileSize } from '@/utils/formatHelpers'
+import { useBatchSelection } from '@/composables/useBatchSelection'
+import BaseModal from '@/components/ui/BaseModal.vue'
+
+const { t } = useI18n()
+
+const props = defineProps<{
+  visible: boolean
+  sessionId: string
+  sessionName?: string
+  fileStats?: FileStats | null
+  kbFacts?: SessionFact[] | null
+  kbFactsLoading?: boolean
+}>()
+
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+  confirm: [fileAction: string, fileOptions: any, selectedFactIds: string[]]
+  cancel: []
+}>()
+
+// Local state
+const fileAction = ref<'delete' | 'transfer_kb' | 'transfer_shared'>('delete')
+const kbCategories = ref('')
+const extractText = ref(true)
+const sharedPath = ref('')
+const isDeleting = ref(false)
+
+// Selection: keyed on fact id. Source is the props.kbFacts list.
+const factSelection = useBatchSelection<SessionFact, string>(
+  () => props.kbFacts ?? [],
+  (f) => f.id
+)
+
+// Computed
+const hasFiles = computed(() => props.fileStats && props.fileStats.total_files > 0)
+
+// Watch for facts changes to seed selection with already-important/preserve facts.
+watch(() => props.kbFacts, (newFacts) => {
+  if (newFacts) {
+    factSelection.setSelected(
+      newFacts.filter(f => f.important || f.preserve).map(f => f.id)
+    )
+  } else {
+    factSelection.clear()
+  }
+}, { immediate: true })
+
+const toggleFactSelection = (factId: string) => {
+  factSelection.toggleByKey(factId)
+}
+
+const selectAllFacts = () => factSelection.selectAll()
+const deselectAllFacts = () => factSelection.clear()
+
+// NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
+
+const getKBFactsSummary = (): string => {
+  const totalFacts = props.kbFacts?.length || 0
+  const preserveCount = factSelection.selectedCount.value
+  const deleteCount = totalFacts - preserveCount
+
+  if (preserveCount === 0) {
+    return t('chat.deleteDialog.deleteAllFacts', { count: totalFacts })
+  } else if (deleteCount === 0) {
+    return t('chat.deleteDialog.preserveAllFacts', { count: totalFacts })
+  } else {
+    return t('chat.deleteDialog.deletePreserveFacts', { deleteCount, preserveCount })
+  }
+}
+
+const getFileActionSummary = (): string => {
+  const fileCount = props.fileStats?.total_files || 0
+  switch (fileAction.value) {
+    case 'delete':
+      return t('chat.deleteDialog.deleteFilesPermanently', { count: fileCount })
+    case 'transfer_kb':
+      return t('chat.deleteDialog.transferFilesToKb', { count: fileCount })
+    case 'transfer_shared':
+      return t('chat.deleteDialog.transferFilesToShared', { count: fileCount })
+    default:
+      return t('chat.deleteDialog.noFileAction')
+  }
+}
+
+const buildFileOptions = (): any => {
+  if (fileAction.value === 'transfer_kb') {
+    return {
+      categories: kbCategories.value.split(',').map(c => c.trim()).filter(c => c),
+      extract_text: extractText.value
+    }
+  } else if (fileAction.value === 'transfer_shared') {
+    return {
+      target_path: sharedPath.value.trim() || 'archive/'
+    }
+  }
+
+  return null
+}
+
+const handleConfirm = () => {
+  isDeleting.value = true
+
+  const fileOptions = buildFileOptions()
+  // Issue #547: Pass selected fact IDs for preservation
+  emit('confirm', fileAction.value, fileOptions, Array.from(factSelection.selected.value))
+
+  // Reset state
+  setTimeout(() => {
+    isDeleting.value = false
+    fileAction.value = 'delete'
+    kbCategories.value = ''
+    extractText.value = true
+    sharedPath.value = ''
+    factSelection.clear()
+  }, 500)
+}
+
+const handleCancel = () => {
+  if (isDeleting.value) return
+
+  // Reset state
+  fileAction.value = 'delete'
+  kbCategories.value = ''
+  extractText.value = true
+  sharedPath.value = ''
+  factSelection.clear()
+
+  emit('cancel')
+}
+</script>
+
+<style scoped>
+@reference "../../assets/tailwind.css";
+/* Custom radio button styling */
+input[type="radio"] {
+  @apply w-4 h-4 cursor-pointer;
+}
+
+input[type="radio"]:checked {
+  @apply accent-autobot-primary;
+}
+</style>

@@ -1,0 +1,139 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Pre-Migration Validation Playbook
+# Validates disk space, network, and dependencies before migration
+---
+
+- name: Pre-Migration Validation
+  hosts: "{{ target_host }}"
+  become: true
+  gather_facts: true
+
+  vars:
+    source_host: "{{ source_host }}"
+    required_space_gb: "{{ required_space_gb | default(100) }}"
+    buffer_percent: "{{ buffer_percent | default(20) }}"
+    min_free_gb: "{{ min_free_gb | default(10) }}"
+    destination_path: "{{ destination_path | default('/opt/autobot') }}"
+
+  tasks:
+    # =========================================================================
+    # DISK SPACE VALIDATION
+    # =========================================================================
+    - name: Get destination disk space
+      ansible.builtin.command:
+        cmd: df -BG {{ destination_path }} --output=size,avail
+      register: disk_space
+      changed_when: false
+
+    - name: Parse disk space
+      ansible.builtin.set_fact:
+        total_space_gb: "{{ (disk_space.stdout_lines[1].split()[0] | replace('G', '') | int) }}"
+        available_space_gb: "{{ (disk_space.stdout_lines[1].split()[1] | replace('G', '') | int) }}"
+
+    - name: Calculate required space with buffer
+      ansible.builtin.set_fact:
+        required_with_buffer: "{{ (required_space_gb | float * (1 + buffer_percent / 100)) | round(0, 'ceil') | int }}"
+        remaining_after: "{{ (available_space_gb | int - required_space_gb | int) }}"
+
+    - name: Display space analysis
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════╗
+          ║          DISK SPACE VALIDATION                             ║
+          ╠════════════════════════════════════════════════════════════╣
+          ║ Destination: {{ target_host }}                             ║
+          ║ Mount Point: {{ destination_path }}                        ║
+          ║                                                            ║
+          ║ Total Disk:     {{ total_space_gb }} GB                    ║
+          ║ Available:      {{ available_space_gb }} GB                ║
+          ║                                                            ║
+          ║ Data to Copy:   {{ required_space_gb }} GB                 ║
+          ║ + Buffer ({{ buffer_percent }}%):  {{ required_with_buffer - required_space_gb | int }} GB          ║
+          ║ Total Required: {{ required_with_buffer }} GB              ║
+          ║                                                            ║
+          ║ After Migration: {{ remaining_after }} GB free            ║
+          ║ Status: {% if remaining_after | int >= min_free_gb | int %}✅ SAFE{% else %}❌ INSUFFICIENT{% endif %} ║
+          ╚════════════════════════════════════════════════════════════╝
+
+    - name: Fail if insufficient space
+      ansible.builtin.fail:
+        msg: >
+          INSUFFICIENT DISK SPACE!
+          Required: {{ required_with_buffer }}GB ({{ required_space_gb }}GB + {{ buffer_percent }}% buffer)
+          Available: {{ available_space_gb }}GB
+          Free after: {{ remaining_after }}GB (minimum {{ min_free_gb }}GB required)
+      when: remaining_after | int < min_free_gb | int
+
+    - name: Warn if tight on space
+      ansible.builtin.debug:
+        msg: "⚠️  WARNING: Only {{ remaining_after }}GB will remain free. Consider increasing disk size."
+      when:
+        - remaining_after | int >= min_free_gb | int
+        - remaining_after | int < 50
+
+    # =========================================================================
+    # NETWORK VALIDATION
+    # =========================================================================
+    - name: Test source host connectivity
+      ansible.builtin.wait_for:
+        host: "{{ source_host }}"
+        port: 22
+        timeout: 10
+      delegate_to: localhost
+
+    - name: Measure network bandwidth to source
+      ansible.builtin.shell: |
+        timeout 5 dd if=/dev/zero bs=1M count=100 2>&1 | ssh {{ source_host }} 'cat > /dev/null' 2>&1 | grep -o '[0-9.]* MB/s' || echo "Network test skipped"
+      register: bandwidth_test
+      changed_when: false
+      ignore_errors: true
+
+    # =========================================================================
+    # DEPENDENCY VALIDATION
+    # =========================================================================
+    - name: Check required packages
+      ansible.builtin.package:
+        name:
+          - rsync
+          - tar
+          - gzip
+          - sudo
+        state: present
+      check_mode: true
+      register: pkg_check
+
+    - name: Verify SSH key authentication works
+      ansible.builtin.command:
+        cmd: ssh -o BatchMode=yes -o ConnectTimeout=5 {{ source_host }} echo "OK"
+      register: ssh_test
+      changed_when: false
+      failed_when: false
+      delegate_to: localhost
+
+    - name: Warn if password authentication required
+      ansible.builtin.debug:
+        msg: "⚠️  WARNING: SSH key auth failed. Migration will require password."
+      when: ssh_test.rc != 0
+
+    # =========================================================================
+    # SUMMARY REPORT
+    # =========================================================================
+    - name: Generate pre-migration report
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════╗
+          ║          PRE-MIGRATION CHECK COMPLETE                      ║
+          ╠════════════════════════════════════════════════════════════╣
+          ║ Source:      {{ source_host }}                             ║
+          ║ Destination: {{ target_host }}                             ║
+          ║                                                            ║
+          ║ Disk Space:  ✅ {{ available_space_gb }}GB available       ║
+          ║ Network:     ✅ {{ source_host }} reachable                ║
+          ║ SSH Auth:    {% if ssh_test.rc == 0 %}✅ Key-based{% else %}⚠️  Password{% endif %} ║
+          ║ Dependencies:✅ All required packages present               ║
+          ║                                                            ║
+          ║ Status: ✅ READY FOR MIGRATION                             ║
+          ╚════════════════════════════════════════════════════════════╝

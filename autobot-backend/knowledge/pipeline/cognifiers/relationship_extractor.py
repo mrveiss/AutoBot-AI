@@ -1,0 +1,310 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Relationship Extractor Cognifier - Extract entity relationships.
+
+Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
+Issue #2026: Dual-mode extraction — LLM + NLP co-occurrence/keyword patterns.
+"""
+
+import logging
+from itertools import combinations
+from typing import Any, Dict, List, Set, Tuple
+
+from knowledge.pipeline.base import BaseCognifier, PipelineContext
+from knowledge.pipeline.cognifiers.llm_utils import (
+    build_entity_map,
+    parse_llm_json_response,
+)
+from knowledge.pipeline.models.chunk import ProcessedChunk
+from knowledge.pipeline.models.entity import Entity
+from knowledge.pipeline.models.relationship import Relationship, RelationType
+from knowledge.pipeline.registry import TaskRegistry
+from services.llm_service import get_llm_service
+
+logger = logging.getLogger(__name__)
+
+
+RELATIONSHIP_EXTRACTION_PROMPT = """Extract relationships between entities.
+
+Known entities:
+{entities}
+
+Relationship types: CAUSES, ENABLES, PREVENTS, TRIGGERS, CONTAINS, PART_OF,
+COMPOSED_OF, RELATES_TO, SIMILAR_TO, CONTRASTS_WITH, PRECEDES, FOLLOWS,
+DURING, IS_A, INSTANCE_OF, SUBTYPE_OF, CREATED_BY, AUTHORED_BY, OWNED_BY,
+IMPLEMENTS, EXTENDS, DEPENDS_ON, USES
+
+Return JSON array:
+[{{"source": "Entity1", "target": "Entity2", "type": "CAUSES",
+"description": "...", "bidirectional": false, "confidence": 0.9}}, ...]
+
+Text:
+{text}
+"""
+
+
+SYMMETRIC_RELATIONS = {"SIMILAR_TO", "RELATES_TO", "CONTRASTS_WITH"}
+
+# Maps lowercase keyword substrings to valid RelationType values.
+# Issue #2026: keywords chosen to capture common code/doc relationships.
+NLP_KEYWORD_PATTERNS: Dict[str, str] = {
+    "import": "USES",
+    "extend": "EXTENDS",
+    "config": "RELATES_TO",
+    "depend": "DEPENDS_ON",
+    "test": "RELATES_TO",
+    "call": "TRIGGERS",
+    "trigger": "TRIGGERS",
+}
+
+
+@TaskRegistry.register_cognifier("extract_relationships")
+class RelationshipExtractor(BaseCognifier):
+    """Extract relationships between entities using LLM or NLP mode."""
+
+    def __init__(
+        self,
+        batch_size: int = 5,
+        mode: str = "auto",
+        nlp_threshold: int = 500,
+    ) -> None:
+        """
+        Initialize relationship extractor.
+
+        Args:
+            batch_size: Number of chunks to process per LLM batch
+            mode: Extraction mode — "llm", "nlp", or "auto"
+            nlp_threshold: Chunk count above which auto selects NLP (#2052)
+        """
+        self.batch_size = batch_size
+        self.mode = mode
+        self.nlp_threshold = nlp_threshold
+        self.llm = get_llm_service()
+
+    def _select_mode(self, chunks: List[ProcessedChunk]) -> str:
+        """
+        Choose extraction mode based on chunk count (#2052).
+
+        Uses the same unit (chunk count) as EntityExtractor so both
+        extractors select the same mode for the same input.
+
+        Args:
+            chunks: Chunks to be processed
+
+        Returns:
+            "nlp" when chunk count exceeds nlp_threshold, else "llm"
+        """
+        return "nlp" if len(chunks) > self.nlp_threshold else "llm"
+
+    async def process(self, context: PipelineContext) -> PipelineContext:
+        """
+        Extract relationships from chunks with entity context.
+
+        Args:
+            context: Pipeline context with chunks and entities
+
+        Returns:
+            Updated context with relationships
+        """
+        chunks: List[ProcessedChunk] = context.chunks
+        entities: List[Entity] = context.entities
+
+        if not entities:
+            logger.warning("No entities for relationship extraction")
+            return context
+
+        active_mode = self.mode if self.mode != "auto" else self._select_mode(chunks)
+        logger.info("Relationship extraction mode: %s", active_mode)
+
+        if active_mode == "nlp":
+            context.relationships = self._nlp_extract(chunks, entities)
+        else:
+            entity_map = build_entity_map(entities)
+            all_relationships: List[Relationship] = []
+            for i in range(0, len(chunks), self.batch_size):
+                batch = chunks[i : i + self.batch_size]
+                batch_rels = await self._process_batch(batch, entities, entity_map)
+                all_relationships.extend(batch_rels)
+            context.relationships = all_relationships
+
+        logger.info("Extracted %s relationships", len(context.relationships))
+        return context
+
+    def _nlp_extract(
+        self,
+        chunks: List[ProcessedChunk],
+        entities: List[Entity],
+    ) -> List[Relationship]:
+        """
+        NLP-light extraction: co-occurrence + keyword pattern matching.
+
+        Issue #2026: skips LLM calls; suitable for bulk ingestion.
+
+        Args:
+            chunks: All chunks to scan
+            entities: Known entities for pairing
+
+        Returns:
+            Deduplicated list of Relationship objects
+        """
+        seen: Set[Tuple[str, str, str]] = set()
+        relationships: List[Relationship] = []
+        for chunk in chunks:
+            chunk_rels = self._nlp_extract_chunk(chunk, entities, seen)
+            relationships.extend(chunk_rels)
+        return relationships
+
+    def _nlp_extract_chunk(
+        self,
+        chunk: ProcessedChunk,
+        entities: List[Entity],
+        seen: Set[Tuple[str, str, str]],
+    ) -> List[Relationship]:
+        """
+        Extract NLP relationships from a single chunk.
+
+        Issue #2026: co-occurrence produces RELATES_TO; keyword patterns
+        produce typed relationships.
+
+        Args:
+            chunk: Chunk to process
+            entities: All known entities
+            seen: Mutable dedup set keyed by (src_canonical, tgt_canonical, type)
+
+        Returns:
+            New relationships found in this chunk
+        """
+        chunk_lower = chunk.content.lower()
+        present = [e for e in entities if e.canonical_name in chunk_lower]
+        if len(present) < 2:
+            return []
+
+        keyword_type = self._match_keyword(chunk_lower)
+        results: List[Relationship] = []
+
+        for src, tgt in combinations(present, 2):
+            rel_type = keyword_type or "RELATES_TO"
+            key = (src.canonical_name, tgt.canonical_name, rel_type)
+            if key in seen:
+                continue
+            seen.add(key)
+            results.append(
+                Relationship(
+                    source_entity_id=src.id,
+                    target_entity_id=tgt.id,
+                    relationship_type=rel_type,
+                    description="NLP co-occurrence",
+                    bidirectional=(rel_type in SYMMETRIC_RELATIONS),
+                    confidence=0.6,
+                    source_chunk_ids=[chunk.id],
+                )
+            )
+        return results
+
+    def _match_keyword(self, chunk_lower: str) -> str:
+        """
+        Return the first matching RelationType for any keyword pattern.
+
+        Issue #2026: checks NLP_KEYWORD_PATTERNS against lowercased chunk text.
+
+        Args:
+            chunk_lower: Lowercased chunk content
+
+        Returns:
+            RelationType string or empty string if no match
+        """
+        for keyword, rel_type in NLP_KEYWORD_PATTERNS.items():
+            if keyword in chunk_lower:
+                return rel_type
+        return ""
+
+    async def _process_batch(
+        self,
+        chunks: List[ProcessedChunk],
+        entities: List[Entity],
+        entity_map: Dict[str, Entity],
+    ) -> List[Relationship]:
+        """Process batch of chunks for relationships."""
+        relationships = []
+        for chunk in chunks:
+            chunk_rels = await self._extract_from_chunk(chunk, entities, entity_map)
+            relationships.extend(chunk_rels)
+        return relationships
+
+    async def _extract_from_chunk(
+        self,
+        chunk: ProcessedChunk,
+        entities: List[Entity],
+        entity_map: Dict[str, Entity],
+    ) -> List[Relationship]:
+        """Extract relationships from a single chunk."""
+        try:
+            entity_list = self._format_entity_list(entities, chunk)
+            prompt = RELATIONSHIP_EXTRACTION_PROMPT.format(entities=entity_list, text=chunk.content)
+            response = await self.llm.chat([{"role": "user", "content": prompt}])
+            parsed = parse_llm_json_response(response.content)
+            raw_rels = parsed if isinstance(parsed, list) else []
+            return self._convert_to_relationships(raw_rels, chunk, entity_map)
+        except Exception as e:
+            logger.error("Relationship extraction failed: %s", e)
+            return []
+
+    def _parse_llm_response(self, content: str) -> list:
+        """
+        Parse LLM JSON response for relationship extraction. Delegates to shared util.
+
+        Args:
+            content: Raw LLM response text
+
+        Returns:
+            Parsed list of relationship dicts, or empty list on failure
+        """
+        parsed = parse_llm_json_response(content)
+        return parsed if isinstance(parsed, list) else []
+
+    def _format_entity_list(self, entities: List[Entity], chunk: ProcessedChunk) -> str:
+        """Format entity list for prompt (chunk-relevant only)."""
+        relevant = [e for e in entities if chunk.id in e.source_chunk_ids]
+        if not relevant:
+            relevant = entities[:20]
+        return "\n".join([f"- {e.name} ({e.entity_type})" for e in relevant])
+
+    def _convert_to_relationships(
+        self,
+        raw_rels: List[Dict[str, Any]],
+        chunk: ProcessedChunk,
+        entity_map: Dict[str, Entity],
+    ) -> List[Relationship]:
+        """Convert raw relationship dicts to Relationship objects."""
+        relationships = []
+        for raw in raw_rels:
+            try:
+                source_name = raw["source"].lower()
+                target_name = raw["target"].lower()
+                source_entity = entity_map.get(source_name)
+                target_entity = entity_map.get(target_name)
+
+                if not source_entity or not target_entity:
+                    continue
+
+                rel_type = raw.get("type", "RELATES_TO")
+                if rel_type not in RelationType.__args__:
+                    rel_type = "RELATES_TO"
+
+                bidirectional = raw.get("bidirectional", False) or rel_type in SYMMETRIC_RELATIONS
+
+                rel = Relationship(
+                    source_entity_id=source_entity.id,
+                    target_entity_id=target_entity.id,
+                    relationship_type=rel_type,
+                    description=raw.get("description", ""),
+                    bidirectional=bidirectional,
+                    confidence=float(raw.get("confidence", 0.8)),
+                    source_chunk_ids=[chunk.id],
+                )
+                relationships.append(rel)
+            except Exception as e:
+                logger.warning("Failed to create relationship: %s", e)
+        return relationships

@@ -1,0 +1,408 @@
+/**
+ * AutoBot - AI-Powered Automation Platform
+ * Copyright (c) 2025 mrveiss
+ * Author: mrveiss
+ *
+ * theme.css - Centralized CSS Variables Theme System
+ * Issue #548: Frontend theming system with CSS variables
+ */
+
+:root {
+  /* ============================================
+   * COLOR SYSTEM
+   * ============================================ */
+
+  /* Primary Colors - Teal for technical aesthetic */
+  --color-primary: #0d9488;
+  --color-primary-hover: #0f766e;
+  --color-primary-light: #5eead4;
+  --color-primary-dark: #115e59;
+
+  /* Secondary Colors */
+  --color-secondary: #64748b;
+  --color-secondary-hover: #475569;
+  --color-secondary-light: #94a3b8;
+
+  /* Status Colors */
+  --color-success: #10b981;
+  --color-success-light: #34d399;
+  --color-success-dark: #059669;
+
+  --color-warning: #f59e0b;
+  --color-warning-light: #fbbf24;
+  --color-warning-dark: #d97706;
+
+  --color-error: #ef4444;
+  --color-error-light: #f87171;
+  --color-error-dark: #dc2626;
+
+  --color-info: #3b82f6;
+  --color-info-light: #60a5fa;
+  --color-info-dark: #2563eb;
+
+  /* ============================================
+   * BACKGROUND COLORS
+   * ============================================ */
+
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  --bg-elevated: #ffffff;
+
+  /* ============================================
+   * TEXT COLORS
+   * ============================================ */
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #64748b;
+  --text-muted: #cbd5e1;
+  --text-inverse: #ffffff;
+
+  /* ============================================
+   * BORDER COLORS
+   * ============================================ */
+
+  --border-color: #e2e8f0;
+  --border-color-light: #f1f5f9;
+  --border-color-dark: #cbd5e1;
+
+  /* Border aliases */
+  --border-default: var(--border-color);
+
+  /* ============================================
+   * LAYOUT VARIABLES
+   * ============================================ */
+
+  --header-height: 80px;
+  --sidebar-width: 256px;
+  --view-min-height: calc(100vh - var(--header-height));
+
+  /* Content constraints */
+  --content-max-width: 1280px;
+  --content-padding-x: 1rem;
+  --content-padding-y: 1.5rem;
+
+  /* ============================================
+   * SPACING SYSTEM
+   * Tailwind-compatible spacing scale (0-12)
+   * ============================================ */
+
+  --spacing-0: 0;
+  --spacing-1: 0.25rem;  /* 4px */
+  --spacing-2: 0.5rem;   /* 8px */
+  --spacing-3: 0.75rem;  /* 12px */
+  --spacing-4: 1rem;     /* 16px */
+  --spacing-5: 1.25rem;  /* 20px */
+  --spacing-6: 1.5rem;   /* 24px */
+  --spacing-8: 2rem;     /* 32px */
+  --spacing-10: 2.5rem;  /* 40px */
+  --spacing-12: 3rem;    /* 48px */
+
+  /* Named spacing aliases */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+
+  /* ============================================
+   * SCROLLBAR CUSTOMIZATION
+   * ============================================ */
+
+  --scrollbar-width: 8px;
+  --scrollbar-track: #f1f1f1;
+  --scrollbar-thumb: #888888;
+  --scrollbar-thumb-hover: #555555;
+  --scrollbar-thumb-radius: 4px;
+
+  /* ============================================
+   * BORDER RADIUS
+   * ============================================ */
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* ============================================
+   * SHADOWS
+   * ============================================ */
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+  /* ============================================
+   * TRANSITIONS
+   * ============================================ */
+
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+
+  /* ============================================
+   * Z-INDEX LAYERS
+   * ============================================ */
+
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-fixed: 300;
+  --z-modal-backdrop: 400;
+  --z-modal: 500;
+  --z-popover: 600;
+  --z-tooltip: 700;
+  --z-toast: 800;
+
+  /* ============================================
+   * TYPOGRAPHY
+   * ============================================ */
+
+  --font-family-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-family-mono: 'Fira Code', 'JetBrains Mono', Menlo, Monaco, Consolas, 'Courier New', monospace;
+
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+
+  /* Line heights */
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* ============================================
+   * LEGACY COMPATIBILITY ALIASES
+   * These map to the existing var() references
+   * found in BusinessIntelligenceView and others
+   * ============================================ */
+
+  --primary-color: var(--color-primary);
+  --primary-dark: var(--color-primary-dark);
+  --success-color: var(--color-success);
+  --warning-color: var(--color-warning);
+  --danger-color: var(--color-error);
+  --info-color: var(--color-info);
+  --text-tertiary: var(--text-tertiary);
+}
+
+/* ============================================
+ * FONT SIZE SCALING SYSTEM
+ * Activated via [data-font-size] attribute
+ * ============================================ */
+
+[data-font-size="small"] {
+  --font-size-xs: 0.6875rem;   /* 11px */
+  --font-size-sm: 0.8125rem;   /* 13px */
+  --font-size-base: 0.9375rem; /* 15px */
+  --font-size-lg: 1.0625rem;   /* 17px */
+  --font-size-xl: 1.1875rem;   /* 19px */
+  --font-size-2xl: 1.375rem;   /* 22px */
+  --font-size-3xl: 1.75rem;    /* 28px */
+}
+
+[data-font-size="large"] {
+  --font-size-xs: 0.8125rem;   /* 13px */
+  --font-size-sm: 0.9375rem;   /* 15px */
+  --font-size-base: 1.0625rem; /* 17px */
+  --font-size-lg: 1.1875rem;   /* 19px */
+  --font-size-xl: 1.3125rem;   /* 21px */
+  --font-size-2xl: 1.625rem;   /* 26px */
+  --font-size-3xl: 2rem;       /* 32px */
+}
+
+/* ============================================
+ * ACCENT COLOR VARIANTS
+ * Activated via [data-accent-color] attribute
+ * ============================================ */
+
+/* Teal (default) */
+[data-accent-color="teal"] {
+  --color-primary: #0d9488;
+  --color-primary-hover: #0f766e;
+  --color-primary-light: #5eead4;
+  --color-primary-dark: #115e59;
+}
+
+[data-accent-color="teal"][data-theme="dark"] {
+  --color-primary: #2dd4bf;
+  --color-primary-hover: #5eead4;
+  --color-primary-light: #99f6e4;
+  --color-primary-dark: #14b8a6;
+}
+
+/* Emerald */
+[data-accent-color="emerald"] {
+  --color-primary: #10b981;
+  --color-primary-hover: #059669;
+  --color-primary-light: #6ee7b7;
+  --color-primary-dark: #047857;
+}
+
+[data-accent-color="emerald"][data-theme="dark"] {
+  --color-primary: #34d399;
+  --color-primary-hover: #6ee7b7;
+  --color-primary-light: #a7f3d0;
+  --color-primary-dark: #10b981;
+}
+
+/* Blue */
+[data-accent-color="blue"] {
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+  --color-primary-light: #93c5fd;
+  --color-primary-dark: #1d4ed8;
+}
+
+[data-accent-color="blue"][data-theme="dark"] {
+  --color-primary: #60a5fa;
+  --color-primary-hover: #93c5fd;
+  --color-primary-light: #bfdbfe;
+  --color-primary-dark: #3b82f6;
+}
+
+/* Purple */
+[data-accent-color="purple"] {
+  --color-primary: #8b5cf6;
+  --color-primary-hover: #7c3aed;
+  --color-primary-light: #c4b5fd;
+  --color-primary-dark: #6d28d9;
+}
+
+[data-accent-color="purple"][data-theme="dark"] {
+  --color-primary: #a78bfa;
+  --color-primary-hover: #c4b5fd;
+  --color-primary-light: #ddd6fe;
+  --color-primary-dark: #8b5cf6;
+}
+
+/* Orange */
+[data-accent-color="orange"] {
+  --color-primary: #f97316;
+  --color-primary-hover: #ea580c;
+  --color-primary-light: #fdba74;
+  --color-primary-dark: #c2410c;
+}
+
+[data-accent-color="orange"][data-theme="dark"] {
+  --color-primary: #fb923c;
+  --color-primary-hover: #fdba74;
+  --color-primary-light: #fed7aa;
+  --color-primary-dark: #f97316;
+}
+
+/* ============================================
+ * LAYOUT DENSITY SYSTEM
+ * Activated via [data-layout-density] attribute
+ * Adjusts spacing and padding for different preferences
+ * ============================================ */
+
+/* Compact - Reduced spacing for information density */
+[data-layout-density="compact"] {
+  --spacing-xs: 0.125rem; /* 2px */
+  --spacing-sm: 0.375rem; /* 6px */
+  --spacing-md: 0.75rem;  /* 12px */
+  --spacing-lg: 1rem;     /* 16px */
+  --spacing-xl: 1.5rem;   /* 24px */
+  --spacing-2xl: 2rem;    /* 32px */
+
+  --content-padding-x: 0.75rem;
+  --content-padding-y: 1rem;
+}
+
+/* Comfortable (default) - Balanced spacing */
+/* Already defined in :root, no override needed */
+
+/* Spacious - Generous spacing for readability */
+[data-layout-density="spacious"] {
+  --spacing-xs: 0.375rem; /* 6px */
+  --spacing-sm: 0.75rem;  /* 12px */
+  --spacing-md: 1.5rem;   /* 24px */
+  --spacing-lg: 2rem;     /* 32px */
+  --spacing-xl: 2.5rem;   /* 40px */
+  --spacing-2xl: 4rem;    /* 64px */
+
+  --content-padding-x: 1.5rem;
+  --content-padding-y: 2rem;
+}
+
+/* ============================================
+ * DARK MODE THEME
+ * Activated via [data-theme="dark"] on root
+ * ============================================ */
+
+[data-theme="dark"] {
+  /* Primary Colors - Lighter teal for dark mode */
+  --color-primary: #2dd4bf;
+  --color-primary-hover: #5eead4;
+  --color-primary-light: #99f6e4;
+  --color-primary-dark: #14b8a6;
+
+  /* Background Colors - Slate palette */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-elevated: #1e293b;
+
+  /* Text Colors */
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  --text-muted: #64748b;
+  --text-inverse: #0f172a;
+
+  /* Border Colors */
+  --border-color: #334155;
+  --border-color-light: #475569;
+  --border-color-dark: #1e293b;
+
+  /* Scrollbar Colors */
+  --scrollbar-track: #1e293b;
+  --scrollbar-thumb: #475569;
+  --scrollbar-thumb-hover: #64748b;
+}
+
+/* ============================================
+ * SYSTEM PREFERENCE DARK MODE
+ * Automatically applies dark theme based on
+ * user's OS preference (respects user choice)
+ * ============================================ */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    /* Primary Colors - Lighter teal for dark mode */
+    --color-primary: #2dd4bf;
+    --color-primary-hover: #5eead4;
+    --color-primary-light: #99f6e4;
+    --color-primary-dark: #14b8a6;
+
+    /* Background Colors - Slate palette */
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-tertiary: #334155;
+    --bg-elevated: #1e293b;
+
+    /* Text Colors */
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-tertiary: #94a3b8;
+    --text-muted: #64748b;
+    --text-inverse: #0f172a;
+
+    /* Border Colors */
+    --border-color: #334155;
+    --border-color-light: #475569;
+    --border-color-dark: #1e293b;
+
+    /* Scrollbar Colors */
+    --scrollbar-track: #1e293b;
+    --scrollbar-thumb: #475569;
+    --scrollbar-thumb-hover: #64748b;
+  }
+}

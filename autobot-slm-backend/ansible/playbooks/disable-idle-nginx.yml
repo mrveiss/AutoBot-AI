@@ -1,0 +1,34 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Issue #1104: Disable idle nginx on worker nodes (.22, .24, .25)
+# These nodes have nginx installed but serve zero real traffic.
+# Removing reduces attack surface and eliminates false positives in scans.
+---
+- name: "Disable idle nginx on worker nodes"
+  hosts: npu,aiml,browser
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: "Check if nginx is installed"
+      ansible.builtin.command:
+        cmd: dpkg -l nginx
+      register: _nginx_installed
+      changed_when: false
+      failed_when: false
+
+    - name: "Stop and disable nginx"
+      ansible.builtin.systemd:
+        name: nginx
+        state: stopped
+        enabled: false
+      when: _nginx_installed.rc == 0
+
+    - name: "Report nginx status"
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}: nginx
+          {{ 'was stopped and disabled' if _nginx_installed.rc == 0
+             else 'not installed (no action needed)' }}

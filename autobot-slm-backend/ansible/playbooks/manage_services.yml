@@ -1,0 +1,130 @@
+---
+# Manage Services Playbook
+# Start, stop, restart, or check status of AutoBot services
+
+- name: "Manage AutoBot Services"
+  hosts: "{{ target_host | default('all') }}"
+  gather_facts: yes
+  become: yes
+
+  vars:
+    service_action: "{{ action | default('status') }}"
+    valid_actions: ['start', 'stop', 'restart', 'status', 'enable', 'disable']
+    # Role detection — works with either inventory naming convention
+    is_frontend: "{{ 'frontend' in group_names }}"
+    is_database: "{{ 'database' in group_names or 'redis' in group_names }}"
+    is_npu: "{{ 'npu' in group_names or 'npu_workers' in group_names }}"
+    is_ai_stack: "{{ 'ai_stack' in group_names or 'ai' in group_names or 'aiml' in group_names }}"
+    is_browser: "{{ 'browser' in group_names }}"
+    is_slm: "{{ 'slm' in group_names }}"
+
+  pre_tasks:
+    - name: "Validate action parameter"
+      fail:
+        msg: "Invalid action. Valid actions: {{ valid_actions | join(', ') }}"
+      when: service_action not in valid_actions
+      tags: ['always']
+
+    - name: "Display service management information"
+      debug:
+        msg:
+          - "========================================"
+          - "AutoBot Service Management"
+          - "========================================"
+          - "Target Host: {{ inventory_hostname }}"
+          - "Action: {{ service_action }}"
+          - "Timestamp: {{ ansible_facts['date_time'].iso8601 }}"
+      tags: ['always']
+
+  tasks:
+    - name: "Manage Frontend Service"
+      systemd:
+        name: "{{ item }}"
+        state: "{{ service_action if service_action in ['started', 'stopped', 'restarted'] else omit }}"
+        enabled: "{{ true if service_action == 'enable' else false if service_action == 'disable' else omit }}"
+      loop:
+        - nginx
+        - autobot-frontend
+      when: is_frontend | bool
+      register: frontend_service_result
+      ignore_errors: yes
+      tags: ['frontend']
+
+    - name: "Manage Redis Service"
+      systemd:
+        name: redis-stack-server
+        state: "{{ service_action if service_action in ['started', 'stopped', 'restarted'] else omit }}"
+        enabled: "{{ true if service_action == 'enable' else false if service_action == 'disable' else omit }}"
+      when: is_database | bool
+      register: redis_service_result
+      ignore_errors: yes
+      tags: ['redis']
+
+    - name: "Manage NPU Worker Service"
+      systemd:
+        name: autobot-npu-worker
+        state: "{{ service_action if service_action in ['started', 'stopped', 'restarted'] else omit }}"
+        enabled: "{{ true if service_action == 'enable' else false if service_action == 'disable' else omit }}"
+      when: is_npu | bool
+      register: npu_service_result
+      ignore_errors: yes
+      tags: ['npu_worker']
+
+    - name: "Manage AI Stack Service"
+      systemd:
+        name: "{{ item }}"
+        state: "{{ service_action if service_action in ['started', 'stopped', 'restarted'] else omit }}"
+        enabled: "{{ true if service_action == 'enable' else false if service_action == 'disable' else omit }}"
+      loop:
+        - ollama
+        - autobot-ai-stack
+      when: is_ai_stack | bool
+      register: ai_service_result
+      ignore_errors: yes
+      tags: ['ai_stack']
+
+    - name: "Manage SLM Backend Service"
+      systemd:
+        name: "{{ item }}"
+        state: "{{ service_action if service_action in ['started', 'stopped', 'restarted'] else omit }}"
+        enabled: "{{ true if service_action == 'enable' else false if service_action == 'disable' else omit }}"
+      loop:
+        - autobot-slm-backend
+        - nginx
+      when: is_slm | bool
+      register: slm_service_result
+      ignore_errors: yes
+      tags: ['slm']
+
+    - name: "Manage Browser Services"
+      systemd:
+        name: "{{ item }}"
+        state: "{{ service_action if service_action in ['started', 'stopped', 'restarted'] else omit }}"
+        enabled: "{{ true if service_action == 'enable' else false if service_action == 'disable' else omit }}"
+      loop:
+        - autobot-vnc
+        - autobot-playwright
+      when: is_browser | bool
+      register: browser_service_result
+      ignore_errors: yes
+      tags: ['browser']
+
+  post_tasks:
+    - name: "Get service status (when action is status)"
+      systemd:
+        name: "{{ item }}"
+      register: service_status
+      loop: "{{ services | default([]) }}"
+      when: service_action == 'status'
+      ignore_errors: yes
+
+    - name: "Display service management summary"
+      debug:
+        msg:
+          - "========================================"
+          - "Service Management Complete"
+          - "========================================"
+          - "Host: {{ inventory_hostname }}"
+          - "Action: {{ service_action }}"
+          - "Status: Operation completed"
+      tags: ['always']

@@ -1,0 +1,865 @@
+/**
+ * AutoBot - AI-Powered Automation Platform
+ * Copyright (c) 2025 mrveiss
+ * Author: mrveiss
+ *
+ * useVoiceConversation.ts - Voice conversation state machine (#1029, #1030, #1031)
+ * Manages walkie-talkie, hands-free, and full-duplex voice conversation modes.
+ * Hands-free uses Silero VAD + server-side Whisper transcription (#1030).
+ * Full-duplex uses WebSocket signaling + AudioWorklet VAD for barge-in (#1031).
+ */
+
+import { ref, computed, watch } from 'vue'
+import type { ChatMessage } from '@/stores/useChatStore'
+import { useVoiceOutput } from '@/composables/useVoiceOutput'
+import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
+import { useChatController } from '@/models/controllers'
+import { useChatStore } from '@/stores/useChatStore'
+import { usePreferences } from '@/composables/usePreferences'
+import { getApiBase } from '@/config/ssot-config'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('useVoiceConversation')
+
+export type ConversationMode = 'walkie-talkie' | 'hands-free' | 'full-duplex'
+export type ConversationState =
+  | 'idle'
+  | 'listening'
+  | 'processing'
+  | 'speaking'
+
+export interface VoiceBubble {
+  id: string
+  sender: 'user' | 'assistant'
+  content: string
+  timestamp: number
+}
+
+// Module-level singletons — shared across all component instances (#1037)
+const state = ref<ConversationState>('idle')
+const mode = ref<ConversationMode>('walkie-talkie')
+const currentTranscript = ref('')
+const bubbles = ref<VoiceBubble[]>([])
+const isActive = ref(false)
+const errorMessage = ref('')
+
+// Secure context check — getUserMedia requires HTTPS with a trusted cert (#1059)
+const micAccessAvailable = ref(
+  typeof window !== 'undefined' &&
+  !!window.isSecureContext &&
+  !!navigator.mediaDevices?.getUserMedia,
+)
+
+// Hands-free mode state (#1030)
+const silenceThreshold = ref(1500)
+const audioLevel = ref(0)
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _recognition: any = null
+let _voiceUnsubscribe: (() => void) | null = null
+let _vadAudioCtx: AudioContext | null = null
+let _vadNode: AudioWorkletNode | null = null
+let _micStream: MediaStream | null = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _sileroVad: any = null
+let _whisperFallback = false // #1329: true when browser STT unavailable (airgapped)
+let _fallbackRecorder: MediaRecorder | null = null
+let _fallbackStream: MediaStream | null = null
+// AbortController for transcription requests — aborts in-flight call when new recording starts.
+let _transcribeController: AbortController | null = null
+
+// Issue #1371: Cooldown timer to prevent TTS echo from triggering VAD
+let _ttsCooldownTimer: ReturnType<typeof setTimeout> | null = null
+const _TTS_COOLDOWN_MS = 600 // Must exceed Silero redemptionMs (250ms)
+
+// Response message types that should be spoken (skip thoughts/planning/debug)
+const _SPEAKABLE_TYPES = new Set(['response', 'message'])
+
+// Max chars to send to TTS — Pocket TTS at ~200ms/chunk (#1054)
+const _MAX_SPEECH_CHARS = 2000
+
+function _generateId(): string {
+  return `vb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+}
+
+/** Return a helpful error when mic access is blocked by an untrusted cert (#1059). */
+function _getMicContextError(modeLabel: string): string {
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    const origin = window.location.origin
+    return (
+      `Mic access unavailable for ${modeLabel} mode. ` +
+      `Your browser requires a trusted HTTPS certificate. ` +
+      `Fix: install the AutoBot CA cert as a trusted root, ` +
+      `or in Chrome/Edge open chrome://flags/#unsafely-treat-insecure-origin-as-secure ` +
+      `and add ${origin}.`
+    )
+  }
+  return `Mic access required for ${modeLabel} mode.`
+}
+
+/** Strip tool-call markup and truncate to a TTS-safe length. */
+function _sanitizeForSpeech(text: string): string {
+  // #1721: Remove script tags first (complete multi-char sanitization), then strip remaining HTML
+  let clean = text
+    .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
+    .replace(/<TOOL_CALL[^>]*>|<\/TOOL_CALL>/gi, '')
+    .replace(/<script[\s\S]*?<\/script\s*>/gi, '') // codeql[js/incomplete-multi-character-sanitization]
+    .replace(/<script[^>]*>/gi, '') // codeql[js/incomplete-multi-character-sanitization]
+  let prev = ''
+  while (prev !== clean) {
+    prev = clean
+    clean = clean.replace(/<[^>]+>/g, '')
+  }
+  clean = clean.replace(/\s+/g, ' ').trim()
+  if (clean.length <= _MAX_SPEECH_CHARS) return clean
+  const truncated = clean.slice(0, _MAX_SPEECH_CHARS)
+  const lastBreak = Math.max(
+    truncated.lastIndexOf('. '),
+    truncated.lastIndexOf('! '),
+    truncated.lastIndexOf('? '),
+  )
+  return lastBreak > 50 ? truncated.slice(0, lastBreak + 1) : truncated
+}
+
+// ─── Voice WS (#6788: shared with useVoiceOutput, single owner) ──────────
+
+function _subscribeVoice(): void {
+  if (_voiceUnsubscribe) return
+  const { subscribeVoiceMessages } = useVoiceOutput()
+  _voiceUnsubscribe = subscribeVoiceMessages(_handleWsMessage)
+}
+
+function _unsubscribeVoice(): void {
+  if (_voiceUnsubscribe) {
+    _voiceUnsubscribe()
+    _voiceUnsubscribe = null
+  }
+}
+
+function _sendWs(data: Record<string, unknown>): void {
+  // Fire-and-forget; sendVoiceFrame logs on failure.
+  void useVoiceOutput().sendVoiceFrame(data)
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function _handleWsMessage(msg: any): void {
+  // tts_audio playback is owned by useVoiceOutput; we only react to state.
+  switch (msg.type) {
+    case 'state':
+      logger.debug('Server state:', msg.state)
+      break
+    case 'tts_start':
+      state.value = 'speaking'
+      break
+    case 'tts_end':
+      // Handled by isSpeaking watcher when audio queue drains
+      break
+    case 'error':
+      logger.error('Server voice error:', msg.message)
+      errorMessage.value = msg.message
+      break
+    case 'pong':
+      break
+  }
+}
+
+// #6823: `_onSpeakingDone` was a near-duplicate of `_resumeAutoListening`
+// (no hands-free cooldown timer). The single factory-level watcher now
+// uses `_resumeAutoListening` directly — removing this function eliminates
+// the path that was missing the cooldown and double-triggering listening
+// resumes when both watchers fired. Walkie-talkie semantics preserved:
+// `_resumeAutoListening` no-ops on inactive sessions and on walkie-talkie
+// (only resumes for full-duplex / hands-free per existing logic).
+
+// ─── AudioWorklet VAD helpers ────────────────────────────
+
+async function _initVad(): Promise<void> {
+  if (_vadAudioCtx) return
+
+  if (!micAccessAvailable.value) {
+    errorMessage.value = _getMicContextError('full-duplex')
+    return
+  }
+
+  try {
+    _micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    _vadAudioCtx = new AudioContext()
+    await _vadAudioCtx.audioWorklet.addModule('/audio-vad-processor.js')
+
+    const source = _vadAudioCtx.createMediaStreamSource(_micStream)
+    _vadNode = new AudioWorkletNode(_vadAudioCtx, 'vad-processor')
+
+    _vadNode.port.onmessage = (event) => {
+      const { speaking } = event.data
+      if (speaking && state.value === 'speaking') {
+        _handleBargeIn()
+      }
+    }
+
+    source.connect(_vadNode)
+    logger.debug('VAD AudioWorklet initialized')
+  } catch (e) {
+    logger.error('VAD init failed:', e)
+    // #1311: distinguish mic-denied from other init failures
+    const err = e instanceof Error ? e : new Error(String(e))
+    if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
+      errorMessage.value = _getMicContextError('full-duplex')
+    } else {
+      errorMessage.value =
+        `Full-duplex init failed: ${err.message || 'unknown error'}`
+    }
+  }
+}
+
+function _teardownVad(): void {
+  if (_vadNode) {
+    _vadNode.disconnect()
+    _vadNode = null
+  }
+  if (_vadAudioCtx) {
+    _vadAudioCtx.close().catch((err) => { logger.warn('Audio context close failed: %s', err) })
+    _vadAudioCtx = null
+  }
+  if (_micStream) {
+    _micStream.getTracks().forEach((t) => t.stop())
+    _micStream = null
+  }
+}
+
+function _handleBargeIn(): void {
+  logger.debug('Barge-in detected')
+  const { stopSpeaking } = useVoiceOutput()
+  stopSpeaking()
+  _sendWs({ type: 'barge_in' })
+  state.value = 'idle'
+  _startListeningInternal()
+}
+
+// ─── Language helper (#1329, #1334) ──────────────────────
+
+/** Map short language codes to BCP-47 tags for browser SpeechRecognition. */
+const _LANG_TO_BCP47: Record<string, string> = {
+  en: 'en-US', de: 'de-DE', fr: 'fr-FR', es: 'es-ES',
+  it: 'it-IT', pt: 'pt-BR', nl: 'nl-NL', ru: 'ru-RU',
+  ja: 'ja-JP', ko: 'ko-KR', zh: 'zh-CN', ar: 'ar-SA',
+  hi: 'hi-IN', pl: 'pl-PL', cs: 'cs-CZ', sv: 'sv-SE',
+  da: 'da-DK', fi: 'fi-FI', nb: 'nb-NO', lv: 'lv-LV',
+  lt: 'lt-LT', et: 'et-EE', uk: 'uk-UA', tr: 'tr-TR',
+}
+
+/** Current language code exposed for UI indicators (#1334). */
+const currentLanguage = ref('en')
+
+function _getSttLanguage(): string {
+  const { language } = usePreferences()
+  const lang = language.value || 'en'
+  currentLanguage.value = lang
+  return _LANG_TO_BCP47[lang] || lang
+}
+
+function _getShortLanguage(): string {
+  const { language } = usePreferences()
+  const lang = language.value || 'en'
+  currentLanguage.value = lang
+  return lang
+}
+
+// ─── Whisper fallback for airgapped mode (#1329) ────────
+
+async function _startWhisperFallback(): Promise<void> {
+  if (state.value === 'listening') return
+  if (!isActive.value) return
+
+  if (!micAccessAvailable.value) {
+    errorMessage.value = _getMicContextError('walkie-talkie')
+    return
+  }
+
+  try {
+    _fallbackStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    _fallbackRecorder = new MediaRecorder(_fallbackStream, {
+      mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm',
+    })
+    const chunks: Blob[] = []
+
+    _fallbackRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data)
+    }
+
+    _fallbackRecorder.onstop = () => {
+      const blob = new Blob(chunks, { type: 'audio/webm' })
+      _fallbackStream?.getTracks().forEach((t) => t.stop())
+      _fallbackStream = null
+      if (!isActive.value || blob.size === 0) {
+        state.value = 'idle'
+        return
+      }
+      state.value = 'processing'
+      _transcribeAudioWithLanguage(blob)
+        .then((text) => {
+          if (text) {
+            _dispatchTranscript(text)
+          } else {
+            state.value = 'idle'
+          }
+        })
+        .catch((err) => {
+          if (err instanceof DOMException && err.name === 'AbortError') { state.value = 'idle'; return }
+          logger.error('Whisper fallback transcription error:', err)
+          errorMessage.value = 'Transcription failed. Try again.'
+          state.value = 'idle'
+        })
+    }
+
+    _fallbackRecorder.start()
+    state.value = 'listening'
+    currentTranscript.value = ''
+    logger.debug('Whisper fallback recording started')
+  } catch (e) {
+    const err = e instanceof Error ? e : new Error(String(e))
+    logger.error('Whisper fallback mic init failed:', err)
+    if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
+      errorMessage.value = _getMicContextError('walkie-talkie')
+    } else {
+      errorMessage.value = `Mic init failed: ${err.message || 'unknown error'}`
+    }
+    state.value = 'idle'
+  }
+}
+
+function _stopWhisperFallback(): void {
+  if (_fallbackRecorder && _fallbackRecorder.state !== 'inactive') {
+    _fallbackRecorder.stop()
+  }
+  _fallbackRecorder = null
+}
+
+// ─── STT helper (shared across modes) ───────────────────
+
+function _startListeningInternal(): void {
+  if (state.value === 'listening') return
+  if (!isActive.value) return
+
+  // #1329: If browser STT failed previously (airgapped), use Whisper fallback
+  if (_whisperFallback) {
+    _startWhisperFallback()
+    return
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any
+  const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition
+  if (!Ctor) {
+    errorMessage.value = 'Voice input requires Chrome, Edge, or Safari 15+.'
+    return
+  }
+
+  _recognition = new Ctor()
+  _recognition.continuous = mode.value === 'full-duplex'
+  _recognition.interimResults = true
+  _recognition.lang = _getSttLanguage()
+
+  _recognition.onstart = () => {
+    state.value = 'listening'
+    currentTranscript.value = ''
+    _sendWs({ type: 'start_listening' })
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  _recognition.onresult = (event: any) => {
+    let interim = ''
+    let finalText = ''
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const r = event.results[i]
+      if (r.isFinal) {
+        finalText += r[0].transcript
+      } else {
+        interim += r[0].transcript
+      }
+    }
+
+    if (finalText && mode.value === 'full-duplex') {
+      currentTranscript.value = ''
+      const text = finalText.trim()
+      if (text) {
+        try { _recognition?.abort() } catch { /* ok */ }
+        _recognition = null
+        _dispatchTranscript(text)
+      }
+    } else if (finalText) {
+      // Walkie-talkie: accumulate (onend sends)
+      currentTranscript.value = finalText
+    } else {
+      currentTranscript.value = interim
+    }
+  }
+
+  _recognition.onend = () => {
+    _sendWs({ type: 'stop_listening' })
+
+    if (mode.value !== 'full-duplex') {
+      const text = currentTranscript.value.trim()
+      if (text) {
+        _dispatchTranscript(text)
+      } else {
+        state.value = 'idle'
+      }
+    } else if (isActive.value && state.value === 'listening') {
+      setTimeout(() => {
+        if (isActive.value && state.value === 'idle') {
+          _startListeningInternal()
+        }
+      }, 100)
+    }
+    _recognition = null
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  _recognition.onerror = (event: any) => {
+    logger.error('Voice recognition error:', event.error)
+    _recognition = null
+    if (event.error === 'not-allowed') {
+      errorMessage.value =
+        'Microphone access denied. Allow mic in browser settings.'
+    } else if (event.error === 'network') {
+      // #1329: Browser STT needs internet — fall back to local Whisper
+      logger.warn('Browser STT network error — switching to Whisper fallback')
+      _whisperFallback = true
+      _startWhisperFallback()
+      return
+    } else if (event.error === 'no-speech') {
+      if (mode.value === 'full-duplex' && isActive.value) {
+        state.value = 'idle'
+        setTimeout(() => _startListeningInternal(), 200)
+        return
+      }
+    } else if (event.error !== 'aborted') {
+      errorMessage.value = `Speech error: ${event.error}`
+    }
+    state.value = 'idle'
+  }
+
+  _recognition.start()
+}
+
+function _stopRecognition(): void {
+  if (_recognition) {
+    try { _recognition.abort() } catch { /* ignore */ }
+    _recognition = null
+  }
+  _stopWhisperFallback()
+  currentTranscript.value = ''
+}
+
+/** Resume listening for auto modes (hands-free / full-duplex) after idle. */
+function _resumeAutoListening(): void {
+  state.value = 'idle'
+  if (!isActive.value) return
+  if (mode.value === 'full-duplex') {
+    _startListeningInternal()
+  } else if (mode.value === 'hands-free' && _sileroVad) {
+    // Issue #1371: Start a cooldown before accepting VAD events.
+    // TTS audio lingers in the Silero VAD buffer; without this delay the
+    // VAD fires onSpeechEnd with captured speaker audio immediately after
+    // state becomes 'listening', creating an echo feedback loop.
+    _ttsCooldownTimer = setTimeout(() => {
+      _ttsCooldownTimer = null
+    }, _TTS_COOLDOWN_MS)
+    state.value = 'listening'
+  }
+}
+
+/** Process a finalized transcript: add bubble, send to LLM, speak response. */
+function _dispatchTranscript(text: string): void {
+  const store = useChatStore()
+  const controller = useChatController()
+  const { speakStreaming, flushStreaming, isSpeaking } = useVoiceOutput()
+
+  state.value = 'processing'
+  _sendWs({ type: 'transcript', text, final: true })
+
+  bubbles.value.push({
+    id: _generateId(),
+    sender: 'user',
+    content: text,
+    timestamp: Date.now(),
+  })
+
+  const lang = _getShortLanguage()
+  controller.sendMessage(text, {
+    use_knowledge: false,
+    language: lang,
+  }).then(() => {
+    const session = store.sessions.find(
+      (s) => s.id === store.currentSessionId,
+    )
+    const msgs: ChatMessage[] = session?.messages ?? []
+    let response: string | null = null
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i]
+      if (m.sender !== 'assistant' || !m.content) continue
+      if (m.type && !_SPEAKABLE_TYPES.has(m.type)) continue
+      response = m.content
+      break
+    }
+
+    if (!response || !isActive.value) {
+      _resumeAutoListening()
+      return
+    }
+
+    bubbles.value.push({
+      id: _generateId(),
+      sender: 'assistant',
+      content: response,
+      timestamp: Date.now(),
+    })
+
+    const speechText = _sanitizeForSpeech(response)
+    if (!speechText) {
+      _resumeAutoListening()
+      return
+    }
+
+    const { wsConnected: voiceWsConnected } = useVoiceOutput()
+    if (mode.value === 'full-duplex' && voiceWsConnected.value) {
+      const { effectiveVoiceId } = useVoiceProfiles()
+      _sendWs({ type: 'speak', text: speechText, voice_id: effectiveVoiceId.value })
+    } else {
+      // Use streaming TTS for walkie-talkie and hands-free (#1319)
+      state.value = 'speaking'
+      speakStreaming(speechText)
+      flushStreaming()
+      // #6823: removed local one-shot `watch(isSpeaking, ...)` here.
+      // The factory-level watcher (below) is the single source of truth
+      // for TTS-completion handling — pre-fix this duplicate caused
+      // both `_resumeAutoListening` AND `_onSpeakingDone` to fire on
+      // every walkie-talkie/hands-free TTS burst, double-triggering
+      // the hands-free TTS cooldown timer and bouncing state through
+      // 'idle' → 'listening' → 'idle' → 'listening'.
+    }
+  }).catch((err) => {
+    logger.error('Failed to send voice transcript:', err)
+    errorMessage.value = 'Failed to send message. Try again.'
+    _resumeAutoListening()
+  })
+}
+
+// ─── Hands-free VAD helpers (#1030) ─────────────────────
+
+function _writeWavStr(view: DataView, off: number, s: string): void {
+  for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i))
+}
+
+/** Convert Float32Array PCM samples to a WAV Blob (16-bit, mono). */
+function _float32ToWav(samples: Float32Array, sr: number): Blob {
+  const len = samples.length
+  const buf = new ArrayBuffer(44 + len * 2)
+  const v = new DataView(buf)
+  _writeWavStr(v, 0, 'RIFF')
+  v.setUint32(4, 36 + len * 2, true)
+  _writeWavStr(v, 8, 'WAVE')
+  _writeWavStr(v, 12, 'fmt ')
+  v.setUint32(16, 16, true)
+  v.setUint16(20, 1, true)
+  v.setUint16(22, 1, true)
+  v.setUint32(24, sr, true)
+  v.setUint32(28, sr * 2, true)
+  v.setUint16(32, 2, true)
+  v.setUint16(34, 16, true)
+  _writeWavStr(v, 36, 'data')
+  v.setUint32(40, len * 2, true)
+  for (let i = 0; i < len; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]))
+    v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true)
+  }
+  return new Blob([buf], { type: 'audio/wav' })
+}
+
+/** POST audio blob to /api/voice/transcribe → { text, confidence } (#1329). */
+async function _transcribeAudioWithLanguage(
+  blob: Blob,
+  filename = 'speech.wav',
+): Promise<string> {
+  const form = new FormData()
+  form.append('audio', blob, filename)
+  const lang = _getShortLanguage()
+  if (lang) form.append('language', lang)
+  _transcribeController?.abort()
+  _transcribeController = new AbortController()
+  const res = await fetchWithAuth(`${getApiBase()}/voice/transcribe`, { // fetchWithAuth retained: FormData audio body + AbortController signal — exempt (#6256)
+    method: 'POST',
+    body: form,
+    signal: _transcribeController.signal,
+  })
+  if (!res.ok) {
+    logger.warn('Transcribe failed:', res.status)
+    return ''
+  }
+  const data = await res.json()
+  return (data.text ?? '').trim()
+}
+
+/** POST audio blob to /api/voice/transcribe → { text, confidence }. */
+async function _transcribeAudio(blob: Blob): Promise<string> {
+  return _transcribeAudioWithLanguage(blob, 'speech.wav')
+}
+
+/** Start Silero VAD for hands-free speech detection (#1030). */
+async function _startHandsFree(): Promise<void> {
+  if (_sileroVad) return
+
+  if (!micAccessAvailable.value) {
+    errorMessage.value = _getMicContextError('hands-free')
+    state.value = 'idle'
+    return
+  }
+
+  state.value = 'listening'
+  try {
+    const { MicVAD } = await import('@ricky0123/vad-web')
+    // Issue #1150: provide explicit asset paths so MicVAD can fetch its
+    // ONNX model (silero_vad_legacy.onnx), worklet bundle, and WASM runtime
+    // from the root of the frontend — these are copied to dist/ by the
+    // vadAssetsPlugin in vite.config.ts.
+    _sileroVad = await MicVAD.new({
+      baseAssetPath: '/',
+      onnxWASMBasePath: '/',
+      positiveSpeechThreshold: 0.8,
+      minSpeechMs: 150,
+      redemptionMs: 250,
+      onSpeechEnd: (audio: Float32Array) => {
+        _handleVadSpeechEnd(audio)
+      },
+      onFrameProcessed: (probs) => {
+        audioLevel.value = probs.isSpeech
+      },
+    })
+    _sileroVad.start()
+    logger.debug('Silero VAD started (hands-free)')
+  } catch (e) {
+    logger.error('Silero VAD init failed:', e)
+    // #1311: distinguish mic-denied from ONNX/WASM init failures
+    const err = e instanceof Error ? e : new Error(String(e))
+    if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
+      errorMessage.value = _getMicContextError('hands-free')
+    } else if (
+      typeof SharedArrayBuffer === 'undefined' ||
+      err.message?.includes('SharedArrayBuffer')
+    ) {
+      errorMessage.value =
+        'Hands-free mode requires cross-origin isolation headers ' +
+        '(COOP/COEP). Ask your admin to update the nginx config.'
+    } else {
+      errorMessage.value =
+        `Hands-free init failed: ${err.message || 'unknown error'}`
+    }
+    state.value = 'idle'
+  }
+}
+
+function _stopHandsFree(): void {
+  if (_sileroVad) {
+    try { _sileroVad.destroy() } catch { /* ignore */ }
+    _sileroVad = null
+  }
+  audioLevel.value = 0
+}
+
+/** Called by Silero VAD when speech ends: encode, transcribe, dispatch. */
+function _handleVadSpeechEnd(audio: Float32Array): void {
+  if (!isActive.value || state.value !== 'listening') return
+  // Issue #1371: Ignore VAD events during TTS cooldown to prevent echo loop.
+  // Silero VAD captures TTS speaker audio via mic; without this guard the
+  // captured audio would be transcribed and sent back to the LLM.
+  if (_ttsCooldownTimer) return
+  state.value = 'processing'
+  const wavBlob = _float32ToWav(audio, 16000)
+  _transcribeAudio(wavBlob)
+    .then((text) => {
+      if (!text || !isActive.value) {
+        state.value = 'idle'
+        return
+      }
+      _dispatchTranscript(text)
+    })
+    .catch((err) => {
+      if (err instanceof DOMException && err.name === 'AbortError') { state.value = 'idle'; return }
+      logger.error('Hands-free transcription error:', err)
+      errorMessage.value = 'Transcription failed. Try again.'
+      state.value = 'idle'
+    })
+}
+
+// ─── Main composable ────────────────────────────────────
+
+export function useVoiceConversation() {
+  const { isSpeaking, unlockAudio, stopSpeaking, wsConnected } = useVoiceOutput()
+
+  const isListening = computed(() => state.value === 'listening')
+  const isProcessing = computed(() => state.value === 'processing')
+
+  const stateLabel = computed(() => {
+    const auto = mode.value === 'full-duplex' || mode.value === 'hands-free'
+    switch (state.value) {
+      case 'idle':
+        return auto ? 'Ready — speak anytime' : 'Tap to speak'
+      case 'listening': return 'Listening...'
+      case 'processing': return 'Processing...'
+      case 'speaking':
+        return mode.value === 'full-duplex'
+          ? 'Speaking — interrupt anytime'
+          : 'AutoBot is speaking...'
+      default: return ''
+    }
+  })
+
+  async function activate(): Promise<void> {
+    isActive.value = true
+    state.value = 'idle'
+    bubbles.value = []
+    errorMessage.value = ''
+    currentLanguage.value = _getShortLanguage()
+    unlockAudio()
+
+    _subscribeVoice()
+    if (mode.value === 'full-duplex') {
+      await _initVad()
+      _startListeningInternal()
+    } else if (mode.value === 'hands-free') {
+      await _startHandsFree()
+    }
+    logger.debug('Voice conversation activated, mode:', mode.value)
+  }
+
+  function deactivate(): void {
+    _stopRecognition()
+    _stopHandsFree()
+    _unsubscribeVoice()
+    _teardownVad()
+    stopSpeaking()
+    if (_ttsCooldownTimer) { clearTimeout(_ttsCooldownTimer); _ttsCooldownTimer = null }
+    isActive.value = false
+    state.value = 'idle'
+    currentTranscript.value = ''
+    logger.debug('Voice conversation deactivated')
+  }
+
+  function startListening(): void {
+    if (state.value === 'speaking' && mode.value === 'full-duplex') {
+      _handleBargeIn()
+      return
+    }
+    if (state.value !== 'idle') return
+    unlockAudio()
+    if (mode.value === 'hands-free') {
+      _startHandsFree()
+    } else {
+      _startListeningInternal()
+    }
+  }
+
+  function stopListening(): void {
+    if (mode.value === 'hands-free') {
+      _stopHandsFree()
+      state.value = 'idle'
+    } else if (_fallbackRecorder && _fallbackRecorder.state !== 'inactive') {
+      _stopWhisperFallback()
+    } else if (_recognition) {
+      _recognition.stop()
+    }
+  }
+
+  function toggleListening(): void {
+    if (state.value === 'listening') {
+      stopListening()
+    } else if (state.value === 'idle') {
+      startListening()
+    } else if (
+      state.value === 'speaking' && mode.value === 'full-duplex'
+    ) {
+      _handleBargeIn()
+    }
+  }
+
+  function setMode(newMode: ConversationMode): void {
+    if (mode.value === newMode) return
+    const wasActive = isActive.value
+
+    // Issue #1149: clear stale errors from the previous mode
+    errorMessage.value = ''
+
+    if (wasActive) {
+      _stopRecognition()
+      _stopHandsFree()
+      _teardownVad()
+      stopSpeaking()
+      if (_ttsCooldownTimer) { clearTimeout(_ttsCooldownTimer); _ttsCooldownTimer = null }
+      state.value = 'idle'
+      currentTranscript.value = ''
+    }
+
+    mode.value = newMode
+
+    if (wasActive && newMode === 'full-duplex') {
+      _subscribeVoice()
+      _initVad().then(() => _startListeningInternal())
+    } else if (wasActive && newMode === 'hands-free') {
+      _startHandsFree()
+    }
+    logger.debug('Mode switched to:', newMode)
+  }
+
+  // #6823: single source of truth for TTS-completion handling. Routes
+  // through `_resumeAutoListening` (not the redundant `_onSpeakingDone`)
+  // so the hands-free TTS cooldown timer is set exactly once per burst
+  // — was previously fired by both the inner `_dispatchTranscript`
+  // watcher AND this outer one.
+  watch(isSpeaking, (speaking) => {
+    if (!speaking && state.value === 'speaking') {
+      _resumeAutoListening()
+    }
+  })
+
+  // #1334: Update STT language when preference changes mid-conversation
+  const { language: prefLanguage } = usePreferences()
+  watch(prefLanguage, (newLang) => {
+    currentLanguage.value = newLang || 'en'
+    if (_recognition && state.value === 'listening') {
+      const bcp47 = _LANG_TO_BCP47[newLang] || newLang
+      _recognition.lang = bcp47
+    }
+    logger.debug('Language preference changed:', newLang)
+  })
+
+  function cleanup(): void {
+    deactivate()
+  }
+
+  return {
+    state,
+    mode,
+    currentTranscript,
+    currentLanguage,
+    bubbles,
+    isActive,
+    errorMessage,
+    wsConnected,
+    audioLevel,
+    silenceThreshold,
+    micAccessAvailable,
+    isListening,
+    isProcessing,
+    stateLabel,
+    activate,
+    deactivate,
+    startListening,
+    stopListening,
+    toggleListening,
+    setMode,
+    cleanup,
+  }
+}

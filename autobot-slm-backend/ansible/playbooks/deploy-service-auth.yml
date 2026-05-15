@@ -1,0 +1,74 @@
+---
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Service Authentication Deployment Playbook
+# Deploys service keys and configures enforcement across the 6-VM fleet
+#
+# Usage:
+#   Full deployment:
+#     ansible-playbook -i inventory/production.yml playbooks/deploy-service-auth.yml
+#
+#   Keys only:
+#     ansible-playbook -i inventory/production.yml playbooks/deploy-service-auth.yml --tags keys
+#
+#   Enforcement config only (backend):
+#     ansible-playbook -i inventory/production.yml playbooks/deploy-service-auth.yml --tags enforcement
+#
+#   Override variables:
+#     ansible-playbook ... -e "service_auth_enforcement_mode=false"
+#     ansible-playbook ... -e "service_auth_circuit_breaker_percentage=50"
+
+- name: "Deploy Service Authentication"
+  hosts: all
+  become: true
+  vars:
+    deployment_timestamp: "{{ ansible_facts['date_time'].iso8601_basic_short }}"
+
+  pre_tasks:
+    - name: Display deployment information
+      ansible.builtin.debug:
+        msg:
+          - "AutoBot Service Authentication Deployment"
+          - "Enforcement: {{ service_auth_enforcement_mode | default(true) }}"
+          - "Circuit Breaker: {{ service_auth_circuit_breaker_percentage | default(100) }}%"
+          - "Target Hosts: {{ ansible_facts['play_hosts'] | length }} VMs"
+          - "Timestamp: {{ deployment_timestamp }}"
+      run_once: true
+      delegate_to: localhost
+
+  roles:
+    - role: service_auth
+      tags: [keys, enforcement, systemd]
+
+- name: "Post-Deployment Verification"
+  hosts: backend
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Wait for backend to be ready
+      ansible.builtin.uri:
+        url: "{{ backend_protocol | default('https') }}://{{ ansible_host }}:{{ backend_port | default(8443) }}/api/health"
+        validate_certs: "{{ validate_backend_certs | default(false) }}"
+        return_content: true
+      register: health_check
+      retries: 6
+      delay: 5
+      until: health_check.status == 200
+      ignore_errors: true
+
+    - name: Display deployment summary
+      ansible.builtin.debug:
+        msg:
+          - "Service Authentication Deployment Complete"
+          - "=========================================="
+          - "Backend Health: {{ 'HEALTHY' if health_check.status | default(0) == 200 else 'CHECK FAILED' }}"
+          - "Enforcement Mode: {{ service_auth_enforcement_mode | default(true) }}"
+          - "Circuit Breaker: {{ service_auth_circuit_breaker_percentage | default(100) }}%"
+          - ""
+          - "Management Commands:"
+          - "  Toggle enforcement: ansible-playbook playbooks/toggle-enforcement.yml -e 'enforcement_mode=false'"
+          - "  Rotate keys:        ansible-playbook playbooks/rotate-service-keys.yml"
+          - "  Emergency rollback:  bash scripts/service-auth/emergency-rollback.sh"

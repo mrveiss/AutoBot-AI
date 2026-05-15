@@ -1,0 +1,61 @@
+# SLM Server - Minimal Dependencies
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+#
+# System dependencies (install via apt):
+#   sudo apt install sshpass  # Required for password-based SSH connections
+#
+
+# Prometheus metrics (Issue #937: shared monitoring implementation)
+prometheus-client>=0.24.1
+
+# Web framework
+fastapi>=0.136.1                # SECURITY UPDATE - requires starlette >=0.52.1
+uvicorn[standard]>=0.46.0
+
+# Database - PostgreSQL (Issue #786)
+sqlalchemy>=2.0.48
+asyncpg>=0.31.0  # Async PostgreSQL driver for SQLAlchemy
+psycopg2-binary>=2.9.12  # Sync PostgreSQL driver for migrations
+
+# Data validation
+pydantic[email]>=2.13.4
+pydantic-settings>=2.14.1
+typing_extensions>=4.15.0  # For Python 3.8 compatibility
+
+# Authentication
+PyJWT[crypto]>=2.12.1
+bcrypt>=5.0.0  # Direct bcrypt API — passlib removed (#2669)
+python-multipart>=0.0.28          # SECURITY UPDATE - arbitrary file write fix
+
+# Async utilities
+aiofiles>=25.1.0
+websockets>=16.0
+
+# Ansible integration
+ansible-runner>=2.4.3
+
+# HTTP client (for health checks)
+httpx>=0.28.1
+
+# System metrics
+psutil>=7.2.2
+
+# SSH connectivity (for connection testing and node management)
+paramiko>=5.0.0
+
+# Cron expression parsing (Issue #741 - Scheduled updates)
+croniter>=6.2.2
+
+# SSO Integration (Issue #576 Phase 4)
+authlib>=1.7.2  # OAuth2/OIDC client
+ldap3>=2.9.1  # LDAP/Active Directory
+pysaml2>=7.5.4  # SAML 2.0 Service Provider
+
+# 2FA/MFA (Issue #576 Phase 5)
+pyotp>=2.9.0  # TOTP generation and verification
+
+# Security: explicit pins to override vulnerable transitive versions
+cryptography>=47.0.0  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
+# Note: pyopenssl version resolved by pysaml2's dependencies (constraints conflict with >=26.0.0)
+# cryptography>=47.0.0 provides primary security coverage

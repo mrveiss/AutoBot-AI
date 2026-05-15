@@ -1,0 +1,39 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Prometheus scrape configuration for docker-compose single-node deployments.
+# For fleet deployments, scrape config is rendered from:
+#   autobot-slm-backend/ansible/roles/monitoring/templates/prometheus.yml.j2
+---
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: docker
+
+alerting:
+  alertmanagers: []
+
+rule_files: []
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # AutoBot backend metrics (docker-compose service name)
+  - job_name: "autobot-backend"
+    static_configs:
+      - targets: ["autobot-backend:8001"]
+    metrics_path: /api/metrics/prometheus
+    scheme: http
+
+  # AutoBot SLM backend metrics (docker-compose service name)
+  - job_name: "autobot-slm"
+    static_configs:
+      - targets: ["autobot-slm:8000"]
+    metrics_path: /api/performance/metrics/prometheus
+    scheme: http

@@ -1,0 +1,29 @@
+---
+# Browser role defaults
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+# (#926 Phase 4: per-role account)
+browser_service_account: autobot-browser
+browser_user: autobot-browser
+browser_group: autobot-browser
+browser_install_dir: /opt/autobot/autobot-browser-worker
+
+# VNC configuration  (#1363: opt-in, not installed by default)
+install_vnc: false
+vnc_port: 5901
+vnc_display: ":1"
+
+# Playwright configuration
+playwright_port: 9001
+playwright_ports_legacy:
+  - "3000"
+browser_timeout: 30
+
+# Desktop environment
+desktop_environment: "xfce4"
+headless_mode: false
+
+# Network
+network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '' }}"

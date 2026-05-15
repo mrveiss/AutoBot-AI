@@ -1,0 +1,51 @@
+Analyze the output of this command and explain what we're looking at.
+
+Command: {{ command }}
+Return Code: {{ return_code }}
+
+Output:
+```
+{{ output }}
+```
+
+Provide your response in this exact JSON format:
+{
+  "summary": "Brief description of what this output shows",
+  "key_findings": [
+    "Important finding 1",
+    "Important finding 2",
+    "Important finding 3"
+  ],
+  "details": "More detailed explanation if needed (null if not needed)",
+  "next_steps": ["Suggested action 1", "Suggested action 2"] or null
+}
+
+Rules:
+- Focus on what the user would want to know
+- Highlight important discoveries or issues
+- Keep key_findings to 3-5 most important points
+- Only suggest next_steps if there's a clear follow-up action
+- If return code is non-zero, explain the error
+- Response must be valid JSON only, no other text
+
+Interpretation Guidelines:
+
+For network scans (nmap):
+- Identify active hosts/devices
+- Note open ports and services
+- Highlight any security concerns
+
+For system info (df, du, free):
+- Focus on resource usage percentages
+- Warn about low resources (>80% used)
+- Suggest cleanup if needed
+
+For file operations (ls, find):
+- Summarize what was found
+- Note file counts and sizes
+- Highlight unusual permissions
+
+For errors:
+- Explain what went wrong
+- Suggest how to fix it
+- Provide alternative approaches

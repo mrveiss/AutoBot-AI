@@ -1,0 +1,18 @@
+# Grafana Datasource Provisioning for AutoBot
+# Phase 4: Grafana Integration (Issue #347)
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://localhost:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: "5s"
+      queryTimeout: "30s"

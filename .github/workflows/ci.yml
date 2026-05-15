@@ -1,0 +1,374 @@
+# AutoBot CI/CD Pipeline
+
+name: AutoBot CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, Dev_new_gui ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
+        id: filter
+        with:
+          filters: |
+            python:
+              - '**/*.py'
+              - '**/requirements*.txt'
+              - 'requirements-ci/**'
+              - 'pyproject.toml'
+              - 'autobot_shared/pyproject.toml'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'autobot-frontend/**'
+              - '!autobot-frontend/node_modules/**'
+              - '.github/workflows/ci.yml'
+
+  security-tests:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+
+        echo "Installing CI-safe requirements..."
+        python -m pip install -r requirements-ci.txt --prefer-binary
+
+        echo "Installing testing dependencies..."
+        python -m pip install pytest pytest-asyncio pytest-cov flake8 black isort mypy bandit
+
+    - name: Create necessary directories and config files
+      run: |
+        mkdir -p data logs static config
+        touch data/.gitkeep logs/.gitkeep static/.gitkeep
+
+        # Create minimal config.yaml for CI testing
+        cat > config/config.yaml << 'EOF'
+        # CI Testing Configuration
+        llm:
+          orchestrator_llm: "mock"
+          task_llm: "mock"
+          ollama:
+            model: "mock-model"
+            models: {}
+          unified:
+            embedding:
+              providers:
+                ollama:
+                  selected_model: "mock-embed"
+
+        deployment:
+          mode: "local"
+
+        data:
+          reliability_stats_file: "data/reliability_stats.json"
+
+        diagnostics:
+          enabled: false
+          use_llm_for_analysis: false
+          use_web_search_for_analysis: false
+          auto_apply_fixes: false
+
+        redis:
+          host: "localhost"
+          port: 6379
+          db: 0
+        EOF
+
+    - name: Run code quality checks
+      run: |
+        echo "Running code quality checks..."
+
+        # Code formatting check — must match project standard (pyproject.toml
+        # [tool.black] line-length=120). The previous --line-length=88 disagreed
+        # with the codebase and reported 1864 files "would be reformatted"
+        # because long lines that legitimately fit within 120 exceeded the
+        # stricter 88. (#7496)
+        echo "Checking code formatting with black..."
+        black --check autobot-backend/ autobot-slm-backend/ autobot_shared/ --line-length=120
+
+        # Import sorting check — reads pyproject.toml for profile, src_paths, known_first_party (#2679)
+        echo "Checking import sorting with isort..."
+        isort --check-only --settings-path=. autobot-backend/ autobot-slm-backend/ autobot_shared/
+
+        # Linting (uses project .flake8 config — same as pre-commit)
+        echo "Running flake8 linter..."
+        flake8 --config=.flake8 autobot-backend/ autobot-slm-backend/ autobot_shared/
+
+    - name: Run security analysis
+      run: |
+        echo "🔒 Running security analysis..."
+
+        # Security vulnerability scan — fail on medium+ severity/confidence
+        bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ \
+          --severity-level medium --confidence-level medium \
+          -f json -o bandit-report.json
+        if [ -f bandit-report.json ]; then
+          echo "Security report generated"
+          python -m json.tool < bandit-report.json || true
+        fi
+
+    - name: Run unit tests with coverage gate
+      run: |
+        echo "Running unit tests with 70% coverage gate (#3285)..."
+        # Run all unit tests excluding slow/integration/distributed/performance markers.
+        # --cov-fail-under=70 enforces the minimum 70% coverage threshold.
+        python -m pytest \
+          -m "not integration and not slow and not distributed and not performance" \
+          --cov=autobot-backend \
+          --cov=autobot-slm-backend \
+          --cov=autobot_shared \
+          --cov-report=xml:coverage.xml \
+          --cov-report=term-missing \
+          --cov-fail-under=70 \
+          --tb=short \
+          -q
+
+    - name: Run integration tests
+      run: |
+        echo "🔄 Running integration tests..."
+        # Integration tests remain in shared directory (#734)
+        TEST_DIR="infrastructure/shared/tests/integration"
+        if [ -d "$TEST_DIR" ]; then
+          python -m pytest "$TEST_DIR" -v --tb=short --maxfail=5
+        else
+          echo "⚠️ No integration test directory found - skipping"
+        fi
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2  # v6
+      with:
+        files: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -rf .venv || true
+
+  frontend-tests:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v6.4.0
+      with:
+        node-version: '22'
+
+    - name: Install frontend dependencies
+      run: |
+        cd autobot-frontend
+        npm ci
+
+    - name: Run frontend linting
+      run: |
+        cd autobot-frontend
+        npm run lint
+
+    - name: Check i18n keys
+      run: |
+        cd autobot-frontend
+        npm run check:i18n
+
+    - name: Run frontend type checking
+      run: |
+        cd autobot-frontend
+        npx vue-tsc --noEmit -p tsconfig.app.json
+
+    - name: Build frontend
+      run: |
+        cd autobot-frontend
+        npm run build
+
+    - name: Run frontend unit tests with coverage gate
+      run: |
+        cd autobot-frontend
+        # test:coverage enforces 70% threshold via vitest.config.ts thresholds (#3285)
+        npm run test:coverage
+
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -rf autobot-frontend/node_modules autobot-frontend/dist || true
+
+  deployment-check:
+    runs-on: ubuntu-latest
+    needs: [changes, security-tests, frontend-tests]
+    if: |
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev_new_gui') &&
+      (needs.security-tests.result == 'success' || needs.security-tests.result == 'skipped') &&
+      (needs.frontend-tests.result == 'success' || needs.frontend-tests.result == 'skipped')
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        python -m pip install -r requirements-ci.txt --prefer-binary
+
+    - name: Create necessary directories and config files
+      run: |
+        mkdir -p data logs static config
+        touch data/.gitkeep logs/.gitkeep static/.gitkeep
+
+        # Create minimal config.yaml for CI testing
+        cat > config/config.yaml << 'EOF'
+        # CI Testing Configuration
+        llm:
+          orchestrator_llm: "mock"
+          task_llm: "mock"
+          ollama:
+            model: "mock-model"
+            models: {}
+          unified:
+            embedding:
+              providers:
+                ollama:
+                  selected_model: "mock-embed"
+
+        deployment:
+          mode: "local"
+
+        data:
+          reliability_stats_file: "data/reliability_stats.json"
+
+        diagnostics:
+          enabled: false
+          use_llm_for_analysis: false
+          use_web_search_for_analysis: false
+          auto_apply_fixes: false
+
+        redis:
+          host: "localhost"
+          port: 6379
+          db: 0
+        EOF
+
+    - name: Test production configuration
+      run: |
+        echo "🚀 Testing production readiness..."
+
+        # Check that all required files exist
+        echo "Checking required files..."
+        test -f main.py || (echo "❌ main.py missing" && exit 1)
+        test -f requirements.txt || (echo "❌ requirements.txt missing" && exit 1)
+        echo "✅ All required files present"
+
+        # Test configuration loading (PYTHONPATH includes backend for imports)
+        PYTHONPATH="autobot-backend:autobot_shared:$PYTHONPATH" \
+          python3 -c 'from config import config; print("Configuration system working")'
+
+        # Test core imports
+        PYTHONPATH="autobot-backend:autobot_shared:$PYTHONPATH" \
+          python3 -c 'from security.enhanced_security_layer import EnhancedSecurityLayer; from security.secure_command_executor import SecureCommandExecutor; from app_factory import create_app; print("Core imports working")'
+
+    - name: Generate deployment artifact
+      run: |
+        echo "📦 Generating deployment summary..."
+        echo "# AutoBot Deployment Summary" > DEPLOYMENT_SUMMARY.md
+        echo "Generated at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> DEPLOYMENT_SUMMARY.md
+        echo "Commit: $GITHUB_SHA" >> DEPLOYMENT_SUMMARY.md
+        echo "Branch: $GITHUB_REF_NAME" >> DEPLOYMENT_SUMMARY.md
+        echo "" >> DEPLOYMENT_SUMMARY.md
+        echo "## Test Results" >> DEPLOYMENT_SUMMARY.md
+        echo "- ✅ Security tests passed" >> DEPLOYMENT_SUMMARY.md
+        echo "- ✅ Integration tests passed" >> DEPLOYMENT_SUMMARY.md
+        echo "- ✅ Frontend build successful" >> DEPLOYMENT_SUMMARY.md
+        echo "" >> DEPLOYMENT_SUMMARY.md
+        echo "## Security Features" >> DEPLOYMENT_SUMMARY.md
+        echo "- Command execution sandboxing ✅" >> DEPLOYMENT_SUMMARY.md
+        echo "- Risk assessment system ✅" >> DEPLOYMENT_SUMMARY.md
+        echo "- Audit logging ✅" >> DEPLOYMENT_SUMMARY.md
+        echo "- Role-based access control ✅" >> DEPLOYMENT_SUMMARY.md
+        echo "- API security endpoints ✅" >> DEPLOYMENT_SUMMARY.md
+
+        cat DEPLOYMENT_SUMMARY.md
+
+    - name: Upload deployment artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: deployment-summary
+        path: DEPLOYMENT_SUMMARY.md
+
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -rf .venv || true
+
+  notify:
+    runs-on: ubuntu-latest
+    needs: [changes, security-tests, frontend-tests, deployment-check]
+    if: always()
+
+    steps:
+    - name: Notify results
+      run: |
+        echo "🎯 CI/CD Pipeline Results:"
+        echo "=========================="
+
+        if [ "${{ needs.security-tests.result }}" == "success" ]; then
+          echo "✅ Security tests: PASSED"
+        else
+          echo "❌ Security tests: FAILED"
+        fi
+
+        if [ "${{ needs.frontend-tests.result }}" == "success" ]; then
+          echo "✅ Frontend tests: PASSED"
+        else
+          echo "❌ Frontend tests: FAILED"
+        fi
+
+        if [ "${{ needs.deployment-check.result }}" == "success" ]; then
+          echo "✅ Deployment check: PASSED"
+        else
+          echo "❌ Deployment check: FAILED"
+        fi
+
+        echo ""
+        if [ "${{ needs.security-tests.result }}" == "success" ] &&
+           [ "${{ needs.frontend-tests.result }}" == "success" ] &&
+           [ "${{ needs.deployment-check.result }}" == "success" ]; then
+          echo "🎉 All checks passed! AutoBot is ready for deployment."
+        else
+          echo "⚠️ Some checks failed. Review the logs above."
+        fi

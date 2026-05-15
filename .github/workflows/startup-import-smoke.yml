@@ -1,0 +1,72 @@
+# GitHub Actions workflow — backend startup-import smoke test (#6789 / #6540)
+#
+# Catches the recurring #6042 migration-regression family at PR time:
+#   #6536 BaseModel orphan imports, #6569 Metadata orphan, #6604 duplicate-class
+#   collisions, #6609 required-field-no-default, #6613 stale singleton attr.
+#
+# Fails the PR if any new backend module loses the ability to fresh-import.
+# Known-broken modules tracked in KNOWN_BROKEN_AT_TEST_INTRODUCTION inside
+# tests/test_startup_imports.py with issue refs.
+
+name: Backend Startup Import Smoke
+
+on:
+  push:
+    branches: [main, Dev_new_gui, develop]
+    paths: &smoke_paths
+      - 'autobot-backend/**/*.py'
+      - 'autobot_shared/**/*.py'
+      - 'autobot-slm-backend/**/*.py'
+      - '**/requirements*.txt'
+      - 'requirements-ci/**'
+      - '.github/workflows/startup-import-smoke.yml'
+  pull_request:
+    branches: [main, Dev_new_gui, develop]
+    paths: *smoke_paths
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  startup-import-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install backend dependencies
+        # #6947: pipefail required so pip install failures surface (was masked by `| tail -5`).
+        # #7018: switched from `autobot-backend/requirements.txt` to `requirements-ci.txt`
+        # because the former pulls torch>=2.11.0 + transitive vllm 0.19.x (requires torch==2.10.0),
+        # an unsatisfiable resolver state. `requirements-ci.txt` is purpose-built to exclude
+        # vllm and other GPU-dependent packages — see `security.yml` which has used it for years.
+        # autobot_shared is installed separately (editable, from repo root, no CWD trickery).
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip >/dev/null
+          python -m pip install pytest >/dev/null
+          python -m pip install -r requirements-ci.txt --prefer-binary
+          python -m pip install -e autobot_shared
+
+      - name: Run startup-import smoke test
+        run: |
+          python -m pytest autobot-backend/tests/test_startup_imports.py -q --tb=line || {
+            echo ""
+            echo "Backend startup-import smoke test FAILED."
+            echo ""
+            echo "If known-broken, add to KNOWN_BROKEN_AT_TEST_INTRODUCTION in"
+            echo "autobot-backend/tests/test_startup_imports.py with issue ref."
+            exit 1
+          }
+

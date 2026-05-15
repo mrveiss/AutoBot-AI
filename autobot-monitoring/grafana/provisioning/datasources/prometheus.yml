@@ -1,0 +1,21 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Grafana auto-provisioned Prometheus datasource for docker-compose deployments.
+# Grafana picks this up on startup — no manual UI configuration required.
+---
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: autobot-prometheus
+    url: http://autobot-prometheus:9090
+    access: proxy
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: "15s"

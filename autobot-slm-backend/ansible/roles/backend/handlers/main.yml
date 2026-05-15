@@ -1,0 +1,32 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: restart backend
+  ansible.builtin.systemd:
+    name: autobot-backend
+    state: restarted
+
+- name: restart celery
+  ansible.builtin.systemd:
+    name: autobot-celery
+    state: restarted
+
+- name: restart celery beat
+  ansible.builtin.systemd:
+    name: autobot-celery-beat
+    state: restarted
+
+- name: reload nginx backend
+  ansible.builtin.systemd:
+    name: nginx
+    state: reloaded
+
+- name: restart nginx backend
+  ansible.builtin.systemd:
+    name: nginx
+    state: reloaded

@@ -1,0 +1,47 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Deploy DNS configuration for fleet
+#
+# Usage:
+#   ansible-playbook deploy-dns.yml                    # Full DNS setup
+#   ansible-playbook deploy-dns.yml --tags hosts       # Update /etc/hosts only
+#   ansible-playbook deploy-dns.yml --tags test        # Test DNS only
+#   ansible-playbook deploy-dns.yml --tags dnsmasq     # DNS cache setup only
+#
+# Available tags:
+#   - mappings: Generate DNS mappings
+#   - hostname: Configure hostnames
+#   - hosts: Manage /etc/hosts
+#   - dnsmasq: Setup dnsmasq cache
+#   - systemd-resolved: Configure systemd-resolved
+#   - test: Test DNS resolution
+#   - scripts: Deploy management scripts
+
+- name: Deploy DNS configuration
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  roles:
+    - role: dns
+      tags:
+        - dns
+
+  post_tasks:
+    - name: Display DNS deployment summary
+      debug:
+        msg:
+          - "DNS configuration deployed successfully"
+          - "Node: {{ inventory_hostname }}"
+          - "Domain: {{ dns_domain }}"
+          - "DNS Cache: {{ 'dnsmasq' if install_dnsmasq else ('systemd-resolved' if use_systemd_resolved else 'None') }}"
+          - "Fleet entries: {{ fleet_host_entries | length }}"
+          - ""
+          - "Management scripts:"
+          - "  Test DNS: /opt/autobot/scripts/dns/test-dns-resolution.sh"
+          - "  Show entries: /opt/autobot/scripts/dns/show-dns-entries.sh"
+          - "  Refresh DNS: /opt/autobot/scripts/dns/refresh-dns.sh"
+      tags:
+        - always

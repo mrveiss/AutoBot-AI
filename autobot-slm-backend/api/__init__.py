@@ -1,0 +1,92 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+SLM API Package
+
+FastAPI routers for the SLM backend.
+"""
+
+from .agents import router as agents_router
+from .api_keys import router as api_keys_router
+from .auth import router as auth_router
+from .autobot_teams import router as autobot_teams_router
+from .autobot_users import router as autobot_users_router
+from .blue_green import router as blue_green_router
+from .browser import router as browser_router
+from .code_sync import router as code_sync_router
+from .config import node_config_router
+from .config import router as config_router
+from .deployments import router as deployments_router
+from .discovery import router as discovery_router
+from .errors import router as errors_router
+from .events import router as events_router
+from .external_agents import router as external_agents_router
+from .health import router as health_router
+from .infrastructure import router as infrastructure_router
+from .llm_config import router as llm_config_router
+from .maintenance import router as maintenance_router
+from .mfa import router as mfa_router
+from .monitoring import router as monitoring_router
+from .nodes import router as nodes_router
+from .nodes_execution import router as nodes_execution_router
+from .npu import router as npu_router
+from .orchestration import router as orchestration_router
+from .secrets import router as secrets_router
+from .security import router as security_router
+from .services import fleet_router as fleet_services_router
+from .services import router as services_router
+from .settings import router as settings_router
+from .setup_wizard import router as setup_wizard_router
+from .slm_users import router as slm_users_router
+from .sso import router as sso_router
+from .sso_auth import router as sso_auth_router
+from .stateful import router as stateful_router
+from .tls import node_tls_router, tls_router
+from .updates import router as updates_router
+from .vnc import node_vnc_router, vnc_router
+from .websocket import router as websocket_router
+
+__all__ = [
+    "agents_router",
+    "browser_router",
+    "api_keys_router",
+    "auth_router",
+    "nodes_router",
+    "nodes_execution_router",
+    "deployments_router",
+    "settings_router",
+    "errors_router",
+    "events_router",
+    "external_agents_router",
+    "health_router",
+    "llm_config_router",
+    "stateful_router",
+    "updates_router",
+    "websocket_router",
+    "services_router",
+    "fleet_services_router",
+    "maintenance_router",
+    "mfa_router",
+    "monitoring_router",
+    "blue_green_router",
+    "node_vnc_router",
+    "vnc_router",
+    "node_tls_router",
+    "tls_router",
+    "security_router",
+    "code_sync_router",
+    "orchestration_router",
+    "config_router",
+    "node_config_router",
+    "discovery_router",
+    "npu_router",
+    "infrastructure_router",
+    "slm_users_router",
+    "autobot_users_router",
+    "autobot_teams_router",
+    "sso_router",
+    "secrets_router",
+    "setup_wizard_router",
+    "sso_auth_router",
+]

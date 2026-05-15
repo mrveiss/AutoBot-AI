@@ -1,0 +1,45 @@
+hardware_acceleration:
+  agent_device_assignments:
+    analysis: gpu
+    chat: gpu
+    code: gpu
+    knowledge_retrieval: gpu
+    orchestrator: gpu
+    planning: gpu
+    rag: gpu
+    research: gpu
+    search: gpu
+    system_commands: cpu
+  gpu_optimization:
+    device_id: 0
+    enabled: true
+    fp16_optimization: true
+    memory_limit_mb: 6000
+    parallel_requests: 2
+  priority:
+  - cuda
+  - openvino
+  - cpu
+llm_config:
+  default_provider: ollama
+  active_provider: ollama
+  fallback_chain:
+    - ollama
+    - openai
+    - vllm
+    - transformers
+    - mock
+  fallback_enabled: true
+  ollama:
+    context_length: 4096
+    gpu_enabled: true
+    gpu_layers: 999
+    host: http://127.0.0.1:11434
+    parallel_requests: 2
+
+# Ollama endpoint for chat workflow manager
+# Matches the key read by _get_ollama_endpoint() in chat_workflow/llm_handler.py
+backend:
+  llm:
+    ollama:
+      endpoint: http://127.0.0.1:11434

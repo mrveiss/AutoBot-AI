@@ -1,0 +1,557 @@
+<script setup lang="ts">
+// AutoBot - AI-Powered Automation Platform
+// Copyright (c) 2025 mrveiss
+// Author: mrveiss
+
+/**
+ * GeneralSettings - General system configuration
+ *
+ * Handles system settings: timezone (full IANA list), NTP servers, display preferences.
+ * NTP sync triggers Ansible time_sync role across all fleet nodes.
+ */
+
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { useDarkMode } from '@/composables/useAccessibility'
+
+const darkMode = useDarkMode()
+
+interface Setting {
+  key: string
+  value: string | null
+  value_type: string
+  description: string | null
+}
+
+interface TimeConfig {
+  timezone: string
+  ntp_servers: string[]
+}
+
+const router = useRouter()
+const authStore = useAuthStore()
+const loading = ref(false)
+const saving = ref(false)
+const syncing = ref(false)
+const error = ref<string | null>(null)
+const success = ref<string | null>(null)
+const syncResult = ref<{ success: boolean; message: string; node_count: number; output?: string } | null>(null)
+
+const settings = ref({
+  system_name: 'AutoBot Production',
+  default_timezone: 'UTC',
+  dark_mode: true,
+  auto_refresh: true,
+  refresh_interval: '30',
+})
+
+// Issue #3305: Apply dark mode immediately when the toggle changes
+watch(() => settings.value.dark_mode, (enabled: boolean) => {
+  darkMode.set(Boolean(enabled))
+})
+
+const timeConfig = ref<TimeConfig>({
+  timezone: 'UTC',
+  ntp_servers: ['0.pool.ntp.org', '1.pool.ntp.org', '2.pool.ntp.org', '3.pool.ntp.org'],
+})
+
+const ntpServersText = computed({
+  get: () => timeConfig.value.ntp_servers.join('\n'),
+  set: (val: string) => {
+    timeConfig.value.ntp_servers = val
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  },
+})
+
+// Full IANA timezone list from browser Intl API, with UTC first
+const allTimezones = computed<string[]>(() => {
+  try {
+    const zones: string[] = (Intl as unknown as { supportedValuesOf: (key: string) => string[] }).supportedValuesOf('timeZone')
+    return ['UTC', ...zones.filter((z) => z !== 'UTC')]
+  } catch {
+    // Fallback for older browsers
+    return [
+      'UTC',
+      'America/New_York',
+      'America/Chicago',
+      'America/Denver',
+      'America/Los_Angeles',
+      'America/Anchorage',
+      'America/Honolulu',
+      'America/Sao_Paulo',
+      'America/Toronto',
+      'America/Vancouver',
+      'America/Mexico_City',
+      'America/Buenos_Aires',
+      'America/Bogota',
+      'America/Lima',
+      'America/Santiago',
+      'Europe/London',
+      'Europe/Paris',
+      'Europe/Berlin',
+      'Europe/Madrid',
+      'Europe/Rome',
+      'Europe/Amsterdam',
+      'Europe/Brussels',
+      'Europe/Vienna',
+      'Europe/Zurich',
+      'Europe/Stockholm',
+      'Europe/Oslo',
+      'Europe/Copenhagen',
+      'Europe/Helsinki',
+      'Europe/Warsaw',
+      'Europe/Prague',
+      'Europe/Budapest',
+      'Europe/Bucharest',
+      'Europe/Sofia',
+      'Europe/Athens',
+      'Europe/Istanbul',
+      'Europe/Kiev',
+      'Europe/Moscow',
+      'Europe/Riga',
+      'Europe/Tallinn',
+      'Europe/Vilnius',
+      'Africa/Cairo',
+      'Africa/Lagos',
+      'Africa/Nairobi',
+      'Africa/Johannesburg',
+      'Africa/Casablanca',
+      'Asia/Dubai',
+      'Asia/Karachi',
+      'Asia/Kolkata',
+      'Asia/Dhaka',
+      'Asia/Bangkok',
+      'Asia/Jakarta',
+      'Asia/Singapore',
+      'Asia/Shanghai',
+      'Asia/Hong_Kong',
+      'Asia/Taipei',
+      'Asia/Seoul',
+      'Asia/Tokyo',
+      'Asia/Almaty',
+      'Asia/Tashkent',
+      'Asia/Tehran',
+      'Asia/Baghdad',
+      'Asia/Beirut',
+      'Asia/Riyadh',
+      'Asia/Kabul',
+      'Asia/Kathmandu',
+      'Asia/Colombo',
+      'Asia/Rangoon',
+      'Asia/Kuala_Lumpur',
+      'Asia/Manila',
+      'Asia/Vladivostok',
+      'Asia/Magadan',
+      'Asia/Kamchatka',
+      'Pacific/Auckland',
+      'Pacific/Fiji',
+      'Pacific/Guam',
+      'Pacific/Honolulu',
+      'Pacific/Midway',
+      'Pacific/Tongatapu',
+      'Australia/Sydney',
+      'Australia/Melbourne',
+      'Australia/Brisbane',
+      'Australia/Adelaide',
+      'Australia/Darwin',
+      'Australia/Perth',
+    ]
+  }
+})
+
+async function fetchSettings(): Promise<void> {
+  loading.value = true
+  error.value = null
+
+  try {
+    const [settingsRes, timeRes] = await Promise.all([
+      fetch(`${authStore.getApiUrl()}/api/settings`, {
+        headers: authStore.getAuthHeaders(),
+      }),
+      fetch(`${authStore.getApiUrl()}/api/settings/time/config`, {
+        headers: authStore.getAuthHeaders(),
+      }),
+    ])
+
+    if (settingsRes.ok) {
+      const data: Setting[] = await settingsRes.json()
+      data.forEach((s) => {
+        if (s.value !== null && s.key in settings.value) {
+          (settings.value as Record<string, string | number | boolean>)[s.key] = s.value
+        }
+      })
+    }
+
+    if (timeRes.ok) {
+      const tc: TimeConfig = await timeRes.json()
+      timeConfig.value = tc
+      settings.value.default_timezone = tc.timezone
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to load settings'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function saveAllSettings(): Promise<void> {
+  saving.value = true
+  error.value = null
+  success.value = null
+
+  try {
+    // Save general settings (upsert: PUT if exists, POST if not)
+    for (const [key, value] of Object.entries(settings.value)) {
+      const putRes = await fetch(`${authStore.getApiUrl()}/api/settings/${key}`, {
+        method: 'PUT',
+        headers: {
+          ...authStore.getAuthHeaders(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ value: String(value) }),
+      })
+      if (putRes.status === 404) {
+        await fetch(`${authStore.getApiUrl()}/api/settings/${key}`, {
+          method: 'POST',
+          headers: {
+            ...authStore.getAuthHeaders(),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ value: String(value) }),
+        })
+      }
+    }
+
+    // Save time config (timezone + NTP)
+    timeConfig.value.timezone = settings.value.default_timezone
+    const timeRes = await fetch(`${authStore.getApiUrl()}/api/settings/time/config`, {
+      method: 'PUT',
+      headers: {
+        ...authStore.getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(timeConfig.value),
+    })
+
+    if (!timeRes.ok) {
+      throw new Error('Failed to save time configuration')
+    }
+
+    success.value = 'Settings saved successfully'
+    setTimeout(() => {
+      success.value = null
+    }, 3000)
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to save settings'
+  } finally {
+    saving.value = false
+  }
+}
+
+async function syncTimeToNodes(): Promise<void> {
+  syncing.value = true
+  syncResult.value = null
+  error.value = null
+
+  try {
+    const res = await fetch(`${authStore.getApiUrl()}/api/settings/time/sync`, {
+      method: 'POST',
+      headers: {
+        ...authStore.getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ node_ids: null }),
+    })
+
+    if (!res.ok) {
+      const detail = await res.text()
+      throw new Error(detail || 'Time sync request failed')
+    }
+
+    syncResult.value = await res.json()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Time sync failed'
+  } finally {
+    syncing.value = false
+  }
+}
+
+// Setup Wizard on-demand access
+const wizardStatus = ref<{ completed: boolean; current_step: string } | null>(null)
+const wizardLoading = ref(false)
+const wizardResetting = ref(false)
+
+async function fetchWizardStatus(): Promise<void> {
+  wizardLoading.value = true
+  try {
+    const res = await fetch(`${authStore.getApiUrl()}/api/setup/status`, {
+      headers: authStore.getAuthHeaders(),
+    })
+    if (res.ok) {
+      wizardStatus.value = await res.json()
+    }
+  } catch {
+    // Non-critical — wizard card just won't show status
+  } finally {
+    wizardLoading.value = false
+  }
+}
+
+function launchWizard(): void {
+  router.push({ name: 'setup' })
+}
+
+async function resetWizard(): Promise<void> {
+  wizardResetting.value = true
+  try {
+    const res = await fetch(`${authStore.getApiUrl()}/api/setup/reset`, {
+      method: 'POST',
+      headers: authStore.getAuthHeaders(),
+    })
+    if (res.ok) {
+      await fetchWizardStatus()
+      success.value = 'Setup wizard has been reset'
+      setTimeout(() => { success.value = null }, 3000)
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to reset wizard'
+  } finally {
+    wizardResetting.value = false
+  }
+}
+
+onMounted(() => {
+  fetchSettings()
+  fetchWizardStatus()
+})
+</script>
+
+<template>
+  <div class="p-6 space-y-6">
+    <!-- Loading -->
+    <div v-if="loading" class="flex items-center justify-center py-8">
+      <svg class="animate-spin w-8 h-8 text-primary-600" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+      </svg>
+    </div>
+
+    <template v-else>
+      <!-- Messages -->
+      <div v-if="error" class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+        {{ error }}
+      </div>
+      <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+        {{ success }}
+      </div>
+
+      <!-- General Settings Card -->
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+        <h2 class="text-lg font-semibold mb-6">General Settings</h2>
+
+        <div class="space-y-6">
+          <!-- System Name -->
+          <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+            <div>
+              <label class="block text-sm font-medium text-gray-900">System Name</label>
+              <p class="text-xs text-gray-500 mt-1">Display name for this installation</p>
+            </div>
+            <input
+              type="text"
+              v-model="settings.system_name"
+              class="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+          </div>
+
+          <!-- Default Timezone — full IANA list -->
+          <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+            <div>
+              <label class="block text-sm font-medium text-gray-900">Default Timezone</label>
+              <p class="text-xs text-gray-500 mt-1">
+                Timezone for displaying dates and times ({{ allTimezones.length }} zones available)
+              </p>
+            </div>
+            <select
+              v-model="settings.default_timezone"
+              class="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            >
+              <option v-for="tz in allTimezones" :key="tz" :value="tz">{{ tz }}</option>
+            </select>
+          </div>
+
+          <!-- Dark Mode -->
+          <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+            <div>
+              <label class="block text-sm font-medium text-gray-900">Dark Mode</label>
+              <p class="text-xs text-gray-500 mt-1">Use dark theme for the interface</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" v-model="settings.dark_mode" class="sr-only peer" />
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+            </label>
+          </div>
+
+          <!-- Auto Refresh -->
+          <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+            <div>
+              <label class="block text-sm font-medium text-gray-900">Auto Refresh</label>
+              <p class="text-xs text-gray-500 mt-1">Automatically refresh data on dashboards</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" v-model="settings.auto_refresh" class="sr-only peer" />
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+            </label>
+          </div>
+
+          <!-- Refresh Interval -->
+          <div class="flex items-center justify-between">
+            <div>
+              <label class="block text-sm font-medium text-gray-900">Refresh Interval</label>
+              <p class="text-xs text-gray-500 mt-1">How often to refresh data (in seconds)</p>
+            </div>
+            <select
+              v-model="settings.refresh_interval"
+              :disabled="!settings.auto_refresh"
+              class="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:text-gray-500"
+            >
+              <option value="10">10 seconds</option>
+              <option value="30">30 seconds</option>
+              <option value="60">1 minute</option>
+              <option value="120">2 minutes</option>
+              <option value="300">5 minutes</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="mt-8 pt-6 border-t border-gray-200 flex justify-end">
+          <button
+            @click="saveAllSettings"
+            class="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+            :disabled="saving"
+          >
+            <svg v-if="saving" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            {{ saving ? 'Saving...' : 'Save Changes' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- NTP / Time Sync Card -->
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-lg font-semibold">Fleet Time Synchronization</h2>
+            <p class="text-sm text-gray-500 mt-1">
+              Configure NTP servers and push time settings to all fleet nodes via Ansible.
+            </p>
+          </div>
+          <button
+            @click="syncTimeToNodes"
+            :disabled="syncing"
+            class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            <svg v-if="syncing" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {{ syncing ? 'Syncing…' : 'Sync All Nodes' }}
+          </button>
+        </div>
+
+        <!-- NTP Servers textarea -->
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-900 mb-1">
+            NTP Servers
+            <span class="text-gray-400 font-normal">(one per line)</span>
+          </label>
+          <textarea
+            v-model="ntpServersText"
+            rows="4"
+            placeholder="0.pool.ntp.org&#10;1.pool.ntp.org&#10;time.google.com"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+          />
+          <p class="text-xs text-gray-500 mt-1">
+            Servers are tried in order. Changes are applied on next "Save Changes" or "Sync All Nodes".
+          </p>
+        </div>
+
+        <!-- Sync result -->
+        <div
+          v-if="syncResult"
+          :class="syncResult.success
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : 'bg-red-50 border-red-200 text-red-800'"
+          class="border rounded-lg p-4 text-sm"
+        >
+          <div class="font-medium mb-1">
+            {{ syncResult.success ? '✅ Sync complete' : '❌ Sync failed' }}
+            — {{ syncResult.node_count }} node{{ syncResult.node_count !== 1 ? 's' : '' }}
+          </div>
+          <div class="text-xs opacity-80">{{ syncResult.message }}</div>
+          <details v-if="syncResult.output" class="mt-2">
+            <summary class="cursor-pointer text-xs font-medium">Ansible output</summary>
+            <pre class="mt-2 text-xs whitespace-pre-wrap font-mono opacity-80">{{ syncResult.output }}</pre>
+          </details>
+        </div>
+      </div>
+      <!-- Setup Wizard Card -->
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg font-semibold">Setup Wizard</h2>
+            <p class="text-sm text-gray-500 mt-1">
+              Run the guided fleet configuration wizard to add nodes, enroll agents, assign roles, and provision your fleet.
+            </p>
+          </div>
+          <span
+            v-if="wizardStatus"
+            :class="wizardStatus.completed
+              ? 'bg-green-100 text-green-800'
+              : 'bg-yellow-100 text-yellow-800'"
+            class="px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap"
+          >
+            {{ wizardStatus.completed ? 'Completed' : `In Progress: ${wizardStatus.current_step}` }}
+          </span>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button
+            @click="launchWizard"
+            class="px-5 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            {{ wizardStatus?.completed ? 'View Wizard' : 'Launch Wizard' }}
+          </button>
+          <button
+            @click="resetWizard"
+            :disabled="wizardResetting"
+            class="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            <svg v-if="wizardResetting" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {{ wizardResetting ? 'Resetting...' : 'Reset Wizard' }}
+          </button>
+        </div>
+      </div>
+    </template>
+  </div>
+</template>

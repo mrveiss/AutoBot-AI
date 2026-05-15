@@ -1,0 +1,80 @@
+# Git
+.git
+.gitignore
+.worktrees
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.eggs
+.mypy_cache
+.pytest_cache
+.ruff_cache
+*.egg
+
+# Virtual environments
+venv
+.venv
+*.venv
+
+# Node
+autobot-frontend/node_modules
+autobot-slm-frontend/node_modules
+node_modules
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CI/CD
+.github
+pipeline-scripts
+
+# Documentation (not needed in containers)
+docs
+*.md
+!autobot-frontend/README.md
+
+# Tests
+**/tests
+**/*_test.py
+**/*.test.ts
+**/*.spec.ts
+**/cypress
+**/playwright.config.ts
+**/vitest.config.ts
+**/*.e2e_test.py
+**/*.performance_test.py
+**/*.integration_test.py
+
+# Development files
+.env
+.env.*
+!.env.example
+*.backup
+*.log
+*.bak
+
+# Build artifacts
+autobot-frontend/dist
+autobot-slm-frontend/dist
+
+# Data (mounted as volumes)
+data
+logs
+reports
+
+# Infrastructure (Ansible, not needed in Docker builds)
+autobot-infrastructure/shared/analysis
+autobot-infrastructure/shared/mcp
+
+# Claude Code
+.claude

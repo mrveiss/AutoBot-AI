@@ -1,0 +1,156 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# GitHub Actions workflow for SSOT configuration compliance
+# Issue: #642 - Centralize Environment Variables with SSOT Config Validation
+#
+# Runs hardcoded value detection with SSOT validation on PRs
+# Reports compliance percentage and highlights violations
+# SSOT violations are blocking — merges require compliance (Issue #2874)
+
+name: SSOT Coverage
+
+on:
+  push:
+    branches: [ main, Dev_new_gui, develop ]
+  pull_request:
+    branches: [ main, Dev_new_gui, develop ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  ssot-coverage:
+    name: SSOT Configuration Compliance
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Run SSOT-aware hardcoded value detection
+      id: ssot_check
+      shell: bash
+      run: |
+        set -euo pipefail
+        chmod +x ./pipeline-scripts/detect-hardcoded-values.sh
+        # Run with JSON output for parsing
+        set +e  # Don't exit on error
+        JSON_OUTPUT=$(./pipeline-scripts/detect-hardcoded-values.sh --json 2>/dev/null)
+        EXIT_CODE=$?
+        set -e
+
+        # Parse JSON output
+        TOTAL_VIOLATIONS=$(echo "$JSON_OUTPUT" | grep -o '"total_violations": [0-9]*' | grep -o '[0-9]*' || echo "0")
+        SSOT_VIOLATIONS=$(echo "$JSON_OUTPUT" | grep -o '"ssot_violations": [0-9]*' | grep -o '[0-9]*' || echo "0")
+        OTHER_VIOLATIONS=$(echo "$JSON_OUTPUT" | grep -o '"other_violations": [0-9]*' | grep -o '[0-9]*' || echo "0")
+        STATUS=$(echo "$JSON_OUTPUT" | grep -o '"status": "[^"]*"' | grep -o '"[^"]*"$' | tr -d '"' || echo "unknown")
+
+        # Set outputs for subsequent steps
+        echo "total_violations=$TOTAL_VIOLATIONS" >> $GITHUB_OUTPUT
+        echo "ssot_violations=$SSOT_VIOLATIONS" >> $GITHUB_OUTPUT
+        echo "other_violations=$OTHER_VIOLATIONS" >> $GITHUB_OUTPUT
+        echo "status=$STATUS" >> $GITHUB_OUTPUT
+        echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+
+        # Output summary
+        echo "::group::SSOT Coverage Summary"
+        echo "Total violations: $TOTAL_VIOLATIONS"
+        echo "SSOT violations (have config equivalent): $SSOT_VIOLATIONS"
+        echo "Other violations: $OTHER_VIOLATIONS"
+        echo "Status: $STATUS"
+        echo "::endgroup::"
+
+    - name: Generate detailed report
+      if: steps.ssot_check.outputs.total_violations != '0'
+      run: |
+        echo "::group::Detailed SSOT Compliance Report"
+        ./pipeline-scripts/detect-hardcoded-values.sh --report 2>/dev/null || true
+        echo "::endgroup::"
+
+    - name: Comment on PR with SSOT status
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v9
+      with:
+        script: |
+          const totalViolations = '${{ steps.ssot_check.outputs.total_violations }}';
+          const ssotViolations = '${{ steps.ssot_check.outputs.ssot_violations }}';
+          const otherViolations = '${{ steps.ssot_check.outputs.other_violations }}';
+          const status = '${{ steps.ssot_check.outputs.status }}';
+
+          let emoji = status === 'pass' ? '✅' : '⚠️';
+          let statusText = status === 'pass' ? 'Passing' : 'Violations Found';
+
+          let body = `## ${emoji} SSOT Configuration Compliance: ${statusText}\n\n`;
+
+          if (status === 'pass') {
+            body += '🎉 No hardcoded values detected that have SSOT config equivalents!\n\n';
+          } else {
+            body += `| Metric | Count |\n`;
+            body += `|--------|-------|\n`;
+            body += `| **Total Violations** | ${totalViolations} |\n`;
+            body += `| SSOT Violations (high priority) | ${ssotViolations} |\n`;
+            body += `| Other Violations | ${otherViolations} |\n\n`;
+
+            if (parseInt(ssotViolations) > 0) {
+              body += `### ⚠️ ${ssotViolations} values have SSOT config equivalents!\n\n`;
+              body += `These should be replaced with SSOT config imports:\n\n`;
+              body += `**Python:**\n`;
+              body += '```python\n';
+              body += 'from src.config.ssot_config import config\n';
+              body += '# Use: config.vm.main, config.port.backend, config.backend_url\n';
+              body += '```\n\n';
+              body += `**TypeScript:**\n`;
+              body += '```typescript\n';
+              body += "import config from '@/config/ssot-config'\n";
+              body += '// Use: config.vm.main, config.port.backend, config.backendUrl\n';
+              body += '```\n\n';
+            }
+
+            body += `📖 See [SSOT_CONFIG_GUIDE.md](docs/developer/SSOT_CONFIG_GUIDE.md) for documentation.\n`;
+          }
+
+          // Find existing comment
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+
+          const botComment = comments.find(comment =>
+            comment.user.type === 'Bot' && comment.body.includes('SSOT Configuration Compliance')
+          );
+
+          if (botComment) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: body
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+          }
+
+    - name: Set job status
+      run: |
+        SSOT_VIOLATIONS="${{ steps.ssot_check.outputs.ssot_violations }}"
+
+        # Fail the job if there are SSOT violations (Issue #2874)
+        if [ "$SSOT_VIOLATIONS" -gt "0" ]; then
+          echo "::error::Found $SSOT_VIOLATIONS hardcoded values that have SSOT config equivalents"
+          echo "::error::Run './pipeline-scripts/detect-hardcoded-values.sh --report' locally for details"
+          exit 1
+        fi

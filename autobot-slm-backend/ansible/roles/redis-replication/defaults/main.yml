@@ -1,0 +1,32 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Redis Replication Configuration Defaults
+# Issue #726 Phase 4: Redis replication orchestration
+
+# Replication mode: 'replica' or 'primary'
+redis_replication_mode: "primary"
+
+# Master configuration (for replicas)
+redis_master_host: ""
+redis_master_port: 6379
+redis_master_auth: ""
+
+# Replica configuration
+redis_replica_read_only: true
+redis_replica_priority: 100
+redis_replica_serve_stale_data: true
+redis_repl_diskless_sync: false
+redis_repl_diskless_sync_delay: 5
+
+# Replication monitoring
+redis_repl_timeout: 60
+redis_repl_ping_replica_period: 10
+redis_min_replicas_to_write: 0
+redis_min_replicas_max_lag: 10
+
+# Connection settings
+redis_port: 6379
+redis_password: ""
+redis_config_file: "/etc/redis/redis.conf"

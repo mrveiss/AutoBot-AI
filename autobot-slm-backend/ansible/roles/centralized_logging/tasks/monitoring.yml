@@ -1,0 +1,33 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Configure logging monitoring and health checks
+
+- name: Create log monitoring script
+  template:
+    src: monitor-logs.sh.j2
+    dest: /usr/local/bin/monitor-autobot-logs
+    mode: '0755'
+
+- name: Create systemd timer for log monitoring
+  template:
+    src: log-monitor.timer.j2
+    dest: /etc/systemd/system/autobot-log-monitor.timer
+    mode: '0644'
+  when: enable_alerting
+
+- name: Create systemd service for log monitoring
+  template:
+    src: log-monitor.service.j2
+    dest: /etc/systemd/system/autobot-log-monitor.service
+    mode: '0644'
+  when: enable_alerting
+
+- name: Enable log monitoring timer
+  systemd:
+    name: autobot-log-monitor.timer
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  when: enable_alerting

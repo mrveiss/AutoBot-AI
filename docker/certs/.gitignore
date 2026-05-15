@@ -1,0 +1,5 @@
+# Generated TLS certificates — do not commit
+*.crt
+*.key
+*.pem
+!.gitignore

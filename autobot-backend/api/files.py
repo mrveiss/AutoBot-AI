@@ -1,0 +1,1313 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Secure File Management API
+
+This module provides secure file management endpoints with proper sandboxing,
+path traversal protection, and authentication/authorization.
+
+Issue #718: Uses dedicated thread pool for file I/O to prevent blocking
+when the main asyncio thread pool is saturated by indexing operations.
+"""
+
+import asyncio
+import logging
+import mimetypes
+import shutil
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+import aiofiles
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
+from fastapi.security import HTTPBearer
+
+from api.schemas_system import (
+    AdminFileListResponse,
+    AdminFileReadResponse,
+    DirectoryCreateResponse,
+    DirectoryListing,
+    DirectoryTreeResponse,
+    FileDeleteResponse,
+    FileInfo,
+    FilePreviewResponse,
+    FileRenameResponse,
+    FilesAPIUploadResponse,
+    FileStatsResponse,
+    FileViewResponse,
+)
+from auth_middleware import get_auth_middleware
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.security.path_validator import validate_relative_path
+from constants.error_constants import (
+    ERR_DIRECTORY_NOT_FOUND,
+    ERR_FILE_NOT_FOUND,
+    ERR_FILE_OR_DIR_NOT_FOUND,
+    ERR_PATH_NOT_FOUND,
+)
+from security_layer import SecurityLayer
+from utils.io_executor import run_in_file_executor
+from utils.path_validation import is_invalid_name
+from utils.paths_manager import ensure_data_directory, get_data_path
+
+router = APIRouter()
+logger = logging.getLogger(__name__)
+security = HTTPBearer(auto_error=False)
+
+# Issue #380: Module-level tuple for dangerous content patterns in uploads
+_DANGEROUS_CONTENT_PATTERNS = (
+    "<script",
+    "</script>",
+    "javascript:",
+    "vbscript:",
+    "onload=",
+    "onerror=",
+    "onclick=",
+    "eval(",
+    "document.write",
+    "innerHTML",
+    "<?php",
+    "<%",
+    "<jsp:",
+    "exec(",
+    "system(",
+    "shell_exec(",
+)
+
+# Configure sandboxed directory for file operations using centralized paths
+
+# Ensure data directory exists
+ensure_data_directory()
+
+# Get sandboxed root using centralized path management
+# CRITICAL: Resolve to absolute path to prevent issues when CWD changes
+SANDBOXED_ROOT = get_data_path("file_manager_root").resolve()
+SANDBOXED_ROOT.mkdir(parents=True, exist_ok=True)
+
+# Maximum file size (50MB)
+MAX_FILE_SIZE = 50 * 1024 * 1024
+
+# Allowed file extensions for security
+ALLOWED_EXTENSIONS = {
+    # Text and data formats
+    ".txt",
+    ".md",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".xml",
+    ".csv",
+    ".log",
+    ".cfg",
+    ".ini",
+    ".con",
+    # Code files
+    ".py",
+    ".js",
+    ".ts",
+    ".sh",
+    ".bat",
+    ".sql",
+    # Web files
+    ".html",
+    ".css",
+    # Office document formats (Microsoft)
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
+    # Office document formats (OpenDocument/LibreOffice)
+    ".odt",  # OpenDocument Text (Writer)
+    ".ods",  # OpenDocument Spreadsheet (Calc)
+    ".odp",  # OpenDocument Presentation (Impress)
+    ".odg",  # OpenDocument Graphics (Draw)
+    # Image formats
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".ico",
+    ".pd",
+    ".gi",
+}
+
+# Performance optimization: O(1) lookup for invalid path characters (Issue #326)
+INVALID_PATH_CHARACTERS = {"<", ">", ":", '"', "|", "?", "*"}
+
+# Issue #380: Module-level frozenset for dangerous filename characters
+_DANGEROUS_FILENAME_CHARS = frozenset({"<", ">", '"', "|", "?", "*", "\0", "\r", "\n"})
+
+# Issue #398: Module-level sets for is_safe_file validation
+_DANGEROUS_FILENAMES = frozenset(
+    {
+        ".htaccess",
+        ".env",
+        "passwd",
+        "shadow",
+        "config",
+        "web.config",
+        "autoexec.bat",
+        "boot.ini",
+        "hosts",
+        "httpd.conf",
+        "nginx.conf",
+    }
+)
+
+_DANGEROUS_EXTENSIONS = frozenset(
+    {
+        ".exe",
+        ".bat",
+        ".cmd",
+        ".com",
+        ".scr",
+        ".pif",
+        ".vbs",
+        ".js",
+        ".jar",
+        ".app",
+        ".deb",
+        ".rpm",
+        ".dmg",
+        ".pkg",
+        ".msi",
+    }
+)
+
+
+def get_security_layer(request: Request) -> SecurityLayer:
+    """Get security layer from app state"""
+    return request.app.state.security_layer
+
+
+def _check_file_permission(request: Request, permission: str) -> dict:
+    """
+    Check file permissions and return user data.
+
+    Args:
+        request: FastAPI request object
+        permission: Permission type to check (view, upload, download, delete)
+
+    Returns:
+        dict: User data if authenticated
+
+    Raises:
+        HTTPException: If permission check fails
+
+    Issue #620.
+    """
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, permission)
+    if not has_permission:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Insufficient permissions for file {permission} operations",
+        )
+    request.state.user = user_data
+    return user_data
+
+
+def _calculate_parent_path(path: str) -> Optional[str]:
+    """
+    Calculate parent path from current path.
+
+    Args:
+        path: Current path string
+
+    Returns:
+        Parent path string or None if at root
+
+    Issue #620.
+    """
+    if not path:
+        return None
+    parent = Path(path).parent
+    return str(parent) if str(parent) != "." else ""
+
+
+# Path validation imported from utils.path_validation (Issue #328 - shared utility)
+
+
+def validate_and_resolve_path(path: str) -> Path:
+    """
+    Validate and resolve a path within the sandboxed directory.
+    Prevents path traversal attacks with multiple security layers.
+    """
+    if not path:
+        return SANDBOXED_ROOT
+
+    # Remove leading/trailing slashes and normalize
+    clean_path = path.strip("/")
+
+    # Enhanced path traversal checks
+    if (
+        ".." in clean_path
+        or clean_path.startswith("/")
+        or "~" in clean_path
+        or any(char in clean_path for char in INVALID_PATH_CHARACTERS)
+    ):
+        raise HTTPException(status_code=400, detail="Invalid path: path traversal not allowed")
+
+    # URL decode to catch encoded traversal attempts
+    import urllib.parse
+
+    decoded_path = urllib.parse.unquote(clean_path)
+    if ".." in decoded_path or decoded_path.startswith("/"):
+        raise HTTPException(status_code=400, detail="Invalid path: encoded traversal not allowed")
+
+    # Validate via shared security module (#1721)
+    try:
+        return validate_relative_path(clean_path, SANDBOXED_ROOT)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Path outside sandbox not allowed",
+        )
+
+
+def get_file_info(file_path: Path, relative_path: str) -> FileInfo:
+    """Get file information for a given path"""
+    stat = file_path.stat()
+
+    # Get MIME type
+    mime_type = None
+    if file_path.is_file():
+        mime_type, _ = mimetypes.guess_type(str(file_path))
+
+    return FileInfo(
+        name=file_path.name,
+        path=relative_path,
+        is_directory=file_path.is_dir(),
+        size=stat.st_size if file_path.is_file() else None,
+        mime_type=mime_type,
+        last_modified=datetime.fromtimestamp(stat.st_mtime),
+        permissions=oct(stat.st_mode)[-3:],
+        extension=file_path.suffix.lower() if file_path.suffix else None,
+    )
+
+
+def is_safe_file(filename: str) -> bool:
+    """
+    Check if file type is allowed and filename is safe.
+
+    Issue #398: Refactored to use module-level constants.
+    """
+    if not filename:
+        return False
+
+    # Check for dangerous characters (Issue #380: module-level constant)
+    if any(char in filename for char in _DANGEROUS_FILENAME_CHARS):
+        return False
+
+    if len(filename) > 255:
+        return False
+
+    extension = Path(filename).suffix.lower()
+    if extension not in ALLOWED_EXTENSIONS:
+        return False
+
+    # Issue #398: Use module-level sets
+    if filename.lower() in _DANGEROUS_FILENAMES:
+        return False
+
+    if extension in _DANGEROUS_EXTENSIONS and extension not in ALLOWED_EXTENSIONS:
+        return False
+
+    # Prevent null bytes and control characters
+    if "\0" in filename or any(ord(c) < 32 for c in filename):
+        return False
+
+    return True
+
+
+def _list_directory_contents(target_path: Path) -> tuple:
+    """
+    List directory contents with file information.
+
+    Args:
+        target_path: Path to directory to list
+
+    Returns:
+        Tuple of (files list, total_size, total_files, total_directories)
+
+    Issue #620.
+    """
+    files = []
+    total_size = 0
+    total_files = 0
+    total_directories = 0
+
+    for item in sorted(target_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+        try:
+            relative_item_path = str(item.relative_to(SANDBOXED_ROOT))
+            file_info = get_file_info(item, relative_item_path)
+            files.append(file_info)
+
+            if item.is_file():
+                total_files += 1
+                total_size += file_info.size or 0
+            else:
+                total_directories += 1
+
+        except (OSError, PermissionError) as e:
+            logger.warning("Skipping inaccessible file %s: %s", item, e)
+            continue
+
+    return files, total_size, total_files, total_directories
+
+
+@router.get("/list", response_model=DirectoryListing)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_files",
+    error_code_prefix="FILES",
+)
+async def list_files(request: Request, path: str = ""):
+    """
+    List files in the specified directory within the sandbox.
+
+    Issue #620: Refactored using Extract Method pattern.
+
+    Args:
+        path: Relative path within the sandbox (optional, defaults to root)
+    """
+    _check_file_permission(request, "view")
+    target_path = validate_and_resolve_path(path)
+
+    # Issue #358/#718: Use dedicated executor for non-blocking file I/O
+    if not await run_in_file_executor(target_path.exists):
+        raise HTTPException(status_code=404, detail=ERR_DIRECTORY_NOT_FOUND)
+
+    if not await run_in_file_executor(target_path.is_dir):
+        raise HTTPException(status_code=400, detail="Path is not a directory")
+
+    # Issue #358/#620: Wrap blocking directory listing in thread
+    files, total_size, total_files, total_directories = await run_in_file_executor(
+        _list_directory_contents, target_path
+    )
+
+    return DirectoryListing(
+        current_path=path,
+        parent_path=_calculate_parent_path(path),
+        files=files,
+        total_files=total_files,
+        total_directories=total_directories,
+        total_size=total_size,
+    )
+
+
+def validate_file_content(content: bytes, filename: str) -> bool:
+    """
+    Validate file content for security threats.
+
+    Args:
+        content: File content bytes
+        filename: Original filename
+
+    Returns:
+        bool: True if content is safe, False otherwise
+    """
+    # Check for null bytes (potential binary injection)
+    if b"\x00" in content:
+        # Only allow null bytes in known binary formats
+        extension = Path(filename).suffix.lower()
+        binary_formats = {
+            # Images
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".ico",
+            # Documents (PDF)
+            ".pdf",
+            # Microsoft Office (ZIP-based binary formats)
+            ".doc",
+            ".docx",
+            ".xlsx",
+            ".ppt",
+            ".pptx",
+            # OpenDocument (ZIP-based binary formats)
+            ".odt",
+            ".ods",
+            ".odp",
+            ".odg",
+        }
+        if extension not in binary_formats:
+            return False
+
+    # Check for script tags and other dangerous content (Issue #380: use module constant)
+    content_str = content.decode("utf-8", errors="ignore").lower()
+
+    for pattern in _DANGEROUS_CONTENT_PATTERNS:
+        if pattern in content_str:
+            logger.warning("Dangerous content detected in %s: %s", filename, pattern)
+            return False
+
+    return True
+
+
+def _validate_upload_file(file: UploadFile, content: bytes) -> None:
+    """
+    Validate uploaded file for security and constraints.
+
+    Issue #281: Extracted helper for file validation.
+
+    Args:
+        file: Uploaded file object
+        content: File content bytes
+
+    Raises:
+        HTTPException: If validation fails
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+
+    if not is_safe_file(file.filename):
+        raise HTTPException(status_code=400, detail=f"File type not allowed: {file.filename}")
+
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB",
+        )
+
+    if not validate_file_content(content, file.filename):
+        raise HTTPException(
+            status_code=400,
+            detail="File content contains potentially dangerous elements",
+        )
+
+    # Verify MIME type matches file extension
+    detected_mime = mimetypes.guess_type(file.filename)[0]
+    if detected_mime and file.content_type and file.content_type != detected_mime:
+        logger.warning(
+            f"MIME type mismatch for {file.filename}: " f"declared={file.content_type}, detected={detected_mime}"
+        )
+
+
+async def _write_upload_file(target_file: Path, content: bytes, overwrite: bool) -> None:
+    """
+    Write uploaded file to target location.
+
+    Issue #281: Extracted helper for file writing.
+
+    Args:
+        target_file: Target file path
+        content: File content to write
+        overwrite: Whether to overwrite existing files
+
+    Raises:
+        HTTPException: If file exists without overwrite or write fails
+    """
+    # Issue #358: Check if file exists in thread to avoid blocking
+    file_exists = await run_in_file_executor(target_file.exists)
+    if file_exists and not overwrite:
+        raise HTTPException(
+            status_code=409,
+            detail="File already exists. Use overwrite=true to replace it.",
+        )
+
+    try:
+        async with aiofiles.open(target_file, "wb") as f:
+            await f.write(content)
+    except OSError as e:
+        logger.error("Failed to write uploaded file %s: %s", target_file, e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+def _log_upload_audit(
+    request: Request,
+    user_data: dict,
+    file: UploadFile,
+    relative_path: str,
+    content_size: int,
+    overwrite: bool,
+) -> None:
+    """
+    Log upload audit information.
+
+    Issue #281: Extracted helper for audit logging.
+
+    Args:
+        request: FastAPI request
+        user_data: Authenticated user data
+        file: Uploaded file
+        relative_path: Relative path to file
+        content_size: Size of uploaded content
+        overwrite: Whether overwrite was used
+    """
+    security_layer = get_security_layer(request)
+    security_layer.audit_log(
+        "file_upload",
+        user_data.get("username", "unknown"),
+        "success",
+        {
+            "filename": file.filename,
+            "path": relative_path,
+            "size": content_size,
+            "user_role": user_data.get("role", "unknown"),
+            "ip": request.client.host if request.client else "unknown",
+            "overwrite": overwrite,
+        },
+    )
+
+
+async def _delete_file_item(target_path: Path, path: str, security_layer, user_data: dict, request: Request) -> dict:
+    """
+    Delete a single file and log audit.
+
+    Issue #398: Extracted from delete_file to reduce method length.
+    """
+    file_stat = await run_in_file_executor(target_path.stat)
+    file_size = file_stat.st_size
+    await run_in_file_executor(target_path.unlink)
+
+    security_layer.audit_log(
+        "file_delete",
+        user_data.get("username", "unknown"),
+        "success",
+        {
+            "path": path,
+            "type": "file",
+            "size": file_size,
+            "filename": target_path.name,
+            "user_role": user_data.get("role", "unknown"),
+            "ip": request.client.host if request.client else "unknown",
+        },
+    )
+    return {"message": f"File '{target_path.name}' deleted successfully"}
+
+
+async def _delete_directory_item(
+    target_path: Path, path: str, security_layer, user_data: dict, request: Request
+) -> dict:
+    """
+    Delete a directory (empty or recursively) and log audit.
+
+    Issue #398: Extracted from delete_file to reduce method length.
+    """
+    try:
+        await run_in_file_executor(target_path.rmdir)
+        delete_type = "directory"
+        extra = {}
+    except OSError:
+        await run_in_file_executor(shutil.rmtree, target_path)
+        delete_type = "directory_recursive"
+        extra = {"warning": "recursive_delete_performed"}
+
+    security_layer.audit_log(
+        "file_delete",
+        user_data.get("username", "unknown"),
+        "success",
+        {
+            "path": path,
+            "type": delete_type,
+            "dirname": target_path.name,
+            "user_role": user_data.get("role", "unknown"),
+            "ip": request.client.host if request.client else "unknown",
+            **extra,
+        },
+    )
+
+    if delete_type == "directory_recursive":
+        return {"message": f"Directory '{target_path.name}' and all contents deleted successfully"}
+    return {"message": f"Directory '{target_path.name}' deleted successfully"}
+
+
+@router.post("/upload", response_model=FilesAPIUploadResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="upload_file",
+    error_code_prefix="FILES",
+)
+async def upload_file(
+    request: Request,
+    file: UploadFile = File(...),
+    path: str = Form(""),
+    overwrite: bool = Form(False),
+):
+    """
+    Upload a file to the specified directory within the sandbox.
+
+    Issue #281: Refactored from 115 lines to use extracted helper methods.
+
+    Args:
+        file: The file to upload
+        path: Target directory path within sandbox
+        overwrite: Whether to overwrite existing files
+    """
+    # SECURITY FIX: Enable proper authentication and authorization
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "upload")
+    if not has_permission:
+        raise HTTPException(status_code=403, detail="Insufficient permissions for file upload")
+
+    # Store user data in request state for audit logging
+    request.state.user = user_data
+
+    # Read file content
+    content = await file.read()
+
+    # Validate file (Issue #281: uses helper)
+    _validate_upload_file(file, content)
+
+    # Validate and resolve target directory
+    target_dir = validate_and_resolve_path(path)
+    # Issue #358: mkdir in thread to avoid blocking
+    await run_in_file_executor(lambda: target_dir.mkdir(parents=True, exist_ok=True))
+
+    # Prepare target file path
+    target_file = target_dir / file.filename
+
+    # Write file (Issue #281: uses helper)
+    await _write_upload_file(target_file, content, overwrite)
+
+    # Get file info for response
+    relative_path = str(target_file.relative_to(SANDBOXED_ROOT))
+    file_info = get_file_info(target_file, relative_path)
+
+    # Audit logging (Issue #281: uses helper)
+    _log_upload_audit(request, user_data, file, relative_path, len(content), overwrite)
+
+    return FilesAPIUploadResponse(
+        success=True,
+        message=f"File '{file.filename}' uploaded successfully",
+        file_info=file_info,
+        upload_id=f"upload_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}",
+    )
+
+
+@router.get("/download/{path:path}", response_model=None)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="download_file",
+    error_code_prefix="FILES",
+)
+async def download_file(request: Request, path: str):
+    """
+    Download a file from the sandbox.
+
+    Args:
+        path: File path within the sandbox
+    """
+    # SECURITY FIX: Enable proper authentication and authorization
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "download")
+    if not has_permission:
+        raise HTTPException(status_code=403, detail="Insufficient permissions for file download")
+
+    # Store user data in request state for audit logging
+    request.state.user = user_data
+
+    target_file = validate_and_resolve_path(path)
+
+    # Issue #358/#718: Use dedicated executor for non-blocking file I/O
+    if not await run_in_file_executor(target_file.exists):
+        raise HTTPException(status_code=404, detail=ERR_FILE_NOT_FOUND)
+
+    if not await run_in_file_executor(target_file.is_file):
+        raise HTTPException(status_code=400, detail="Path is not a file")
+
+    # Issue #358: Get file stat in thread to avoid blocking
+    file_stat = await run_in_file_executor(target_file.stat)
+
+    # Enhanced audit logging with authenticated user
+    security_layer = get_security_layer(request)
+    security_layer.audit_log(
+        "file_download",
+        user_data.get("username", "unknown"),
+        "success",
+        {
+            "path": path,
+            "size": file_stat.st_size,
+            "filename": target_file.name,
+            "user_role": user_data.get("role", "unknown"),
+            "ip": request.client.host if request.client else "unknown",
+        },
+    )
+
+    return FileResponse(
+        path=str(target_file),
+        filename=target_file.name,
+        media_type="application/octet-stream",
+    )
+
+
+@router.get("/view/{path:path}", response_model=FileViewResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="view_file",
+    error_code_prefix="FILES",
+)
+async def view_file(request: Request, path: str):
+    """
+    View file content (for text files) or get file info.
+
+    Args:
+        path: File path within the sandbox
+    """
+    # SECURITY FIX: Use modern auth_middleware instead of deprecated function
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
+    if not has_permission:
+        raise HTTPException(status_code=403, detail="Insufficient permissions for file viewing")
+
+    # Store user data in request state for audit logging
+    request.state.user = user_data
+
+    target_file = validate_and_resolve_path(path)
+
+    # Issue #358/#718: Use dedicated executor for non-blocking file I/O
+    if not await run_in_file_executor(target_file.exists):
+        raise HTTPException(status_code=404, detail=ERR_FILE_NOT_FOUND)
+
+    if not await run_in_file_executor(target_file.is_file):
+        raise HTTPException(status_code=400, detail="Path is not a file")
+
+    # Issue #358: Get file info in thread to avoid blocking
+    relative_path = str(target_file.relative_to(SANDBOXED_ROOT))
+    file_info = await run_in_file_executor(get_file_info, target_file, relative_path)
+
+    # Try to read content for text files
+    content = None
+    if file_info.mime_type and file_info.mime_type.startswith("text/"):
+        try:
+            # PERFORMANCE FIX: Convert to async file I/O
+            async with aiofiles.open(target_file, "r", encoding="utf-8") as f:
+                content = await f.read()
+        except OSError as e:
+            logger.error("Failed to read file %s: %s", target_file, e)
+            raise HTTPException(status_code=500, detail="Internal server error")
+        except UnicodeDecodeError as e:
+            # File is binary, don't include content
+            logger.debug("File is binary, skipping content read: %s", e)
+
+    return {
+        "file_info": file_info,
+        "content": content,
+        "is_text": content is not None,
+    }
+
+
+def _log_rename_audit(
+    request: Request,
+    user_data: dict,
+    old_path: str,
+    new_name: str,
+    new_path: str,
+    is_directory: bool,
+) -> None:
+    """
+    Log rename operation audit information.
+
+    Args:
+        request: FastAPI request object
+        user_data: Authenticated user data
+        old_path: Original path before rename
+        new_name: New name for the item
+        new_path: New relative path after rename
+        is_directory: Whether the renamed item is a directory
+
+    Issue #620.
+    """
+    security_layer = get_security_layer(request)
+    security_layer.audit_log(
+        "file_rename",
+        user_data.get("username", "unknown"),
+        "success",
+        {
+            "old_path": old_path,
+            "new_name": new_name,
+            "new_path": new_path,
+            "type": "directory" if is_directory else "file",
+            "user_role": user_data.get("role", "unknown"),
+            "ip": request.client.host if request.client else "unknown",
+        },
+    )
+
+
+async def _validate_rename_paths(source_path: Path, new_name: str) -> Path:
+    """
+    Validate source exists and target doesn't exist for rename.
+
+    Args:
+        source_path: Path to source file/directory
+        new_name: New name for the item
+
+    Returns:
+        Path: Target path for the rename
+
+    Raises:
+        HTTPException: If validation fails
+
+    Issue #620.
+    """
+    if not await run_in_file_executor(source_path.exists):
+        raise HTTPException(status_code=404, detail=ERR_FILE_OR_DIR_NOT_FOUND)
+
+    target_path = source_path.parent / new_name
+
+    if await run_in_file_executor(target_path.exists):
+        raise HTTPException(
+            status_code=409,
+            detail=f"A file or directory named '{new_name}' already exists",
+        )
+
+    return target_path
+
+
+@router.post("/rename", response_model=FileRenameResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="rename_file_or_directory",
+    error_code_prefix="FILES",
+)
+async def rename_file_or_directory(request: Request, path: str = Form(...), new_name: str = Form(...)):
+    """
+    Rename a file or directory within the sandbox.
+
+    Issue #620: Refactored using Extract Method pattern.
+
+    Args:
+        path: Current path of the file/directory
+        new_name: New name for the file/directory (not full path, just name)
+    """
+    user_data = _check_file_permission(request, "upload")
+
+    if is_invalid_name(new_name):
+        raise HTTPException(status_code=400, detail="Invalid file/directory name")
+
+    source_path = validate_and_resolve_path(path)
+    target_path = await _validate_rename_paths(source_path, new_name)
+
+    # Issue #358: Perform rename in thread to avoid blocking
+    await run_in_file_executor(source_path.rename, target_path)
+
+    # Issue #358/#620: Get info for the renamed item in thread
+    relative_path = str(target_path.relative_to(SANDBOXED_ROOT))
+    item_info = await run_in_file_executor(get_file_info, target_path, relative_path)
+    is_directory = await run_in_file_executor(target_path.is_dir)
+
+    _log_rename_audit(request, user_data, path, new_name, relative_path, is_directory)
+
+    return {
+        "message": f"Successfully renamed to '{new_name}'",
+        "item_info": item_info,
+    }
+
+
+def _determine_file_type(mime_type: Optional[str]) -> str:
+    """
+    Determine the preview file type from MIME type.
+
+    Args:
+        mime_type: MIME type string or None
+
+    Returns:
+        str: File type category (text, image, pdf, or binary)
+
+    Issue #620.
+    """
+    if not mime_type:
+        return "binary"
+
+    if mime_type.startswith("text/"):
+        return "text"
+    if mime_type.startswith("image/"):
+        return "image"
+    if mime_type == "application/pdf":
+        return "pdf"
+
+    return "binary"
+
+
+async def _read_text_content(target_file: Path) -> tuple:
+    """
+    Read text content from file for preview.
+
+    Args:
+        target_file: Path to file to read
+
+    Returns:
+        Tuple of (content, file_type) where file_type may change to binary on decode error
+
+    Issue #620.
+    """
+    try:
+        async with aiofiles.open(target_file, "r", encoding="utf-8") as f:
+            content = await f.read()
+        return content, "text"
+    except OSError as e:
+        logger.error("Failed to read file %s: %s", target_file, e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+    except UnicodeDecodeError:
+        return None, "binary"
+
+
+@router.get("/preview", response_model=FilePreviewResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="preview_file",
+    error_code_prefix="FILES",
+)
+async def preview_file(request: Request, path: str):
+    """
+    Get file preview with content and download URL.
+
+    Issue #620: Refactored using Extract Method pattern.
+
+    Args:
+        path: File path within the sandbox (query parameter)
+
+    Returns:
+        Dict with type, url, and content for preview
+    """
+    _check_file_permission(request, "view")
+    target_file = validate_and_resolve_path(path)
+
+    # Issue #358/#718: Use dedicated executor for non-blocking file I/O
+    if not await run_in_file_executor(target_file.exists):
+        raise HTTPException(status_code=404, detail=ERR_FILE_NOT_FOUND)
+
+    if not await run_in_file_executor(target_file.is_file):
+        raise HTTPException(status_code=400, detail="Path is not a file")
+
+    # Issue #358/#620: Get file info in thread to avoid blocking
+    relative_path = str(target_file.relative_to(SANDBOXED_ROOT))
+    file_info = await run_in_file_executor(get_file_info, target_file, relative_path)
+
+    file_type = _determine_file_type(file_info.mime_type)
+    content = None
+
+    if file_type == "text":
+        content, file_type = await _read_text_content(target_file)
+
+    return {
+        "type": file_type,
+        "url": f"/api/files/download/{path}",
+        "content": content,
+        "mime_type": file_info.mime_type,
+        "size": file_info.size,
+        "name": file_info.name,
+    }
+
+
+@router.delete("/delete", response_model=FileDeleteResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_file",
+    error_code_prefix="FILES",
+)
+async def delete_file(request: Request, path: str):
+    """
+    Delete a file or directory within the sandbox.
+
+    Issue #398: Refactored with extracted helper methods.
+
+    Args:
+        path: Path to the file/directory to delete (query parameter)
+    """
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "delete")
+    if not has_permission:
+        raise HTTPException(status_code=403, detail="Insufficient permissions for file deletion")
+
+    request.state.user = user_data
+    target_path = validate_and_resolve_path(path)
+
+    if not await run_in_file_executor(target_path.exists):
+        raise HTTPException(status_code=404, detail=ERR_FILE_OR_DIR_NOT_FOUND)
+
+    security_layer = get_security_layer(request)
+    is_file = await run_in_file_executor(target_path.is_file)
+
+    if is_file:
+        return await _delete_file_item(target_path, path, security_layer, user_data, request)
+    return await _delete_directory_item(target_path, path, security_layer, user_data, request)
+
+
+def _log_directory_create_audit(
+    request: Request,
+    user_data: dict,
+    relative_path: str,
+    name: str,
+    parent_path: str,
+) -> None:
+    """
+    Log directory creation audit information.
+
+    Args:
+        request: FastAPI request object
+        user_data: Authenticated user data
+        relative_path: Relative path of the new directory
+        name: Name of the new directory
+        parent_path: Parent directory path
+
+    Issue #620.
+    """
+    security_layer = get_security_layer(request)
+    security_layer.audit_log(
+        "directory_create",
+        user_data.get("username", "unknown"),
+        "success",
+        {
+            "path": relative_path,
+            "name": name,
+            "parent_path": parent_path,
+            "user_role": user_data.get("role", "unknown"),
+            "ip": request.client.host if request.client else "unknown",
+        },
+    )
+
+
+@router.post("/create_directory", response_model=DirectoryCreateResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_directory",
+    error_code_prefix="FILES",
+)
+async def create_directory(request: Request, path: str = Form(...), name: str = Form(...)):
+    """
+    Create a new directory within the sandbox.
+
+    Issue #620: Refactored using Extract Method pattern.
+
+    Args:
+        path: Parent directory path
+        name: New directory name
+    """
+    user_data = _check_file_permission(request, "upload")
+
+    if is_invalid_name(name):
+        raise HTTPException(status_code=400, detail="Invalid directory name")
+
+    parent_dir = validate_and_resolve_path(path)
+    new_dir = parent_dir / name
+
+    # Issue #358/#718: Use dedicated executor for non-blocking file I/O
+    if await run_in_file_executor(new_dir.exists):
+        raise HTTPException(status_code=409, detail="Directory already exists")
+
+    # Issue #358/#620: mkdir in thread to avoid blocking
+    await run_in_file_executor(lambda: new_dir.mkdir(parents=True, exist_ok=False))
+
+    relative_path = str(new_dir.relative_to(SANDBOXED_ROOT))
+    dir_info = await run_in_file_executor(get_file_info, new_dir, relative_path)
+
+    _log_directory_create_audit(request, user_data, relative_path, name, path)
+
+    return {
+        "message": f"Directory '{name}' created successfully",
+        "directory_info": dir_info,
+    }
+
+
+@router.get("/tree", response_model=DirectoryTreeResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_directory_tree",
+    error_code_prefix="FILES",
+)
+async def get_directory_tree(request: Request, path: str = ""):
+    """Get directory tree structure for file browser"""
+    # SECURITY FIX: Enable proper authentication and authorization
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
+    if not has_permission:
+        raise HTTPException(
+            status_code=403,
+            detail="Insufficient permissions for viewing directory tree",
+        )
+
+    # Store user data in request state for audit logging
+    request.state.user = user_data
+
+    target_path = validate_and_resolve_path(path)
+
+    # Issue #358/#718: Use dedicated executor for non-blocking file I/O
+    if not await run_in_file_executor(target_path.exists):
+        raise HTTPException(status_code=404, detail=ERR_DIRECTORY_NOT_FOUND)
+
+    if not await run_in_file_executor(target_path.is_dir):
+        raise HTTPException(status_code=400, detail="Path is not a directory")
+
+    def build_tree(directory: Path, relative_base: Path) -> dict:
+        """Recursively build directory tree structure (sync, runs in thread)"""
+        try:
+            items = []
+            for item in sorted(directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+                try:
+                    relative_path = str(item.relative_to(SANDBOXED_ROOT))
+                    item_info = {
+                        "name": item.name,
+                        "path": relative_path,
+                        "type": "directory" if item.is_dir() else "file",
+                    }
+
+                    if item.is_file():
+                        item_info["size"] = item.stat().st_size
+                        item_info["extension"] = item.suffix.lower() if item.suffix else None
+                    else:
+                        # Recursively add children for directories
+                        item_info["children"] = build_tree(item, SANDBOXED_ROOT)
+
+                    items.append(item_info)
+                except (OSError, PermissionError) as e:
+                    logger.warning("Skipping inaccessible item %s: %s", item, e)
+                    continue
+
+            return items
+        except Exception as e:
+            logger.error("Error building tree for %s: %s", directory, e)
+            return []
+
+    # Issue #358: Run entire recursive tree building in thread to avoid blocking
+    tree_data = await run_in_file_executor(build_tree, target_path, SANDBOXED_ROOT)
+
+    return {"path": path, "tree": tree_data}
+
+
+@router.get("/stats", response_model=FileStatsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_file_stats",
+    error_code_prefix="FILES",
+)
+async def get_file_stats(request: Request):
+    """Get file system statistics for the sandbox"""
+    # SECURITY FIX: Enable proper authentication and authorization
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
+    if not has_permission:
+        raise HTTPException(status_code=403, detail="Insufficient permissions for file statistics")
+
+    # Store user data in request state for audit logging
+    request.state.user = user_data
+
+    # Issue #358: Run stats collection in thread to avoid blocking event loop
+    def _collect_stats_sync():
+        """Sync helper for stats collection to avoid blocking event loop."""
+        total_files = 0
+        total_directories = 0
+        total_size = 0
+
+        for item in SANDBOXED_ROOT.rglob("*"):
+            if item.is_file():
+                total_files += 1
+                total_size += item.stat().st_size
+            elif item.is_dir():
+                total_directories += 1
+
+        return total_files, total_directories, total_size
+
+    total_files, total_directories, total_size = await run_in_file_executor(_collect_stats_sync)
+
+    return {
+        "sandbox_root": str(SANDBOXED_ROOT),
+        "total_files": total_files,
+        "total_directories": total_directories,
+        "total_size": total_size,
+        "total_size_mb": round(total_size / (1024 * 1024), 2),
+        "max_file_size_mb": MAX_FILE_SIZE // (1024 * 1024),
+        "allowed_extensions": sorted(list(ALLOWED_EXTENSIONS)),
+    }
+
+
+# SLM Admin File Browser (Issue #984) ==========================================
+
+_ADMIN_ALLOWED_DIRS = (
+    "/opt/autobot",
+    "/home/autobot",  # noqa: ssot-path
+    "/var/log/autobot",
+    "/etc/autobot",
+)
+_ADMIN_MAX_READ_BYTES = 1 * 1024 * 1024  # 1 MB cap for inline reads
+
+
+def _validate_admin_path(path: str) -> Path:
+    """Resolve and validate an absolute path for the SLM admin file browser.
+
+    Restricts access to pre-approved base directories (Issue #984).
+    Uses shared path validator (#1721).
+    """
+    from autobot_shared.security.path_validator import validate_path
+
+    try:
+        return validate_path(path, allowed_roots=list(_ADMIN_ALLOWED_DIRS))
+    except ValueError:
+        raise HTTPException(
+            status_code=403,
+            detail="Path outside allowed directories",
+        )
+
+
+def _entry_to_file_item(entry: Path) -> dict:
+    """Convert a filesystem entry to a FileItem dict (Issue #984)."""
+    try:
+        st = entry.stat()
+        is_dir = entry.is_dir()
+        return {
+            "name": entry.name,
+            "path": str(entry),
+            "type": "directory" if is_dir else "file",
+            "size": 0 if is_dir else st.st_size,
+            "modified": datetime.fromtimestamp(st.st_mtime).isoformat(),
+            "permissions": oct(st.st_mode & 0o777)[2:],
+        }
+    except OSError:
+        return {
+            "name": entry.name,
+            "path": str(entry),
+            "type": "file",
+            "size": 0,
+            "modified": "",
+            "permissions": "",
+        }
+
+
+@router.get("", summary="List directory for SLM admin file browser", response_model=AdminFileListResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="admin_list_directory",
+    error_code_prefix="FILES",
+)
+async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ssot-path
+    """List directory contents at an absolute path.
+
+    No auth required — accessible via /autobot-api/ nginx proxy (Issue #984).
+    Restricted to pre-approved base directories.
+    """
+    target = _validate_admin_path(path)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail=ERR_PATH_NOT_FOUND)
+    if not target.is_dir():
+        raise HTTPException(status_code=400, detail="Path is not a directory")
+    try:
+        entries = sorted(target.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower()))  # codeql[py/path-injection]
+        return {"files": [_entry_to_file_item(e) for e in entries]}
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+
+@router.get("/read", summary="Read file content for SLM admin file browser", response_model=AdminFileReadResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="admin_read_file",
+    error_code_prefix="FILES",
+)
+async def admin_read_file(path: str) -> dict:
+    """Return text content of a file at an absolute path.
+
+    Limited to 1 MB. No auth required — accessible via /autobot-api/ (Issue #984).
+    """
+    target = _validate_admin_path(path)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail=ERR_FILE_NOT_FOUND)
+    if not target.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file")
+    if target.stat().st_size > _ADMIN_MAX_READ_BYTES:
+        raise HTTPException(status_code=413, detail="File too large to read inline (> 1 MB)")
+    try:
+        # #7467: was sync `target.read_text(...)` blocking the event loop.
+        content = await asyncio.to_thread(target.read_text, encoding="utf-8", errors="replace")
+        return {"content": content}  # codeql[py/path-injection]
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Permission denied")

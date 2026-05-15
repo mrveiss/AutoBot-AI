@@ -1,0 +1,10 @@
+# AutoBot configuration for Windows Ollama
+services:
+  ollama:
+    host: 127.0.0.2
+    port: 11434
+    type: windows
+
+  # Disable any local Ollama
+  local_ollama:
+    enabled: false

@@ -1,0 +1,415 @@
+# AutoBot SLM Nginx Configuration
+# Managed by Ansible - slm_manager role
+
+{% if slm_colocated_frontend | default(false) | bool %}
+# Co-located user backend upstream (#2829)
+# Proxies directly to uvicorn (HTTP) — no intermediate backend nginx.
+upstream autobot_backend {
+    server {{ frontend_backend_host }}:{{ frontend_backend_port }};
+}
+{% endif %}
+
+# Redirect HTTP to HTTPS
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _;
+
+    return 301 https://$host$request_uri;
+}
+
+# HTTPS server
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name _;
+
+    # SSL configuration
+    ssl_certificate {{ slm_tls_cert }};
+    ssl_certificate_key {{ slm_tls_key }};
+
+    # SSL settings
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    # Issue #1015: Content Security Policy
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' wss://$host; frame-ancestors 'none'; base-uri 'self'; form-action 'self';" always;
+
+    # Issue #1090: Allow SLM agent event sync payloads (typically 1.5-2MB)
+    client_max_body_size 10m;
+
+    # Logging
+    access_log {{ slm_log_dir }}/nginx-access.log;
+    error_log {{ slm_log_dir }}/nginx-error.log;
+
+    # Frontend static files
+    root {{ slm_frontend_dir }}/dist;
+    index index.html;
+
+{% if slm_colocated_frontend | default(false) | bool %}
+    # ── Co-located mode (#2829) ───────────────────────────────
+    # SLM API under /slm/api/, user backend at /api/, user frontend at /
+    # Backend upstream is plain HTTP to uvicorn — no double-proxy.
+
+    # SLM Backend WebSocket (must be before /slm/api/ to take priority)
+    location /slm/api/ws/ {
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/ws/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+    }
+
+    # SLM Backend API reverse proxy
+    location /slm/api/ {
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+
+    # SLM Backend health check
+    location /slm/api/health {
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/health;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
+    # Issue #3105: WebSocket proxy for /api/ws/ — must be BEFORE /api/ to take priority
+    location /api/ws/ {
+        proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+{% if frontend_backend_protocol == 'https' %}
+        proxy_ssl_verify off;
+{% endif %}
+    }
+
+    # User backend WebSocket proxies (HTTP to uvicorn)
+    # Issue #3108: include X-Forwarded-* proxy headers
+    location /api/ws {
+        proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+{% if frontend_backend_protocol == 'https' %}
+        proxy_ssl_verify off;
+{% endif %}
+    }
+
+    location /api/terminal/ws {
+        proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+{% if frontend_backend_protocol == 'https' %}
+        proxy_ssl_verify off;
+{% endif %}
+    }
+
+    location /api/voice/stream {
+        proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+{% if frontend_backend_protocol == 'https' %}
+        proxy_ssl_verify off;
+{% endif %}
+    }
+
+    location /ws {
+        proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+{% if frontend_backend_protocol == 'https' %}
+        proxy_ssl_verify off;
+{% endif %}
+    }
+
+    # User backend API proxy
+    location /api/ {
+        proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+{% if frontend_backend_protocol == 'https' %}
+        proxy_ssl_verify off;
+{% endif %}
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+
+    # FastAPI OpenAPI docs (#6749 follow-up — without these, the SPA fallback
+    # serves index.html for /openapi.json /docs /redoc instead of the spec).
+    # Use `=` for /openapi.json (exact match) so it can't shadow real routes;
+    # `^~` for /docs and /redoc so prefix match takes priority over the SPA
+    # catch-all.
+    location = /openapi.json {
+        proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+{% if frontend_backend_protocol == 'https' %}
+        proxy_ssl_verify off;
+{% endif %}
+    }
+    location ^~ /docs {
+        proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+{% if frontend_backend_protocol == 'https' %}
+        proxy_ssl_verify off;
+{% endif %}
+    }
+    location ^~ /redoc {
+        proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+{% if frontend_backend_protocol == 'https' %}
+        proxy_ssl_verify off;
+{% endif %}
+    }
+
+{% else %}
+    # ── Standalone mode ───────────────────────────────────────
+    # SLM API at both /api/ and /slm/api/ (#3268: agents always use /slm/api/)
+
+    # WebSocket endpoint (must be before /api/ to take priority)
+    location /api/ws/ {
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/ws/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+    }
+
+    # /slm/api/ alias — agents always use this path regardless of mode (#3268)
+    location /slm/api/ws/ {
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/ws/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+    }
+
+    location /slm/api/ {
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+
+    # API reverse proxy
+    location /api/ {
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+
+    # Health check endpoint (bypass auth)
+    location /api/health {
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/health;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
+{% endif %}
+
+    # Grafana Live WebSocket (must be before the general /grafana/ block)
+    location /grafana/api/live/ {
+        proxy_pass http://{{ grafana_host }}:{{ grafana_port }}/grafana/api/live/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600;
+
+        # Issue #1160: Override server-level security headers for Grafana iframe embedding.
+        # nginx add_header in location replaces parent context headers, so all headers re-declared.
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://$host; frame-ancestors 'self'; base-uri 'self';" always;
+    }
+
+    # Grafana reverse proxy (monitoring dashboards)
+    # Issue #853: Support both local and external Grafana instances
+    location /grafana/ {
+        proxy_pass http://{{ grafana_host }}:{{ grafana_port }}/grafana/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Issue #1160: Override server-level security headers for Grafana iframe embedding.
+        # nginx add_header in location replaces parent context headers, so all headers re-declared.
+        # frame-ancestors 'self' allows the SLM admin (same origin) to embed Grafana dashboards.
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://$host; frame-ancestors 'self'; base-uri 'self';" always;
+{% if grafana_enable_cors | default(false) %}
+
+        # CORS headers for external Grafana iframe embedding
+        add_header Access-Control-Allow-Origin "{{ grafana_cors_origin }}" always;
+        add_header Access-Control-Allow-Credentials "true" always;
+{% endif %}
+    }
+
+    # Prometheus reverse proxy (metrics queries)
+    location /prometheus/ {
+        proxy_pass http://{{ prometheus_host }}:{{ prometheus_port }}/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Main AutoBot backend proxy (user backend skills, cache, etc.)
+    # /autobot-api/* → https://main_backend/api/* (strips /autobot-api prefix)
+    # Issue #1791: inject X-Internal-API-Key for service auth + WebSocket support
+    location /autobot-api/ {
+        proxy_pass https://{{ autobot_backend_host }}:{{ autobot_backend_port }}/api/;
+        proxy_http_version 1.1;
+        proxy_ssl_verify off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+{% if autobot_internal_api_key %}
+        proxy_set_header X-Internal-API-Key "{{ autobot_internal_api_key }}";
+{% endif %}
+        # WebSocket support for /processes/{id}/stream (#1777)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+
+    # noVNC WebSocket/HTTP proxy — Issue #1002
+    # /tools/novnc/* → http://main_backend:6080/* (strips /tools/novnc prefix)
+    # Needed to avoid mixed-content blocking when embedding VNC in HTTPS SLM admin.
+    location /tools/novnc/ {
+        proxy_pass http://{{ autobot_backend_host }}:{{ novnc_port }}/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600;
+    }
+
+    # SLM Frontend SPA at /slm/ subroute (#2716)
+    location = /slm {
+        return 301 /slm/;
+    }
+
+    location /slm/ {
+        alias {{ slm_frontend_dir }}/dist/;
+        try_files $uri $uri/ /slm/index.html;
+
+        # Prevent index.html from being cached so new deployments are picked up
+        location ~* /slm/index\.html$ {
+            add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+            add_header Pragma "no-cache" always;
+        }
+    }
+
+{% if slm_colocated_frontend | default(false) | bool %}
+    # User frontend SPA fallback — serves index.html for client-side routes
+    location / {
+        root {{ frontend_dist_dir }};
+        try_files $uri $uri/ /index.html;
+
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Cross-Origin-Opener-Policy "same-origin" always;
+        add_header Cross-Origin-Embedder-Policy "credentialless" always;
+    }
+{% else %}
+    # Standalone SLM: redirect root to /slm/
+    location = / {
+        return 302 /slm/;
+    }
+{% endif %}
+
+    # Gzip compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+    gzip_min_length 1000;
+}

@@ -1,0 +1,1043 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Agent Loop Implementation
+
+The core agent execution loop implementing the Manus 6-step pattern:
+    1. ANALYZE EVENTS    → Understand state from event stream
+    2. SELECT TOOLS      → Choose based on plan + knowledge
+    3. WAIT FOR EXECUTION → Sandbox executes tool
+    4. ITERATE           → One tool per iteration, repeat
+    5. SUBMIT RESULTS    → Deliver via message tools
+    6. ENTER STANDBY     → Idle state, await new tasks
+
+This module orchestrates the Planner, Event Stream, Parallel Executor,
+and Think Tool into a cohesive execution system.
+"""
+
+import asyncio
+import hashlib
+import json
+import logging
+import time
+import uuid
+from typing import Any, Optional
+
+from agent_loop.slack_hook import get_slack_hook
+from agent_loop.think_tool import ThinkTool
+from agent_loop.types import (
+    AgentLoopConfig,
+    AgentMessage,
+    IterationResult,
+    LoopPhase,
+    LoopState,
+    MessageType,
+    TaskContext,
+    ThinkCategory,
+)
+from events import EventStreamManager, EventType
+from events.event_types import APPROVAL_REQUIRED as EVT_APPROVAL_REQUIRED
+from events.types import create_approval_required_event, create_message_event
+from live_event_manager import publish_live_event
+from planner import PlannerModule
+from tools.parallel import ParallelToolExecutor
+
+logger = logging.getLogger(__name__)
+
+# =============================================================================
+# Approval Workflow – Sensitive Tool Classification (Issue #4092)
+# =============================================================================
+
+#: Tools that require explicit user approval before execution.
+#: Covers file modifications, system commands, and deployment operations.
+SENSITIVE_TOOLS: frozenset[str] = frozenset(
+    {
+        # File & filesystem mutations
+        "write_file",
+        "edit_file",
+        "delete_file",
+        "move_file",
+        "copy_file",
+        "create_directory",
+        "remove_directory",
+        # Shell / system commands
+        "bash",
+        "shell",
+        "execute_command",
+        "run_command",
+        "terminal",
+        "system_exec",
+        # Deployment / infrastructure
+        "deploy",
+        "ansible",
+        "docker",
+        "kubectl",
+        "helm",
+        "terraform",
+        # Git mutations (write-side)
+        "git_push",
+        "git_commit",
+        "git_merge",
+        "git_rebase",
+        "git_reset",
+        "git_force_push",
+        # Network / HTTP mutations
+        "http_post",
+        "http_put",
+        "http_patch",
+        "http_delete",
+        "send_request",
+        # Code execution
+        "code_interpreter",
+    }
+)
+
+# =============================================================================
+# Repetition-Halt Guard (Issue #3859, #3862, #3877)
+# =============================================================================
+
+# Sentinel key injected into tool_results when the repetition-halt guard fires.
+# Presence of this key in tool_results lets _execute_iteration_phases detect
+# a halt without inspecting the error string.  Issue #3877.
+_HALT_SENTINEL = "__repetition_halt__"
+
+# =============================================================================
+# Agent Loop
+# =============================================================================
+
+
+class AgentLoop:
+    """
+    The main agent execution loop.
+
+    Implements the Manus-inspired 6-step iteration pattern with
+    event stream integration, planning, and parallel tool execution.
+    """
+
+    def __init__(
+        self,
+        event_stream: EventStreamManager,
+        planner: Optional[PlannerModule] = None,
+        tool_executor: Optional[ParallelToolExecutor] = None,
+        think_tool: Optional[ThinkTool] = None,
+        config: Optional[AgentLoopConfig] = None,
+    ):
+        """
+        Initialize the agent loop.
+
+        Args:
+            event_stream: Event stream manager for publishing/subscribing
+            planner: Optional planner module for task decomposition
+            tool_executor: Optional parallel tool executor
+            think_tool: Optional think tool for reasoning
+            config: Loop configuration
+        """
+        self.event_stream = event_stream
+        self.planner = planner
+        self.tool_executor = tool_executor
+        self.think_tool = think_tool or ThinkTool()
+        self.config = config or AgentLoopConfig()
+
+        # State
+        self._state = LoopState.IDLE
+        self._current_phase = LoopPhase.STANDBY
+        self._current_context: Optional[TaskContext] = None
+        self._iteration_count = 0
+        self._consecutive_errors = 0
+        # Issue #3877: explicit flag set when repetition halt fires; checked by
+        # _should_continue() so the main while-loop exits on the very next guard
+        # check rather than relying solely on _should_iterate()'s error detection.
+        self._halted_on_repetition: bool = False
+
+    # =========================================================================
+    # Properties
+    # =========================================================================
+
+    @property
+    def state(self) -> LoopState:
+        """Get current loop state."""
+        return self._state
+
+    @property
+    def phase(self) -> LoopPhase:
+        """Get current loop phase."""
+        return self._current_phase
+
+    @property
+    def context(self) -> Optional[TaskContext]:
+        """Get current task context."""
+        return self._current_context
+
+    @property
+    def iteration_count(self) -> int:
+        """Get current iteration count."""
+        return self._iteration_count
+
+    # =========================================================================
+    # Main Entry Points
+    # =========================================================================
+
+    def _init_task_context(
+        self,
+        task_id: str,
+        task_description: str,
+        initial_context: Optional[dict],
+    ) -> None:
+        """
+        Initialize task context and state for new task.
+
+        Issue #665: Extracted from run_task to reduce function length.
+
+        Args:
+            task_id: Task identifier
+            task_description: Description of the task
+            initial_context: Optional initial context/metadata
+        """
+        self._current_context = TaskContext(
+            task_id=task_id,
+            description=task_description,
+            metadata=initial_context or {},
+        )
+        self._state = LoopState.INITIALIZING
+        self._iteration_count = 0
+        self._consecutive_errors = 0
+        self._halted_on_repetition = False
+
+    async def _execute_main_loop(self) -> list[IterationResult]:
+        """Execute the main iteration loop.
+
+        Issue #665: Extracted from run_task to reduce function length.
+
+        Returns:
+            List of iteration results
+        """
+        self._state = LoopState.RUNNING
+        results: list[IterationResult] = []
+
+        while self._should_continue():
+            iteration_result = await self._run_iteration()
+            results.append(iteration_result)
+
+            if not iteration_result.should_continue:
+                break
+
+        return results
+
+    async def _create_task_plan(self, task_description: str, initial_context: Optional[dict]) -> None:
+        """Create execution plan if planner is available.
+
+        Issue #620: Extracted from run_task to reduce function length.
+
+        Args:
+            task_description: Description of the task
+            initial_context: Optional initial context/metadata
+        """
+        if self.planner:
+            plan = await self.planner.create_plan(
+                task_description,
+                context=initial_context,
+            )
+            self._current_context.plan_id = plan.plan_id
+            logger.info("AgentLoop: Plan created with %d steps", len(plan.steps))
+
+    async def _finalize_task(self, results: list[IterationResult]) -> dict[str, Any]:
+        """Finalize task execution and build result.
+
+        Issue #620: Extracted from run_task to reduce function length.
+
+        Args:
+            results: List of iteration results
+
+        Returns:
+            Dict with task results
+        """
+        self._state = LoopState.COMPLETING
+        if self.config.think_on_completion:
+            await self._think_before_completion()
+
+        self._state = LoopState.COMPLETED
+        return self._build_result(results)
+
+    async def run_task(
+        self,
+        task_description: str,
+        task_id: Optional[str] = None,
+        initial_context: Optional[dict] = None,
+    ) -> dict[str, Any]:
+        """Run a complete task through the agent loop.
+
+        Issue #665, #620: Refactored to use extracted helper methods.
+
+        Args:
+            task_description: Description of the task to perform
+            task_id: Optional task ID (generated if not provided)
+            initial_context: Optional initial context/metadata
+
+        Returns:
+            Dict with task results
+        """
+        task_id = task_id or f"task-{uuid.uuid4().hex[:12]}"
+        logger.info("AgentLoop: Starting task %s: %s", task_id, task_description[:100])
+
+        self._init_task_context(task_id, task_description, initial_context)
+
+        # Issue #4308: notify Slack that the agent has started
+        slack = get_slack_hook()
+        await slack.post_agent_status(
+            agent_name="AgentLoop",
+            status="started",
+            message=f"Task {task_id}: {task_description[:120]}",
+        )
+
+        _task_start = time.monotonic()
+
+        try:
+            # Issue #620: Use helper for plan creation
+            await self._create_task_plan(task_description, initial_context)
+
+            results = await self._execute_main_loop()
+
+            # Issue #620: Use helper for task finalization
+            result = await self._finalize_task(results)
+
+            # Issue #4308: notify Slack on successful task completion
+            duration = time.monotonic() - _task_start
+            await slack.post_task_completion(
+                task_id=task_id,
+                task_title=task_description[:80],
+                agent_name="AgentLoop",
+                summary=(
+                    f"Completed {result.get('iterations', 0)} iteration(s), "
+                    f"{result.get('tools_executed', 0)} tool(s) executed."
+                ),
+                status="completed",
+                duration_seconds=duration,
+            )
+            return result
+
+        except asyncio.CancelledError:
+            self._state = LoopState.CANCELLED
+            logger.warning("AgentLoop: Task %s cancelled", task_id)
+            raise
+
+        except Exception as e:
+            self._state = LoopState.FAILED
+            logger.error("AgentLoop: Task %s failed: %s", task_id, e)
+            # Issue #4308: notify Slack on task failure
+            duration = time.monotonic() - _task_start
+            await slack.post_task_completion(
+                task_id=task_id,
+                task_title=task_description[:80],
+                agent_name="AgentLoop",
+                summary=f"Task failed: {e}",
+                status="failed",
+                duration_seconds=duration,
+            )
+            raise
+
+        finally:
+            self._current_phase = LoopPhase.STANDBY
+
+    async def cancel(self) -> None:
+        """Cancel the current task."""
+        if self._state == LoopState.RUNNING:
+            self._state = LoopState.CANCELLED
+            logger.info("AgentLoop: Task cancellation requested")
+
+    async def pause(self) -> None:
+        """Pause the current task."""
+        if self._state == LoopState.RUNNING:
+            self._state = LoopState.PAUSED
+            logger.info("AgentLoop: Task paused")
+
+    async def resume(self) -> None:
+        """Resume a paused task."""
+        if self._state == LoopState.PAUSED:
+            self._state = LoopState.RUNNING
+            logger.info("AgentLoop: Task resumed")
+
+    # =========================================================================
+    # Iteration Logic
+    # =========================================================================
+
+    async def _execute_iteration_phases(self, result: IterationResult) -> IterationResult:
+        """
+        Execute all phases of an iteration.
+
+        Args:
+            result: The IterationResult to populate
+
+        Returns:
+            Updated IterationResult with phase outcomes. Issue #620.
+        """
+        # Phase 1: Analyze Events
+        self._current_phase = LoopPhase.ANALYZE_EVENTS
+        events_context = await self._analyze_events()
+        result.events_analyzed = len(events_context.get("events", []))
+
+        # Issue #4528: inject first_turn_note into user content on first turn.
+        # _analyze_events() sets context["first_turn_note"] on iteration 1 when
+        # first_turn_priming_enabled=True, but nothing downstream consumed it.
+        # Extract it here, append to the task description carried in events_context,
+        # then clear it so subsequent iterations are not affected.
+        first_turn_note = events_context.pop("first_turn_note", None)
+        if first_turn_note and self.config.first_turn_priming_enabled:
+            task_content = events_context.get("task_description", "")
+            events_context["task_description"] = (
+                task_content + "\n\n" + first_turn_note if task_content else first_turn_note
+            )
+
+        # Phase 2: Select Tools
+        self._current_phase = LoopPhase.SELECT_TOOLS
+        tools_to_execute = await self._select_tools(events_context)
+
+        if not tools_to_execute:
+            result.phase_completed = LoopPhase.SELECT_TOOLS
+            result.should_continue = False
+            return result
+
+        # Phase 3: Execute Tools
+        self._current_phase = LoopPhase.WAIT_FOR_EXECUTION
+        tool_results = await self._execute_tools(tools_to_execute)
+
+        # Issue #3877 / #3859: detect repetition-halt via sentinel key.
+        # When halted: do not add any rejected tools to tools_executed and
+        # stop iterating immediately so the LLM receives the error but the
+        # loop does not re-propose the same tools indefinitely.
+        if tool_results.pop(_HALT_SENTINEL, False):
+            # Issue #3862: keep should_continue=False so the loop exits, but
+            # surface the halt errors as tool_results so the LLM can adapt.
+            # Issue #3859: tools_executed stays empty — no tool actually ran.
+            result.tools_executed = []
+            result.tool_results = tool_results
+            result.should_continue = False
+            result.phase_completed = LoopPhase.ITERATE
+            return result
+
+        result.tools_executed = [t.get("tool_name", "unknown") for t in tools_to_execute]
+        result.tool_results = tool_results
+
+        for tool_name in result.tools_executed:
+            self._current_context.add_tool(tool_name)
+
+        # Phase 4: Iterate
+        self._current_phase = LoopPhase.ITERATE
+        result.should_continue = await self._should_iterate(tool_results)
+
+        if self._current_context.plan_id and self.planner:
+            result.plan_progress = await self._get_plan_progress()
+
+        result.phase_completed = LoopPhase.ITERATE
+        self._consecutive_errors = 0
+        return result
+
+    def _log_iteration_completion(self, start_time: float, result: IterationResult) -> None:
+        """
+        Log iteration completion details if configured.
+
+        Args:
+            start_time: Monotonic time when iteration started
+            result: The completed IterationResult. Issue #620.
+        """
+        if self.config.log_iterations:
+            duration = (time.monotonic() - start_time) * 1000
+            logger.info(
+                "AgentLoop: Iteration %d completed in %.1fms (tools: %s)",
+                self._iteration_count,
+                duration,
+                result.tools_executed,
+            )
+
+    async def _run_iteration(self) -> IterationResult:
+        """Run a single iteration of the agent loop."""
+        self._iteration_count += 1
+        start_time = time.monotonic()
+        logger.debug("AgentLoop: Starting iteration %d", self._iteration_count)
+
+        result = IterationResult(iteration_number=self._iteration_count)
+
+        try:
+            result = await self._execute_iteration_phases(result)
+        except Exception as e:
+            result.error = str(e)
+            result.should_continue = await self._handle_iteration_error(e)
+            self._current_context.add_error(str(e))
+
+        self._log_iteration_completion(start_time, result)
+        return result
+
+    # =========================================================================
+    # Phase Implementations
+    # =========================================================================
+
+    async def _analyze_events(self) -> dict[str, Any]:
+        """
+        Phase 1: Analyze recent events from the event stream.
+
+        Returns context for tool selection.
+        """
+        events = await self.event_stream.get_latest(
+            count=self.config.events_to_analyze,
+            task_id=self._current_context.task_id if self._current_context else None,
+        )
+
+        # Filter out system events if configured
+        if not self.config.include_system_events:
+            events = [e for e in events if e.event_type != EventType.SYSTEM]
+
+        # Build context from events
+        context = {
+            "events": [e.to_dict() for e in events],
+            "event_count": len(events),
+            "event_types": list(set(e.event_type.name for e in events)),
+            "recent_actions": [e.content for e in events if e.event_type == EventType.ACTION][-5:],
+            "recent_observations": [e.content for e in events if e.event_type == EventType.OBSERVATION][-5:],
+        }
+
+        # Issue #4481: inject a first-turn context hint so the LLM knows no
+        # prior tool results exist yet.  Only added on iteration 1 (the very
+        # first call) when the feature is enabled.
+        if self.config.first_turn_priming_enabled and self._iteration_count == 1:
+            context["first_turn_note"] = "Note: This is the first iteration — no tool results exist yet."
+
+        return context
+
+    async def _select_tools(
+        self,
+        events_context: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """
+        Phase 2: Select tools to execute based on context.
+
+        This is where the agent decides what to do next.
+        Returns list of tool specifications.
+        """
+        # If we have a plan, get the current step
+        if self._current_context and self._current_context.plan_id and self.planner:
+            plan = await self.planner.get_plan(self._current_context.plan_id)
+            if plan:
+                # Get next steps to execute (may be parallel)
+                next_steps = plan.get_parallel_group()
+                if next_steps:
+                    # Convert plan steps to tool calls
+                    # This would integrate with the LLM to determine actual tools
+                    return await self._plan_steps_to_tools(next_steps, events_context)
+
+        # Without a plan, we need LLM to select tools
+        # This is a placeholder - actual implementation would call LLM
+        return []
+
+    async def _execute_tools(
+        self,
+        tools: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """
+        Phase 3: Execute selected tools.
+
+        Uses parallel executor if available and configured.
+        """
+        if not tools:
+            return {}
+
+        # Issue #3255 / #3877: Halt before execution if identical call repeated too often.
+        # Setting _halted_on_repetition=True ensures _should_continue() terminates the
+        # main while-loop immediately after this iteration, independent of whether
+        # _should_iterate() correctly classifies the error result.
+        repeated_tool = self._check_tool_call_repetition(tools)
+        if repeated_tool is not None:
+            halt_msg = (
+                f"Halted: repetitive tool call detected for '{repeated_tool}' "
+                f"(exceeded max_identical_tool_calls="
+                f"{self.config.max_identical_tool_calls})"
+            )
+            # Issue #3877: include ALL tools in halt results so _should_iterate
+            # sees every tool from the batch as having an error result.
+            # Issue #3859: do NOT record any of these in tools_executed — the
+            # sentinel key lets _execute_iteration_phases skip add_tool() calls
+            # and set should_continue=False without calling _should_iterate.
+            halt_results: dict[str, Any] = {
+                _HALT_SENTINEL: True,
+            }
+            for tool in tools:
+                t_name = tool.get("tool_name", "unknown")
+                halt_results[t_name] = {"error": halt_msg}
+            self._halted_on_repetition = True
+            return halt_results
+
+        # Issue #4092: Gate sensitive operations behind user approval.
+        denied_results = await self._check_approvals(tools)
+        if denied_results:
+            return denied_results
+
+        # Check if we need to think before certain tools
+        await self._think_before_tools(tools)
+
+        if self.tool_executor and self.config.enable_parallel_tools:
+            # Use parallel executor
+            from tools.parallel import create_tool_calls
+
+            tool_calls = create_tool_calls(tools)
+            return await self.tool_executor.execute_batch(
+                tool_calls,
+                task_id=(self._current_context.task_id if self._current_context else None),
+            )
+
+        # Sequential execution (fallback)
+        results = {}
+        for tool in tools:
+            tool_name = tool.get("tool_name", "unknown")
+            try:
+                # This would integrate with actual tool dispatcher
+                result = await self._dispatch_tool(tool)
+                results[tool_name] = result
+            except Exception as e:
+                logger.error("Tool %s execution failed: %s", tool_name, e)
+                results[tool_name] = {"error": "Tool execution failed"}
+
+        return results
+
+    async def _should_iterate(
+        self,
+        tool_results: dict[str, Any],
+    ) -> bool:
+        """
+        Phase 4: Determine if we should continue iterating.
+
+        Returns True if more iterations are needed.
+        """
+        # Check for cancellation/pause
+        if self._state != LoopState.RUNNING:
+            return False
+
+        # Check iteration limit
+        if self._iteration_count >= self.config.max_iterations:
+            logger.warning(
+                "AgentLoop: Max iterations (%d) reached",
+                self.config.max_iterations,
+            )
+            return False
+
+        # Check if plan is complete
+        if self._current_context and self._current_context.plan_id and self.planner:
+            plan = await self.planner.get_plan(self._current_context.plan_id)
+            if plan and plan.is_complete:
+                return False
+
+        # Check if all tools succeeded
+        all_succeeded = all("error" not in result for result in tool_results.values() if isinstance(result, dict))
+
+        return all_succeeded
+
+    # =========================================================================
+    # Message Handling (Manus Pattern)
+    # =========================================================================
+
+    async def notify(self, content: str, metadata: Optional[dict] = None) -> None:
+        """
+        Send a non-blocking notification to the user.
+
+        Args:
+            content: Message content
+            metadata: Optional metadata
+        """
+        message = AgentMessage(
+            message_type=MessageType.NOTIFY,
+            content=content,
+            metadata=metadata or {},
+            task_id=self._current_context.task_id if self._current_context else None,
+        )
+
+        event = create_message_event(
+            role="assistant",
+            content=message.to_dict(),
+            task_id=message.task_id,
+        )
+        await self.event_stream.publish(event)
+
+    async def ask(
+        self,
+        content: str,
+        options: Optional[list[str]] = None,
+        metadata: Optional[dict] = None,
+    ) -> str:
+        """
+        Send a blocking question to the user.
+
+        Args:
+            content: Question content
+            options: Optional list of answer options
+            metadata: Optional metadata
+
+        Returns:
+            User's response
+        """
+        message = AgentMessage(
+            message_type=MessageType.ASK,
+            content=content,
+            options=options,
+            metadata=metadata or {},
+            task_id=self._current_context.task_id if self._current_context else None,
+        )
+
+        event = create_message_event(
+            role="assistant",
+            content=message.to_dict(),
+            task_id=message.task_id,
+        )
+        await self.event_stream.publish(event)
+
+        # Wait for user response
+        # This would integrate with the event stream subscription
+        # Placeholder - actual implementation would wait for user MESSAGE event
+        return ""
+
+    # =========================================================================
+    # Think Tool Integration
+    # =========================================================================
+
+    async def _think_before_tools(
+        self,
+        tools: list[dict[str, Any]],
+    ) -> None:
+        """Think before executing certain tools."""
+        if not self.config.mandatory_think_enabled:
+            return
+
+        # Check for git tools
+        git_tools = {"git", "gh", "github"}
+        has_git_tool = any(
+            tool.get("tool_name", "").lower() in git_tools or "git" in tool.get("tool_name", "").lower()
+            for tool in tools
+        )
+
+        if has_git_tool and self.config.think_on_git:
+            context = f"About to execute git tools: {[t.get('tool_name') for t in tools]}"
+            result = await self.think_tool.think(
+                ThinkCategory.GIT_DECISION,
+                context,
+                task_id=(self._current_context.task_id if self._current_context else None),
+            )
+            if self._current_context:
+                self._current_context.add_think(result)
+
+    async def _think_before_completion(self) -> None:
+        """Think before reporting task completion."""
+        if not self._current_context:
+            return
+
+        context = f"""
+Task: {self._current_context.description}
+Iterations: {self._iteration_count}
+Tools executed: {len(self._current_context.tools_executed)}
+Errors: {len(self._current_context.errors)}
+Duration: {self._current_context.get_duration_ms():.0f}ms
+"""
+        result = await self.think_tool.think(
+            ThinkCategory.COMPLETION,
+            context,
+            task_id=self._current_context.task_id,
+        )
+        self._current_context.add_think(result)
+
+    # =========================================================================
+    # Helper Methods
+    # =========================================================================
+
+    # =========================================================================
+    # Repetitive Tool-Call Detection (#3255)
+    # =========================================================================
+
+    @staticmethod
+    def _compute_tool_call_hash(tool: dict[str, Any]) -> str:
+        """Return a stable content hash for a tool call.
+
+        The hash is derived from the tool name and its sorted arguments so that
+        two calls with identical intent produce the same hash regardless of
+        dict-insertion order.
+
+        Issue #3255, #3868, #3874.
+        """
+        tool_name = tool.get("tool_name", "")
+        args = tool.get("args", tool.get("arguments", tool.get("parameters", {})))
+        # Issue #3874: preserve non-dict arg identity; {} would alias all
+        # non-dict calls to the same bucket
+        if not isinstance(args, dict):
+            args = {"_raw": str(args), "_type": type(args).__name__}
+        try:
+            # Issue #3868: default=str handles datetime, bytes, custom objects
+            canonical = json.dumps({"n": tool_name, "a": args}, sort_keys=True, default=str)
+        except Exception:
+            # Absolute fallback — should never be reached with default=str
+            canonical = repr({"n": tool_name, "a": args})
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    def _check_tool_call_repetition(self, tools: list[dict[str, Any]]) -> Optional[str]:
+        """Check whether any pending tool call has been issued too many times.
+
+        Returns the offending tool name if repetition is detected, else None.
+        Records each call regardless so the counter accumulates across iterations.
+
+        Issue #3255.
+        """
+        if not self._current_context:
+            return None
+
+        threshold = self.config.max_identical_tool_calls
+        for tool in tools:
+            call_hash = self._compute_tool_call_hash(tool)
+            count = self._current_context.record_tool_call_hash(call_hash)
+            tool_name = tool.get("tool_name", "unknown")
+            if count >= threshold:
+                logger.warning(
+                    "AgentLoop: Detected repetitive tool call: %s called %d times "
+                    "with identical args (threshold=%d)",
+                    tool_name,
+                    count,
+                    threshold,
+                )
+                return tool_name
+        return None
+
+    # =========================================================================
+    # Approval Workflow (Issue #4092)
+    # =========================================================================
+
+    @staticmethod
+    def _sensitive_tool_name(tool: dict[str, Any]) -> Optional[str]:
+        """Return the tool name if it is in SENSITIVE_TOOLS, else None."""
+        name = tool.get("tool_name", "").lower()
+        if name in SENSITIVE_TOOLS:
+            return name
+        # Also match by prefix so e.g. "bash_run" → "bash" is caught.
+        for sensitive in SENSITIVE_TOOLS:
+            if name.startswith(sensitive):
+                return sensitive
+        return None
+
+    def _requires_approval(self, tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Return the subset of *tools* that require user approval.
+
+        Returns an empty list when approval is disabled in the config.
+        """
+        if not self.config.require_approval_for_sensitive:
+            return []
+        return [t for t in tools if self._sensitive_tool_name(t) is not None]
+
+    async def _check_approvals(
+        self,
+        tools: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Request approval for every sensitive tool in *tools*.
+
+        Iterates sequentially so the user sees one dialog at a time.
+        Returns a non-empty error dict if any tool is denied (the remaining
+        tools are skipped); returns ``{}`` when all are approved or when
+        approval is not required.
+        """
+        for tool in self._requires_approval(tools):
+            tool_name = tool.get("tool_name", "unknown")
+            approval_id = str(uuid.uuid4())
+            approved = await self._request_approval(tool, approval_id)
+            if not approved:
+                logger.warning(
+                    "AgentLoop: tool '%s' denied by user (approval_id=%s)",
+                    tool_name,
+                    approval_id,
+                )
+                return {
+                    tool_name: {"error": (f"Tool '{tool_name}' was denied by the user " f"(approval_id={approval_id})")}
+                }
+        return {}
+
+    async def _request_approval(
+        self,
+        tool: dict[str, Any],
+        approval_id: str,
+    ) -> bool:
+        """Emit APPROVAL_REQUIRED and wait for APPROVAL_RESPONSE.
+
+        Returns True if the user approved, False if denied or timed out.
+        Uses pub/sub subscribe() so the response is received instantly when
+        the user approves — no 1-second polling window that could miss fast
+        approvals or race against the event store.
+        """
+        tool_name = tool.get("tool_name", "unknown")
+        args = tool.get("args", tool.get("arguments", tool.get("parameters", {})))
+        task_id = self._current_context.task_id if self._current_context else None
+
+        event = create_approval_required_event(
+            approval_id=approval_id,
+            tool_name=tool_name,
+            arguments=args if isinstance(args, dict) else {"value": repr(args)},
+            reason=f"Tool '{tool_name}' performs a sensitive operation and requires authorization.",
+            risk_level="high",
+            timeout_seconds=self.config.approval_timeout_seconds,
+            task_id=task_id,
+        )
+        await self.event_stream.publish(event)
+        # Bridge to LiveEventManager so the WebSocket frontend receives the
+        # approval dialog trigger (#4959).  RedisEventStreamManager and
+        # LiveEventManager are two disconnected buses — events published to one
+        # never reach the other without an explicit bridge call.
+        await publish_live_event(
+            "global",
+            EVT_APPROVAL_REQUIRED,
+            {
+                "approval_id": approval_id,
+                "tool_name": tool_name,
+                "arguments": args if isinstance(args, dict) else {"value": repr(args)},
+                "reason": f"Tool '{tool_name}' performs a sensitive operation and requires authorization.",
+                "risk_level": "high",
+                "timeout_seconds": self.config.approval_timeout_seconds,
+                "task_id": task_id,
+            },
+        )
+        logger.info(
+            "AgentLoop: approval required for tool '%s' (approval_id=%s)",
+            tool_name,
+            approval_id,
+        )
+
+        # Issue #4308: mirror approval request to Slack (fire-and-forget)
+        slack = get_slack_hook()
+        await slack.request_approval(
+            approval_id=approval_id,
+            title=f"Approval required: {tool_name}",
+            description=(
+                f"Tool '{tool_name}' is requesting authorization to perform a "
+                f"sensitive operation. Reply *approve* or *reject* in this thread."
+            ),
+            approval_type="tool",
+            requested_by="AgentLoop",
+        )
+
+        # Use pub/sub subscribe() instead of polling get_latest().
+        # subscribe() blocks on pubsub.listen() and yields the event the moment
+        # it is published — no 1-second window that could miss the signal.
+        async def _await_response() -> bool:
+            # Do NOT filter by task_id here: if the frontend omits task_id in
+            # the approval request the published event has task_id=None, which
+            # the subscriber's task_id filter would skip even when approval_id
+            # matches.  approval_id is a UUID — globally unique — so filtering
+            # by it is sufficient and safe.
+            async for resp_event in self.event_stream.subscribe(
+                event_types=[EventType.APPROVAL_RESPONSE],
+            ):
+                if resp_event.content.get("approval_id") == approval_id:
+                    decision: bool = resp_event.content.get("approved", False)
+                    logger.info(
+                        "AgentLoop: approval_id=%s decision=%s",
+                        approval_id,
+                        "approved" if decision else "denied",
+                    )
+                    return decision
+            return False  # iterator exhausted without a match
+
+        try:
+            return await asyncio.wait_for(
+                _await_response(),
+                timeout=self.config.approval_timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "AgentLoop: approval timed out for tool '%s' (approval_id=%s)",
+                tool_name,
+                approval_id,
+            )
+            return False
+
+    def _should_continue(self) -> bool:
+        """Check if the loop should continue.
+
+        Issue #3877: Also returns False when a repetition halt has fired so the
+        main while-loop exits even if _should_iterate() did not catch the error.
+        """
+        if self._halted_on_repetition:
+            return False
+        if self._state not in (LoopState.RUNNING, LoopState.PAUSED):
+            return False
+        if self._iteration_count >= self.config.max_iterations:
+            return False
+        if self._consecutive_errors >= self.config.max_consecutive_errors:
+            return False
+        return True
+
+    async def _handle_iteration_error(self, error: Exception) -> bool:
+        """Handle an error during iteration."""
+        self._consecutive_errors += 1
+
+        logger.error(
+            "AgentLoop: Iteration error (%d consecutive): %s",
+            self._consecutive_errors,
+            error,
+        )
+
+        if self._consecutive_errors >= self.config.max_consecutive_errors:
+            logger.error("AgentLoop: Max consecutive errors reached, stopping")
+            return False
+
+        # Think about error recovery
+        if self.config.mandatory_think_enabled:
+            result = await self.think_tool.think(
+                ThinkCategory.ERROR_RECOVERY,
+                f"Error: {error}",
+                task_id=(self._current_context.task_id if self._current_context else None),
+            )
+            if self._current_context:
+                self._current_context.add_think(result)
+
+        return True  # Continue after error
+
+    async def _plan_steps_to_tools(
+        self,
+        steps: list,
+        events_context: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Convert plan steps to tool specifications."""
+        # This would use LLM to determine actual tools from step descriptions
+        # Placeholder implementation
+        return []
+
+    async def _dispatch_tool(
+        self,
+        tool: dict[str, Any],
+    ) -> Any:
+        """Dispatch a single tool call."""
+        # This would integrate with actual tool system
+        # Placeholder implementation
+        return {"status": "executed"}
+
+    async def _get_plan_progress(self) -> float:
+        """Get current plan completion progress."""
+        if not self._current_context or not self._current_context.plan_id:
+            return 0.0
+
+        if not self.planner:
+            return 0.0
+
+        plan = await self.planner.get_plan(self._current_context.plan_id)
+        if not plan:
+            return 0.0
+
+        return plan.get_progress()
+
+    def _build_result(
+        self,
+        iterations: list[IterationResult],
+    ) -> dict[str, Any]:
+        """Build the final task result."""
+        if not self._current_context:
+            return {"error": "No context"}
+
+        return {
+            "task_id": self._current_context.task_id,
+            "description": self._current_context.description,
+            "state": self._state.name,
+            "iterations": len(iterations),
+            "tools_executed": len(self._current_context.tools_executed),
+            "errors": self._current_context.errors,
+            "duration_ms": self._current_context.get_duration_ms(),
+            "plan_id": self._current_context.plan_id,
+            "think_count": len(self._current_context.think_history),
+        }

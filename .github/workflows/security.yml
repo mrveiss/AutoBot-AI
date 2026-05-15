@@ -1,0 +1,315 @@
+# Security Scanning workflow
+#
+# Security checks are blocking — failures prevent merge (Issue #2874).
+
+name: Security Scanning
+
+on:
+  push:
+    branches: [ main, dev, Dev_new_gui ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      deps: ${{ steps.filter.outputs.deps }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
+        id: filter
+        with:
+          filters: |
+            python:
+              - 'autobot-backend/**/*.py'
+              - 'autobot-slm-backend/**/*.py'
+              - 'autobot_shared/**/*.py'
+              - '.github/workflows/security.yml'
+            deps:
+              - '**/requirements*.txt'
+              - 'requirements-ci/**'
+              - 'pyproject.toml'
+              - 'autobot_shared/pyproject.toml'
+              - 'autobot-frontend/package*.json'
+              - '.github/workflows/security.yml'
+
+  dependency-security:
+    name: Dependency Security Scan
+    needs: changes
+    # Always run on schedule (daily security scan); gate on `deps` for push/PR.
+    if: github.event_name == 'schedule' || needs.changes.outputs.deps == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        python -m pip install pip-audit bandit safety
+        # Use CI-safe requirements (excludes vllm and other GPU-dependent packages)
+        python -m pip install -r requirements-ci.txt --prefer-binary || {
+          echo "::error::Some dependencies failed to install — security tools may be incomplete"
+          exit 1
+        }
+
+    - name: Python Dependency Audit
+      run: |
+        echo "## Python Dependency Security Report" >> $GITHUB_STEP_SUMMARY
+        pip-audit --format=json --output=python-audit.json || true
+        pip-audit --format=markdown >> $GITHUB_STEP_SUMMARY || true
+
+    - name: Safety Check (Alternative Python Security)
+      run: |
+        echo "## Safety Security Report" >> $GITHUB_STEP_SUMMARY
+        safety check --json --output safety-report.json || true
+        safety check || true
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v6.4.0
+      with:
+        node-version: '22'
+
+    - name: Install Frontend dependencies
+      run: |
+        cd autobot-frontend
+        npm ci
+
+    - name: Node.js Dependency Audit
+      run: |
+        cd autobot-frontend
+        echo "## Node.js Dependency Security Report" >> $GITHUB_STEP_SUMMARY
+        npm audit --audit-level=moderate --json > npm-audit.json || true
+        npm audit --audit-level=moderate || true
+
+    - name: Upload Security Reports
+      uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: dependency-security-reports
+        path: |
+          python-audit.json
+          safety-report.json
+          autobot-frontend/npm-audit.json
+        retention-days: 30
+
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -rf .venv || true
+
+  static-analysis:
+    name: Static Application Security Testing (SAST)
+    needs: changes
+    # Always run on schedule (daily SAST scan); gate on `python` for push/PR.
+    if: github.event_name == 'schedule' || needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install SAST tools
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install bandit semgrep flake8 pylint
+
+    - name: Bandit Security Linter
+      run: |
+        echo "## Bandit Security Analysis" >> $GITHUB_STEP_SUMMARY
+        python3 -m bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ -f json -o bandit-report.json || true
+        python3 -m bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ -f txt || true
+
+    - name: Semgrep SAST Scan
+      run: |
+        echo "## Semgrep Security Analysis" >> $GITHUB_STEP_SUMMARY
+        python3 -m semgrep --config=auto --json --output=semgrep-report.json autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
+        python3 -m semgrep --config=auto autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
+
+    - name: Python Code Quality Check
+      run: |
+        echo "## Code Quality Analysis" >> $GITHUB_STEP_SUMMARY
+        python3 -m flake8 autobot-backend/ autobot-slm-backend/ autobot_shared/ --max-line-length=88 --extend-ignore=E203,W503 \
+          --output-file=flake8-report.txt || true
+        cat flake8-report.txt || true
+
+    - name: Secret Detection
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "## Secret Detection" >> $GITHUB_STEP_SUMMARY
+        # Check for common secret patterns (without Docker)
+        echo "Scanning for potential secrets..."
+
+        # Check for hardcoded API keys, passwords, tokens
+        SECRETS_FOUND=0
+
+        # Check for AWS keys
+        if grep -rE "AKIA[0-9A-Z]{16}" --exclude="*_test.py" --exclude="test_*.py" autobot-backend/ autobot-slm-backend/ autobot_shared/ 2>/dev/null; then
+          echo "::error::Potential AWS access key found"
+          SECRETS_FOUND=$((SECRETS_FOUND + 1))
+        fi
+
+        # Check for private keys
+        if grep -rE "-----BEGIN (RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----" autobot-backend/ autobot-slm-backend/ autobot_shared/ 2>/dev/null; then
+          echo "::error::Potential private key found"
+          SECRETS_FOUND=$((SECRETS_FOUND + 1))
+        fi
+
+        # Check for common password patterns in code (excluding tests)
+        if grep -rE "password\s*=\s*['\"][^'\"]{8,}['\"]" autobot-backend/ autobot-slm-backend/ autobot_shared/ --include="*.py" 2>/dev/null | grep -v "test\|example\|placeholder"; then
+          echo "::error::Potential hardcoded password found"
+          SECRETS_FOUND=$((SECRETS_FOUND + 1))
+        fi
+
+        if [ $SECRETS_FOUND -eq 0 ]; then
+          echo "No obvious secrets detected" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "::error::Found $SECRETS_FOUND potential secret(s) — review required"
+          echo "Found $SECRETS_FOUND potential secret(s) — please review" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+
+    - name: Upload SAST Reports
+      uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: sast-security-reports
+        path: |
+          bandit-report.json
+          semgrep-report.json
+          flake8-report.txt
+        retention-days: 30
+
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -rf .venv || true
+
+  compliance-check:
+    name: Security Compliance Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Check for Security Files
+      run: |
+        echo "## Security Compliance Check" >> $GITHUB_STEP_SUMMARY
+
+        # Check for required security files
+        files=(
+          ".gitignore"
+          "requirements.txt"
+        )
+
+        missing_files=()
+        for file in "${files[@]}"; do
+          if [ ! -e "$file" ]; then
+            missing_files+=("$file")
+          fi
+        done
+
+        if [ ${#missing_files[@]} -eq 0 ]; then
+          echo "All required security files present" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "Missing security files:" >> $GITHUB_STEP_SUMMARY
+          printf '%s\n' "${missing_files[@]}" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Security Best Practices Check
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "## Security Best Practices" >> $GITHUB_STEP_SUMMARY
+
+        # Check for security-related imports
+        security_imports=$(grep -r "hashlib\|secrets\|cryptography\|bcrypt" autobot-backend/ autobot-slm-backend/ autobot_shared/ | wc -l)
+        echo "Security-related imports found: $security_imports" >> $GITHUB_STEP_SUMMARY
+
+        # Check for input validation patterns
+        validation_patterns=$(grep -r "validator\|sanitize\|escape\|validate" autobot-backend/ autobot-slm-backend/ autobot_shared/ | wc -l)
+        echo "Input validation patterns found: $validation_patterns" >> $GITHUB_STEP_SUMMARY
+
+        # Check for error handling
+        error_handling=$(grep -r "try:\|except\|raise" autobot-backend/ autobot-slm-backend/ autobot_shared/ | wc -l)
+        echo "Error handling patterns found: $error_handling" >> $GITHUB_STEP_SUMMARY
+
+  security-summary:
+    name: Security Summary Report
+    runs-on: ubuntu-latest
+    needs: [changes, dependency-security, static-analysis, compliance-check]
+    if: always()
+
+    steps:
+    - name: Download all security reports
+      uses: actions/download-artifact@v8
+
+    - name: Generate Security Summary
+      run: |
+        echo "# Security Scan Summary" > security-summary.md
+        echo "" >> security-summary.md
+        echo "**Scan Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> security-summary.md
+        echo "**Branch:** ${{ github.ref_name }}" >> security-summary.md
+        echo "**Commit:** ${{ github.sha }}" >> security-summary.md
+        echo "" >> security-summary.md
+
+        # Check if reports exist and summarize
+        if [ -d "dependency-security-reports" ]; then
+          echo "## Dependency Security" >> security-summary.md
+          echo "- Python audit completed" >> security-summary.md
+          echo "- Node.js audit completed" >> security-summary.md
+          echo "" >> security-summary.md
+        fi
+
+        if [ -d "sast-security-reports" ]; then
+          echo "## Static Analysis Security Testing" >> security-summary.md
+          echo "- Bandit security linting completed" >> security-summary.md
+          echo "- Semgrep security analysis completed" >> security-summary.md
+          echo "- Secret detection completed" >> security-summary.md
+          echo "" >> security-summary.md
+        fi
+
+        echo "## Recommendations" >> security-summary.md
+        echo "1. Review all security reports for critical findings" >> security-summary.md
+        echo "2. Update dependencies with known vulnerabilities" >> security-summary.md
+        echo "3. Address any SAST findings in critical code paths" >> security-summary.md
+
+    - name: Upload Security Summary
+      uses: actions/upload-artifact@v7
+      with:
+        name: security-summary
+        path: security-summary.md
+        retention-days: 90

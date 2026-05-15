@@ -1,0 +1,55 @@
+# AutoBot Browser Worker - Systemd Service Unit
+# Deploys to: 172.16.168.25 (Browser VM)
+# Runs Playwright browser automation service via Node.js/Express
+#
+# Installation:
+#   sudo cp autobot-browser-worker.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable autobot-browser-worker
+#   sudo systemctl start autobot-browser-worker
+
+[Unit]
+Description=AutoBot Browser Worker - Playwright Automation Service
+Documentation=https://github.com/mrveiss/AutoBot-AI
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=autobot
+Group=autobot
+WorkingDirectory=/opt/autobot/autobot-browser-worker
+
+# Environment variables
+EnvironmentFile=/etc/autobot/autobot-browser-worker.env
+Environment="NODE_ENV=production"
+Environment="PLAYWRIGHT_BROWSERS_PATH=/opt/autobot/autobot-browser-worker/browsers"
+
+# Start Node.js Express server
+ExecStart=/usr/bin/node /opt/autobot/autobot-browser-worker/playwright-server.js
+
+# Restart policy
+Restart=always
+RestartSec=5s
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+# Resource limits (browser automation needs memory)
+MemoryMax=4G
+CPUQuota=150%
+LimitNOFILE=65535
+
+# Security
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/autobot/autobot-browser-worker/browsers
+ReadWritePaths=/var/log/autobot
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-browser-worker
+
+[Install]
+WantedBy=multi-user.target

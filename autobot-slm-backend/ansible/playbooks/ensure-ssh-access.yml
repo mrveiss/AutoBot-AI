@@ -1,0 +1,70 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Ensure SSH Access Safety Playbook
+#
+# ALWAYS run this BEFORE modifying firewall rules to prevent lockouts.
+# Ensures SSH service is enabled and firewall allows SSH on all fleet nodes.
+#
+# Usage:
+#   ansible-playbook -i inventory/slm-nodes.yml playbooks/ensure-ssh-access.yml
+#
+# Run before:
+#   - Any firewall rule changes
+#   - Security hardening
+#   - Network configuration changes
+---
+- name: Ensure SSH Access on All Fleet Nodes
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Ensure SSH service is installed
+      ansible.builtin.apt:
+        name: openssh-server
+        state: present
+        update_cache: false
+
+    - name: Ensure SSH service is enabled
+      ansible.builtin.systemd:
+        name: ssh
+        enabled: true
+        state: started
+
+    - name: Ensure UFW allows SSH (port 22)
+      community.general.ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+        comment: 'SSH access - DO NOT REMOVE'
+      when: ansible_facts['distribution'] == 'Ubuntu' or ansible_facts['distribution'] == 'Debian'
+
+    - name: Verify SSH is listening on port 22
+      ansible.builtin.wait_for:
+        port: 22
+        host: 0.0.0.0
+        timeout: 10
+
+    - name: Display SSH status
+      ansible.builtin.debug:
+        msg: "✅ SSH is enabled and accessible on {{ inventory_hostname }} ({{ ansible_host }})"
+
+- name: Verification Summary
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: SSH Access Summary
+      ansible.builtin.debug:
+        msg:
+          - "============================================"
+          - "SSH Access Verification Complete"
+          - "============================================"
+          - "All {{ groups['all'] | length }} machines have:"
+          - "  ✅ SSH service enabled and running"
+          - "  ✅ Firewall rule allowing port 22"
+          - "  ✅ Port 22 listening and accessible"
+          - ""
+          - "Safe to proceed with firewall changes."

@@ -1,0 +1,153 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Check System Updates Playbook
+# Discovers available apt package updates on fleet nodes.
+# Output is parsed by the SLM backend to populate UpdateInfo records.
+---
+
+- name: Check System Updates
+  hosts: "{{ target_hosts | default('all') }}"
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 0
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Get list of upgradable packages
+      ansible.builtin.shell: |
+        apt list --upgradable 2>/dev/null | grep -v '^Listing' | head -500
+      register: upgradable_raw
+      changed_when: false
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Get held packages
+      ansible.builtin.shell: |
+        apt-mark showhold 2>/dev/null || true
+      register: held_packages
+      changed_when: false
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Parse upgradable packages into JSON
+      ansible.builtin.set_fact:
+        parsed_packages: >-
+          {{
+            upgradable_raw.stdout_lines | default([])
+            | map('regex_replace',
+                '^([^ /]+)/(\S+) (\S+) \S+ \[upgradable from: ([^\]]+)\]$',
+                '{"p":"\1","r":"\2","a":"\3","c":"\4"}')
+            | select('match', '^\{')
+            | list
+          }}
+        held_list: "{{ (held_packages.stdout_lines | default([])) }}"
+        security_pkgs: >-
+          {{
+            upgradable_raw.stdout_lines | default([])
+            | select('search', '-security')
+            | map('regex_replace', '^([^ /]+)/.*', '\1')
+            | list
+          }}
+        apt_pkg_names: >-
+          {{
+            upgradable_raw.stdout_lines | default([])
+            | select('match', '^[a-zA-Z0-9]')
+            | map('regex_replace', '^([^ /]+)/.*', '\1')
+            | list
+          }}
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Collect Ubuntu Pro ESM security status
+      ansible.builtin.shell: |
+        pro security-status --format json 2>/dev/null || true
+      register: esm_status_raw
+      changed_when: false
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Set ESM package facts when pro output is available
+      ansible.builtin.set_fact:
+        _esm_upgradable: >-
+          {{
+            (esm_status_raw.stdout | from_json).get('packages', [])
+            | selectattr('status', 'equalto', 'upgrade_available')
+            | list
+          }}
+      when:
+        - ansible_facts['os_family'] == "Debian"
+        - esm_status_raw.stdout | default('') | regex_search('^\s*\{') is not none
+
+    - name: Merge ESM security package names into security list
+      ansible.builtin.set_fact:
+        security_pkgs: >-
+          {{
+            (security_pkgs | default([]))
+            + (_esm_upgradable | map(attribute='package') | list)
+            | unique
+          }}
+      when:
+        - ansible_facts['os_family'] == "Debian"
+        - _esm_upgradable | default([]) | length > 0
+
+    - name: Resolve installed versions for ESM packages via dpkg-query
+      ansible.builtin.shell: |
+        dpkg-query -W -f='${Package}=${Version}\n' \
+          {{ _esm_upgradable | map(attribute='package') | join(' ') }} \
+          2>/dev/null || true
+      register: _esm_dpkg_raw
+      changed_when: false
+      when:
+        - ansible_facts['os_family'] == "Debian"
+        - _esm_upgradable | default([]) | length > 0
+
+    - name: Build ESM installed-version lookup dict from dpkg-query output
+      ansible.builtin.set_fact:
+        _esm_installed_versions: >-
+          {{
+            dict(
+              _esm_dpkg_raw.stdout_lines | default([])
+              | select('match', '^[^=]+=.+')
+              | map('regex_replace', '^([^=]+)=(.+)$', '\1')
+              | zip(
+                  _esm_dpkg_raw.stdout_lines | default([])
+                  | select('match', '^[^=]+=.+')
+                  | map('regex_replace', '^([^=]+)=(.+)$', '\2')
+                )
+            )
+          }}
+      when:
+        - ansible_facts['os_family'] == "Debian"
+        - _esm_upgradable | default([]) | length > 0
+
+    - name: Append ESM-only package entry (not in apt list) to parsed packages
+      ansible.builtin.set_fact:
+        parsed_packages: >-
+          {{
+            parsed_packages | default([])
+            + [{'p': item.package, 'r': 'esm-security',
+                'a': item.version,
+                'c': (_esm_installed_versions | default({})
+                      ).get(item.package, 'unknown')}]
+          }}
+      loop: "{{ _esm_upgradable | default([]) }}"
+      loop_control:
+        label: "{{ item.package }}"
+      when:
+        - ansible_facts['os_family'] == "Debian"
+        - item.package not in (apt_pkg_names | default([]))
+
+    - name: Output discovered packages as JSON
+      ansible.builtin.debug:
+        msg: >-
+          AUTOBOT_UPDATES_JSON:{{ {
+            'hostname': ansible_facts['hostname'],
+            'ip_address': ansible_facts['default_ipv4'].address | default('unknown'),
+            'os_family': ansible_facts['os_family'],
+            'packages': parsed_packages | default([]),
+            'held': held_list | default([]),
+            'security_packages': security_pkgs | default([]),
+            'total': (parsed_packages | default([])) | length
+          } | to_json }}

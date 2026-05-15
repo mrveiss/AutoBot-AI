@@ -1,0 +1,95 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Deploy Loki (native binary) on main server
+
+- name: Check if Loki binary exists
+  stat:
+    path: "{{ loki_binary_path }}"
+  register: loki_binary
+
+- name: Download Loki binary
+  get_url:
+    url: "{{ loki_binary_url }}"
+    dest: "/tmp/loki-linux-amd64.zip"
+    mode: '0644'
+  when: not loki_binary.stat.exists
+
+- name: Install unzip (if needed)
+  package:
+    name: unzip
+    state: present
+  when: not loki_binary.stat.exists
+
+- name: Extract Loki binary
+  unarchive:
+    src: "/tmp/loki-linux-amd64.zip"
+    dest: "/tmp/"
+    remote_src: yes
+  when: not loki_binary.stat.exists
+
+- name: Install Loki binary
+  copy:
+    src: "/tmp/loki-linux-amd64"
+    dest: "{{ loki_binary_path }}"
+    mode: '0755'
+    remote_src: yes
+  when: not loki_binary.stat.exists
+  notify: restart loki
+
+- name: Create Loki configuration
+  template:
+    src: loki-config.yml.j2
+    dest: "{{ loki_config_dir }}/config.yml"
+    owner: "{{ logging_user }}"
+    group: "{{ logging_group }}"
+    mode: '0644'
+  notify: restart loki
+
+- name: Create Loki systemd service
+  template:
+    src: loki.service.j2
+    dest: /etc/systemd/system/loki.service
+    mode: '0644'
+  notify:
+    - reload systemd
+    - restart loki
+
+- name: Ensure Loki data directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ logging_user }}"
+    group: "{{ logging_group }}"
+    mode: '0755'
+  loop:
+    - "{{ loki_data_dir }}"
+    - "{{ loki_data_dir }}/chunks"
+    - "{{ loki_data_dir }}/rules"
+    - "{{ loki_data_dir }}/index"
+
+- name: Enable and start Loki service
+  systemd:
+    name: loki
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Wait for Loki to be ready
+  uri:
+    url: "http://localhost:{{ loki_port }}/ready"
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 10
+  delay: 3
+
+- name: Cleanup temporary files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/tmp/loki-linux-amd64.zip"
+    - "/tmp/loki-linux-amd64"
+  when: not loki_binary.stat.exists

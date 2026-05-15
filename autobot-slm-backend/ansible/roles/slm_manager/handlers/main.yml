@@ -1,0 +1,35 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: restart slm backend
+  ansible.builtin.systemd:
+    name: "{{ slm_backend_service }}"
+    state: restarted
+  # (#2872) Intentional: during initial provisioning the service unit may
+  # not be deployed yet when this handler fires from a config template
+  # change.  The "Start backend service" task later ensures it runs.
+  failed_when: false
+
+- name: test nginx config
+  ansible.builtin.command:
+    cmd: nginx -t
+
+- name: reload nginx
+  ansible.builtin.systemd:
+    name: nginx
+    state: reloaded
+
+- name: restart nginx
+  ansible.builtin.systemd:
+    name: nginx
+    state: restarted
+
+- name: restart grafana
+  ansible.builtin.systemd:
+    name: grafana-server
+    state: restarted

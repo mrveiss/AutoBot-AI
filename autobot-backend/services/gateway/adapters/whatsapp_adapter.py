@@ -1,0 +1,50 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""WhatsApp Platform Adapter for Message Gateway"""
+
+import logging
+from typing import Any, Dict
+
+from .base_adapter import BaseAdapter, NormalizedResponse, UnifiedMessage
+
+logger = logging.getLogger(__name__)
+
+
+class WhatsAppAdapter(BaseAdapter):
+    """WhatsApp platform adapter for unified message gateway."""
+
+    def __init__(self):
+        super().__init__("whatsapp")
+
+    async def normalize_message(self, raw_message: Dict[str, Any]) -> UnifiedMessage:
+        """Convert WhatsApp message to unified schema."""
+        metadata = await self.extract_metadata(raw_message)
+        metadata["message_id"] = raw_message.get("id")
+        metadata["is_group"] = raw_message.get("is_group", False)
+
+        return UnifiedMessage(
+            user_id=raw_message["from"],
+            platform="whatsapp",
+            channel_id=raw_message["chat_id"],
+            message=raw_message["body"],
+            timestamp=float(raw_message.get("timestamp", 0)),
+            metadata=metadata,
+        )
+
+    async def denormalize_response(self, unified_response: NormalizedResponse) -> Dict[str, Any]:
+        """Convert unified response to WhatsApp format."""
+        whatsapp_response = {
+            "to": unified_response.channel_id,
+            "body": unified_response.content,
+        }
+
+        # WhatsApp reply type
+        if unified_response.response_type == "reply":
+            whatsapp_response["reply_to"] = unified_response.metadata.get("message_id")
+
+        return whatsapp_response
+
+    def get_rate_limit(self) -> Dict[str, int]:
+        """WhatsApp rate limit: 80 requests/second with burst of 100."""
+        return {"requests_per_second": 80, "burst_size": 100}

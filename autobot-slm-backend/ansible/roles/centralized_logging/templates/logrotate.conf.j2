@@ -1,0 +1,25 @@
+# AutoBot log rotation configuration
+{{ log_base_dir }}/*.log {
+    daily
+    missingok
+    rotate {{ log_rotation_count }}
+    compress
+    delaycompress
+    notifempty
+    create 0644 {{ logging_user }} {{ logging_group }}
+    size {{ log_rotation_size }}
+    sharedscripts
+    postrotate
+        systemctl reload promtail > /dev/null 2>&1 || true
+    endscript
+}
+
+{{ centralized_log_dir }}/**/*.log {
+    weekly
+    missingok
+    rotate 4
+    compress
+    delaycompress
+    notifempty
+    create 0644 {{ logging_user }} {{ logging_group }}
+}

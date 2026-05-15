@@ -1,0 +1,357 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Git Tracker Service (Issue #741).
+
+Tracks git repository version and checks for updates from remote.
+"""
+
+import asyncio
+import logging
+import os
+from datetime import datetime, timezone
+from typing import Optional, Tuple
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.database import CodeSource, Setting
+
+logger = logging.getLogger(__name__)
+
+# Import db_service at module level for testing
+try:
+    from services.database import db_service
+except ImportError:
+    # Allow testing without full service initialization
+    db_service = None  # type: ignore
+
+# Configuration
+VERSION_CHECK_INTERVAL = 300  # 5 minutes
+DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot/code_source")
+DEFAULT_BRANCH = os.environ.get("SLM_REPO_BRANCH", "Dev_new_gui")
+
+
+class GitTracker:
+    """
+    Tracks git repository versions and checks for remote updates.
+
+    Used by SLM to monitor the agent code repository and notify
+    nodes when updates are available.
+    """
+
+    def __init__(
+        self,
+        repo_path: str,
+        remote: str = "origin",
+        branch: str = "main",
+    ):
+        """
+        Initialize GitTracker.
+
+        Args:
+            repo_path: Path to the git repository
+            remote: Remote name (default: origin)
+            branch: Branch to track (default: main)
+        """
+        self.repo_path = repo_path
+        self.remote = remote
+        self.branch = branch
+        self.latest_commit: Optional[str] = None
+        self.last_fetch: Optional[datetime] = None
+
+    async def _run_git_command(self, *args: str) -> Tuple[str, int]:
+        """
+        Run a git command and return output.
+
+        Args:
+            *args: Git command arguments
+
+        Returns:
+            Tuple of (stdout, return_code)
+        """
+        cmd = ["git", "-C", self.repo_path, *args]
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await proc.communicate()
+
+            if proc.returncode != 0:
+                logger.warning(
+                    "Git command failed: %s, stderr: %s",
+                    " ".join(cmd),
+                    stderr.decode().strip(),
+                )
+
+            return stdout.decode().strip(), proc.returncode
+
+        except Exception as e:
+            logger.error("Error running git command: %s", e)
+            return "", 1
+
+    async def get_local_commit(self) -> Optional[str]:
+        """
+        Get the current commit hash of the local repository.
+
+        Falls back to slm_agent_latest_commit DB setting when
+        the repo path is not a git repository (rsync deployments).
+
+        Returns:
+            Current commit hash or None if error
+        """
+        output, returncode = await self._run_git_command("rev-parse", "HEAD")
+
+        if returncode == 0 and output:
+            return output
+
+        # Fallback: read from DB setting (rsync deployments have no .git)
+        return await self._get_commit_from_db()
+
+    async def _get_commit_from_db(self) -> Optional[str]:
+        """Read slm_agent_latest_commit from DB.
+
+        Helper for get_local_commit (Issue #829).
+        """
+        if db_service is None:
+            return None
+        try:
+            async with db_service.session() as db:
+                result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
+                setting = result.scalar_one_or_none()
+                return setting.value if setting else None
+        except Exception as e:
+            logger.debug("DB fallback for commit hash failed: %s", e)
+            return None
+
+    async def fetch_remote(self) -> bool:
+        """
+        Fetch updates from the remote repository.
+
+        Returns:
+            True if fetch succeeded, False otherwise
+        """
+        _, returncode = await self._run_git_command("fetch", self.remote)
+
+        if returncode == 0:
+            self.last_fetch = datetime.now(timezone.utc)
+            return True
+        return False
+
+    async def get_remote_commit(self, branch: Optional[str] = None) -> Optional[str]:
+        """
+        Get the latest commit hash from the remote branch.
+
+        Args:
+            branch: Branch name (uses self.branch if not specified)
+
+        Returns:
+            Remote commit hash or None if error
+        """
+        target_branch = branch or self.branch
+        ref = f"{self.remote}/{target_branch}"
+
+        output, returncode = await self._run_git_command("rev-parse", ref)
+
+        if returncode == 0 and output:
+            return output
+        return None
+
+    async def check_for_updates(self, fetch: bool = True) -> dict:
+        """
+        Check if updates are available from the remote.
+
+        For rsync deployments (no .git), reads the latest commit from
+        the DB setting populated by the post-commit hook notification.
+
+        Args:
+            fetch: Whether to fetch from remote first (default: True)
+
+        Returns:
+            Dict with has_update, local_commit, remote_commit, last_fetch
+        """
+        if fetch:
+            await self.fetch_remote()
+
+        local_commit = await self.get_local_commit()
+        remote_commit = await self.get_remote_commit()
+
+        # Fallback for rsync deployments: use DB commit as remote_commit
+        if remote_commit is None:
+            remote_commit = await self._get_commit_from_db()
+
+        has_update = local_commit is not None and remote_commit is not None and local_commit != remote_commit
+
+        if remote_commit:
+            self.latest_commit = remote_commit
+
+        return {
+            "has_update": has_update,
+            "local_commit": local_commit,
+            "remote_commit": remote_commit,
+            "last_fetch": self.last_fetch.isoformat() if self.last_fetch else None,
+        }
+
+    async def pull_updates(self) -> bool:
+        """
+        Pull updates from the remote repository.
+
+        Returns:
+            True if pull succeeded, False otherwise
+        """
+        _, returncode = await self._run_git_command("pull", self.remote, self.branch)
+        return returncode == 0
+
+
+# Singleton instance for the SLM agent code repository
+_tracker_instance: Optional[GitTracker] = None
+
+
+def get_git_tracker(
+    repo_path: str = DEFAULT_REPO_PATH,
+    branch: str = DEFAULT_BRANCH,
+) -> GitTracker:
+    """
+    Get or create the GitTracker singleton instance.
+
+    Resets the singleton when repo_path or branch changes so that
+    version_check_task always tracks the active CodeSource config.
+
+    Issue #1185: accept branch param and reset on config change.
+
+    Args:
+        repo_path: Path to the git repository
+        branch: Branch to track (default: Dev_new_gui)
+
+    Returns:
+        GitTracker instance
+    """
+    global _tracker_instance
+
+    config_changed = _tracker_instance is not None and (
+        _tracker_instance.repo_path != repo_path or _tracker_instance.branch != branch
+    )
+
+    if _tracker_instance is None or config_changed:
+        if config_changed:
+            logger.info(
+                "GitTracker config changed: %s@%s -> %s@%s",
+                _tracker_instance.repo_path,  # type: ignore[union-attr]
+                _tracker_instance.branch,  # type: ignore[union-attr]
+                repo_path,
+                branch,
+            )
+        _tracker_instance = GitTracker(repo_path=repo_path, branch=branch)
+
+    return _tracker_instance
+
+
+async def _get_active_code_source_config() -> Tuple[str, str]:
+    """Read repo_path and branch from the active CodeSource DB record.
+
+    Falls back to DEFAULT_REPO_PATH / DEFAULT_BRANCH when no active
+    source exists or DB is unavailable.
+
+    Issue #1185: ensures version_check_task uses dynamic config.
+    """
+    if db_service is None:
+        return DEFAULT_REPO_PATH, DEFAULT_BRANCH
+    try:
+        async with db_service.session() as db:
+            result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
+            source = result.scalar_one_or_none()
+            if source:
+                return source.repo_path, source.branch
+    except Exception as e:
+        logger.debug("Failed to read CodeSource config from DB: %s", e)
+    return DEFAULT_REPO_PATH, DEFAULT_BRANCH
+
+
+async def update_latest_version_setting(
+    db: AsyncSession,
+    commit_hash: str,
+) -> None:
+    """
+    Update the slm_agent_latest_commit setting in database.
+
+    Args:
+        db: Database session
+        commit_hash: The latest commit hash to store
+    """
+    result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
+    setting = result.scalar_one_or_none()
+
+    if setting:
+        setting.value = commit_hash
+    else:
+        setting = Setting(
+            key="slm_agent_latest_commit",
+            value=commit_hash,
+        )
+        db.add(setting)
+
+    await db.commit()
+    logger.info("Updated slm_agent_latest_commit to: %s", commit_hash[:12])
+
+
+async def version_check_task(
+    interval: int = VERSION_CHECK_INTERVAL,
+) -> None:
+    """
+    Background task that periodically checks for code updates.
+
+    Reads repo_path and branch from the active CodeSource DB record on
+    each iteration so config changes take effect without restart.
+
+    Issue #1185: use dynamic CodeSource config instead of static env var.
+
+    Args:
+        interval: Check interval in seconds (default: 300 = 5 min)
+    """
+    logger.info("Starting version check task (interval: %ds)", interval)
+
+    while True:
+        try:
+            repo_path, branch = await _get_active_code_source_config()
+            tracker = get_git_tracker(repo_path=repo_path, branch=branch)
+            result = await tracker.check_for_updates()
+
+            if result["remote_commit"]:
+                async with db_service.session() as db:
+                    await update_latest_version_setting(db, result["remote_commit"])
+
+                if result["has_update"]:
+                    logger.info(
+                        "Update available: local=%s, remote=%s",
+                        (result["local_commit"][:12] if result["local_commit"] else "unknown"),
+                        result["remote_commit"][:12],
+                    )
+            else:
+                logger.warning("Failed to get remote commit hash")
+
+        except Exception as e:
+            logger.error("Version check failed: %s", e)
+
+        await asyncio.sleep(interval)
+
+
+def start_version_checker(
+    interval: int = VERSION_CHECK_INTERVAL,
+) -> asyncio.Task:
+    """
+    Start the version checker background task.
+
+    Repo path and branch are read from the active CodeSource DB record
+    on each check iteration (issue #1185).
+
+    Args:
+        interval: Check interval in seconds
+
+    Returns:
+        The asyncio Task object
+    """
+    return asyncio.create_task(version_check_task(interval))

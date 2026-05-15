@@ -1,0 +1,144 @@
+# Auto-manage Dependabot pull requests
+#
+# This workflow:
+# 1. Auto-merges minor/patch Dependabot updates (npm, yarn, pip)
+# 2. Closes stale Dependabot PRs (no commits for 30+ days)
+# 3. Labels major version updates for manual review
+#
+# See: https://github.com/mrveiss/AutoBot-AI/issues/4110
+
+name: Dependabot auto-manage
+
+on:
+  schedule:
+    # Run daily at 04:00 UTC
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Process Dependabot PRs
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prs = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              creator: 'dependabot[bot]',
+              per_page: 100,
+            });
+
+            console.log('Found ' + prs.data.length + ' open Dependabot PRs');
+
+            for (const pr of prs.data) {
+              const title = pr.title;
+              console.log('Processing PR #' + pr.number + ': ' + title);
+
+              // Check if it's a minor/patch update
+              // Major updates typically include "major version bump" or version change from X.y.z to (X+1).0.0
+              const isMajor = title.includes('major version bump') ||
+                              /bump .+ from \d+\.\d+\.\d+ to [1-9]\d+\.\d+\.\d+/.test(title);
+
+              if (!isMajor) {
+                // Auto-merge minor/patch updates
+                try {
+                  await github.rest.pulls.merge({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: pr.number,
+                    merge_method: 'squash',
+                  });
+                  console.log('Merged PR #' + pr.number);
+                } catch (error) {
+                  console.log('Could not merge PR #' + pr.number + ': ' + error.message);
+                }
+              } else {
+                // Add label for major version updates (manual review)
+                try {
+                  await github.rest.issues.addLabels({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: pr.number,
+                    labels: ['major-version-update', 'needs-review'],
+                  });
+                  console.log('Labeled PR #' + pr.number + ' for manual review');
+                } catch (error) {
+                  console.log('Could not label PR #' + pr.number + ': ' + error.message);
+                }
+              }
+            }
+
+      - name: Close stale Dependabot PRs
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const DAYS_STALE = 30;
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - DAYS_STALE);
+
+            const prs = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              creator: 'dependabot[bot]',
+              per_page: 100,
+            });
+
+            console.log('Checking ' + prs.data.length + ' Dependabot PRs for staleness');
+
+            for (const pr of prs.data) {
+              const updatedAt = new Date(pr.updated_at);
+
+              if (updatedAt < cutoffDate) {
+                console.log('Closing stale PR #' + pr.number + ' (last updated ' + pr.updated_at + ')');
+
+                try {
+                  await github.rest.pulls.update({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: pr.number,
+                    state: 'closed',
+                  });
+
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: pr.number,
+                    body: 'Auto-closed stale Dependabot PR (no activity for ' + DAYS_STALE + '+ days). Feel free to reopen if needed.',
+                  });
+
+                  console.log('Closed PR #' + pr.number);
+                } catch (error) {
+                  console.log('Could not close PR #' + pr.number + ': ' + error.message);
+                }
+              }
+            }
+
+      - name: Generate summary
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Dependabot Management Summary
+
+          **Actions taken:**
+          - Minor/patch updates: auto-merged
+          - Major version updates: labeled for manual review
+          - Stale PRs (30+ days): closed with notification
+
+          See workflow run for detailed logs.
+          EOF

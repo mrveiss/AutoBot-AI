@@ -1,0 +1,438 @@
+<script setup lang="ts">
+/**
+ * Invite User Dialog Component
+ *
+ * Issue #874: Frontend Collaborative Session UI (#608 Phase 6)
+ * Issue #3985: Replace hardcoded mock users with real API
+ * Issue #4035: Add debounce to search filter
+ *
+ * Modal dialog for inviting users to collaborate on a session.
+ * Supports role selection and email-based invitations.
+ * Fetches real users from the /user-management/users API endpoint.
+ */
+
+import { ref, computed, onMounted, toRef, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusRestore } from '@/composables/useFocusRestore'
+import { useInitialFocus } from '@/composables/useInitialFocus'
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
+import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
+import { useDebounce } from '@/composables/useDebounce'
+import { useCollaborationInvites } from '@/composables/useCollaborationInvites'
+import type { CollaborationUser } from '@/composables/useCollaborationInvites'
+
+const { t } = useI18n()
+const { inviteCollaborator, sessionPresence } = useSessionCollaboration()
+
+// Props
+const props = defineProps<{
+  /** Whether the dialog is visible */
+  modelValue: boolean
+}>()
+
+// Emits
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  invited: [userId: string, username: string, role: string]
+}>()
+
+const dialogRef = ref<HTMLElement | null>(null)
+const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
+useFocusRestore(toRef(props, 'modelValue'))
+useBodyScrollLock(toRef(props, 'modelValue'))
+const { focusFirst } = useInitialFocus(dialogRef)
+watch(() => props.modelValue, (open) => { if (open) focusFirst() }, { immediate: true })
+
+// Local state
+const searchQuery = ref('')
+const selectedRole = ref<'collaborator' | 'viewer'>('collaborator')
+const selectedUserId = ref<string | null>(null)
+const inviting = ref(false)
+
+const { users, loading, errorMessage, fetchUsers: fetchUsersFromApi } = useCollaborationInvites()
+
+// Debounce search query for performance (Issue #4035)
+// Reduces unnecessary filtering operations during rapid typing
+const debouncedSearchQuery = useDebounce(searchQuery, 350)
+
+// Fetch users from API
+const fetchUsers = async () => {
+  await fetchUsersFromApi(t('collaboration.invite.failedToLoadUsers'))
+}
+
+// Load users when dialog opens
+onMounted(() => {
+  if (props.modelValue) {
+    fetchUsers()
+  }
+})
+
+// Filter users by debounced search query
+const filteredUsers = computed(() => {
+  if (!debouncedSearchQuery.value) return users.value
+
+  const query = debouncedSearchQuery.value.toLowerCase()
+  return users.value.filter(user =>
+    user.username.toLowerCase().includes(query) ||
+    user.email.toLowerCase().includes(query) ||
+    (user.display_name && user.display_name.toLowerCase().includes(query))
+  )
+})
+
+// Already in session
+const alreadyInSession = computed(() => {
+  const participantIds = new Set(sessionPresence.value.map(p => p.userId))
+  return filteredUsers.value.filter(user => participantIds.has(user.id))
+})
+
+// Available to invite
+const availableUsers = computed(() => {
+  const participantIds = new Set(sessionPresence.value.map(p => p.userId))
+  return filteredUsers.value.filter(user => !participantIds.has(user.id))
+})
+
+// Get initials
+const getInitials = (username: string): string => {
+  return username
+    .split(/[\s_-]/)
+    .map(part => part[0])
+    .join('')
+    .toUpperCase()
+    .substring(0, 2)
+}
+
+// Get display name or username
+const getDisplayName = (user: CollaborationUser): string => {
+  return user.display_name || user.username
+}
+
+// Select user
+const selectUser = (userId: string) => {
+  selectedUserId.value = userId
+  errorMessage.value = null
+}
+
+// Send invitation
+const sendInvitation = async () => {
+  if (!selectedUserId.value) {
+    errorMessage.value = t('collaboration.invite.selectUserError')
+    return
+  }
+
+  inviting.value = true
+  errorMessage.value = null
+
+  try {
+    // Call composable to send invitation
+    const success = inviteCollaborator(selectedUserId.value, selectedRole.value)
+
+    if (success) {
+      const user = users.value.find(u => u.id === selectedUserId.value)
+      if (user) {
+        emit('invited', user.id, user.username, selectedRole.value)
+      }
+
+      // Close dialog and reset
+      closeDialog()
+    } else {
+      errorMessage.value = t('collaboration.invite.sendFailed')
+    }
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : t('collaboration.invite.genericError')
+  } finally {
+    inviting.value = false
+  }
+}
+
+// Close dialog
+const closeDialog = () => {
+  emit('update:modelValue', false)
+  // Reset state after animation
+  setTimeout(() => {
+    searchQuery.value = ''
+    selectedUserId.value = null
+    selectedRole.value = 'collaborator'
+    errorMessage.value = null
+  }, 300)
+}
+
+// Role options
+const roleOptions = computed(() => [
+  {
+    value: 'collaborator' as const,
+    label: t('collaboration.invite.roleEditor'),
+    description: t('collaboration.invite.roleEditorDesc'),
+    icon: 'pencil-square'
+  },
+  {
+    value: 'viewer' as const,
+    label: t('collaboration.invite.roleViewer'),
+    description: t('collaboration.invite.roleViewerDesc'),
+    icon: 'eye'
+  }
+])
+</script>
+
+<template>
+  <!-- Modal backdrop -->
+  <Transition name="modal-backdrop">
+    <div
+      v-if="props.modelValue"
+      class="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+      @click.self="closeDialog"
+    >
+      <!-- Modal content -->
+      <Transition name="modal-content">
+        <div
+          v-if="props.modelValue"
+          ref="dialogRef"
+          class="bg-autobot-bg-secondary rounded-lg shadow-2xl w-full max-w-md border border-autobot-border"
+          role="dialog"
+          aria-labelledby="invite-dialog-title"
+          aria-modal="true"
+          tabindex="-1"
+          @keydown="onFocusTrapKeydown"
+          @keydown.escape="closeDialog"
+        >
+          <!-- Header -->
+          <div class="flex items-center justify-between px-6 py-4 border-b border-autobot-border">
+            <h2 id="invite-dialog-title" class="text-lg font-semibold text-autobot-text-primary">
+              {{ $t('collaboration.invite.title') }}
+            </h2>
+            <button
+              class="text-autobot-text-muted hover:text-autobot-text-primary transition-colors"
+              :aria-label="$t('collaboration.invite.closeDialog')"
+              @click="closeDialog"
+            >
+              <i class="bi bi-x-lg" />
+            </button>
+          </div>
+
+          <!-- Body -->
+          <div class="px-6 py-4 space-y-4">
+            <!-- Search input -->
+            <div>
+              <label for="user-search" class="block text-sm font-medium text-autobot-text-secondary mb-2">
+                {{ $t('collaboration.invite.searchUsers') }}
+              </label>
+              <div class="relative">
+                <i class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-autobot-text-muted" />
+                <input
+                  id="user-search"
+                  v-model="searchQuery"
+                  type="text"
+                  :placeholder="$t('collaboration.invite.searchPlaceholder')"
+                  class="w-full pl-10 pr-4 py-2 bg-autobot-bg-tertiary border border-autobot-border rounded-lg text-autobot-text-primary placeholder-autobot-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  autocomplete="off"
+                  :disabled="loading"
+                >
+              </div>
+            </div>
+
+            <!-- Loading indicator -->
+            <div v-if="loading" class="flex items-center justify-center py-8 text-autobot-text-muted">
+              <i class="bi bi-arrow-repeat animate-spin mr-2" />
+              <span class="text-sm">{{ $t('common.loading') }}</span>
+            </div>
+
+            <!-- User list -->
+            <div v-else class="max-h-60 overflow-y-auto custom-scrollbar space-y-1">
+              <!-- Available users -->
+              <div v-if="availableUsers.length > 0">
+                <div class="text-xs font-medium text-autobot-text-muted uppercase tracking-wide mb-2">
+                  {{ $t('collaboration.invite.available', { count: availableUsers.length }) }}
+                </div>
+                <button
+                  v-for="user in availableUsers"
+                  :key="user.id"
+                  :class="[
+                    'w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left',
+                    selectedUserId === user.id
+                      ? 'bg-blue-500/20 border border-blue-500/30'
+                      : 'bg-autobot-bg-tertiary/50 hover:bg-autobot-bg-tertiary border border-transparent'
+                  ]"
+                  @click="selectUser(user.id)"
+                >
+                  <div class="w-10 h-10 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-sm font-medium text-autobot-text-primary">
+                    {{ getInitials(getDisplayName(user)) }}
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-autobot-text-primary truncate">
+                      {{ getDisplayName(user) }}
+                    </div>
+                    <div class="text-xs text-autobot-text-muted truncate">
+                      {{ user.email }}
+                    </div>
+                  </div>
+                  <i
+                    v-if="selectedUserId === user.id"
+                    class="bi bi-check-circle-fill text-blue-400"
+                  />
+                </button>
+              </div>
+
+              <!-- Already in session -->
+              <div v-if="alreadyInSession.length > 0" class="mt-3">
+                <div class="text-xs font-medium text-autobot-text-muted uppercase tracking-wide mb-2">
+                  {{ $t('collaboration.invite.alreadyInSession', { count: alreadyInSession.length }) }}
+                </div>
+                <div
+                  v-for="user in alreadyInSession"
+                  :key="user.id"
+                  class="w-full flex items-center gap-3 p-3 rounded-lg bg-autobot-bg-tertiary/30 opacity-50 cursor-not-allowed"
+                >
+                  <div class="w-10 h-10 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-sm font-medium text-autobot-text-primary">
+                    {{ getInitials(getDisplayName(user)) }}
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-autobot-text-primary truncate">
+                      {{ getDisplayName(user) }}
+                    </div>
+                    <div class="text-xs text-autobot-text-muted truncate">
+                      {{ user.email }}
+                    </div>
+                  </div>
+                  <span class="text-xs text-autobot-text-muted">
+                    {{ $t('collaboration.invite.inSession') }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- No results -->
+              <div
+                v-if="filteredUsers.length === 0"
+                class="text-center py-8 text-autobot-text-muted"
+              >
+                <i class="bi bi-search text-2xl mb-2" />
+                <div class="text-sm">{{ $t('collaboration.invite.noUsersFound') }}</div>
+              </div>
+            </div>
+
+            <!-- Role selection -->
+            <div v-if="!loading">
+              <label class="block text-sm font-medium text-autobot-text-secondary mb-2">
+                {{ $t('collaboration.invite.permissionLevel') }}
+              </label>
+              <div class="space-y-2">
+                <button
+                  v-for="role in roleOptions"
+                  :key="role.value"
+                  :class="[
+                    'w-full flex items-start gap-3 p-3 rounded-lg border transition-all text-left',
+                    selectedRole === role.value
+                      ? 'bg-blue-500/20 border-blue-500/50'
+                      : 'bg-autobot-bg-tertiary/50 border-autobot-border hover:bg-autobot-bg-tertiary'
+                  ]"
+                  @click="selectedRole = role.value"
+                >
+                  <div
+                    :class="[
+                      'w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5',
+                      selectedRole === role.value
+                        ? 'border-blue-500 bg-blue-500'
+                        : 'border-autobot-border bg-transparent'
+                    ]"
+                  >
+                    <i
+                      v-if="selectedRole === role.value"
+                      class="bi bi-check text-xs text-white"
+                    />
+                  </div>
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-1">
+                      <i :class="`bi bi-${role.icon} text-autobot-text-muted`" />
+                      <span class="text-sm font-medium text-autobot-text-primary">
+                        {{ role.label }}
+                      </span>
+                    </div>
+                    <div class="text-xs text-autobot-text-muted">
+                      {{ role.description }}
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <!-- Error message -->
+            <div
+              v-if="errorMessage"
+              class="px-3 py-2 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2"
+              role="alert"
+            >
+              <i class="bi bi-exclamation-triangle" />
+              <span>{{ errorMessage }}</span>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-autobot-border">
+            <button
+              class="px-4 py-2 text-sm rounded bg-autobot-bg-tertiary hover:bg-autobot-bg-secondary text-autobot-text-primary transition-colors"
+              @click="closeDialog"
+            >
+              {{ $t('common.cancel') }}
+            </button>
+            <button
+              class="px-4 py-2 text-sm rounded bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              :disabled="!selectedUserId || inviting || loading"
+              @click="sendInvitation"
+            >
+              <i v-if="inviting" class="bi bi-arrow-repeat animate-spin" />
+              <span>{{ inviting ? $t('collaboration.invite.sending') : $t('collaboration.invite.sendInvitation') }}</span>
+            </button>
+          </div>
+        </div>
+      </Transition>
+    </div>
+  </Transition>
+</template>
+
+<style scoped>
+/* Modal animations */
+.modal-backdrop-enter-active,
+.modal-backdrop-leave-active {
+  transition: opacity var(--duration-300) var(--ease-out);
+}
+
+.modal-backdrop-enter-from,
+.modal-backdrop-leave-to {
+  opacity: 0;
+}
+
+.modal-content-enter-active {
+  transition: all var(--duration-300) var(--ease-out);
+}
+
+.modal-content-leave-active {
+  transition: all var(--duration-200) var(--ease-in);
+}
+
+.modal-content-enter-from {
+  opacity: 0;
+  transform: scale(0.95) translateY(-10px);
+}
+
+.modal-content-leave-to {
+  opacity: 0;
+  transform: scale(0.95) translateY(10px);
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+  border-radius: var(--radius-default);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.5);
+}
+</style>

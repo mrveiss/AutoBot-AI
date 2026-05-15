@@ -1,0 +1,146 @@
+name: Docker Smoke Test
+
+on:
+  push:
+    branches:
+      - Dev_new_gui
+  pull_request:
+    branches:
+      - Dev_new_gui
+    # Required status check via branch protection (#6723) — must run on PR
+  schedule:
+    - cron: '0 10 * * 0'  # Every Sunday at 10 AM UTC
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Create .env from .env.example
+        run: cp .env.example .env
+
+      - name: Build images with layer cache
+        run: |
+          docker buildx build \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            --file docker/backend/Dockerfile \
+            --tag autobot/backend:latest \
+            --load \
+            .
+          docker buildx build \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            --file docker/slm/Dockerfile \
+            --tag autobot/slm:latest \
+            --load \
+            .
+          docker buildx build \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            --file docker/frontend/Dockerfile \
+            --tag autobot/frontend:latest \
+            --load \
+            .
+          # Rotate cache so next run gets the freshest layers
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - name: Start services with Docker Compose
+        run: docker compose --env-file docker/.env.docker up -d
+
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for services to start..."
+          max_attempts=90
+          attempt=0
+
+          while [ $attempt -lt $max_attempts ]; do
+            attempt=$((attempt + 1))
+            echo "Attempt $attempt/$max_attempts: Checking service health..."
+
+            # Frontend (nginx), backend, and SLM must all be healthy
+            frontend_ok=false
+            backend_ok=false
+            slm_ok=false
+
+            curl -s -f http://localhost > /dev/null 2>&1 && frontend_ok=true
+            curl -s -f http://localhost/api/system/health > /dev/null 2>&1 && backend_ok=true
+            curl -s -f http://localhost/slm/api/health > /dev/null 2>&1 && slm_ok=true
+
+            if $frontend_ok && $backend_ok && $slm_ok; then
+              echo "✓ Frontend responding on port 80"
+              echo "✓ Backend health check passed"
+              echo "✓ SLM health check passed"
+              exit 0
+            fi
+
+            $frontend_ok || echo "  waiting: frontend not yet responding"
+            $backend_ok  || echo "  waiting: backend not yet responding"
+            $slm_ok      || echo "  waiting: SLM not yet responding"
+
+            sleep 10
+          done
+
+          echo "Services failed to become healthy within 15 minutes (900s)"
+          echo ""
+          echo "=== Docker Compose Logs ==="
+          docker compose --env-file docker/.env.docker logs
+          exit 1
+
+      - name: Verify services are running
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Verifying services..."
+          docker compose --env-file docker/.env.docker ps
+
+          # #7066: || true to swallow SIGPIPE from curl when head exits early.
+          # These pipelines are informational only — the actual smoke gate is
+          # the docker-compose healthchecks above. With set -o pipefail (added
+          # by #7019), curl receives SIGPIPE → exit 23 → step fails.
+          echo ""
+          echo "=== Frontend Health Check ==="
+          curl -v http://localhost 2>&1 | head -20 || true
+
+          echo ""
+          echo "=== Backend Health Check ==="
+          curl -v http://localhost/api/system/health 2>&1 | head -20 || true
+
+          echo ""
+          echo "=== SLM Health Check ==="
+          curl -v http://localhost/slm/api/health 2>&1 | head -20 || true
+
+      - name: Collect logs on failure
+        if: failure()
+        run: docker compose --env-file docker/.env.docker logs > failure-logs.txt
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: docker-compose-logs
+          path: failure-logs.txt
+
+      - name: Clean up
+        if: always()
+        run: docker compose --env-file docker/.env.docker down

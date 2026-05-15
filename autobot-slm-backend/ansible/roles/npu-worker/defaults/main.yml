@@ -1,0 +1,24 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# NPU Worker configuration defaults  (#926 Phase 4: per-role account + scoped dir)
+npu_service_account: autobot-npu
+npu_user: autobot-npu
+npu_group: autobot-npu
+npu_install_dir: /opt/autobot/autobot-npu-worker
+npu_log_dir: /var/log/autobot
+npu_models_dir: /var/lib/autobot-npu/models
+
+# OpenVINO
+npu_install_openvino: true
+npu_device: "NPU"  # CPU, GPU, NPU
+
+# Server settings
+npu_host: "0.0.0.0"
+npu_port: 8081
+
+# Redis connection
+npu_redis_host: "{{ redis_host | default('127.0.0.1') }}"
+npu_redis_port: 6379
+npu_redis_password: ""

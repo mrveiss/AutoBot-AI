@@ -1,0 +1,61 @@
+<!-- AutoBot - AI-Powered Automation Platform -->
+<!-- Copyright (c) 2025 mrveiss -->
+<!-- Author: mrveiss -->
+<!-- Issue #566 - Code Intelligence Dashboard -->
+
+<template>
+  <div class="redis-panel">
+    <div class="panel-header">
+      <h3><i class="fas fa-database"></i> {{ $t('analytics.findings.redis.title') }}</h3>
+      <span v-if="findings.length > 0" class="count-badge">{{ findings.length }}</span>
+    </div>
+    <FindingsTable
+      :findings="findings"
+      :loading="loading"
+      :empty-message="$t('analytics.findings.redis.emptyMessage')"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import FindingsTable from './FindingsTable.vue'
+import type { RedisOptimizationFinding } from '@/types/codeIntelligence'
+
+defineProps<{
+  findings: RedisOptimizationFinding[]
+  loading: boolean
+}>()
+</script>
+
+<style scoped>
+.redis-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.panel-header h3 {
+  margin: var(--spacing-0);
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+}
+
+.panel-header i {
+  color: var(--chart-red, #ef4444);
+}
+
+.count-badge {
+  background: var(--bg-tertiary);
+  padding: var(--spacing-0-5) var(--spacing-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+</style>

@@ -1,0 +1,54 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Install Node.js via NodeSource repository
+
+- name: Check if Node.js is already installed
+  command: node --version
+  register: node_check
+  # (#2872) Intentional: `node` exits rc=127 when not installed;
+  # the result gates conditional installation below.
+  failed_when: false
+  changed_when: false
+
+- name: Download NodeSource setup script
+  get_url:
+    url: "https://deb.nodesource.com/setup_{{ nodejs_version.split('.')[0] }}.x"
+    dest: /tmp/nodesource_setup.sh
+    mode: '0755'
+  when: node_check.rc != 0
+
+- name: Run NodeSource setup script
+  command: bash /tmp/nodesource_setup.sh
+  when: node_check.rc != 0
+
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: agent_config nodejs | Refresh apt cache after NodeSource add (best-effort, bounded; #6719)
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+
+- name: Install Node.js
+  package:
+    name: nodejs
+    state: present
+
+- name: Verify Node.js installation
+  command: node --version
+  register: node_version_output
+  changed_when: false
+
+- name: Verify npm installation
+  command: npm --version
+  register: npm_version_output
+  changed_when: false
+
+- name: Display Node.js and npm versions
+  debug:
+    msg: "Node.js {{ node_version_output.stdout }}, npm {{ npm_version_output.stdout }}"

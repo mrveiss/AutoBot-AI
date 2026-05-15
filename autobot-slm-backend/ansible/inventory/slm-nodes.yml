@@ -1,0 +1,193 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# SLM Managed Nodes Inventory
+# Nodes registered in SLM admin dashboard
+---
+all:
+  vars:
+    ansible_user: autobot
+    ansible_ssh_private_key_file: /etc/autobot/ssh/autobot_key
+    ansible_python_interpreter: /usr/bin/python3
+
+    # Network and service-discovery — read from install-time secrets.
+    # install.sh writes SLM_HOST, NETWORK_SUBNET, NETWORK_GATEWAY to
+    # /etc/autobot/slm-secrets.env so these values are never hardcoded here.
+    slm_host: "{{ lookup('env', 'SLM_HOST') | default(lookup('pipe', 'grep -oP \"SLM_HOST=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || echo 127.0.0.1'), true) }}"
+    network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0/0' }}"
+    network_gateway: "{{ lookup('env', 'NETWORK_GATEWAY') or lookup('pipe', 'grep -oP \"NETWORK_GATEWAY=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0' }}"
+
+  children:
+    slm_nodes:
+      hosts:
+        # SLM Manager - main admin machine
+        00-SLM-Manager:
+          ansible_host: 127.0.0.1
+          slm_node_id: "00-SLM-Manager"
+          slm_node_role: "slm-manager"
+          slm_services_to_monitor:
+            - slm-agent
+            - autobot-slm-backend
+            - slm-admin-ui
+            - nginx
+            - postgresql@16-main
+
+        # Backend server
+        01-Backend:
+          ansible_host: "{{ lookup('env', 'AUTOBOT_BACKEND_HOST') | default('127.0.0.1', true) }}"
+          slm_node_id: "01-Backend"
+          slm_node_role: "backend"
+          slm_services_to_monitor:
+            - slm-agent
+            - autobot-backend
+            - ollama
+            - nginx
+
+        # Frontend server
+        02-Frontend:
+          ansible_host: "{{ lookup('env', 'AUTOBOT_FRONTEND_HOST') | default('127.0.0.1', true) }}"
+          slm_node_id: "02-Frontend"
+          slm_services_to_monitor:
+            - slm-agent
+            - nginx
+
+        # NPU Worker
+        npu-worker:
+          ansible_host: "{{ lookup('env', 'AUTOBOT_NPU_WORKER_HOST') | default('127.0.0.1', true) }}"
+          slm_node_id: "npu-worker"
+          slm_services_to_monitor:
+            - slm-agent
+            - autobot-npu-worker
+            - nginx
+
+        # AI Stack
+        03-AI-Stack:
+          ansible_host: "{{ lookup('env', 'AUTOBOT_AI_STACK_HOST') | default('127.0.0.1', true) }}"
+          slm_node_id: "03-AI-Stack"
+          slm_services_to_monitor:
+            - slm-agent
+            - autobot-ai-stack
+            - autobot-chromadb
+            - autobot-tts-worker
+            - nginx
+
+        # Databases
+        04-Databases:
+          ansible_host: "{{ lookup('env', 'AUTOBOT_REDIS_HOST') | default('127.0.0.1', true) }}"
+          slm_node_id: "04-Databases"
+          slm_services_to_monitor:
+            - slm-agent
+            - redis-stack-server
+            - redis_exporter
+            - nginx
+
+        # Browser automation
+        browser-automation:
+          ansible_host: "{{ lookup('env', 'AUTOBOT_BROWSER_SERVICE_HOST') | default('127.0.0.1', true) }}"
+          slm_node_id: "browser-automation"
+          slm_services_to_monitor:
+            - slm-agent
+            - autobot-playwright
+            - nginx
+
+        # LLM CPU node (#1040) — also VNC desktop (#1525)
+        05-LLM-CPU:
+          ansible_host: "{{ lookup('env', 'AUTOBOT_LLM_HOST') | default('127.0.0.1', true) }}"
+          slm_node_id: "05-LLM-CPU"
+          slm_node_role: "llm"
+          node_roles:
+            - llm
+            - vnc
+          slm_services_to_monitor:
+            - slm-agent
+            - ollama
+            - vnc-server
+            - vnc-websockify
+
+        # Reserved node - pending role assignment
+        06-Node-27:
+          ansible_host: "{{ lookup('env', 'AUTOBOT_RESERVED_HOST') | default('127.0.0.1', true) }}"
+          slm_node_id: "06-Node-27"
+          slm_services_to_monitor: []
+
+    # Role-based groups for targeted provisioning
+    main:
+      hosts:
+        01-Backend:
+
+    frontend:
+      hosts:
+        02-Frontend:
+
+    npu_worker:
+      hosts:
+        npu-worker:
+
+    browser_worker:
+      hosts:
+        browser-automation:
+
+    redis:
+      hosts:
+        04-Databases:
+
+    ai_stack:
+      hosts:
+        03-AI-Stack:
+
+    slm_server:
+      hosts:
+        00-SLM-Manager:
+
+    # LLM inference nodes (CPU or GPU) — #1040
+    llm_nodes:
+      hosts:
+        05-LLM-CPU:
+
+    # VNC desktop nodes (#1525, #2407)
+    vnc_nodes:
+      hosts:
+        05-LLM-CPU:
+
+    # Aggregate for all infrastructure nodes
+    infrastructure:
+      children:
+        main:
+        frontend:
+        npu_worker:
+        browser_worker:
+        redis:
+        ai_stack:
+        slm_server:
+        llm_nodes:
+
+    # Cross-inventory aliases (#2515)
+    # Ensure group names from production.yml resolve in slm-nodes.yml.
+    database:
+      children:
+        redis:
+
+    aiml:
+      children:
+        ai_stack:
+
+    npu:
+      children:
+        npu_worker:
+
+    npu_workers:
+      children:
+        npu_worker:
+
+    backend:
+      children:
+        main:
+
+    browser:
+      children:
+        browser_worker:
+
+    slm:
+      children:
+        slm_server:

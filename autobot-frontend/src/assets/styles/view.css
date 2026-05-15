@@ -1,0 +1,196 @@
+/**
+ * AutoBot - AI-Powered Automation Platform
+ * Copyright (c) 2025 mrveiss
+ * Author: mrveiss
+ *
+ * view.css - Reusable View Container Styles
+ * Issue #548: Centralized view styling to eliminate duplication
+ *
+ * Usage: Add the "view-container" class to your view's root element
+ * Example: <div class="monitoring-view view-container">
+ */
+
+/* ============================================
+ * VIEW CONTAINER BASE STYLES
+ * Standard scrollable container for all views
+ * ============================================ */
+
+.view-container {
+  min-height: var(--view-min-height);
+  max-height: var(--view-min-height);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
+/* ============================================
+ * CUSTOM SCROLLBAR - WEBKIT (Chrome/Safari/Edge)
+ * ============================================ */
+
+.view-container::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+}
+
+.view-container::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+.view-container::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--scrollbar-thumb-radius);
+}
+
+.view-container::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* ============================================
+ * CUSTOM SCROLLBAR - FIREFOX
+ * Uses standard scrollbar-* properties
+ * ============================================ */
+
+.view-container {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* ============================================
+ * VIEW CONTAINER VARIANTS
+ * Different container behaviors for specific use cases
+ * ============================================ */
+
+/* Full-height container without scroll (for nested scroll areas) */
+.view-container-full {
+  min-height: var(--view-min-height);
+  overflow: hidden;
+}
+
+/* Flex container that fills available height */
+.view-container-flex {
+  min-height: var(--view-min-height);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Centered content container (for error/empty states) */
+.view-container-centered {
+  min-height: var(--view-min-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============================================
+ * VIEW CONTENT WRAPPER
+ * Standard content padding and max-width
+ * ============================================ */
+
+.view-content {
+  padding: var(--content-padding-y) var(--content-padding-x);
+}
+
+.view-content-constrained {
+  padding: var(--content-padding-y) var(--content-padding-x);
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+}
+
+/* ============================================
+ * VIEW HEADER STYLES
+ * Standard page title and description
+ * ============================================ */
+
+.view-header {
+  margin-bottom: var(--spacing-lg);
+}
+
+.view-title {
+  font-size: var(--font-size-3xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-sm) 0;
+}
+
+.view-description {
+  font-size: var(--font-size-base);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* ============================================
+ * VIEW NAVIGATION (SUB-NAV TABS)
+ * Standard tab navigation within views
+ * ============================================ */
+
+.view-nav {
+  display: flex;
+  gap: var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: var(--spacing-lg);
+}
+
+.view-nav-link {
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: all var(--transition-fast);
+}
+
+.view-nav-link:hover {
+  color: var(--text-primary);
+  border-bottom-color: var(--border-color-dark);
+}
+
+.view-nav-link.active,
+.view-nav-link.router-link-active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+/* ============================================
+ * RESPONSIVE ADJUSTMENTS
+ * ============================================ */
+
+@media (max-width: 768px) {
+  .view-container {
+    /* Adjust for mobile header height if different */
+    min-height: calc(100vh - 60px);
+    max-height: calc(100vh - 60px);
+  }
+
+  .view-content {
+    padding: var(--spacing-md);
+  }
+
+  .view-title {
+    font-size: var(--font-size-2xl);
+  }
+
+  .view-nav {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .view-nav-link {
+    white-space: nowrap;
+  }
+}
+
+/* ============================================
+ * ACCESSIBILITY - REDUCED MOTION
+ * Respects user's OS-level preference
+ * ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .view-container {
+    scroll-behavior: auto;
+  }
+
+  .view-nav-link {
+    transition: none;
+  }
+}

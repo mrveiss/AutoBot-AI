@@ -1,0 +1,12 @@
+--- a/autobot-vue/src/components/SettingsPanel.vue
++++ b/autobot-vue/src/components/SettingsPanel.vue
+@@ -1079,7 +1079,8 @@ export default {
+       { id: 'cache', label: 'Cache' },
+       { id: 'voiceInterface', label: 'Voice Interface' },
+       { id: 'prompts', label: 'System Prompts' },
+-      { id: 'developer', label: 'Developer' }
++      { id: 'notifications', label: 'Notifications' },
++      { id: 'developer', label: 'Developer' }
+     ];
+     const activeTab = ref('backend');
+     const activeBackendSubTab = ref('memory');

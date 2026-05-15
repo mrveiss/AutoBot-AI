@@ -1,0 +1,54 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# dns role - Main tasks
+
+- name: Generate fleet DNS mappings
+  include_tasks: generate_mappings.yml
+  tags:
+    - dns
+    - mappings
+
+- name: Configure hostname
+  include_tasks: hostname.yml
+  when: set_hostname
+  tags:
+    - dns
+    - hostname
+
+- name: Manage /etc/hosts entries
+  include_tasks: etc_hosts.yml
+  when: manage_etc_hosts
+  tags:
+    - dns
+    - hosts
+
+- name: Setup dnsmasq
+  include_tasks: dnsmasq.yml
+  when: install_dnsmasq and not use_systemd_resolved
+  tags:
+    - dns
+    - dnsmasq
+    - cache
+
+- name: Configure systemd-resolved
+  include_tasks: systemd_resolved.yml
+  when: use_systemd_resolved and not install_dnsmasq
+  tags:
+    - dns
+    - systemd-resolved
+
+- name: Test DNS resolution
+  include_tasks: test_dns.yml
+  when: test_dns_resolution
+  tags:
+    - dns
+    - test
+    - verify
+
+- name: Create DNS management scripts
+  include_tasks: scripts.yml
+  tags:
+    - dns
+    - scripts

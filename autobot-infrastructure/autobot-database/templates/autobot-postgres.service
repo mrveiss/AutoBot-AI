@@ -1,0 +1,22 @@
+# AutoBot PostgreSQL - Systemd Service Unit
+# Deploys to: 172.16.168.23 (DB Stack VM)
+# Runs PostgreSQL for relational data storage
+#
+# Note: This is a drop-in override for the standard postgresql service
+# The actual service is managed by the postgresql package
+#
+# Prerequisites:
+#   sudo apt-get install postgresql-16
+#
+# Installation:
+#   sudo mkdir -p /etc/systemd/system/postgresql.service.d
+#   sudo cp autobot-postgres.conf /etc/systemd/system/postgresql.service.d/autobot.conf
+#   sudo systemctl daemon-reload
+
+[Unit]
+Description=AutoBot PostgreSQL - Relational Database
+Documentation=https://github.com/mrveiss/AutoBot-AI
+
+# Note: PostgreSQL is managed via the standard postgresql service
+# This unit exists for documentation purposes
+# Use: sudo systemctl status postgresql

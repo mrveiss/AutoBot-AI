@@ -1,0 +1,17 @@
+{
+  "name": "autobot-browser-worker",
+  "version": "1.0.0",
+  "description": "AutoBot Browser Automation Worker - Deploys to ${AUTOBOT_BROWSER_SERVICE_HOST}",
+  "private": true,
+  "scripts": {
+    "start": "node playwright-server.js",
+    "test": "npx playwright test"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "playwright": "^1.54.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2"
+  }
+}

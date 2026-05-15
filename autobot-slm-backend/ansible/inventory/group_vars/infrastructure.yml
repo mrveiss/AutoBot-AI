@@ -1,0 +1,72 @@
+---
+# AutoBot Infrastructure - Single Source of Truth for Network Configuration
+# Issue #808: Centralize all hardcoded IPs
+#
+# This file is the canonical Ansible source for network topology.
+# All group_vars and templates MUST reference these variables instead of
+# hardcoding IP addresses or subnet ranges.
+#
+# Host IPs are defined once in the inventory files:
+#   - production.yml    (primary: ansible_host per VM)
+#   - slm-nodes.yml     (SLM node registry)
+#
+# Service discovery variables (backend_host, frontend_host, redis_host, etc.)
+# are derived from inventory ansible_host values in production.yml.
+#
+# Shell scripts use: infrastructure/shared/scripts/lib/ssot-config.sh
+# Python code uses:  config/complete.yaml via autobot_shared.ssot_config
+# Environment vars:  .env.network (generated from config/complete.yaml)
+
+# ==========================================
+# NETWORK TOPOLOGY
+# ==========================================
+
+# Canonical network configuration - referenced by all group_vars.
+# Written by install.sh into /etc/autobot/slm-secrets.env as NETWORK_SUBNET
+# and NETWORK_GATEWAY.  Loaded here via env lookup so values are never
+# hardcoded in the repo — every install detects its own subnet automatically.
+network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0/0' }}"
+network_gateway: "{{ lookup('env', 'NETWORK_GATEWAY') or lookup('pipe', 'grep -oP \"NETWORK_GATEWAY=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0' }}"
+# DNS servers — override per-install via -e or inventory vars
+dns_nameservers:
+  - "{{ lookup('env', 'DNS_PRIMARY') or '8.8.8.8' }}"
+  - "{{ lookup('env', 'DNS_SECONDARY') or '1.1.1.1' }}"
+
+# ==========================================
+# INFRASTRUCTURE HOST MAP
+# ==========================================
+# Convenience dict for templates and documentation.
+# For Ansible plays, prefer the flat variables (backend_host, redis_host, etc.)
+# defined in production.yml which use hostvars lookups.
+
+infrastructure:
+  hosts:
+    slm: "{{ hostvars[groups['slm'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    backend: "{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    frontend: "{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    npu: "{{ hostvars[groups['npu'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    database: "{{ hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    aiml: "{{ hostvars[groups['aiml'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    browser: "{{ hostvars[groups['browser'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    reserved_1: "{{ hostvars[groups['vnc_nodes'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    reserved_2: "127.0.0.1"
+
+  ports:
+    slm: 8000
+    backend: 8001
+    frontend: 5173
+    npu_worker: 8081
+    redis: 6379
+    ai_stack: 8080
+    browser: 3000
+    vnc: 6080
+    ollama: 11434
+
+  # Service URLs (derived from hosts and ports above)
+  urls:
+    backend: "http://{{ infrastructure.hosts.backend }}:{{ infrastructure.ports.backend }}"
+    frontend: "http://{{ infrastructure.hosts.frontend }}:{{ infrastructure.ports.frontend }}"
+    redis: "redis://{{ infrastructure.hosts.database }}:{{ infrastructure.ports.redis }}"
+    ai_stack: "http://{{ infrastructure.hosts.aiml }}:{{ infrastructure.ports.ai_stack }}"
+    npu_worker: "http://{{ infrastructure.hosts.npu }}:{{ infrastructure.ports.npu_worker }}"
+    browser: "http://{{ infrastructure.hosts.browser }}:{{ infrastructure.ports.browser }}"

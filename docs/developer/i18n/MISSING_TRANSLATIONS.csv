@@ -1,0 +1,446 @@
+Key,English Value,Category,Tier
+knowledge.mainCategories.facts,facts,knowledge.mainCategories,Tier 3
+knowledge.mainCategories.import,Import,knowledge.mainCategories,Tier 3
+knowledge.mainCategories.populate,Populate,knowledge.mainCategories,Tier 3
+knowledge.maintenance.critical,Critical,knowledge.maintenance,Tier 3
+knowledge.maintenance.databaseSize,Database Size,knowledge.maintenance,Tier 3
+knowledge.maintenance.healthDashboard,Health Dashboard,knowledge.maintenance,Tier 3
+knowledge.maintenance.healthError,"Unable to load health metrics. Click ""Refresh All"" to try again.",knowledge.maintenance,Tier 3
+knowledge.maintenance.issuesFound,Issues Found,knowledge.maintenance,Tier 3
+knowledge.maintenance.loadingHealth,Loading health metrics...,knowledge.maintenance,Tier 3
+knowledge.maintenance.maintenanceHistory,Maintenance History,knowledge.maintenance,Tier 3
+knowledge.maintenance.noHistory,No maintenance operations recorded in this session,knowledge.maintenance,Tier 3
+knowledge.maintenance.qualityDimensions,Quality Dimensions,knowledge.maintenance,Tier 3
+knowledge.maintenance.qualityScore,Quality Score,knowledge.maintenance,Tier 3
+knowledge.maintenance.refreshAll,Refresh All,knowledge.maintenance,Tier 3
+knowledge.maintenance.refreshing,Refreshing...,knowledge.maintenance,Tier 3
+knowledge.maintenance.subtitle,"Monitor and maintain knowledge base health, handle duplicates, and clean up orphaned data",knowledge.maintenance,Tier 2
+knowledge.maintenance.title,Knowledge Base Maintenance,knowledge.maintenance,Tier 2
+knowledge.maintenance.topRecommendations,Top Recommendations,knowledge.maintenance,Tier 3
+knowledge.maintenance.totalFacts,Total Facts,knowledge.maintenance,Tier 3
+knowledge.maintenance.totalVectors,Total Vectors,knowledge.maintenance,Tier 3
+knowledge.maintenance.warnings,Warnings,knowledge.maintenance,Tier 3
+knowledge.manager.errorFallback,Knowledge Base failed to load. Please try refreshing.,knowledge.manager,Tier 3
+knowledge.manager.tabAdvanced,Advanced,knowledge.manager,Tier 1
+knowledge.manager.tabCategories,Categories,knowledge.manager,Tier 1
+knowledge.manager.tabManage,Manage,knowledge.manager,Tier 1
+knowledge.manager.tabPromptEditor,Prompts,knowledge.manager,Tier 1
+knowledge.manager.tabSearch,Search,knowledge.manager,Tier 1
+knowledge.manager.tabStatistics,Statistics,knowledge.manager,Tier 1
+knowledge.manager.tabSystemDocs,System Docs,knowledge.manager,Tier 1
+knowledge.manager.tabUpload,Upload,knowledge.manager,Tier 1
+knowledge.memoryOrphan.activeSessions,Active Sessions,knowledge.memoryOrphan,Tier 3
+knowledge.memoryOrphan.cleanUp,Clean Up,knowledge.memoryOrphan,Tier 3
+knowledge.memoryOrphan.cleaning,Cleaning...,knowledge.memoryOrphan,Tier 3
+knowledge.memoryOrphan.cleanupDescription,Remove orphaned entities that are no longer associated with any conversation.,knowledge.memoryOrphan,Tier 3
+knowledge.memoryOrphan.cleanupError,Failed to clean up orphaned entities,knowledge.memoryOrphan,Tier 3
+knowledge.memoryOrphan.cleanupTitle,Clean Up Orphans,knowledge.memoryOrphan,Tier 3
+knowledge.memoryOrphan.conversationEntities,Conversation Entities,knowledge.memoryOrphan,Tier 3
+knowledge.memoryOrphan.description,Detect and clean up orphaned memory entities from expired or deleted conversations.,knowledge.memoryOrphan,Tier 3
+knowledge.memoryOrphan.orphanedEntities,Orphaned Entities,knowledge.memoryOrphan,Tier 3
+knowledge.memoryOrphan.previewTitle,Orphaned Entity Preview,knowledge.memoryOrphan,Tier 3
+knowledge.memoryOrphan.scanDescription,Analyze memory entities and identify those not linked to any active conversation.,knowledge.memoryOrphan,Tier 3
+knowledge.memoryOrphan.scanError,Failed to scan memory entities,knowledge.memoryOrphan,Tier 3
+knowledge.memoryOrphan.scanMeta,"Safe, read-only operation",knowledge.memoryOrphan,Tier 3
+knowledge.memoryOrphan.scanNow,Scan Now,knowledge.memoryOrphan,Tier 3
+knowledge.memoryOrphan.scanTitle,Scan for Orphans,knowledge.memoryOrphan,Tier 3
+knowledge.memoryOrphan.scanning,Scanning...,knowledge.memoryOrphan,Tier 3
+knowledge.memoryOrphan.title,Memory Entity Cleanup,knowledge.memoryOrphan,Tier 2
+knowledge.persistence.addSelectedToKb,Add Selected to KB,knowledge.persistence,Tier 3
+knowledge.persistence.addToKbDescription,Permanently store this item in the knowledge base for future reference.,knowledge.persistence,Tier 3
+knowledge.persistence.addToKbLabel,Add to Knowledge Base,knowledge.persistence,Tier 3
+knowledge.persistence.applyDecisions,Apply Decisions,knowledge.persistence,Tier 3
+knowledge.persistence.associatedFiles,Associated Files,knowledge.persistence,Tier 3
+knowledge.persistence.bulkActionsTitle,Bulk Actions,knowledge.persistence,Tier 3
+knowledge.persistence.cancel,Cancel,knowledge.persistence,Tier 3
+knowledge.persistence.compileButton,Compile,knowledge.persistence,Tier 3
+knowledge.persistence.compileDescription,Create a compiled summary of this conversation for future reference.,knowledge.persistence,Tier 3
+knowledge.persistence.compileFailed,Failed to compile conversation,knowledge.persistence,Tier 3
+knowledge.persistence.compileTitle,Compile Conversation,knowledge.persistence,Tier 3
+knowledge.persistence.compileTitleLabel,Title,knowledge.persistence,Tier 3
+knowledge.persistence.compileTitlePlaceholder,Enter a title for the compiled summary,knowledge.persistence,Tier 3
+knowledge.persistence.compiledSuccess,Conversation compiled successfully,knowledge.persistence,Tier 3
+knowledge.persistence.createdLabel,Created,knowledge.persistence,Tier 3
+knowledge.persistence.decisionsApplyFailed,Failed to apply decisions,knowledge.persistence,Tier 3
+knowledge.persistence.defaultTopic,General Conversation,knowledge.persistence,Tier 3
+knowledge.persistence.deleteDescription,Remove this item permanently.,knowledge.persistence,Tier 3
+knowledge.persistence.deleteLabel,Delete,knowledge.persistence,Tier 3
+knowledge.persistence.deleteSelected,Delete Selected,knowledge.persistence,Tier 3
+knowledge.persistence.deselectAll,Deselect All,knowledge.persistence,Tier 3
+knowledge.persistence.failedToLoad,Failed to load persistence data,knowledge.persistence,Tier 3
+knowledge.persistence.includeSystemMessages,Include system messages,knowledge.persistence,Tier 3
+knowledge.persistence.keepSelectedTemporarily,Keep Selected Temporarily,knowledge.persistence,Tier 3
+knowledge.persistence.keepTemporaryDescription,Keep this item available during the session but don't persist it.,knowledge.persistence,Tier 3
+knowledge.persistence.keepTemporaryLabel,Keep Temporarily,knowledge.persistence,Tier 3
+knowledge.persistence.keywordsLabel,Keywords,knowledge.persistence,Tier 3
+knowledge.persistence.knowledgeItems,Knowledge Items,knowledge.persistence,Tier 3
+knowledge.persistence.reviewTitle,Review Items,knowledge.persistence,Tier 3
+knowledge.persistence.selectAll,Select All,knowledge.persistence,Tier 3
+knowledge.persistence.sourceLabel,Source,knowledge.persistence,Tier 3
+knowledge.persistence.suggestionAddToKb,Suggested: Add to Knowledge Base,knowledge.persistence,Tier 3
+knowledge.persistence.suggestionDelete,Suggested: Delete,knowledge.persistence,Tier 3
+knowledge.persistence.suggestionKeepTemporary,Suggested: Keep Temporarily,knowledge.persistence,Tier 3
+knowledge.persistence.title,Knowledge Persistence,knowledge.persistence,Tier 2
+knowledge.persistence.topicLabel,Topic,knowledge.persistence,Tier 3
+knowledge.promptEditor.allCategories,All Categories,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.categoryAgents,Agents,knowledge.promptEditor,Tier 2
+knowledge.promptEditor.categorySystem,System,knowledge.promptEditor,Tier 2
+knowledge.promptEditor.categoryTemplates,Templates,knowledge.promptEditor,Tier 2
+knowledge.promptEditor.characters,{count} characters,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.confirmDiscardChanges,You have unsaved changes. Discard them?,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.contentPlaceholder,Enter prompt content...,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.errorLoadPrompts,Failed to load prompts,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.errorRevert,Failed to revert prompt,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.errorSavePrompt,Failed to save prompt,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.filterAgents,Agents,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.filterSystem,System,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.filterTemplates,Templates,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.history,History,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.loadingHistory,Loading version history...,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.loadingPrompts,Loading prompts...,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.noHistory,No version history available,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.noPrompts,No prompt templates found,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.noSearchResults,No prompts match your search,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.previewVersion,Preview - Version {version},knowledge.promptEditor,Tier 3
+knowledge.promptEditor.revert,Revert,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.save,Save,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.searchPlaceholder,Search prompts...,knowledge.promptEditor,Tier 1
+knowledge.promptEditor.selectPrompt,Select a prompt from the list to view or edit it.,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.subtitle,View and edit system prompt templates used by AutoBot agents,knowledge.promptEditor,Tier 2
+knowledge.promptEditor.successReverted,Prompt reverted successfully,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.successSaved,Prompt saved successfully,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.title,Prompt Template Editor,knowledge.promptEditor,Tier 2
+knowledge.promptEditor.unknown,Unknown,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.unsavedChanges,Unsaved Changes,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.variables,{count} variables,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.versionHistory,Version History,knowledge.promptEditor,Tier 3
+knowledge.promptEditor.versionNumber,v{version},knowledge.promptEditor,Tier 3
+knowledge.qualityScore.title,Quality: {score}%,knowledge.qualityScore,Tier 2
+knowledge.research.accept,Accept,knowledge.research,Tier 3
+knowledge.research.acceptTitle,Accept this source into knowledge base,knowledge.research,Tier 3
+knowledge.research.accepted,Accepted,knowledge.research,Tier 3
+knowledge.research.browserConnected,Browser connected,knowledge.research,Tier 3
+knowledge.research.browserDisconnected,Browser disconnected,knowledge.research,Tier 3
+knowledge.research.btnResearch,Research,knowledge.research,Tier 3
+knowledge.research.btnStop,Stop,knowledge.research,Tier 3
+knowledge.research.emptyState,No sources found yet. Start a research query above.,knowledge.research,Tier 3
+knowledge.research.errorConnect,Failed to connect to research engine,knowledge.research,Tier 3
+knowledge.research.errorGeneric,An error occurred during research,knowledge.research,Tier 3
+knowledge.research.errorWebSocket,WebSocket connection error,knowledge.research,Tier 3
+knowledge.research.foundSources,Found Sources,knowledge.research,Tier 3
+knowledge.research.liveBrowserView,Live browser view,knowledge.research,Tier 3
+knowledge.research.open,Open,knowledge.research,Tier 3
+knowledge.research.queryPlaceholder,Enter a research topic or question...,knowledge.research,Tier 3
+knowledge.research.refreshScreenshot,Refresh screenshot,knowledge.research,Tier 3
+knowledge.research.reject,Reject,knowledge.research,Tier 3
+knowledge.research.rejectTitle,Reject this source,knowledge.research,Tier 3
+knowledge.research.rejected,Rejected,knowledge.research,Tier 3
+knowledge.research.searching,Searching the web...,knowledge.research,Tier 3
+knowledge.research.startQuery,Start a research query to see live results,knowledge.research,Tier 3
+knowledge.research.statusConnecting,Connecting to research engine...,knowledge.research,Tier 3
+knowledge.research.statusDisconnected,Disconnected from research engine,knowledge.research,Tier 3
+knowledge.research.statusDone,"Done! Found {found} sources, stored {stored}",knowledge.research,Tier 3
+knowledge.research.statusError,Error occurred,knowledge.research,Tier 3
+knowledge.research.statusFound,Found: {title},knowledge.research,Tier 3
+knowledge.research.statusReady,Ready to research,knowledge.research,Tier 3
+knowledge.research.statusSearching,Searching with {engine}...,knowledge.research,Tier 3
+knowledge.research.statusStarting,Starting research...,knowledge.research,Tier 3
+knowledge.research.statusStopped,Research stopped,knowledge.research,Tier 3
+knowledge.research.waitingBrowser,Waiting for browser connection...,knowledge.research,Tier 3
+knowledge.scopeSelector.group,Group ({count} team{plural}),knowledge.scopeSelector,Tier 3
+knowledge.scopeSelector.helpGroup,Members of selected groups can access this,knowledge.scopeSelector,Tier 3
+knowledge.scopeSelector.helpOrganization,Everyone in the organization can access this,knowledge.scopeSelector,Tier 3
+knowledge.scopeSelector.helpPrivate,Only you can access this knowledge,knowledge.scopeSelector,Tier 3
+knowledge.scopeSelector.helpShared,Your team members can access this,knowledge.scopeSelector,Tier 3
+knowledge.scopeSelector.helpSystem,All users and system processes can access this,knowledge.scopeSelector,Tier 3
+knowledge.scopeSelector.label,Knowledge Scope,knowledge.scopeSelector,Tier 2
+knowledge.scopeSelector.organization,Organization,knowledge.scopeSelector,Tier 3
+knowledge.scopeSelector.private,Private (only me),knowledge.scopeSelector,Tier 3
+knowledge.scopeSelector.selectTeams,Select Teams,knowledge.scopeSelector,Tier 3
+knowledge.scopeSelector.shared,Shared (team),knowledge.scopeSelector,Tier 3
+knowledge.scopeSelector.system,System-wide,knowledge.scopeSelector,Tier 3
+knowledge.search.accessPlatform,Platform,knowledge.search,Tier 3
+knowledge.search.accessPublic,Public,knowledge.search,Tier 3
+knowledge.search.accessSystem,System,knowledge.search,Tier 3
+knowledge.search.accessUser,User,knowledge.search,Tier 3
+knowledge.search.aiSynthesis,AI Synthesis,knowledge.search,Tier 3
+knowledge.search.allCategories,All Categories,knowledge.search,Tier 3
+knowledge.search.autoEnhanceQuery,Auto-enhance query,knowledge.search,Tier 3
+knowledge.search.clear,Clear,knowledge.search,Tier 3
+knowledge.search.clearAccessLevelFilter,Clear access level filter,knowledge.search,Tier 3
+knowledge.search.clearCategoryFilter,Clear category filter,knowledge.search,Tier 3
+knowledge.search.clickToView,Click to view full document,knowledge.search,Tier 3
+knowledge.search.close,Close,knowledge.search,Tier 3
+knowledge.search.confidence,{value}% confidence,knowledge.search,Tier 3
+knowledge.search.copyContent,Copy Content,knowledge.search,Tier 3
+knowledge.search.defaultDocTitle,Untitled Document,knowledge.search,Tier 3
+knowledge.search.enableReranking,Enable reranking,knowledge.search,Tier 3
+knowledge.search.enhancedQuery,Enhanced query,knowledge.search,Tier 3
+knowledge.search.fallbackNote,Tip: Some documents may not be indexed yet. Check the Manage tab for indexing status.,knowledge.search,Tier 3
+knowledge.search.filterByAccessLevel,Filter by Access Level,knowledge.search,Tier 3
+knowledge.search.filterByCategory,Filter by Category,knowledge.search,Tier 3
+knowledge.search.filtering,Filtering: {category},knowledge.search,Tier 3
+knowledge.search.foundResults,"Found {count} results for ""{query}""",knowledge.search,Tier 3
+knowledge.search.indexHelpAfter,to set up indexing and vectorization.,knowledge.search,Tier 3
+knowledge.search.indexHelpBefore,Visit the,knowledge.search,Tier 3
+knowledge.search.indexHelpLink,Manage tab,knowledge.search,Tier 3
+knowledge.search.loadingDocument,Loading document content...,knowledge.search,Tier 3
+knowledge.search.matchScore,{value}% match,knowledge.search,Tier 3
+knowledge.search.needToIndex,Need to index your knowledge first?,knowledge.search,Tier 3
+knowledge.search.noContent,No content available,knowledge.search,Tier 3
+knowledge.search.noResults,No results found,knowledge.search,Tier 1
+knowledge.search.noResultsHint,Try different keywords or broaden your search,knowledge.search,Tier 1
+knowledge.search.noResultsRagHint,Try rephrasing your question or switching to traditional search,knowledge.search,Tier 1
+knowledge.search.ragDesc,AI-powered semantic search with synthesis,knowledge.search,Tier 3
+knowledge.search.ragEnhanced,RAG Enhanced,knowledge.search,Tier 3
+knowledge.search.ragPlaceholder,Ask a question about your knowledge...,knowledge.search,Tier 3
+knowledge.search.ragUnavailable,RAG search requires vectorized documents. Switch to traditional search or vectorize your documents first.,knowledge.search,Tier 3
+knowledge.search.rerankScore,{value}% rerank,knowledge.search,Tier 3
+knowledge.search.rerankingBadge,NEW,knowledge.search,Tier 3
+knowledge.search.resultsLimit,Results limit,knowledge.search,Tier 3
+knowledge.search.retry,Retry,knowledge.search,Tier 3
+knowledge.search.searchBtn,Search,knowledge.search,Tier 1
+knowledge.search.searchPlaceholder,Search knowledge base...,knowledge.search,Tier 1
+knowledge.search.searching,Searching...,knowledge.search,Tier 3
+knowledge.search.sourcesCount,{count} sources,knowledge.search,Tier 3
+knowledge.search.subtitle,Search through your knowledge base using traditional or AI-enhanced RAG search,knowledge.search,Tier 2
+knowledge.search.title,Knowledge Search,knowledge.search,Tier 2
+knowledge.search.traditionalDesc,Fast keyword-based search across all documents,knowledge.search,Tier 3
+knowledge.search.traditionalSearch,Traditional Search,knowledge.search,Tier 3
+knowledge.sessionOrphan.cleanUp,Clean Up,knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.cleaning,Cleaning...,knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.cleanupDescription,Remove knowledge facts that are linked to deleted or expired sessions.,knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.cleanupError,Failed to clean up session orphans,knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.cleanupTitle,Clean Up Orphans,knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.deletedSessions,Deleted Sessions,knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.description,Find and clean up knowledge facts linked to deleted or expired chat sessions.,knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.factsChecked,Facts Checked,knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.important,Important,knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.orphanedFacts,Orphaned Facts,knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.previewTitle,Orphaned Facts Preview,knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.scanDescription,Analyze knowledge facts and identify those linked to non-existent sessions.,knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.scanError,Failed to scan session orphans,knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.scanMeta,"Safe, read-only operation",knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.scanNow,Scan Now,knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.scanTitle,Scan for Orphans,knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.scanning,Scanning...,knowledge.sessionOrphan,Tier 3
+knowledge.sessionOrphan.title,Session Orphan Cleanup,knowledge.sessionOrphan,Tier 2
+knowledge.sessionOrphan.withSessionTracking,With Session Tracking,knowledge.sessionOrphan,Tier 3
+knowledge.share.admin,Admin,knowledge.share,Tier 3
+knowledge.share.cancel,Cancel,knowledge.share,Tier 3
+knowledge.share.closeAriaLabel,Close dialog,knowledge.share,Tier 3
+knowledge.share.currentAccess,Current Access,knowledge.share,Tier 3
+knowledge.share.noAccess,Not shared with anyone yet,knowledge.share,Tier 3
+knowledge.share.noResults,No users found,knowledge.share,Tier 1
+knowledge.share.read,Read,knowledge.share,Tier 3
+knowledge.share.removeAccess,Remove access,knowledge.share,Tier 3
+knowledge.share.saveChanges,Save Changes,knowledge.share,Tier 3
+knowledge.share.saving,Saving...,knowledge.share,Tier 3
+knowledge.share.searchError,Failed to search users,knowledge.share,Tier 3
+knowledge.share.searchPlaceholder,Search users or teams...,knowledge.share,Tier 1
+knowledge.share.searchUnavailable,User search is not available,knowledge.share,Tier 3
+knowledge.share.searching,Searching...,knowledge.share,Tier 3
+knowledge.share.shareWith,Share with,knowledge.share,Tier 3
+knowledge.share.team,Team,knowledge.share,Tier 3
+knowledge.share.title,Share: {name},knowledge.share,Tier 2
+knowledge.share.unsavedConfirm,You have unsaved changes. Are you sure you want to close?,knowledge.share,Tier 3
+knowledge.share.user,User,knowledge.share,Tier 3
+knowledge.share.write,Write,knowledge.share,Tier 3
+knowledge.stats.available,Available,knowledge.stats,Tier 3
+knowledge.stats.avgDocsPerCategory,Average documents per category,knowledge.stats,Tier 3
+knowledge.stats.avgDocsPerCategoryValue,{count} avg docs/category,knowledge.stats,Tier 3
+knowledge.stats.avgPerDoc,{size} avg/doc,knowledge.stats,Tier 3
+knowledge.stats.avgTagsPerDoc,{count} avg tags/doc,knowledge.stats,Tier 3
+knowledge.stats.categories,Categories,knowledge.stats,Tier 3
+knowledge.stats.confirmOptimize,This will optimize the database. Continue?,knowledge.stats,Tier 3
+knowledge.stats.databaseSize,Database Size,knowledge.stats,Tier 3
+knowledge.stats.docsByCategory,Documents by Category,knowledge.stats,Tier 3
+knowledge.stats.docsByType,Documents by Type,knowledge.stats,Tier 3
+knowledge.stats.documentLifecycle,Document Lifecycle,knowledge.stats,Tier 3
+knowledge.stats.embeddingModel,Embedding Model,knowledge.stats,Tier 3
+knowledge.stats.embeddingsGenerated,Embeddings generated,knowledge.stats,Tier 3
+knowledge.stats.exportStats,Export Stats,knowledge.stats,Tier 3
+knowledge.stats.factsCount,{count} facts,knowledge.stats,Tier 3
+knowledge.stats.generateReport,Generate Report,knowledge.stats,Tier 3
+knowledge.stats.goToManage,Go to System Knowledge,knowledge.stats,Tier 3
+knowledge.stats.indexAvailable,Index Available,knowledge.stats,Tier 3
+knowledge.stats.indexName,Index Name,knowledge.stats,Tier 3
+knowledge.stats.indexedDocuments,Indexed Documents,knowledge.stats,Tier 3
+knowledge.stats.initialized,Initialized,knowledge.stats,Tier 3
+knowledge.stats.knowledgeItemsInRedis,Knowledge items in Redis,knowledge.stats,Tier 3
+knowledge.stats.knowledgeItemsStored,Knowledge items stored,knowledge.stats,Tier 3
+knowledge.stats.lastUpdated,Last Updated,knowledge.stats,Tier 3
+knowledge.stats.noRecentActivity,No recent activity,knowledge.stats,Tier 3
+knowledge.stats.notVectorized,Not vectorized,knowledge.stats,Tier 3
+knowledge.stats.optimizeDb,Optimize DB,knowledge.stats,Tier 3
+knowledge.stats.overviewAriaLabel,Knowledge base overview statistics,knowledge.stats,Tier 3
+knowledge.stats.popularTags,Popular Tags,knowledge.stats,Tier 3
+knowledge.stats.popularTagsAriaLabel,Popular tags in knowledge base,knowledge.stats,Tier 3
+knowledge.stats.rag,RAG,knowledge.stats,Tier 3
+knowledge.stats.ragAvailable,RAG Available,knowledge.stats,Tier 3
+knowledge.stats.realTimeTracking,Real-time tracking,knowledge.stats,Tier 3
+knowledge.stats.recentActivity,Recent Activity,knowledge.stats,Tier 3
+knowledge.stats.redisDb,Redis DB,knowledge.stats,Tier 3
+knowledge.stats.refresh,Refresh,knowledge.stats,Tier 3
+knowledge.stats.refreshVectorStats,Refresh vector statistics,knowledge.stats,Tier 3
+knowledge.stats.status,Status,knowledge.stats,Tier 3
+knowledge.stats.storageUsed,Storage used,knowledge.stats,Tier 3
+knowledge.stats.storageUsedTitle,Storage Used,knowledge.stats,Tier 3
+knowledge.stats.systemKnowledgeDesc,"Manage system-level knowledge including man pages, commands, and documentation.",knowledge.stats,Tier 3
+knowledge.stats.systemKnowledgeMgmt,System Knowledge Management,knowledge.stats,Tier 3
+knowledge.stats.textSplitter,Text Splitter,knowledge.stats,Tier 3
+knowledge.stats.totalDocuments,Total Documents,knowledge.stats,Tier 3
+knowledge.stats.totalFacts,Total Facts,knowledge.stats,Tier 3
+knowledge.stats.totalVectors,Total Vectors,knowledge.stats,Tier 3
+knowledge.stats.unavailable,Unavailable,knowledge.stats,Tier 3
+knowledge.stats.uniqueTags,Unique Tags,knowledge.stats,Tier 3
+knowledge.stats.vectorDbTitle,Vector Database Statistics,knowledge.stats,Tier 3
+knowledge.stats.vectorDistribution,Vector Categories Distribution,knowledge.stats,Tier 3
+knowledge.stats.vectorFramework,Vector Framework,knowledge.stats,Tier 3
+knowledge.stats.vectorIndexHealth,Vector Index Health,knowledge.stats,Tier 3
+knowledge.stats.vectorNotGenerated,Vectors Not Generated,knowledge.stats,Tier 3
+knowledge.stats.vectorizedForRag,Vectorized for RAG,knowledge.stats,Tier 3
+knowledge.systemDocs.copied,Copied!,knowledge.systemDocs,Tier 3
+knowledge.systemDocs.copy,Copy,knowledge.systemDocs,Tier 3
+knowledge.systemDocs.errorCopy,Failed to copy to clipboard,knowledge.systemDocs,Tier 3
+knowledge.systemDocs.errorExport,Failed to export document,knowledge.systemDocs,Tier 3
+knowledge.systemDocs.errorExportAll,Failed to export all documents,knowledge.systemDocs,Tier 3
+knowledge.systemDocs.errorLoadCategories,Failed to load documentation categories,knowledge.systemDocs,Tier 3
+knowledge.systemDocs.errorLoadContent,Failed to load document content,knowledge.systemDocs,Tier 3
+knowledge.systemDocs.errorLoadDocs,Failed to load documents,knowledge.systemDocs,Tier 3
+knowledge.systemDocs.export,Export,knowledge.systemDocs,Tier 3
+knowledge.systemDocs.exportAll,Export All,knowledge.systemDocs,Tier 3
+knowledge.systemDocs.loadingCategories,Loading categories...,knowledge.systemDocs,Tier 3
+knowledge.systemDocs.loadingDocs,Loading documents...,knowledge.systemDocs,Tier 3
+knowledge.systemDocs.noDocs,No documents in this category,knowledge.systemDocs,Tier 3
+knowledge.systemDocs.noSearchResults,No documents match your search,knowledge.systemDocs,Tier 3
+knowledge.systemDocs.searchPlaceholder,Search documentation...,knowledge.systemDocs,Tier 1
+knowledge.systemDocs.selectCategory,Select a category to view documents,knowledge.systemDocs,Tier 3
+knowledge.systemDocs.selectDocument,Select a document to view its content,knowledge.systemDocs,Tier 3
+knowledge.systemDocs.subtitle,Browse and export system documentation,knowledge.systemDocs,Tier 2
+knowledge.systemDocs.title,System Documentation,knowledge.systemDocs,Tier 2
+knowledge.systemDocs.words,{count} words,knowledge.systemDocs,Tier 3
+knowledge.systemKnowledge.aboutTitle,About System Knowledge,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.allHosts,All Hosts,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.commandsIndexed,Commands Indexed,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.confirmIndexDocs,Do you want to force reindex existing documents?,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.confirmInitialize,This will initialize system knowledge for the selected host. This may take several minutes. Continue?,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.confirmRefreshManPages,This will refresh man pages for the selected host. Continue?,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.confirmReindex,This will reindex all documents for the selected host. Continue?,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.confirmVectorize,"This will vectorize {totalFacts} facts. Currently {totalVectors} vectors exist, {needsVectorization} need vectorization. Continue?",knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.docsIndexed,Docs Indexed,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.error,Error,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.indexAutoBotDocs,Index AutoBot Docs,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.initializeMachineKnowledge,Initialize Machine Knowledge,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.initializing,Initializing...,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.populateCommands,Populate Commands,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.populating,Populating...,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.recentActivity,Recent Activity,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.refreshManPages,Refresh Man Pages,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.refreshStats,Refresh Stats,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.refreshing,Refreshing...,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.reindexDocuments,Reindex Documents,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.reindexing,Reindexing...,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.searchableVectors,Searchable Vectors,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.subtitle,Index and manage system-level knowledge from infrastructure machines,knowledge.systemKnowledge,Tier 2
+knowledge.systemKnowledge.success,Success,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.targetHost,Target Host,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.totalFacts,Total Facts,knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.vectorizeComplete,Vectorize Facts (✓ {vectors} vectors from {facts} facts),knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.vectorizePending,Vectorize Facts ({pending} pending),knowledge.systemKnowledge,Tier 3
+knowledge.systemKnowledge.vectorizing,Vectorizing...,knowledge.systemKnowledge,Tier 3
+knowledge.treeNode.retryTitle,Retry vectorization,knowledge.treeNode,Tier 3
+knowledge.treeNode.vectorizeTitle,Vectorize this document,knowledge.treeNode,Tier 3
+knowledge.upload.accessAutobot,AutoBot,knowledge.upload,Tier 3
+knowledge.upload.accessGeneral,General,knowledge.upload,Tier 3
+knowledge.upload.accessHint,Controls which users and systems can access this knowledge,knowledge.upload,Tier 3
+knowledge.upload.accessLevel,Access Level,knowledge.upload,Tier 3
+knowledge.upload.accessSystem,System,knowledge.upload,Tier 3
+knowledge.upload.accessUser,User,knowledge.upload,Tier 3
+knowledge.upload.addToKnowledgeBase,Add to Knowledge Base,knowledge.upload,Tier 3
+knowledge.upload.browse,browse,knowledge.upload,Tier 3
+knowledge.upload.category,Category,knowledge.upload,Tier 2
+knowledge.upload.categoryForAll,Category for all files,knowledge.upload,Tier 2
+knowledge.upload.characters,{count} characters,knowledge.upload,Tier 3
+knowledge.upload.clearAll,Clear All,knowledge.upload,Tier 3
+knowledge.upload.clearAllTitle,Clear all files,knowledge.upload,Tier 3
+knowledge.upload.contentLabel,Content,knowledge.upload,Tier 3
+knowledge.upload.contentPlaceholder,Enter knowledge content here...,knowledge.upload,Tier 3
+knowledge.upload.contentPreview,Content Preview,knowledge.upload,Tier 3
+knowledge.upload.description,"Add new knowledge to the system by entering text, importing from URLs, or uploading files.",knowledge.upload,Tier 3
+knowledge.upload.dragAndDrop,Drag & drop files here or,knowledge.upload,Tier 1
+knowledge.upload.dropToAdd,Drop files to add,knowledge.upload,Tier 3
+knowledge.upload.errorAddText,Failed to add text to knowledge base,knowledge.upload,Tier 3
+knowledge.upload.errorFileTooLarge,"File ""{name}"" exceeds the maximum size limit",knowledge.upload,Tier 3
+knowledge.upload.errorImportUrl,Failed to import URL content,knowledge.upload,Tier 3
+knowledge.upload.errorUnsupportedFormat,"File ""{name}"" has an unsupported format",knowledge.upload,Tier 3
+knowledge.upload.errorUploadFiles,Failed to upload files,knowledge.upload,Tier 3
+knowledge.upload.importContent,Import Content,knowledge.upload,Tier 3
+knowledge.upload.importFromUrl,Import from URL,knowledge.upload,Tier 3
+knowledge.upload.invalidFileType,Invalid file type,knowledge.upload,Tier 3
+knowledge.upload.orAutoDetected,(or auto-detected),knowledge.upload,Tier 3
+knowledge.upload.previewContentTitle,Preview content,knowledge.upload,Tier 3
+knowledge.upload.previewTruncated,Preview truncated to first 500 characters,knowledge.upload,Tier 3
+knowledge.upload.removeFileTitle,Remove file,knowledge.upload,Tier 3
+knowledge.upload.selectCategory,Select Category,knowledge.upload,Tier 3
+knowledge.upload.successTextAdded,Text added to knowledge base successfully,knowledge.upload,Tier 3
+knowledge.upload.successUrlImported,URL content imported successfully,knowledge.upload,Tier 3
+knowledge.upload.supportedFormats,"Supported formats: PDF, TXT, MD, JSON, CSV, DOCX",knowledge.upload,Tier 3
+knowledge.upload.tags,Tags,knowledge.upload,Tier 2
+knowledge.upload.tagsForAll,Tags for all files,knowledge.upload,Tier 2
+knowledge.upload.tagsPlaceholder,Enter tags separated by commas...,knowledge.upload,Tier 2
+knowledge.upload.textEntry,Text Entry,knowledge.upload,Tier 3
+knowledge.upload.titleLabel,Title,knowledge.upload,Tier 2
+knowledge.upload.titlePlaceholder,Enter a descriptive title...,knowledge.upload,Tier 2
+knowledge.upload.uploadFailed,Upload failed,knowledge.upload,Tier 3
+knowledge.upload.uploadFiles,Upload Files,knowledge.upload,Tier 1
+knowledge.upload.uploadedSuccessfully,Uploaded successfully,knowledge.upload,Tier 3
+knowledge.upload.uploading,Uploading...,knowledge.upload,Tier 3
+knowledge.upload.urlLabel,URL,knowledge.upload,Tier 3
+knowledge.upload.useAutoDetected,Use Auto-Detected,knowledge.upload,Tier 3
+knowledge.upload.visGroup,Group,knowledge.upload,Tier 3
+knowledge.upload.visOrganization,Organization,knowledge.upload,Tier 3
+knowledge.upload.visPrivate,Private,knowledge.upload,Tier 3
+knowledge.upload.visShared,Shared,knowledge.upload,Tier 3
+knowledge.upload.visSystem,System,knowledge.upload,Tier 3
+knowledge.upload.visibility,Visibility,knowledge.upload,Tier 2
+knowledge.upload.visibilityHint,Controls who can discover and view this knowledge,knowledge.upload,Tier 2
+knowledge.vectorization.cancelButton,Cancel,knowledge.vectorization,Tier 3
+knowledge.vectorization.completed,Completed,knowledge.vectorization,Tier 3
+knowledge.vectorization.done,Done,knowledge.vectorization,Tier 3
+knowledge.vectorization.failed,Failed,knowledge.vectorization,Tier 3
+knowledge.vectorization.inProgress,In Progress,knowledge.vectorization,Tier 3
+knowledge.vectorization.noDocuments,No documents to vectorize,knowledge.vectorization,Tier 3
+knowledge.vectorization.progressTitle,Vectorization Progress,knowledge.vectorization,Tier 3
+knowledge.vectorization.retryFailed,Retry Failed,knowledge.vectorization,Tier 3
+knowledge.vectorization.statusFailed,Failed,knowledge.vectorization,Tier 3
+knowledge.vectorization.statusPending,Pending,knowledge.vectorization,Tier 3
+knowledge.vectorization.statusUnknown,Unknown,knowledge.vectorization,Tier 3
+knowledge.vectorization.statusVectorized,Vectorized,knowledge.vectorization,Tier 3
+knowledge.vectorization.tooltipFailed,Vectorization failed for this document,knowledge.vectorization,Tier 3
+knowledge.vectorization.tooltipPending,Document is pending vectorization,knowledge.vectorization,Tier 3
+knowledge.vectorization.tooltipUnknown,Vectorization status unknown,knowledge.vectorization,Tier 3
+knowledge.vectorization.tooltipVectorized,Document has been vectorized and is searchable via RAG,knowledge.vectorization,Tier 3
+knowledge.vectorization.total,Total,knowledge.vectorization,Tier 3
+knowledge.verification.approve,Approve,knowledge.verification,Tier 3
+knowledge.verification.approveSelected,Approve Selected,knowledge.verification,Tier 3
+knowledge.verification.approvedToday,Approved Today,knowledge.verification,Tier 3
+knowledge.verification.autonomous,Autonomous,knowledge.verification,Tier 3
+knowledge.verification.clearSelection,Clear Selection,knowledge.verification,Tier 3
+knowledge.verification.collaborative,Collaborative,knowledge.verification,Tier 3
+knowledge.verification.emptyMessage,No items pending verification,knowledge.verification,Tier 3
+knowledge.verification.emptyTitle,Queue Empty,knowledge.verification,Tier 3
+knowledge.verification.loading,Loading verification queue...,knowledge.verification,Tier 3
+knowledge.verification.modeLabel,Mode:,knowledge.verification,Tier 3
+knowledge.verification.pending,Pending,knowledge.verification,Tier 3
+knowledge.verification.qualityThreshold,Quality Threshold,knowledge.verification,Tier 3
+knowledge.verification.reject,Reject,knowledge.verification,Tier 3
+knowledge.verification.rejectSelected,Reject Selected,knowledge.verification,Tier 3
+knowledge.verification.rejectedToday,Rejected Today,knowledge.verification,Tier 3
+knowledge.verification.selectAll,Select All,knowledge.verification,Tier 3
+knowledge.verification.title,Verification Queue,knowledge.verification,Tier 2
+knowledge.verification.typeConnector,Connector,knowledge.verification,Tier 3
+knowledge.verification.typeResearch,Web Research,knowledge.verification,Tier 3
+knowledge.verification.typeUpload,Manual Upload,knowledge.verification,Tier 3
+knowledge.verification.typeUrl,URL Fetch,knowledge.verification,Tier 3
+knowledge.verification.untitled,Untitled,knowledge.verification,Tier 2

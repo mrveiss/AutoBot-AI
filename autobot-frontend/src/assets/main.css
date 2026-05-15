@@ -1,0 +1,95 @@
+@import './base.css';
+
+/* Accessibility: Screen Reader Only utility class */
+/* Hides content visually but keeps it available to screen readers */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Accessibility: Focusable screen reader only content */
+/* Makes SR-only content visible when focused (e.g., skip links) */
+.sr-only-focusable:focus,
+.sr-only-focusable:active {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+
+/* Accessibility: Reduced Motion Support */
+/* Respects user's OS-level "Reduce Motion" preference */
+/* WCAG 2.1 Success Criterion 2.3.3 Animation from Interactions (AAA) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* Disable all animations */
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+
+    /* Disable all transitions */
+    transition-duration: 0.01ms !important;
+
+    /* Disable scroll behavior smoothing */
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================
+ * MOBILE RESPONSIVE UTILITIES (#1804)
+ * Touch-friendly and viewport-adaptive rules for phones/tablets
+ * ============================================================ */
+
+/* Ensure interactive elements meet WCAG 2.5.5 minimum 44×44px touch target */
+@media (max-width: 1024px) {
+  /* Buttons and links in nav already have lg:hidden / lg:block logic in Tailwind.
+   * This fills in any element that needs a bigger tap area on touch screens. */
+  button,
+  [role="button"],
+  a {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* Chat interface: make scrollable containers work properly with touch */
+  .overflow-y-auto,
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Extra-small viewports: tighten page-header padding */
+@media (max-width: 480px) {
+  .page-header {
+    padding: var(--spacing-3) var(--spacing-3) var(--spacing-2);
+  }
+
+  .page-actions {
+    flex-wrap: wrap;
+  }
+}
+
+/* RTL layout support (#1337) */
+[dir="rtl"] .chat-sidebar {
+  border-right: none;
+  border-left: 1px solid var(--border-color);
+}
+
+[dir="rtl"] pre,
+[dir="rtl"] code,
+[dir="rtl"] .code-block {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}

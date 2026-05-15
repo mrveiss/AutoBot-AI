@@ -1,0 +1,232 @@
+{
+  "backend_connectivity": {
+    "success": true,
+    "status_code": 200,
+    "response_time": 0.0036773681640625,
+    "timestamp": "2025-09-11T14:05:39.139832",
+    "data": {
+      "status": "ok",
+      "mode": "fast",
+      "redis": true,
+      "ollama": "connected",
+      "details": {
+        "ollama": {
+          "status": "connected",
+          "model": "llama3.2:1b-instruct-q4_K_M"
+        }
+      }
+    }
+  },
+  "api_endpoints": {
+    "/api/health": {
+      "success": true,
+      "status_code": 200,
+      "response_time": 0.0028023719787597656,
+      "description": "Backend Health",
+      "data": {
+        "status": "ok",
+        "mode": "fast",
+        "redis": true,
+        "ollama": "connected",
+        "details": {
+          "ollama": {
+            "status": "connected",
+            "model": "llama3.2:1b-instruct-q4_K_M"
+          }
+        }
+      },
+      "has_data": true
+    },
+    "/ws/health": {
+      "success": true,
+      "status_code": 200,
+      "response_time": 0.0014476776123046875,
+      "description": "WebSocket Health",
+      "data": {
+        "status": "healthy",
+        "service": "websocket",
+        "endpoint": "/ws",
+        "timestamp": "2025-09-11 14:05:39"
+      },
+      "has_data": true
+    },
+    "/api/knowledge_base/stats/basic": {
+      "success": true,
+      "status_code": 200,
+      "response_time": 0.0012688636779785156,
+      "description": "Knowledge Base Stats",
+      "data": {
+        "total_documents": 1000,
+        "total_chunks": 5000,
+        "total_facts": 100,
+        "categories": [
+          "documentation",
+          "code",
+          "config"
+        ],
+        "status": "online",
+        "message": "Knowledge base statistics retrieved successfully",
+        "last_updated": null
+      },
+      "has_data": true,
+      "documents_count": 1000,
+      "chunks_count": 5000
+    },
+    "/api/chat/health": {
+      "success": true,
+      "status_code": 200,
+      "response_time": 0.0011970996856689453,
+      "description": "Chat Health",
+      "data": {
+        "status": "healthy",
+        "service": "chat",
+        "timestamp": 1757588739.1468866
+      },
+      "has_data": true
+    },
+    "/api/llm/models": {
+      "success": true,
+      "status_code": 200,
+      "response_time": 0.0067937374114990234,
+      "description": "LLM Models",
+      "data": {
+        "models": [
+          {
+            "name": "gemma3:270m",
+            "type": "ollama",
+            "size": 291554930,
+            "modified_at": "2025-08-18T17:47:43.979558381+03:00",
+            "available": true
+          },
+          {
+            "name": "gemma3:1b",
+            "type": "ollama",
+            "size": 815319791,
+            "modified_at": "2025-08-18T17:42:08.878778044+03:00",
+            "available": true
+          },
+          {
+            "name": "gemma2:2b",
+            "type": "ollama",
+            "size": 1629518495,
+            "modified_at": "2025-08-18T17:38:49.575833494+03:00",
+            "available": true
+          },
+          {
+            "name": "gemma3:latest",
+            "type": "ollama",
+            "size": 3338801804,
+            "modified_at": "2025-08-18T17:37:49.251056368+03:00",
+            "available": true
+          },
+          {
+            "name": "llama3.2:3b-instruct-q4_K_M",
+            "type": "ollama",
+            "size": 2019393189,
+            "modified_at": "2025-08-13T10:28:44.727668185+03:00",
+            "available": true
+          },
+          {
+            "name": "llama3.2:1b-instruct-q4_K_M",
+            "type": "ollama",
+            "size": 807709787,
+            "modified_at": "2025-08-13T10:28:44.179627406+03:00",
+            "available": true
+          },
+          {
+            "name": "wizard-vicuna-uncensored:13b",
+            "type": "ollama",
+            "size": 7365835082,
+            "modified_at": "2025-08-13T10:28:26.229571563+03:00",
+            "available": true
+          },
+          {
+            "name": "artifish/llama3.2-uncensored:latest",
+            "type": "ollama",
+            "size": 2241006824,
+            "modified_at": "2025-08-12T14:27:51.3013608+03:00",
+            "available": true
+          },
+          {
+            "name": "nomic-embed-text:latest",
+            "type": "ollama",
+            "size": 274302450,
+            "modified_at": "2025-08-12T11:10:47.575501818+03:00",
+            "available": true
+          },
+          {
+            "name": "llama3.2:3b",
+            "type": "ollama",
+            "size": 2019393189,
+            "modified_at": "2025-08-12T11:10:47.023478556+03:00",
+            "available": true
+          },
+          {
+            "name": "llama3.2:1b",
+            "type": "ollama",
+            "size": 1321098329,
+            "modified_at": "2025-08-12T11:10:46.459454779+03:00",
+            "available": true
+          },
+          {
+            "name": "dolphin-llama3:8b",
+            "type": "ollama",
+            "size": 4661235994,
+            "modified_at": "2025-08-12T11:10:45.91143168+03:00",
+            "available": true
+          }
+        ],
+        "total_count": 12
+      },
+      "has_data": true
+    },
+    "/api/system/health": {
+      "success": true,
+      "status_code": 200,
+      "response_time": 0.0019183158874511719,
+      "description": "System Health",
+      "data": {
+        "status": "healthy",
+        "backend": "connected",
+        "timestamp": "2025-09-11T14:05:39.156069",
+        "fast_check": true,
+        "response_time_ms": "< 50ms",
+        "ollama": "connected",
+        "details": {
+          "ollama": {
+            "status": "connected",
+            "model": "llama3.2:1b-instruct-q4_K_M"
+          }
+        }
+      },
+      "has_data": true
+    }
+  },
+  "frontend_backend_proxy": {
+    "frontend_accessible": {
+      "success": true,
+      "status_code": 200,
+      "has_app_div": true,
+      "has_vite_client": true,
+      "is_vue_app": true
+    },
+    "proxy_test": {
+      "success": true,
+      "status_code": 200,
+      "cors_headers_present": true
+    }
+  },
+  "production_readiness": {
+    "overall_score": 100.0,
+    "backend_connectivity": true,
+    "api_success_rate": 100.0,
+    "frontend_accessibility": true,
+    "proxy_functionality": true,
+    "knowledge_base_populated": true,
+    "production_ready": true,
+    "passed_tests": 4,
+    "total_tests": 4,
+    "recommendation": "\u2705 PRODUCTION READY - System is fully operational and ready for deployment"
+  },
+  "total_time": 0.03315234184265137
+}

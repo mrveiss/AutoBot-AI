@@ -1,0 +1,337 @@
+---
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Rotate Service Authentication Keys (#1734)
+# Should be run every 80 days (before 90-day TTL expires).
+# Automated via systemd timer: autobot-key-rotation.timer
+#
+# Usage:
+#   Full rotation:
+#     ansible-playbook -i inventory/production.yml playbooks/rotate-service-keys.yml
+#   Generate only:
+#     ansible-playbook ... --tags generate
+#   Distribute only (keys must exist):
+#     ansible-playbook ... --tags distribute
+#
+# Run from: autobot-slm-backend/ansible/
+
+# ======================================================================
+# Phase 0: Pre-rotation validation — verify current keys work
+# ======================================================================
+- name: "Phase 0 - Pre-Rotation Validation"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    service_auth_keys_dir: /etc/autobot/service-keys
+    redis_host: >-
+      {{ hostvars[groups['database'][0]]['ansible_host']
+         | default('127.0.0.1') }}
+    redis_port: 6379
+
+  tasks:
+    - name: Determine this host service ID
+      ansible.builtin.set_fact:
+        this_service_id: >-
+          {%- if inventory_hostname in groups['backend'] -%}main-backend
+          {%- elif inventory_hostname in groups['frontend'] -%}frontend
+          {%- elif inventory_hostname in groups['npu'] -%}npu-worker
+          {%- elif inventory_hostname in groups['database'] -%}redis-stack
+          {%- elif inventory_hostname in groups['aiml'] -%}ai-stack
+          {%- elif inventory_hostname in groups['browser'] -%}browser-service
+          {%- else -%}unknown{%- endif -%}
+      tags: [validate]
+
+    - name: Check current key file exists
+      ansible.builtin.stat:
+        path: "{{ service_auth_keys_dir }}/{{ this_service_id }}.env"
+      register: _pre_key_file
+      when: this_service_id != 'unknown'
+      tags: [validate]
+
+    - name: Warn if current key file is missing
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: No existing key file for {{ this_service_id }}.
+          This is expected for first-time deployment.
+      when:
+        - this_service_id != 'unknown'
+        - not (_pre_key_file.stat.exists | default(false))
+      tags: [validate]
+
+    - name: Backup current key file before rotation
+      ansible.builtin.copy:
+        src: "{{ service_auth_keys_dir }}/{{ this_service_id }}.env"
+        dest: "{{ service_auth_keys_dir }}/{{ this_service_id }}.env.pre-rotate"
+        remote_src: true
+        mode: "0600"
+        owner: autobot
+        group: autobot
+      when:
+        - this_service_id != 'unknown'
+        - _pre_key_file.stat.exists | default(false)
+      tags: [validate]
+
+# ======================================================================
+# Phase 1: Generate new service keys on localhost
+# ======================================================================
+- name: "Phase 1 - Generate New Service Keys"
+  hosts: localhost
+  gather_facts: true
+  connection: local
+
+  vars:
+    autobot_root: /opt/autobot
+    key_generator: >-
+      {{ autobot_root }}/autobot-infrastructure/shared/scripts/generate_service_keys.py
+    keys_backup_dir: "{{ autobot_root }}/config/service-keys"
+    redis_host: >-
+      {{ hostvars[groups['database'][0]]['ansible_host']
+         | default('127.0.0.1') }}
+    redis_port: 6379
+
+  tasks:
+    - name: Display rotation information
+      ansible.builtin.debug:
+        msg:
+          - "Service Key Rotation"
+          - "Timestamp: {{ ansible_facts['date_time'].iso8601 }}"
+          - "Generator: {{ key_generator }}"
+          - "Redis: {{ redis_host }}:{{ redis_port }}"
+      tags: [generate]
+
+    - name: Verify key generator script exists
+      ansible.builtin.stat:
+        path: "{{ key_generator }}"
+      register: generator_stat
+      tags: [generate]
+
+    - name: Fail if generator script is missing
+      ansible.builtin.fail:
+        msg: >-
+          Key generator not found at {{ key_generator }}.
+          Ensure autobot-infrastructure/shared/scripts/generate_service_keys.py
+          exists.
+      when: not generator_stat.stat.exists
+      tags: [generate]
+
+    - name: Verify Redis connectivity
+      ansible.builtin.command:
+        cmd: "redis-cli -h {{ redis_host }} -p {{ redis_port }} ping"
+      register: redis_ping
+      changed_when: false
+      tags: [generate]
+
+    - name: Fail if Redis is unreachable
+      ansible.builtin.fail:
+        msg: "Cannot connect to Redis at {{ redis_host }}:{{ redis_port }}"
+      when: "'PONG' not in redis_ping.stdout"
+      tags: [generate]
+
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ keys_backup_dir }}"
+        state: directory
+        mode: '0700'
+      tags: [generate]
+
+    - name: Generate new service keys
+      ansible.builtin.command:
+        cmd: "python3 {{ key_generator }}"
+        chdir: "{{ autobot_root }}"
+      register: key_generation
+      tags: [generate]
+
+    - name: Display key generation output
+      ansible.builtin.debug:
+        msg: "{{ key_generation.stdout_lines }}"
+      tags: [generate]
+
+    - name: Find latest keys backup file
+      ansible.builtin.find:
+        paths: "{{ keys_backup_dir }}"
+        patterns: "service-keys-*.yaml"
+      register: backup_files
+      tags: [generate]
+
+    - name: Verify backup was created
+      ansible.builtin.assert:
+        that:
+          - backup_files.matched > 0
+        fail_msg: "No service keys backup file found after generation"
+      tags: [generate]
+
+    - name: Display latest backup file
+      ansible.builtin.debug:
+        msg: >-
+          Latest backup:
+          {{ (backup_files.files | sort(attribute='mtime') | last).path }}
+      tags: [generate]
+
+# ======================================================================
+# Phase 2: Distribute keys to all VMs using service_auth role
+# ======================================================================
+- name: "Phase 2 - Distribute Keys to All VMs"
+  hosts: all
+  become: true
+
+  roles:
+    - role: service_auth
+      tags: [distribute, keys]
+
+# ======================================================================
+# Phase 3: Restart backend to pick up new keys
+# ======================================================================
+- name: "Phase 3 - Restart Backend Service"
+  hosts: backend
+  gather_facts: false
+  become: true
+
+  vars:
+    backend_health_url: >-
+      {{ backend_protocol | default('https') }}://{{ ansible_host }}:{{ backend_port | default(8443) }}/api/health
+    startup_delay: 10
+
+  tasks:
+    - name: Restart backend via systemctl
+      ansible.builtin.systemd:
+        name: autobot-backend
+        state: restarted
+      tags: [restart]
+
+    - name: Wait for backend startup
+      ansible.builtin.pause:
+        seconds: "{{ startup_delay }}"
+      tags: [restart]
+
+    - name: Verify backend health
+      ansible.builtin.uri:
+        url: "{{ backend_health_url }}"
+        method: GET
+        timeout: 15
+        status_code: 200
+        validate_certs: false
+      register: health_check
+      retries: 6
+      delay: 10
+      until: health_check.status == 200
+      tags: [restart, verify]
+
+# ======================================================================
+# Phase 4: Verify all services can authenticate
+# ======================================================================
+- name: "Phase 4 - Verify Service Authentication"
+  hosts: all
+  become: true
+
+  vars:
+    service_auth_keys_dir: /etc/autobot/service-keys
+    redis_host: >-
+      {{ hostvars[groups['database'][0]]['ansible_host']
+         | default('127.0.0.1') }}
+    redis_port: 6379
+
+  tasks:
+    - name: Determine this host service ID
+      ansible.builtin.set_fact:
+        this_service_id: >-
+          {%- if inventory_hostname in groups['backend'] -%}main-backend
+          {%- elif inventory_hostname in groups['frontend'] -%}frontend
+          {%- elif inventory_hostname in groups['npu'] -%}npu-worker
+          {%- elif inventory_hostname in groups['database'] -%}redis-stack
+          {%- elif inventory_hostname in groups['aiml'] -%}ai-stack
+          {%- elif inventory_hostname in groups['browser'] -%}browser-service
+          {%- else -%}unknown{%- endif -%}
+      tags: [verify]
+
+    - name: Verify key file exists on VM
+      ansible.builtin.stat:
+        path: "{{ service_auth_keys_dir }}/{{ this_service_id }}.env"
+      register: key_file_stat
+      when: this_service_id != 'unknown'
+      tags: [verify]
+
+    - name: Verify key file is recent (updated within last 10 minutes)
+      ansible.builtin.assert:
+        that:
+          - key_file_stat.stat.exists
+          - (ansible_facts['date_time'].epoch | int) - (key_file_stat.stat.mtime | int) < 600
+        fail_msg: >-
+          Key file for {{ this_service_id }} is missing or stale
+          (older than 10 minutes)
+      when: this_service_id != 'unknown'
+      tags: [verify]
+
+    - name: Verify key exists in Redis
+      ansible.builtin.command:
+        cmd: >-
+          redis-cli -h {{ redis_host }} -p {{ redis_port }}
+          exists service:key:{{ this_service_id }}
+      register: redis_key_check
+      changed_when: false
+      delegate_to: localhost
+      when: this_service_id != 'unknown'
+      tags: [verify]
+
+    - name: Assert key present in Redis
+      ansible.builtin.assert:
+        that:
+          - "'1' in redis_key_check.stdout"
+        fail_msg: >-
+          Key for {{ this_service_id }} NOT found in Redis.
+          Run key generation again.
+      when: this_service_id != 'unknown'
+      tags: [verify]
+
+    - name: Remove pre-rotation backup (rotation succeeded)
+      ansible.builtin.file:
+        path: "{{ service_auth_keys_dir }}/{{ this_service_id }}.env.pre-rotate"
+        state: absent
+      when: this_service_id != 'unknown'
+      tags: [verify]
+
+    - name: Display verification result
+      ansible.builtin.debug:
+        msg: >-
+          {{ this_service_id }}: Key file OK, Redis key OK
+      when: this_service_id != 'unknown'
+      tags: [verify]
+
+# ======================================================================
+# Phase 5: Summary
+# ======================================================================
+- name: "Phase 5 - Rotation Summary"
+  hosts: localhost
+  gather_facts: true
+  connection: local
+
+  vars:
+    keys_backup_dir: /opt/autobot/config/service-keys
+
+  tasks:
+    - name: Find latest backup file
+      ansible.builtin.find:
+        paths: "{{ keys_backup_dir }}"
+        patterns: "service-keys-*.yaml"
+      register: final_backup_files
+      tags: [summary]
+
+    - name: Display rotation summary
+      ansible.builtin.debug:
+        msg:
+          - "Key Rotation Complete"
+          - "=============================================="
+          - "Timestamp: {{ ansible_facts['date_time'].iso8601 }}"
+          - "Keys generated: 6 services"
+          - "Keys distributed: all VMs"
+          - "Backend: restarted and healthy"
+          - "Verification: all keys validated"
+          - ""
+          - "Backup: {{ (final_backup_files.files | sort(attribute='mtime') | last).path | default('N/A') }}"
+          - ""
+          - "Next rotation due: ~80 days (before 90-day TTL)"
+          - "Automated via: systemctl status autobot-key-rotation.timer"
+      tags: [summary]

@@ -1,0 +1,15 @@
+{
+  "total_fixes": 6,
+  "successful_fixes": 6,
+  "failed_fixes": 0,
+  "files_modified": [
+    "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-frontend/src/components/HistoryView.vue",
+    "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-frontend/src/components/FileBrowser.vue",
+    "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-frontend/src/components/KnowledgeManager.vue",
+    "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-frontend/src/components/ChatInterface.vue"
+  ],
+  "fixes_by_type": {
+    "vfor_key_fix": 6,
+    "event_cleanup_fix": 0
+  }
+}

@@ -1,0 +1,35 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# AutoBot Frontend Service (Vue/Vite Dev Server)
+# Deployed on: 172.16.168.21 (Frontend VM)
+# Port: 5173
+
+[Unit]
+Description=AutoBot Frontend (Vue/Vite)
+Documentation=https://github.com/mrveiss/AutoBot-AI
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=autobot
+Group=autobot
+WorkingDirectory=/home/autobot/autobot-vue
+Environment=NODE_ENV=development
+Environment=VITE_BACKEND_HOST=172.16.168.20
+Environment=VITE_BACKEND_PORT=8001
+ExecStart=/snap/bin/npm run dev -- --host 0.0.0.0 --port 5173
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-frontend
+
+# Allow home directory access for npm
+ProtectHome=false
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

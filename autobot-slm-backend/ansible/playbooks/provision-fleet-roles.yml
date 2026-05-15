@@ -1,0 +1,714 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Auto-Provision Fleet Nodes by Role (#837, #2678)
+#
+# Provisions each node with common baseline, SLM agent, and
+# role-specific configuration in dependency order.
+# Works with both static inventory and dynamic/temp inventories.
+#
+# Usage:
+#   cd autobot-slm-backend/ansible
+#   ansible-playbook -i inventory/slm-nodes.yml playbooks/provision-fleet-roles.yml
+#
+# Limit to specific nodes:
+#   --limit "02-Frontend,04-Databases"
+#
+# Tag filtering (--tags) works correctly with include_role because
+# every include_role task carries an apply: block that propagates
+# the tag set into the included role's own tasks (#2827).
+---
+
+# -------------------------------------------------------------------
+# Play 0: Pre-flight — sync code_source from GitHub (#3561)
+#
+# Pulls the latest committed code before any role runs so that
+# Ansible role files, templates, and defaults are always current.
+# Uses ignore_errors: yes so offline / air-gapped SLMs still work
+# (they deploy from whatever code_source is already on disk and get
+# a visible warning).  Mirrors the pattern in update-all-nodes.yml.
+# -------------------------------------------------------------------
+- name: "Play 0 - Pre-flight: Sync code_source from GitHub"
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    github_repo: "https://github.com/mrveiss/AutoBot-AI.git"
+    git_repo_root: "/opt/autobot/code_source"
+    deploy_ref: "Dev_new_gui"
+
+  tasks:
+    - name: "[PRE-FLIGHT] Verify code_source exists"
+      ansible.builtin.stat:
+        path: "{{ git_repo_root }}/.git"
+      register: code_source_stat
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Abort if code_source missing"
+      ansible.builtin.fail:
+        msg: >-
+          Code source not found at {{ git_repo_root }}.
+          Initialize with: git clone {{ github_repo }} {{ git_repo_root }}
+      when: not code_source_stat.stat.exists
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Get code_source commit before sync"
+      ansible.builtin.command:
+        cmd: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} log -1 --format='%h %s'
+      register: pre_sync_commit
+      changed_when: false
+      tags: [always]
+
+    # Root-owned files in code_source (e.g. from earlier sudo cp) block
+    # git reset --hard.  Fix ownership before the pull so force: yes works.
+    - name: "[PRE-FLIGHT] Fix code_source ownership so git reset can overwrite"
+      ansible.builtin.file:
+        path: "{{ git_repo_root }}"
+        state: directory
+        owner: "{{ ansible_user_id | default('autobot') }}"
+        group: "{{ ansible_user_id | default('autobot') }}"
+        recurse: true
+      become: true
+      failed_when: false
+      changed_when: false
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Fix log directory and file ownership (#4309)"
+      block:
+        - name: "[PRE-FLIGHT] Ensure log directory exists with correct ownership"
+          ansible.builtin.file:
+            path: /var/log/autobot
+            state: directory
+            owner: autobot
+            group: autobot
+            mode: "0755"
+          become: true
+          failed_when: false
+
+        - name: "[PRE-FLIGHT] Fix log file ownership so Ansible can write"
+          ansible.builtin.file:
+            path: "{{ item }}"
+            owner: autobot
+            group: autobot
+            mode: "0644"
+          become: true
+          failed_when: false
+          with_items:
+            - /var/log/autobot/ansible.log
+            - /var/log/autobot/backend.log
+            - /var/log/autobot/backend-error.log
+            - /var/log/autobot/celery.log
+            - /var/log/autobot/celery-error.log
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Sync latest code from GitHub (if reachable)"
+      ansible.builtin.git:
+        repo: "{{ github_repo }}"
+        dest: "{{ git_repo_root }}"
+        version: "{{ deploy_ref }}"
+        update: yes
+        force: yes
+      ignore_errors: yes
+      register: github_sync
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Warn if GitHub sync skipped"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: GitHub sync failed (no internet access?).
+          Deploying from existing code_source at {{ git_repo_root }}.
+      when: github_sync is failed
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Show code_source age when sync skipped"
+      ansible.builtin.command:
+        cmd: "git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} log -1 --format='Last commit: %h %s (%cr)'"
+      register: code_source_age
+      changed_when: false
+      when: github_sync is failed
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Display code_source age (offline mode)"
+      ansible.builtin.debug:
+        msg: "Offline deployment — {{ code_source_age.stdout }}"
+      when: github_sync is failed
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Get current deploy commit"
+      ansible.builtin.command:
+        cmd: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} log -1 --format='%h %s'
+      register: deploy_info
+      changed_when: false
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Count commits advanced during sync"
+      ansible.builtin.command:
+        cmd: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} rev-list --count {{ pre_sync_commit.stdout.split()[0] }}..HEAD
+      register: sync_commit_count
+      changed_when: false
+      when: github_sync is not failed
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Display sync delta"
+      ansible.builtin.debug:
+        msg:
+          - "=== Pre-flight Code Sync Summary ==="
+          - "Was at: {{ pre_sync_commit.stdout }}"
+          - "Now at: {{ deploy_info.stdout }}"
+          - "Commits advanced: {{ sync_commit_count.stdout | default('0') }}"
+      when: github_sync is not failed
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] WARN: code_source was significantly behind"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: code_source advanced {{ sync_commit_count.stdout }} commits during sync.
+          Role behavior may have changed significantly. Review recent changes before proceeding.
+      when:
+        - github_sync is not failed
+        - sync_commit_count.stdout | int > 50
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Display deployed commit"
+      ansible.builtin.debug:
+        msg: "Deploying from commit: {{ deploy_info.stdout }}"
+      when: github_sync is not failed
+      tags: [always]
+
+# -------------------------------------------------------------------
+# Phase 0: Shared Dependencies (nginx, python312, nodejs)
+# Resolved from ROLE_DEPENDENCIES map via node_dependencies host var.
+# -------------------------------------------------------------------
+- name: "Provision Phase 0: Shared Dependencies"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
+  tasks:
+    - name: "Deps | Install nginx"
+      ansible.builtin.include_role:
+        name: nginx
+        apply:
+          tags: ['deps', 'nginx']
+      when: "'nginx' in (node_dependencies | default([]))"
+      tags: ['deps', 'nginx']
+
+    - name: "Deps | Install Python 3.12"
+      ansible.builtin.include_role:
+        name: python312
+        apply:
+          tags: ['deps', 'python312']
+      when: "'python312' in (node_dependencies | default([]))"
+      tags: ['deps', 'python312']
+
+    - name: "Deps | Install Node.js"
+      ansible.builtin.include_role:
+        name: nodejs
+        apply:
+          tags: ['deps', 'nodejs']
+      when: "'nodejs' in (node_dependencies | default([]))"
+      tags: ['deps', 'nodejs']
+
+    # Orphan removals (admin-approved only)
+    - name: "Deps | Remove nginx if marked for removal"
+      ansible.builtin.apt:
+        name: nginx
+        state: absent
+        purge: true
+      when: "'nginx' in (pending_dep_removals | default([]))"
+      tags: ['deps', 'removal']
+
+    - name: "Deps | Remove Python 3.12 if marked for removal"
+      ansible.builtin.apt:
+        name:
+          - python3.12
+          - python3.12-venv
+          - python3.12-dev
+        state: absent
+        purge: true
+      when: "'python312' in (pending_dep_removals | default([]))"
+      tags: ['deps', 'removal']
+
+    - name: "Deps | Remove Node.js if marked for removal"
+      ansible.builtin.apt:
+        name: nodejs
+        state: absent
+        purge: true
+      when: "'nodejs' in (pending_dep_removals | default([]))"
+      tags: ['deps', 'removal']
+
+# -------------------------------------------------------------------
+# Phase 1: Common baseline on ALL target nodes
+# -------------------------------------------------------------------
+- name: "Provision Phase 1: Common Baseline"
+  hosts: all
+  become: true
+  gather_facts: true
+  serial: "100%"
+
+  tasks:
+    - name: "Common | Apply common role to all fleet nodes"
+      ansible.builtin.include_role:
+        name: common
+        apply:
+          tags: ['common', 'provision']
+      tags: ['common', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 2: SLM Agent on ALL target nodes
+# -------------------------------------------------------------------
+- name: "Provision Phase 2: SLM Agent"
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: "Agent | Deploy SLM agent"
+      ansible.builtin.import_role:
+        name: slm_agent
+      tags: ['slm-agent', 'slm_agent', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 3: Data layer (Redis, PostgreSQL)
+# -------------------------------------------------------------------
+- name: "Provision Phase 3: Data Layer"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
+  tasks:
+    - name: "Data | Deploy Redis role"
+      ansible.builtin.import_role:
+        name: redis
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_redis_active | bool
+      tags: ['redis', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 4a: Backend
+# -------------------------------------------------------------------
+- name: "Provision Phase 4a: Backend"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
+  tasks:
+    - name: "App | Deploy backend role"
+      ansible.builtin.include_role:
+        name: backend
+        apply:
+          tags: ['backend', 'provision']
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_backend_active | bool
+      tags: ['backend', 'provision']
+
+    - name: "App | Deploy VNC role"
+      ansible.builtin.include_role:
+        name: vnc
+        apply:
+          tags: ['vnc', 'provision']
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_vnc_active | bool
+      tags: ['vnc', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 4b: Frontend
+# -------------------------------------------------------------------
+- name: "Provision Phase 4b: Frontend"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
+  tasks:
+    - name: "App | Deploy frontend role"
+      ansible.builtin.include_role:
+        name: frontend
+        apply:
+          tags: ['frontend', 'provision']
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_frontend_active | bool
+      tags: ['frontend', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 4c: Re-render SLM nginx for co-located frontend (#3012)
+#
+# When the frontend role deploys user frontend code onto a node
+# that also runs the SLM manager, the SLM nginx config must switch
+# to co-located mode (user frontend at /, SLM at /slm/).
+# The slm_manager role's own nginx task auto-detects this by
+# checking for the user frontend package.json, but it runs before
+# the frontend role syncs the code. This phase re-renders the
+# SLM nginx config after the frontend role has completed.
+#
+# Detection is purely filesystem-based so it works regardless of
+# whether provisioning was triggered via the setup wizard (full
+# fleet inventory) or per-node API (temp inventory with no groups).
+# -------------------------------------------------------------------
+- name: "Provision Phase 4c: SLM Nginx Co-location Update"
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    # Use filesystem state rather than inventory group membership so
+    # this works with any inventory shape (wizard, per-node, static).
+    - name: "SLM | Stat SLM nginx config to detect SLM manager host"
+      ansible.builtin.stat:
+        path: "/etc/nginx/sites-available/{{ slm_nginx_config | default('autobot-slm') }}"
+      register: _slm_nginx_config_stat
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Stat user frontend package.json for co-location detection"
+      ansible.builtin.stat:
+        path: "{{ frontend_dist_dir | default('/opt/autobot/autobot-frontend/dist') | dirname }}/package.json"
+      register: _post_frontend_colocated_check
+      when: _slm_nginx_config_stat.stat.exists
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Resolve co-location flag"
+      ansible.builtin.set_fact:
+        _is_slm_frontend_colocated: >-
+          {{
+            _slm_nginx_config_stat.stat.exists and
+            _post_frontend_colocated_check.stat.exists | default(false) | bool
+          }}
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    # Load role defaults so template variables are defined, then immediately
+    # override slm_colocated_frontend via set_fact (precedence 19 > include_vars 18).
+    - name: "SLM | Load slm_manager defaults for nginx re-render"
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../roles/slm_manager/defaults/main.yml"
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Set slm_colocated_frontend=true (set_fact wins over include_vars)"
+      ansible.builtin.set_fact:
+        slm_colocated_frontend: true
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    # include_vars above resets frontend_backend_host to 127.0.0.1 (the default).
+    # On WSL2 mirrored networking 127.0.0.1 is ECONNREFUSED; must re-override (#5608).
+    - name: "SLM | Read /proc/version to detect WSL2 for nginx re-render (#5608)"
+      ansible.builtin.slurp:
+        src: /proc/version
+      register: _phase4c_proc_version
+      changed_when: false
+      failed_when: false
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Set frontend_backend_host=10.255.255.254 on WSL2 hosts (#5608)"
+      ansible.builtin.set_fact:
+        frontend_backend_host: "10.255.255.254"
+      when:
+        - _is_slm_frontend_colocated | bool
+        - _phase4c_proc_version.content is defined
+        - (_phase4c_proc_version.content | b64decode | lower) is search('microsoft')
+        - frontend_backend_host == '127.0.0.1'
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Re-render SLM nginx config for co-located mode (#3012)"
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/slm_manager/templates/autobot-slm.conf.j2"
+        dest: "/etc/nginx/sites-available/{{ slm_nginx_config | default('autobot-slm') }}"
+        mode: "0644"
+        backup: true
+      when: _is_slm_frontend_colocated | bool
+      register: _slm_nginx_rerendered
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    # Re-build the SLM frontend so VITE_API_URL='/slm' is baked in (#3268, #3426).
+    # Without this, the SLM login page calls /api/auth/login which nginx routes
+    # to the user backend (port 8001) → 502 in co-located mode.
+    # Must run BEFORE nginx test/reload so the new assets are served immediately.
+    #
+    # #7472: ensure node_modules exists before build — provisioning may run
+    # standalone (re-provision after disk wipe, fresh install where this
+    # phase races deploy-slm-manager's npm install). Without this, build
+    # fails with `sh: 1: vite: not found` (rc=127). Idempotent no-op when
+    # deps already installed.
+    - name: "SLM | Ensure SLM frontend node_modules exist (#7472)"
+      community.general.npm:
+        path: "{{ slm_frontend_dir | default('/opt/autobot/autobot-slm-frontend') }}"
+        state: present
+      become_user: "{{ slm_user | default('autobot') }}"
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Rebuild SLM frontend with co-located API prefix (#3268)"
+      ansible.builtin.command:
+        cmd: npm run build
+        chdir: "{{ slm_frontend_dir | default('/opt/autobot/autobot-slm-frontend') }}"
+      become_user: "{{ slm_user | default('autobot') }}"
+      environment:
+        VITE_API_URL: "/slm"
+      when: _is_slm_frontend_colocated | bool
+      changed_when: true
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Test nginx config after co-location update"
+      ansible.builtin.command:
+        cmd: nginx -t
+      when: _slm_nginx_rerendered is defined and _slm_nginx_rerendered is changed
+      changed_when: false
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Reload nginx after co-location update"
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+      when: _slm_nginx_rerendered is defined and _slm_nginx_rerendered is changed
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 5a: AI Stack
+# -------------------------------------------------------------------
+- name: "Provision Phase 5a: AI Stack"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
+  tasks:
+    - name: "AI | Deploy AI stack role"
+      ansible.builtin.include_role:
+        name: ai-stack
+        apply:
+          tags: ['ai-stack', 'provision']
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_ai_stack_active | bool
+      tags: ['ai-stack', 'provision']
+
+    - name: "AI | Deploy LLM role"
+      ansible.builtin.include_role:
+        name: llm
+        apply:
+          tags: ['llm', 'provision']
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_llm_active | bool
+      tags: ['llm', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 5b: NPU Worker
+# -------------------------------------------------------------------
+- name: "Provision Phase 5b: NPU Worker"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
+  tasks:
+    - name: "AI | Deploy NPU worker role"
+      ansible.builtin.include_role:
+        name: npu-worker
+        apply:
+          tags: ['npu-worker', 'provision']
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_npu_worker_active | bool
+      tags: ['npu-worker', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 5c: TTS Worker (co-located with NPU worker by convention)
+# -------------------------------------------------------------------
+- name: "Provision Phase 5c: TTS Worker"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
+  tasks:
+    - name: "AI | Deploy TTS worker role"
+      ansible.builtin.include_role:
+        name: tts-worker
+        apply:
+          tags: ['tts-worker', 'provision']
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_tts_worker_active | bool
+      tags: ['tts-worker', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 5d: Standalone LLM nodes (GPU-aware — #1040)
+# -------------------------------------------------------------------
+- name: "Provision Phase 5d: LLM Nodes"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
+  tasks:
+    - name: "LLM | Deploy LLM role (GPU auto-detected)"
+      ansible.builtin.include_role:
+        name: llm
+        apply:
+          tags: ['llm', 'provision']
+      when: >-
+        inventory_hostname in groups.get('llm_nodes', [])
+      tags: ['llm', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 6: Browser Automation
+# -------------------------------------------------------------------
+- name: "Provision Phase 6: Browser Automation"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
+  tasks:
+    - name: "Auto | Deploy browser role"
+      ansible.builtin.include_role:
+        name: browser
+        apply:
+          tags: ['browser', 'provision']
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_browser_active | bool
+      tags: ['browser', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 6.5: Mark each provisioned node as synced (#7103)
+# -------------------------------------------------------------------
+# Without this, wizard-provisioned nodes stay code_status=unknown forever
+# (the heartbeat handler intentionally ignores heartbeat.code_version per
+# #889; node.code_version is only set by /mark-synced). The SLM Code Sync
+# UI then misleadingly shows "All nodes are up to date" instead of real
+# drift. Mirrors the pattern used by update-all-nodes.yml lines 365-379.
+- name: "Provision Phase 6.5: Mark provisioned nodes as synced"
+  hosts: all
+  gather_facts: false
+
+  tasks:
+    - name: "Mark-synced | Get deployed commit (once on controller)"
+      ansible.builtin.command:
+        cmd: git rev-parse HEAD
+        chdir: "{{ playbook_dir }}/../../.."
+      register: _provision_commit
+      changed_when: false
+      failed_when: false
+      run_once: true
+      delegate_to: localhost
+      become: false
+      tags: ['mark-synced']
+
+    - name: "Mark-synced | Login to SLM API"
+      ansible.builtin.uri:
+        url: "https://{{ hostvars['00-SLM-Manager']['ansible_host'] | default('127.0.0.1') }}/api/auth/login"
+        method: POST
+        body_format: json
+        body:
+          username: "admin"
+          password: "{{ slm_admin_password | default(lookup('env', 'SLM_ADMIN_PASSWORD')) | default('admin', true) }}"
+        validate_certs: false
+        status_code: [200, 401, 403]
+        timeout: 10
+      register: _slm_login
+      no_log: true
+      failed_when: false
+      run_once: true
+      delegate_to: localhost
+      tags: ['mark-synced']
+
+    - name: "Mark-synced | Warn if login failed (skip mark-synced gracefully)"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: SLM login returned status {{ _slm_login.status }} —
+          mark-synced skipped. Code Sync UI will show this node as 'unknown'
+          until next 'Update' run. (#7103)
+      when: _slm_login.status != 200
+      run_once: true
+      tags: ['mark-synced']
+
+    - name: "Mark-synced | POST to /api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
+      ansible.builtin.uri:
+        url: "https://{{ hostvars['00-SLM-Manager']['ansible_host'] | default('127.0.0.1') }}/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ _slm_login.json.access_token | default('') }}"
+          Content-Type: "application/json"
+        body: "{}"
+        body_format: json
+        validate_certs: false
+        status_code: [200, 404]
+        timeout: 10
+      delegate_to: localhost
+      ignore_errors: true
+      when: _slm_login.status == 200
+      tags: ['mark-synced']
+
+# -------------------------------------------------------------------
+# Phase 7: Summary
+# -------------------------------------------------------------------
+- name: "Provision Summary"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: "Summary | Fleet provisioning complete"
+      ansible.builtin.debug:
+        msg:
+          - "=== Fleet Auto-Provisioning Complete ==="
+          - ""
+          - "All targeted nodes provisioned with:"
+          - "  Phase 1: Common baseline (SSH, packages, users)"
+          - "  Phase 2: SLM Agent + Node Exporter"
+          - "  Phase 3-6: Role-specific configuration (when matched)"
+          - "  Phase 4c: SLM nginx co-location update (when applicable)"
+          - "  Phase 5c: TTS Worker (when tts-worker in node_roles)"
+          - ""
+          - "Roles deployed based on:"
+          - "  - node_roles variable (from DB/API)"
+          - "  - Inventory group membership (static inventory)"
+          - ""
+          - "Next: Verify with health-check.yml"

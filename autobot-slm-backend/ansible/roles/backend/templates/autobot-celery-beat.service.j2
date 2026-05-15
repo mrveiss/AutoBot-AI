@@ -1,0 +1,56 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2026 mrveiss
+# Author: mrveiss
+#
+# Issue #6555: Periodic-task scheduler. Celery Beat reads
+# celery_app.conf.beat_schedule and enqueues tasks at the configured
+# crontab times; the existing autobot-celery worker service consumes them.
+#
+# Single-instance — running multiple Beat processes against the same
+# broker would fire each schedule N times. The schedule file at
+# /var/lib/autobot/celerybeat-schedule guards against that with a file
+# lock, but production deploys this on exactly one host.
+[Unit]
+Description=AutoBot Celery Beat (periodic scheduler)
+# #6580: Beat enqueues to Redis; the worker consumes from there. They
+# communicate via the broker, not directly. The previous Requires=
+# autobot-celery.service caused systemd to STOP Beat whenever the worker
+# stopped (crashes, deploy, max_tasks_per_child rotation) — schedules
+# would silently miss their windows because the schedule file's next-run
+# timestamp advances even on shutdown. After= keeps start-order ordering;
+# Wants= softens the dependency so Beat survives worker restarts.
+After=network-online.target redis-stack-server.service autobot-celery.service
+Wants=network-online.target redis-stack-server.service autobot-celery.service
+
+[Service]
+Type=simple
+User={{ backend_user }}
+Group={{ backend_group }}
+WorkingDirectory={{ backend_code_dir | default(backend_install_dir) }}
+Environment="PATH={{ backend_code_dir | default(backend_install_dir) }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir | default(backend_install_dir) }}:{{ backend_install_dir | dirname }}/autobot_shared:{{ backend_install_dir | dirname }}"
+EnvironmentFile={{ backend_code_dir | default(backend_install_dir) }}/.env
+EnvironmentFile=-{{ service_auth_keys_dir | default('/etc/autobot/service-keys') }}/{{ service_auth_service_id | default('main-backend') }}.env
+
+# Beat command — reads beat_schedule from celery_app.py and persists
+# next-run state to the schedule file (default file-based scheduler).
+# Type=simple: systemd tracks MAINPID directly; no separate pidfile.
+# Multi-Beat is prevented by the file lock on the schedule database.
+ExecStart={{ backend_code_dir | default(backend_install_dir) }}/venv/bin/celery -A celery_app beat \
+    --loglevel=info \
+    --schedule={{ celery_beat_schedule_file | default('/var/lib/autobot/celerybeat-schedule') }}
+
+ExecStop=/bin/kill -TERM $MAINPID
+TimeoutStopSec=30
+
+Restart=always
+RestartSec=5
+
+StandardOutput=append:{{ backend_log_dir }}/celery-beat.log
+StandardError=append:{{ backend_log_dir }}/celery-beat-error.log
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

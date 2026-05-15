@@ -1,0 +1,143 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Ansible Monitoring Role - Grafana Installation
+---
+
+- name: Check if Grafana is already installed
+  ansible.builtin.command:
+    cmd: dpkg -l grafana
+  register: _grafana_installed
+  changed_when: false
+  # (#2872) Intentional: dpkg exits rc=1 when package is not installed;
+  # the result drives conditional installation below.
+  failed_when: false
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Remove legacy Grafana APT key from trusted keyring
+  ansible.builtin.apt_key:
+    url: https://apt.grafana.com/gpg.key
+    state: absent
+  when:
+    - ansible_facts['os_family'] == "Debian"
+    - _grafana_installed.rc != 0
+  # (#2872) Intentional: legacy key may not exist; removal is best-effort
+  # cleanup before adding the new signed keyring file.
+  failed_when: false
+
+- name: Remove conflicting Grafana repo entries
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/sources.list.d/grafana.list
+    - /etc/apt/sources.list.d/grafana.sources
+  when:
+    - ansible_facts['os_family'] == "Debian"
+    - _grafana_installed.rc != 0
+
+- name: Add Grafana APT signing key
+  ansible.builtin.get_url:
+    url: https://apt.grafana.com/gpg.key
+    dest: /usr/share/keyrings/grafana.key
+    mode: "0644"
+  when:
+    - ansible_facts['os_family'] == "Debian"
+    - _grafana_installed.rc != 0
+
+# #7218: idempotent repo-add — preserve device-shipped Grafana repo if present.
+# Refresh handled by the bounded-shell task below (#6719).
+- name: "Add Grafana repository (idempotent, #7218)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
+  vars:
+    apt_repo_match: "apt.grafana.com"
+    apt_repo_spec: "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main"
+    apt_repo_filename: "grafana"
+    apt_repo_label: "Grafana (monitoring)"
+  when:
+    - ansible_facts['os_family'] == "Debian"
+    - _grafana_installed.rc != 0
+
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: Grafana | Refresh apt cache after PPA add (best-effort, bounded; #6719)
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  when:
+    - ansible_facts['os_family'] == "Debian"
+    - _grafana_installed.rc != 0
+
+- name: Install Grafana
+  ansible.builtin.apt:
+    name: grafana
+    state: present
+  when:
+    - ansible_facts['os_family'] == "Debian"
+    - _grafana_installed.rc != 0
+
+- name: Configure Grafana
+  ansible.builtin.template:
+    src: grafana.ini.j2
+    dest: /etc/grafana/grafana.ini
+    owner: root
+    group: grafana
+    mode: "0640"
+  notify: Restart grafana
+
+- name: Create Grafana provisioning directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: grafana
+    mode: "0755"
+  loop:
+    - /etc/grafana/provisioning/datasources
+    - /etc/grafana/provisioning/dashboards
+
+- name: Configure Prometheus datasource
+  ansible.builtin.template:
+    src: grafana-datasource.yml.j2
+    dest: /etc/grafana/provisioning/datasources/prometheus.yml
+    owner: root
+    group: grafana
+    mode: "0640"
+  notify: Restart grafana
+
+- name: Configure dashboard provisioning
+  ansible.builtin.template:
+    src: grafana-dashboards.yml.j2
+    dest: /etc/grafana/provisioning/dashboards/default.yml
+    owner: root
+    group: grafana
+    mode: "0640"
+  notify: Restart grafana
+
+- name: Create dashboard directory
+  ansible.builtin.file:
+    path: /var/lib/grafana/dashboards
+    state: directory
+    owner: root
+    group: grafana
+    mode: "0755"
+
+- name: Deploy AutoBot dashboards
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../../autobot-infrastructure/shared/config/grafana/dashboards/"
+    dest: /var/lib/grafana/dashboards/
+    owner: root
+    group: grafana
+    mode: "0640"
+  notify: Restart grafana
+
+- name: Enable and start Grafana
+  ansible.builtin.systemd:
+    name: grafana-server
+    state: started
+    enabled: true

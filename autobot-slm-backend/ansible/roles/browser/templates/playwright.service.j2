@@ -1,0 +1,39 @@
+[Unit]
+Description=AutoBot Playwright Browser Automation
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=autobot
+Group=autobot
+WorkingDirectory=/opt/autobot/autobot-browser-worker
+
+# Environment
+Environment="PLAYWRIGHT_PORT={{ playwright_port }}"
+Environment="BROWSER_TIMEOUT={{ browser_timeout }}"
+Environment="HEADLESS={{ headless_mode | lower }}"
+Environment="DISPLAY={{ vnc_display }}"
+# Shared, user-agnostic browsers location — prevents the service looking up
+# browsers under $HOME/.cache/ms-playwright which is unreliable for system
+# users with non-existent homes. (#4662)
+Environment="PLAYWRIGHT_BROWSERS_PATH=/var/lib/autobot/playwright-browsers"
+EnvironmentFile=-/etc/autobot/autobot-browser-worker.env
+
+# Start command - Node.js Express server
+ExecStart=/usr/bin/node /opt/autobot/autobot-browser-worker/playwright-server.js
+
+# Restart policy
+Restart=always
+RestartSec=5s
+
+# Limits
+LimitNOFILE=65535
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-playwright
+
+[Install]
+WantedBy=multi-user.target

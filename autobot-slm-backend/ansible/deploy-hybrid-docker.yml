@@ -1,0 +1,23 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Ansible Playbook - Docker Container Deployment (#3424)
+#
+# Triggered by SLMDeploymentOrchestrator.deploy_docker() via:
+#   POST /api/slm/deployments/docker
+#
+# Expected extra_vars (injected by deployment_orchestrator.py):
+#   target_host      - IP/hostname of the target node
+#   docker_containers - JSON list of container specs:
+#                         name, image, ports, environment, restart_policy
+#   docker_image     - (optional) standalone image to pull without running
+---
+
+- name: "Docker Container Deployment"
+  hosts: "{{ target_host | default('all') }}"
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: docker

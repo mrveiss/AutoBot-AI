@@ -1,0 +1,257 @@
+---
+# Common role - Base system configuration for all AutoBot hosts
+# Applied to all VMs before service-specific roles
+
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml for
+# rationale. Ansible's apt module aborts on any partial-fetch warning even
+# with retries:3 + cache_valid_time, because every retry sees the same
+# unreachable PPA and hits the same hard failure.
+- name: "Common | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  tags: ['common', 'packages']
+
+- name: "Common | Install base packages"
+  apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+      - git
+      - curl
+      - wget
+      - vim
+      - htop
+      - net-tools
+      - ufw
+      - rsync
+      - ca-certificates
+      - gnupg
+      - lsb-release
+      # Network diagnostics (#703)
+      - netcat-openbsd
+      - iputils-ping
+      - dnsutils
+    state: present
+  become: yes
+  tags: ['common', 'packages']
+
+- name: "Common | Create autobot user"
+  user:
+    name: autobot
+    comment: "AutoBot Service User"
+    home: /home/autobot
+    shell: /bin/bash
+    create_home: yes
+    state: present
+  become: yes
+  tags: ['common', 'users']
+
+- name: "Common | Create emergency admin user"
+  user:
+    name: "{{ emergency_admin_user }}"
+    comment: "Emergency Admin User (fallback access)"
+    shell: /bin/bash
+    create_home: yes
+    groups: sudo
+    append: yes
+    password: "{{ emergency_admin_password_hash }}"
+    state: present
+  become: yes
+  when: emergency_admin_password_hash is defined
+  tags: ['common', 'users', 'emergency']
+
+- name: "Common | Configure passwordless sudo for emergency admin"
+  copy:
+    content: "{{ emergency_admin_user }} ALL=(ALL) NOPASSWD: ALL\n"
+    dest: "/etc/sudoers.d/90-{{ emergency_admin_user }}"
+    owner: root
+    group: root
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  become: yes
+  when: emergency_admin_password_hash is defined
+  tags: ['common', 'users', 'emergency']
+
+- name: "Common | Create AutoBot directory structure"
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: autobot
+    group: autobot
+    mode: '0755'
+  loop:
+    - /opt/autobot
+    - /opt/autobot/logs
+    - /opt/autobot/data
+    - /opt/autobot/config
+    - /opt/autobot/scripts
+  become: yes
+  tags: ['common', 'directories']
+
+# Issue #2828: Use shared key path so any user in the autobot group can
+# run Ansible without needing the key in their own ~/.ssh/.
+- name: "Common | Configure SSH key authentication"
+  authorized_key:
+    user: autobot
+    key: "{{ lookup('file', '/etc/autobot/ssh/autobot_key.pub') }}"
+    state: present
+  become: yes
+  when: lookup('file', '/etc/autobot/ssh/autobot_key.pub', errors='ignore') is not none
+  tags: ['common', 'ssh']
+
+- name: "Common | Reset UFW to clean state (Issue #895)"
+  block:
+    - name: "Common | Disable UFW temporarily"
+      ufw:
+        state: disabled
+      become: yes
+
+    - name: "Common | Reset UFW rules to defaults"
+      command: ufw --force reset
+      become: yes
+      changed_when: true
+
+    - name: "Common | Re-enable UFW"
+      ufw:
+        state: enabled
+      become: yes
+  when: ufw_reset_rules | default(false) | bool
+  tags: ['common', 'firewall', 'firewall-reset']
+
+- name: "Common | Configure firewall - Set default policies"
+  ufw:
+    state: enabled
+    policy: "{{ item.policy }}"
+    direction: "{{ item.direction }}"
+  loop:
+    - { direction: 'incoming', policy: "{{ ufw_default_incoming_policy }}" }
+    - { direction: 'outgoing', policy: "{{ ufw_default_outgoing_policy }}" }
+    - { direction: 'routed', policy: "{{ ufw_default_routed_policy }}" }
+  become: yes
+  tags: ['common', 'firewall']
+
+- name: "Common | Allow all localhost traffic (#2722)"
+  ufw:
+    rule: allow
+    from_ip: 127.0.0.1
+    to_ip: 127.0.0.1
+    comment: "Allow localhost"
+  become: yes
+  tags: ['common', 'firewall']
+
+- name: "Common | Merge base and role-specific firewall rules (#894)"
+  set_fact:
+    merged_firewall_rules: "{{ (security.base_firewall_rules | default([])) + (security.firewall_rules | default([])) }}"
+  tags: ['common', 'firewall']
+
+- name: "Common | Configure firewall - Apply merged rules (#894)"
+  ufw:
+    rule: "{{ item.rule }}"
+    port: "{{ item.port | default(omit) }}"
+    proto: "{{ item.proto | default('tcp') }}"
+    from_ip: "{{ item.src | default('any') }}"
+    to_ip: "{{ item.dest | default('any') }}"
+    comment: "{{ item.comment | default('AutoBot rule') }}"
+  loop: "{{ merged_firewall_rules }}"
+  become: yes
+  notify: reload firewall
+  when: merged_firewall_rules | length > 0
+  tags: ['common', 'firewall']
+
+- name: "Common | Configure firewall - Set logging level (#887)"
+  ufw:
+    logging: "{{ ufw_logging }}"
+  become: yes
+  tags: ['common', 'firewall']
+
+- name: "Common | Enable firewall"
+  ufw:
+    state: enabled
+  become: yes
+  when: ufw_enabled | bool
+  tags: ['common', 'firewall']
+
+- name: "Common | Set hostname"
+  hostname:
+    name: "{{ inventory_hostname }}"
+  become: yes
+  when:
+    - inventory_hostname is defined
+    - inventory_hostname != '00-SLM-Manager'
+  tags: ['common', 'hostname']
+
+- name: "Common | Update /etc/hosts"
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ ansible_facts['default_ipv4'].address }} {{ inventory_hostname }} {{ inventory_hostname_short }}"
+    regexp: "^{{ ansible_facts['default_ipv4'].address }}"
+    state: present
+  become: yes
+  when:
+    - ansible_facts['default_ipv4'].address is defined
+    - inventory_hostname != '00-SLM-Manager'
+  tags: ['common', 'hostname']
+
+- name: "Common | Configure DNS resolvers"
+  template:
+    src: resolv.conf.j2
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+  when: dns_servers is defined
+  tags: ['common', 'dns']
+
+- name: "Common | Check for PEP 668 (externally managed Python)"
+  shell: ls /usr/lib/python3*/EXTERNALLY-MANAGED 2>/dev/null
+  register: _pep668
+  changed_when: false
+  # (#2872) Intentional: EXTERNALLY-MANAGED marker may not exist; rc != 0
+  # means system pip is allowed and the pip install below should proceed.
+  failed_when: false
+  tags: ['common', 'python']
+
+- name: "Common | Install Python packages (system-wide)"
+  pip:
+    name:
+      - pip
+      - setuptools
+      - wheel
+    state: latest
+    executable: pip3
+  become: yes
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang on network issues
+  when: _pep668.rc != 0
+  tags: ['common', 'python']
+
+- name: "Common | Create log directory"
+  file:
+    path: /var/log/autobot
+    state: directory
+    owner: autobot
+    group: autobot
+    mode: '0755'
+  become: yes
+  tags: ['common', 'logging']
+
+- name: "Common | Display configuration summary"
+  debug:
+    msg:
+      - "=== Common Role Configuration Complete ==="
+      - "Hostname: {{ inventory_hostname }}"
+      - "IP Address: {{ ansible_facts['default_ipv4'].address | default('N/A') }}"
+      - "AutoBot User: autobot"
+      - "Base Packages: Installed"
+      - "Firewall: Enabled (SSH allowed)"
+      - "Directory Structure: Created"
+  tags: ['common', 'report']

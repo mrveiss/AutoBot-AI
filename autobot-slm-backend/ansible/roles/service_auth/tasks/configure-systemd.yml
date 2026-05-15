@@ -1,0 +1,35 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Service Authentication - Systemd Integration
+# Only runs on backend hosts (guarded in main.yml)
+---
+- name: "ServiceAuth | Check for existing systemd service"
+  ansible.builtin.stat:
+    path: /etc/systemd/system/autobot-backend.service
+  register: _backend_service_stat
+
+- name: "ServiceAuth | Add service key EnvironmentFile to systemd"
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/system/autobot-backend.service
+    regexp: "^EnvironmentFile=.*service-keys/main-backend\\.env"
+    insertafter: "^EnvironmentFile="
+    line: "EnvironmentFile=-{{ service_auth_keys_dir }}/main-backend.env"
+  become: true
+  when: _backend_service_stat.stat.exists
+  notify:
+    - reload systemd
+    - restart backend
+
+- name: "ServiceAuth | Add enforcement config EnvironmentFile to systemd"
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/system/autobot-backend.service
+    regexp: "^EnvironmentFile=.*service-auth\\.env"
+    insertafter: "^EnvironmentFile="
+    line: "EnvironmentFile=-{{ service_auth_config_dir }}/service-auth.env"
+  become: true
+  when: _backend_service_stat.stat.exists
+  notify:
+    - reload systemd
+    - restart backend

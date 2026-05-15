@@ -1,0 +1,328 @@
+# Dependabot configuration — Issue #1938
+# Guards against incompatible major version bumps in pip and npm deps.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/autobot-backend"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "backend"
+    ignore:
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sqlalchemy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "torch"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "pip"
+    directory: "/autobot_shared"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "backend"
+    ignore:
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pydantic-settings"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "starlette"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "pip"
+    directory: "/autobot-slm-backend"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "backend"
+    ignore:
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sqlalchemy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pydantic-settings"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "npm"
+    directory: "/autobot-frontend"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "frontend"
+    ignore:
+      - dependency-name: "vue"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "npm"
+    directory: "/autobot-slm-frontend"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "frontend"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "devops"
+
+  # Docker base images (Issue #7157 — supply-chain hardening, sister of #7091/#7120)
+  # Dependabot auto-PRs digest updates when new versions publish.
+  #
+  # Major version bumps are explicitly ignored — `python:3.12` should NOT auto-PR
+  # to `python:3.13` until autobot_shared/pyproject.toml's `requires-python` is
+  # bumped first. Same logic for node-major and ubuntu-major.
+  - package-ecosystem: "docker"
+    directory: "/docker/backend"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "devops"
+      - "security"
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "docker"
+    directory: "/docker/slm"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "devops"
+      - "security"
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "docker"
+    directory: "/docker/frontend"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "devops"
+      - "security"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "ubuntu"
+        update-types: ["version-update:semver-major"]
+
+  # Self-review during #7157 implementation surfaced 2 missed Dockerfiles:
+  - package-ecosystem: "docker"
+    directory: "/autobot-backend/services/autoresearch"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "devops"
+      - "security"
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "docker"
+    directory: "/autobot-infrastructure/shared/mcp/tools/context7"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "devops"
+      - "security"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+
+  # context7 MCP tool has its own npm deps — Dockerfile FROM is tracked above
+  # but the package.json runtime deps need their own ecosystem.
+  # (#7170 self-review found this — surfaced after #7163 + #7170 merged)
+  - package-ecosystem: "npm"
+    directory: "/autobot-infrastructure/shared/mcp/tools/context7"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "devops"
+
+  # === #7182 P1: Production worker dirs ===
+  # Comprehensive audit of all manifest files vs Dependabot coverage caught
+  # 8+ uncovered dirs. Workers below all deploy via autobot-infrastructure
+  # (per autobot-infrastructure/README.md): browser→.25, npu→.22, ai-stack→.24.
+  - package-ecosystem: "pip"
+    directory: "/autobot-browser-worker"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "backend"
+
+  - package-ecosystem: "npm"
+    directory: "/autobot-browser-worker"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "frontend"
+
+  - package-ecosystem: "pip"
+    directory: "/autobot-npu-worker"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "backend"
+    ignore:
+      - dependency-name: "torch"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "pip"
+    directory: "/autobot-tts-worker"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "backend"
+    ignore:
+      - dependency-name: "torch"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "pip"
+    directory: "/autobot-infrastructure/shared/docker/ai-stack"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "backend"
+    ignore:
+      - dependency-name: "torch"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sqlalchemy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "pip"
+    directory: "/autobot-infrastructure/autobot-npu-worker/docker"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "backend"
+    ignore:
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+
+  # === #7182 P2: Root-level manifests ===
+  # Catches root-level requirements*.txt (requirements.txt, requirements-ci.txt,
+  # requirements-dev.txt) AND root pyproject.toml — used by ci.yml + security.yml.
+  # Risk of stale CI tooling without this entry.
+  - package-ecosystem: "pip"
+    directory: "/"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "backend"
+      - "devops"
+    ignore:
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sqlalchemy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "starlette"
+        update-types: ["version-update:semver-major"]

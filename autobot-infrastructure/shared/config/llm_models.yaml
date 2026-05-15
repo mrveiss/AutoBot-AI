@@ -1,0 +1,94 @@
+# LLM Model Configuration (#2553)
+# Defines context window capabilities and message budgeting per model
+
+models:
+  # Default fallback model (quality tier)
+  default:
+    name: "qwen3.5:9b"
+    context_window_tokens: 32768
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 800
+      recent_messages: 30
+      max_history_tokens: 6000
+
+  # Quality tier — chat, research, code analysis
+  qwen3.5:9b:
+    context_window_tokens: 32768
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 800
+      recent_messages: 30
+      max_history_tokens: 6000
+
+  # Instruction tier — RAG, extraction, step execution
+  mistral:7b-instruct:
+    context_window_tokens: 32768
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 600
+      recent_messages: 25
+      max_history_tokens: 5000
+
+  # System/uncensored tier — commands, security
+  dolphin-llama3:8b:
+    context_window_tokens: 8192
+    max_output_tokens: 2048
+    message_budget:
+      system_prompt: 500
+      recent_messages: 20
+      max_history_tokens: 3000
+
+  # Light processing tier — structured extraction, formatting
+  phi3:mini:
+    context_window_tokens: 4096
+    max_output_tokens: 2048
+    message_budget:
+      system_prompt: 300
+      recent_messages: 15
+      max_history_tokens: 3000
+
+  # Routing tier — fast orchestration
+  llama3.2:1b:
+    context_window_tokens: 4096
+    max_output_tokens: 1024
+    message_budget:
+      system_prompt: 200
+      recent_messages: 10
+      max_history_tokens: 2000
+
+  # Classification tier
+  gemma2:2b:
+    context_window_tokens: 8192
+    max_output_tokens: 1024
+    message_budget:
+      system_prompt: 300
+      recent_messages: 10
+      max_history_tokens: 2000
+
+# Token estimation defaults
+token_estimation:
+  chars_per_token: 4  # Conservative estimate
+  safety_margin: 0.9  # Use 90% of available context
+
+# Model Performance Classification (#2553)
+# Maps models to performance levels for intelligent task routing
+performance_classification:
+  # Lightweight models (< 2B parameters) - Fast, low resource usage
+  lightweight:
+    - llama3.2:1b
+    - gemma2:2b
+    - nomic-embed-text
+
+  # Standard models (2-8B parameters) - Balanced performance/quality
+  standard:
+    - phi3:mini
+    - dolphin-phi:2.7b-v2.6-q4_K_M
+    - llama3:8b
+    - openchat:7b
+    - mistral:7b-instruct
+    - dolphin-llama3:8b
+
+  # Advanced models (8B+ parameters) - High quality, more resources
+  advanced:
+    - qwen3.5:9b

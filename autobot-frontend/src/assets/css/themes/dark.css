@@ -1,0 +1,146 @@
+/**
+ * AutoBot - AI-Powered Automation Platform
+ * Copyright (c) 2025 mrveiss
+ * Author: mrveiss
+ *
+ * dark.css - Dark Theme Override
+ * Issue #704: CSS Design System - Centralized Theming & SSOT Styles
+ *
+ * This file overrides design tokens for dark mode.
+ * Activated via [data-theme="dark"] on document root.
+ */
+
+[data-theme="dark"],
+:root {
+  /* ============================================
+   * BACKGROUND COLORS - Dark Theme
+   * ============================================ */
+
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-elevated: #1e293b;
+  --bg-surface: #1a1a2e;
+  --bg-card: #1e293b;
+  --bg-input: #1e293b;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(255, 255, 255, 0.1);
+  --bg-overlay: rgba(0, 0, 0, 0.7);
+
+  /* ============================================
+   * TEXT COLORS - Dark Theme
+   * ============================================ */
+
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --text-muted: #475569;
+  --text-inverse: #0f172a;
+  --text-link: #60a5fa;
+  --text-link-hover: #93c5fd;
+
+  /* ============================================
+   * BORDER COLORS - Dark Theme
+   * ============================================ */
+
+  --border-default: #475569;
+  --border-subtle: rgba(71, 85, 105, 0.5);
+  --border-strong: #64748b;
+
+  /* ============================================
+   * CODE SYNTAX - Dark Theme
+   * GitHub Dark-inspired syntax highlighting
+   * ============================================ */
+
+  --code-bg: #0d1117;
+  --code-text: #c9d1d9;
+  --code-keyword: #ff7b72;
+  --code-string: #a5d6ff;
+  --code-number: #79c0ff;
+  --code-comment: #8b949e;
+  --code-function: #d2a8ff;
+  --code-variable: #ffa657;
+  --code-operator: #ff7b72;
+  --code-class: #7ee787;
+  --code-tag: #7ee787;
+  --code-attribute: #79c0ff;
+
+  /* ============================================
+   * CHART COLORS - Dark Theme
+   * Slightly brighter for dark backgrounds
+   * ============================================ */
+
+  --chart-bg: var(--bg-card);
+  --chart-grid: rgba(148, 163, 184, 0.1);
+  --chart-axis: var(--text-tertiary);
+  --chart-tooltip-bg: var(--bg-elevated);
+
+  /* ============================================
+   * SHADOWS - Dark Theme
+   * Deeper shadows for dark mode
+   * ============================================ */
+
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+
+  /* ============================================
+   * SCROLLBAR - Dark Theme
+   * ============================================ */
+
+  --scrollbar-track: #1e293b;
+  --scrollbar-thumb: #475569;
+  --scrollbar-thumb-hover: #64748b;
+
+  /* ============================================
+   * COMPONENT TOKENS - Dark Theme
+   * ============================================ */
+
+  --card-bg: #1e293b;
+  --card-border: rgba(71, 85, 105, 0.5);
+  --table-header-bg: #1e293b;
+  --table-row-bg: #1e293b;
+  --table-row-hover: rgba(255, 255, 255, 0.05);
+  --table-border: rgba(71, 85, 105, 0.5);
+  --input-bg: #1e293b;
+  --input-border: #475569;
+}
+
+/* ============================================
+ * SYSTEM PREFERENCE: Prefers Dark Mode
+ * Auto-apply dark theme when user hasn't chosen
+ * ============================================ */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-tertiary: #334155;
+    --bg-elevated: #1e293b;
+    --bg-surface: #1a1a2e;
+    --bg-card: #1e293b;
+    --bg-input: #1e293b;
+    --bg-hover: rgba(255, 255, 255, 0.05);
+    --bg-active: rgba(255, 255, 255, 0.1);
+    --bg-overlay: rgba(0, 0, 0, 0.7);
+
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-tertiary: #64748b;
+    --text-muted: #475569;
+    --text-inverse: #0f172a;
+    --text-link: #60a5fa;
+    --text-link-hover: #93c5fd;
+
+    --border-default: #475569;
+    --border-subtle: rgba(71, 85, 105, 0.5);
+    --border-strong: #64748b;
+
+    --scrollbar-track: #1e293b;
+    --scrollbar-thumb: #475569;
+    --scrollbar-thumb-hover: #64748b;
+  }
+}

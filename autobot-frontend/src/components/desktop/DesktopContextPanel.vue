@@ -1,0 +1,250 @@
+<!-- AutoBot - AI-Powered Automation Platform -->
+<!-- Copyright (c) 2025 mrveiss -->
+<!-- Author: mrveiss -->
+
+<template>
+  <div class="desktop-context-panel">
+    <div class="panel-header">
+      <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('desktop.contextPanel.title') }}</h3>
+      <button @click="refresh" :disabled="loading" class="refresh-btn" :title="$t('desktop.contextPanel.title')">
+        <svg class="w-4 h-4" :class="{ 'animate-spin': loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      </button>
+    </div>
+
+    <div v-if="error" class="error-message">
+      {{ error }}
+    </div>
+
+    <div v-else-if="context" class="context-sections">
+      <!-- System Info -->
+      <div class="context-section">
+        <h4 class="section-title">{{ $t('desktop.contextPanel.system') }}</h4>
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="info-label">{{ $t('desktop.contextPanel.cpuLoad') }}</span>
+            <span class="info-value">{{ context.system.cpu_load_1min || $t('desktop.contextPanel.na') }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">{{ $t('desktop.contextPanel.memory') }}</span>
+            <span class="info-value">
+              {{ context.system.memory_percent }}% ({{ context.system.memory_used_mb }}MB / {{ context.system.memory_total_mb }}MB)
+            </span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">{{ $t('desktop.contextPanel.uptime') }}</span>
+            <span class="info-value">{{ context.system.uptime || $t('desktop.contextPanel.na') }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Desktop Info -->
+      <div class="context-section">
+        <h4 class="section-title">{{ $t('desktop.contextPanel.desktop') }}</h4>
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="info-label">{{ $t('desktop.contextPanel.resolution') }}</span>
+            <span class="info-value">{{ context.desktop.resolution || $t('desktop.contextPanel.na') }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">{{ $t('desktop.contextPanel.activeWindow') }}</span>
+            <span class="info-value text-truncate">{{ context.desktop.active_window || $t('desktop.contextPanel.none') }}</span>
+          </div>
+          <div v-if="context.desktop.window_count" class="info-item">
+            <span class="info-label">{{ $t('desktop.contextPanel.windows') }}</span>
+            <span class="info-value">{{ context.desktop.window_count }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Running Processes -->
+      <div v-if="context.processes && context.processes.length > 0" class="context-section">
+        <h4 class="section-title">{{ $t('desktop.contextPanel.topProcesses') }}</h4>
+        <div class="process-list">
+          <div v-for="proc in context.processes" :key="proc.pid" class="process-item">
+            <div class="process-info">
+              <span class="process-pid">{{ $t('desktop.contextPanel.pid', { pid: proc.pid }) }}</span>
+              <span class="process-command">{{ proc.command }}</span>
+            </div>
+            <div class="process-stats">
+              <span class="process-cpu">{{ $t('desktop.contextPanel.cpu', { pct: proc.cpu }) }}</span>
+              <span class="process-mem">{{ $t('desktop.contextPanel.mem', { pct: proc.mem }) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Last Update -->
+      <div class="update-time">
+        {{ $t('desktop.contextPanel.lastUpdated', { time: formatTime(context.timestamp) }) }}
+      </div>
+    </div>
+
+    <div v-else class="loading-state">
+      {{ $t('desktop.contextPanel.loading') }}
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import ApiClient from '@/utils/ApiClient'
+import { createLogger } from '@/utils/debugUtils'
+import { usePollingJob } from '@/composables/usePollingJob'
+
+const { t } = useI18n()
+const logger = createLogger('DesktopContextPanel')
+
+interface DesktopContext {
+  system: {
+    cpu_load_1min?: string
+    cpu_load_5min?: string
+    cpu_load_15min?: string
+    memory_used_mb?: string
+    memory_total_mb?: string
+    memory_percent?: string
+    uptime?: string
+  }
+  desktop: {
+    resolution?: string
+    active_window?: string
+    window_count?: string
+  }
+  processes?: Array<{
+    pid: string
+    cpu: string
+    mem: string
+    command: string
+  }>
+  timestamp: string
+}
+
+const context = ref<DesktopContext | null>(null)
+const loading = ref(false)
+const error = ref<string | null>(null)
+
+const { start: startContextPolling } = usePollingJob<DesktopContext | null>(
+  async () => {
+    loading.value = true
+    error.value = null
+    try {
+      const data = await ApiClient.get<DesktopContext>('/vnc/desktop/context')
+      context.value = data
+      return data
+    } catch (err: unknown) {
+      logger.error('Failed to fetch desktop context:', err)
+      error.value = t('desktop.contextPanel.error')
+      return null
+    } finally {
+      loading.value = false
+    }
+  },
+  { intervalMs: 5000, maxAttempts: Infinity }
+)
+
+function refresh(): void {
+  startContextPolling('')
+}
+
+function formatTime(timestamp: string): string {
+  try {
+    const date = new Date(timestamp)
+    return date.toLocaleTimeString()
+  } catch {
+    return timestamp
+  }
+}
+
+onMounted(() => {
+  startContextPolling('')  // fires immediately + every 5s; auto-cleans via onScopeDispose
+})
+</script>
+
+<style scoped>
+@reference "../../assets/tailwind.css";
+.desktop-context-panel {
+  @apply bg-autobot-bg-secondary rounded-lg border border-autobot-border p-4;
+}
+
+.panel-header {
+  @apply flex items-center justify-between mb-4 pb-2 border-b border-autobot-border;
+}
+
+.refresh-btn {
+  @apply p-1 text-autobot-text-muted hover:text-autobot-text-primary transition-colors;
+}
+
+.error-message {
+  @apply text-sm text-red-600 p-2 bg-red-50 rounded;
+}
+
+.loading-state {
+  @apply text-sm text-autobot-text-muted text-center py-4;
+}
+
+.context-sections {
+  @apply space-y-4;
+}
+
+.context-section {
+  @apply space-y-2;
+}
+
+.section-title {
+  @apply text-xs font-semibold text-autobot-text-primary uppercase tracking-wide;
+}
+
+.info-grid {
+  @apply space-y-1.5;
+}
+
+.info-item {
+  @apply flex items-start justify-between text-xs;
+}
+
+.info-label {
+  @apply text-autobot-text-secondary font-medium;
+}
+
+.info-value {
+  @apply text-autobot-text-primary font-mono text-right;
+}
+
+.text-truncate {
+  @apply truncate max-w-xs;
+}
+
+.process-list {
+  @apply space-y-2 max-h-48 overflow-y-auto;
+}
+
+.process-item {
+  @apply flex items-center justify-between text-xs p-2 bg-autobot-bg-tertiary rounded;
+}
+
+.process-info {
+  @apply flex flex-col gap-0.5 flex-1 min-w-0;
+}
+
+.process-pid {
+  @apply text-autobot-text-muted font-mono text-[10px];
+}
+
+.process-command {
+  @apply text-autobot-text-primary truncate;
+}
+
+.process-stats {
+  @apply flex gap-2 text-autobot-text-secondary font-mono;
+}
+
+.process-cpu, .process-mem {
+  @apply text-[10px];
+}
+
+.update-time {
+  @apply text-[10px] text-autobot-text-muted text-center mt-2 pt-2 border-t border-autobot-border;
+}
+</style>

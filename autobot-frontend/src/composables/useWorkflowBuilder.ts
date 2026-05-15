@@ -1,0 +1,1212 @@
+// AutoBot - AI-Powered Automation Platform
+// Copyright (c) 2025 mrveiss
+// Author: mrveiss
+/**
+ * Workflow Builder Composable
+ *
+ * Provides reactive state and API integration for the Workflow Automation Builder.
+ * Issue #585: GUI Integration - Workflow Automation Builder
+ *
+ * Backend APIs:
+ * - /api/orchestrator/* - Enhanced multi-agent orchestration
+ * - /api/workflow-automation/* - Workflow automation management
+ */
+
+import { ref, computed, reactive } from 'vue';
+import { getBackendUrl, getBackendWsUrl, getApiBase } from '@/config/ssot-config';
+import { createLogger } from '@/utils/debugUtils';
+import httpClient from '@/utils/ApiClient';
+import type { ApiResponse } from '@/types/api';
+import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
+import type { WorkflowTemplateDetail } from '@/types/workflowTemplates';
+import { useWebSocket } from '@/composables/useWebSocket';
+import { useLoadingState } from '@/composables/useLoadingState';
+
+const logger = createLogger('useWorkflowBuilder');
+
+// ==================================================================================
+// TYPE DEFINITIONS
+// ==================================================================================
+
+// #7123: WorkflowStepStatus, RiskLevel, and the runtime step shape are
+// now defined canonically in @/types/workflowTemplates. Imported here for
+// in-file use AND re-exported so existing import paths
+// (`useWorkflowBuilder.WorkflowStepStatus`, etc.) keep working.
+import type {
+  WorkflowStepStatus,
+  RiskLevel,
+  AutomationWorkflowStep,
+} from '@/types/workflowTemplates'
+export type { WorkflowStepStatus, RiskLevel, AutomationWorkflowStep }
+
+/** Automation execution modes */
+export type AutomationMode = 'manual' | 'semi_automatic' | 'automatic';
+
+/** Plan approval modes */
+export type PlanApprovalMode = 'full_plan' | 'per_step' | 'hybrid' | 'auto_safe';
+
+/** Plan approval status */
+export type PlanApprovalStatus =
+  | 'pending'
+  | 'presented'
+  | 'awaiting_approval'
+  | 'approved'
+  | 'rejected'
+  | 'modified'
+  | 'timeout';
+
+/** Execution strategy */
+export type ExecutionStrategy =
+  | 'sequential'
+  | 'parallel'
+  | 'pipeline'
+  | 'collaborative'
+  | 'adaptive';
+
+/**
+ * Workflow step definition (#7123).
+ *
+ * Alias to the canonical `AutomationWorkflowStep` from
+ * `@/types/workflowTemplates`. The 6+ consumers (`WorkflowRunner.vue`,
+ * `WorkflowLiveDashboard.vue`, `OrchestrationVisualizer.vue`,
+ * `WorkflowCanvas.vue`, `WorkflowBuilderView.vue`, this composable's
+ * helpers) keep their `import { WorkflowStep }` path but now resolve to
+ * a single source of truth that mirrors backend
+ * `services/workflow_automation/WorkflowStep.to_status_dict()`.
+ */
+export type WorkflowStep = AutomationWorkflowStep;
+
+/** Workflow phase from state machine (#1380) */
+export type WorkflowPhase =
+  | 'planning'
+  | 'executing'
+  | 'validating'
+  | 'complete'
+  | 'failed';
+
+/** State machine info for a workflow (#1380) */
+export interface WorkflowStateInfo {
+  workflow_id: string;
+  goal: string;
+  current_step: WorkflowPhase;
+  active_service: string;
+  steps_completed: string[];
+  done: boolean;
+  errors: string[];
+  routing_table: Record<string, string>;
+}
+
+/** Active workflow definition */
+export interface ActiveWorkflow {
+  workflow_id: string;
+  name: string;
+  description: string;
+  session_id: string;
+  steps: WorkflowStep[];
+  current_step: number;
+  total_steps: number;
+  is_paused: boolean;
+  is_cancelled: boolean;
+  automation_mode: AutomationMode;
+  phase?: WorkflowPhase;
+  active_service?: string;
+  created_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  user_interventions: Record<string, unknown>[];
+}
+
+/** Plan approval request */
+export interface PlanApprovalRequest {
+  workflow_id: string;
+  plan_summary: string;
+  total_steps: number;
+  steps: WorkflowStep[];
+  approval_mode: PlanApprovalMode;
+  status: PlanApprovalStatus;
+  risk_assessment?: string;
+  estimated_total_duration: number;
+  timeout_seconds: number;
+  created_at?: string;
+}
+
+/** Workflow template */
+export interface WorkflowTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  icon: string;
+  steps: Omit<WorkflowStep, 'step_id' | 'status'>[];
+  // Optional fields present on API WorkflowTemplateSummary (#920)
+  estimated_duration_minutes?: number;
+  agents_involved?: string[];
+  complexity?: string;
+  tags?: string[];
+}
+
+/** Execution strategy info */
+export interface StrategyInfo {
+  name: string;
+  description: string;
+  best_for: string;
+}
+
+/** Agent capability */
+export interface AgentCapability {
+  agent: string;
+  capabilities: string[];
+  performance: {
+    reliability: number;
+    total_tasks: number;
+  };
+}
+
+/** Agent performance metrics */
+export interface AgentPerformance {
+  agent_name: string;
+  total_tasks: number;
+  successful_tasks: number;
+  failed_tasks: number;
+  average_duration: number;
+  reliability_score: number;
+}
+
+/** Orchestration status */
+export interface OrchestrationStatus {
+  status: string;
+  active_workflows: number;
+  max_parallel_tasks: number;
+  total_agents: number;
+  capabilities: {
+    execution_strategies: string[];
+    agent_coordination: boolean;
+    performance_tracking: boolean;
+    automatic_failover: boolean;
+    resource_optimization: boolean;
+  };
+}
+
+/** Workflow execution result */
+export interface WorkflowExecutionResult {
+  type: 'workflow_orchestration' | 'direct_execution';
+  workflow_id: string;
+  workflow_response?: {
+    workflow_preview: string[];
+    strategy_used: string;
+    execution_time: number;
+  };
+  result?: {
+    response: string;
+    response_text: string;
+    messageType: string;
+  };
+  details: Record<string, unknown>;
+}
+
+/**
+ * Orchestrator workflow plan — preview returned from `/api/orchestrator/*`
+ * for the multi-agent planning surface.
+ *
+ * #7228: renamed from `WorkflowPlan` to disambiguate from the canonical
+ * runtime `WorkflowPlan` in `@/types/workflowTemplates` (which mirrors
+ * backend `autobot_shared.workflow.WorkflowPlan`). The two shapes serve
+ * different concerns:
+ *   - `OrchestratorWorkflowPlan` (this) — UI preview from the
+ *     orchestrator endpoint; partial fields, inline task shape, no
+ *     runtime state.
+ *   - `WorkflowPlan` (canonical, in `@/types/workflowTemplates`) —
+ *     full runtime execution plan with fallback_plans,
+ *     approval_required, dependencies_graph, and the richer task
+ *     field set inherited from `WorkflowTask`.
+ *
+ * Both exist legitimately; the rename prevents future contributors from
+ * accidentally treating them as interchangeable.
+ */
+export interface OrchestratorWorkflowPlan {
+  plan_id: string;
+  goal: string;
+  strategy: ExecutionStrategy;
+  estimated_duration: number;
+  tasks: Array<{
+    task_id: string;
+    agent_type: string;
+    action: string;
+    priority: number;
+    dependencies: string[];
+    capabilities_required: string[];
+  }>;
+  success_criteria: string[];
+  resource_requirements: Record<string, unknown>;
+}
+
+/** Workflow node for canvas */
+export interface WorkflowNode {
+  id: string;
+  type: 'step' | 'condition' | 'parallel' | 'loop' | 'vision-capture' | 'vision-find-element' | 'vision-click' | 'vision-type-text' | 'vision-ocr' | 'vision-wait';
+  position: { x: number; y: number };
+  data: WorkflowStep | Record<string, unknown>;
+  connections: string[];
+}
+
+// ==================================================================================
+// API CLIENT
+// ==================================================================================
+
+class WorkflowBuilderApiClient {
+  private baseUrl: string;
+  private timeout: number;
+
+  constructor() {
+    this.baseUrl = getBackendUrl();
+    this.timeout = 60000;
+  }
+
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    const url = `${this.baseUrl}${endpoint}`;
+    try {
+      const method = ((options.method as string) || 'GET').toUpperCase();
+      let data: T;
+      if (method === 'POST') {
+        const body = options.body ? JSON.parse(options.body as string) as unknown : undefined;
+        data = await httpClient.post<T>(url, body, { timeout: this.timeout });
+      } else {
+        data = await httpClient.get<T>(url, { timeout: this.timeout });
+      }
+      return { success: true, data };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('API request failed:', { endpoint, error: message });
+      return { success: false, error: message };
+    }
+  }
+
+  // ==================================================================================
+  // ORCHESTRATION API (/api/orchestrator)
+  // ==================================================================================
+
+  /** Execute a workflow with multi-agent orchestration */
+  async executeWorkflow(
+    goal: string,
+    strategy?: ExecutionStrategy,
+    context?: Record<string, unknown>,
+    maxParallelTasks?: number
+  ): Promise<ApiResponse<WorkflowExecutionResult>> {
+    return this.request(`${getApiBase()}/orchestrator/workflow/execute`, {
+      method: 'POST',
+      body: JSON.stringify({
+        goal,
+        strategy,
+        context,
+        max_parallel_tasks: maxParallelTasks,
+      }),
+    });
+  }
+
+  /** Create a workflow plan without executing */
+  async createWorkflowPlan(
+    goal: string,
+    context?: Record<string, unknown>
+  ): Promise<ApiResponse<{ status: string; plan: OrchestratorWorkflowPlan; task_count: number }>> {
+    return this.request(`${getApiBase()}/orchestrator/workflow/plan`, {
+      method: 'POST',
+      body: JSON.stringify({ goal, context }),
+    });
+  }
+
+  /** Get active workflows */
+  async getActiveOrchestrationWorkflows(): Promise<
+    ApiResponse<{ status: string; active_count: number; workflows: ActiveWorkflow[] }>
+  > {
+    return this.request(`${getApiBase()}/orchestrator/workflow/active`);
+  }
+
+  /** Get agent performance metrics */
+  async getAgentPerformance(): Promise<
+    ApiResponse<{ status: string; performance_data: Record<string, AgentPerformance> }>
+  > {
+    return this.request(`${getApiBase()}/orchestrator/agents/performance`);
+  }
+
+  /** Get agent recommendations */
+  async getAgentRecommendations(
+    taskType: string,
+    capabilitiesNeeded: string[]
+  ): Promise<
+    ApiResponse<{
+      status: string;
+      task_type: string;
+      capabilities_requested: string[];
+      recommended_agents: string[];
+      agent_count: number;
+    }>
+  > {
+    return this.request(`${getApiBase()}/orchestrator/agents/recommend`, {
+      method: 'POST',
+      body: JSON.stringify({
+        task_type: taskType,
+        capabilities_needed: capabilitiesNeeded,
+      }),
+    });
+  }
+
+  /** Get available execution strategies */
+  async getExecutionStrategies(): Promise<
+    ApiResponse<{ strategies: Record<string, StrategyInfo>; default: string }>
+  > {
+    return this.request(`${getApiBase()}/orchestrator/strategies`);
+  }
+
+  /** Get agent capabilities */
+  async getAgentCapabilities(): Promise<
+    ApiResponse<{
+      capability_coverage: Record<string, number>;
+      agents: Record<string, AgentCapability>;
+      total_agents: number;
+    }>
+  > {
+    return this.request(`${getApiBase()}/orchestrator/capabilities`);
+  }
+
+  /** Get orchestration system status */
+  async getOrchestrationStatus(): Promise<ApiResponse<OrchestrationStatus>> {
+    return this.request(`${getApiBase()}/orchestrator/status`);
+  }
+
+  /** Get example workflows */
+  async getExampleWorkflows(): Promise<
+    ApiResponse<{
+      examples: Record<string, { goal: string; strategy: string; description: string }>;
+      usage_tips: string[];
+    }>
+  > {
+    return this.request(`${getApiBase()}/orchestrator/examples`);
+  }
+
+  // ==================================================================================
+  // WORKFLOW AUTOMATION API (/api/workflow-automation)
+  // ==================================================================================
+
+  /** Create a new workflow */
+  async createWorkflow(
+    name: string,
+    description: string,
+    steps: Omit<WorkflowStep, 'step_id' | 'status'>[],
+    sessionId: string,
+    automationMode: AutomationMode = 'semi_automatic'
+  ): Promise<ApiResponse<{ success: boolean; workflow_id: string; message: string }>> {
+    return this.request(`${getApiBase()}/workflow-automation/create_workflow`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        description,
+        steps: steps.map((step) => ({
+          command: step.command,
+          description: step.description,
+          explanation: step.explanation,
+          requires_confirmation: step.requires_confirmation,
+          risk_level: step.risk_level,
+          dependencies: step.dependencies || [],
+        })),
+        session_id: sessionId,
+        automation_mode: automationMode,
+      }),
+    });
+  }
+
+  /** Start workflow execution */
+  async startWorkflow(
+    workflowId: string
+  ): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    return this.request(`${getApiBase()}/workflow-automation/start_workflow/${workflowId}`, {
+      method: 'POST',
+    });
+  }
+
+  /** Control workflow execution */
+  async controlWorkflow(
+    workflowId: string,
+    action: 'pause' | 'resume' | 'cancel' | 'approve_step' | 'skip_step',
+    stepId?: string,
+    userInput?: string
+  ): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    return this.request(`${getApiBase()}/workflow-automation/control_workflow`, {
+      method: 'POST',
+      body: JSON.stringify({
+        workflow_id: workflowId,
+        action,
+        step_id: stepId,
+        user_input: userInput,
+      }),
+    });
+  }
+
+  /** Get workflow status */
+  async getWorkflowStatus(
+    workflowId: string
+  ): Promise<ApiResponse<{ success: boolean; workflow: ActiveWorkflow }>> {
+    return this.request(`${getApiBase()}/workflow-automation/workflow_status/${workflowId}`);
+  }
+
+  /** Get all active workflows */
+  async getActiveWorkflows(): Promise<
+    ApiResponse<{ success: boolean; workflows: ActiveWorkflow[]; count: number }>
+  > {
+    return this.request(`${getApiBase()}/workflow-automation/active_workflows`);
+  }
+
+  /** Get completed workflow history (#1367) */
+  async getCompletedWorkflows(): Promise<
+    ApiResponse<{ success: boolean; workflows: ActiveWorkflow[]; count: number }>
+  > {
+    return this.request(`${getApiBase()}/workflow-automation/completed_workflows`);
+  }
+
+  /** Create workflow from natural language */
+  async createWorkflowFromChat(
+    userRequest: string,
+    sessionId: string,
+    autoStart: boolean = true,
+    requireApproval: boolean = false,
+    approvalMode: PlanApprovalMode = 'full_plan'
+  ): Promise<
+    ApiResponse<{
+      success: boolean;
+      workflow_id?: string;
+      message: string;
+      status?: string;
+      plan?: PlanApprovalRequest;
+    }>
+  > {
+    return this.request(`${getApiBase()}/workflow-automation/create_from_chat`, {
+      method: 'POST',
+      body: JSON.stringify({
+        user_request: userRequest,
+        session_id: sessionId,
+        auto_start: autoStart,
+        require_approval: requireApproval,
+        approval_mode: approvalMode,
+      }),
+    });
+  }
+
+  /** Present plan for approval */
+  async presentPlanForApproval(
+    workflowId: string,
+    approvalMode: PlanApprovalMode = 'full_plan',
+    timeoutSeconds: number = 300
+  ): Promise<
+    ApiResponse<{
+      success: boolean;
+      workflow_id: string;
+      status: string;
+      plan: PlanApprovalRequest;
+    }>
+  > {
+    return this.request(`${getApiBase()}/workflow-automation/present_plan/${workflowId}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        workflow_id: workflowId,
+        approval_mode: approvalMode,
+        include_risk_assessment: true,
+        timeout_seconds: timeoutSeconds,
+      }),
+    });
+  }
+
+  /** Approve or reject plan */
+  async approvePlan(
+    workflowId: string,
+    approved: boolean,
+    approvalMode: PlanApprovalMode = 'full_plan',
+    modifications?: string[],
+    reason?: string
+  ): Promise<
+    ApiResponse<{
+      success: boolean;
+      workflow_id: string;
+      status: string;
+      message: string;
+    }>
+  > {
+    return this.request(`${getApiBase()}/workflow-automation/approve_plan`, {
+      method: 'POST',
+      body: JSON.stringify({
+        workflow_id: workflowId,
+        approved,
+        approval_mode: approvalMode,
+        modifications,
+        reason,
+      }),
+    });
+  }
+
+  /** Get pending approval */
+  async getPendingApproval(
+    workflowId: string
+  ): Promise<
+    ApiResponse<{
+      success: boolean;
+      workflow_id: string;
+      has_pending_approval: boolean;
+      approval: PlanApprovalRequest | null;
+    }>
+  > {
+    return this.request(`${getApiBase()}/workflow-automation/pending_approval/${workflowId}`);
+  }
+}
+
+// Singleton instance
+const apiClient = new WorkflowBuilderApiClient();
+
+// ==================================================================================
+// COMPOSABLE
+// ==================================================================================
+
+export function useWorkflowBuilder() {
+  // ==================================================================================
+  // STATE
+  // ==================================================================================
+
+  // Loading states — each managed by its own useLoadingState instance
+  const { isLoading: loading, wrap: wrapLoading } = useLoadingState();
+  const { isLoading: executingWorkflow, wrap: wrapExecuting } = useLoadingState();
+  const { isLoading: loadingStrategies, wrap: wrapStrategies } = useLoadingState();
+  const { isLoading: loadingCapabilities, wrap: wrapCapabilities } = useLoadingState();
+  const { isLoading: loadingExamples, wrap: wrapExamples } = useLoadingState();
+
+  // Error state — accumulated to prevent race conditions (#2626)
+  const errors = ref<string[]>([]);
+  const error = computed<string | null>(() =>
+    errors.value.length > 0 ? errors.value.join('; ') : null,
+  );
+
+  // Data state
+  const activeWorkflows = ref<ActiveWorkflow[]>([]);
+  const completedWorkflows = ref<ActiveWorkflow[]>([]);
+  const currentWorkflow = ref<ActiveWorkflow | null>(null);
+  const workflowPlan = ref<OrchestratorWorkflowPlan | null>(null);
+  const pendingApproval = ref<PlanApprovalRequest | null>(null);
+
+  // Orchestration data
+  const orchestrationStatus = ref<OrchestrationStatus | null>(null);
+  const executionStrategies = ref<Record<string, StrategyInfo>>({});
+  const agentCapabilities = ref<Record<string, AgentCapability>>({});
+  const agentPerformance = ref<Record<string, AgentPerformance>>({});
+  const exampleWorkflows = ref<Record<string, { goal: string; strategy: string; description: string }>>({});
+
+  // Canvas state for visual builder
+  const workflowNodes = ref<WorkflowNode[]>([]);
+  const selectedNodeId = ref<string | null>(null);
+
+  // WebSocket connection — managed via useWebSocket composable
+  const wsUrl = ref('');
+  const {
+    isConnected: wsConnected,
+    connect: wsConnect,
+    disconnect: wsDisconnect,
+  } = useWebSocket(wsUrl, {
+    autoConnect: false,
+    autoReconnect: false,
+    parseJSON: false,
+    onMessage: (data: string) => {
+      try {
+        handleWebSocketMessage(JSON.parse(data));
+      } catch (e) {
+        logger.error('Failed to parse WebSocket message:', e);
+      }
+    },
+    onOpen: () => logger.info('WebSocket connected'),
+    onClose: () => logger.info('WebSocket disconnected'),
+    onError: (event) => logger.error('WebSocket error:', event),
+  });
+
+  // ==================================================================================
+  // COMPUTED
+  // ==================================================================================
+
+  const hasActiveWorkflows = computed(() => activeWorkflows.value.length > 0);
+  const isWorkflowPaused = computed(() => currentWorkflow.value?.is_paused ?? false);
+  const currentStepIndex = computed(() => currentWorkflow.value?.current_step ?? 0);
+  const totalSteps = computed(() => currentWorkflow.value?.total_steps ?? 0);
+  const progress = computed(() => {
+    if (totalSteps.value === 0) return 0;
+    return Math.round((currentStepIndex.value / totalSteps.value) * 100);
+  });
+
+  const selectedNode = computed(() => {
+    if (!selectedNodeId.value) return null;
+    return workflowNodes.value.find((n) => n.id === selectedNodeId.value) || null;
+  });
+
+  // ==================================================================================
+  // WORKFLOW TEMPLATES - API Integration (Issue #778)
+  // ==================================================================================
+
+  // Templates API composable
+  const {
+    templates: apiTemplates,
+    loading: loadingApiTemplates,
+    error: apiTemplatesError,
+    fetchTemplates: fetchApiTemplates,
+    createWorkflowFromTemplate: createFromApiTemplate,
+    executeTemplate: executeApiTemplate
+  } = useWorkflowTemplates();
+
+  // Minimal fallback templates shown when API is unreachable
+  const builtInTemplates: WorkflowTemplate[] = [
+    {
+      id: 'system_update',
+      name: 'System Update',
+      description: 'Update and upgrade system packages',
+      category: 'System',
+      icon: 'fas fa-sync-alt',
+      steps: [{ command: 'sudo apt update && sudo apt upgrade -y', description: 'Update system', risk_level: 'medium', requires_confirmation: true, estimated_duration: 120, started_at: null, completed_at: null }],
+    },
+    {
+      id: 'security_scan',
+      name: 'Security Scan',
+      description: 'Run security scanning workflow',
+      category: 'Security',
+      icon: 'fas fa-shield-alt',
+      steps: [{ command: 'sudo lynis audit system', description: 'System security audit', risk_level: 'low', requires_confirmation: false, estimated_duration: 300, started_at: null, completed_at: null }],
+    },
+  ];
+
+  // Templates with API fallback - use API templates if available, otherwise fallback to built-in
+  const templates = computed<WorkflowTemplate[]>(() => {
+    if (apiTemplates.value.length > 0) {
+      // Convert API templates to WorkflowTemplate format
+      return apiTemplates.value.map(apiTemplate => ({
+        id: apiTemplate.id,
+        name: apiTemplate.name,
+        description: apiTemplate.description,
+        category: apiTemplate.category,
+        icon: apiTemplate.icon || getDefaultIconForCategory(apiTemplate.category),
+        steps: 'steps' in apiTemplate
+          ? (apiTemplate as WorkflowTemplateDetail).steps.map(step => ({
+              // #6951 Phase 2F + #7044: TemplateStep is the canonical static-template
+              // shape; the runtime workflow_automation fields below need synthesis.
+              command: step.command ?? step.action ?? '',
+              description: step.description,
+              risk_level: 'low' as RiskLevel,             // templates carry no risk classification
+              requires_confirmation: step.requires_approval,
+              estimated_duration: step.estimated_duration_seconds,
+              dependencies: step.dependencies,
+            }))
+          : []
+      }));
+    }
+    return builtInTemplates;
+  });
+
+  // Helper to get default icon for category
+  function getDefaultIconForCategory(category: string): string {
+    const icons: Record<string, string> = {
+      security: 'fas fa-shield-alt',
+      research: 'fas fa-search',
+      development: 'fas fa-code',
+      system_admin: 'fas fa-server',
+      analysis: 'fas fa-chart-bar',
+      System: 'fas fa-cog',
+      Development: 'fas fa-code',
+      Security: 'fas fa-lock',
+      Backup: 'fas fa-database'
+    };
+    return icons[category] || 'fas fa-tasks';
+  }
+
+  /** Load templates from API */
+  async function loadTemplates(): Promise<void> {
+    await fetchApiTemplates();
+    logger.debug('Templates loaded from API:', apiTemplates.value.length);
+  }
+
+  // ==================================================================================
+  // METHODS - ORCHESTRATION API
+  // ==================================================================================
+
+  /** Load orchestration system status */
+  async function loadOrchestrationStatus(): Promise<void> {
+    await wrapLoading(async () => {
+      const response = await apiClient.getOrchestrationStatus();
+      if (response.success && response.data) {
+        orchestrationStatus.value = response.data;
+        logger.debug('Orchestration status loaded:', response.data);
+      } else {
+        // Non-blocking: status badge shows "Services Offline" when null
+        logger.warn('Orchestration status unavailable:', response.error);
+      }
+    });
+  }
+
+  /** Load execution strategies */
+  async function loadExecutionStrategies(): Promise<void> {
+    await wrapStrategies(async () => {
+      const response = await apiClient.getExecutionStrategies();
+      if (response.success && response.data) {
+        executionStrategies.value = response.data.strategies;
+        logger.debug('Strategies loaded:', response.data);
+      } else {
+        logger.error('Failed to load strategies:', response.error);
+      }
+    });
+  }
+
+  /** Load agent capabilities */
+  async function loadAgentCapabilities(): Promise<void> {
+    await wrapCapabilities(async () => {
+      const response = await apiClient.getAgentCapabilities();
+      if (response.success && response.data) {
+        agentCapabilities.value = response.data.agents;
+        logger.debug('Agent capabilities loaded:', response.data);
+      } else {
+        logger.error('Failed to load agent capabilities:', response.error);
+      }
+    });
+  }
+
+  /** Load agent performance metrics */
+  async function loadAgentPerformance(): Promise<void> {
+    const response = await apiClient.getAgentPerformance();
+    if (response.success && response.data) {
+      agentPerformance.value = response.data.performance_data;
+      logger.debug('Agent performance loaded:', response.data);
+    } else {
+      logger.error('Failed to load agent performance:', response.error);
+    }
+  }
+
+  /** Load example workflows */
+  async function loadExampleWorkflows(): Promise<void> {
+    await wrapExamples(async () => {
+      const response = await apiClient.getExampleWorkflows();
+      if (response.success && response.data) {
+        exampleWorkflows.value = response.data.examples;
+        logger.debug('Example workflows loaded:', response.data);
+      } else {
+        logger.error('Failed to load example workflows:', response.error);
+      }
+    });
+  }
+
+  /** Execute workflow with orchestration */
+  async function executeOrchestrationWorkflow(
+    goal: string,
+    strategy?: ExecutionStrategy,
+    context?: Record<string, unknown>
+  ): Promise<WorkflowExecutionResult | null> {
+    errors.value = [];
+    return wrapExecuting(async () => {
+      const response = await apiClient.executeWorkflow(goal, strategy, context);
+      if (response.success && response.data) {
+        logger.info('Workflow executed:', response.data);
+        return response.data;
+      } else {
+        errors.value = [...errors.value, response.error || 'Failed to execute workflow'];
+        logger.error('Workflow execution failed:', response.error);
+        return null;
+      }
+    });
+  }
+
+  /** Create workflow plan without executing */
+  async function createPlan(
+    goal: string,
+    context?: Record<string, unknown>
+  ): Promise<OrchestratorWorkflowPlan | null> {
+    errors.value = [];
+    return wrapLoading(async () => {
+      const response = await apiClient.createWorkflowPlan(goal, context);
+      if (response.success && response.data) {
+        workflowPlan.value = response.data.plan;
+        logger.info('Workflow plan created:', response.data);
+        return response.data.plan;
+      } else {
+        errors.value = [...errors.value, response.error || 'Failed to create workflow plan'];
+        logger.error('Plan creation failed:', response.error);
+        return null;
+      }
+    });
+  }
+
+  // ==================================================================================
+  // METHODS - WORKFLOW AUTOMATION API
+  // ==================================================================================
+
+  /** Load active workflows */
+  async function loadActiveWorkflows(): Promise<void> {
+    await wrapLoading(async () => {
+      const response = await apiClient.getActiveWorkflows();
+      if (response.success && response.data) {
+        activeWorkflows.value = response.data.workflows;
+        logger.debug('Active workflows loaded:', response.data);
+      } else {
+        // Non-blocking: empty list is a valid state; log but don't block the UI
+        logger.warn('Active workflows unavailable:', response.error);
+      }
+    });
+  }
+
+  /** Load completed workflow history (#1367) */
+  async function loadCompletedWorkflows(): Promise<void> {
+    const response = await apiClient.getCompletedWorkflows();
+    if (response.success && response.data) {
+      completedWorkflows.value = response.data.workflows;
+    } else {
+      logger.warn('Completed workflows unavailable:', response.error);
+    }
+  }
+
+  /** Get workflow status */
+  async function getWorkflowStatus(workflowId: string): Promise<ActiveWorkflow | null> {
+    const response = await apiClient.getWorkflowStatus(workflowId);
+    if (response.success && response.data) {
+      currentWorkflow.value = response.data.workflow;
+      return response.data.workflow;
+    }
+    return null;
+  }
+
+  /** Create workflow from template */
+  async function createWorkflowFromTemplate(
+    template: WorkflowTemplate,
+    sessionId: string,
+    automationMode: AutomationMode = 'semi_automatic'
+  ): Promise<string | null> {
+    errors.value = [];
+    return wrapLoading(async () => {
+      const response = await apiClient.createWorkflow(
+        template.name,
+        template.description,
+        template.steps,
+        sessionId,
+        automationMode
+      );
+      if (response.success && response.data) {
+        logger.info('Workflow created from template:', response.data);
+        await loadActiveWorkflows();
+        return response.data.workflow_id;
+      } else {
+        errors.value = [...errors.value, response.error || 'Failed to create workflow'];
+        logger.error('Workflow creation failed:', response.error);
+        return null;
+      }
+    });
+  }
+
+  /** Create workflow from natural language */
+  async function createWorkflowFromNaturalLanguage(
+    request: string,
+    sessionId: string,
+    requireApproval: boolean = true
+  ): Promise<string | null> {
+    errors.value = [];
+    return wrapLoading(async () => {
+      const response = await apiClient.createWorkflowFromChat(
+        request,
+        sessionId,
+        !requireApproval,
+        requireApproval
+      );
+      if (response.success && response.data?.workflow_id) {
+        if (response.data.plan) {
+          pendingApproval.value = response.data.plan;
+        }
+        await loadActiveWorkflows();
+        return response.data.workflow_id;
+      } else {
+        errors.value = [...errors.value, response.error || response.data?.message || 'Failed to create workflow'];
+        logger.error('Workflow creation from chat failed:', response.error);
+        return null;
+      }
+    });
+  }
+
+  /** Start workflow execution */
+  async function startWorkflow(workflowId: string): Promise<boolean> {
+    errors.value = [];
+    return wrapExecuting(async () => {
+      const response = await apiClient.startWorkflow(workflowId);
+      if (response.success) {
+        logger.info('Workflow started:', workflowId);
+        await getWorkflowStatus(workflowId);
+        return true;
+      } else {
+        errors.value = [...errors.value, response.error || 'Failed to start workflow'];
+        logger.error('Workflow start failed:', response.error);
+        return false;
+      }
+    });
+  }
+
+  /** Pause workflow */
+  async function pauseWorkflow(workflowId: string): Promise<boolean> {
+    const response = await apiClient.controlWorkflow(workflowId, 'pause');
+    if (response.success) {
+      logger.info('Workflow paused:', workflowId);
+      await getWorkflowStatus(workflowId);
+      return true;
+    }
+    return false;
+  }
+
+  /** Resume workflow */
+  async function resumeWorkflow(workflowId: string): Promise<boolean> {
+    const response = await apiClient.controlWorkflow(workflowId, 'resume');
+    if (response.success) {
+      logger.info('Workflow resumed:', workflowId);
+      await getWorkflowStatus(workflowId);
+      return true;
+    }
+    return false;
+  }
+
+  /** Cancel workflow */
+  async function cancelWorkflow(workflowId: string): Promise<boolean> {
+    const response = await apiClient.controlWorkflow(workflowId, 'cancel');
+    if (response.success) {
+      logger.info('Workflow cancelled:', workflowId);
+      await loadActiveWorkflows();
+      return true;
+    }
+    return false;
+  }
+
+  /** Approve workflow step */
+  async function approveStep(workflowId: string, stepId: string): Promise<boolean> {
+    const response = await apiClient.controlWorkflow(workflowId, 'approve_step', stepId);
+    if (response.success) {
+      logger.info('Step approved:', { workflowId, stepId });
+      await getWorkflowStatus(workflowId);
+      return true;
+    }
+    return false;
+  }
+
+  /** Skip workflow step */
+  async function skipStep(workflowId: string, stepId: string): Promise<boolean> {
+    const response = await apiClient.controlWorkflow(workflowId, 'skip_step', stepId);
+    if (response.success) {
+      logger.info('Step skipped:', { workflowId, stepId });
+      await getWorkflowStatus(workflowId);
+      return true;
+    }
+    return false;
+  }
+
+  /** Approve plan */
+  async function approvePlan(workflowId: string): Promise<boolean> {
+    const response = await apiClient.approvePlan(workflowId, true);
+    if (response.success) {
+      pendingApproval.value = null;
+      logger.info('Plan approved:', workflowId);
+      return true;
+    }
+    return false;
+  }
+
+  /** Reject plan */
+  async function rejectPlan(workflowId: string, reason?: string): Promise<boolean> {
+    const response = await apiClient.approvePlan(workflowId, false, 'full_plan', undefined, reason);
+    if (response.success) {
+      pendingApproval.value = null;
+      logger.info('Plan rejected:', workflowId);
+      return true;
+    }
+    return false;
+  }
+
+  // ==================================================================================
+  // METHODS - CANVAS OPERATIONS
+  // ==================================================================================
+
+  /** Add node to canvas */
+  function addNode(node: WorkflowNode): void {
+    workflowNodes.value.push(node);
+    logger.debug('Node added:', node);
+  }
+
+  /** Remove node from canvas */
+  function removeNode(nodeId: string): void {
+    workflowNodes.value = workflowNodes.value.filter((n) => n.id !== nodeId);
+    if (selectedNodeId.value === nodeId) {
+      selectedNodeId.value = null;
+    }
+    logger.debug('Node removed:', nodeId);
+  }
+
+  /** Update node position */
+  function updateNodePosition(nodeId: string, position: { x: number; y: number }): void {
+    const node = workflowNodes.value.find((n) => n.id === nodeId);
+    if (node) {
+      node.position = position;
+    }
+  }
+
+  /** Connect two nodes */
+  function connectNodes(sourceId: string, targetId: string): void {
+    const sourceNode = workflowNodes.value.find((n) => n.id === sourceId);
+    if (sourceNode && !sourceNode.connections.includes(targetId)) {
+      sourceNode.connections.push(targetId);
+      logger.debug('Nodes connected:', { sourceId, targetId });
+    }
+  }
+
+  /** Disconnect nodes */
+  function disconnectNodes(sourceId: string, targetId: string): void {
+    const sourceNode = workflowNodes.value.find((n) => n.id === sourceId);
+    if (sourceNode) {
+      sourceNode.connections = sourceNode.connections.filter((id) => id !== targetId);
+    }
+  }
+
+  /** Clear canvas */
+  function clearCanvas(): void {
+    workflowNodes.value = [];
+    selectedNodeId.value = null;
+    logger.debug('Canvas cleared');
+  }
+
+  /** Export canvas to workflow steps */
+  function exportCanvasToSteps(): WorkflowStep[] {
+    return workflowNodes.value
+      .filter((n) => n.type === 'step')
+      .map((n, _index) => ({
+        step_id: n.id,
+        ...(n.data as Omit<WorkflowStep, 'step_id'>),
+        status: 'pending' as WorkflowStepStatus,
+      }));
+  }
+
+  // ==================================================================================
+  // METHODS - WEBSOCKET
+  // ==================================================================================
+
+  /** Connect to workflow WebSocket */
+  function connectWebSocket(sessionId: string): void {
+    wsDisconnect();
+    wsUrl.value = `${getBackendWsUrl()}/api/workflow-automation/workflow_ws/${sessionId}`;
+    wsConnect();
+  }
+
+  /** Handle WebSocket messages */
+  function handleWebSocketMessage(data: Record<string, unknown>): void {
+    const messageType = data.type as string;
+
+    switch (messageType) {
+      case 'workflow_status_update':
+        if (data.workflow) {
+          currentWorkflow.value = data.workflow as ActiveWorkflow;
+        }
+        break;
+      case 'step_completed':
+        loadActiveWorkflows();
+        break;
+      case 'workflow_completed':
+        loadActiveWorkflows();
+        break;
+      case 'approval_required':
+        pendingApproval.value = data.approval as PlanApprovalRequest;
+        break;
+      default:
+        logger.debug('Unhandled WebSocket message:', data);
+    }
+  }
+
+  /** Disconnect WebSocket */
+  function disconnectWebSocket(): void {
+    wsDisconnect();
+  }
+
+  // ==================================================================================
+  // LIFECYCLE
+  // ==================================================================================
+  // useWebSocket calls disconnect() via onScopeDispose automatically
+
+  // ==================================================================================
+  // RETURN
+  // ==================================================================================
+
+  return {
+    // State
+    loading,
+    executingWorkflow,
+    loadingStrategies,
+    loadingCapabilities,
+    loadingExamples,
+    loadingApiTemplates,
+    error,
+    apiTemplatesError,
+    activeWorkflows,
+    completedWorkflows,
+    currentWorkflow,
+    workflowPlan,
+    pendingApproval,
+    orchestrationStatus,
+    executionStrategies,
+    agentCapabilities,
+    agentPerformance,
+    exampleWorkflows,
+    workflowNodes,
+    selectedNodeId,
+    wsConnected,
+    templates,
+    builtInTemplates,
+
+    // Computed
+    hasActiveWorkflows,
+    isWorkflowPaused,
+    currentStepIndex,
+    totalSteps,
+    progress,
+    selectedNode,
+
+    // Orchestration methods
+    loadOrchestrationStatus,
+    loadExecutionStrategies,
+    loadAgentCapabilities,
+    loadAgentPerformance,
+    loadExampleWorkflows,
+    executeOrchestrationWorkflow,
+    createPlan,
+
+    // Template methods (Issue #778)
+    loadTemplates,
+    createFromApiTemplate,
+    executeApiTemplate,
+
+    // Workflow automation methods
+    loadActiveWorkflows,
+    loadCompletedWorkflows,
+    getWorkflowStatus,
+    createWorkflowFromTemplate,
+    createWorkflowFromNaturalLanguage,
+    startWorkflow,
+    pauseWorkflow,
+    resumeWorkflow,
+    cancelWorkflow,
+    approveStep,
+    skipStep,
+    approvePlan,
+    rejectPlan,
+
+    // Canvas methods
+    addNode,
+    removeNode,
+    updateNodePosition,
+    connectNodes,
+    disconnectNodes,
+    clearCanvas,
+    exportCanvasToSteps,
+
+    // WebSocket methods
+    connectWebSocket,
+    disconnectWebSocket,
+  };
+}
+
+export default useWorkflowBuilder;

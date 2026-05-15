@@ -1,0 +1,848 @@
+# Infrastructure & Deployment Guide
+
+**Status**: MANDATORY - Local-only development with immediate sync
+
+This guide provides detailed instructions for AutoBot's distributed VM infrastructure and deployment workflows.
+
+> **MANDATORY RULE**: NEVER edit code directly on remote VMs - Edit locally, sync immediately
+
+---
+
+## SSH Authentication
+
+### SSH Key Setup
+
+**Key Location**: `~/.ssh/autobot_key` (4096-bit RSA)
+
+**Configured for all 5 VMs**:
+
+- `frontend` (<frontend-ip>)
+- `npu-worker` (<npu-ip>)
+- `redis` (<database-ip>)
+- `ai-stack` (<aiml-ip>)
+- `browser` (<browser-ip>)
+
+### Verify SSH Access
+
+```bash
+# Test connection to all VMs
+for vm in frontend npu-worker redis ai-stack browser; do
+    echo "Testing $vm..."
+    ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> through <browser-ip> "hostname" 2>/dev/null
+done
+
+# Test specific VM
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "echo 'Frontend VM connected'"
+```
+
+### SSH Configuration
+
+Add to `~/.ssh/config` for easier access:
+
+```ssh-config
+# AutoBot VMs
+Host autobot-frontend
+    HostName <frontend-ip>
+    User autobot
+    IdentityFile ~/.ssh/autobot_key
+    StrictHostKeyChecking accept-new
+
+Host autobot-npu
+    HostName <npu-ip>
+    User autobot
+    IdentityFile ~/.ssh/autobot_key
+    StrictHostKeyChecking accept-new
+
+Host autobot-redis
+    HostName <database-ip>
+    User autobot
+    IdentityFile ~/.ssh/autobot_key
+    StrictHostKeyChecking accept-new
+
+Host autobot-ai
+    HostName <aiml-ip>
+    User autobot
+    IdentityFile ~/.ssh/autobot_key
+    StrictHostKeyChecking accept-new
+
+Host autobot-browser
+    HostName <browser-ip>
+    User autobot
+    IdentityFile ~/.ssh/autobot_key
+    StrictHostKeyChecking accept-new
+```
+
+**Usage**:
+
+```bash
+# Now you can use short names
+ssh autobot-frontend
+ssh autobot-redis
+```
+
+---
+
+## File Synchronization
+
+### Sync Script
+
+**Script Location**: `./infrastructure/shared/scripts/sync-to-vm.sh`
+
+**Basic Usage**:
+
+```bash
+# Syntax
+./infrastructure/shared/scripts/sync-to-vm.sh <vm-name> <local-path> <remote-path>
+
+# Example: Sync frontend component to Frontend VM
+./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/src/components/Chat.vue /home/autobot/autobot-slm-frontend/src/components/Chat.vue
+
+# Example: Sync entire directory
+./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/src/components/ /home/autobot/autobot-slm-frontend/src/components/
+```
+
+### Sync to All VMs
+
+```bash
+# Sync to ALL VMs at once
+./infrastructure/shared/scripts/sync-to-vm.sh all scripts/setup.sh /home/autobot/scripts/
+
+# Sync directory to all VMs
+./infrastructure/shared/scripts/sync-to-vm.sh all autobot-backend/utils/ /home/autobot/autobot-backend/utils/
+```
+
+### Common Sync Patterns
+
+**Sync frontend changes**:
+
+```bash
+# Single component
+./infrastructure/shared/scripts/sync-to-vm.sh frontend \
+    autobot-slm-frontend/src/components/ChatMessages.vue \
+    /home/autobot/autobot-slm-frontend/src/components/ChatMessages.vue
+
+# Entire components directory
+./infrastructure/shared/scripts/sync-to-vm.sh frontend \
+    autobot-slm-frontend/src/components/ \
+    /home/autobot/autobot-slm-frontend/src/components/
+
+# Full frontend rebuild
+./infrastructure/shared/scripts/sync-to-vm.sh frontend \
+    autobot-slm-frontend/ \
+    /home/autobot/autobot-slm-frontend/
+```
+
+**Sync backend changes**:
+
+```bash
+# Single API file
+./infrastructure/shared/scripts/sync-to-vm.sh all \
+    autobot-user-autobot-backend/api/chat.py \
+    /home/autobot/autobot-user-autobot-backend/api/chat.py
+
+# Entire backend directory
+./infrastructure/shared/scripts/sync-to-vm.sh all \
+    autobot-backend/ \
+    /home/autobot/autobot-backend/
+```
+
+**Sync configuration**:
+
+```bash
+# Environment file (be careful with secrets!)
+./infrastructure/shared/scripts/sync-to-vm.sh all \
+    .env.example \
+    /home/autobot/.env.example
+
+# Config file
+./infrastructure/shared/scripts/sync-to-vm.sh all \
+    infrastructure/shared/config/config.yaml \
+    /home/autobot/config/config.yaml
+```
+
+### Sync Shortcuts
+
+**Use the convenience script**:
+
+```bash
+# Frontend sync (uses sync-to-vm.sh internally)
+./sync-frontend.sh
+
+# Equivalent to:
+./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/ /home/autobot/autobot-slm-frontend/
+```
+
+---
+
+## MANDATORY: Local-Only Development
+
+### The Rule
+
+**NEVER edit code directly on remote VMs (<frontend-ip>-25) - ZERO TOLERANCE**
+
+### Required Workflow
+
+1. **Edit locally** in `/opt/autobot`
+2. **Sync immediately** using sync scripts
+3. **Never skip sync** - remote machines must stay synchronized
+
+### Why This Is Critical
+
+| Problem | Impact |
+|---------|--------|
+| **No version control on VMs** | Changes completely untracked |
+| **No backup system** | Remote edits never saved or recorded |
+| **VMs are ephemeral** | Can be reinstalled anytime leading to PERMANENT WORK LOSS |
+| **No recovery mechanism** | Cannot track or recover remote changes |
+
+### What This Means
+
+**CORRECT workflow**:
+
+```bash
+# Step 1: Edit locally
+vim autobot-user-autobot-backend/api/chat.py
+
+# Step 2: Sync immediately
+./infrastructure/shared/scripts/sync-to-vm.sh all autobot-user-autobot-backend/api/chat.py /home/autobot/autobot-user-autobot-backend/api/chat.py
+
+# Step 3: Commit changes (version control)
+git add autobot-user-autobot-backend/api/chat.py
+git commit -m "Update chat API"
+```
+
+**FORBIDDEN workflow**:
+
+```bash
+# NEVER DO THIS - Direct editing on VM
+ssh autobot@<frontend-ip>
+vim /home/autobot/autobot-user-autobot-backend/api/chat.py  # PERMANENT WORK LOSS RISK!
+```
+
+### Enforcement
+
+- **Pre-commit checks**: Verify no unsynced changes exist
+- **Code review**: Check for evidence of direct VM edits
+- **Periodic VM reinstalls**: Prove resilience (all work is local)
+
+---
+
+## Network Configuration
+
+### Service Binding Rules
+
+**CORRECT - Bind to all interfaces**:
+
+```python
+# Backend service
+app.run(host="0.0.0.0", port=8001)  # Accessible from network
+
+# Frontend development server
+vite --host 0.0.0.0 --port 5173  # Accessible from network
+```
+
+**FORBIDDEN - Localhost binding**:
+
+```python
+# NOT accessible from remote VMs
+app.run(host="localhost", port=8001)
+app.run(host="127.0.0.1", port=8001)
+
+# NOT accessible from remote VMs
+vite --host localhost --port 5173
+```
+
+### Service Access Patterns
+
+**Backend on Main Machine** (<backend-ip>):
+
+```python
+# Binds to all interfaces
+uvicorn main:app --host 0.0.0.0 --port 8001
+
+# Accessed from frontend VM:
+# https://<backend-ip>:8443/api/chat
+```
+
+**Frontend on VM1** (<frontend-ip>):
+
+```bash
+# Binds to all interfaces
+npm run dev -- --host 0.0.0.0 --port 5173
+
+# Accessed from browser:
+# http://<frontend-ip>:5173
+```
+
+**Redis on VM3** (<database-ip>):
+
+```bash
+# Configure Redis to bind to all interfaces
+# In /etc/redis/redis.conf:
+bind 0.0.0.0
+
+# Accessed from any VM:
+# redis-cli -h <database-ip> -p 6379
+```
+
+### Inter-VM Communication
+
+**Use actual IPs** for communication between VMs:
+
+```python
+# CORRECT - Use NetworkConstants
+from autobot_shared.network_constants import NetworkConstants
+
+backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}/api/chat"
+# Result: https://<backend-ip>:8443/api/chat
+
+redis_host = NetworkConstants.REDIS_VM_IP
+# Result: <database-ip>
+
+# WRONG - Using localhost (won't work from remote VMs)
+backend_url = "http://localhost:8001/api/chat"
+redis_host = "localhost"
+```
+
+### Network Testing
+
+**Test connectivity between VMs**:
+
+```bash
+# From main machine, test backend accessibility
+curl https://<backend-ip>:8443/api/health
+
+# From frontend VM, test backend accessibility
+ssh autobot@<frontend-ip> "curl https://<backend-ip>:8443/api/health"
+
+# From any VM, test Redis
+redis-cli -h <database-ip> ping
+# Should return: PONG
+
+# Test all VMs from main machine
+for ip in 20 21 22 23 24 25; do
+    echo "Testing 172.16.168.$ip..."
+    ping -c 1 172.16.168.$ip
+done
+```
+
+---
+
+## Firewall Configuration (UFW)
+
+> **Issue #887**: UFW firewall blocks localhost connections - needs proper default rules
+
+### Critical Firewall Requirements
+
+AutoBot infrastructure requires specific firewall rules to function correctly:
+
+1. **Infrastructure subnet must be allowed** (`<network-subnet>`) - VMs cannot communicate without this
+2. **SSH must be allowed** (port 22) - Critical to prevent lockout
+3. **Service-specific ports** - Backend API, Redis, Frontend, etc.
+
+**CRITICAL**: Without proper UFW configuration, services will show as "LISTENING" but all connection attempts will timeout due to UFW BLOCK rules.
+
+### Firewall Configuration Methods
+
+#### Method 1: Ansible Deployment (RECOMMENDED)
+
+The `common` role automatically configures UFW during provisioning:
+
+```bash
+# Deploy firewall configuration to all VMs
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/provision-fleet-roles.yml --tags common,firewall
+
+# Deploy to specific VM
+ansible-playbook playbooks/provision-fleet-roles.yml --limit <backend-ip> --tags common,firewall
+```
+
+**Firewall rules are defined in**: `ansible/inventory/group_vars/all.yml` under `security.firewall_rules`
+
+**Service port mappings are in**: `ansible/roles/common/defaults/main.yml` under `firewall_service_ports`
+
+#### Method 2: Standalone Script (Manual/Emergency)
+
+For manual configuration or emergency repairs:
+
+```bash
+# Apply AutoBot firewall rules (preserves existing rules)
+sudo ./infrastructure/shared/config/ufw-defaults.sh apply
+
+# Reset UFW and apply AutoBot rules (CAUTION: removes all existing rules)
+sudo ./infrastructure/shared/config/ufw-defaults.sh reset
+
+# Show current firewall status
+sudo ./infrastructure/shared/config/ufw-defaults.sh status
+```
+
+**Script location**: `infrastructure/shared/config/ufw-defaults.sh`
+
+### Role-Specific Firewall Rules (Issue #894)
+
+**Each VM receives firewall rules specific to its role (least privilege principle):**
+
+### Default Firewall Rules
+
+**Base rules (applied to ALL VMs):**
+- SSH from gateway (port 22, source: <network-gateway>)
+
+**Role-specific rules (defined in `inventory/group_vars/<role>.yml`):**
+
+**Frontend VM (<frontend-ip>):**
+- 443/tcp (any) - HTTPS public access
+- 80/tcp (any) - HTTP public access
+- 5173/tcp (infrastructure only) - Vue dev server
+- 8001/tcp (infrastructure only) - Backend API connectivity
+- 8443/tcp (infrastructure only) - Backend API HTTPS connectivity
+
+**Backend VM (<backend-ip>):**
+- 8443/tcp (infrastructure only) - Backend API HTTPS
+- 8001/tcp (infrastructure only) - Backend API HTTP
+- 6080/tcp (infrastructure only) - noVNC web console
+- 5900/tcp (infrastructure only) - VNC
+
+**Redis VM (<database-ip>):**
+- 6379/tcp (infrastructure only) - Redis Stack
+- 5432/tcp (infrastructure only) - PostgreSQL
+- 8001/tcp (infrastructure only) - Redis Insight UI
+
+**AI/ML VMs (<npu-ip>, <aiml-ip>):**
+- 8080/tcp (infrastructure only) - AI Stack API
+- 8081/tcp (infrastructure only) - NPU Worker API
+- 11434/tcp (infrastructure only) - Ollama API
+
+**Browser VM (<browser-ip>):**
+- 3000/tcp (infrastructure only) - Browser Worker API
+- 3001/tcp (infrastructure only) - Playwright Debug
+
+**SLM Server (<slm-manager-ip>):**
+- 443/tcp (any) - SLM Frontend HTTPS
+- 80/tcp (any) - SLM Frontend HTTP
+- 8000/tcp (infrastructure only) - SLM Backend API
+- 9090/tcp (infrastructure only) - Prometheus
+- 3000/tcp (infrastructure only) - Grafana
+- 9100/tcp (infrastructure only) - Node Exporter
+- 5432/tcp (infrastructure only) - PostgreSQL
+
+**Default Policies**:
+- Incoming: DENY (default-deny security stance)
+- Outgoing: ALLOW (services can make outbound connections)
+- Routed: DENY (no routing between interfaces)
+
+### Troubleshooting Firewall Issues
+
+#### Symptom: Service starts but connection attempts timeout
+
+```bash
+# Check if UFW is blocking connections
+sudo dmesg | grep UFW | tail -20
+
+# Example of blocked connection:
+# [UFW BLOCK] IN=loopback0 SRC=127.0.0.1 DST=127.0.0.1 PROTO=TCP DPT=8443
+```
+
+**Solution**: Apply proper firewall rules using Ansible or standalone script
+
+#### Verify Firewall Status
+
+```bash
+# Check UFW status
+sudo ufw status verbose
+
+# Check specific rule exists
+sudo ufw status | grep "<network-subnet>"
+sudo ufw status | grep "8443"
+
+# Check recent UFW blocks
+sudo tail -f /var/log/ufw.log
+```
+
+#### Emergency Firewall Disable (TEMPORARY ONLY)
+
+```bash
+# ONLY use this to verify firewall is the issue
+# DO NOT leave firewall disabled in production
+sudo ufw disable
+
+# Test your connection
+curl http://localhost:8443/api/health
+
+# Re-enable with proper rules
+sudo ./infrastructure/shared/config/ufw-defaults.sh apply
+```
+
+### Adding Custom Firewall Rules
+
+#### Via Ansible (Recommended)
+
+Edit `ansible/inventory/group_vars/all.yml`:
+
+```yaml
+security:
+  firewall_rules:
+    # Existing rules...
+    # Add new rule:
+    - rule: allow
+      port: 9999
+      proto: tcp
+      src: "<network-subnet>"
+      comment: "Custom service port"
+```
+
+Then deploy:
+
+```bash
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/provision-fleet-roles.yml --tags common,firewall
+```
+
+#### Via Command Line (Temporary)
+
+```bash
+# Allow specific port from infrastructure subnet
+sudo ufw allow from <network-subnet> to any port 9999 proto tcp comment 'Custom service'
+
+# Allow specific port from any source
+sudo ufw allow 9999/tcp comment 'Public service'
+
+# Reload firewall
+sudo ufw reload
+```
+
+**WARNING**: Command-line rules are not persistent in Ansible-managed environments. Always update Ansible configuration for permanent changes.
+
+### Verification Checklist
+
+After deploying firewall configuration, verify:
+
+```bash
+# 1. UFW is enabled
+sudo ufw status | grep "Status: active"
+
+# 2. Infrastructure subnet rule exists
+sudo ufw status | grep "<network-subnet>"
+
+# 3. SSH rule exists (CRITICAL)
+sudo ufw status | grep "22/tcp"
+
+# 4. Service-specific ports are allowed
+sudo ufw status | grep "8443/tcp"  # Backend
+sudo ufw status | grep "6379/tcp"  # Redis
+sudo ufw status | grep "443/tcp"   # Frontend
+
+# 5. Test actual connectivity
+curl http://<backend-ip>:8443/api/health  # Backend
+redis-cli -h <database-ip> ping            # Redis
+curl https://<frontend-ip>                 # Frontend
+```
+
+---
+
+## VM Infrastructure Overview
+
+### Service Layout
+
+| VM | IP:Port | Service | Purpose |
+|----|---------|---------|---------|
+| **Main (WSL)** | <backend-ip>:8443 | Backend API | FastAPI backend, business logic |
+| **Main (WSL)** | <backend-ip>:6080 | VNC Desktop | noVNC web-based terminal |
+| **VM1 Frontend** | <frontend-ip>:5173 | Web UI | Vue.js frontend (SINGLE SERVER) |
+| **VM2 NPU Worker** | <npu-ip>:8081 | AI Acceleration | Hardware NPU for AI tasks |
+| **VM3 Redis** | <database-ip>:6379 | Data Layer | Redis database, cache, queues |
+| **VM4 AI Stack** | <aiml-ip>:8080 | AI Processing | LLM inference, AI services |
+| **VM5 Browser** | <browser-ip>:3000 | Web Automation | Playwright browser automation |
+
+### Architecture Diagram
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                     Main Machine (WSL)                       │
+│                    <backend-ip>                             │
+│  ┌──────────────┐  ┌──────────────┐                         │
+│  │ Backend API  │  │ VNC Desktop  │                         │
+│  │   :8001      │  │   :6080      │                         │
+│  └──────────────┘  └──────────────┘                         │
+└─────────────────────────────────────────────────────────────┘
+                            │
+        ┌───────────────────┼───────────────────┐
+        │                   │                   │
+┌───────▼─────────┐ ┌──────▼──────────┐ ┌─────▼──────────┐
+│  VM1: Frontend  │ │  VM3: Redis     │ │  VM4: AI Stack │
+│  <frontend-ip>  │ │  <database-ip>  │ │  <aiml-ip> │
+│  Port: 5173     │ │  Port: 6379     │ │  Port: 8080    │
+└─────────────────┘ └─────────────────┘ └────────────────┘
+        │                   │                   │
+┌───────▼─────────┐ ┌──────▼──────────┐
+│ VM2: NPU Worker │ │ VM5: Browser    │
+│ <npu-ip>   │ │ <browser-ip>   │
+│ Port: 8081      │ │ Port: 3000      │
+└─────────────────┘ └─────────────────┘
+```
+
+---
+
+## Deployment Workflows
+
+### Development Deployment
+
+**Daily development workflow**:
+
+```bash
+# 1. Start AutoBot services (main machine)
+scripts/start-services.sh start
+# Or: sudo systemctl start autobot-backend
+
+# 2. Make code changes locally
+vim autobot-backend/api/chat.py
+
+# 3. Sync changes to VMs (if needed)
+./infrastructure/shared/scripts/sync-to-vm.sh main autobot-backend/ /opt/autobot/autobot-backend/
+
+# 4. Restart affected services
+scripts/start-services.sh restart backend
+# Or: sudo systemctl restart autobot-backend
+
+# 5. View logs
+scripts/start-services.sh logs backend
+# Or: journalctl -u autobot-backend -f
+```
+
+**See**: [Service Management Guide](SERVICE_MANAGEMENT.md) for complete documentation.
+
+### Production Deployment
+
+**Production deployment workflow**:
+
+```bash
+# 1. Test locally first
+scripts/start-services.sh start
+# Verify everything works
+
+# 2. Commit changes
+git add .
+git commit -m "Production-ready changes"
+
+# 3. Deploy via Ansible
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/deploy-native-services.yml
+
+# 4. Verify health checks
+curl -k https://<backend-ip>:8443/api/health
+curl https://<frontend-ip>
+
+# 5. Monitor via SLM GUI
+# Visit: https://<slm-manager-ip>/orchestration
+```
+
+**See**: [Service Management Guide](SERVICE_MANAGEMENT.md) for Ansible deployment details.
+
+### Rolling Updates
+
+**Update one VM at a time using Ansible**:
+
+```bash
+# Update specific node via Ansible
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/deploy-native-services.yml --limit <frontend-ip> --tags frontend
+
+# Wait for health check
+curl https://<frontend-ip>
+
+# Update NPU Worker VM
+ansible-playbook playbooks/deploy-native-services.yml --limit <npu-ip> --tags npu
+
+# Or use SLM GUI for rolling updates
+# Visit: https://<slm-manager-ip>/orchestration
+# Select node → Deploy → Monitor progress
+```
+
+**Manual alternative (not recommended)**:
+
+```bash
+# Update Frontend VM
+./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/ /opt/autobot/autobot-slm-frontend/
+ssh autobot@<frontend-ip> "sudo systemctl restart autobot-frontend"
+```
+
+---
+
+## VM Management
+
+### Check VM Status
+
+```bash
+# Check all VMs are reachable
+for ip in 20 21 22 23 24 25; do
+    echo "Checking 172.16.168.$ip..."
+    ping -c 1 172.16.168.$ip && echo "UP" || echo "DOWN"
+done
+
+# Check services on each VM
+ssh autobot@<frontend-ip> "systemctl status frontend"
+ssh autobot@<database-ip> "systemctl status redis"
+```
+
+### Restart Services
+
+```bash
+# Main machine services (CLI wrapper)
+scripts/start-services.sh restart backend
+scripts/start-services.sh restart celery
+
+# Or direct systemctl
+sudo systemctl restart autobot-backend
+sudo systemctl restart autobot-celery
+
+# Remote VM services (via SSH)
+ssh autobot@<frontend-ip> "sudo systemctl restart autobot-frontend"
+ssh autobot@<database-ip> "sudo systemctl restart redis-stack-server"
+
+# Or use SLM Orchestration GUI
+# Visit: https://<slm-manager-ip>/orchestration
+```
+
+### View Logs
+
+```bash
+# Main machine - Backend logs (systemd)
+scripts/start-services.sh logs backend
+# Or: journalctl -u autobot-backend -f
+
+# Main machine - Celery logs
+journalctl -u autobot-celery -f
+
+# Remote VMs - Frontend logs
+ssh autobot@<frontend-ip> "journalctl -u autobot-frontend -f"
+
+# Remote VMs - Redis logs
+ssh autobot@<database-ip> "journalctl -u redis-stack-server -f"
+
+# Or use SLM GUI for log viewing
+# Visit: https://<slm-manager-ip>/orchestration → Select service → Logs
+```
+
+---
+
+## Infrastructure Directory Structure
+
+The infrastructure folder uses a per-role organization:
+
+```text
+infrastructure/
+├── autobot-backend/       # User backend infra (docker, tests, config, scripts, templates)
+├── autobot-frontend/      # User frontend infra
+├── autobot-slm-backend/        # SLM backend infra
+├── autobot-slm-frontend/       # SLM frontend infra
+├── autobot-npu-worker/         # NPU worker infra
+├── autobot-browser-worker/     # Browser worker infra
+└── shared/                     # Shared infrastructure
+    ├── scripts/                # Common utilities, sync scripts
+    ├── certs/                  # Certificate management
+    ├── config/                 # Shared configurations
+    ├── docker/                 # Shared docker resources
+    ├── mcp/                    # MCP server configs
+    ├── tools/                  # Development tools
+    ├── tests/                  # Shared test utilities
+    └── analysis/               # Analysis tools
+```
+
+---
+
+## Troubleshooting
+
+### Sync Script Not Working
+
+**Issue**: `sync-to-vm.sh` fails with permission denied
+
+**Solution**:
+
+```bash
+# Make script executable
+chmod +x infrastructure/shared/scripts/sync-to-vm.sh
+
+# Verify SSH key permissions
+chmod 600 ~/.ssh/autobot_key
+
+# Test SSH connection
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "echo 'Connected'"
+```
+
+### Services Not Accessible
+
+**Issue**: Can't reach service from remote VM
+
+**Solution**:
+
+```bash
+# 1. Verify service is running
+ssh autobot@<frontend-ip> "ps aux | grep node"  # Frontend
+ps aux | grep uvicorn  # Backend (main machine)
+
+# 2. Verify service is binding to 0.0.0.0
+netstat -tulpn | grep 8001  # Should show 0.0.0.0:8001
+
+# 3. Test from source VM
+ssh autobot@<frontend-ip> "curl https://<backend-ip>:8443/api/health"
+```
+
+### VM Out of Sync
+
+**Issue**: Code changes not reflected on VM
+
+**Solution**:
+
+```bash
+# Recommended: Full redeploy via Ansible
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/deploy-native-services.yml
+
+# Or manual re-sync (not recommended)
+./infrastructure/shared/scripts/sync-to-vm.sh main autobot-backend/ /opt/autobot/autobot-backend/
+sudo systemctl restart autobot-backend
+
+# Verify sync
+ssh autobot@<backend-ip> "md5sum /opt/autobot/autobot-backend/api/chat.py"
+md5sum autobot-backend/api/chat.py
+# Hashes should match
+```
+
+---
+
+## Related Documentation
+
+- **Network Constants**: `autobot_shared/network_constants.py`
+- **Setup Guide**: `docs/developer/DEVELOPER_SETUP.md`
+- **Hardcoding Prevention**: `docs/developer/HARDCODING_PREVENTION.md`
+- **Redis Client Usage**: `docs/developer/REDIS_CLIENT_USAGE.md`
+
+---
+
+## Summary Checklist
+
+**Before deploying**:
+
+- [ ] All changes committed to git (local version control)
+- [ ] Services bind to `0.0.0.0` (not localhost)
+- [ ] Using `NetworkConstants` for IPs/ports (not hardcoded)
+- [ ] Tested locally first (`scripts/start-services.sh start` or `systemctl start autobot-backend`)
+- [ ] Synced to VMs (`./infrastructure/shared/scripts/sync-to-vm.sh`)
+- [ ] Health checks pass on all services
+
+**Development workflow**:
+
+- [ ] Edit locally in `/opt/autobot`
+- [ ] Sync immediately after changes
+- [ ] NEVER edit directly on VMs
+- [ ] Test changes on target VM
+- [ ] Commit to git
+
+**Avoid**:
+
+- [ ] No direct edits on remote VMs (<frontend-ip>-25)
+- [ ] No binding to localhost/127.0.0.1
+- [ ] No hardcoded IPs/ports in code
+- [ ] No skipping sync after changes
+- [ ] No untracked changes on VMs
+
+---

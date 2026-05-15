@@ -1,0 +1,18 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+# Enhanced API modules with NPU semantic search and analytics
+__all__ = [
+    "chat",
+    "system",
+    "files",
+    "knowledge",
+    "llm",
+    "sandbox",
+    # Issue #567: base_terminal archived — endpoints migrated to terminal.py
+    # Issue #3332: base_terminal removed from public API surface
+    "websockets",
+    "enhanced_search",  # New NPU-accelerated search API
+    "analytics",  # Enhanced backend analytics API
+    "live_events",  # Issue #1408: scoped real-time event channels
+]

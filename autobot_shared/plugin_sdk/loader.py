@@ -1,0 +1,289 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Plugin Loader
+
+Dynamic plugin discovery and loading system.
+
+Issue #730 - Plugin SDK for extensible tool architecture.
+"""
+
+import importlib
+import importlib.util
+import json
+import logging
+import os
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Type
+
+from plugin_sdk.base import BasePlugin, PluginManifest, PluginRegistry, PluginStatus
+
+logger = logging.getLogger(__name__)
+
+
+class PluginLoader:
+    """
+    Plugin discovery and loading system.
+
+    Discovers plugins from filesystem, loads manifests, and instantiates plugins.
+    """
+
+    def __init__(self, plugin_dirs: Optional[List[Path]] = None):
+        """
+        Initialize plugin loader.
+
+        Args:
+            plugin_dirs: List of directories to search for plugins
+        """
+        self.plugin_dirs = plugin_dirs or []
+        self.registry = PluginRegistry()
+
+    def discover_plugins(self) -> List[PluginManifest]:
+        """
+        Discover all plugins in configured directories.
+
+        Returns:
+            List of plugin manifests found
+        """
+        manifests = []
+
+        for plugin_dir in self.plugin_dirs:
+            if not plugin_dir.exists():
+                logger.warning("Plugin directory does not exist: %s", plugin_dir)
+                continue
+
+            # Look for plugin.json files
+            for manifest_file in plugin_dir.rglob("plugin.json"):
+                try:
+                    with open(manifest_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+
+                    manifest = PluginManifest(**data)
+                    manifests.append(manifest)
+                    logger.info("Discovered plugin: %s v%s", manifest.name, manifest.version)
+
+                except Exception as e:
+                    logger.error(
+                        "Failed to load manifest %s: %s",
+                        manifest_file,
+                        e,
+                        exc_info=True,
+                    )
+
+        return manifests
+
+    async def load_plugin(self, manifest: PluginManifest, config: Optional[Dict] = None) -> Optional[BasePlugin]:
+        """
+        Load a plugin from its manifest.
+
+        Args:
+            manifest: Plugin manifest
+            config: Plugin configuration
+
+        Returns:
+            Loaded plugin instance or None on failure
+        """
+        try:
+            # Check dependencies
+            missing_deps = self._check_dependencies(manifest)
+            if missing_deps:
+                logger.error(
+                    "Cannot load plugin %s: missing dependencies %s",
+                    manifest.name,
+                    missing_deps,
+                )
+                return None
+
+            # Check required environment variables
+            missing_required, missing_optional = self._check_required_env(manifest)
+            if missing_required:
+                logger.error(
+                    "Cannot load plugin %s: required env vars not set: %s",
+                    manifest.name,
+                    missing_required,
+                )
+                return None
+            if missing_optional:
+                logger.info(
+                    "Plugin %s loaded with optional env vars unset: %s",
+                    manifest.name,
+                    missing_optional,
+                )
+
+            # Import plugin module
+            plugin_class = self._import_plugin_class(manifest.entry_point)
+            if not plugin_class:
+                return None
+
+            # Instantiate plugin
+            plugin = plugin_class(manifest, config)
+
+            # Initialize plugin
+            await plugin.initialize()
+            plugin.status = PluginStatus.LOADED
+
+            # Register with registry
+            self.registry.register(plugin)
+
+            logger.info("Loaded plugin: %s v%s", manifest.name, manifest.version)
+            return plugin
+
+        except Exception as e:
+            logger.error("Failed to load plugin %s: %s", manifest.name, e, exc_info=True)
+            return None
+
+    async def unload_plugin(self, name: str) -> bool:
+        """
+        Unload a plugin.
+
+        Args:
+            name: Plugin name
+
+        Returns:
+            True if successfully unloaded
+        """
+        try:
+            plugin = self.registry.get_plugin(name)
+            if not plugin:
+                logger.warning("Plugin not found: %s", name)
+                return False
+
+            # Shutdown plugin
+            await plugin.shutdown()
+            plugin.status = PluginStatus.UNLOADED
+
+            # Unregister from registry
+            self.registry.unregister(name)
+
+            logger.info("Unloaded plugin: %s", name)
+            return True
+
+        except Exception as e:
+            logger.error("Failed to unload plugin %s: %s", name, e, exc_info=True)
+            return False
+
+    async def reload_plugin(self, name: str) -> bool:
+        """
+        Reload a plugin.
+
+        Args:
+            name: Plugin name
+
+        Returns:
+            True if successfully reloaded
+        """
+        try:
+            plugin = self.registry.get_plugin(name)
+            if not plugin:
+                logger.warning("Plugin not found: %s", name)
+                return False
+
+            # Use plugin's reload method
+            await plugin.reload()
+
+            logger.info("Reloaded plugin: %s", name)
+            return True
+
+        except Exception as e:
+            logger.error("Failed to reload plugin %s: %s", name, e, exc_info=True)
+            return False
+
+    def _check_dependencies(self, manifest: PluginManifest) -> List[str]:
+        """
+        Check if plugin dependencies are loaded.
+
+        Args:
+            manifest: Plugin manifest
+
+        Returns:
+            List of missing dependency names
+        """
+        missing = []
+        for dep in manifest.dependencies:
+            if not self.registry.get_plugin(dep):
+                missing.append(dep)
+        return missing
+
+    def _check_required_env(self, manifest: PluginManifest) -> Tuple[List[str], List[str]]:
+        """
+        Check which env vars declared by the manifest are unset.
+
+        Returns:
+            Tuple of (missing_required, missing_optional) env var names.
+            An env var set to an empty string is treated as missing.
+        """
+        missing_required: List[str] = []
+        missing_optional: List[str] = []
+        for env in manifest.required_env:
+            if not os.environ.get(env.name):
+                if env.required:
+                    missing_required.append(env.name)
+                else:
+                    missing_optional.append(env.name)
+        return missing_required, missing_optional
+
+    def get_env_status(self, plugin_name: str) -> Optional[Dict[str, Dict[str, object]]]:
+        """
+        Return per-env-var configuration status for a loaded plugin.
+
+        SECURITY: response NEVER contains env var values, only the
+        configured/missing boolean and the manifest metadata.
+
+        Args:
+            plugin_name: Name of a loaded plugin
+
+        Returns:
+            Dict mapping env-var name to status dict, or None if the
+            plugin is not loaded.
+        """
+        plugin = self.registry.get_plugin(plugin_name)
+        if plugin is None:
+            return None
+        return {
+            env.name: {
+                "configured": bool(os.environ.get(env.name)),
+                "secret": env.secret,
+                "required": env.required,
+                "description": env.description,
+                "docs_url": env.docs_url,
+                "obtain_steps": list(env.obtain_steps),
+            }
+            for env in plugin.manifest.required_env
+        }
+
+    def _import_plugin_class(self, entry_point: str) -> Optional[Type[BasePlugin]]:
+        """
+        Import plugin class from entry point.
+
+        Args:
+            entry_point: Python module path (e.g., 'plugins.hello.main')
+
+        Returns:
+            Plugin class or None on failure
+        """
+        try:
+            # Import module
+            module = importlib.import_module(entry_point)
+
+            # Look for Plugin class or class with 'Plugin' suffix
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+                if isinstance(attr, type) and issubclass(attr, BasePlugin) and attr is not BasePlugin:
+                    return attr
+
+            logger.error("No plugin class found in module: %s", entry_point)
+            return None
+
+        except Exception as e:
+            logger.error("Failed to import plugin %s: %s", entry_point, e, exc_info=True)
+            return None
+
+    def get_loaded_plugins(self) -> Dict[str, BasePlugin]:
+        """Get all loaded plugins."""
+        return self.registry.get_all_plugins()
+
+    def get_plugin_info(self, name: str) -> Optional[Dict]:
+        """Get plugin information."""
+        plugin = self.registry.get_plugin(name)
+        return plugin.get_info() if plugin else None

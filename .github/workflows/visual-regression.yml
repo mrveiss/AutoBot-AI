@@ -1,0 +1,115 @@
+# Visual regression workflow — Playwright + Storybook
+#
+# Pixel-diffs every Storybook story against committed baseline PNGs on
+# every PR that touches the frontend. Catches design-token rounds, icon
+# typos, layout shifts, color regressions that vue-tsc + vitest can't.
+#
+# Companion to autobot-frontend/tests/visual/ infrastructure shipped in
+# PR #5221. Closes #5226.
+#
+# Behavior:
+#   - On PR: build Storybook, run `npm run test:visual` against the
+#     static build (no need to start the dev server)
+#   - First-run / no-baselines: warn-only (does not fail the build),
+#     so the PR that adds the first baseline doesn't fail itself
+#   - On diff: HTML report + actual/expected/diff PNGs uploaded as
+#     workflow artifacts; the workflow fails the PR
+#   - Linux baselines only — frontend tests/visual/README.md documents
+#     the cross-platform baseline policy (per-OS suffix)
+
+name: Visual Regression
+
+on:
+  push:
+    branches: [main, develop, 'Dev_*']
+    paths:
+      - 'autobot-frontend/**'
+      - '.github/workflows/visual-regression.yml'
+  pull_request:
+    branches: [main, develop, 'Dev_*']
+    paths:
+      - 'autobot-frontend/**'
+      - '.github/workflows/visual-regression.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+permissions:
+  contents: read
+
+jobs:
+  visual-regression:
+    name: Storybook visual regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: autobot-frontend
+        run: npm ci
+
+      - name: Install Playwright browsers (chromium only)
+        working-directory: autobot-frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run visual regression tests
+        id: visual
+        working-directory: autobot-frontend
+        env:
+          CI: 'true'
+        run: |
+          set -euo pipefail
+          if [ ! -d "tests/visual/__screenshots__" ]; then
+            # First run: no baselines committed yet. Regenerate them.
+            echo "::warning::No visual baselines committed yet — running with --update-snapshots (will not fail on diff). Commit the generated baselines to enable enforcement."
+            npm run test:visual -- --update-snapshots
+            echo "first_run=true" >> "$GITHUB_OUTPUT"
+          else
+            # Baselines exist: enforce diffs. Visual changes will fail this check.
+            npm run test:visual
+            echo "first_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload generated baselines on first run
+        # When --update-snapshots ran (no committed baselines yet), expose
+        # the generated PNGs as an artifact so a maintainer can pull them
+        # locally and commit. Without this step the warning message
+        # "Pull this branch + commit the generated baselines" is
+        # unactionable since the screenshots never escape the CI runner.
+        if: steps.visual.outputs.first_run == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-regression-generated-baselines-${{ github.run_id }}
+          path: autobot-frontend/tests/visual/__screenshots__/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Playwright HTML report on failure
+        if: failure() || steps.visual.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-regression-report-${{ github.run_id }}
+          path: autobot-frontend/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload diff screenshots on failure
+        if: failure() || steps.visual.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-regression-diffs-${{ github.run_id }}
+          path: autobot-frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 14

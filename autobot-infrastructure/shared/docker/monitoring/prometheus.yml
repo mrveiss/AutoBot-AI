@@ -1,0 +1,57 @@
+# AutoBot Prometheus Configuration
+# Monitoring configuration for production deployment
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'autobot-monitor'
+
+rule_files:
+  # - "alert_rules.yml"
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+
+  # AutoBot backend monitoring
+  - job_name: 'autobot-backend'
+    static_configs:
+      - targets: ['autobot-backend:8001']
+    metrics_path: '/api/metrics/prometheus'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    honor_labels: true
+
+  # Redis monitoring
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+
+  # Nginx monitoring (if enabled)
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['autobot-frontend:80']
+    metrics_path: '/nginx_status'
+    scrape_interval: 30s
+
+  # System monitoring (node exporter)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Remote storage (optional)
+# remote_write:
+#   - url: "http://your-remote-storage:8086/api/v1/prom/write"

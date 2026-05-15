@@ -1,0 +1,22 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# centralized_logging role - Main tasks
+
+- name: Include OS-specific variables
+  include_vars: "{{ ansible_facts['os_family'] }}.yml"
+  # (#2872) Intentional: OS-specific var files (e.g. RedHat.yml) may not
+  # exist for all supported distributions; the role falls back to defaults.
+  failed_when: false
+
+- name: Create logging directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ logging_user }}"
+    group: "{{ logging_group }}"
+    mode: '0755'
+  loop:
+    - "{{ log_base_dir }}"
+    - "{{ centralized_log_dir }}"

@@ -1,0 +1,369 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Organization Knowledge Management API
+
+Issue #679: Organization-level knowledge policies, analytics, and controls.
+"""
+
+import logging
+from typing import Dict
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from api.schemas_knowledge import (
+    KnowledgeOrganizationCleanupResponse,
+    KnowledgeOrganizationPolicyResponse,
+    KnowledgeOrganizationStatsResponse,
+    OrganizationKnowledgePolicy,
+    OrganizationKnowledgeStats,
+    UpdateOrganizationPolicyRequest,
+)
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from knowledge.ownership import VisibilityLevel
+from knowledge_factory import get_or_create_knowledge_base
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/knowledge/organization", tags=["knowledge-organization"])
+
+
+# =============================================================================
+# Pydantic Models
+# =============================================================================
+
+
+# =============================================================================
+# Endpoints - Organization Policies
+# =============================================================================
+
+
+@router.get("/policy", response_model=KnowledgeOrganizationPolicyResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_organization_policy",
+    error_code_prefix="KNOWLEDGE_ORGANIZATION",
+)
+async def get_organization_policy(request: Request, current_user: Dict = Depends(get_current_user)):
+    """Get organization knowledge policy.
+
+    Issue #679: Organization-level knowledge policy settings.
+
+    Returns:
+        OrganizationKnowledgePolicy: Current policy settings
+    """
+    org_id = current_user.get("org_id")
+    if not org_id:
+        raise HTTPException(status_code=400, detail="User not associated with an organization")
+
+    kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
+
+    try:
+        # Get policy from Redis or use defaults
+        policy_key = f"org:policy:{org_id}"
+        policy_data = await kb.redis().get(policy_key)
+
+        if policy_data:
+            import json
+
+            if isinstance(policy_data, bytes):
+                policy_data = policy_data.decode("utf-8")
+            policy_dict = json.loads(policy_data)
+            policy = OrganizationKnowledgePolicy(**policy_dict)
+        else:
+            # Return default policy
+            policy = OrganizationKnowledgePolicy()
+
+        return policy
+
+    except Exception as e:
+        logger.error("Error retrieving organization policy: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.put("/policy", response_model=KnowledgeOrganizationPolicyResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_organization_policy",
+    error_code_prefix="KNOWLEDGE_ORGANIZATION",
+)
+async def update_organization_policy(
+    policy_request: UpdateOrganizationPolicyRequest,
+    request: Request,
+    current_user: Dict = Depends(get_current_user),
+):
+    """Update organization knowledge policy.
+
+    Issue #679: Organization admins can configure knowledge policies.
+
+    Args:
+        policy_request: New policy settings
+
+    Returns:
+        Updated policy
+
+    Raises:
+        403: If user is not an organization admin
+    """
+    org_id = current_user.get("org_id")
+    if not org_id:
+        raise HTTPException(status_code=400, detail="User not associated with an organization")
+
+    user_role = current_user.get("role", "")
+    if user_role not in ("admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Organization admin role required")
+
+    kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
+
+    try:
+        # Store policy in Redis
+        policy_key = f"org:policy:{org_id}"
+        policy_json = policy_request.policy.model_dump_json()
+        await kb.redis().set(policy_key, policy_json)
+
+        logger.info("Updated organization policy for org %s", org_id)
+
+        return policy_request.policy
+
+    except Exception as e:
+        logger.error("Error updating organization policy: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =============================================================================
+# Endpoints - Organization Analytics
+# =============================================================================
+
+
+async def _analyze_organization_facts(kb, fact_ids: list) -> dict:
+    """Analyze organization facts for statistics.
+
+    Helper for get_organization_knowledge_stats() (Issue #679).
+    """
+    import json
+
+    by_visibility = {}
+    by_source = {}
+    total_size = 0
+    user_contributions = {}
+
+    for fact_id in fact_ids:
+        fact_data = await kb.redis().hgetall(f"fact:{fact_id}")
+        if not fact_data:
+            continue
+
+        # Get content size
+        content = fact_data.get(b"content") or fact_data.get("content")
+        if content:
+            if isinstance(content, bytes):
+                total_size += len(content)
+            else:
+                total_size += len(content.encode("utf-8"))
+
+        # Get metadata
+        metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata")
+        if metadata_raw:
+            if isinstance(metadata_raw, bytes):
+                metadata_raw = metadata_raw.decode("utf-8")
+            metadata = json.loads(metadata_raw)
+
+            # Count by visibility
+            visibility = metadata.get("visibility", VisibilityLevel.PRIVATE)
+            by_visibility[visibility] = by_visibility.get(visibility, 0) + 1
+
+            # Count by source
+            source = metadata.get("source_type", "unknown")
+            by_source[source] = by_source.get(source, 0) + 1
+
+            # Count by user
+            owner_id = metadata.get("owner_id")
+            if owner_id:
+                user_contributions[owner_id] = user_contributions.get(owner_id, 0) + 1
+
+    return {
+        "by_visibility": by_visibility,
+        "by_source": by_source,
+        "total_size": total_size,
+        "user_contributions": user_contributions,
+    }
+
+
+def _get_organization_team_count(current_user: Dict) -> int:
+    """Get count of teams in user's organization.
+
+    Helper for get_organization_knowledge_stats() (Issue #679).
+    Dict users (auth_middleware) carry no team info — returns 0.
+    """
+    team_memberships = getattr(current_user, "team_memberships", None)
+    if team_memberships is None:
+        return 0
+    org_id = str(current_user.org_id) if hasattr(current_user, "org_id") else None
+    return len([m.team for m in team_memberships if m.team and str(m.team.org_id) == org_id and not m.team.is_deleted])
+
+
+@router.get("/stats", response_model=KnowledgeOrganizationStatsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_organization_knowledge_stats",
+    error_code_prefix="KNOWLEDGE_ORGANIZATION",
+)
+async def get_organization_knowledge_stats(request: Request, current_user: Dict = Depends(get_current_user)):
+    """Get knowledge statistics for the organization.
+
+    Issue #679: Organization-level analytics.
+
+    Returns:
+        OrganizationKnowledgeStats: Statistics and breakdowns
+    """
+    org_id = current_user.get("org_id")
+    if not org_id:
+        raise HTTPException(status_code=400, detail="User not associated with an organization")
+
+    kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
+    if kb is None or not kb.ownership_manager:
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
+
+    try:
+        # Get all organization facts
+        fact_ids = await kb.ownership_manager.get_organization_facts(organization_id=str(org_id))
+
+        # Analyze facts
+        analysis = await _analyze_organization_facts(kb, fact_ids)
+
+        # Get top contributors
+        top_contributors = sorted(
+            [{"user_id": uid, "count": count} for uid, count in analysis["user_contributions"].items()],
+            key=lambda x: x["count"],
+            reverse=True,
+        )[:10]
+
+        # Get team count — 0 for dict-based auth (no team info available)
+        team_count = _get_organization_team_count(current_user)
+
+        return OrganizationKnowledgeStats(
+            organization_id=org_id,
+            total_facts=len(fact_ids),
+            by_visibility=analysis["by_visibility"],
+            by_source=analysis["by_source"],
+            total_size_bytes=analysis["total_size"],
+            user_count=len(analysis["user_contributions"]),
+            team_count=team_count,
+            top_contributors=top_contributors,
+        )
+
+    except Exception as e:
+        logger.error("Error retrieving organization stats: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+async def _delete_expired_facts(kb, fact_ids: list, cutoff_date) -> int:
+    """Delete facts whose creation date precedes cutoff_date.
+
+    Helper for cleanup_organization_knowledge. Ref: #1088.
+    """
+    import json
+
+    from autobot_shared.time_utils import parse_utc_iso
+
+    deleted_count = 0
+    for fact_id in fact_ids:
+        fact_data = await kb.redis().hgetall(f"fact:{fact_id}")
+        if not fact_data:
+            continue
+
+        metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata")
+        if not metadata_raw:
+            continue
+
+        if isinstance(metadata_raw, bytes):
+            metadata_raw = metadata_raw.decode("utf-8")
+        metadata = json.loads(metadata_raw)
+
+        created_at_str = metadata.get("created_at")
+        if not created_at_str:
+            continue
+
+        try:
+            created_at = parse_utc_iso(created_at_str)
+            if created_at < cutoff_date:
+                await kb.ownership_manager.cleanup_ownership_indexes(fact_id, metadata)
+                await kb.redis().delete(f"fact:{fact_id}")
+                deleted_count += 1
+        except (ValueError, TypeError):
+            # Skip if date parsing fails
+            pass
+
+    return deleted_count
+
+
+@router.delete("/cleanup", response_model=KnowledgeOrganizationCleanupResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cleanup_organization_knowledge",
+    error_code_prefix="KNOWLEDGE_ORGANIZATION",
+)
+async def cleanup_organization_knowledge(
+    request: Request,
+    current_user: Dict = Depends(get_current_user),
+    retention_days: int = 90,
+):
+    """Clean up old organization knowledge based on retention policy.
+
+    Issue #679: Organization data retention management.
+
+    Args:
+        retention_days: Delete knowledge older than this many days
+
+    Returns:
+        Cleanup summary
+
+    Raises:
+        403: If user is not an organization admin
+    """
+    from datetime import timedelta
+
+    from autobot_shared.time_utils import now_utc
+
+    org_id = current_user.get("org_id")
+    if not org_id:
+        raise HTTPException(status_code=400, detail="User not associated with an organization")
+
+    user_role = current_user.get("role", "")
+    if user_role not in ("admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Organization admin role required")
+
+    kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
+    if kb is None or not kb.ownership_manager:
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
+
+    try:
+        org_id = str(org_id)
+        fact_ids = await kb.ownership_manager.get_organization_facts(organization_id=org_id)
+
+        cutoff_date = now_utc() - timedelta(days=retention_days)
+        deleted_count = await _delete_expired_facts(kb, fact_ids, cutoff_date)
+
+        logger.info(
+            "Cleaned up %d facts older than %d days for org %s",
+            deleted_count,
+            retention_days,
+            org_id,
+        )
+
+        return {
+            "success": True,
+            "organization_id": org_id,
+            "retention_days": retention_days,
+            "deleted_count": deleted_count,
+            "cutoff_date": cutoff_date.isoformat(),
+        }
+
+    except Exception as e:
+        logger.error("Error cleaning up organization knowledge: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")

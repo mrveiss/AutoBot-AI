@@ -1,0 +1,230 @@
+<template>
+  <div class="workflow-history">
+    <!-- Filters -->
+    <div class="history-filters">
+      <div class="search-box">
+        <i class="fas fa-search"></i>
+        <input v-model="searchQuery" :placeholder="$t('workflow.history.searchPlaceholder')" />
+      </div>
+      <div class="filter-group">
+        <select v-model="statusFilter">
+          <option value="">{{ $t('workflow.history.allStatus') }}</option>
+          <option value="completed">{{ $t('workflow.history.completed') }}</option>
+          <option value="failed">{{ $t('workflow.history.failed') }}</option>
+          <option value="cancelled">{{ $t('workflow.history.cancelled') }}</option>
+        </select>
+        <select v-model="sortOrder">
+          <option value="newest">{{ $t('workflow.history.newestFirst') }}</option>
+          <option value="oldest">{{ $t('workflow.history.oldestFirst') }}</option>
+          <option value="name">{{ $t('workflow.history.nameAZ') }}</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- History List -->
+    <div v-if="filteredWorkflows.length === 0" class="empty-state">
+      <i class="fas fa-history"></i>
+      <h3>{{ $t('workflow.history.noHistory') }}</h3>
+      <p>{{ $t('workflow.history.noHistoryDescription') }}</p>
+    </div>
+
+    <div v-else class="history-list">
+      <div v-for="wf in filteredWorkflows" :key="wf.workflow_id" class="history-item" @click="$emit('view-workflow', wf.workflow_id)">
+        <div class="item-status" :class="getStatusClass(wf)">
+          <i :class="getStatusIcon(wf)"></i>
+        </div>
+        <div class="item-info">
+          <span class="item-name">{{ wf.name }}</span>
+          <span class="item-desc">{{ wf.description }}</span>
+          <div class="item-meta">
+            <span><i class="fas fa-list-ol"></i> {{ $t('workflow.history.stepsCount', { count: wf.total_steps }) }}</span>
+            <span><i class="fas fa-clock"></i> {{ formatDuration(wf) }}</span>
+            <span><i class="fas fa-calendar"></i> {{ formatDate(wf.created_at) }}</span>
+          </div>
+        </div>
+        <div class="item-stats">
+          <div class="stat success"><span>{{ getCompletedCount(wf) }}</span> {{ $t('workflow.history.passed') }}</div>
+          <div class="stat failed" v-if="getFailedCount(wf) > 0"><span>{{ getFailedCount(wf) }}</span> {{ $t('workflow.history.failedLabel') }}</div>
+          <div class="stat skipped" v-if="getSkippedCount(wf) > 0"><span>{{ getSkippedCount(wf) }}</span> {{ $t('workflow.history.skipped') }}</div>
+        </div>
+        <div class="item-actions">
+          <button class="btn-icon" @click.stop="$emit('view-workflow', wf.workflow_id)" :title="$t('workflow.history.viewDetails')">
+            <i class="fas fa-eye"></i>
+          </button>
+          <button class="btn-icon" @click.stop="$emit('re-run', wf.workflow_id)" :title="$t('workflow.history.reRun')">
+            <i class="fas fa-redo"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div v-if="totalPages > 1" class="pagination">
+      <button :disabled="currentPage === 1" @click="currentPage--"><i class="fas fa-chevron-left"></i></button>
+      <span>{{ $t('workflow.history.pageOf', { current: currentPage, total: totalPages }) }}</span>
+      <button :disabled="currentPage === totalPages" @click="currentPage++"><i class="fas fa-chevron-right"></i></button>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+// Issue #1367: Merge active (finished) + persisted completed workflows
+import { ref, computed } from 'vue';
+import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
+
+const props = defineProps<{
+  workflows: ActiveWorkflow[];
+  completedWorkflows?: ActiveWorkflow[];
+}>();
+defineEmits<{
+  (e: 'view-workflow', id: string): void;
+  (e: 're-run', id: string): void;
+}>();
+
+const searchQuery = ref('');
+const statusFilter = ref('');
+const sortOrder = ref('newest');
+const currentPage = ref(1);
+const perPage = 10;
+
+/** Merge active finished + persisted completed, deduplicate by id */
+const allHistoryWorkflows = computed(() => {
+  const map = new Map<string, ActiveWorkflow>();
+  // Persisted completed first (lower priority for dedup)
+  for (const wf of props.completedWorkflows ?? []) {
+    map.set(wf.workflow_id, wf);
+  }
+  // Active finished overwrite (fresher data)
+  for (const wf of props.workflows) {
+    if (wf.completed_at || wf.is_cancelled) {
+      map.set(wf.workflow_id, wf);
+    }
+  }
+  return [...map.values()];
+});
+
+const filteredWorkflows = computed(() => {
+  let result = [...allHistoryWorkflows.value];
+  if (searchQuery.value) {
+    const q = searchQuery.value.toLowerCase();
+    result = result.filter(
+      wf => wf.name.toLowerCase().includes(q)
+        || wf.description.toLowerCase().includes(q),
+    );
+  }
+  if (statusFilter.value) {
+    result = result.filter(wf => {
+      if (statusFilter.value === 'completed') {
+        return wf.completed_at && !wf.is_cancelled
+          && getFailedCount(wf) === 0;
+      }
+      if (statusFilter.value === 'failed') return getFailedCount(wf) > 0;
+      if (statusFilter.value === 'cancelled') return wf.is_cancelled;
+      return true;
+    });
+  }
+  result.sort((a, b) => {
+    if (sortOrder.value === 'newest') {
+      return new Date(b.created_at || 0).getTime()
+        - new Date(a.created_at || 0).getTime();
+    }
+    if (sortOrder.value === 'oldest') {
+      return new Date(a.created_at || 0).getTime()
+        - new Date(b.created_at || 0).getTime();
+    }
+    return a.name.localeCompare(b.name);
+  });
+  const start = (currentPage.value - 1) * perPage;
+  return result.slice(start, start + perPage);
+});
+
+const totalPages = computed(
+  () => Math.ceil(allHistoryWorkflows.value.length / perPage),
+);
+
+function getStatusClass(wf: ActiveWorkflow): string {
+  if (wf.is_cancelled) return 'cancelled';
+  if (getFailedCount(wf) > 0) return 'failed';
+  return 'success';
+}
+
+function getStatusIcon(wf: ActiveWorkflow): string {
+  if (wf.is_cancelled) return 'fas fa-times';
+  if (getFailedCount(wf) > 0) return 'fas fa-exclamation-triangle';
+  return 'fas fa-check';
+}
+
+function getCompletedCount(wf: ActiveWorkflow): number {
+  return wf.steps.filter(s => s.status === 'completed').length;
+}
+
+function getFailedCount(wf: ActiveWorkflow): number {
+  return wf.steps.filter(s => s.status === 'failed').length;
+}
+
+function getSkippedCount(wf: ActiveWorkflow): number {
+  return wf.steps.filter(s => s.status === 'skipped').length;
+}
+
+function formatDuration(wf: ActiveWorkflow): string {
+  if (!wf.started_at || !wf.completed_at) return '-';
+  const ms = new Date(wf.completed_at).getTime() - new Date(wf.started_at).getTime();
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  return `${min}m ${sec % 60}s`;
+}
+
+function formatDate(date?: string): string {
+  if (!date) return '-';
+  return new Date(date).toLocaleDateString();
+}
+</script>
+
+<style scoped>
+.workflow-history { height: 100%; display: flex; flex-direction: column; }
+
+.history-filters { display: flex; justify-content: space-between; align-items: center; gap: var(--spacing-4); margin-bottom: var(--spacing-5); flex-wrap: wrap; }
+.search-box { display: flex; align-items: center; gap: var(--spacing-2-5); padding: var(--spacing-2-5) var(--spacing-3-5); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-lg); flex: 1; min-width: 200px; }
+.search-box i { color: var(--text-muted); }
+.search-box input { flex: 1; background: none; border: none; color: var(--text-primary); font-size: var(--text-sm); outline: none; }
+.search-box input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.filter-group { display: flex; gap: var(--spacing-2); }
+.filter-group select { padding: var(--spacing-2-5) var(--spacing-3); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-lg); color: var(--text-primary); font-size: var(--text-sm); cursor: pointer; }
+
+.empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-tertiary); padding: var(--spacing-10); }
+.empty-state i { font-size: var(--text-5xl); margin-bottom: var(--spacing-4); }
+.empty-state h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-2); color: var(--text-primary); }
+
+.history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--spacing-3); }
+.history-item { display: flex; align-items: center; gap: var(--spacing-4); padding: var(--spacing-4); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-xl); cursor: pointer; transition: all 0.2s; }
+.history-item:hover { border-color: var(--color-primary); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+
+.item-status { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--text-base); flex-shrink: 0; }
+.item-status.success { background: var(--color-success-bg); color: var(--color-success); }
+.item-status.failed { background: var(--color-error-bg); color: var(--color-error); }
+.item-status.cancelled { background: var(--color-warning-bg); color: var(--color-warning); }
+
+.item-info { flex: 1; min-width: 0; }
+.item-name { display: block; font-size: 15px; font-weight: 500; color: var(--text-primary); margin-bottom: var(--spacing-0-5); }
+.item-desc { display: block; font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--spacing-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item-meta { display: flex; gap: var(--spacing-4); font-size: var(--text-xs); color: var(--text-tertiary); }
+.item-meta span { display: flex; align-items: center; gap: var(--spacing-1); }
+
+.item-stats { display: flex; gap: var(--spacing-3); }
+.item-stats .stat { font-size: var(--text-xs); padding: var(--spacing-1) var(--spacing-2-5); border-radius: var(--radius-xl); }
+.item-stats .stat span { font-weight: 600; }
+.item-stats .success { background: var(--color-success-bg); color: var(--color-success); }
+.item-stats .failed { background: var(--color-error-bg); color: var(--color-error); }
+.item-stats .skipped { background: var(--bg-tertiary); color: var(--text-tertiary); }
+
+.item-actions { display: flex; gap: var(--spacing-2); }
+.btn-icon { width: 32px; height: 32px; background: var(--bg-tertiary); border: none; border-radius: var(--radius-md); color: var(--text-secondary); cursor: pointer; transition: all 0.15s; }
+.btn-icon:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.pagination { display: flex; justify-content: center; align-items: center; gap: var(--spacing-4); padding: var(--spacing-4) var(--spacing-0); margin-top: auto; }
+.pagination button { padding: var(--spacing-2) var(--spacing-3); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); color: var(--text-secondary); cursor: pointer; }
+.pagination button:hover:not(:disabled) { background: var(--bg-hover); }
+.pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
+.pagination span { font-size: var(--text-sm); color: var(--text-tertiary); }
+</style>

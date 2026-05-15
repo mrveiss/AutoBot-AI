@@ -1,0 +1,17 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Service Authentication Role - Handlers
+---
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+
+- name: restart backend
+  ansible.builtin.systemd:
+    name: autobot-backend
+    state: restarted
+  become: true
+  when: inventory_hostname in groups['backend']

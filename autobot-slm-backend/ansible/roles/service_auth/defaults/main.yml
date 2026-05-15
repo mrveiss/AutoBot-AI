@@ -1,0 +1,49 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Service Authentication Role - Default Variables
+---
+# Feature toggles
+service_auth_enabled: true
+service_auth_enforcement_mode: true
+service_auth_override_token: ""
+service_auth_circuit_breaker_enabled: false
+service_auth_circuit_breaker_percentage: 100
+service_auth_rate_limit_window: 300
+service_auth_rate_limit_max_failures: 10
+service_auth_timestamp_window: 300
+service_auth_key_ttl_days: 90
+service_auth_rotation_days: 80
+service_auth_rotation_timer_enabled: true
+
+# Key storage paths
+service_auth_keys_dir: /etc/autobot/service-keys
+service_auth_config_dir: /etc/autobot
+
+# Service definitions - maps inventory groups to service IDs.
+# Host IPs are resolved from inventory (ansible_host), not hardcoded here.
+service_auth_services:
+  main-backend:
+    group: backend
+  frontend:
+    group: frontend
+  npu-worker:
+    group: npu
+  redis-stack:
+    group: database
+  ai-stack:
+    group: aiml
+  browser-service:
+    group: browser
+
+# Redis connection for key storage.
+# Override via inventory group_vars or -e flags. Falls back to the
+# ansible_host of the first host in the 'database' inventory group.
+service_auth_redis_host: >-
+  {{ hostvars[groups['database'][0]]['ansible_host']
+     | default('127.0.0.1') }}
+service_auth_redis_port: 6379
+
+# Ansible working directory for rotation playbook invocation
+autobot_ansible_dir: /opt/autobot/autobot-slm-backend/ansible

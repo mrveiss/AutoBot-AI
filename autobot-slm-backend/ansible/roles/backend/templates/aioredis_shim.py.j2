@@ -1,0 +1,31 @@
+"""Compatibility shim for aioredis - redirects to modern redis-py with async support."""
+# Issue #858: Python 3.13 compatibility - aioredis is deprecated, use redis-py async
+import redis.asyncio as aioredis_impl
+from redis.asyncio import (
+    Redis,
+    ConnectionPool,
+    from_url,
+    StrictRedis,
+)
+from redis.exceptions import (
+    RedisError,
+    ConnectionError,
+    TimeoutError,
+    ResponseError,
+)
+
+# Export all for * imports
+__all__ = [
+    "Redis",
+    "ConnectionPool",
+    "from_url",
+    "StrictRedis",
+    "RedisError",
+    "ConnectionError",
+    "TimeoutError",
+    "ResponseError",
+]
+
+# Backward compatibility
+create_redis_pool = from_url
+create_redis = from_url

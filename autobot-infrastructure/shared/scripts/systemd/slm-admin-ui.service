@@ -1,0 +1,36 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# SLM Admin UI Service (Vue/Vite Dev Server)
+# Deployed on: 172.16.168.19 (SLM Manager)
+# Port: 5174
+
+[Unit]
+Description=SLM Admin UI (Vue/Vite)
+Documentation=https://github.com/mrveiss/AutoBot-AI
+After=network.target slm-backend.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=autobot
+Group=autobot
+WorkingDirectory=/home/autobot/AutoBot/slm-admin
+Environment=NODE_ENV=development
+ExecStart=/snap/bin/npm run dev -- --host 127.0.0.1 --port 5174
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=slm-admin-ui
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/autobot/AutoBot/slm-admin/node_modules/.vite
+PrivateTmp=true
+
+[Install]
+WantedBy=slm.target multi-user.target

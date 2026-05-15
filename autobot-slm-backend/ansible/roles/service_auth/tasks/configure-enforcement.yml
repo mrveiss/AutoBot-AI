@@ -1,0 +1,51 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Service Authentication - Enforcement Mode Configuration
+# Only runs on backend hosts (guarded in main.yml)
+---
+- name: "ServiceAuth | Set enforcement mode"
+  ansible.builtin.lineinfile:
+    path: "{{ service_auth_config_dir }}/service-auth.env"
+    regexp: "^SERVICE_AUTH_ENFORCEMENT_MODE="
+    line: "SERVICE_AUTH_ENFORCEMENT_MODE={{ service_auth_enforcement_mode | string | lower }}"
+    create: true
+    owner: autobot
+    group: autobot
+    mode: "0600"
+  become: true
+  notify: restart backend
+
+- name: "ServiceAuth | Set override token"
+  ansible.builtin.lineinfile:
+    path: "{{ service_auth_config_dir }}/service-auth.env"
+    regexp: "^SERVICE_AUTH_OVERRIDE_TOKEN="
+    line: "SERVICE_AUTH_OVERRIDE_TOKEN={{ service_auth_override_token }}"
+  become: true
+  when: service_auth_override_token | length > 0
+  notify: restart backend
+
+- name: "ServiceAuth | Set circuit breaker percentage"
+  ansible.builtin.lineinfile:
+    path: "{{ service_auth_config_dir }}/service-auth.env"
+    regexp: "^SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE="
+    line: "SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE={{ service_auth_circuit_breaker_percentage }}"
+  become: true
+  notify: restart backend
+
+- name: "ServiceAuth | Set rate limit max failures"
+  ansible.builtin.lineinfile:
+    path: "{{ service_auth_config_dir }}/service-auth.env"
+    regexp: "^SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES="
+    line: "SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES={{ service_auth_rate_limit_max_failures }}"
+  become: true
+  notify: restart backend
+
+- name: "ServiceAuth | Set authentication timestamp window"
+  ansible.builtin.lineinfile:
+    path: "{{ service_auth_config_dir }}/service-auth.env"
+    regexp: "^AUTH_TIMESTAMP_WINDOW="
+    line: "AUTH_TIMESTAMP_WINDOW={{ service_auth_timestamp_window }}"
+  become: true
+  notify: restart backend

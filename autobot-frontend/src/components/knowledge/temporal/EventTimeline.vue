@@ -1,0 +1,426 @@
+<!-- AutoBot - Knowledge Graph Pipeline (Issue #759) -->
+<template>
+  <div class="event-timeline">
+    <div class="timeline-header">
+      <h4><i class="fas fa-stream"></i> {{ $t('knowledge.temporal.events.title') }}</h4>
+      <span v-if="events.length > 0" class="event-count">
+        {{ $t('knowledge.temporal.events.eventCount', { count: events.length }) }}
+      </span>
+    </div>
+
+    <!-- Loading -->
+    <div v-if="loading" class="loading-state">
+      <i class="fas fa-spinner fa-spin"></i>
+      <span>{{ $t('knowledge.temporal.events.loading') }}</span>
+    </div>
+
+    <!-- Empty -->
+    <div v-else-if="events.length === 0" class="empty-state">
+      <i class="fas fa-calendar-times"></i>
+      <p>{{ $t('knowledge.temporal.events.noEvents') }}</p>
+      <p class="empty-hint">
+        {{ $t('knowledge.temporal.events.emptyHint') }}
+      </p>
+    </div>
+
+    <!-- Timeline -->
+    <div v-else class="timeline-container">
+      <div class="timeline-line" />
+
+      <div
+        v-for="(event, index) in events"
+        :key="event.id"
+        class="timeline-item"
+      >
+        <!-- Date Marker -->
+        <div
+          v-if="shouldShowDateMarker(index)"
+          class="date-marker"
+        >
+          <span>{{ formatDateMarker(event) }}</span>
+        </div>
+
+        <!-- Event Card -->
+        <div class="timeline-dot-container">
+          <div
+            class="timeline-dot"
+            :style="{ backgroundColor: getEventColor(event.event_type) }"
+          >
+            <i :class="getEventIcon(event.event_type)"></i>
+          </div>
+        </div>
+
+        <div
+          class="timeline-card"
+          :class="{ expanded: isEventExpanded(event.id) }"
+          @click="toggleExpand(event.id)"
+        >
+          <div class="card-header">
+            <span
+              class="event-type-badge"
+              :style="{
+                backgroundColor: getEventColor(event.event_type),
+                color: 'white',
+              }"
+            >
+              {{ event.event_type }}
+            </span>
+            <span class="event-time">
+              {{ formatTimestamp(event) }}
+            </span>
+          </div>
+
+          <h5 class="event-name">{{ event.name }}</h5>
+
+          <p
+            v-if="event.description"
+            class="event-description"
+          >
+            {{ event.description }}
+          </p>
+
+          <!-- Participants -->
+          <div
+            v-if="event.participants.length > 0"
+            class="event-participants"
+          >
+            <span
+              v-for="participant in event.participants"
+              :key="participant"
+              class="participant-badge"
+            >
+              {{ participant }}
+            </span>
+          </div>
+
+          <!-- Expanded Content -->
+          <div
+            v-if="isEventExpanded(event.id)"
+            class="expanded-content"
+          >
+            <div
+              v-if="event.causal_links.length > 0"
+              class="causal-links-section"
+            >
+              <span class="links-label">{{ $t('knowledge.temporal.events.causalLinks') }}:</span>
+              <div class="causal-chain-wrapper">
+                <CausalChainViewer
+                  :event-id="event.id"
+                />
+              </div>
+            </div>
+            <div class="event-entity">
+              <span class="entity-label">{{ $t('knowledge.temporal.events.entity') }}:</span>
+              <span>{{ event.entity_name }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+// AutoBot - AI-Powered Automation Platform
+// Copyright (c) 2025 mrveiss
+// Author: mrveiss
+
+import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import type { TemporalEvent } from '@/composables/useKnowledgeGraph'
+import { useExpansion } from '@/composables/useExpansion'
+import {
+  getEventTypeColor as getEventColor,
+  getEventTypeIcon as getEventIcon,
+} from '../constants'
+import CausalChainViewer from './CausalChainViewer.vue'
+
+const props = defineProps<{
+  events: TemporalEvent[]
+  loading: boolean
+}>()
+
+const { t } = useI18n()
+const { isExpanded: isEventExpanded, expand: expandEvent, collapseAll: collapseAllEvents } = useExpansion<string>()
+
+function formatTimestamp(event: TemporalEvent): string {
+  if (event.timestamp) {
+    const date = new Date(event.timestamp)
+    return date.toLocaleString()
+  }
+  return event.temporal_expression ?? t('knowledge.temporal.events.unknownTime')
+}
+
+function formatDateMarker(event: TemporalEvent): string {
+  if (event.timestamp) {
+    const date = new Date(event.timestamp)
+    return date.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+  }
+  return event.temporal_expression ?? ''
+}
+
+function getDateKey(event: TemporalEvent): string {
+  if (!event.timestamp) return ''
+  return new Date(event.timestamp).toLocaleDateString()
+}
+
+function shouldShowDateMarker(index: number): boolean {
+  if (index === 0) return true
+  const current = getDateKey(props.events[index])
+  const previous = getDateKey(props.events[index - 1])
+  return current !== previous && current !== ''
+}
+
+function toggleExpand(eventId: string): void {
+  const wasExpanded = isEventExpanded(eventId)
+  collapseAllEvents()
+  if (!wasExpanded) expandEvent(eventId)
+}
+</script>
+
+<style scoped>
+.event-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.timeline-header h4 {
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin: var(--spacing-0);
+}
+
+.timeline-header h4 i {
+  color: var(--color-primary);
+}
+
+.event-count {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+}
+
+/* States */
+.loading-state,
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-2xl);
+  color: var(--text-tertiary);
+  gap: var(--spacing-sm);
+}
+
+.loading-state i,
+.empty-state i {
+  font-size: var(--text-2xl);
+}
+
+.empty-hint {
+  font-size: var(--text-sm);
+}
+
+/* Timeline */
+.timeline-container {
+  position: relative;
+  padding-left: var(--spacing-10);
+}
+
+.timeline-line {
+  position: absolute;
+  left: 15px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border-default);
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: var(--spacing-md);
+}
+
+.date-marker {
+  margin-bottom: var(--spacing-sm);
+  margin-left: var(--spacing-neg-40px);
+  padding-left: var(--spacing-10);
+}
+
+.date-marker span {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.timeline-dot-container {
+  position: absolute;
+  left: -40px;
+  top: var(--spacing-sm);
+  width: 30px;
+  display: flex;
+  justify-content: center;
+}
+
+.timeline-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.timeline-dot i {
+  color: white;
+  font-size: var(--text-xs);
+}
+
+/* Event Card */
+.timeline-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  cursor: pointer;
+  transition: all var(--duration-200);
+}
+
+.timeline-card:hover {
+  border-color: var(--border-strong);
+}
+
+.timeline-card.expanded {
+  border-color: var(--color-primary);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xs);
+}
+
+.event-type-badge {
+  font-size: var(--text-xs);
+  padding: 2px var(--spacing-sm);
+  border-radius: var(--radius-full);
+  text-transform: capitalize;
+}
+
+.event-time {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.event-name {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.event-description {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: var(--spacing-0);
+  line-height: 1.5;
+}
+
+/* Participants */
+.event-participants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
+}
+
+.participant-badge {
+  font-size: var(--text-xs);
+  padding: 2px var(--spacing-sm);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+}
+
+/* Expanded */
+.expanded-content {
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.causal-links-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.links-label,
+.entity-label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+}
+
+.causal-chain-wrapper {
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+}
+
+.event-entity {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+@media (max-width: 768px) {
+  .timeline-container {
+    padding-left: var(--spacing-8);
+  }
+
+  .timeline-line {
+    left: 11px;
+  }
+
+  .timeline-dot-container {
+    left: -32px;
+  }
+
+  .timeline-dot {
+    width: 22px;
+    height: 22px;
+  }
+
+  .timeline-dot i {
+    font-size: 8px;
+  }
+}
+</style>

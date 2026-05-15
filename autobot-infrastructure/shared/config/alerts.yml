@@ -1,0 +1,151 @@
+# AutoBot Alert Configuration
+# ==========================
+#
+# Defines alert rules for performance metrics monitoring
+
+alerts:
+  # System-level alerts
+  - name: high_cpu_usage
+    metric: system_cpu_usage
+    condition: above
+    threshold: 80.0
+    duration: 300  # 5 minutes
+    severity: warning
+    action: log
+
+  - name: critical_cpu_usage
+    metric: system_cpu_usage
+    condition: above
+    threshold: 95.0
+    duration: 120  # 2 minutes
+    severity: critical
+    action: log
+
+  - name: high_memory_usage
+    metric: system_memory_usage
+    condition: above
+    threshold: 85.0
+    duration: 300  # 5 minutes
+    severity: warning
+    action: log
+
+  - name: low_memory_available
+    metric: system_memory_available
+    condition: below
+    threshold: 1.0  # GB
+    duration: 180  # 3 minutes
+    severity: critical
+    action: log
+
+  - name: high_disk_usage
+    metric: system_disk_usage
+    condition: above
+    threshold: 90.0
+    duration: 600  # 10 minutes
+    severity: warning
+    action: log
+
+  - name: critical_disk_usage
+    metric: system_disk_usage
+    condition: above
+    threshold: 95.0
+    duration: 300  # 5 minutes
+    severity: critical
+    action: log
+
+  # Service-level alerts
+  - name: service_down
+    metric: service_availability
+    condition: below
+    threshold: 1.0
+    duration: 60   # 1 minute
+    severity: critical
+    action: log
+
+  - name: slow_service_response
+    metric: service_response_time
+    condition: above
+    threshold: 5.0  # seconds
+    duration: 180   # 3 minutes
+    severity: warning
+    action: log
+
+  - name: very_slow_service_response
+    metric: service_response_time
+    condition: above
+    threshold: 10.0  # seconds
+    duration: 120    # 2 minutes
+    severity: critical
+    action: log
+
+  # Redis-specific alerts
+  - name: redis_high_memory
+    metric: redis_memory_used
+    condition: above
+    threshold: 500.0  # MB
+    duration: 300     # 5 minutes
+    severity: warning
+    action: log
+
+  - name: redis_too_many_clients
+    metric: redis_connected_clients
+    condition: above
+    threshold: 100
+    duration: 180  # 3 minutes
+    severity: warning
+    action: log
+
+  # Process-level alerts
+  - name: too_many_threads
+    metric: process_thread_count
+    condition: above
+    threshold: 200
+    duration: 300  # 5 minutes
+    severity: warning
+    action: log
+
+  - name: too_many_open_files
+    metric: process_open_files
+    condition: above
+    threshold: 1000
+    duration: 300  # 5 minutes
+    severity: warning
+    action: log
+
+  # Network alerts
+  - name: high_network_traffic
+    metric: system_network_bytes_sent
+    condition: above
+    threshold: 1073741824  # 1GB
+    duration: 600          # 10 minutes
+    severity: warning
+    action: log
+
+# Alert actions configuration
+actions:
+  log:
+    # Default log action - alerts saved to data/metrics/alerts.json
+    enabled: true
+
+  webhook:
+    # Webhook notifications (e.g., Slack, Teams)
+    enabled: false
+    url: ""
+    headers:
+      Content-Type: "application/json"
+
+  email:
+    # Email notifications
+    enabled: false
+    smtp_server: ""
+    smtp_port: 587
+    username: ""
+    password: ""
+    to_addresses: []
+    from_address: ""
+
+# Metric collection settings
+collection:
+  interval: 30          # Collection interval in seconds
+  retention_days: 30    # How long to keep metrics
+  buffer_size: 3600     # In-memory buffer size (1 hour at 1s intervals)

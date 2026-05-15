@@ -1,0 +1,66 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""Subprocess entry point for isolated codebase indexing (#1180).
+
+Runs do_indexing_with_progress in a separate process so its ChromaDB
+PersistentClient does not conflict with the KB's concurrent PersistentClient.
+If this process crashes (SIGSEGV in chromadb_rust_bindings), the parent
+uvicorn worker that launched it is unaffected.
+
+Usage (internal — called by _run_indexing_subprocess):
+    python indexing_worker.py <task_id> <root_path> [source_id]
+"""
+
+import logging
+import os
+import sys
+from pathlib import Path
+
+# Set up sys.path before importing project modules.
+# Required because subprocess env may not have PYTHONPATH set identically.
+_BACKEND_ROOT = Path(__file__).parent.parent.parent  # .../autobot-backend/
+_SHARED_ROOT = _BACKEND_ROOT.parent / "autobot_shared"
+for _p in [str(_BACKEND_ROOT.parent), str(_SHARED_ROOT), str(_BACKEND_ROOT)]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+from api.codebase_analytics.scanner import do_indexing_with_progress  # noqa: E402
+from autobot_shared.async_compat import run_or_schedule
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(name)s %(levelname)s %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+
+def main() -> None:
+    """Entry point: parse CLI args and run indexing task."""
+    if len(sys.argv) < 3:
+        logger.error("Usage: indexing_worker.py <task_id> <root_path>")
+        sys.exit(1)
+
+    # Issue #1303: Lower process priority so the embedding-heavy indexing
+    # subprocess doesn't starve backend API workers of CPU.
+    try:
+        os.nice(10)
+    except OSError:
+        logger.debug("Could not set nice priority (non-root)")
+
+    task_id = sys.argv[1]
+    root_path = sys.argv[2]
+    source_id = sys.argv[3] if len(sys.argv) > 3 else None
+
+    logger.info(
+        "[Worker] Starting indexing task=%s path=%s source=%s",
+        task_id,
+        root_path,
+        source_id,
+    )
+    run_or_schedule(do_indexing_with_progress(task_id, root_path, source_id=source_id))
+    logger.info("[Worker] Indexing task=%s finished", task_id)
+
+
+if __name__ == "__main__":
+    main()

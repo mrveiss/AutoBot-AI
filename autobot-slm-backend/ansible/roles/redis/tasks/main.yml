@@ -1,0 +1,288 @@
+---
+# Redis role - Redis Stack deployment for AutoBot database layer
+
+- name: "Redis | Check if Redis Stack is already installed"
+  ansible.builtin.command:
+    cmd: dpkg -l redis-stack-server
+  register: _redis_installed
+  changed_when: false
+  # (#2872) Intentional: dpkg exits rc=1 when package is not installed;
+  # the result gates conditional installation below.
+  failed_when: false
+  tags: ['redis', 'packages']
+
+- name: "Redis | Add Redis GPG key"
+  apt_key:
+    url: https://packages.redis.io/gpg
+    state: present
+  become: yes
+  when: _redis_installed.rc != 0
+  tags: ['redis', 'packages']
+
+# #7178: Redis only publishes redis-stack-server for jammy/bullseye/focal.
+# Noble (Ubuntu 24.04) has no redis-stack-server package — repo dist exists
+# but ships only redis-server/redis-sentinel. Pin to jammy when the host
+# distribution release isn't one of the supported suites; jammy packages
+# work fine on noble (same glibc family, statically-linked redis modules).
+- name: "Redis | Determine Redis Stack repo suite (#7178: noble fallback)"
+  ansible.builtin.set_fact:
+    redis_stack_suite: >-
+      {{ ansible_facts['distribution_release']
+         if ansible_facts['distribution_release'] in ['jammy', 'bullseye', 'focal']
+         else 'jammy' }}
+  tags: ['redis', 'packages']
+
+# #7218: idempotent repo-add — preserve device-shipped repo if present
+- name: "Redis | Add Redis Stack repository (idempotent, #7218)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
+  vars:
+    apt_repo_match: "packages.redis.io"
+    apt_repo_spec: "deb https://packages.redis.io/deb {{ redis_stack_suite }} main"
+    apt_repo_filename: "redis"
+    apt_repo_label: "Redis Stack"
+  when: _redis_installed.rc != 0
+  tags: ['redis', 'packages']
+
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: "Redis | Refresh apt cache after PPA add (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  when: _redis_installed.rc != 0
+  tags: ['redis', 'packages']
+
+- name: "Redis | Install Redis Stack"
+  apt:
+    name:
+      - redis-stack-server
+    state: present
+  become: yes
+  when: _redis_installed.rc != 0
+  tags: ['redis', 'packages']
+
+- name: "Redis | Create redis system group"
+  group:
+    name: redis
+    system: true
+    state: present
+  become: yes
+  tags: ['redis', 'packages']
+
+- name: "Redis | Create redis system user"
+  user:
+    name: redis
+    group: redis
+    system: true
+    shell: /usr/sbin/nologin
+    home: /var/lib/redis-stack
+    create_home: false
+    state: present
+  become: yes
+  tags: ['redis', 'packages']
+
+# Issue #3396: Add autobot to the redis group as defense-in-depth so that
+# any package-managed files (e.g. binary/lib paths) that retain redis:redis
+# ownership remain group-readable by the autobot service user.
+- name: "Redis | Add autobot user to redis group"
+  user:
+    name: autobot
+    groups: redis
+    append: yes
+  become: yes
+  tags: ['redis', 'ownership']
+
+# Issue #3396: Ownership is set to autobot:autobot (not redis:redis) so the
+# autobot service user can read and write the data directory without sudo.
+# The systemd service override (redis-stack-override.conf.j2) runs
+# redis-stack-server as User=autobot Group=autobot to match.
+# recurse:yes enforces ownership on all existing files idempotently —
+# the file module only marks changed when it actually modifies something,
+# so it will NOT trigger the restart handler on clean runs.
+- name: "Redis | Create Redis data directory with autobot:autobot ownership"
+  file:
+    path: /var/lib/redis-stack
+    state: directory
+    owner: autobot
+    group: autobot
+    mode: '0750'
+  become: yes
+  tags: ['redis', 'ownership']
+
+- name: "Redis | Enforce autobot:autobot ownership on Redis data files (recursive)"
+  file:
+    path: /var/lib/redis-stack
+    state: directory
+    owner: autobot
+    group: autobot
+    recurse: yes
+  become: yes
+  tags: ['redis', 'ownership']
+
+- name: "Redis | Set vm.overcommit_memory for background saves"
+  ansible.builtin.sysctl:
+    name: vm.overcommit_memory
+    value: '1'
+    state: present
+    sysctl_set: true
+    reload: true
+  become: yes
+  tags: ['redis', 'configuration']
+
+# #6701 + #7272: Stat each TLS cert before rendering redis.conf so the
+# template only emits tls-* directives when the certs actually exist.
+# Installs without TLS (or where distribute-tls-certs.yml hasn't run yet)
+# won't crash redis-server at boot with "Cannot read CA certificate".
+# Now uses the shared _shared/tasks/stat_tls_certs.yml helper (#7272) —
+# registers tls_server_cert/tls_server_key/tls_ca_cert.
+- name: "Redis | Stat TLS certs (#6701/#7272)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/stat_tls_certs.yml
+  vars:
+    tls_cert_dir: "{{ redis_tls_cert_dir }}"
+  tags: ['redis', 'configuration']
+
+- name: "Redis | Configure Redis Stack"
+  template:
+    src: redis-stack.conf.j2
+    dest: /etc/redis-stack.conf
+    owner: autobot
+    group: autobot
+    mode: '0640'
+    backup: yes
+  become: yes
+  notify: restart redis-stack
+  tags: ['redis', 'configuration']
+
+- name: "Redis | Configure firewall - Allow Redis port"
+  ufw:
+    rule: allow
+    port: "{{ redis_port }}"
+    proto: tcp
+    from_ip: "{{ network_subnet }}"
+    comment: "Redis Stack"
+  become: yes
+  notify: reload firewall
+  tags: ['redis', 'firewall']
+
+- name: "Redis | Configure firewall - Allow RedisInsight port"
+  ufw:
+    rule: allow
+    port: "{{ redis_insight_port }}"
+    proto: tcp
+    from_ip: "{{ network_subnet }}"
+    comment: "RedisInsight"
+  become: yes
+  notify: reload firewall
+  tags: ['redis', 'firewall']
+
+# Issue #3011: Defense-in-depth — restore dpkg conffile if it was deleted
+# by a prior decommission or remove-role run. Plain `apt reinstall` does
+# NOT restore deleted conffiles; --force-confmiss is required.
+- name: "Redis | Check if base systemd service file exists"
+  ansible.builtin.stat:
+    path: /etc/systemd/system/redis-stack-server.service
+  register: _redis_service_file
+  become: yes
+  tags: ['redis', 'systemd']
+
+- name: "Redis | Restore missing dpkg conffile (--force-confmiss)"
+  ansible.builtin.shell: >
+    apt-get -o Dpkg::Options::="--force-confmiss"
+    install --reinstall redis-stack-server -y
+  become: yes
+  when: not _redis_service_file.stat.exists
+  tags: ['redis', 'systemd']
+
+- name: "Redis | Create systemd override directory"
+  file:
+    path: /etc/systemd/system/redis-stack-server.service.d
+    state: directory
+    mode: '0755'
+  become: yes
+  tags: ['redis', 'systemd']
+
+- name: "Redis | Configure systemd service override"
+  template:
+    src: redis-stack-override.conf.j2
+    dest: /etc/systemd/system/redis-stack-server.service.d/override.conf
+    mode: '0644'
+  become: yes
+  notify:
+    - reload systemd
+    - restart redis-stack
+  tags: ['redis', 'systemd']
+
+- name: "Redis | Enable and start Redis Stack"
+  systemd:
+    name: redis-stack-server
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  become: yes
+  tags: ['redis', 'service']
+
+- name: "Redis | Wait for Redis to be ready (retry-based)"
+  command: >
+    {{ redis_cli_path | default('/usr/bin/redis-cli') }}
+    -h 127.0.0.1 -p {{ redis_port }}
+    {% if redis_password is defined and redis_password %}-a {{ redis_password }}{% endif %}
+    ping
+  register: redis_ping
+  changed_when: false
+  no_log: "{{ redis_password is defined and redis_password | default(false) | bool }}"
+  retries: 60
+  delay: 5
+  until: redis_ping is succeeded
+  tags: ['redis', 'validation']
+
+- name: "Redis | Create backup directory"
+  file:
+    path: /var/backups/redis
+    state: directory
+    owner: autobot
+    group: autobot
+    mode: '0755'
+  become: yes
+  tags: ['redis', 'backup']
+
+- name: "Redis | Create backup script"
+  template:
+    src: redis-backup.sh.j2
+    dest: /usr/local/bin/redis-backup.sh
+    mode: '0755'
+    owner: root
+    group: root
+  become: yes
+  tags: ['redis', 'backup']
+
+- name: "Redis | Schedule daily backups"
+  cron:
+    name: "Redis Stack daily backup"
+    job: "/usr/local/bin/redis-backup.sh >> /var/log/autobot/redis-backup.log 2>&1"
+    hour: "2"
+    minute: "0"
+    user: root
+  become: yes
+  tags: ['redis', 'backup']
+
+# Prometheus exporter - scrape target for SLM monitoring
+- name: "Redis | Install redis_exporter"
+  ansible.builtin.import_tasks: redis_exporter.yml
+  tags: ['redis', 'redis_exporter']
+
+- name: "Redis | Display configuration summary"
+  debug:
+    msg:
+      - "=== Redis Stack Configuration Complete ==="
+      - "Redis Host: {{ ansible_facts['default_ipv4'].address }}"
+      - "Redis Port: {{ redis_port }}"
+      - "RedisInsight Port: {{ redis_insight_port }}"
+      - "Memory Limit: {{ redis_memory_limit }}"
+      - "Persistence: {{ 'Enabled' if redis_persistence else 'Disabled' }}"
+      - "Backup: Enabled (daily at 2:00 AM)"
+      - "Status: {{ redis_ping.stdout }}"
+  tags: ['redis', 'report']

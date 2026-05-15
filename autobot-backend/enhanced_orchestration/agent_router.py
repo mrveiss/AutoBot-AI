@@ -1,0 +1,67 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""Agent selection, resolution, and capability coverage extracted from WorkflowRunner (#6393)."""
+
+from typing import Any, Dict, List, Optional, Set
+
+from autobot_shared.logging_manager import get_logger
+from orchestration import AgentCapability
+from orchestration.performance_tracker import PerformanceTracker
+
+logger = get_logger("agent_router")
+
+
+class AgentRouter:
+    """Resolves agents, scores recommendations, and computes capability coverage.
+
+    Extracted from WorkflowRunner (#6393) and addresses hidden AgentClientRegistry
+    construction (#6392) by accepting the registry as an injected dependency.
+    """
+
+    def __init__(
+        self,
+        agent_capabilities: Dict[str, Set],
+        performance_tracker: PerformanceTracker,
+        agent_registry: Any,
+    ) -> None:
+        self.agent_capabilities = agent_capabilities
+        self._perf = performance_tracker
+        self._agent_client_registry = agent_registry
+
+    async def get_agent_recommendations(self, capabilities_needed: Set) -> List[str]:
+        suitable = []
+        for agent, caps in self.agent_capabilities.items():
+            if not capabilities_needed.issubset(caps):
+                continue
+            perf = self._perf.agent_performance.get(agent)
+            if perf is None:
+                continue
+            score = (
+                perf.reliability_score * 0.5
+                + len(capabilities_needed.intersection(caps)) / len(capabilities_needed) * 0.3
+                + min(perf.total_tasks / 100, 1.0) * 0.2
+            )
+            suitable.append((agent, score))
+        suitable.sort(key=lambda x: x[1], reverse=True)
+        return [a for a, _ in suitable]
+
+    async def get_agent_instance(self, agent_type: str) -> Optional[Any]:
+        agent = self._agent_client_registry.get_agent(agent_type)
+        if agent is not None:
+            await self._agent_client_registry.update_agent_health(agent_type)
+            return agent
+        logger.warning(
+            "Agent '%s' not found. Available: %s",
+            agent_type,
+            self._agent_client_registry.list_agents(),
+        )
+        return None
+
+    def calculate_capability_coverage(self) -> Dict[str, float]:
+        coverage: Dict[str, float] = {}
+        n_agents = max(len(self.agent_capabilities), 1)
+        for capability in AgentCapability:
+            agents_with_cap = sum(1 for caps in self.agent_capabilities.values() if capability in caps)
+            coverage[capability.value] = agents_with_cap / n_agents
+        return coverage

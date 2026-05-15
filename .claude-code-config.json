@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "puppeteer": {
+      "command": "mcp-server-puppeteer"
+    },
+    "github": {
+      "command": "github-project-manager-mcp",
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PAT}"
+      }
+    }
+  }
+}

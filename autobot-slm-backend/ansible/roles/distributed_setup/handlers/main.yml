@@ -1,0 +1,21 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Handlers for distributed_setup role
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: restart autobot-coordinator
+  systemd:
+    name: autobot-coordinator
+    state: restarted
+  when: create_systemd_services
+
+- name: restart health-monitor
+  systemd:
+    name: autobot-health-monitor.timer
+    state: restarted
+  when: create_systemd_services

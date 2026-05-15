@@ -1,0 +1,189 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Pre-commit Hook: No Direct Redis Connections in Production Code
+# ==============================================================
+#
+# Blocks commits containing:
+# - Direct redis.Redis() instantiation in production code
+# - Direct aioredis.Redis() instantiation in production code
+#
+# Intentional exceptions:
+# - autobot-shared/redis_client.py (the canonical client definition)
+# - autobot-infrastructure/ (standalone scripts that can't import autobot_shared)
+# - Test files (*_test.py, *.integration_test.py, etc.)
+# - Lines with "# noqa: redis" comments
+#
+# Issue: #1086 - Pre-commit check to flag redis.Redis() in new code
+#
+# Install: pre-commit install (uses .pre-commit-config.yaml)
+
+set -uo pipefail
+
+# Source shared library (#7185 — colors + get_staged_files)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/_common.sh
+source "$SCRIPT_DIR/lib/_common.sh"
+
+VIOLATIONS=0
+
+# Get Python files to scan (production code only).
+# Uses get_staged_files (#7185) for the staged-files lookup with positional-args
+# override (#6785: same hook runs as local pre-commit AND CI gate). The
+# multi-stage allowlist below is hook-specific and must remain.
+get_staged_python_files() {
+    get_staged_files '\.py$' "$@" | \
+        grep -v -E '(__pycache__|node_modules|\.venv|venv|archive|temp)' | \
+        grep -v -E '(_test\.py$|\.e2e_test\.py$|\.integration_test\.py$|\.performance_test\.py$)' | \
+        grep -v -E '(conftest\.py$|test_.*\.py$)' | \
+        grep -v -E '^autobot-infrastructure/' | \
+        grep -v -E '^autobot-shared/redis_client\.py$' || true
+}
+
+# Check a Python file for direct redis.Redis() calls.
+#
+# Uses Python's tokenize module so that comments, docstrings, and ordinary
+# string literals are never mistaken for executable code.  This eliminates
+# false positives from docstring text such as:
+#   """Direct redis.Redis() instantiation is required because …"""
+#
+# Suppression: add  # noqa: redis  to any line that must be exempt.
+#
+# Issue #1829 — false positives on comments/docstrings
+check_direct_redis() {
+    local file="$1"
+    local violations
+    violations=$(python3 - "$file" <<'PYEOF'
+import sys
+import re
+import tokenize
+import io
+
+PATTERN = re.compile(r'(?:^|[\s(,=+\[{])(?:aio)?redis\.Redis\s*\(')
+NOQA    = re.compile(r'#\s*noqa:.*\bredis\b', re.IGNORECASE)
+
+path = sys.argv[1]
+
+try:
+    with open(path, 'rb') as fh:
+        src = fh.read()
+except OSError as exc:
+    print(f"  SKIP  {path}: {exc}", file=sys.stderr)
+    sys.exit(0)
+
+# Collect line text for reporting and noqa lookup.
+try:
+    lines = src.decode('utf-8', errors='replace').splitlines()
+except Exception:
+    sys.exit(0)
+
+# Token types that represent executable code — everything else is skipped.
+# OP, NAME, NUMBER, STRING (non-docstring), NEWLINE, NL, INDENT, DEDENT, …
+# We only want to flag tokens whose type is NAME or OP that are part of an
+# expression, but the easiest approach is: collect all tokens, skip the
+# ones that are COMMENT or STRING, then check the *source line* only when
+# we encounter a non-comment, non-string token that contains the pattern.
+#
+# Strategy: build a set of line numbers that are "code lines" — i.e. lines
+# that contain at least one token that is NOT a comment or string literal.
+# Then check only those lines for the redis.Redis( pattern.
+
+try:
+    tokens = list(tokenize.tokenize(io.BytesIO(src).readline))
+except tokenize.TokenError:
+    # Untokenisable file — fall back to skipping it silently.
+    sys.exit(0)
+
+# Lines that belong exclusively to comments or string literals.
+non_code_lines = set()
+code_lines     = set()
+
+for tok in tokens:
+    if tok.type in (tokenize.COMMENT, tokenize.STRING, tokenize.ENCODING,
+                    tokenize.NEWLINE, tokenize.NL, tokenize.INDENT,
+                    tokenize.DEDENT, tokenize.ENDMARKER):
+        # Mark every physical line this token spans as non-code (tentative).
+        for ln in range(tok.start[0], tok.end[0] + 1):
+            if ln not in code_lines:
+                non_code_lines.add(ln)
+    else:
+        # A real code token — its line is definitely a code line.
+        lno = tok.start[0]
+        code_lines.add(lno)
+        non_code_lines.discard(lno)
+
+found = False
+for lno in sorted(code_lines):
+    idx = lno - 1  # lines list is 0-based
+    if idx < 0 or idx >= len(lines):
+        continue
+    line_text = lines[idx]
+    # Honour noqa suppression.
+    if NOQA.search(line_text):
+        continue
+    if PATTERN.search(line_text):
+        print(f"{lno}:{line_text[:120]}")
+        found = True
+
+sys.exit(1 if found else 0)
+PYEOF
+)
+    local py_exit=$?
+    if [[ $py_exit -ne 0 ]]; then
+        while IFS= read -r entry; do
+            local lno="${entry%%:*}"
+            local text="${entry#*:}"
+            echo -e "  ${RED}VIOLATION${NC} ${file}:${lno}"
+            echo "    ${text}"
+            ((VIOLATIONS++))
+        done <<< "$violations"
+    fi
+}
+
+main() {
+    echo -e "${BOLD}${CYAN}Pre-commit: No Direct Redis Connections in Production Code${NC}"
+    echo "Issue #1086 - Redis Client Standard Enforcement"
+    echo "================================================"
+    echo ""
+
+    local py_files
+    py_files=$(get_staged_python_files "$@")
+
+    if [[ -z "$py_files" ]]; then
+        echo -e "${GREEN}No production Python files staged for commit.${NC}"
+        exit 0
+    fi
+
+    local py_count
+    py_count=$(echo "$py_files" | wc -l)
+    echo -e "Scanning ${BOLD}${py_count}${NC} Python file(s) for direct redis.Redis() usage..."
+    echo ""
+
+    for file in $py_files; do
+        [[ -f "$file" ]] && check_direct_redis "$file"
+    done
+
+    echo ""
+    echo "================================================"
+
+    if [[ $VIOLATIONS -gt 0 ]]; then
+        echo -e "${RED}COMMIT BLOCKED: $VIOLATIONS direct Redis connection(s) found${NC}"
+        echo ""
+        echo "Quick fix:"
+        echo "  from autobot_shared.redis_client import get_redis_client"
+        echo "  redis_client = get_redis_client(async_client=False, database=\"main\")"
+        echo ""
+        echo "Available databases: main, knowledge, prompts, analytics"
+        echo ""
+        echo "Exempt a line (standalone scripts only): add '# noqa: redis'"
+        echo ""
+        exit 1
+    else
+        echo -e "${GREEN}No direct Redis connection violations found!${NC}"
+        exit 0
+    fi
+}
+
+main "$@"

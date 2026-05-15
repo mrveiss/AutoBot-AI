@@ -1,0 +1,49 @@
+[Unit]
+Description=AutoBot FastAPI Backend Service
+Documentation=https://github.com/autobot/autobot
+After=network-online.target redis.service
+Wants=network-online.target
+Requires=network-online.target
+
+[Service]
+Type=simple
+User={{ autobot.user }}
+Group={{ autobot.group }}
+WorkingDirectory={{ backend.directories.app_dir }}
+Environment=PYTHONPATH={{ autobot.base_dir }}
+EnvironmentFile=/etc/autobot/backend.env
+
+# Main service command
+ExecStart={{ backend.python.virtual_env }}/bin/uvicorn {{ backend.fastapi.app_module }} \
+    --host {{ backend.fastapi.host }} \
+    --port {{ backend.fastapi.port }} \
+    --workers {{ backend.fastapi.workers }} \
+    --worker-class {{ backend.fastapi.worker_class }} \
+    --access-log \
+    --log-level {{ backend.fastapi.log_level | default('info') }}
+
+# Process management
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Resource limits
+LimitNOFILE={{ backend.fastapi.limit_nofile | default(65536) }}
+LimitNPROC={{ backend.fastapi.limit_nproc | default(4096) }}
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Health check
+ExecReload=/bin/kill -HUP $MAINPID
+TimeoutStopSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-backend
+
+[Install]
+WantedBy=multi-user.target

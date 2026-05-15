@@ -1,0 +1,81 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Push code_source from the Ansible controller to the SLM manager (#3604)
+#
+# When GitHub is unreachable FROM the SLM manager, the pre-flight git pull
+# in provision-fleet-roles.yml silently falls back to whatever is already
+# in /opt/autobot/code_source.  This playbook closes that gap: run it from
+# the dev machine BEFORE provisioning to push the current local checkout to
+# SLM, so roles, templates, and playbooks are always up-to-date regardless
+# of whether the SLM can reach GitHub.
+#
+# Usage (from dev machine):
+#   ansible-playbook -i inventory/hosts.yml playbooks/sync-code-source.yml \
+#       -e "controller_repo_root=/home/martins/AutoBot-Ai/AutoBot-AI"
+#
+# When imported by deploy-slm-manager.yml the variable is set automatically
+# via the playbook vars block at the top of that file.
+#
+# When controller_repo_root is not defined this play is a no-op, so it is
+# safe to always import from deploy-slm-manager.yml without a guard.
+---
+- name: "Sync code_source: push from controller to SLM"
+  hosts: 00-SLM-Manager
+  become: true
+  gather_facts: false
+
+  vars:
+    _code_source_dest: "{{ code_source_dir | default('/opt/autobot/code_source') }}"
+    _code_source_owner: "{{ code_source_owner | default('root') }}"
+    _code_source_group: "{{ code_source_group | default('root') }}"
+
+  tasks:
+    - name: "code_source sync | Skip when controller_repo_root not set"
+      ansible.builtin.debug:
+        msg: >-
+          controller_repo_root not defined — skipping local push.
+          Set -e "controller_repo_root=/path/to/AutoBot-AI" to push from
+          the dev machine before provisioning.
+      when: controller_repo_root is not defined
+      tags: ['code-source', 'sync']
+
+    - name: "code_source sync | Push {{ controller_repo_root }} → {{ _code_source_dest }}"
+      ansible.posix.synchronize:
+        src: "{{ controller_repo_root }}/"
+        dest: "{{ _code_source_dest }}/"
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=*.pyc"
+          - "--exclude=__pycache__"
+          - "--exclude=node_modules"
+          - "--exclude=dist"
+          - "--exclude=.worktrees"
+          - "--delete"
+      when: controller_repo_root is defined
+      tags: ['code-source', 'sync']
+
+    - name: "code_source sync | Fix ownership on {{ _code_source_dest }}"
+      ansible.builtin.file:
+        path: "{{ _code_source_dest }}"
+        state: directory
+        owner: "{{ _code_source_owner }}"
+        group: "{{ _code_source_group }}"
+        recurse: true
+      when: controller_repo_root is defined
+      tags: ['code-source', 'sync']
+
+    - name: "code_source sync | Show pushed commit"
+      ansible.builtin.command:
+        cmd: "git -C {{ _code_source_dest }} log -1 --format='%h %s'"
+      register: _pushed_commit
+      changed_when: false
+      when: controller_repo_root is defined
+      tags: ['code-source', 'sync']
+
+    - name: "code_source sync | Report result"
+      ansible.builtin.debug:
+        msg: "code_source now at: {{ _pushed_commit.stdout }}"
+      when: controller_repo_root is defined
+      tags: ['code-source', 'sync']

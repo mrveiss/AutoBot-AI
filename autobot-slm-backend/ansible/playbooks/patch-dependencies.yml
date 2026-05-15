@@ -1,0 +1,137 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Dependency Patching Playbook - Rolling Updates
+# Issue #682: Ansible Rolling Update System for Dependency Patching
+#
+# This playbook implements oVirt-style rolling updates across the AutoBot
+# infrastructure. It updates one host group at a time in dependency order,
+# with automatic health checks and rollback capability.
+#
+# Usage:
+#   # Dry run - preview changes
+#   ansible-playbook playbooks/patch-dependencies.yml --check -e dry_run=true
+#
+#   # Update all hosts with rolling updates
+#   ansible-playbook playbooks/patch-dependencies.yml
+#
+#   # Update specific group only
+#   ansible-playbook playbooks/patch-dependencies.yml --limit backend
+#
+#   # Force update (skip version checks)
+#   ansible-playbook playbooks/patch-dependencies.yml -e force_update=true
+
+- name: "AutoBot Dependency Patching - Pre-flight Checks"
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Display patching information
+      ansible.builtin.debug:
+        msg: |
+          ═══════════════════════════════════════════════════════════
+          AutoBot Dependency Patching - Rolling Update System
+          ═══════════════════════════════════════════════════════════
+          Mode: {{ 'DRY RUN' if (dry_run | default(false)) else 'LIVE UPDATE' }}
+          Rollback enabled: {{ rollback_on_failure | default(true) }}
+          Health checks: {{ health_check_enabled | default(true) }}
+          ═══════════════════════════════════════════════════════════
+
+          Update order:
+          1. Database (Redis) - Stateful, updated first
+          2. Backend (FastAPI) - Depends on Redis
+          3. AI Stack - Depends on Backend
+          4. NPU Workers - Depends on Backend
+          5. Frontend (Vue.js) - Depends on Backend API
+          ═══════════════════════════════════════════════════════════
+
+    - name: Confirm update (interactive mode)
+      ansible.builtin.pause:
+        prompt: "Press ENTER to continue with dependency patching, or Ctrl+C to abort"
+      when:
+        - not (dry_run | default(false))
+        - not (auto_confirm | default(false))
+
+# Phase 1: Update Database (Redis) - No Python venv, but included for completeness
+- name: "Phase 1: Database Updates"
+  hosts: database
+  become: yes
+  serial: 1
+  max_fail_percentage: 0
+  roles:
+    - role: dependency_patching
+  tags:
+    - database
+    - phase1
+
+# Phase 2: Update Backend Services
+- name: "Phase 2: Backend Updates"
+  hosts: backend
+  become: yes
+  serial: 1
+  max_fail_percentage: 0
+  roles:
+    - role: dependency_patching
+  tags:
+    - backend
+    - phase2
+
+# Phase 3: Update AI/ML Stack
+- name: "Phase 3: AI/ML Stack Updates"
+  hosts: aiml
+  become: yes
+  serial: 1
+  max_fail_percentage: 0
+  roles:
+    - role: dependency_patching
+  tags:
+    - aiml
+    - phase3
+
+# Phase 4: Update NPU Workers
+- name: "Phase 4: NPU Worker Updates"
+  hosts: npu
+  become: yes
+  serial: 1
+  max_fail_percentage: 0
+  roles:
+    - role: dependency_patching
+  tags:
+    - npu
+    - phase4
+
+# Phase 5: Update Frontend (Node.js, not Python)
+- name: "Phase 5: Frontend Updates"
+  hosts: frontend
+  become: yes
+  serial: 1
+  max_fail_percentage: 0
+  roles:
+    - role: dependency_patching
+  tags:
+    - frontend
+    - phase5
+
+# Final: Summary and verification
+- name: "Post-Patching Summary"
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Display completion summary
+      ansible.builtin.debug:
+        msg: |
+          ═══════════════════════════════════════════════════════════
+          AutoBot Dependency Patching - COMPLETE
+          ═══════════════════════════════════════════════════════════
+
+          All phases completed successfully.
+
+          Next steps:
+          1. Verify application functionality
+          2. Run pip-audit to confirm CVE remediation
+          3. Monitor logs for any issues
+
+          Commands:
+            pip-audit  # Verify no remaining CVEs
+            ./deploy.sh --health-check  # Verify all services healthy
+          ═══════════════════════════════════════════════════════════

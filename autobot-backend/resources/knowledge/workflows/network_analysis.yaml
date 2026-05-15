@@ -1,0 +1,212 @@
+metadata:
+  name: "Network Analysis and Reconnaissance Workflow"
+  category: network_security
+  complexity: medium
+  estimated_time: "30-60 minutes"
+  version: "1.0.0"
+  description: "Comprehensive network analysis workflow for security assessment and troubleshooting"
+
+objective: "Perform thorough network reconnaissance and analysis to identify hosts, services, vulnerabilities, and network topology"
+
+prerequisites:
+  - "Target network range or specific hosts identified"
+  - "Permission to perform network scanning (authorization required)"
+  - "Understanding of network protocols and services"
+  - "Basic knowledge of network security concepts"
+
+required_tools:
+  - name: nmap
+    purpose: Network discovery and port scanning
+    optional: false
+  - name: netstat
+    purpose: Local network connection analysis
+    optional: false
+  - name: ss
+    purpose: Modern socket statistics
+    optional: true
+  - name: wireshark
+    purpose: Packet capture and analysis
+    optional: true
+  - name: tcpdump
+    purpose: Command-line packet capture
+    optional: true
+  - name: arp
+    purpose: ARP table examination
+    optional: false
+
+workflow_steps:
+  - step: 1
+    action: "Network Discovery"
+    details: "Identify active hosts on the target network"
+    commands:
+      - "nmap -sn 192.168.1.0/24"
+      - "nmap -sP --send-ip 10.0.0.0/8"
+      - "ping -c 1 {target_range} 2>/dev/null | grep 'bytes from'"
+      - "arp -a"
+    expected_output: "List of active IP addresses and MAC addresses"
+    validation: "Verify discovered hosts respond to ping or have ARP entries"
+    security_notes:
+      - "Use -Pn flag if hosts don't respond to ping"
+      - "ICMP may be blocked by firewalls"
+      - "ARP scan only works on local network segment"
+
+  - step: 2
+    action: "Port Scanning"
+    details: "Identify open ports and services on discovered hosts"
+    commands:
+      - "nmap -sS -O -sV {target_hosts}"
+      - "nmap -p- --open {target_hosts}"
+      - "nmap -sU --top-ports 1000 {target_hosts}"
+      - "nmap -A -T4 {target_hosts}"
+    expected_output: "Open ports, service versions, and operating system information"
+    validation: "Cross-reference results with banner grabbing and service probes"
+    security_notes:
+      - "SYN scan (-sS) requires root privileges"
+      - "Aggressive scans (-A) are more detectable"
+      - "UDP scans (-sU) take longer but find UDP services"
+
+  - step: 3
+    action: "Service Enumeration"
+    details: "Gather detailed information about identified services"
+    commands:
+      - "nmap --script default {target_hosts}"
+      - "nmap --script vuln {target_hosts}"
+      - "nmap --script discovery {target_hosts}"
+      - "netcat -nv {host} {port}"
+    expected_output: "Service banners, versions, and potential vulnerabilities"
+    validation: "Verify service identification through manual connection"
+    common_ports:
+      - "21: FTP"
+      - "22: SSH"
+      - "23: Telnet"
+      - "25: SMTP"
+      - "53: DNS"
+      - "80: HTTP"
+      - "110: POP3"
+      - "143: IMAP"
+      - "443: HTTPS"
+      - "993: IMAPS"
+      - "995: POP3S"
+
+  - step: 4
+    action: "Local Network Analysis"
+    details: "Analyze local system's network configuration and connections"
+    commands:
+      - "ip addr show"
+      - "ip route show"
+      - "netstat -tlnp"
+      - "ss -tlnp"
+      - "lsof -i"
+    expected_output: "Local interfaces, routing table, and active connections"
+    validation: "Identify suspicious connections or unexpected listening services"
+
+  - step: 5
+    action: "Traffic Analysis"
+    details: "Capture and analyze network traffic for suspicious activity"
+    commands:
+      - "tcpdump -i any -c 100 -w capture.pcap"
+      - "tcpdump -i eth0 port 80 -A"
+      - "wireshark -i eth0 -k"
+      - "tshark -i any -c 50 -V"
+    expected_output: "Network packet captures for analysis"
+    validation: "Review captured traffic for anomalies or security issues"
+    optional: true
+
+  - step: 6
+    action: "Vulnerability Assessment"
+    details: "Check for known vulnerabilities in discovered services"
+    commands:
+      - "nmap --script vulners {target_hosts}"
+      - "nmap --script vul-cve-* {target_hosts}"
+      - "nmap --script http-enum {web_servers}"
+      - "nmap --script smb-vuln-* {smb_hosts}"
+    expected_output: "List of potential security vulnerabilities"
+    validation: "Research CVE numbers and assess impact"
+    security_notes:
+      - "Vulnerability scans may trigger security alerts"
+      - "Some scripts may cause service disruption"
+      - "Always verify findings manually"
+
+  - step: 7
+    action: "Documentation and Reporting"
+    details: "Document findings and prepare analysis report"
+    commands:
+      - "nmap -oA network_scan_{date} {target_range}"
+      - "echo 'Network Analysis Report' > network_report.txt"
+      - "date >> network_report.txt"
+      - "echo '--- Discovered Hosts ---' >> network_report.txt"
+      - "cat discovered_hosts.txt >> network_report.txt"
+    expected_output: "Comprehensive report of network analysis findings"
+    validation: "Ensure all critical findings are documented with evidence"
+
+decision_points:
+  - condition: "Hosts don't respond to ping"
+    if_true: "Use -Pn flag and try TCP SYN ping (-PS)"
+    if_false: "Continue with standard ICMP discovery"
+  - condition: "Firewall blocks port scans"
+    if_true: "Try stealth techniques (-sS, -f, --scan-delay)"
+    if_false: "Proceed with comprehensive scanning"
+  - condition: "Critical vulnerabilities found"
+    if_true: "Prioritize assessment and notify security team immediately"
+    if_false: "Continue with standard documentation process"
+  - condition: "Suspicious network activity detected"
+    if_true: "Initiate incident response procedures"
+    if_false: "Document findings for regular security review"
+
+quality_checks:
+  - "Verify all target hosts were properly scanned"
+  - "Confirm service version information is accurate"
+  - "Cross-validate vulnerability findings"
+  - "Ensure documentation includes timestamps"
+  - "Check that scan results are complete"
+  - "Verify no false positives in vulnerability list"
+
+common_pitfalls:
+  - issue: "Scanning without proper authorization"
+    prevention: "Always obtain written permission before scanning networks"
+  - issue: "Overwhelming target systems with aggressive scans"
+    prevention: "Use timing templates (-T1 to -T3) and rate limiting"
+  - issue: "Missing UDP services in reconnaissance"
+    prevention: "Include UDP scans for comprehensive service discovery"
+  - issue: "Ignoring encrypted services"
+    prevention: "Test SSL/TLS configurations and certificate validity"
+  - issue: "Not documenting scan methodology"
+    prevention: "Record all commands used and their purpose"
+
+alternative_approaches:
+  - approach: "Passive network monitoring"
+    when_to_use: "When active scanning might be detected or disruptive"
+    description: "Monitor network traffic and analyze existing connections"
+  - approach: "Social engineering reconnaissance"
+    when_to_use: "When technical scans are blocked or ineffective"
+    description: "Gather network information through non-technical means"
+  - approach: "DNS enumeration"
+    when_to_use: "When direct scanning is not feasible"
+    description: "Use DNS queries to discover network topology and services"
+
+success_metrics:
+  - "Complete inventory of network hosts and services"
+  - "Identification of all critical vulnerabilities"
+  - "Documentation of network topology and trust relationships"
+  - "Clear risk assessment with prioritized recommendations"
+  - "Comprehensive evidence collection for findings"
+
+post_analysis_actions:
+  - "Review findings with network administrators"
+  - "Prioritize vulnerabilities by risk and exploitability"
+  - "Develop remediation timeline for identified issues"
+  - "Schedule follow-up scans to verify fixes"
+  - "Update network security monitoring rules"
+
+related_workflows:
+  - "Incident Response"
+  - "Vulnerability Management"
+  - "Penetration Testing"
+  - "Digital Forensics"
+
+legal_considerations:
+  - "Ensure proper authorization before any network scanning"
+  - "Comply with organizational security policies"
+  - "Respect third-party network boundaries"
+  - "Document authorization and scope limitations"
+  - "Follow responsible disclosure for vulnerabilities found"

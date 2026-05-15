@@ -1,0 +1,63 @@
+# AutoBot NPU Worker - Systemd Service Unit
+# Deploys to: 172.16.168.22 (NPU VM)
+# Runs Intel NPU acceleration service natively
+#
+# Installation:
+#   sudo cp autobot-npu-worker.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable autobot-npu-worker
+#   sudo systemctl start autobot-npu-worker
+
+[Unit]
+Description=AutoBot NPU Worker - Intel NPU Acceleration Service
+Documentation=https://github.com/mrveiss/AutoBot-AI
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=autobot
+Group=video
+WorkingDirectory=/opt/autobot/autobot-npu-worker
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONDONTWRITEBYTECODE=1"
+Environment="NPU_DEVICE=AUTO"
+Environment="NPU_LOG_LEVEL=INFO"
+# Redis config provided by EnvironmentFile (.env)
+EnvironmentFile=-/opt/autobot/autobot-npu-worker/.env
+
+# Start uvicorn server
+ExecStart=/opt/autobot/autobot-npu-worker/venv/bin/uvicorn \
+    npu_inference_server:app \
+    --host 0.0.0.0 \
+    --port 8081 \
+    --workers 1 \
+    --log-level info
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# Resource limits
+MemoryMax=8G
+CPUQuota=200%
+
+# Security
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/autobot/autobot-npu-worker/models
+ReadWritePaths=/opt/autobot/autobot-npu-worker/cache
+ReadWritePaths=/opt/autobot/autobot-npu-worker/logs
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-npu-worker
+
+[Install]
+WantedBy=multi-user.target

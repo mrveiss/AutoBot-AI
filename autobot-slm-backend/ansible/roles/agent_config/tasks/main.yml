@@ -1,0 +1,57 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# agent_config role - Main tasks
+
+- name: Create project directory structure
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'
+  loop:
+    - "{{ project_root }}"
+    - "{{ config_dir }}"
+    - "{{ logs_dir }}"
+    - "{{ docs_dir }}"
+    - "{{ uploads_dir }}"
+    - "{{ models_dir }}"
+    - "{{ models_dir }}/transformers"
+    - "{{ models_dir }}/huggingface"
+
+- name: Install system dependencies
+  include_tasks: system_packages.yml
+
+- name: Set up Python environment
+  include_tasks: python_env.yml
+
+- name: Install Python dependencies
+  include_tasks: python_deps.yml
+
+- name: Install OpenVINO
+  include_tasks: openvino.yml
+  when: install_openvino
+
+- name: Install and configure Ollama
+  include_tasks: ollama.yml
+  when: install_ollama
+
+- name: Install Node.js
+  include_tasks: nodejs.yml
+  when: install_nodejs
+
+- name: Install Playwright
+  include_tasks: playwright.yml
+  when: install_playwright
+
+- name: Configure agent environment
+  include_tasks: config.yml
+
+- name: Create systemd service
+  include_tasks: service.yml
+  when: create_systemd_service
+
+- name: Verify installation
+  include_tasks: verify.yml

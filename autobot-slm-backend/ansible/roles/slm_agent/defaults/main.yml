@@ -1,0 +1,60 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# SLM Agent Role - Default Variables
+# Override these in inventory or playbook variables
+
+# Admin connectivity
+# slm_host must be provided by inventory or via -e.  The setup wizard
+# injects it from settings.external_url (#2747); static inventories derive
+# it from hostvars['autobot-slm']['ansible_host'].  The loopback fallback
+# here is intentionally safe: it triggers an obvious connection failure
+# rather than silently routing to a different machine's IP.
+# SLM API is always at /slm/api/ regardless of co-location mode (#3268).
+# In co-located mode, nginx routes /api/ to the user backend; /slm/api/ reaches SLM.
+# In standalone mode, nginx exposes both /api/ and /slm/api/ as aliases to SLM.
+# Using /slm consistently means all agents (local + remote) work in both modes.
+slm_admin_url: "https://{{ slm_host | default('127.0.0.1') }}/slm"
+slm_heartbeat_interval: 30
+
+# Agent user/group (should match common role's autobot user)
+slm_agent_user: autobot
+slm_agent_group: autobot
+
+# Installation directories (#1121/#1129: role-centric layout under /opt/autobot/)
+slm_agent_dir: /opt/autobot/autobot-slm-agent
+slm_agent_data_dir: /var/lib/slm-agent
+
+# Python dependencies for the agent
+slm_agent_python_packages:
+  - aiohttp
+  - psutil
+
+# Services to monitor (systemd service names)
+# Override per-host in inventory, e.g.:
+#   slm_services_to_monitor:
+#     - redis-stack-server
+#     - nginx
+slm_services_to_monitor: []
+
+# Port checks (optional)
+# Format: [{"host": "localhost", "port": 6379}]
+slm_ports_to_check: []
+
+# Logging configuration
+slm_agent_log_level: INFO
+slm_agent_debug: false
+
+# Systemd service configuration
+slm_agent_restart_sec: 10
+slm_agent_watchdog_sec: 60
+
+# Node Exporter (general fleet monitoring, issue #945)
+node_exporter_version: "1.7.0"
+node_exporter_port: 9100
+
+# Issue #741: Version tracking
+# Set this to override the git commit (e.g., for releases)
+# When empty, the current git commit hash is auto-detected
+slm_agent_version: ""

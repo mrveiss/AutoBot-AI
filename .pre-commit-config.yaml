@@ -1,0 +1,479 @@
+# Pre-commit hooks configuration for AutoBot
+# Automatically enforces code quality standards before commits
+# Install: pip install pre-commit && pre-commit install
+
+repos:
+  # Record branch name BEFORE stash cycle for post-stash verification (Issue #1670)
+  # Must be the FIRST hook so the branch is captured before any stash/pop occurs.
+  - repo: local
+    hooks:
+      - id: record-branch
+        name: Record Branch for Branch Guard (Issue #1670)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-record-branch
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Records current branch to detect silent branch switches from stash/pop"
+
+  # Python code formatting with Black
+  - repo: https://github.com/psf/black
+    rev: 26.3.1
+    hooks:
+      - id: black
+        args: [--line-length=120]
+        language_version: python3
+        exclude: ^autobot-infrastructure/
+
+  # Python import sorting with isort
+  - repo: https://github.com/pycqa/isort
+    rev: 8.0.1
+    hooks:
+      - id: isort
+        args: [--profile=black, --line-length=120]
+        exclude: ^autobot-infrastructure/
+
+  # Python linting with flake8
+  # Uses .flake8 config file for consistent settings across local dev and CI
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.3.0
+    hooks:
+      - id: flake8
+        # Uses .flake8 config file in repo root via args
+        args: [--config=.flake8]
+        # Exclude tests, infrastructure, and code analysis tools (non-production code)
+        exclude: ^(tests/|autobot-infrastructure/|autobot-backend/code_analysis/)
+
+  # Remove unused imports and variables with autoflake
+  - repo: https://github.com/PyCQA/autoflake
+    rev: v2.3.3
+    hooks:
+      - id: autoflake
+        args: [
+          --in-place,
+          --remove-all-unused-imports,
+          --remove-unused-variables,
+          --expand-star-imports,
+          --ignore-init-module-imports
+        ]
+        exclude: ^autobot-infrastructure/
+
+  # Trailing whitespace removal
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--unsafe]  # Allow custom YAML tags
+      - id: check-json
+        exclude: (tsconfig\.json|\.eslintrc\.json|api_test_results_.*\.json)$
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # AutoBot custom: regression-prevention for #5178 datetime migration.
+  # Blocks datetime.utcnow().isoformat() (#5178), datetime.utcnow().isoformat()
+  # + "Z" mixed format (#5238), and bare time.strftime("%Y-%m-%dT...") (#5178
+  # bug-fix). Use autobot_shared.time_utils.utc_timestamp() instead.
+  # Only fires on staged Python files — does not block pre-existing
+  # violations until those files are touched. Broader DTZ003 enforcement
+  # gated on #5211 completion.
+  - repo: local
+    hooks:
+      - id: no-utcnow-isoformat
+        name: Block datetime.utcnow().isoformat() and friends (#5178 #5238)
+        entry: tools/lint/check_no_utcnow_isoformat.py
+        language: python
+        files: \.py$
+        # Stage matches the existing record-branch hook above.
+        stages: [pre-commit]
+        description: "Use autobot_shared.time_utils.utc_timestamp() instead of datetime.utcnow().isoformat()"
+
+  # AutoBot custom: regression-prevention for #6987 broken `src.*` mock paths.
+  # autobot-backend has no `src/` package; ``patch("src.foo.bar")`` silently
+  # no-ops (ModuleNotFoundError swallowed by `with` cleanup). Production
+  # code runs unmocked, tests pass on stale-mock-luck. #6987 found 48 such
+  # sites that masked years of real production drift (#7147, #7154, #7161,
+  # #7216, #7237, #7251, …). #6987 fixed the 48 existing violations; this
+  # hook prevents the next contributor from reintroducing the pattern.
+  # AST-based detection covers all import forms: patch(), mock.patch(),
+  # unittest.mock.patch(), patch.object(), and target= kwarg.
+  - repo: local
+    hooks:
+      - id: no-src-mock-path
+        name: Block patch("src.*") mock paths in tests (#6987 / #7165)
+        entry: tools/lint/check_no_src_mock_path.py
+        language: python
+        files: (_test\.py|test_.*\.py)$
+        stages: [pre-commit]
+        description: "patch('src.…') silently no-ops — autobot-backend has no src/ package"
+
+  # AutoBot custom: regression-prevention for #7150 git safe.directory migration.
+  # When code_source/ is owned by `autobot` (cloned by install.sh) and the
+  # Ansible playbook runs as root via sudo, git 2.35+ aborts read-only
+  # operations with rc=128 ("dubious ownership"). #7150 fixed 17 sites
+  # mechanically; #7219 found 7 more in update-all-nodes.yml (top-level vs
+  # playbooks/ basename collision). This guard blocks future regressions.
+  - repo: local
+    hooks:
+      - id: git-safe-directory-required
+        name: Block unguarded `git -C {{ git_repo_root }}` (#7150 #7219)
+        entry: tools/lint/check_git_safe_directory.py
+        language: python
+        files: \.(yml|yaml)$
+        stages: [pre-commit]
+        description: "Pass -c safe.directory={{ git_repo_root }} to every git -C invocation against code_source"
+
+  # AutoBot custom: regression-prevention for #7180. ansible-core 2.24 will
+  # remove INJECT_FACTS_AS_VARS, breaking any `{{ ansible_X }}` reference
+  # to an auto-injected fact (date_time, default_ipv4, hostname,
+  # distribution_release, os_family, env, kernel, etc.). The migration
+  # landed 84 files; this guard prevents reintroduction.
+  # Inventory/connection vars (ansible_user, ansible_host, ansible_become_*,
+  # ansible_ssh_*, ansible_python_interpreter, ansible_connection) are
+  # explicitly NOT facts and remain valid.
+  - repo: local
+    hooks:
+      - id: no-deprecated-ansible-facts
+        name: Block deprecated `{{ ansible_X }}` fact refs (#7180 #7221)
+        entry: tools/lint/check_no_deprecated_ansible_facts.py
+        language: python
+        files: \.(yml|yaml|j2)$
+        stages: [pre-commit]
+        description: "Use ansible_facts['X'] instead of the deprecated ansible_X top-level fact"
+
+  # AutoBot custom: regression-prevention for #6940. PR #6881 found 7 files
+  # calling response.get("content") on LLMResponse (a Pydantic BaseModel)
+  # — masked by MockLLMInterface in tests but raised AttributeError in prod.
+  # AST-aware: only flags `.get(...)` / `[...]` access on variables assigned
+  # from llm_service.chat() / chat_optimized() / etc. in files that import
+  # LLMResponse. Allowlists judges/__init__.py (intentional triple-fallback).
+  - repo: local
+    hooks:
+      - id: no-llm-response-dict-access
+        name: Block dict-style access on LLMResponse (#6940)
+        entry: tools/lint/check_no_llm_response_dict_access.py
+        language: python
+        files: \.py$
+        stages: [pre-commit]
+        description: "Use response.content (attribute), not response.get('content') — LLMResponse is a Pydantic BaseModel"
+
+  # AutoBot custom: regression-prevention for #5225 KB redis accessor migration.
+  # Blocks any reference to the old public ``aioredis_client`` attribute
+  # (renamed to ``_aioredis_client`` in #5225) and any reference to the new
+  # private ``_aioredis_client`` attribute from outside the KB class itself
+  # (narrow allowlist: ``knowledge/base.py`` lifecycle paths, sibling mixin
+  # type hints, test fakes). Use ``kb.redis()`` instead — the accessor raises
+  # ``RuntimeError`` on uninitialized access and was added in #5184 / PR #5218
+  # specifically to decouple cross-module callers from KB internals.
+  - repo: local
+    hooks:
+      - id: no-kb-aioredis-access
+        name: Block direct access to KB.aioredis_client / ._aioredis_client (#5225)
+        entry: tools/lint/check_no_kb_aioredis_access.py
+        language: python
+        files: \.py$
+        stages: [pre-commit]
+        description: "Use kb.redis() instead of reaching into KB internals (#5225)"
+
+  # AutoBot custom: regression-prevention for #5913 response_model=DataResponse safety check.
+  # Blocks any FastAPI route decorated with response_model=DataResponse unless its body
+  # calls create_success_response(), returns a dict literal with a 'success' key, or
+  # returns a bypass response type (JSONResponse, StreamingResponse, etc.).
+  # Background: #5843 → #5896 → #5904 cascade where 52 endpoints got DataResponse
+  # annotations but returned plain dicts without 'success', causing HTTP 500 at runtime.
+  - repo: local
+    hooks:
+      - id: response-model-data-response
+        name: Verify response_model=DataResponse endpoints return success-compatible shapes (#5913)
+        entry: tools/lint/check_response_models.py
+        language: python
+        files: \.py$
+        stages: [pre-commit]
+        description: "Use create_success_response() or a named schema when annotating with response_model=DataResponse (#5913)"
+
+  # AutoBot custom: prevent re-introduction of local BaseModel definitions in
+  # non-schema API endpoint files. Schema migration (#5799, #5996) moved
+  # 375+ classes to domain schemas_*.py files. This hook blocks new ones.
+  - repo: local
+    hooks:
+      - id: no-local-schemas
+        name: Block local BaseModel definitions in non-schema API files (#6056)
+        entry: tools/lint/check_no_local_schemas.py
+        language: python
+        files: ^autobot-backend/api/(?!schemas_).*\.py$
+        stages: [pre-commit]
+        description: "Move BaseModel subclasses to domain schemas_*.py files (#6056)"
+
+  # AutoBot custom: regression-prevention for #6558 (decorator order) +
+  # #6633 (stacked-duplicate). In Python ``@A @B def f`` ≡ ``f = A(B(f))``;
+  # if ``@with_error_handling`` is placed above ``@router.*`` the FastAPI
+  # router registers the unwrapped function and the error wrapper becomes
+  # dead code. #6558 swapped 1801 endpoints across 188 files; this hook
+  # blocks the regression. Also catches two adjacent
+  # ``@with_error_handling`` decorators (#6633).
+  - repo: local
+    hooks:
+      - id: decorator-order
+        name: Check @with_error_handling/@router decorator order (#6638)
+        entry: tools/lint/check_decorator_order.py
+        language: python
+        files: ^autobot-backend/api/.*\.py$
+        stages: [pre-commit]
+        description: "Ensure @router.* is OUTERMOST and @with_error_handling is not stacked (#6558, #6633)"
+
+  # AutoBot custom: regression-prevention for #7444 (blocking I/O in async).
+  # 159 production violations exist as of filing — `requests.get/...` and
+  # `Path.read_text/write_text` calls inside `async def` bodies block the
+  # event loop and cause intermittent latency spikes under concurrent load.
+  # This hook stops NEW violations from landing while the existing 159 are
+  # migrated separately. Pre-commit only runs on changed files, so existing
+  # violations don't trigger unless the file is touched.
+  - repo: local
+    hooks:
+      - id: no-blocking-io-in-async
+        name: Block sync I/O calls inside async def (#7444)
+        entry: tools/lint/check_no_blocking_io_in_async.py
+        language: python
+        files: ^(autobot-backend|autobot_shared|autobot-slm-backend)/.*\.py$
+        stages: [pre-commit]
+        description: "Block requests.* and Path.read_text/write_text inside async def bodies (#7444)"
+
+  # Python-specific checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-ast  # Check Python syntax
+      - id: debug-statements  # Check for debugger imports
+      - id: name-tests-test  # Ensure test files are named correctly
+        args: [--pytest-test-first]
+        # Exclude colocated tests (*_test.py convention) and special test files
+        exclude: (_test\.py$|^(tests/|autobot-infrastructure/.*/tests/|autobot-.*/tests/).*(results/|benchmarks/|fixtures/|conftest\.py|mock_llm_interface\.py|ci_cd_integration\.py|integration_test_infrastructure\.py|security_port_audit\.py|frontend_comprehensive_corrected\.py|phase9_comprehensive_test_suite\.py|benchmark_base\.py|api_benchmarks\.py|rag_benchmarks\.py|mocks\.py|system_assessment_report\.py))
+
+  # Security checks with bandit
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.4
+    hooks:
+      - id: bandit
+        args: [-c, .bandit]
+        files: ^(autobot-backend/|autobot-slm-backend/|autobot_shared/)
+        exclude: (code_analysis/|_test\.py|\.e2e_test\.py|\.integration_test\.py|\.performance_test\.py|conftest\.py)$
+        additional_dependencies: ["bandit[toml]"]
+
+  # Block commits when branch is shared with a worktree (Issue #1654)
+  # Must run BEFORE the stash/restore cycle to prevent branch corruption.
+  - repo: local
+    hooks:
+      - id: worktree-branch-guard
+        name: Worktree Branch Guard (Issue #1654)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-worktree-branch-guard
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Blocks commits when current branch is also checked out in another worktree"
+
+  # Enforce branching discipline: block direct commits on protected branches (Issue #4113)
+  # Prevents commits to main/master; all work flows through Dev_new_gui
+  - repo: local
+    hooks:
+      - id: target-branch-guard
+        name: Target Branch Guard (Issue #4113)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-target-branch-guard
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Blocks direct commits on main/master (protected branches); all commits flow through Dev_new_gui"
+
+  # Detect mass file deletions that indicate stash-handling bugs (Issue #4111)
+  - repo: local
+    hooks:
+      - id: detect-mass-deletions
+        name: Detect Mass Deletions (Issue #4111)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-detect-mass-deletions
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Blocks commits with >50 staged file deletions (likely stash bug, not intended cleanup)"
+
+  # Hardcoded value detection (Issue #694)
+  - repo: local
+    hooks:
+      - id: detect-hardcoded-values
+        name: Detect Hardcoded Values (Strict)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
+        language: script
+        types: [python, ts, vue]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks commits with hardcoded IPs, ports, magic numbers, role strings, AutoBot file paths, and model name literals (#3397)"
+
+  # Function length enforcement (Issue #620)
+  - repo: local
+    hooks:
+      - id: function-length-check
+        name: Function Length Check (Issue #620)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-function-length
+        language: script
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks commits with functions >65 lines, warns for 51-65 lines"
+
+  # No direct redis.Redis() in production code (Issue #1086)
+  - repo: local
+    hooks:
+      - id: no-direct-redis
+        name: No Direct Redis Connections in Production Code (Issue #1086)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-direct-redis
+        language: script
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks commits with direct redis.Redis() — use get_redis_client() instead"
+
+  # No new /health routes outside api/system_health.py (Issue #3333)
+  - repo: local
+    hooks:
+      - id: no-new-health-route
+        name: No New /health Routes Outside system_health.py (Issue #3333)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-new-health-route
+        language: script
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks new @router.get('/health') definitions; modules must call api.system_health.register_health_probe instead"
+
+  # No new top-level WorkflowStep/AgentTask/WorkflowPlan outside canonical (Issue #6951)
+  - repo: local
+    hooks:
+      - id: no-new-workflow-step
+        name: No New WorkflowStep/AgentTask/WorkflowPlan Outside Canonical (Issue #6951)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-new-workflow-step
+        language: script
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks new top-level dataclass declarations of WorkflowStep/AgentTask/WorkflowPlan outside autobot_shared/workflow/types.py; subclasses and aliases are allowed"
+
+  # No new ad-hoc *Status(Enum) outside canonical (Issue #6973)
+  - repo: local
+    hooks:
+      - id: no-new-status-enum
+        name: No New *Status(Enum) Outside Canonical (Issue #6973)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-new-status-enum
+        language: script
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks new ad-hoc *Status(Enum) declarations outside autobot_shared/status_enums.py; lifecycle-shaped enums must use canonical TaskStatus/JobStatus/WorkflowStatus aliases"
+
+  # No tag-pinned 3rd-party GitHub Actions (Issue #7120, preventive for #7091)
+  - repo: local
+    hooks:
+      - id: no-tag-pinned-action
+        name: No Tag-Pinned 3rd-Party GitHub Actions (Issue #7120)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-tag-pinned-action
+        language: script
+        files: ^\.github/(workflows|actions)/.*\.ya?ml$
+        pass_filenames: true
+        stages: [pre-commit]
+        description: "Blocks tag-pinned `uses: <org>/<repo>@vN` for non-actions/* orgs in workflows/composite actions; SHA pins required for supply-chain immutability"
+
+  # No print()/console.* in production code (Issue #1082)
+  - repo: local
+    hooks:
+      - id: no-print-console
+        name: No print()/console.* in Production Code (Issue #1082)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-print-console
+        language: script
+        pass_filenames: false
+        stages: [pre-commit]
+        description: Blocks commits with print() in Python or console.* in TypeScript/Vue production code
+
+  # Branch guard — abort commit if stash/pop silently switched branches (Issue #1670)
+  # Runs at prepare-commit-msg stage (AFTER stash/pop) to compare the current
+  # branch against the branch recorded by record-branch (BEFORE stash/pop).
+  # Exits non-zero to ABORT the commit if they differ.
+  - repo: local
+    hooks:
+      - id: branch-guard
+        name: Branch Guard — Abort on Silent Branch Switch (Issue #1670)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-branch-guard
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [prepare-commit-msg]
+        description: "Aborts commit if pre-commit stash/pop silently switched the active branch"
+
+  # Warn when untracked source files exist at commit time (Issue #1503)
+  # Runs at prepare-commit-msg stage — AFTER the pre-commit stash/restore cycle —
+  # so it can detect untracked files that survived or were restored by the stash pop.
+  - repo: local
+    hooks:
+      - id: warn-untracked-files
+        name: Warn on Untracked Source Files (Issue #1503)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-warn-untracked
+        language: script
+        pass_filenames: false
+        stages: [prepare-commit-msg]
+        description: >
+          Warns when untracked non-gitignored source files coexist with a commit.
+          pre-commit stash/restore can accidentally stage these files from other branches.
+          Fix: use git worktree add .worktrees/feat-XXXX for parallel branch work.
+
+  # Bootstrap: install post-checkout hook from tracked source (Issue #1692)
+  # The post-checkout hook cannot bootstrap itself (chicken-and-egg).
+  # This pre-commit hook copies the canonical source into .git/hooks/
+  # on every commit, ensuring new clones and worktrees get the hook.
+  - repo: local
+    hooks:
+      - id: install-post-checkout
+        name: Install post-checkout hook (Issue #1692)
+        entry: bash -c 'SRC="scripts/hooks/post-checkout"; DST="$(git rev-parse --git-common-dir)/hooks/post-checkout"; [ -f "$SRC" ] && { [ ! -f "$DST" ] || ! diff -q "$SRC" "$DST" >/dev/null 2>&1; } && cp "$SRC" "$DST" && chmod +x "$DST" && echo "post-checkout hook installed" || true'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Copies tracked post-checkout hook into .git/hooks/ so it runs on checkout and worktree creation"
+
+  # Bootstrap: install post-commit hook from tracked source (Issue #2416)
+  # Mirrors the install-post-checkout pattern above. The post-commit hook
+  # auto-heals working tree files corrupted by pre-commit's stash/pop cycle.
+  - repo: local
+    hooks:
+      - id: install-post-commit
+        name: Install post-commit hook (Issue #2416)
+        entry: bash -c 'SRC="scripts/hooks/post-commit"; DST="$(git rev-parse --git-common-dir)/hooks/post-commit"; [ -f "$SRC" ] && { [ ! -f "$DST" ] || ! diff -q "$SRC" "$DST" >/dev/null 2>&1; } && cp "$SRC" "$DST" && chmod +x "$DST" && echo "post-commit hook installed" || true'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Copies tracked post-commit hook into .git/hooks/ so it heals stash-pop conflicts"
+
+# Configuration for specific file types
+default_language_version:
+  python: python3
+
+exclude: |
+  (?x)^(
+      node_modules/.*|
+      \.venv/.*|
+      venv/.*|
+      __pycache__/.*|
+      \.git/.*|
+      temp/.*|
+      logs/.*|
+      reports/.*|
+      archive/.*|
+      .*\.log|
+      .*\.pyc|
+      .*\.pyo
+  )$

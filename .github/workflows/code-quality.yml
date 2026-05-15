@@ -1,0 +1,168 @@
+# GitHub Actions workflow for code quality enforcement
+# Runs on every push and pull request
+
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, Dev_new_gui, develop ]
+    paths: &cq_paths
+      - '**/*.py'
+      - '**/requirements*.txt'
+      - 'requirements-ci/**'
+      - 'pyproject.toml'
+      - '.flake8'
+      - '.bandit'
+      - '.pre-commit-config.yaml'
+      - 'pipeline-scripts/**'
+      - 'tools/lint/**'
+      - 'autobot-infrastructure/shared/scripts/hooks/**'
+      - 'autobot-infrastructure/ansible/roles/slm_agent/files/**'
+      - 'docs/developer/**'
+      - '.github/workflows/code-quality.yml'
+  pull_request:
+    branches: [ main, Dev_new_gui, develop ]
+    paths: *cq_paths
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+
+permissions:
+  contents: read
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # Pin versions to match .pre-commit-config.yaml (Issue #2128)
+        python -m pip install black==26.3.1 isort==8.0.1 flake8==7.3.0 autoflake==2.3.3 'bandit[toml]==1.9.4'
+
+    - name: Check code formatting with Black
+      run: |
+        python3 -m black --check --line-length=120 autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
+          echo "Black formatting check failed"
+          echo "Run 'python3 -m black --line-length=120 autobot-backend/ autobot-slm-backend/ autobot_shared/' to fix"
+          exit 1
+        }
+
+    - name: Check import sorting with isort
+      run: |
+        # Use --settings-path to read pyproject.toml (profile, src_paths, known_first_party) (#2679)
+        python3 -m isort --check-only --settings-path=. --line-length=120 autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
+          echo "isort check failed"
+          echo "Run 'python3 -m isort --settings-path=. --line-length=120 autobot-backend/ autobot-slm-backend/ autobot_shared/' to fix"
+          exit 1
+        }
+
+    - name: Lint with flake8
+      run: |
+        # Uses .flake8 config for consistency with pre-commit (Issue #2128)
+        python3 -m flake8 --config=.flake8 autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
+          echo "⚠️ flake8 linting issues found"
+          exit 1
+        }
+
+    - name: Block datetime.utcnow().isoformat() regressions (#5178 #5238 #5268)
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        # Pre-commit covers local dev — this CI step closes the bypass gap
+        # (devs without pre-commit installed, or `--no-verify` users).
+        # Changed-files-only mode mirrors pre-commit semantics: doesn't
+        # block on the 59 pre-existing violations tracked by #5263.
+        # After #5263 closes, swap to full-scan mode (no argv).
+        if [ -n "${BASE_SHA:-}" ]; then
+          # PR context — diff against the merge base
+          base="$BASE_SHA"
+        else
+          # Push context — diff against the previous commit on the branch
+          base="${HEAD_SHA}^"
+        fi
+        # `git diff --name-only` may return non-existent paths (deleted
+        # files); filter to existing .py files before passing to the hook.
+        files=$(git diff --name-only "$base" "$HEAD_SHA" -- '*.py' \
+          | while read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done \
+          || true)
+        if [ -z "$files" ]; then
+          echo "No changed Python files — skipping #5178 regression check."
+          exit 0
+        fi
+        echo "Checking $(echo "$files" | wc -l) changed .py file(s) for banned patterns..."
+        echo "$files" | xargs python3 tools/lint/check_no_utcnow_isoformat.py
+
+    - name: Block hardcoded value regressions (#694, #6725)
+      run: bash pipeline-scripts/check-hardcoded-values-pr.sh
+
+    - name: Block hardcoded-IP fallback regressions (#6783)
+      run: bash pipeline-scripts/check-hardcoded-ip-fallbacks-pr.sh
+
+    - name: Block direct redis client regressions (#1086, #6785)
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-direct-redis
+
+    - name: Block print/console regressions (#1082, #6785)
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-print-console
+
+    - name: Check for unused imports with autoflake
+      run: |
+        python3 -m autoflake --check --recursive \
+          --remove-all-unused-imports \
+          --remove-unused-variables \
+          --expand-star-imports \
+          --ignore-init-module-imports \
+          autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
+          echo "⚠️ Unused imports/variables detected"
+          exit 1
+        }
+
+    - name: Security check with bandit
+      run: |
+        python3 -m bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
+          echo "⚠️ Security issues detected - review bandit output"
+          exit 1
+        }
+
+    - name: Check Ansible agent code drift (#1629)
+      run: |
+        bash pipeline-scripts/detect-agent-code-drift.sh || {
+          echo "Ansible slm_agent role has drifted from canonical source"
+          echo "See Issue #1629 for details"
+          exit 1
+        }
+
+
+    - name: Check developer docs reference existing files (#3425)
+      run: |
+        python3 pipeline-scripts/check-doc-references.py || {
+          echo "One or more developer docs reference files that no longer exist."
+          echo "Update the doc to point to the current file path."
+          exit 1
+        }
+
+    - name: Code quality summary
+      if: always()
+      run: |
+        echo "Code Quality Check Complete"
+        echo ""
+        echo "All checks enforce strict mode — failures will block the pipeline."
+
+    - name: Cleanup virtual environment
+      if: always()
+      run: |
+        rm -rf .venv || true

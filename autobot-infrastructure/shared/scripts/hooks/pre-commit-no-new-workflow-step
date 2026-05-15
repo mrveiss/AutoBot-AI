@@ -1,0 +1,149 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Pre-commit Hook: No New WorkflowStep / AgentTask / WorkflowPlan Outside Canonical Location
+# ==========================================================================================
+#
+# Issue #6951 — consolidates duplicate workflow shapes onto the canonical
+# autobot_shared.workflow.{WorkflowTask, WorkflowPlan} types. New modules MUST
+# either:
+#   1. Import the canonical type:
+#        from autobot_shared.workflow import WorkflowTask, WorkflowPlan
+#   2. Subclass for domain-specific behaviour (lifecycle methods, extra fields):
+#        class MyTask(WorkflowTask):
+#            def my_method(self) -> None: ...
+#   3. Alias for transitional compat:
+#        WorkflowStep = WorkflowTask
+#
+# This hook blocks commits that add NEW top-level dataclass declarations of
+# `class WorkflowStep:` / `class AgentTask:` / `class WorkflowPlan:` (no base
+# class) outside the exempt locations.
+#
+# Allowed patterns (NOT blocked):
+#   - `class WorkflowStep(WorkflowTask):`         — subclass (parens before colon)
+#   - `WorkflowStep = WorkflowTask`               — alias (no `class` keyword)
+#   - Lines under EXEMPT_PATHS below
+#
+# Exempt locations (canonical + 3 documented domain shapes per #6951 audit):
+#   - autobot_shared/workflow/types.py                            (canonical)
+#   - autobot-backend/services/workflow_automation/models.py      (shell+vision execution)
+#   - autobot-backend/agents/overseer/types.py                    (multi-step decomposition)
+#
+# Suppression: append `# noqa: workflow-shape` to the offending line (last resort).
+#
+# Install: pre-commit install (uses .pre-commit-config.yaml)
+
+set -uo pipefail
+
+# Source shared library (#7185 — colors + get_staged_files).
+# This hook reads `git diff --cached -U0` (line-level diff) rather than a file
+# list, so get_staged_files isn't applicable; only colors are reused.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/_common.sh
+source "$SCRIPT_DIR/lib/_common.sh"
+
+EXEMPT_PATHS=(
+    "autobot_shared/workflow/types.py"
+    "autobot-backend/services/workflow_automation/models.py"
+    "autobot-backend/agents/overseer/types.py"
+)
+
+is_exempt() {
+    local path="$1"
+    for exempt in "${EXEMPT_PATHS[@]}"; do
+        if [[ "$path" == "$exempt" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Pull every "+ class WorkflowStep:" / "+ class AgentTask:" / "+ class WorkflowPlan:"
+# line that is not a removal, not a hunk header, not a subclass declaration
+# (no parens before the colon), and not a noqa-suppressed line.
+collect_violations() {
+    git diff --cached --no-color -U0 -- '*.py' 2>/dev/null | \
+    awk '
+        /^diff --git/ {
+            file = ""
+            next
+        }
+        /^\+\+\+ b\// {
+            file = substr($0, 7)
+            next
+        }
+        /^@@ / {
+            match($0, /\+[0-9]+/)
+            new_lineno = substr($0, RSTART + 1, RLENGTH - 1) + 0
+            next
+        }
+        /^\+/ && !/^\+\+\+/ {
+            line = substr($0, 2)
+            # Match "class WorkflowStep:" (top-level, no base class — parens absent)
+            # Reject if line contains parens before the colon (= subclass).
+            if (match(line, /^class[[:space:]]+(WorkflowStep|AgentTask|WorkflowPlan)[[:space:]]*:/)) {
+                if (line !~ /#[[:space:]]*noqa:.*workflow-shape/) {
+                    printf "%s\t%d\t%s\n", file, new_lineno, line
+                }
+            }
+            new_lineno++
+            next
+        }
+    '
+}
+
+main() {
+    echo -e "${BOLD}${CYAN}Pre-commit: No New WorkflowStep/AgentTask/WorkflowPlan Outside Canonical Location${NC}"
+    echo "Issue #6951 — Workflow Type Consolidation"
+    echo "================================================"
+    echo ""
+
+    local violations
+    violations=$(collect_violations)
+
+    if [[ -z "$violations" ]]; then
+        echo -e "${GREEN}No new top-level workflow-shape declarations detected.${NC}"
+        exit 0
+    fi
+
+    local count=0
+    while IFS=$'\t' read -r path lineno text; do
+        if is_exempt "$path"; then
+            continue
+        fi
+        echo -e "  ${RED}VIOLATION${NC} ${path}:${lineno}"
+        echo "    ${text}"
+        ((count++))
+    done <<< "$violations"
+
+    echo ""
+    echo "================================================"
+
+    if (( count > 0 )); then
+        echo -e "${RED}COMMIT BLOCKED: $count new top-level workflow-shape declaration(s) found${NC}"
+        echo ""
+        echo "Quick fix — import the canonical type instead of redeclaring it:"
+        echo ""
+        echo "  from autobot_shared.workflow import WorkflowTask, WorkflowPlan"
+        echo ""
+        echo "  # Option 1: alias for transitional compat"
+        echo "  WorkflowStep = WorkflowTask"
+        echo ""
+        echo "  # Option 2: subclass for domain-specific behaviour"
+        echo "  class MyTask(WorkflowTask):"
+        echo "      def my_lifecycle_method(self) -> None: ..."
+        echo ""
+        echo "Suppression (last resort): append '# noqa: workflow-shape' to the class line."
+        echo ""
+        echo "See #6951 for the consolidation context and #7014 for this hook."
+        echo ""
+        exit 1
+    fi
+
+    echo -e "${GREEN}All new workflow-shape declarations are in exempt files.${NC}"
+    exit 0
+}
+
+main "$@"

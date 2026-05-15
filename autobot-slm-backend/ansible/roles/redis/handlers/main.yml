@@ -1,0 +1,29 @@
+---
+# Redis role handlers
+
+- name: restart redis-stack
+  systemd:
+    name: redis-stack-server
+    state: restarted
+  become: yes
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+  become: yes
+
+- name: reload firewall
+  ufw:
+    state: reloaded
+  become: yes
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: yes
+
+- name: Restart redis_exporter
+  ansible.builtin.systemd:
+    name: redis_exporter
+    state: restarted
+  become: yes

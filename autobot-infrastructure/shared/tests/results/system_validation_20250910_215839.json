@@ -1,0 +1,421 @@
+{
+  "summary": {
+    "test_summary": {
+      "total_tests": 30,
+      "passed": 26,
+      "failed": 1,
+      "warnings": 3,
+      "skipped": 0,
+      "success_rate": "86.7%"
+    },
+    "execution_info": {
+      "total_duration": "1.54s",
+      "timestamp": "2025-09-10T21:58:39.841261",
+      "hostname": "MV-Stealth"
+    },
+    "critical_issues": [
+      "Docker Services Status"
+    ],
+    "warnings": [
+      "Router Registry - Disabled",
+      "Knowledge Base Content",
+      "Knowledge Base Search"
+    ]
+  },
+  "detailed_results": [
+    {
+      "test_name": "Port Connectivity - Backend API",
+      "status": "pass",
+      "message": "172.16.168.20:8001 is accessible",
+      "duration": 0.002897500991821289,
+      "details": {
+        "host": "172.16.168.20",
+        "port": 8001,
+        "response_time": "< 3s"
+      },
+      "timestamp": "2025-09-10T21:58:38.304536"
+    },
+    {
+      "test_name": "Port Connectivity - Redis Database",
+      "status": "pass",
+      "message": "172.16.168.23:6379 is accessible",
+      "duration": 0.004885673522949219,
+      "details": {
+        "host": "172.16.168.23",
+        "port": 6379,
+        "response_time": "< 3s"
+      },
+      "timestamp": "2025-09-10T21:58:38.306525"
+    },
+    {
+      "test_name": "Port Connectivity - Frontend Server",
+      "status": "pass",
+      "message": "172.16.168.21:5173 is accessible",
+      "duration": 0.006816864013671875,
+      "details": {
+        "host": "172.16.168.21",
+        "port": 5173,
+        "response_time": "< 3s"
+      },
+      "timestamp": "2025-09-10T21:58:38.308455"
+    },
+    {
+      "test_name": "Port Connectivity - NPU Worker",
+      "status": "pass",
+      "message": "172.16.168.22:8081 is accessible",
+      "duration": 0.009140729904174805,
+      "details": {
+        "host": "172.16.168.22",
+        "port": 8081,
+        "response_time": "< 3s"
+      },
+      "timestamp": "2025-09-10T21:58:38.310781"
+    },
+    {
+      "test_name": "Port Connectivity - AI Stack",
+      "status": "pass",
+      "message": "172.16.168.24:8080 is accessible",
+      "duration": 0.011143922805786133,
+      "details": {
+        "host": "172.16.168.24",
+        "port": 8080,
+        "response_time": "< 3s"
+      },
+      "timestamp": "2025-09-10T21:58:38.312783"
+    },
+    {
+      "test_name": "Port Connectivity - Browser Service",
+      "status": "pass",
+      "message": "172.16.168.25:3000 is accessible",
+      "duration": 0.013132572174072266,
+      "details": {
+        "host": "172.16.168.25",
+        "port": 3000,
+        "response_time": "< 3s"
+      },
+      "timestamp": "2025-09-10T21:58:38.314773"
+    },
+    {
+      "test_name": "Infrastructure Summary",
+      "status": "pass",
+      "message": "All 6 services accessible",
+      "duration": 0.013257265090942383,
+      "details": {
+        "connected": 6,
+        "total": 6
+      },
+      "timestamp": "2025-09-10T21:58:38.314890"
+    },
+    {
+      "test_name": "Port Connectivity - Backend API",
+      "status": "pass",
+      "message": "172.16.168.20:8001 is accessible",
+      "duration": 0.014939069747924805,
+      "details": {
+        "host": "172.16.168.20",
+        "port": 8001,
+        "response_time": "< 3s"
+      },
+      "timestamp": "2025-09-10T21:58:38.316583"
+    },
+    {
+      "test_name": "API Endpoint - Health Check",
+      "status": "pass",
+      "message": "HTTP 200 - Response time: 0.03s",
+      "duration": 0.31392836570739746,
+      "details": {
+        "url": "http://172.16.168.20:8001/api/health",
+        "status_code": 200,
+        "response_time": "0.03s",
+        "content_length": 145
+      },
+      "timestamp": "2025-09-10T21:58:38.615567"
+    },
+    {
+      "test_name": "API Endpoint - Router Registry",
+      "status": "pass",
+      "message": "HTTP 200 - Response time: 0.02s",
+      "duration": 0.33504152297973633,
+      "details": {
+        "url": "http://172.16.168.20:8001/api/endpoints",
+        "status_code": 200,
+        "response_time": "0.02s",
+        "content_length": 5737
+      },
+      "timestamp": "2025-09-10T21:58:38.636682"
+    },
+    {
+      "test_name": "API Endpoint - Knowledge Base Stats",
+      "status": "pass",
+      "message": "HTTP 200 - Response time: 0.01s",
+      "duration": 0.34975481033325195,
+      "details": {
+        "url": "http://172.16.168.20:8001/api/knowledge_base/stats/basic",
+        "status_code": 200,
+        "response_time": "0.01s",
+        "content_length": 208
+      },
+      "timestamp": "2025-09-10T21:58:38.651391"
+    },
+    {
+      "test_name": "API Endpoint - LLM Status",
+      "status": "pass",
+      "message": "HTTP 200 - Response time: 0.01s",
+      "duration": 0.36289310455322266,
+      "details": {
+        "url": "http://172.16.168.20:8001/api/llm/status",
+        "status_code": 200,
+        "response_time": "0.01s",
+        "content_length": 119
+      },
+      "timestamp": "2025-09-10T21:58:38.664530"
+    },
+    {
+      "test_name": "API Endpoint - System Status",
+      "status": "pass",
+      "message": "HTTP 200 - Response time: 0.02s",
+      "duration": 0.37900519371032715,
+      "details": {
+        "url": "http://172.16.168.20:8001/api/system/status",
+        "status_code": 200,
+        "response_time": "0.02s",
+        "content_length": 282
+      },
+      "timestamp": "2025-09-10T21:58:38.680643"
+    },
+    {
+      "test_name": "API Endpoint - WebSocket Health",
+      "status": "pass",
+      "message": "HTTP 200 - Response time: 0.02s",
+      "duration": 0.3955674171447754,
+      "details": {
+        "url": "http://172.16.168.20:8001/ws/health",
+        "status_code": 200,
+        "response_time": "0.02s",
+        "content_length": 93
+      },
+      "timestamp": "2025-09-10T21:58:38.697205"
+    },
+    {
+      "test_name": "API Endpoint - Chat Health",
+      "status": "pass",
+      "message": "HTTP 200 - Response time: 0.01s",
+      "duration": 0.41047191619873047,
+      "details": {
+        "url": "http://172.16.168.20:8001/api/chat/health",
+        "status_code": 200,
+        "response_time": "0.01s",
+        "content_length": 67
+      },
+      "timestamp": "2025-09-10T21:58:38.712112"
+    },
+    {
+      "test_name": "Router Registry - Enabled",
+      "status": "pass",
+      "message": "29 routers enabled",
+      "duration": 0.4261629581451416,
+      "details": {
+        "count": 29,
+        "routers": [
+          "system",
+          "async_chat",
+          "settings",
+          "cache",
+          "rum",
+          "developer",
+          "chat",
+          "websockets",
+          "knowledge",
+          "chat_knowledge",
+          "agent_config",
+          "prompts",
+          "llm",
+          "files",
+          "templates",
+          "secrets",
+          "playwright",
+          "terminal",
+          "logs",
+          "batch",
+          "service_monitor",
+          "infrastructure_monitor",
+          "monitoring_alerts",
+          "system_validation",
+          "validation_dashboard",
+          "intelligent_agent",
+          "knowledge_mcp",
+          "research_browser",
+          "hot_reload"
+        ]
+      },
+      "timestamp": "2025-09-10T21:58:38.727807"
+    },
+    {
+      "test_name": "Router Registry - Disabled",
+      "status": "warning",
+      "message": "3 routers disabled",
+      "duration": 0.4265916347503662,
+      "details": {
+        "count": 3,
+        "routers": [
+          "workflow",
+          "monitoring",
+          "startup"
+        ]
+      },
+      "timestamp": "2025-09-10T21:58:38.728231"
+    },
+    {
+      "test_name": "Router Registry - Lazy Load",
+      "status": "pass",
+      "message": "3 routers set for lazy loading",
+      "duration": 0.42669129371643066,
+      "details": {
+        "count": 3,
+        "routers": [
+          "chat_knowledge",
+          "llm",
+          "intelligent_agent"
+        ]
+      },
+      "timestamp": "2025-09-10T21:58:38.728325"
+    },
+    {
+      "test_name": "Chat Router Configuration",
+      "status": "pass",
+      "message": "Chat router loaded with prefix /api/chat",
+      "duration": 0.4267406463623047,
+      "details": {
+        "prefix": "/api/chat",
+        "tags": [
+          "chat",
+          "messaging"
+        ]
+      },
+      "timestamp": "2025-09-10T21:58:38.728374"
+    },
+    {
+      "test_name": "Port Connectivity - Backend API",
+      "status": "pass",
+      "message": "172.16.168.20:8001 is accessible",
+      "duration": 0.42955875396728516,
+      "details": {
+        "host": "172.16.168.20",
+        "port": 8001,
+        "response_time": "< 2s"
+      },
+      "timestamp": "2025-09-10T21:58:38.731199"
+    },
+    {
+      "test_name": "Knowledge Base Stats",
+      "status": "pass",
+      "message": "Retrieved knowledge base statistics",
+      "duration": 0.44770026206970215,
+      "details": {
+        "total_documents": 1000,
+        "total_chunks": 5000,
+        "total_facts": 100
+      },
+      "timestamp": "2025-09-10T21:58:38.749341"
+    },
+    {
+      "test_name": "Knowledge Base Content",
+      "status": "warning",
+      "message": "Knowledge base has limited content: 1000 documents",
+      "duration": 0.44778919219970703,
+      "details": {
+        "document_count": 1000
+      },
+      "timestamp": "2025-09-10T21:58:38.749422"
+    },
+    {
+      "test_name": "Knowledge Base Search",
+      "status": "warning",
+      "message": "Search returned 0 results",
+      "duration": 1.129798173904419,
+      "details": {
+        "query": "Redis configuration",
+        "results_count": 0
+      },
+      "timestamp": "2025-09-10T21:58:39.431437"
+    },
+    {
+      "test_name": "Port Connectivity - Backend API",
+      "status": "pass",
+      "message": "172.16.168.20:8001 is accessible",
+      "duration": 1.1315033435821533,
+      "details": {
+        "host": "172.16.168.20",
+        "port": 8001,
+        "response_time": "< 2s"
+      },
+      "timestamp": "2025-09-10T21:58:39.433149"
+    },
+    {
+      "test_name": "LLM Status Check",
+      "status": "pass",
+      "message": "LLM status endpoint accessible",
+      "duration": 1.1404788494110107,
+      "details": {
+        "response": {
+          "status": "connected",
+          "provider_type": "local",
+          "model": "llama3.2:1b-instruct-q4_K_M",
+          "timestamp": "2025-08-18T10:31:00Z"
+        }
+      },
+      "timestamp": "2025-09-10T21:58:39.442114"
+    },
+    {
+      "test_name": "LLM Models Available",
+      "status": "pass",
+      "message": "12 models available",
+      "duration": 1.1594092845916748,
+      "details": {
+        "model_count": 12
+      },
+      "timestamp": "2025-09-10T21:58:39.461046"
+    },
+    {
+      "test_name": "System CPU Usage",
+      "status": "pass",
+      "message": "CPU information retrieved",
+      "duration": 1.380782127380371,
+      "details": {
+        "cpu_info": "%Cpu(s):  5.1 us,  2.1 sy,  0.0 ni, 92.3 id,  0.0 wa,  0.0 hi,  0.4 si,  0.0 st"
+      },
+      "timestamp": "2025-09-10T21:58:39.682421"
+    },
+    {
+      "test_name": "System Memory Usage",
+      "status": "pass",
+      "message": "Memory information retrieved",
+      "duration": 1.3808436393737793,
+      "details": {
+        "memory_info": "MiB Mem :  47916.6 total,  30844.7 free,  13576.4 used,   4073.9 buff/cache"
+      },
+      "timestamp": "2025-09-10T21:58:39.682476"
+    },
+    {
+      "test_name": "System Disk Usage",
+      "status": "pass",
+      "message": "Disk information retrieved",
+      "duration": 1.385307788848877,
+      "details": {
+        "disk_info": "/dev/sdd       1007G  103G  854G  11% /"
+      },
+      "timestamp": "2025-09-10T21:58:39.686946"
+    },
+    {
+      "test_name": "Docker Services Status",
+      "status": "fail",
+      "message": "Docker command failed with exit code 1",
+      "duration": 1.539487600326538,
+      "details": {
+        "exit_code": 1,
+        "error": ""
+      },
+      "timestamp": "2025-09-10T21:58:39.841126"
+    }
+  ]
+}

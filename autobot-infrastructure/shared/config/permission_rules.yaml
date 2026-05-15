@@ -1,0 +1,492 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Permission Rules Configuration - Claude Code Style
+# ==================================================
+#
+# This file defines default permission rules for command execution.
+# Rules follow the pattern: tool(pattern) -> action
+#
+# Actions:
+#   - allow: Auto-approve matching commands (no prompt)
+#   - ask: Always prompt for approval (even if normally safe)
+#   - deny: Block matching commands completely
+#
+# Precedence: DENY > ASK > ALLOW > DEFAULT (risk-based)
+#
+# Pattern Syntax:
+#   - "*" matches any characters (glob-style)
+#   - "?" matches single character
+#   - Patterns are case-sensitive
+#
+# Security Note:
+#   - Adding ALLOW rules for dangerous commands requires admin privileges
+#   - Users cannot override DENY rules without admin privileges
+#
+# Issue: Permission System v2 - Claude Code Style
+
+version: "1.0"
+description: "AutoBot Permission Rules - Default Configuration"
+
+# =============================================================================
+# DEFAULT RULES - Applied to all projects unless overridden
+# =============================================================================
+
+default_rules:
+  # -------------------------------------------------------------------------
+  # ALLOW Rules - Auto-approve these commands without prompting
+  # -------------------------------------------------------------------------
+  allow:
+    # File viewing (read-only)
+    - tool: Bash
+      pattern: "ls *"
+      description: "List files and directories"
+    - tool: Bash
+      pattern: "cat *"
+      description: "View file contents"
+    - tool: Bash
+      pattern: "head *"
+      description: "View file beginning"
+    - tool: Bash
+      pattern: "tail *"
+      description: "View file end"
+    - tool: Bash
+      pattern: "less *"
+      description: "Page through file"
+    - tool: Bash
+      pattern: "more *"
+      description: "Page through file"
+    - tool: Bash
+      pattern: "wc *"
+      description: "Word count"
+    - tool: Bash
+      pattern: "file *"
+      description: "Determine file type"
+
+    # Directory navigation
+    - tool: Bash
+      pattern: "pwd"
+      description: "Print working directory"
+    - tool: Bash
+      pattern: "cd *"
+      description: "Change directory"
+    - tool: Bash
+      pattern: "tree *"
+      description: "Directory tree view"
+
+    # Search operations
+    - tool: Bash
+      pattern: "find *"
+      description: "Find files"
+    - tool: Bash
+      pattern: "grep *"
+      description: "Search file contents"
+    - tool: Bash
+      pattern: "rg *"
+      description: "Ripgrep search"
+    - tool: Bash
+      pattern: "ag *"
+      description: "Silver searcher"
+    - tool: Bash
+      pattern: "which *"
+      description: "Locate command"
+    - tool: Bash
+      pattern: "whereis *"
+      description: "Locate binary"
+
+    # System info (read-only)
+    - tool: Bash
+      pattern: "date"
+      description: "Show date/time"
+    - tool: Bash
+      pattern: "whoami"
+      description: "Current user"
+    - tool: Bash
+      pattern: "hostname"
+      description: "System hostname"
+    - tool: Bash
+      pattern: "uname *"
+      description: "System information"
+    - tool: Bash
+      pattern: "uptime"
+      description: "System uptime"
+    - tool: Bash
+      pattern: "df *"
+      description: "Disk space"
+    - tool: Bash
+      pattern: "du *"
+      description: "Directory size"
+    - tool: Bash
+      pattern: "free *"
+      description: "Memory usage"
+    - tool: Bash
+      pattern: "ps *"
+      description: "Process list"
+    - tool: Bash
+      pattern: "top -b *"
+      description: "Process monitor (batch)"
+    - tool: Bash
+      pattern: "env"
+      description: "Environment variables"
+    - tool: Bash
+      pattern: "printenv *"
+      description: "Print environment"
+
+    # Git read operations
+    - tool: Bash
+      pattern: "git status"
+      description: "Git status"
+    - tool: Bash
+      pattern: "git status *"
+      description: "Git status with options"
+    - tool: Bash
+      pattern: "git log *"
+      description: "Git log"
+    - tool: Bash
+      pattern: "git diff *"
+      description: "Git diff"
+    - tool: Bash
+      pattern: "git show *"
+      description: "Git show commit"
+    - tool: Bash
+      pattern: "git branch *"
+      description: "Git branches"
+    - tool: Bash
+      pattern: "git remote *"
+      description: "Git remotes"
+    - tool: Bash
+      pattern: "git config --list"
+      description: "Git config list"
+
+    # Package info (read-only)
+    - tool: Bash
+      pattern: "npm list *"
+      description: "NPM package list"
+    - tool: Bash
+      pattern: "npm view *"
+      description: "NPM package info"
+    - tool: Bash
+      pattern: "pip list"
+      description: "Python packages"
+    - tool: Bash
+      pattern: "pip show *"
+      description: "Python package info"
+    - tool: Bash
+      pattern: "python --version"
+      description: "Python version"
+    - tool: Bash
+      pattern: "node --version"
+      description: "Node version"
+
+    # Text processing (non-destructive)
+    - tool: Bash
+      pattern: "sort *"
+      description: "Sort lines"
+    - tool: Bash
+      pattern: "uniq *"
+      description: "Filter duplicates"
+    - tool: Bash
+      pattern: "cut *"
+      description: "Cut columns"
+    - tool: Bash
+      pattern: "awk *"
+      description: "Text processing"
+    - tool: Bash
+      pattern: "sed -n *"
+      description: "Sed print only"
+
+    # Echo/print (safe)
+    - tool: Bash
+      pattern: "echo *"
+      description: "Print text"
+    - tool: Bash
+      pattern: "printf *"
+      description: "Formatted print"
+
+  # -------------------------------------------------------------------------
+  # ASK Rules - Always prompt for these commands (even if normally safe)
+  # -------------------------------------------------------------------------
+  ask:
+    # Network operations
+    - tool: Bash
+      pattern: "curl *"
+      description: "HTTP requests - may send data"
+    - tool: Bash
+      pattern: "wget *"
+      description: "Download files"
+    - tool: Bash
+      pattern: "ping *"
+      description: "Network ping"
+    - tool: Bash
+      pattern: "nc *"
+      description: "Netcat"
+    - tool: Bash
+      pattern: "nmap *"
+      description: "Network scanning"
+    - tool: Bash
+      pattern: "ssh *"
+      description: "SSH connection"
+    - tool: Bash
+      pattern: "scp *"
+      description: "Secure copy"
+    - tool: Bash
+      pattern: "rsync *"
+      description: "Remote sync"
+
+    # Git write operations
+    - tool: Bash
+      pattern: "git push *"
+      description: "Push to remote"
+    - tool: Bash
+      pattern: "git commit *"
+      description: "Commit changes"
+    - tool: Bash
+      pattern: "git add *"
+      description: "Stage files"
+    - tool: Bash
+      pattern: "git checkout *"
+      description: "Switch branches/restore"
+    - tool: Bash
+      pattern: "git merge *"
+      description: "Merge branches"
+    - tool: Bash
+      pattern: "git rebase *"
+      description: "Rebase commits"
+    - tool: Bash
+      pattern: "git reset *"
+      description: "Reset changes"
+    - tool: Bash
+      pattern: "git stash *"
+      description: "Stash changes"
+
+    # File modifications
+    - tool: Bash
+      pattern: "cp *"
+      description: "Copy files"
+    - tool: Bash
+      pattern: "mv *"
+      description: "Move/rename files"
+    - tool: Bash
+      pattern: "mkdir *"
+      description: "Create directory"
+    - tool: Bash
+      pattern: "touch *"
+      description: "Create/update file"
+    - tool: Bash
+      pattern: "chmod *"
+      description: "Change permissions"
+    - tool: Bash
+      pattern: "chown *"
+      description: "Change ownership"
+
+    # Package installation
+    - tool: Bash
+      pattern: "npm install *"
+      description: "Install NPM packages"
+    - tool: Bash
+      pattern: "npm update *"
+      description: "Update NPM packages"
+    - tool: Bash
+      pattern: "pip install *"
+      description: "Install Python packages"
+    - tool: Bash
+      pattern: "pip uninstall *"
+      description: "Uninstall Python packages"
+
+    # Archive operations
+    - tool: Bash
+      pattern: "tar *"
+      description: "Archive operations"
+    - tool: Bash
+      pattern: "zip *"
+      description: "Zip files"
+    - tool: Bash
+      pattern: "unzip *"
+      description: "Unzip files"
+    - tool: Bash
+      pattern: "gzip *"
+      description: "Gzip compression"
+    - tool: Bash
+      pattern: "gunzip *"
+      description: "Gzip decompression"
+
+    # Script execution
+    - tool: Bash
+      pattern: "python *"
+      description: "Run Python script"
+    - tool: Bash
+      pattern: "python3 *"
+      description: "Run Python 3 script"
+    - tool: Bash
+      pattern: "node *"
+      description: "Run Node script"
+    - tool: Bash
+      pattern: "bash *"
+      description: "Run bash script"
+    - tool: Bash
+      pattern: "sh *"
+      description: "Run shell script"
+    - tool: Bash
+      pattern: "./*"
+      description: "Execute local script"
+
+    # Build/test commands
+    - tool: Bash
+      pattern: "npm run *"
+      description: "NPM scripts"
+    - tool: Bash
+      pattern: "npm test *"
+      description: "NPM tests"
+    - tool: Bash
+      pattern: "npm build *"
+      description: "NPM build"
+    - tool: Bash
+      pattern: "pytest *"
+      description: "Python tests"
+    - tool: Bash
+      pattern: "make *"
+      description: "Make targets"
+
+    # Text editing (may modify files)
+    - tool: Bash
+      pattern: "sed -i *"
+      description: "Sed in-place edit"
+    - tool: Bash
+      pattern: "nano *"
+      description: "Nano editor"
+    - tool: Bash
+      pattern: "vim *"
+      description: "Vim editor"
+    - tool: Bash
+      pattern: "vi *"
+      description: "Vi editor"
+
+  # -------------------------------------------------------------------------
+  # DENY Rules - Block these commands completely
+  # -------------------------------------------------------------------------
+  deny:
+    # Destructive file operations
+    - tool: Bash
+      pattern: "rm -rf /*"
+      description: "Recursive root deletion - EXTREMELY DANGEROUS"
+    - tool: Bash
+      pattern: "rm -rf /"
+      description: "Root deletion - EXTREMELY DANGEROUS"
+    - tool: Bash
+      pattern: "rm -rf ~/*"
+      description: "Home directory deletion - DANGEROUS"
+    - tool: Bash
+      pattern: "rm -rf ~"
+      description: "Home directory deletion - DANGEROUS"
+    - tool: Bash
+      pattern: "rm -rf .*"
+      description: "Hidden files deletion - DANGEROUS"
+
+    # Disk operations
+    - tool: Bash
+      pattern: "dd if=*"
+      description: "Disk dump - can destroy data"
+    - tool: Bash
+      pattern: "mkfs *"
+      description: "Format filesystem"
+    - tool: Bash
+      pattern: "fdisk *"
+      description: "Partition disk"
+    - tool: Bash
+      pattern: "parted *"
+      description: "Partition manipulation"
+
+    # System control
+    - tool: Bash
+      pattern: "shutdown *"
+      description: "System shutdown"
+    - tool: Bash
+      pattern: "reboot"
+      description: "System reboot"
+    - tool: Bash
+      pattern: "halt"
+      description: "System halt"
+    - tool: Bash
+      pattern: "poweroff"
+      description: "Power off"
+    - tool: Bash
+      pattern: "init *"
+      description: "Init level change"
+
+    # Process killing (broad)
+    - tool: Bash
+      pattern: "killall *"
+      description: "Kill all processes by name"
+    - tool: Bash
+      pattern: "pkill *"
+      description: "Pattern-based process kill"
+    - tool: Bash
+      pattern: "kill -9 -1"
+      description: "Kill all processes"
+
+    # Dangerous patterns
+    - tool: Bash
+      pattern: ":(){ :|:& };:"
+      description: "Fork bomb"
+    - tool: Bash
+      pattern: "> /dev/sd*"
+      description: "Overwrite disk device"
+    - tool: Bash
+      pattern: "mv /* *"
+      description: "Move root contents"
+    - tool: Bash
+      pattern: "chmod -R 777 /*"
+      description: "Dangerous permission change"
+    - tool: Bash
+      pattern: "chown -R * /*"
+      description: "Dangerous ownership change"
+
+    # Privilege escalation without explicit command
+    - tool: Bash
+      pattern: "sudo su"
+      description: "Switch to root"
+    - tool: Bash
+      pattern: "sudo -i"
+      description: "Root shell"
+    - tool: Bash
+      pattern: "sudo bash"
+      description: "Root bash shell"
+
+    # Sensitive file access
+    - tool: Bash
+      pattern: "cat /etc/shadow"
+      description: "Read shadow file"
+    - tool: Bash
+      pattern: "* /etc/shadow"
+      description: "Shadow file access"
+    - tool: Bash
+      pattern: "cat /etc/passwd"
+      description: "Read passwd file"
+
+    # History/credential theft
+    - tool: Bash
+      pattern: "cat ~/.bash_history"
+      description: "Read bash history"
+    - tool: Bash
+      pattern: "cat ~/.ssh/*"
+      description: "Read SSH keys"
+    - tool: Bash
+      pattern: "cat ~/.aws/*"
+      description: "Read AWS credentials"
+
+# =============================================================================
+# PROJECT-SPECIFIC RULES
+# =============================================================================
+# Override rules for specific projects (keyed by project path hash)
+# These are managed via API and stored in Redis, then synced here on save
+
+project_rules: {}
+
+# =============================================================================
+# USER-SPECIFIC RULES
+# =============================================================================
+# Per-user rule overrides (keyed by user ID)
+# These allow users to customize their own experience within admin-set limits
+
+user_rules: {}

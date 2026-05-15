@@ -1,0 +1,60 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Configure agent environment and settings
+
+- name: Create agent configuration file from template
+  template:
+    src: agent_config.yml.j2
+    dest: "{{ config_dir }}/agent_config.yml"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0640'
+  notify: restart autobot-agent
+
+- name: Create environment file for systemd service
+  template:
+    src: agent.env.j2
+    dest: "{{ config_dir }}/agent.env"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0640'
+  notify: restart autobot-agent
+
+- name: Create logging configuration
+  template:
+    src: logging.yml.j2
+    dest: "{{ config_dir }}/logging.yml"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0644'
+
+- name: Set up model cache directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'
+  loop:
+    - "{{ models_dir }}"
+    - "{{ models_dir }}/transformers"
+    - "{{ models_dir }}/huggingface"
+
+- name: Create uploads directory with proper permissions
+  file:
+    path: "{{ uploads_dir }}"
+    state: directory
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0750'
+
+- name: Set environment variables in agent profile
+  lineinfile:
+    path: "/home/{{ service_user }}/.bashrc"
+    line: "export {{ item.key }}={{ item.value }}"
+    create: yes
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+  loop: "{{ env_vars | dict2items }}"

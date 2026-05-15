@@ -1,0 +1,15 @@
+---
+# Apply UFW firewall configuration to specified hosts
+# Usage: ansible-playbook playbooks/apply-firewall.yml --limit <host>
+
+- name: Apply UFW Firewall Configuration
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Apply common role (firewall configuration)
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: main
+      tags: ['firewall', 'common']

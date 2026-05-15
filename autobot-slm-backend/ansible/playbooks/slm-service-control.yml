@@ -1,0 +1,39 @@
+---
+# SLM Service Control Playbook
+# Used by SLM API to start/stop/restart any systemd service
+# Related to Issue #728
+
+- name: "SLM Service Control"
+  hosts: target
+  gather_facts: no
+  become: yes
+
+  vars:
+    service_name: "{{ service | mandatory }}"
+    service_action: "{{ action | default('status') }}"
+
+  tasks:
+    - name: "Validate action"
+      ansible.builtin.fail:
+        msg: "Invalid action '{{ service_action }}'. Must be one of: start, stop, restart, status"
+      when: service_action not in ['start', 'stop', 'restart', 'status']
+
+    - name: "{{ service_action | capitalize }} service {{ service_name }}"
+      ansible.builtin.systemd:
+        name: "{{ service_name }}"
+        state: "{{ 'started' if service_action == 'start' else 'stopped' if service_action == 'stop' else 'restarted' if service_action == 'restart' else omit }}"
+      register: service_result
+      when: service_action != 'status'
+
+    - name: "Get service status"
+      ansible.builtin.systemd:
+        name: "{{ service_name }}"
+      register: status_result
+      when: service_action == 'status'
+
+    - name: "Output result"
+      ansible.builtin.debug:
+        msg:
+          - "Service: {{ service_name }}"
+          - "Action: {{ service_action }}"
+          - "Success: {{ 'yes' if (service_result is not failed or status_result is not failed) else 'no' }}"

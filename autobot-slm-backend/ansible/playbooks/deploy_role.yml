@@ -1,0 +1,122 @@
+---
+# Deploy Role Playbook
+# Deploy or update a specific role on target host(s)
+
+- name: "Deploy AutoBot Role"
+  hosts: "{{ target_host | default('all') }}"
+  gather_facts: yes
+  become: yes
+
+  vars:
+    deploy_timestamp: "{{ ansible_facts['date_time'].iso8601 }}"
+    deploy_role: "{{ role_name | default('common') }}"
+
+  pre_tasks:
+    - name: "Validate role_name parameter"
+      fail:
+        msg: "role_name parameter is required. Use: -e 'role_name=<role>'"
+      when: role_name is not defined
+      tags: ['always']
+
+    - name: "Display deployment information"
+      debug:
+        msg:
+          - "========================================"
+          - "AutoBot Role Deployment"
+          - "========================================"
+          - "Target Host: {{ inventory_hostname }}"
+          - "Role: {{ deploy_role }}"
+          - "IP Address: {{ ansible_facts['default_ipv4'].address | default('N/A') }}"
+          - "Timestamp: {{ deploy_timestamp }}"
+      tags: ['always']
+
+  tasks:
+    - name: "Apply Common Role"
+      include_role:
+        name: common
+      when: deploy_role == 'common'
+      tags: ['common']
+
+    - name: "Apply Frontend Role"
+      include_role:
+        name: frontend
+      when: deploy_role == 'frontend'
+      tags: ['frontend']
+
+    - name: "Apply Redis Role"
+      include_role:
+        name: redis
+      when: deploy_role == 'redis'
+      tags: ['redis']
+
+    - name: "Apply NPU Worker Role"
+      include_role:
+        name: npu-worker
+      when: deploy_role == 'npu-worker'
+      tags: ['npu-worker']
+
+    - name: "Apply TTS Worker Role"
+      include_role:
+        name: tts-worker
+      when: deploy_role == 'tts-worker'
+      tags: ['tts-worker']
+
+    - name: "Apply AI Stack Role"
+      include_role:
+        name: ai-stack
+      when: deploy_role == 'ai-stack'
+      tags: ['ai-stack']
+
+    - name: "Apply Backend Role"
+      include_role:
+        name: backend
+      when: deploy_role == 'backend'
+      tags: ['backend']
+
+    - name: "Apply Browser Role"
+      include_role:
+        name: browser
+      when: deploy_role == 'browser'
+      tags: ['browser']
+
+    - name: "Apply LLM Role"
+      include_role:
+        name: llm
+      when: deploy_role == 'llm'
+      tags: ['llm']
+
+    - name: "Apply VNC Role"
+      include_role:
+        name: vnc
+      when: deploy_role == 'vnc'
+      tags: ['vnc']
+
+    - name: "Apply Monitoring Role"
+      include_role:
+        name: monitoring
+      when: deploy_role == 'monitoring'
+      tags: ['monitoring']
+
+    - name: "Apply PostgreSQL Role"
+      include_role:
+        name: postgresql
+      when: deploy_role == 'postgresql'
+      tags: ['postgresql']
+
+    - name: "Apply SLM Manager Role"
+      include_role:
+        name: slm_manager
+      when: deploy_role == 'slm-manager'
+      tags: ['slm-manager']
+
+  post_tasks:
+    - name: "Display deployment summary"
+      debug:
+        msg:
+          - "========================================"
+          - "Role Deployment Complete"
+          - "========================================"
+          - "Host: {{ inventory_hostname }}"
+          - "Role: {{ deploy_role }}"
+          - "Status: Deployed successfully"
+      tags: ['always']

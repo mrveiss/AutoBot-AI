@@ -1,0 +1,170 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# LLM Role - Ollama LLM inference server for AutoBot
+# Issue #1040: GPU detection + conditional model pulling
+---
+
+# -----------------------------------------------------------------
+# Phase 1: GPU Detection
+# -----------------------------------------------------------------
+
+- name: "GPU | Detect NVIDIA GPU via nvidia-smi"
+  ansible.builtin.command:
+    cmd: nvidia-smi --query-gpu=name --format=csv,noheader
+  register: _nvidia_smi_result
+  changed_when: false
+  # (#2872) Intentional: nvidia-smi exits rc != 0 when no GPU is present;
+  # the result drives GPU vs CPU model selection below.
+  failed_when: false
+  when: llm_has_gpu == "auto"
+
+- name: "GPU | Set GPU fact from detection"
+  ansible.builtin.set_fact:
+    _llm_gpu_detected: >-
+      {{ _nvidia_smi_result.rc == 0
+         and _nvidia_smi_result.stdout | default('') | length > 0 }}
+  when: llm_has_gpu == "auto"
+
+- name: "GPU | Set GPU fact from override"
+  ansible.builtin.set_fact:
+    _llm_gpu_detected: "{{ llm_has_gpu | bool }}"
+  when: llm_has_gpu != "auto"
+
+- name: "GPU | Report detection result"
+  ansible.builtin.debug:
+    msg: >-
+      GPU detected: {{ _llm_gpu_detected }}
+      {% if _nvidia_smi_result is defined and _nvidia_smi_result.rc == 0 %}
+      ({{ _nvidia_smi_result.stdout | default('unknown') | trim }})
+      {% endif %}
+
+- name: "GPU | Build model list for this node"
+  ansible.builtin.set_fact:
+    _llm_models_to_pull: >-
+      {{ llm_cpu_models + (llm_gpu_models if _llm_gpu_detected | bool else []) }}
+
+- name: "GPU | Set effective concurrency for CPU-only nodes"
+  ansible.builtin.set_fact:
+    _llm_effective_max_loaded: "{{ llm_cpu_max_loaded_models }}"
+    _llm_effective_num_parallel: "{{ llm_cpu_num_parallel }}"
+    _llm_effective_keep_alive: "{{ llm_cpu_keep_alive }}"
+    _llm_effective_num_gpu: -1
+  when: not (_llm_gpu_detected | bool)
+
+- name: "GPU | Set effective concurrency for GPU nodes"
+  ansible.builtin.set_fact:
+    _llm_effective_max_loaded: "{{ llm_max_loaded_models }}"
+    _llm_effective_num_parallel: "{{ llm_num_parallel }}"
+    _llm_effective_keep_alive: "{{ llm_keep_alive }}"
+    _llm_effective_num_gpu: "{{ llm_num_gpu }}"
+  when: _llm_gpu_detected | bool
+
+- name: "GPU | Display effective configuration"
+  ansible.builtin.debug:
+    msg:
+      - "Models to pull: {{ _llm_models_to_pull }}"
+      - "Max loaded: {{ _llm_effective_max_loaded }}"
+      - "Parallel: {{ _llm_effective_num_parallel }}"
+      - "GPU layers: {{ _llm_effective_num_gpu }}"
+
+# -----------------------------------------------------------------
+# Phase 2: Ollama Installation
+# -----------------------------------------------------------------
+
+- name: "Install | Check if Ollama is already installed"
+  ansible.builtin.stat:
+    path: /usr/local/bin/ollama
+  register: _ollama_binary
+
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: "Install | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  when: not _ollama_binary.stat.exists
+
+- name: "Install | Install LLM dependencies"
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+      - zstd
+    state: present
+  when: not _ollama_binary.stat.exists
+
+- name: "Install | Download Ollama installer"
+  ansible.builtin.get_url:
+    url: https://ollama.ai/install.sh
+    dest: /tmp/ollama-install.sh
+    mode: "0755"
+  when:
+    - llm_install_ollama | default(true)
+    - not _ollama_binary.stat.exists
+
+- name: "Install | Install Ollama"
+  ansible.builtin.shell:
+    cmd: /tmp/ollama-install.sh
+    creates: /usr/local/bin/ollama
+  when:
+    - llm_install_ollama | default(true)
+    - not _ollama_binary.stat.exists
+
+- name: "Install | Create Ollama data directory"
+  ansible.builtin.file:
+    path: "{{ llm_models_dir }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ llm_user }}"
+    group: "{{ llm_group }}"
+
+# -----------------------------------------------------------------
+# Phase 3: Service Configuration
+# -----------------------------------------------------------------
+
+- name: "Service | Deploy Ollama systemd service"
+  ansible.builtin.template:
+    src: ollama.service.j2
+    dest: /etc/systemd/system/ollama.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart ollama
+
+- name: "Service | Enable and start Ollama"
+  ansible.builtin.systemd:
+    name: ollama
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: "Service | Wait for Ollama to be ready"
+  ansible.builtin.uri:
+    url: "http://localhost:{{ llm_port }}/api/tags"
+    method: GET
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 30
+  delay: 2
+
+# -----------------------------------------------------------------
+# Phase 4: Model Pulling (conditional on hardware)
+# -----------------------------------------------------------------
+
+- name: "Models | Pull models appropriate for this node"
+  ansible.builtin.command:
+    cmd: "ollama pull {{ item }}"
+  loop: "{{ _llm_models_to_pull }}"
+  when: llm_pull_models | default(true)
+  become: yes
+  register: _model_pull
+  changed_when: "'pulling' in (_model_pull.stderr | default(''))"
+  failed_when: _model_pull.rc != 0
+  tags: ['llm', 'models']

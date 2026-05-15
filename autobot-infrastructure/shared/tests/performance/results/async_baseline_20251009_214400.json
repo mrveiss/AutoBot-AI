@@ -1,0 +1,125 @@
+{
+  "timestamp": "2025-10-09T21:44:00.812711",
+  "test_phase": "BASELINE_BEFORE_ASYNC_CONVERSIONS",
+  "total_duration_seconds": 7.608076118998724,
+  "total_tests": 4,
+  "test_results": [
+    {
+      "test_name": "concurrent_chat_50_users",
+      "total_requests": 50,
+      "successful_requests": 0,
+      "failed_requests": 50,
+      "duration_seconds": 1.4110918850001326,
+      "requests_per_second": 35.433553641331656,
+      "mean_latency_ms": 1396.1164750000535,
+      "median_latency_ms": 1394.8401415000262,
+      "p95_latency_ms": 1402.0600500007276,
+      "p99_latency_ms": 1403.5460439990857,
+      "min_latency_ms": 1390.5936169994675,
+      "max_latency_ms": 1403.5460439990857,
+      "std_dev_latency_ms": 3.902022075920243,
+      "timestamp": "2025-10-09T21:43:54.616235",
+      "metadata": {
+        "concurrent_users": 50,
+        "test_message": "What is AutoBot's architecture?",
+        "baseline_threshold": "10-50s",
+        "target_after_async": "<2s p95"
+      }
+    },
+    {
+      "test_name": "concurrent_redis_100_ops",
+      "total_requests": 100,
+      "successful_requests": 0,
+      "failed_requests": 100,
+      "duration_seconds": 0.06350927800122008,
+      "requests_per_second": 1574.5730883301633,
+      "mean_latency_ms": 0.0,
+      "median_latency_ms": 0.0,
+      "p95_latency_ms": 0.0,
+      "p99_latency_ms": 0.0,
+      "min_latency_ms": 0.0,
+      "max_latency_ms": 0.0,
+      "std_dev_latency_ms": 0.0,
+      "timestamp": "2025-10-09T21:43:56.682501",
+      "metadata": {
+        "total_operations": 100,
+        "operations_per_request": 2,
+        "redis_host": "172.16.168.23"
+      }
+    },
+    {
+      "test_name": "mixed_io_50_ops",
+      "total_requests": 50,
+      "successful_requests": 0,
+      "failed_requests": 50,
+      "duration_seconds": 0.07209149600021192,
+      "requests_per_second": 693.563079892988,
+      "mean_latency_ms": 0.0,
+      "median_latency_ms": 0.0,
+      "p95_latency_ms": 0.0,
+      "p99_latency_ms": 0.0,
+      "min_latency_ms": 0.0,
+      "max_latency_ms": 0.0,
+      "std_dev_latency_ms": 0.0,
+      "timestamp": "2025-10-09T21:43:58.758046",
+      "metadata": {
+        "total_operations": 50,
+        "io_types": [
+          "file_write",
+          "redis_set",
+          "file_read",
+          "redis_get"
+        ]
+      }
+    },
+    {
+      "test_name": "cross_vm_latency_4_vms",
+      "total_requests": 80,
+      "successful_requests": 40,
+      "failed_requests": 40,
+      "duration_seconds": 0.05127645799984748,
+      "requests_per_second": 1560.170166204498,
+      "mean_latency_ms": 29.991071400263536,
+      "median_latency_ms": 28.594441499990353,
+      "p95_latency_ms": 44.477340999947046,
+      "p99_latency_ms": 44.69369700018433,
+      "min_latency_ms": 15.58102799936023,
+      "max_latency_ms": 44.69369700018433,
+      "std_dev_latency_ms": 11.60597015060502,
+      "timestamp": "2025-10-09T21:44:00.812450",
+      "metadata": {
+        "vms_tested": [
+          "frontend",
+          "npu-worker",
+          "redis",
+          "ai-stack"
+        ],
+        "requests_per_vm": 20,
+        "target_p95": "<100ms"
+      }
+    }
+  ],
+  "summary": {
+    "total_requests": 280,
+    "total_successful": 40,
+    "overall_success_rate": 14.285714285714285
+  },
+  "performance_analysis": {
+    "chat_performance": {
+      "baseline_p95_ms": 1402.0600500007276,
+      "target_after_async_ms": 2000,
+      "meets_target": true,
+      "improvement_needed": "Already fast"
+    },
+    "redis_performance": {
+      "baseline_ops_per_sec": 1574.5730883301633,
+      "target_ops_per_sec": 1000,
+      "meets_target": true
+    },
+    "cross_vm_latency": {
+      "baseline_p95_ms": 44.477340999947046,
+      "target_p95_ms": 100,
+      "meets_target": true
+    }
+  }
+}

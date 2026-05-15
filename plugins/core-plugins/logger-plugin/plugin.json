@@ -1,0 +1,23 @@
+{
+  "name": "logger-plugin",
+  "version": "1.0.0",
+  "display_name": "Logger Plugin",
+  "description": "Example plugin demonstrating hook-based event logging",
+  "author": "AutoBot Team",
+  "entry_point": "plugins.core_plugins.logger_plugin.main",
+  "dependencies": [],
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "log_file": {
+        "type": "string",
+        "default": "/tmp/plugin_events.log"
+      },
+      "log_level": {
+        "type": "string",
+        "default": "INFO"
+      }
+    }
+  },
+  "hooks": ["on_agent_execute", "on_tool_call", "on_message_received"]
+}

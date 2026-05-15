@@ -1,0 +1,70 @@
+role: autobot-browser-worker
+description: "Playwright browser automation worker — web scraping, GUI automation, screenshots"
+version: "1.0.0"
+target_node: browser
+
+deploy:
+  source: autobot-browser-worker/
+  destination: /opt/autobot/autobot-browser-worker/
+  shared: true
+  infrastructure: true
+
+system_dependencies:
+  - nodejs              # v20 via NodeSource
+  - chromium-browser
+  - xvfb               # Virtual display for headed mode
+  - libgbm-dev
+  - libnss3
+
+services:
+  - name: autobot-playwright
+    type: systemd
+    start_order: 1
+    user: autobot-browser-worker
+
+ports:
+  # (#4662) Port 9001 is canonical — port 3000 was legacy and caused EADDRINUSE
+  # conflicts with other services. Must match playwright_port default in the
+  # Ansible browser role (roles/browser/defaults/main.yml).
+  - port: 9001
+    protocol: http
+    public: false
+    loopback_only: false
+    description: "Playwright worker HTTP API (accessed by backend at .20)"
+
+health:
+  endpoint: "http://localhost:9001/health"
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+  expected_status: 200
+
+secrets:
+  own:
+    - browser_service_key
+  shared:
+    - service_auth_token
+
+tls:
+  auto_rotate: false   # Internal HTTP (service auth via token)
+
+system_updates:
+  policy: full
+  reboot_strategy: immediate
+
+coexistence:
+  compatible_with:
+    - autobot-slm-agent
+    - autobot_shared
+  conflicts_with: []
+  warns_with: []
+
+depends_on: []
+
+ansible_role: browser
+notes: |
+  systemd service is named 'autobot-playwright' (NOT autobot-browser-worker).
+  Playwright browsers installed via: npx playwright install chromium into
+  /var/lib/autobot/playwright-browsers (shared, world-readable) — set via
+  PLAYWRIGHT_BROWSERS_PATH in systemd unit. (#4662)
+  Worker binds :9001 (canonical). Port 3000 was legacy and is no longer used.

@@ -1,0 +1,391 @@
+<template>
+  <div class="declarations-section analytics-section">
+    <h3>
+      <i class="fas fa-code"></i> {{ $t('analytics.declarations.title') }}
+      <span v-if="declarations && declarations.length > 0" class="total-count">
+        ({{ declarations.length.toLocaleString() }} {{ $t('analytics.declarations.total') }})
+      </span>
+      <div v-if="declarations && declarations.length > 0" class="section-export-buttons">
+        <button @click="emit('export', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')">
+          <i class="fas fa-file-alt"></i> MD
+        </button>
+        <button @click="emit('export', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')">
+          <i class="fas fa-file-code"></i> JSON
+        </button>
+      </div>
+    </h3>
+    <div v-if="loading" class="section-loading">
+      <i class="fas fa-spinner fa-spin"></i>
+      <span>{{ $t('analytics.codebase.actions.loading') }}</span>
+    </div>
+    <div v-else-if="declarations && declarations.length > 0" class="section-content">
+      <!-- Type Summary Cards -->
+      <div class="summary-cards">
+        <div class="summary-card total">
+          <div class="summary-value">{{ declarations.length.toLocaleString() }}</div>
+          <div class="summary-label">{{ $t('analytics.declarations.total') }}</div>
+        </div>
+        <div
+          v-for="(typeData, type) in declarationsByType"
+          :key="type"
+          class="summary-card"
+          :class="getDeclarationTypeClass(String(type))"
+        >
+          <div class="summary-value">{{ typeData.declarations.length.toLocaleString() }}</div>
+          <div class="summary-label">{{ formatDeclarationType(String(type)) }}</div>
+        </div>
+      </div>
+
+      <!-- Grouped by Type (Accordion) -->
+      <div class="accordion-groups">
+        <div
+          v-for="(typeData, type) in declarationsByType"
+          :key="type"
+          class="accordion-group"
+        >
+          <div
+            class="accordion-header"
+            @click="toggleDeclarationType(String(type))"
+          >
+            <div class="header-info">
+              <i :class="isExpandedType(type) ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <span class="header-name">{{ formatDeclarationType(String(type)) }}</span>
+              <span class="header-count">({{ typeData.declarations.length.toLocaleString() }})</span>
+            </div>
+            <div class="header-badges">
+              <span v-if="typeData.exportedCount > 0" class="export-badge">
+                {{ typeData.exportedCount }} {{ $t('analytics.declarations.exported') }}
+              </span>
+            </div>
+          </div>
+          <transition name="accordion">
+            <div v-if="isExpandedType(type)" class="accordion-items">
+              <div
+                v-for="(declaration, index) in typeData.declarations.slice(0, 30)"
+                :key="index"
+                class="list-item"
+                :class="{ 'item-exported': declaration.is_exported }"
+              >
+                <div class="item-header">
+                  <span class="item-name">{{ declaration.name }}</span>
+                  <span v-if="declaration.is_exported" class="export-badge small">{{ $t('analytics.declarations.exported') }}</span>
+                </div>
+                <div class="item-location">{{ declaration.file_path }}:{{ declaration.line_number }}</div>
+              </div>
+              <div v-if="typeData.declarations.length > 30" class="show-more">
+                <span class="muted">{{ $t('analytics.declarations.showingOf', { shown: 30, total: typeData.declarations.length.toLocaleString(), type: formatDeclarationType(String(type)) }) }}</span>
+              </div>
+            </div>
+          </transition>
+        </div>
+      </div>
+    </div>
+    <EmptyState
+      v-else-if="!loading"
+      icon="code"
+      :message="$t('analytics.declarations.emptyMessage')"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+// AutoBot - AI-Powered Automation Platform
+// Copyright (c) 2025 mrveiss
+// Author: mrveiss
+/**
+ * Declarations Section Component
+ *
+ * Displays code declarations grouped by type.
+ * Extracted from CodebaseAnalytics.vue for better maintainability.
+ *
+ * Issue #184: Split oversized Vue components
+ * Issue #704: Migrated to design tokens
+ */
+
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useGroupingMemo } from '@/composables/useComputedMemo'
+import { useExpansion } from '@/composables/useExpansion'
+import EmptyState from '@/components/ui/EmptyState.vue'
+
+const { t } = useI18n()
+
+interface Declaration {
+  name: string
+  file_path: string
+  line_number: number
+  is_exported: boolean
+  declaration_type?: string
+}
+
+interface Props {
+  declarations: Declaration[]
+  /** #5368: render a spinner during the scan instead of empty-state. */
+  loading?: boolean
+}
+
+const props = defineProps<Props>()
+const emit = defineEmits<{
+  export: [format: 'md' | 'json']
+}>()
+
+const typeExpansion = useExpansion<string>()
+const isExpandedType = typeExpansion.isExpanded
+
+// Issue #4036: Memoized type grouping with export counts
+const declarationsByType = useGroupingMemo(
+  () => {
+    const groups: Record<string, { declarations: Declaration[], exportedCount: number }> = {}
+    props.declarations.forEach(d => {
+      const type = d.declaration_type || 'unknown'
+      if (!groups[type]) {
+        groups[type] = { declarations: [], exportedCount: 0 }
+      }
+      groups[type].declarations.push(d)
+      if (d.is_exported) groups[type].exportedCount++
+    })
+    return groups
+  },
+  () => [props.declarations],
+  { ttl: 120000 } // 2 minutes TTL for type grouping
+)
+
+const toggleDeclarationType = (type: string) => {
+  typeExpansion.toggle(type)
+}
+
+const formatDeclarationType = (type: string): string => {
+  const key = `analytics.declarations.types.${type}`
+  const translated = t(key)
+  // Fall back to capitalized type name if key not found
+  return translated !== key ? translated : type.charAt(0).toUpperCase() + type.slice(1)
+}
+
+const getDeclarationTypeClass = (type: string): string => {
+  const classes: Record<string, string> = {
+    function: 'type-function',
+    class: 'type-class',
+    method: 'type-method',
+    variable: 'type-variable',
+    constant: 'type-constant',
+    interface: 'type-interface',
+    type: 'type-type'
+  }
+  return classes[type] || 'type-other'
+}
+</script>
+
+<style scoped>
+.declarations-section {
+  margin-bottom: var(--spacing-6);
+}
+
+.declarations-section h3 {
+  color: var(--color-info);
+  margin-bottom: var(--spacing-4);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2-5);
+  flex-wrap: wrap;
+}
+
+.total-count {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.section-content {
+  background: var(--bg-active);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+}
+
+/* #5368: loading state shown during scan in progress */
+.section-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-6);
+  background: var(--bg-active);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.section-loading i {
+  color: var(--color-info);
+}
+
+.summary-cards {
+  display: flex;
+  gap: var(--spacing-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--spacing-5);
+}
+
+.summary-card {
+  padding: var(--spacing-3) var(--spacing-5);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  min-width: 80px;
+}
+
+.summary-card.total { background: var(--bg-active); }
+.summary-card.type-function { background: var(--chart-green-bg); }
+.summary-card.type-class { background: var(--chart-purple-bg); }
+.summary-card.type-method { background: var(--chart-blue-bg); }
+.summary-card.type-variable { background: var(--chart-orange-bg); }
+.summary-card.type-constant { background: var(--chart-red-bg); }
+.summary-card.type-interface { background: var(--color-info-bg); }
+.summary-card.type-type { background: var(--color-primary-bg); }
+.summary-card.type-other { background: var(--bg-hover); }
+
+.summary-value {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+}
+
+.summary-label {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.accordion-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.accordion-group {
+  background: var(--bg-hover);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.accordion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-3) var(--spacing-4);
+  cursor: pointer;
+  transition: background var(--duration-200) var(--ease-in-out);
+}
+
+.accordion-header:hover {
+  background: var(--bg-active);
+}
+
+.header-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2-5);
+}
+
+.header-name {
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.header-count {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.export-badge {
+  padding: var(--spacing-0-5) var(--spacing-2);
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  background: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+.export-badge.small {
+  font-size: var(--text-xs);
+  padding: var(--spacing-px) var(--spacing-1-5);
+}
+
+.accordion-items {
+  padding: 0 var(--spacing-4) var(--spacing-4);
+}
+
+.list-item {
+  background: var(--bg-active);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-2-5) var(--spacing-3);
+  margin-bottom: var(--spacing-1-5);
+  border-left: 3px solid var(--border-default);
+}
+
+.list-item.item-exported {
+  border-left-color: var(--color-info);
+}
+
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-1);
+}
+
+.item-name {
+  color: var(--text-primary);
+  font-weight: var(--font-medium);
+  font-family: var(--font-mono);
+}
+
+.item-location {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+}
+
+.show-more {
+  text-align: center;
+  padding: var(--spacing-2);
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.accordion-enter-active,
+.accordion-leave-active {
+  transition: all var(--duration-300) var(--ease-in-out);
+}
+
+.accordion-enter-from,
+.accordion-leave-to {
+  opacity: 0;
+  max-height: 0;
+}
+
+.section-export-buttons {
+  display: flex;
+  gap: var(--spacing-2);
+  margin-left: auto;
+}
+
+.export-btn {
+  padding: var(--spacing-1) var(--spacing-2-5);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 0.8em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  transition: all var(--duration-150) var(--ease-out);
+}
+
+.export-btn:hover {
+  background: var(--bg-card);
+  border-color: var(--color-info-dark);
+  color: var(--text-primary);
+}
+</style>

@@ -1,0 +1,148 @@
+# AutoBot Distributed Architecture Configuration
+# Distributed 6-VM setup — IPs set at deploy time via Ansible inventory
+# SSOT: IPs derived from complete.yaml → .env.network → ssot-config.sh (#808)
+
+# Deployment Architecture
+deployment:
+  mode: "distributed"
+  coordinator_host: ""  # Set via AUTOBOT_BACKEND_HOST env var
+  total_vms: 6
+  architecture: "6-vm-distributed"
+
+# VM Infrastructure Mapping
+infrastructure:
+  vms:
+    coordinator:
+      host: ""  # Set via AUTOBOT_BACKEND_HOST env var
+      role: "backend-coordinator"
+      services: ["backend-api", "ollama-llm", "vnc-desktop"]
+      description: "Main WSL machine - Backend API coordination"
+
+    frontend:
+      host: ""  # Set via AUTOBOT_FRONTEND_HOST env var
+      port: 5173
+      role: "frontend-ui"
+      services: ["vue-frontend", "web-interface"]
+      description: "Vue.js frontend serving"
+
+    npu_worker:
+      host: ""  # Set via AUTOBOT_NPU_WORKER_HOST env var
+      port: 8081
+      role: "ai-acceleration"
+      services: ["npu-worker", "intel-openvino", "hardware-acceleration"]
+      description: "Intel NPU + OpenVINO acceleration"
+
+    redis:
+      host: ""  # Set via AUTOBOT_REDIS_HOST env var
+      port: 6379
+      role: "data-layer"
+      services: ["redis-stack", "redis-insight", "vector-storage"]
+      description: "Redis Stack with RedisInsight dashboard"
+
+    ai_stack:
+      host: ""  # Set via AUTOBOT_AI_STACK_HOST env var
+      port: 8080
+      role: "ai-processing"
+      services: ["ai-stack", "multimodal-processing"]
+      description: "AI processing and multimodal services"
+
+    browser:
+      host: ""  # Set via AUTOBOT_BROWSER_SERVICE_HOST env var
+      port: 3000
+      role: "browser-automation"
+      services: ["playwright", "web-automation"]
+      description: "Playwright browser automation"
+
+# Service URLs (Computed from infrastructure — populated by generate-env-files.py)
+services:
+  backend_api: ""
+  frontend: ""
+  redis: ""
+  redis_insight: ""
+  npu_worker: ""
+  ai_stack: ""
+  browser: ""
+  ollama: ""
+  vnc_desktop: ""
+
+# Network Configuration — set at install time via slm-secrets.env
+network:
+  subnet: ""  # Detected by install.sh → NETWORK_SUBNET
+  gateway: ""  # Detected by install.sh → NETWORK_GATEWAY
+  coordinator_ip: ""  # Set via AUTOBOT_BACKEND_HOST env var
+  vm_range: ""  # Informational only — not used by code
+
+# Hardware Optimization
+hardware:
+  coordinator:
+    cpu: "Intel Ultra 9 185H (22 cores)"
+    gpu: "RTX 4070"
+    ram: "32GB+"
+    role: "Backend coordination + Local LLM"
+
+  npu_worker:
+    cpu: "Multi-core"
+    npu: "Intel NPU (AI Boost)"
+    gpu: "Intel Arc (if available)"
+    role: "Hardware AI acceleration"
+
+  redis:
+    cpu: "Multi-core"
+    ram: "High memory"
+    storage: "SSD recommended"
+    role: "High-performance data layer"
+
+# Performance Configuration
+performance:
+  api_timeout: 10000
+  llm_timeout: 30
+  max_concurrent_requests: 50
+  redis_connection_timeout: 2
+  health_check_interval: 30
+
+# Security Configuration
+security:
+  ssh_key_file: "~/.ssh/autobot_distributed"
+  allowed_networks: ["${network.subnet}", "127.0.0.0/8"]  # subnet from network block above
+  firewall_enabled: true
+
+# Monitoring Configuration
+monitoring:
+  health_checks:
+    enabled: true
+    interval_seconds: 30
+    timeout_seconds: 5
+
+  logging:
+    level: "INFO"
+    distributed_collection: true
+    aggregation_host: ""  # Set via AUTOBOT_BACKEND_HOST env var
+
+# Backup Configuration
+backup:
+  strategy: "distributed"
+  collection_host: ""  # Set via AUTOBOT_BACKEND_HOST env var
+  schedule: "daily"
+  retention_days: 7
+
+  targets:
+    - name: "redis_data"
+      host: ""  # Set via AUTOBOT_REDIS_HOST env var
+      path: "/var/lib/redis/"
+
+    - name: "knowledge_base"
+      host: ""  # Set via AUTOBOT_BACKEND_HOST env var
+      path: "./data/"
+
+    - name: "logs"
+      hosts: []  # Populated dynamically from Ansible inventory
+      path: "/var/log/autobot/"
+
+# Feature Flags for Distributed Mode
+features:
+  distributed_mode: true
+  remote_redis: true
+  remote_frontend: true
+  hardware_acceleration: true
+  distributed_logging: true
+  ssh_automation: true

@@ -1,0 +1,33 @@
+---
+# SLM Service Logs Playbook
+# Used by SLM API to fetch systemd journal logs for a service
+# Related to Issue #728
+
+- name: "SLM Get Service Logs"
+  hosts: target
+  gather_facts: no
+  become: yes
+
+  vars:
+    service_name: "{{ service | mandatory }}"
+    log_lines: "{{ lines | default(100) }}"
+    since_time: "{{ since | default('') }}"
+
+  tasks:
+    - name: "Build journalctl command"
+      ansible.builtin.set_fact:
+        journal_cmd: >-
+          journalctl -u {{ service_name }}
+          -n {{ log_lines }}
+          --no-pager
+          {{ '--since=' ~ since_time if since_time else '' }}
+
+    - name: "Fetch service logs"
+      ansible.builtin.shell: "{{ journal_cmd }}"
+      register: logs_output
+      changed_when: false
+      failed_when: false
+
+    - name: "Output logs"
+      ansible.builtin.debug:
+        var: logs_output.stdout

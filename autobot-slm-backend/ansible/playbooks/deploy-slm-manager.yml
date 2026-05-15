@@ -1,0 +1,80 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# SLM Manager Deployment Playbook (Issue #814, #837)
+#
+# Full deployment pipeline:
+#   1. Set up SLM server (postgresql, backend, frontend, nginx, TLS)
+#   2. Seed fleet nodes into SLM database
+#   3. Auto-provision all fleet nodes with their assigned roles
+#
+# Usage:
+#   ansible-playbook -i inventory/slm-nodes.yml playbooks/deploy-slm-manager.yml
+#
+# Tags:
+#   --tags packages     System packages only
+#   --tags tls          TLS certificate generation only
+#   --tags backend      Backend venv + service only
+#   --tags frontend     Frontend build only
+#   --tags nginx        Nginx config only
+#   --tags service      Start/restart services only
+#   --tags postgresql   Database only
+#   --tags monitoring   Prometheus + Grafana only
+#   --tags seed         Register fleet nodes in SLM database
+#   --tags provision    Auto-provision fleet nodes by role
+#   --tags code-source  Push code_source from controller only
+#
+# When GitHub is unreachable from SLM, pass controller_repo_root to push
+# the local checkout to SLM before provisioning (#3604):
+#   ansible-playbook ... -e "controller_repo_root=/home/martins/AutoBot-Ai/AutoBot-AI"
+---
+- name: Deploy SLM Manager
+  hosts: 00-SLM-Manager
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Remove conflicting APT source files from prior installs
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/apt/sources.list.d/grafana.list
+        - /etc/apt/sources.list.d/grafana.sources
+      tags: ['always']
+
+  roles:
+    - role: postgresql
+      tags: ['postgresql']
+      vars:
+        # #1038: Backend on .20 connects to PostgreSQL here for user management.
+        # Must listen on all interfaces and allow subnet access.
+        postgresql_listen_addresses: "*"
+        pg_hba_remote_access:
+          - database: autobot_users
+            user: slm_app
+            address: "{{ network_subnet | default('0.0.0.0/0', true) }}"
+    - role: slm_manager
+    - role: monitoring
+      tags: ['monitoring']
+      vars:
+        monitoring_install_prometheus: true
+        monitoring_install_grafana: true
+        monitoring_install_node_exporter: true
+
+# Push code_source from controller to SLM before provisioning (#3604).
+# No-op when controller_repo_root is not set (e.g. triggered from SLM web UI).
+- name: Sync code_source from controller
+  import_playbook: sync-code-source.yml
+  tags: ['code-source', 'provision']
+
+# After all services are up, register fleet nodes in SLM database
+- name: Seed Fleet Nodes
+  import_playbook: seed-fleet-nodes.yml
+  tags: ['seed']
+
+# Auto-provision all fleet nodes with their assigned roles
+- name: Provision Fleet Roles
+  import_playbook: provision-fleet-roles.yml
+  tags: ['provision']

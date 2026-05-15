@@ -1,0 +1,69 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Dependency Patching Role - Default Variables
+# Issue #682: Ansible Rolling Update System for Dependency Patching
+
+# Backup settings
+backup_enabled: true
+backup_retention_days: 7
+backup_base_path: "/opt/autobot/backups"
+
+# Update behavior
+dry_run: false
+force_update: false
+update_timeout: 300  # seconds per package batch
+
+# Health check settings
+health_check_enabled: true
+health_check_retries: 10
+health_check_delay: 5  # seconds between retries
+health_check_timeout: 60
+
+# Rollback settings
+rollback_on_failure: true
+rollback_timeout: 120
+
+# Service drain settings (for graceful shutdown)
+drain_enabled: true
+drain_timeout: 60  # seconds to wait for connections to drain
+
+# Python venv settings
+venv_path: "/opt/autobot/venv"
+requirements_path: "/opt/autobot/requirements.txt"
+pip_extra_args: "--no-cache-dir"
+
+# Packages to update (CVE fixes from Issue #544)
+# Format: package_name: minimum_version
+python_security_updates:
+  # Critical
+  langchain-core: "0.3.81"        # Serialization injection + template injection + SSRF
+  nltk: "3.9.3"                   # Zip slip vulnerability
+  # High
+  starlette: "0.52.1"             # O(n^2) DoS via Range header
+  fastapi: "0.135.1"              # Requires starlette >=0.46.0
+  aiohttp: "3.13.3"               # Zip bomb + DoS + payload + chunked
+  python-multipart: "0.0.22"      # Arbitrary file write
+  cryptography: "46.0.5"          # Subgroup attack on SECT curves
+  pillow: "12.1.1"                # OOB write loading PSD images
+  protobuf: "5.29.6"              # JSON recursion depth bypass
+  # Medium (pypdf - 10 CVEs)
+  pypdf: "6.7.5"                  # Infinite loops, RAM exhaustion, malformed streams
+  # Carried forward from prior patches
+  filelock: "3.20.1"
+  keras: "3.12.0"
+  markdownify: "0.14.1"
+  marshmallow: "3.26.2"
+  urllib3: "2.6.0"
+  werkzeug: "3.1.4"
+  requests: "2.32.4"
+
+# Service restart after update
+restart_service_after_update: true
+service_restart_delay: 5  # seconds to wait after restart before health check
+
+# System package (apt) update settings
+security_only: false  # Only apply security updates
+reboot_if_required: false  # Reboot automatically if kernel updated
+system_update_timeout: 600  # seconds for apt upgrade to complete

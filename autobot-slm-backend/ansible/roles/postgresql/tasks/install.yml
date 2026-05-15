@@ -1,0 +1,133 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# PostgreSQL Installation Tasks
+---
+
+- name: Check if PostgreSQL is already installed
+  ansible.builtin.command:
+    cmd: "dpkg -l postgresql-{{ postgresql_version }}"
+  register: _pg_installed
+  changed_when: false
+  # (#2872) Intentional: dpkg exits rc=1 when package is not installed;
+  # the result gates conditional installation below.
+  failed_when: false
+
+- name: Determine PostgreSQL APT release codename
+  ansible.builtin.set_fact:
+    _pgdg_release: >-
+      {{ postgresql_apt_release
+         | default('', true)
+         | ternary(postgresql_apt_release,
+             _pgdg_codename_map[ansible_facts['distribution_release']]
+             | default(ansible_facts['distribution_release'])) }}
+  vars:
+    _pgdg_codename_map:
+      kali-rolling: "bookworm"
+  when: _pg_installed.rc != 0
+
+- name: Fail if OS is too old for PostgreSQL 16
+  ansible.builtin.fail:
+    msg: >-
+      PostgreSQL {{ postgresql_version }} requires Ubuntu 22.04+ or Debian 11+.
+      Target runs {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}
+      ({{ ansible_facts['distribution_release'] }}).
+      Either upgrade the VM OS or set postgresql_version to "14".
+  when:
+    - _pg_installed.rc != 0
+    - ansible_facts['distribution_release'] in ['focal', 'bionic', 'xenial', 'buster']
+    - postgresql_apt_release | default('', true) | length == 0
+
+- name: Add PostgreSQL APT signing key
+  ansible.builtin.get_url:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    dest: /usr/share/keyrings/pgdg.asc
+    mode: "0644"
+  become: true
+  when: _pg_installed.rc != 0
+
+# #7218: idempotent repo-add — preserve device-shipped pgdg repo if present
+- name: "PostgreSQL | Add PostgreSQL APT repository (idempotent, #7218)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
+  vars:
+    apt_repo_match: "apt.postgresql.org"
+    apt_repo_spec: "deb [signed-by=/usr/share/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt {{ _pgdg_release }}-pgdg main"
+    apt_repo_filename: "pgdg"
+    apt_repo_label: "PostgreSQL pgdg"
+  when: _pg_installed.rc != 0
+
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: PostgreSQL | Refresh apt cache after PPA add (best-effort, bounded; #6719)
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  when: _pg_installed.rc != 0
+
+- name: Ensure en_US.UTF-8 locale is available
+  community.general.locale_gen:
+    name: en_US.UTF-8
+    state: present
+  become: true
+  # (#2872) Intentional: locale_gen may fail on minimal containers or
+  # systems without locales package; PostgreSQL will still work with C locale.
+  # Replaced ignore_errors with register + warning for visibility.
+  register: _locale_result
+  failed_when: false
+
+- name: Warn if locale generation failed
+  ansible.builtin.debug:
+    msg: "WARNING: en_US.UTF-8 locale generation failed — PostgreSQL will use system default locale"
+  when: _locale_result.failed | default(false)
+
+- name: Install PostgreSQL packages
+  ansible.builtin.apt:
+    name:
+      - "postgresql-{{ postgresql_version }}"
+      - "postgresql-client-{{ postgresql_version }}"
+      - "postgresql-contrib-{{ postgresql_version }}"
+      - python3-psycopg2
+      - libpq-dev
+    state: present
+  become: true
+  when: _pg_installed.rc != 0
+
+- name: Check if PostgreSQL cluster data directory exists
+  ansible.builtin.stat:
+    path: "{{ postgresql_data_dir }}/PG_VERSION"
+  register: _pg_cluster_exists
+  become: true
+
+- name: Initialize PostgreSQL cluster if missing
+  ansible.builtin.command:
+    cmd: "pg_createcluster {{ postgresql_version }} main"
+  become: true
+  become_user: postgres
+  when: not _pg_cluster_exists.stat.exists
+  changed_when: true
+
+- name: Ensure PostgreSQL service is enabled
+  ansible.builtin.systemd:
+    name: "{{ postgresql_service }}"
+    enabled: true
+    state: started
+  become: true
+
+- name: Wait for PostgreSQL to be ready (retry-based)
+  community.postgresql.postgresql_query:
+    db: postgres
+    login_port: "{{ postgresql_port }}"
+    login_user: "{{ postgresql_user | default('postgres') }}"
+    query: "SELECT 1"
+  become: yes
+  become_user: postgres
+  retries: 60
+  delay: 5
+  until: postgresql_ready is succeeded
+  register: postgresql_ready
+  changed_when: false
