@@ -322,6 +322,20 @@ python -m black --check $(git diff origin/Dev_new_gui...$PR_BRANCH --name-only |
 
 ---
 
+# Phase 2.5: Anti-Polling Rule (PR Wait)
+
+**batch-implement is a self-contained session**: you review and merge your own PRs in the same run. Do **not** create PRs and then exit, leaving the batch issue `in_progress` for the next heartbeat to re-check.
+
+If the batch session must exit before all PRs are merged (e.g. budget limit, rate limit after 3× retries):
+- Update the batch issue to `in_review`, not `in_progress`.
+- Post ONE comment listing which PRs are open: "Batch paused — PRs #N, #M await merge."
+- Use `ScheduleWakeup` with `delaySeconds: 900` for a single deferred re-check.
+- Do **not** spin with repeated identical "PRs still open" comments on every heartbeat.
+
+This avoids the polling anti-pattern: an agent re-running every 2–5 min posting "PR open, awaiting merge" 11 times in 1h (GH#7623 / MVA-315).
+
+---
+
 # Phase 3: Merge Each PR
 
 Merge immediately after review passes. Do not let PRs sit overnight.
