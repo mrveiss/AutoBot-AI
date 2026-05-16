@@ -42,7 +42,6 @@ const sampleItems: NavItem[] = [
 const meta = {
   title: 'Components/Layout/NavOverflowMenu',
   component: NavOverflowMenu,
-  tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
     docs: {

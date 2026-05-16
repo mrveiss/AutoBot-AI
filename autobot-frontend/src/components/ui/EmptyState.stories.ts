@@ -8,7 +8,6 @@ import EmptyState from './EmptyState.vue';
 const meta = {
   title: 'Components/UI/EmptyState',
   component: EmptyState,
-  tags: ['autodocs'],
   argTypes: {
     icon: {
       control: 'text',

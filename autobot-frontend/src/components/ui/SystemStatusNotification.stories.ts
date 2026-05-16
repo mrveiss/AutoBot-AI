@@ -4,7 +4,6 @@ import SystemStatusNotification from './SystemStatusNotification.vue';
 const meta = {
   title: 'Components/UI/SystemStatusNotification',
   component: SystemStatusNotification,
-  tags: ['autodocs'],
   argTypes: {
     visible: {
       control: 'boolean',

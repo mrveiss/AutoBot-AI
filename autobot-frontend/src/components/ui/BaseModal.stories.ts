@@ -4,7 +4,6 @@ import BaseModal from './BaseModal.vue';
 const meta = {
   title: 'Components/UI/BaseModal',
   component: BaseModal,
-  tags: ['autodocs'],
   argTypes: {
     modelValue: {
       control: 'boolean',

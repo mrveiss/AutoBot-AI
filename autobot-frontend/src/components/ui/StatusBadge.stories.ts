@@ -4,7 +4,6 @@ import StatusBadge from './StatusBadge.vue';
 const meta = {
   title: 'Components/UI/StatusBadge',
   component: StatusBadge,
-  tags: ['autodocs'],
   argTypes: {
     variant: {
       control: 'select',

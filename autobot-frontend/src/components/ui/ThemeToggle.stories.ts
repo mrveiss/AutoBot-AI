@@ -4,7 +4,6 @@ import ThemeToggle from './ThemeToggle.vue';
 const meta = {
   title: 'Components/UI/ThemeToggle',
   component: ThemeToggle,
-  tags: ['autodocs'],
   argTypes: {
     mode: {
       control: 'select',

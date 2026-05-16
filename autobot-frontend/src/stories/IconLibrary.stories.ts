@@ -175,7 +175,6 @@ const ALL_ICON_NAMES: string[] = ICON_GROUPS.flatMap((g) => g.names);
 
 const meta = {
   title: 'Design System/Icon Library',
-  tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
     docs: {

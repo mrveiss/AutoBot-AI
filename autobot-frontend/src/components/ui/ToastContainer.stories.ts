@@ -4,7 +4,6 @@ import ToastContainer from './ToastContainer.vue';
 const meta = {
   title: 'Components/UI/ToastContainer',
   component: ToastContainer,
-  tags: ['autodocs'],
   argTypes: {},
 } as Meta<typeof ToastContainer>;
 

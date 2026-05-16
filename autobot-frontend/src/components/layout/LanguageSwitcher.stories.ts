@@ -4,7 +4,6 @@ import LanguageSwitcher from './LanguageSwitcher.vue';
 const meta = {
   title: 'Components/Layout/LanguageSwitcher',
   component: LanguageSwitcher,
-  tags: ['autodocs'],
   parameters: {
     layout: 'centered',
     docs: {

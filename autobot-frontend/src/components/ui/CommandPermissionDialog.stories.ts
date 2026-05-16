@@ -4,7 +4,6 @@ import CommandPermissionDialog from './CommandPermissionDialog.vue';
 const meta = {
   title: 'Components/UI/CommandPermissionDialog',
   component: CommandPermissionDialog,
-  tags: ['autodocs'],
   argTypes: {
     show: {
       control: 'boolean',
