@@ -18,7 +18,7 @@ from api.schemas_workflows import (
     ErrorBudgetResetResponse,
     ErrorBudgetStatusResponse,
 )
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import ComponentHealth, KnownProbes, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.resilience.circuit_breaker_manager import (
@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/resilience", tags=["resilience"])
 
 
-@register_health_probe("error_resilience")
+@register_health_probe(KnownProbes.ERROR_RESILIENCE)
 async def probe_error_resilience(
     request: Request | None = None,
 ) -> ComponentHealth:

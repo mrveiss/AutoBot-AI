@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import ComponentHealth, KnownProbes, register_health_probe
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
 
@@ -200,7 +200,7 @@ async def get_system_info(
     )
 
 
-@register_health_probe("intelligent_agent")
+@register_health_probe(KnownProbes.INTELLIGENT_AGENT)
 async def probe_intelligent_agent(
     request: Request | None = None,
 ) -> ComponentHealth:

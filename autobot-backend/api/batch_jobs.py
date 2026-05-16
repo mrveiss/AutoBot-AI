@@ -38,7 +38,7 @@ from api.schemas_workflows import (
     BatchTemplate,
     BatchTemplateDeleteResponse,
 )
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import ComponentHealth, KnownProbes, register_health_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -573,7 +573,7 @@ async def delete_batch_schedule(
 # =============================================================================
 
 
-@register_health_probe("batch_jobs")
+@register_health_probe(KnownProbes.BATCH_JOBS)
 async def probe_batch_jobs(
     request: Request | None = None,
 ) -> ComponentHealth:
