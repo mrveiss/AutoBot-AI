@@ -12,7 +12,6 @@ combined list in Redis for 60 seconds to avoid latency on every dropdown open.
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger

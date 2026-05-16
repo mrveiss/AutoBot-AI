@@ -9,7 +9,6 @@ Provides context injection for LLM agents to be aware of current system state, c
 
 import asyncio
 import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional

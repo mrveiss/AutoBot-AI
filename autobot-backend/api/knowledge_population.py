@@ -18,7 +18,6 @@ Related Issues: #185 (Split), #209 (Knowledge split)
 """
 
 import asyncio
-import logging
 import re
 from pathlib import Path as PathLib
 

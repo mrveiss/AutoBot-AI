@@ -6,7 +6,6 @@ Centralized path management for backend API.
 Ensures all log/data writes use consistent, configurable paths.
 """
 
-import logging
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger

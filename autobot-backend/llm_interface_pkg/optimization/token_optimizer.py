@@ -17,7 +17,6 @@ Issue #2098: Active token budget optimization with context compaction.
 
 import hashlib
 import json
-import logging
 import threading
 import time
 from collections import OrderedDict

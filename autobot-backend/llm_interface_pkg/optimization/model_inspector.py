@@ -23,7 +23,6 @@ Issue #1945: Empty-weight model inspection for hardware routing.
 Issue #3186: Actually call init_empty_weights() for accurate param counts.
 """
 
-import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, Optional

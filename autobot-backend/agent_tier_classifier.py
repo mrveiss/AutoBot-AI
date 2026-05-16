@@ -13,7 +13,6 @@ Tier 3 (Specialized Agents): 40-60% cache hit rate
 Tier 4 (Orchestrator): 50-70% cache hit rate
 """
 
-import logging
 from enum import Enum
 from functools import lru_cache
 from typing import Dict

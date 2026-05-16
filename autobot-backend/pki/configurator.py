@@ -14,7 +14,6 @@ Services configured:
 - Inter-service communication
 """
 
-import logging
 from dataclasses import dataclass
 from typing import Dict, Optional
 

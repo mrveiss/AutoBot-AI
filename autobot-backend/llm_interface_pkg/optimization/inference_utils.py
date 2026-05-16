@@ -12,7 +12,6 @@ yielding up to 2048x reduction in the final projection computation.
 Issue #1968: Only-last-logit optimization for autoregressive generation.
 """
 
-import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional

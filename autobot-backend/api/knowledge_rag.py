@@ -11,8 +11,6 @@ with cross-encoder reranking for improved relevance scoring.
 Issue #4681: Added GET /entity/{id}/history for evolutionary lineage tracking.
 """
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from auth_middleware import check_admin_permission, get_current_user

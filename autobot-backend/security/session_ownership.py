@@ -14,7 +14,6 @@ FEATURE FLAG SUPPORT:
 - ENFORCED: Full enforcement with access blocking
 """
 
-import logging
 from typing import Dict, Optional
 
 from fastapi import HTTPException, Request

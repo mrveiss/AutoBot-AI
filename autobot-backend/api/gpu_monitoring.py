@@ -11,7 +11,6 @@ reporting, multimodal optimization, and config updates.
 Issue #2315: Fix decorator order, router prefix, GPU guard, and tag case.
 """
 
-import logging
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, status

@@ -12,7 +12,6 @@ when the main asyncio thread pool is saturated by indexing operations.
 """
 
 import asyncio
-import logging
 import mimetypes
 import shutil
 from datetime import datetime, timezone

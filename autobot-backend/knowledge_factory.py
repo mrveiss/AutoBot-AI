@@ -4,7 +4,6 @@
 """Knowledge Base Factory - Breaks circular import between api/knowledge.py and app_factory.py"""
 
 import asyncio
-import logging
 import time
 from typing import Optional
 

@@ -20,7 +20,6 @@ Issue #2143: Sub-workflow composition — a step with type="sub_workflow" delega
 """
 
 import asyncio
-import logging
 import time
 import uuid
 from datetime import datetime, timezone

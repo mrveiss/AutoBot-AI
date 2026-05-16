@@ -7,7 +7,6 @@ Knowledge Base Task Handlers
 Issue #322: Refactored to use TaskExecutionContext to eliminate data clump pattern.
 """
 
-import logging
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger

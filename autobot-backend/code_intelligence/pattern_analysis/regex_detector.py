@@ -9,7 +9,6 @@ for better performance and maintainability.
 """
 
 import ast
-import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path

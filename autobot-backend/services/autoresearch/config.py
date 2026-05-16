@@ -9,13 +9,11 @@ Issue #2597: Service-specific configuration for experiment runner.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 from autobot_shared.ssot_config import config
-from constants.model_constants import ANTHROPIC_CLAUDE_SONNET4_6
 
 
 @dataclass

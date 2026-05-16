@@ -9,7 +9,6 @@ analysis tools to provide comprehensive code pattern detection.
 """
 
 import asyncio
-import logging
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set

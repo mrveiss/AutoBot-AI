@@ -7,7 +7,6 @@ Knowledge Audit and Compliance API
 Issue #679: Audit logging and compliance reporting for knowledge access and modifications.
 """
 
-import logging
 from datetime import timedelta
 from typing import Dict, Optional
 

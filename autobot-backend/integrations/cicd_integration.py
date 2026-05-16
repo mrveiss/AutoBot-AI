@@ -4,7 +4,6 @@
 
 """CI/CD integration for Jenkins, GitLab CI, and CircleCI."""
 
-import logging
 from typing import Any, Dict, List
 
 import aiohttp

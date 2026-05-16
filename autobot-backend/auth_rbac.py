@@ -32,7 +32,6 @@ from autobot_shared.logging_manager import get_logger
         ...
 """
 
-import logging
 from typing import Callable, List, Union
 
 from fastapi import Request

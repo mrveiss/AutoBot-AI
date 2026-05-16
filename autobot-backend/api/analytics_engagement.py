@@ -8,10 +8,8 @@ Provides endpoints for tracking user engagement metrics across features.
 """
 
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter
 
 from api.schemas_analytics import EngagementMetricsResponse
 from api.schemas_common import DataResponse
@@ -33,7 +31,7 @@ async def get_engagement_metrics():
     try:
         # Retrieve engagement metrics from Redis
         # Format: engagement:feature:<feature_name> -> {count, last_accessed}
-        engagement_data = {}
+        pass
 
         if redis:
             # Scan for all engagement keys

@@ -8,7 +8,6 @@ Assigns tasks from managers to direct reports, escalates stuck tasks
 up the chain of command, and provides activity summaries.
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, select

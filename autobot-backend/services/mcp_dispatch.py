@@ -22,7 +22,6 @@ caches it locally.  Cache can be refreshed explicitly via refresh_tool_cache().
 Cache TTL and RBAC filtering added in #2598.
 """
 
-import logging
 import time
 from typing import Optional
 

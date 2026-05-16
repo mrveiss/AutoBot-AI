@@ -3,7 +3,6 @@
 # Author: mrveiss
 """Async PostgreSQL client for Neural Mesh RAG graph operations (#2055)."""
 
-import logging
 from datetime import datetime
 from typing import Any, Optional
 

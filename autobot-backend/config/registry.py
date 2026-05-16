@@ -32,8 +32,6 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-from autobot_shared.ssot_config import config
-
 # stdlib logging avoids circular import: network_constants → config.registry → get_logger
 # → logging_manager → from config import config_manager (partially initialized) GH#7765
 logger = logging.getLogger(__name__)

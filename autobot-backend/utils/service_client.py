@@ -329,7 +329,6 @@ def load_service_credentials_from_env() -> tuple[str, str]:
     Raises:
         ValueError: If credentials not found
     """
-    import os
     from pathlib import Path
 
     # Try SERVICE_ID from environment
@@ -386,7 +385,6 @@ def create_service_client_from_env() -> ServiceHTTPClient:
         client = create_service_client_from_env()
         response = await client.get(f"{ServiceURLs.AI_STACK_SERVICE}/api/inference")
     """
-    import os
 
     service_id, service_key = load_service_credentials_from_env()
 

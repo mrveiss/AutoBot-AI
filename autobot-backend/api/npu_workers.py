@@ -32,7 +32,6 @@ Endpoints:
 - POST   /api/npu/pool/reload - Hot-reload pool configuration (Issue #168)
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status

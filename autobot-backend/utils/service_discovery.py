@@ -8,7 +8,6 @@ Provides dynamic service resolution and health monitoring across 6 VMs
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone

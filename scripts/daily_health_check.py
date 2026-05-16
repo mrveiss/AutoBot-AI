@@ -4,13 +4,14 @@ AutoBot Daily Health Check
 Runs 7-point checklist and posts findings to MVA-12
 """
 
-import subprocess
 import json
-import requests
 import logging
 import os
-from datetime import datetime, timedelta
+import subprocess
+from datetime import datetime
 from pathlib import Path
+
+import requests
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -122,33 +123,34 @@ class HealthCheck:
             return False
 
     def check_error_logs(self):
-        """Check 5: Error logs (last 24h)"""
+        """Check 5: Error logs (last 24h via journalctl)"""
         logger.info("Checking error logs...")
-        error_log_path = Path("/var/log/autobot/backend-error.log")
-
-        if not error_log_path.exists():
-            self.results["error_logs"] = {
-                "status": "OK",
-                "note": "No error log file found",
-                "timestamp": datetime.now().isoformat(),
-            }
-            return True
 
         try:
-            # Check for errors in last 24h
-            cutoff_time = datetime.now() - timedelta(hours=24)
-            error_count = 0
-            recent_errors = []
+            # Use journalctl to get only the last 24h of error-priority entries for the backend service.
+            # This avoids the previous bug where cutoff_time was computed but never applied to the file scan,
+            # causing ALL historical errors to be counted instead of only the last 24 hours.
+            result = subprocess.run(
+                [
+                    "journalctl",
+                    "-u",
+                    "autobot-backend.service",
+                    "--since",
+                    "24 hours ago",
+                    "--no-pager",
+                    "-q",
+                    "-p",
+                    "err",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            lines = [ln for ln in result.stdout.strip().split("\n") if ln] if result.stdout.strip() else []
+            error_count = len(lines)
+            recent_errors = [ln[:100] for ln in lines[-5:]] if lines else []
 
-            with open(error_log_path, "r") as f:
-                for line in f:
-                    # Simple check: line contains ERROR or Traceback
-                    if "ERROR" in line or "Traceback" in line or "Exception" in line:
-                        error_count += 1
-                        if len(recent_errors) < 5:  # Keep last 5 errors
-                            recent_errors.append(line.strip()[:100])
-
-            has_errors = error_count > 20  # Threshold for alerting
+            has_errors = error_count > 20
             self.results["error_logs"] = {
                 "status": "WARNING" if has_errors else "OK",
                 "error_count_24h": error_count,

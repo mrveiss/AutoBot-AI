@@ -9,7 +9,6 @@ Author: mrveiss
 """
 
 import asyncio
-import logging
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, patch

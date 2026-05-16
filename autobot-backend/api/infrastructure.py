@@ -10,7 +10,6 @@ by the chat terminal and host-selection UI components.
 Issue #1310: Fleet/system VMs removed — they belong in SLM only.
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query

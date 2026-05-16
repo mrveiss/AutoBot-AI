@@ -11,7 +11,6 @@ posting operations. Credentials are read from skill config at runtime.
 
 import asyncio
 import json
-import logging
 from typing import Any, Dict, List, Tuple
 
 import aiohttp

@@ -23,7 +23,6 @@ from autobot_shared.logging_manager import get_logger
 
 from __future__ import annotations
 
-import logging
 from typing import Any, List, Optional, Sequence
 
 from knowledge.backends.base import (

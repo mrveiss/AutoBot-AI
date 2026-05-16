@@ -9,7 +9,6 @@ Extended with desktop interaction controls (Issue #74)
 
 import asyncio
 import base64
-import logging
 import re
 import subprocess  # nosec B404
 import tempfile

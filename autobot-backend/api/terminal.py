@@ -110,7 +110,6 @@ See Also:
 
 import asyncio
 import json
-import logging
 import shlex
 import signal
 import time

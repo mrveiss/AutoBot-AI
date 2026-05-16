@@ -20,7 +20,6 @@ from autobot_shared.logging_manager import get_logger
 
 from __future__ import annotations
 
-import logging
 import xml.etree.ElementTree as ET  # nosec B405 — sitemap XML from crawled URLs; XXE risk accepted
 from typing import List, Optional
 from urllib.parse import urlparse

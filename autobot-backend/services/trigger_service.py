@@ -31,7 +31,6 @@ import asyncio
 import hashlib
 import hmac
 import json
-import logging
 import secrets
 import uuid
 from dataclasses import asdict, dataclass, field

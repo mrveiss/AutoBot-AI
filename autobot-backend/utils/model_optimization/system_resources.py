@@ -9,7 +9,6 @@ Contains system resource analysis for model selection.
 Issue #2032: Multi-GPU VRAM detection — sums free VRAM across all GPUs.
 """
 
-import logging
 from typing import List, Tuple
 
 import psutil

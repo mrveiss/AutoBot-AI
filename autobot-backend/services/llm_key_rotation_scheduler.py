@@ -10,8 +10,6 @@ and auto-revokes keys whose expires_at has passed.
 
 from __future__ import annotations
 
-import os
-
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from autobot_shared.logging_manager import get_logger

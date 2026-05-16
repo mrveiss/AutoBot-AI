@@ -24,7 +24,6 @@ Issue #357 - Wrapped blocking SQLite operations with asyncio.to_thread() for non
 """
 
 import asyncio
-import logging
 import re
 import sqlite3
 from datetime import datetime, timezone

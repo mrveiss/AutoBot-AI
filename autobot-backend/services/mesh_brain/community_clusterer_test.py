@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from autobot_shared.logging_manager import get_logger
 from services.mesh_brain.community_clusterer import CommunityClusterer, cluster_graph
 
 
@@ -252,7 +251,7 @@ async def test_loop_body_logs_warning_and_sleeps_on_import_error(caplog):
         try:
             await CommunityClusterer(mesh_db).run()
         except ImportError as exc:
-            import logging as _logging
+            pass
 
             _get_logger(__name__).warning(
                 "graspologic not installed — community clustering paused. "

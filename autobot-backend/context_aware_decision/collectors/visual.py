@@ -9,7 +9,6 @@ Specialized collector for visual context information from screen analysis.
 Part of Issue #381 - God Class Refactoring
 """
 
-import logging
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger

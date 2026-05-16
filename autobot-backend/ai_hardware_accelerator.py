@@ -189,7 +189,6 @@ class AIHardwareAccelerator:
         self.redis_client = None
         self.device_metrics = {}
         self.task_history = []
-        import os
 
         npu_worker_host = config.npu_worker_host
         npu_worker_port = config.npu_worker_port

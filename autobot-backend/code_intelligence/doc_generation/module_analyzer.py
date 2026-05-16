@@ -145,7 +145,6 @@ class ModuleAnalyzer:
 
     def analyze_package(self, package_path: str, depth: int = 0) -> Optional[PackageDoc]:
         """Analyze a Python package and all its modules."""
-        import logging
 
         logger = get_logger(__name__)
 

@@ -22,7 +22,6 @@ All classes are now in the llm_pattern_analysis/ package. This module provides
 backward compatibility by re-exporting all classes.
 """
 
-import logging
 import time
 from datetime import datetime, timezone
 from pathlib import Path

@@ -19,7 +19,6 @@ Design:
   itself is async only to be compatible with the async call sites.
 """
 
-import logging
 from typing import Any
 
 from autobot_shared.logging_manager import get_logger

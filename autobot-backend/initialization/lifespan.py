@@ -11,7 +11,6 @@ Handles application startup and shutdown with 2-phase initialization:
 
 import asyncio
 import logging
-import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 

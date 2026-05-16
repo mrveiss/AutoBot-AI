@@ -10,7 +10,6 @@ This module provides a centralized interface for communicating with the AI Stack
 
 import asyncio
 import json
-import os
 import time
 import uuid
 from typing import Dict, List, Optional

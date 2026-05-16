@@ -11,7 +11,6 @@ and interaction patterns for inter-agent communication within AutoBot.
 
 import asyncio
 import json
-import logging
 import os
 import sys
 import time

@@ -18,7 +18,6 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 """
 
 import hashlib
-import logging
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field

@@ -9,7 +9,6 @@ Specialized collector for audio/voice context information.
 Part of Issue #381 - God Class Refactoring
 """
 
-import logging
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger

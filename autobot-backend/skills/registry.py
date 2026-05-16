@@ -9,7 +9,6 @@ Handles skill lifecycle (load, enable, disable) and dependency validation.
 """
 
 import importlib
-import logging
 import pkgutil
 import threading
 from typing import Any, Dict, List, Optional, Set, Type

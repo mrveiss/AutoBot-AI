@@ -6,7 +6,6 @@ Hot Reload API Endpoints
 Provides REST endpoints for hot reloading chat workflow modules during development
 """
 
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request

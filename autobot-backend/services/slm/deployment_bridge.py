@@ -16,7 +16,6 @@ Related to Issue #3407.
 from __future__ import annotations
 
 import enum
-import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime

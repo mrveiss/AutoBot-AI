@@ -12,8 +12,6 @@ Updated in Issue #453 to use real Ollama integration.
 """
 
 import asyncio
-import logging
-import os
 from typing import Optional
 
 from autobot_shared.logging_manager import get_logger

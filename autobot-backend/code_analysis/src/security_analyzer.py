@@ -5,7 +5,6 @@ Analyzes codebase for security vulnerabilities and defensive coding issues
 
 import ast
 import json
-import logging
 import re
 import time
 from dataclasses import dataclass

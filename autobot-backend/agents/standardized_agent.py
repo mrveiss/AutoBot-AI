@@ -13,7 +13,6 @@ This addresses the critical duplicate pattern identified in the codebase analysi
 """
 
 import asyncio
-import logging
 import time
 from abc import abstractmethod
 from dataclasses import dataclass

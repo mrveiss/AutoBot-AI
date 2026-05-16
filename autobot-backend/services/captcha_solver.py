@@ -35,7 +35,6 @@ Related: Issue #206
 from __future__ import annotations
 
 import io
-import logging
 import re
 from dataclasses import dataclass
 from enum import Enum

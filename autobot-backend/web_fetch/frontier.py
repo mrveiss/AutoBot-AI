@@ -10,7 +10,6 @@ Issue #7400: Foundation package for unified web search/scrape/crawl.
 from __future__ import annotations
 
 import hashlib
-import logging
 from collections import deque
 from typing import List, Optional, Tuple
 from urllib.parse import urljoin, urlparse

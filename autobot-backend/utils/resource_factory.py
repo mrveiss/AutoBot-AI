@@ -7,8 +7,6 @@ Resource Factory - Centralized management of expensive shared resources
 Provides singleton-like behavior with app.state integration for optimal performance
 """
 
-import logging
-
 from fastapi import Request
 
 from autobot_shared.logging_manager import get_logger

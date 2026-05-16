@@ -5,7 +5,6 @@
 Shared utilities and constants for codebase analytics endpoints
 """
 
-import logging
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger

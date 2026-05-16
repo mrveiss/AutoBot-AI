@@ -16,7 +16,6 @@ Endpoints:
 - POST /api/audit/cleanup - Trigger cleanup of old audit logs (admin only)
 """
 
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 

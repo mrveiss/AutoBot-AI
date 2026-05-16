@@ -10,7 +10,6 @@ including logging, retry mechanisms, and error recovery strategies.
 
 import asyncio
 import functools
-import logging
 import threading
 import time
 import traceback

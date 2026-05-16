@@ -8,7 +8,6 @@ Defines the abstract interface for platform-specific message adapters.
 All platform adapters (Slack, Discord, WhatsApp, Teams, Web) inherit from this.
 """
 
-import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict

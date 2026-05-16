@@ -9,7 +9,6 @@ Follows the canonical client pattern established by Redis utilities.
 Pool sizes are coordinated via SSOT config (#2860).
 """
 
-import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
 

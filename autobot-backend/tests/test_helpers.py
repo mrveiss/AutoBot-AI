@@ -1,7 +1,5 @@
 """Shared helpers for backend e2e/integration tests."""
 
-import os
-
 from autobot_shared.ssot_config import config
 
 

@@ -13,7 +13,6 @@ UPDATED: Now uses unified_config_manager for consistent model selection
 """
 
 import fcntl
-import logging
 import threading
 from typing import Dict
 

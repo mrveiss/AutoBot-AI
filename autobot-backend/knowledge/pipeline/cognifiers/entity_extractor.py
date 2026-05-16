@@ -8,7 +8,6 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 Issue #2025: Dual-mode entity extraction — LLM + NLP (Neural Mesh RAG Phase 2).
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 

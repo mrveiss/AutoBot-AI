@@ -11,7 +11,6 @@ Endpoints:
     DELETE /verbatim-memory/session/{session_id}
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request

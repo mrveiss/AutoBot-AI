@@ -19,7 +19,6 @@ import textwrap
 
 import pytest
 
-from autobot_shared.ssot_config import config
 from code_intelligence.precommit_analyzer import (
     CheckCategory,
     CheckDefinition,

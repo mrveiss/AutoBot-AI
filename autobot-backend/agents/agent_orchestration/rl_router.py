@@ -19,7 +19,6 @@ rl:router:replay:{state_key}   LIST   JSON-encoded (action, reward) pairs
 
 import hashlib
 import json
-import logging
 import time
 from typing import Dict, List, Tuple
 

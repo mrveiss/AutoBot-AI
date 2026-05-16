@@ -20,7 +20,6 @@ performance requirements, and system resources.
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.http_client import get_http_client

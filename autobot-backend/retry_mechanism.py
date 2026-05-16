@@ -8,7 +8,6 @@ Handles transient failures in network requests, database operations, and externa
 """
 
 import asyncio
-import logging
 import random
 import threading
 import time

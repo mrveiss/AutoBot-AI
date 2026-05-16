@@ -9,7 +9,6 @@ GPU memory management, batch processing optimization, and performance monitoring
 Issue #473: Added Prometheus metrics integration for unified monitoring.
 """
 
-import logging
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass

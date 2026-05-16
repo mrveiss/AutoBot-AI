@@ -11,7 +11,6 @@ Extracted from performance_monitor.py as part of Issue #381 refactoring.
 
 import asyncio
 import json
-import logging
 import time
 from functools import wraps
 

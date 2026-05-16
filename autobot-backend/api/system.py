@@ -3,7 +3,6 @@
 # Author: mrveiss
 import asyncio
 import importlib
-import logging
 import sys
 from datetime import datetime, timezone
 

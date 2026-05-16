@@ -9,7 +9,6 @@ tool integrations. Each integration extends BaseIntegration and
 implements connection testing, health checks, and tool-specific methods.
 """
 
-import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum

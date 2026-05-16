@@ -15,7 +15,6 @@ Stores key metadata in Redis MAIN database:
 from __future__ import annotations
 
 import hashlib
-import os
 import secrets
 import time
 from dataclasses import dataclass

@@ -11,7 +11,6 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import asyncio
-import logging
 from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger

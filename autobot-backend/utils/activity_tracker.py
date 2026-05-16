@@ -10,7 +10,6 @@ Centralized utility for tracking user activities across all UI components.
 Provides async, non-blocking activity recording with secret usage detection.
 """
 
-import logging
 import re
 import uuid
 from typing import Any, Optional

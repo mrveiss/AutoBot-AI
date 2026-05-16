@@ -7,7 +7,6 @@ Storage utilities for codebase analytics (Redis and ChromaDB)
 Issue #369: Added async ChromaDB operations to prevent event loop blocking.
 """
 
-import logging
 import re
 from pathlib import Path
 

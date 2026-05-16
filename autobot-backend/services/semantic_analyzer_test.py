@@ -9,7 +9,6 @@ Tests for framework detection and coding pattern analysis.
 
 import ast
 
-from autobot_shared.logging_manager import get_logger
 from services.semantic_analyzer import SemanticAnalyzer
 
 

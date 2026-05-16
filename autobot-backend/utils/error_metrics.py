@@ -9,7 +9,6 @@ for the error handling system. Integrates with error_boundaries and error_catalo
 """
 
 import asyncio
-import logging
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional

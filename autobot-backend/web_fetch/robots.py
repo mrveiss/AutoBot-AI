@@ -13,7 +13,6 @@ TTL: 1 hour (hardcoded per robots.txt staleness expectations).
 from __future__ import annotations
 
 import asyncio
-import logging
 import urllib.robotparser
 from typing import Optional
 from urllib.parse import urlparse

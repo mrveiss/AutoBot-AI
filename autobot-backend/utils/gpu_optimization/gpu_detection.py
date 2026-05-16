@@ -11,7 +11,6 @@ Contains GPU availability checking and capability detection.
 
 import functools
 import json
-import logging
 import platform
 import subprocess
 from pathlib import Path

@@ -7,7 +7,6 @@ Manages classification rules and keywords in Redis for dynamic updates
 """
 
 import json
-import logging
 from typing import Any, Dict, List, Optional
 
 import redis

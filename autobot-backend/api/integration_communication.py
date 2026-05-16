@@ -9,7 +9,6 @@ Provides endpoints for testing connections, sending messages, and
 listing channels/guilds.
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status

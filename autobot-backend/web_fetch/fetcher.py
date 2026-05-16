@@ -19,7 +19,6 @@ Jina circuit breaker from media.link.pipeline is reused via _try_jina / _record_
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from typing import Optional
 from urllib.parse import urlparse

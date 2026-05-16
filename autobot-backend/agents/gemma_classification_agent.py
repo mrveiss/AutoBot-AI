@@ -7,7 +7,6 @@ Uses Google's Gemma 2B/3 models for ultra-fast classification tasks
 """
 
 import json
-import logging
 from typing import Any, Dict, List, Optional
 
 import aiohttp

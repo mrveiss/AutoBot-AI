@@ -11,7 +11,6 @@ not, to generate a better search query for the next round.
 Issue #1382: Follow-up from #1373.
 """
 
-import logging
 from dataclasses import dataclass
 from typing import List, Optional
 

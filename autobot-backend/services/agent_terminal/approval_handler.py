@@ -8,7 +8,6 @@ Manages command approval workflow and auto-approval rules.
 """
 
 import asyncio
-import logging
 import time
 from typing import Dict, Optional
 

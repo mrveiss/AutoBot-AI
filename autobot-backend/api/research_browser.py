@@ -7,7 +7,6 @@ Handles browser automation for research tasks with user interaction support
 """
 
 import asyncio
-import logging
 import os
 from datetime import datetime, timezone
 from typing import Optional

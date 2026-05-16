@@ -5,7 +5,6 @@
 Provider-specific health check implementations
 """
 
-import os
 import time
 
 import aiohttp

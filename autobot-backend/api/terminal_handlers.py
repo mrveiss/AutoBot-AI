@@ -22,7 +22,6 @@ Related Issues: #185 (Split), #210 (Terminal split), #290 (God class refactoring
 
 import asyncio
 import json
-import logging
 import os
 import time
 from datetime import datetime, timezone

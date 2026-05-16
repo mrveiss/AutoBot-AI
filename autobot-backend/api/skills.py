@@ -10,7 +10,6 @@ configure, execute, and monitor skills.
 Includes metrics and health tracking (Issue #4339).
 """
 
-import logging
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request

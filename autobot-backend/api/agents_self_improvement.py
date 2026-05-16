@@ -8,7 +8,6 @@ Endpoints for accessing task outcome history, learned strategies,
 and resetting learning state per agent/task type.
 """
 
-import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Query

@@ -12,7 +12,6 @@ import ast
 import asyncio
 import hashlib
 import json
-import logging
 import os
 import re
 from collections import defaultdict

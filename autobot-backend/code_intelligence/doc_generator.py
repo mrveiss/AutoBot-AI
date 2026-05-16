@@ -31,7 +31,6 @@ Refactoring History:
   to reduce god class DocGenerator from 48 methods to 5 methods (90% reduction)
 """
 
-import logging
 import os
 from typing import List, Optional, Set
 

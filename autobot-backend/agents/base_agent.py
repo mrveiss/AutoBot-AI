@@ -8,8 +8,6 @@ Provides unified interface for agents running locally or in containers
 
 import asyncio
 import json
-import logging
-import os
 import threading
 import uuid
 from abc import ABC, abstractmethod

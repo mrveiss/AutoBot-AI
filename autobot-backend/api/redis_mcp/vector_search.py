@@ -9,7 +9,6 @@ hybrid search, and index info — using Redis Stack 7.4.0 FT.* commands.
 Issue #2623: Transparent text-to-embedding conversion via NPU/Ollama fallback.
 """
 
-import logging
 import re
 import struct
 from typing import Any, Dict, List, Optional

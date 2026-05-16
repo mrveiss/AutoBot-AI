@@ -81,7 +81,6 @@ class _ConfigStub:
 
     def get_redis_config(self):
         """Env-var fallback so redis_client.get_redis_client() survives re-entry (#3491)."""
-        import os
 
         return {
             "enabled": config.redis_enabled.lower() == "true",

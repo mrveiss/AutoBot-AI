@@ -10,7 +10,6 @@ and managed with priority-based execution.
 """
 
 import asyncio
-import logging
 import threading
 
 from autobot_shared.logging_manager import get_logger

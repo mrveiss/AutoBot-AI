@@ -13,7 +13,6 @@ Issue #386: Analyzes Vue SFC files (.vue) for:
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
-import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple

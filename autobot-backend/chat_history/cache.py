@@ -11,7 +11,6 @@ Provides caching functionality for chat sessions:
 """
 
 import json
-import os
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger

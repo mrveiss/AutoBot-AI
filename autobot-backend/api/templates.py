@@ -11,7 +11,6 @@ Route ordering: Static paths (/templates/search, /templates/categories,
 segments as path parameters.
 """
 
-import logging
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query

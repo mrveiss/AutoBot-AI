@@ -8,7 +8,6 @@ Business logic for user management operations including CRUD,
 authentication, and role assignment.
 """
 
-import logging
 import secrets
 import uuid
 from typing import List, Optional

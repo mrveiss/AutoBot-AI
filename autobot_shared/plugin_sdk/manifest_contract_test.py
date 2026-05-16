@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import pytest
 
 from plugin_sdk.manifest_contract import ManifestContract
-from plugin_sdk.unified_registry import UnifiedRegistry, get_unified_registry
+from plugin_sdk.unified_registry import get_unified_registry
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -171,7 +171,6 @@ def _load_manifest_parser():
     import sys
     import types
     from pathlib import Path
-    from unittest.mock import MagicMock
 
     # Stub autobot_shared.logging_manager so get_logger returns a stdlib logger.
     _lm_stub = types.ModuleType("autobot_shared.logging_manager")

@@ -19,7 +19,6 @@ from autobot_shared.logging_manager import get_logger
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple

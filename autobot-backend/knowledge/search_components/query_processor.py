@@ -8,7 +8,6 @@ Issue #381: Extracted from search.py god class refactoring.
 Contains query preprocessing and expansion functionality.
 """
 
-import logging
 import re
 from typing import List
 

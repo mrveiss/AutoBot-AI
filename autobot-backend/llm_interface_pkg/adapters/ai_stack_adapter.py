@@ -7,7 +7,6 @@ AI Stack Adapter - Wraps AIStackClient for the adapter registry.
 Issue #1403: Routes LLM requests through AI Stack VM (.24).
 """
 
-import logging
 import time
 from typing import List, Optional
 

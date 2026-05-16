@@ -6,7 +6,6 @@ Monitors system metrics and sends alerts when thresholds are exceeded
 
 import asyncio
 import json
-import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone

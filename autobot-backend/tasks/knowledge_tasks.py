@@ -11,7 +11,6 @@ Issue #424: Added periodic task for incremental man page updates.
 
 import asyncio
 import fnmatch
-import logging
 import os
 import subprocess  # nosec B404 - used for internal script execution only
 import sys

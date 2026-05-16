@@ -17,7 +17,6 @@ Key integration points:
 Issue #1946: Layer-by-layer inference mode for batch/offline processing.
 """
 
-import logging
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional

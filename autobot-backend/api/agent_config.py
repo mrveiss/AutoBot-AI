@@ -9,8 +9,6 @@ Provides endpoints for configuring and monitoring AI agents used throughout the 
 Each agent can have its own LLM model configuration and status monitoring.
 """
 
-import logging
-import os
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -40,12 +38,6 @@ from services.slm_client import get_slm_client
 logger = get_logger(__name__)
 
 # 6-tier model mapping (#2553) — all defaults from SSOT constants.
-from autobot_shared.ssot_config import CLASSIFICATION_MODEL as _SSOT_CLASSIFICATION
-from autobot_shared.ssot_config import INSTRUCTION_MODEL as _SSOT_INSTRUCTION
-from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL as _SSOT_LIGHT
-from autobot_shared.ssot_config import QUALITY_MODEL as _SSOT_QUALITY
-from autobot_shared.ssot_config import ROUTING_MODEL as _SSOT_ROUTING
-from autobot_shared.ssot_config import SYSTEM_MODEL as _SSOT_SYSTEM
 
 # Routing tier — orchestrator only, no tool use
 ROUTING_TIER_MODEL = config.routing_model

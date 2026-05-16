@@ -14,7 +14,6 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
 import asyncio
-import logging
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Query

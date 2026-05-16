@@ -9,7 +9,6 @@ can see what is pending, what failed, and how the worker is keeping up.
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Query

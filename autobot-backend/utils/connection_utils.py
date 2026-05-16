@@ -7,7 +7,6 @@ Eliminates duplication across system.py, llm.py, and redis.py
 """
 
 import asyncio
-import os
 import time
 from datetime import datetime, timezone
 
@@ -20,7 +19,6 @@ from autobot_shared.ssot_config import get_ollama_url
 from config import config as global_config_manager
 from constants.api_constants import PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS
 from constants.model_constants import ModelConstants
-from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)

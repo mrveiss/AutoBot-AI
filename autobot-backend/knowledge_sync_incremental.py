@@ -190,7 +190,6 @@ class IncrementalKnowledgeSync:
 
     def __init__(self, project_root: str = None):
         """Initialize incremental sync with project root and file tracking."""
-        import os
 
         if project_root is None:
             project_root = config.base_dir

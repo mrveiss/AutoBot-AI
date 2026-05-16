@@ -24,7 +24,6 @@ Reports include:
 - CausalSeverity (CRITICAL, DEGRADED, WARNING)
 """
 
-import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone

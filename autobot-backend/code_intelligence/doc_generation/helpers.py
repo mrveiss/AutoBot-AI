@@ -423,7 +423,6 @@ def validate_module_path(file_path: str) -> Optional[str]:
     Returns:
         Absolute path if valid, None otherwise
     """
-    import logging
 
     logger = get_logger(__name__)
 
@@ -449,7 +448,6 @@ def read_and_parse_module(file_path: str) -> Optional[Tuple[str, ast.Module]]:
     Returns:
         Tuple of (source, ast) or None on error
     """
-    import logging
 
     logger = get_logger(__name__)
 

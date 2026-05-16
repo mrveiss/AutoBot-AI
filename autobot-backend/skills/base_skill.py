@@ -9,7 +9,6 @@ Skills are self-contained AI capability modules with manifest-driven
 configuration, dependency tracking, and lifecycle management.
 """
 
-import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum

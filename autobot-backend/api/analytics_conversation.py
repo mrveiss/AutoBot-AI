@@ -7,7 +7,6 @@ Analyzes AutoBot conversation patterns, intent flows, and interaction metrics
 """
 
 import asyncio
-import logging
 import re
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone

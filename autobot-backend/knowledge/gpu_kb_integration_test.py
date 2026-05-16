@@ -4,7 +4,6 @@ Simple test to verify GPU-optimized semantic chunking integration with knowledge
 """
 
 import asyncio
-import os
 import sys
 import time
 

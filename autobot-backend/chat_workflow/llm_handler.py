@@ -10,7 +10,6 @@ and streaming response processing.
 
 import asyncio
 import json
-import logging
 from typing import Any, Dict, List
 
 from async_chat_workflow import WorkflowMessage
@@ -700,7 +699,6 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             return default_model
         except Exception as e:
             logger.error("Failed to load model from config: %s", e)
-            import os
 
             return config.default_llm_model
 

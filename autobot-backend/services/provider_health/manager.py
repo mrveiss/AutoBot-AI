@@ -6,7 +6,6 @@ Provider Health Manager - Orchestrates health checks across all providers
 """
 
 import asyncio
-import logging
 import time
 from typing import Dict, Optional
 

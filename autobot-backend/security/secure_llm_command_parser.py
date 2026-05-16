@@ -9,7 +9,6 @@ This module provides secure command extraction that prevents prompt injection at
 by validating LLM responses before extracting executable commands.
 """
 
-import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 

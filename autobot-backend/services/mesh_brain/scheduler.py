@@ -4,7 +4,6 @@
 """MeshBrainScheduler — orchestrates autonomous mesh evolution jobs (#1994, #2120)."""
 
 import asyncio
-import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional

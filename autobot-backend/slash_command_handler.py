@@ -24,7 +24,6 @@ Updated: 2025-12-06 - Refactored to fix Feature Envy with Command pattern
 """
 
 import asyncio
-import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass

@@ -19,7 +19,6 @@ Execution: Uses PTY integration for commands to appear in user's terminal.
 """
 
 import asyncio
-import logging
 import time
 from datetime import datetime, timezone
 from typing import AsyncGenerator, Optional, Tuple, Union

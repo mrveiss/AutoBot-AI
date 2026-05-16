@@ -18,7 +18,6 @@ SSE event shapes:
 
 import asyncio
 import json
-import logging
 from typing import AsyncIterator, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Request

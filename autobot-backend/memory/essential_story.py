@@ -9,7 +9,6 @@ has persistent top-memories without requiring a RAG retrieval round-trip.
 """
 
 import asyncio
-import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 

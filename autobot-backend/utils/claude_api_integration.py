@@ -7,7 +7,6 @@ Integrates the batching system with AutoBot's existing Claude API infrastructure
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional

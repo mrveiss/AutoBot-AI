@@ -24,7 +24,6 @@ when the main asyncio thread pool is saturated by indexing operations.
 
 import asyncio
 import base64
-import logging
 import mimetypes
 import os
 import shutil

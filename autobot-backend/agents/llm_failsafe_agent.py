@@ -11,7 +11,6 @@ and degraded operation modes.
 
 import asyncio
 import json
-import logging
 import time
 from dataclasses import dataclass
 from enum import Enum

@@ -7,7 +7,6 @@ Organization Knowledge Management API
 Issue #679: Organization-level knowledge policies, analytics, and controls.
 """
 
-import logging
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request

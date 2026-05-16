@@ -15,7 +15,6 @@ context actually covers the user's query. Two evaluation tiers:
 Issue: #1374
 """
 
-import logging
 import re
 import time
 from dataclasses import dataclass

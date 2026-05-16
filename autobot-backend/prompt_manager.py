@@ -10,7 +10,6 @@ across the AutoBot application, eliminating hardcoded prompts in Python code.
 
 import hashlib
 import json
-import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path

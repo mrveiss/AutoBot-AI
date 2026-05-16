@@ -12,7 +12,6 @@ Issue #386: Analyzes shell scripts (.sh, .bash, .zsh) for:
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
-import logging
 import re
 from pathlib import Path
 from typing import Dict, List, Set, Tuple

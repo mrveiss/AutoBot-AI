@@ -32,8 +32,6 @@ from autobot_shared.logging_manager import get_logger
 from __future__ import annotations
 
 import asyncio
-import logging
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 

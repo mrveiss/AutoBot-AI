@@ -8,7 +8,6 @@ Issue #759: ECL Pipeline endpoints for entity extraction, temporal events,
 hierarchical summarization, and document processing.
 """
 
-import logging
 import re
 from typing import Optional
 from uuid import UUID

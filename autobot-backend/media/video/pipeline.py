@@ -10,7 +10,6 @@
 
 import asyncio
 import base64
-import logging
 import os
 import tempfile
 from typing import Any, Dict, List, Optional, Tuple

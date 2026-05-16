@@ -8,7 +8,6 @@ Executes tasks in isolated Docker containers with resource limits.
 Provides CPU, memory, and timeout constraints.
 """
 
-import logging
 from typing import Dict, Optional, Tuple
 
 from autobot_shared.logging_manager import get_logger

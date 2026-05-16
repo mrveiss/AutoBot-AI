@@ -7,7 +7,6 @@ This bypasses cached instances and creates fresh knowledge base for testing
 """
 
 import asyncio
-import logging
 
 from fastapi import APIRouter
 

@@ -31,7 +31,6 @@ from autobot_shared.logging_manager import get_logger
 """
 
 import asyncio
-import logging
 import os
 import subprocess  # nosec B404 - Required for SSH key validation
 import tempfile

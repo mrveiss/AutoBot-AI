@@ -9,7 +9,6 @@ Extracted from voice_processing_system.py as part of Issue #381 god class refact
 """
 
 import asyncio
-import logging
 import time
 from typing import Any, Dict, List
 

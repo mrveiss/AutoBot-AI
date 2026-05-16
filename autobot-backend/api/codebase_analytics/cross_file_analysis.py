@@ -19,7 +19,6 @@ finding to ChromaDB with ``type="problem"`` so they surface in
 """
 
 import asyncio
-import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional  # noqa: F401  (List used in pub API)
 

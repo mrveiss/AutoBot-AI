@@ -13,7 +13,6 @@ analyzer into a single scanning interface.
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
-import logging
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set

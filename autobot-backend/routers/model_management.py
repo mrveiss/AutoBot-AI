@@ -7,7 +7,6 @@ Model Management API Router (Issue #904)
 Endpoints for training, deploying, and serving code completion models.
 """
 
-import logging
 import threading
 import time
 from pathlib import Path

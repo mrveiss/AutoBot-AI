@@ -11,7 +11,6 @@ These examples can be copied and adapted for other components.
 """
 
 import asyncio
-import logging
 import os
 import sys
 from typing import Any, Dict, List

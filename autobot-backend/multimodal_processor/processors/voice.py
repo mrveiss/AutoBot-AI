@@ -9,7 +9,6 @@ GPU-accelerated audio processing with Whisper and Wav2Vec2 models.
 Part of Issue #381 - God Class Refactoring
 """
 
-import logging
 import time
 from typing import Any, Dict, Tuple
 

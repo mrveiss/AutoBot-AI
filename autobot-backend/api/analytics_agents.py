@@ -13,7 +13,6 @@ Provides API endpoints for:
 Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query

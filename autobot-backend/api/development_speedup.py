@@ -7,7 +7,6 @@ Development Speedup API
 Advanced code analysis endpoints for development acceleration using NPU and Redis.
 """
 
-import logging
 from typing import Any, Awaitable, Callable, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Query

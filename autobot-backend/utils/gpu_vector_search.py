@@ -17,7 +17,6 @@ Issue #387: GPU-Accelerated Vector Search Implementation
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone

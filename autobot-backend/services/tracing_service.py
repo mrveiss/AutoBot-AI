@@ -24,8 +24,6 @@ Features:
 - Configurable sampling strategy (Issue #697)
 """
 
-import logging
-import os
 import threading
 from contextlib import contextmanager
 from typing import Any, Dict, Optional

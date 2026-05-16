@@ -10,7 +10,6 @@ Scores incoming requests on a 0-10 scale to determine which model tier
 should handle the request. Uses lightweight heuristics for fast scoring (~5ms).
 """
 
-import logging
 import re
 from typing import Dict, List, Set
 

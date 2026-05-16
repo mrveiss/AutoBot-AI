@@ -8,7 +8,6 @@ CRUD operations for the central agents table and a seed function
 that populates it from DEFAULT_AGENT_CONFIGS at startup.
 """
 
-import logging
 from typing import Dict, List, Optional
 
 from sqlalchemy import select

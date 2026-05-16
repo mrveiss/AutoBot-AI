@@ -15,7 +15,6 @@ Parent Epic: #217 - Advanced Code Intelligence
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional

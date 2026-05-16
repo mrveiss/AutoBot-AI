@@ -8,7 +8,6 @@ Handles command execution in PTY with intelligent polling and cancellation.
 """
 
 import asyncio
-import logging
 import re
 import time
 import uuid

@@ -10,7 +10,6 @@ streaming).  This adapter's sole responsibility is the ``test_environment()``
 diagnostic method used by ``api/adapters.py``.
 """
 
-import logging
 import time
 from typing import List, Optional
 

@@ -13,7 +13,6 @@ Provides session management for chat history:
 """
 
 import json
-import logging
 import os
 import time
 import uuid

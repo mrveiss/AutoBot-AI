@@ -10,7 +10,6 @@ Issue #2092: Added Q-learning RL router between pattern-match and LLM fallback.
 """
 
 import json
-import logging
 import time
 from typing import Any, Dict, List, Optional
 

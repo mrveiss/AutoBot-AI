@@ -36,7 +36,6 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
-import logging
 import time
 import uuid
 from dataclasses import dataclass, field

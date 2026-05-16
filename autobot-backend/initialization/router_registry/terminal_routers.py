@@ -8,8 +8,6 @@ This module handles loading of terminal-related API routers.
 These routers provide terminal access, command execution, and remote terminal functionality.
 """
 
-import logging
-
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

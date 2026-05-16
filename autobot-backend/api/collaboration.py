@@ -8,7 +8,6 @@ Multi-user session collaboration with permission management.
 Part of Issue #872 - Session Collaboration API (#608 Phase 3).
 """
 
-import logging
 import uuid
 from typing import Optional
 

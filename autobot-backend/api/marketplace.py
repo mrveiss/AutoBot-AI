@@ -10,7 +10,6 @@ Issue #1803 - Plugin and agent marketplace: package, share, and install extensio
 """
 
 import json
-import logging
 from enum import Enum
 from typing import Any, Optional
 

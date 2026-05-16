@@ -13,7 +13,6 @@ Author: mrveiss
 import enum
 import hashlib
 import json
-import logging
 import random
 import sys
 import time

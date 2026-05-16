@@ -14,7 +14,6 @@ Issue #401: Improved code quality - proper imports, type hints, security fixes.
 import asyncio
 import base64
 import json
-import logging
 import os
 import shutil
 import subprocess

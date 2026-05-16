@@ -9,7 +9,6 @@ Mount point: /api/analytics/codebase/sources (via router.py)
 """
 
 import asyncio
-import logging
 import re
 import shutil
 import uuid

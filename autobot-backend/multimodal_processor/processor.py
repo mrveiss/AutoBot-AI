@@ -11,7 +11,6 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import asyncio
-import logging
 import time
 from typing import Any, Dict, List, Optional
 

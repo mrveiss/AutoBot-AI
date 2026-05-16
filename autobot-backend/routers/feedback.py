@@ -7,7 +7,6 @@ Feedback API Router (Issue #905)
 Endpoints for completion feedback tracking and model improvement.
 """
 
-import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query

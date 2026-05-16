@@ -9,7 +9,6 @@ commentary and analysis for the intelligent agent system.
 """
 
 import asyncio
-import logging
 import shlex
 import subprocess
 import time

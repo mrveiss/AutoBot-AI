@@ -10,7 +10,6 @@ and AI-generated review comments. Learns from past reviews.
 
 import asyncio
 import json
-import logging
 import re
 import uuid
 from datetime import datetime, timezone

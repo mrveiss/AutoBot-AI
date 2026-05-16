@@ -8,7 +8,6 @@ Handles privilege escalation requests through GUI dialogs
 """
 
 import asyncio
-import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional

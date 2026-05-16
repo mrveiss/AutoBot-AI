@@ -22,8 +22,6 @@ from autobot_shared.logging_manager import get_logger
     )
 """
 
-import logging
-
 from autobot_shared.singleton_factory import lazy_singleton
 
 from .manager import ChatWorkflowManager

@@ -18,7 +18,6 @@ Parent Epic: #217 - Advanced Code Intelligence
 """
 
 import ast
-import logging
 import re
 import time
 from dataclasses import dataclass, field

@@ -5,7 +5,6 @@ Analyzes API endpoints for consistency, patterns, and best practices
 
 import ast
 import json
-import logging
 import re
 import time
 from dataclasses import dataclass

@@ -17,8 +17,6 @@ Features:
 
 import asyncio
 import hashlib
-import logging
-import os
 import time
 from dataclasses import dataclass, field
 from enum import Enum

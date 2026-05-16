@@ -9,14 +9,12 @@ Issue #7402: Wire dead ``max_depth`` parameter to Frontier + RobotsCache + WebFe
 """
 
 import hashlib
-import logging
 import os
 from datetime import datetime
 from typing import List, Optional
 from urllib.parse import urlparse
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (

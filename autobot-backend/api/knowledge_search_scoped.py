@@ -7,8 +7,6 @@ Scope-Aware Knowledge Search API
 Issue #679: Permission-filtered knowledge search that respects hierarchical access control.
 """
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.schemas_knowledge import (

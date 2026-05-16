@@ -11,7 +11,6 @@ store, retrieve, update, delete, and vectorization.
 import asyncio
 import hashlib
 import json
-import logging
 import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional

@@ -2,7 +2,6 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 import asyncio
-import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse

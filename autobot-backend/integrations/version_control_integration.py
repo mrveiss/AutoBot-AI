@@ -4,7 +4,6 @@
 
 """Version Control System integrations for GitLab and Bitbucket."""
 
-import logging
 from typing import Any, Dict, List
 
 import aiohttp

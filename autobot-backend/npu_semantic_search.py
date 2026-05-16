@@ -166,7 +166,6 @@ class NPUSemanticSearch:
         self.similarity_threshold = 0.7  # Minimum similarity for results
 
         # NPU Worker configuration
-        import os
 
         npu_worker_host = config.npu_worker_host
         npu_worker_port = config.npu_worker_port

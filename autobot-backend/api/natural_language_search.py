@@ -15,7 +15,6 @@ Features:
 - Integration with existing semantic search
 """
 
-import logging
 import re
 from dataclasses import dataclass
 from enum import Enum

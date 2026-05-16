@@ -5,7 +5,6 @@
 Simple synchronous PTY implementation that works reliably
 """
 
-import logging
 import os
 import pty
 import queue

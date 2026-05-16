@@ -8,8 +8,6 @@ Exposes queue state and allows removal of queued jobs.
 Mount point: /api/analytics/codebase (via router.py)
 """
 
-import logging
-
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 

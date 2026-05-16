@@ -27,7 +27,6 @@ from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import importlib
-import logging
 import sys
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple

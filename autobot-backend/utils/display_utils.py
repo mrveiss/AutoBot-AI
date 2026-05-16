@@ -8,7 +8,6 @@ Provides cross-platform display resolution detection for optimal
 Playwright viewport configuration based on the current environment.
 """
 
-import logging
 import os
 import subprocess
 import sys

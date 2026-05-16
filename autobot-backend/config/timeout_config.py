@@ -6,7 +6,6 @@
 Timeout configuration management for unified config manager.
 """
 
-import os
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger

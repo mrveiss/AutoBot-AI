@@ -8,7 +8,6 @@ Manages hardware acceleration with priority: NPU > GPU > CPU
 Optimizes model execution across different hardware targets.
 """
 
-import logging
 import os
 import platform
 import subprocess  # nosec B404 - hardware detection requires subprocess
@@ -18,7 +17,6 @@ import psutil
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.ssot_config import config
 from config import config_manager
 
 logger = get_logger(__name__)

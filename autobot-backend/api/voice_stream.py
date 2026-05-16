@@ -29,7 +29,6 @@ Protocol (JSON messages):
 
 import asyncio
 import base64
-import os
 from collections import deque
 from typing import Optional
 

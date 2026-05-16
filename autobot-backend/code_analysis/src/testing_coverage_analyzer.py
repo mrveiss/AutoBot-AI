@@ -5,7 +5,6 @@ Analyzes codebase for testing gaps, missing test patterns, and coverage issues
 
 import ast
 import json
-import logging
 import re
 import time
 from dataclasses import dataclass

@@ -8,7 +8,6 @@ Extracted from analytics.py to maintain <20 functions per file
 """
 
 import asyncio
-import logging
 import threading
 from datetime import datetime, timezone
 

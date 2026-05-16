@@ -6,8 +6,6 @@ Workflow Scheduler API endpoints
 Provides workflow scheduling and queue management capabilities
 """
 
-import logging
-
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

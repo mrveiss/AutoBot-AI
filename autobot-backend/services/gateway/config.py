@@ -8,7 +8,6 @@ Issue #732: Unified Gateway for multi-channel communication.
 Contains configuration settings for the Gateway service.
 """
 
-import os
 from dataclasses import dataclass
 
 from autobot_shared.ssot_config import config

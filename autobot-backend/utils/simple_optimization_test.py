@@ -4,7 +4,6 @@ Simple test to verify GPU optimization is working
 """
 
 import asyncio
-import os
 import sys
 import time
 

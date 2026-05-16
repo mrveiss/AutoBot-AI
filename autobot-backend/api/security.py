@@ -11,8 +11,6 @@ Includes:
 - Domain security statistics
 """
 
-import logging
-
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
 

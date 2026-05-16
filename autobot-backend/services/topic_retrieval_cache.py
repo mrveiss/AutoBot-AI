@@ -23,7 +23,6 @@ Architecture:
 
 import asyncio
 import json
-import logging
 import time
 import uuid
 from dataclasses import dataclass

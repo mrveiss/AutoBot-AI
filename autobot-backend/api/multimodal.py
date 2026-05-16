@@ -7,7 +7,6 @@ Multi-Modal AI Processing API Endpoints
 Provides REST API access to GPU-accelerated multi-modal AI capabilities
 """
 
-import logging
 import time
 import uuid
 from typing import List, Optional

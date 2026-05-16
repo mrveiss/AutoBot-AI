@@ -10,8 +10,6 @@ Issue #3140: Updated to use LayerInferencePipeline for end-to-end generation.
 """
 
 import asyncio
-import logging
-import os
 import time
 from typing import Any, Dict, List, Optional
 

@@ -14,7 +14,6 @@ Replaces the dual Redis KB + ChromaDB CLI approach with a single ChromaDB-based 
 import asyncio
 import hashlib
 import json
-import logging
 import os
 import re
 import threading

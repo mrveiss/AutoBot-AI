@@ -35,7 +35,6 @@ Overlap note (issue #3336):
 """
 
 import asyncio
-import logging
 import os
 import uuid
 from dataclasses import dataclass, field

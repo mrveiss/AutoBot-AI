@@ -23,7 +23,6 @@ Issue #1951: Attention backend fallback chain.
 """
 
 import gc
-import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, List, Optional

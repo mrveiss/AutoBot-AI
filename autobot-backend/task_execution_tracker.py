@@ -8,7 +8,6 @@ Integrates with orchestrator and agents to provide comprehensive execution track
 
 import asyncio
 import json
-import logging
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone

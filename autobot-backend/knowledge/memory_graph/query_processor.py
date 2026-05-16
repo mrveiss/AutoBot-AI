@@ -20,7 +20,6 @@ Redis key layout (read-only; written by autobot_memory_graph):
 import asyncio
 import hashlib
 import json
-import logging
 import re
 import time
 from dataclasses import dataclass, field

@@ -20,8 +20,6 @@ async variants to prevent event loop blocking. See Issue #369.
 from __future__ import annotations
 
 import json
-import logging
-import os
 import pickle  # nosec B403 — reading ChromaDB internal pickle files only
 import sqlite3
 from pathlib import Path
