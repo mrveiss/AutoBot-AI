@@ -8,12 +8,12 @@ The plugin-per-provider architecture now lives in ``llm_providers/``.
 This module re-exports everything that external callers relied on so that
 no import sites need to change.
 
-New code should import directly from ``llm_interface_pkg.providers``:
+New code should import directly from ``llm_shared.providers``:
 
-    from llm_interface_pkg.providers import OllamaProvider, ...
-    from llm_interface_pkg import get_provider_registry
-    from llm_interface_pkg.models import LLMRequest, LLMResponse
-    from llm_interface_pkg.types import ProviderType, LLMType
+    from llm_shared.providers import OllamaProvider, ...
+    from llm_shared import get_provider_registry
+    from llm_shared.models import LLMRequest, LLMResponse
+    from llm_shared.types import ProviderType, LLMType
 """
 
 from __future__ import annotations
@@ -25,13 +25,13 @@ from autobot_shared.logging_manager import get_logger
 # ---------------------------------------------------------------------------
 # Re-export the plugin registry and base classes from canonical location
 # ---------------------------------------------------------------------------
-from llm_interface_pkg import BaseProvider, ProviderRegistry, get_provider_registry
+from llm_shared import BaseProvider, ProviderRegistry, get_provider_registry
 
 # ---------------------------------------------------------------------------
 # Re-export canonical types from their authoritative modules
 # ---------------------------------------------------------------------------
-from llm_interface_pkg.models import LLMRequest, LLMResponse
-from llm_interface_pkg.providers import (
+from llm_shared.models import LLMRequest, LLMResponse
+from llm_shared.providers import (
     AnthropicProvider,
     CustomOpenAIProvider,
     GroqProvider,
@@ -42,7 +42,7 @@ from llm_interface_pkg.providers import (
     OpenRouterProvider,
     VLLMProvider,
 )
-from llm_interface_pkg.types import LLMType, ProviderType
+from llm_shared.types import LLMType, ProviderType
 
 logger = get_logger(__name__)
 
@@ -80,7 +80,7 @@ from abc import ABC, abstractmethod
 class LLMProvider(ABC):
     """Abstract base class for LLM providers (legacy shim).
 
-    New providers should subclass ``llm_interface_pkg.providers.base_provider.BaseProvider``
+    New providers should subclass ``llm_shared.providers.base_provider.BaseProvider``
     instead.
     """
 

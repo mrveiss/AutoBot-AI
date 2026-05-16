@@ -719,8 +719,8 @@ async def get_provider_optimization_summary(provider_type: str, admin_check: boo
     Issue #744: Requires admin authentication.
     """
     try:
-        from llm_interface_pkg.optimization import get_optimization_router
-        from llm_interface_pkg.types import ProviderType
+        from llm_shared.optimization import get_optimization_router
+        from llm_shared.types import ProviderType
 
         # Map provider string to enum
         provider_map = {

@@ -40,11 +40,11 @@ import uuid
 from typing import Any, AsyncIterator, Dict, List, Union
 
 from autobot_shared.tracing import get_tracer
-from llm_interface_pkg import ProviderRegistry, get_provider_registry
-from llm_interface_pkg.cache import CachedResponse, get_llm_cache
-from llm_interface_pkg.models import LLMRequest, LLMResponse
-from llm_interface_pkg.tiered_routing import TierConfig, TieredModelRouter
-from llm_interface_pkg.types import LLMType
+from llm_shared import ProviderRegistry, get_provider_registry
+from llm_shared.cache import CachedResponse, get_llm_cache
+from llm_shared.models import LLMRequest, LLMResponse
+from llm_shared.tiered_routing import TierConfig, TieredModelRouter
+from llm_shared.types import LLMType
 
 try:
     from services.provider_health import ProviderHealthManager, ProviderStatus
@@ -55,7 +55,7 @@ except Exception:  # pragma: no cover
     ProviderHealthManager = None  # type: ignore[assignment]
     ProviderStatus = None  # type: ignore[assignment]
 
-# OTel tracer shared with llm_interface_pkg — same span names so traces merge.
+# OTel tracer shared with llm_shared — same span names so traces merge.
 _llm_tracer = get_tracer("autobot.llm")
 
 logger = get_logger(__name__)

@@ -19,7 +19,7 @@ import torch.optim as optim
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
-from llm_interface_pkg.hardware import HardwareDetector
+from llm_shared.hardware import HardwareDetector
 from training.completion_model import CompletionModel
 from training.data_loader import create_dataloaders
 from training.evaluator import CompletionEvaluator

@@ -1,13 +1,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Tests for llm_interface_pkg.providers.cache_utils (#7368)."""
+"""Tests for llm_shared.providers.cache_utils (#7368)."""
 
 import json
 import random
 import pytest
 
-from llm_interface_pkg.providers.cache_utils import sorted_for_cache
+from llm_shared.providers.cache_utils import sorted_for_cache
 
 
 def _serialise(payload: dict) -> str:

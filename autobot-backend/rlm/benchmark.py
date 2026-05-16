@@ -142,7 +142,7 @@ async def _generate(
 ) -> str:
     """Call Ollama generate and return the raw text."""
     from autobot_shared.ssot_config import get_config
-    from llm_interface_pkg.ollama_helpers import call_ollama_generate
+    from llm_shared.ollama_helpers import call_ollama_generate
 
     ssot = get_config()
     return await call_ollama_generate(

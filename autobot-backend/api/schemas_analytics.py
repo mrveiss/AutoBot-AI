@@ -3211,7 +3211,7 @@ class UsageRecordEndpointRequest(BaseModel):
     Renamed from UsageRecordRequest in #6636 to disambiguate from the
     LLM-analytics UsageRecordRequest at line 2845, which has a different
     shape (prompt-based) and is used by analytics_llm_patterns.py and
-    llm_interface_pkg/interface.py. The previous shadowing caused silent
+    llm_shared/interface.py. The previous shadowing caused silent
     Pydantic validation failures in LLM usage tracking
     (logged as non-critical and swallowed)."""
 

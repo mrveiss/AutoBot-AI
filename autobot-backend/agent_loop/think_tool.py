@@ -352,7 +352,7 @@ class ThinkTool:
 
         # Use Ollama directly via the shared helper
         from autobot_shared.ssot_config import get_config
-        from llm_interface_pkg.ollama_helpers import call_ollama_generate
+        from llm_shared.ollama_helpers import call_ollama_generate
 
         ssot = get_config()
         return await call_ollama_generate(

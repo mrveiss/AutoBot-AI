@@ -34,7 +34,7 @@ def _stub_module(name: str, **attrs) -> types.ModuleType:
 if "groq" not in sys.modules:
     _stub_module("groq", AsyncGroq=MagicMock)
 
-# xxhash (used by some llm_interface_pkg internals)
+# xxhash (used by some llm_shared internals)
 if "xxhash" not in sys.modules:
     _stub_module(
         "xxhash",
@@ -82,11 +82,11 @@ if "circuit_breaker" not in sys.modules:
 # Imports under test
 # ---------------------------------------------------------------------------
 
-from llm_interface_pkg.models import LLMRequest, LLMResponse  # noqa: E402
-from llm_interface_pkg.providers.anthropic import AnthropicProvider  # noqa: E402
-from llm_interface_pkg.providers.custom_openai import CustomOpenAIProvider  # noqa: E402
-from llm_interface_pkg.providers.groq import GroqProvider  # noqa: E402
-from llm_interface_pkg.providers.openai import OpenAIProvider  # noqa: E402
+from llm_shared.models import LLMRequest, LLMResponse  # noqa: E402
+from llm_shared.providers.anthropic import AnthropicProvider  # noqa: E402
+from llm_shared.providers.custom_openai import CustomOpenAIProvider  # noqa: E402
+from llm_shared.providers.groq import GroqProvider  # noqa: E402
+from llm_shared.providers.openai import OpenAIProvider  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Shared helpers

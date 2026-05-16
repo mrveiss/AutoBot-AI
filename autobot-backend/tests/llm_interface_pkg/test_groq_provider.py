@@ -40,8 +40,8 @@ _make_groq_stub()
 _make_xxhash_stub()
 
 
-from llm_interface_pkg.models import LLMRequest  # noqa: E402
-from llm_interface_pkg.providers.groq import GroqProvider  # noqa: E402
+from llm_shared.models import LLMRequest  # noqa: E402
+from llm_shared.providers.groq import GroqProvider  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

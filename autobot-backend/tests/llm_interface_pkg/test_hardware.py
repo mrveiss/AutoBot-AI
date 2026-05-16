@@ -5,20 +5,20 @@
 
 from unittest.mock import patch
 
-from llm_interface_pkg.hardware import HardwareDetector
+from llm_shared.hardware import HardwareDetector
 
 
 class TestHardwareDetector:
     """Test that hardware detection uses real checks, not placeholders."""
 
-    @patch("llm_interface_pkg.hardware.TORCH_AVAILABLE", False)
+    @patch("llm_shared.hardware.TORCH_AVAILABLE", False)
     def test_no_torch_no_cuda(self):
         detector = HardwareDetector()
         detected = detector.detect_hardware()
         assert "cuda" not in detected
         assert "cpu" in detected
 
-    @patch("llm_interface_pkg.hardware.TORCH_AVAILABLE", False)
+    @patch("llm_shared.hardware.TORCH_AVAILABLE", False)
     @patch.dict("sys.modules", {"openvino": None})
     def test_no_false_positive_openvino_without_library(self):
         """No openvino_npu/intel_arc when openvino not installed."""
@@ -27,8 +27,8 @@ class TestHardwareDetector:
         assert "openvino_npu" not in detected
         assert "intel_arc" not in detected
 
-    @patch("llm_interface_pkg.hardware.TORCH_AVAILABLE", True)
-    @patch("llm_interface_pkg.hardware.torch")
+    @patch("llm_shared.hardware.TORCH_AVAILABLE", True)
+    @patch("llm_shared.hardware.torch")
     def test_cuda_detected_when_available(self, mock_torch):
         mock_torch.cuda.is_available.return_value = True
         detector = HardwareDetector()

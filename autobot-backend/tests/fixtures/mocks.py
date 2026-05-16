@@ -87,7 +87,7 @@ class MockLLMInterface:
 
 @dataclass
 class _MockLLMResponseShim:
-    """Duck-typed fallback if `llm_interface_pkg.models.LLMResponse` is
+    """Duck-typed fallback if `llm_shared.models.LLMResponse` is
     unavailable at import time. Matches the fields agents/cognifiers read
     (`.content`, `.model`, `.provider`)."""
 
@@ -113,7 +113,7 @@ def make_llm_response(
 ):
     """Build an LLMResponse-shaped value for tests (canonical, #7134).
 
-    Returns the real ``LLMResponse`` from ``llm_interface_pkg.models`` when
+    Returns the real ``LLMResponse`` from ``llm_shared.models`` when
     importable — that pins the field contract, so a future field rename or
     type change breaks the fixture (and every test that uses it) at import
     time rather than silently producing wrong-shape mocks. Falls back to a
@@ -137,7 +137,7 @@ def make_llm_response(
         provider: provider name; defaults to ``"mock"``.
     """
     try:
-        from llm_interface_pkg.models import LLMResponse
+        from llm_shared.models import LLMResponse
 
         return LLMResponse(content=content, error=error, model=model, provider=provider)
     except Exception:

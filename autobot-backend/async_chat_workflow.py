@@ -18,7 +18,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import TimingConstants
 from dependency_container import inject_services
-from llm_interface_pkg.models import ChatMessage, LLMResponse  # Phase 2D #3185
+from llm_shared.models import ChatMessage, LLMResponse  # Phase 2D #3185
 from retry_mechanism import RetryConfig, RetryStrategy, with_retry
 
 logger = get_logger(__name__)

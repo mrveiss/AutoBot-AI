@@ -167,7 +167,7 @@ def _build_extraction_prompt(markdown: str, schema: Dict[str, Any]) -> str:
 
 async def _call_llm_for_extraction(prompt: str) -> str:
     """Call the LLM gateway with structured-output mode and return raw content."""
-    from llm_interface_pkg.types import LLMType
+    from llm_shared.types import LLMType
     from services.llm_service import get_llm_service
 
     svc = get_llm_service()
