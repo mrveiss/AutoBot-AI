@@ -45,7 +45,7 @@ from api.schemas_workflows import (
     SecurityScanRequest,
     TestSuiteRequest,
 )
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import ComponentHealth, KnownProbes, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
@@ -543,7 +543,7 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
             operation_integration_manager.websocket_connections[operation_id].remove(websocket)
 
 
-@register_health_probe("long_running")
+@register_health_probe(KnownProbes.LONG_RUNNING)
 async def probe_long_running(
     request: Request | None = None,
 ) -> ComponentHealth:

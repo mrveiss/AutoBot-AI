@@ -18,6 +18,7 @@ aggregator.
 from __future__ import annotations
 
 import asyncio
+import enum
 import time
 from datetime import datetime, timezone
 from typing import Awaitable, Callable, Literal
@@ -28,6 +29,26 @@ from pydantic import BaseModel
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
+
+
+class KnownProbes(str, enum.Enum):
+    """Canonical probe-name constants — single source of truth.
+
+    Issue #6917: both backend probes and frontend callers previously
+    hardcoded probe name strings independently. Using this enum at
+    registration time makes a typo an immediate ImportError/AttributeError
+    rather than a silent runtime fallback.
+
+    Frontend code should import these values via the OpenAPI schema or
+    reference this file's docstring when adding a new frontend caller.
+    """
+
+    BATCH_JOBS = "batch_jobs"
+    LONG_RUNNING = "long_running"
+    KNOWLEDGE = "knowledge"
+    ERROR_RESILIENCE = "error_resilience"
+    INTELLIGENT_AGENT = "intelligent_agent"
+
 
 # Per-probe timeout. Probes slower than this become ``status="down"`` so a slow
 # component cannot hold the aggregator hostage.

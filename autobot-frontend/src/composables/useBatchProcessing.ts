@@ -32,6 +32,7 @@ import type {
 import { isTerminalStatus } from '@/types/batch-processing'
 import { getApiBase } from '@/config/ssot-config'
 import { useProbeBackedHealth } from '@/composables/useProbeBackedHealth'
+import { PROBE_NAMES } from '@/types/probe-names'
 
 const logger = createLogger('useBatchProcessing')
 
@@ -185,7 +186,7 @@ export function useBatchProcessingApi() {
      * the fallback values match the prior behaviour.
      */
     getHealth: useProbeBackedHealth<BatchHealthResponse>({
-      probeName: 'batch_jobs',
+      probeName: PROBE_NAMES.BATCH_JOBS,
       buildHealthy: (probe, data) => ({
         status: 'healthy',
         active_jobs: 0,
