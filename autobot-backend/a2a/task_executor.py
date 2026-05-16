@@ -12,6 +12,7 @@ with the task ID while execution continues asynchronously.
 import logging
 from typing import Any, Dict, Optional
 
+from .pii_pipeline import PIIBlocked, scrub_outbound
 from .self_evaluator import DEFAULT_EVAL_THRESHOLD, evaluate_task_output
 from .task_manager import get_task_manager
 from .types import TaskArtifact, TaskState
@@ -67,6 +68,33 @@ async def execute_a2a_task(
     manager.publish_event(task_id, {"event": "state_change", "state": "working", "task_id": task_id})
 
     try:
+        # Issue #7355: Scrub inbound payload before forwarding to orchestrator.
+        # Prevents PII/credentials that arrived in the A2A request from leaking
+        # into downstream RAG retrieval, agent prompts, or external API calls.
+        try:
+            scrub_result = scrub_outbound(input_text, peer_id=task_id, message_id=task_id)
+            input_text = scrub_result.text
+            if scrub_result.redaction_count > 0:
+                logger.info(
+                    "A2A task %s: scrubbed %d PII item(s) from inbound payload",
+                    task_id,
+                    scrub_result.redaction_count,
+                )
+        except PIIBlocked as exc:
+            logger.warning("A2A task %s: inbound payload blocked by PII pipeline: %s", task_id, exc)
+            manager.update_state(task_id, TaskState.FAILED, message="Blocked: PII detected in request")
+            manager.publish_event(
+                task_id,
+                {
+                    "event": "state_change",
+                    "state": "failed",
+                    "terminal": True,
+                    "task_id": task_id,
+                    "message": "pii_blocked",
+                },
+            )
+            return
+
         # Late import to avoid circular deps at module load time
         from agents.agent_orchestration import get_distributed_agent_coordinator
 
@@ -76,8 +104,27 @@ async def execute_a2a_task(
             context=context,
         )
 
-        # Artifact 1: primary text response
+        # Artifact 1: primary text response — scrub before storing artifact
+        # so response artifacts returned to remote callers are clean.
         response_text = _extract_response_text(result)
+        try:
+            out_scrub = scrub_outbound(response_text, peer_id=task_id, message_id=task_id)
+            response_text = out_scrub.text
+        except PIIBlocked:
+            # Response itself blocked — surface as failed rather than leaking
+            logger.warning("A2A task %s: response blocked by PII pipeline", task_id)
+            manager.update_state(task_id, TaskState.FAILED, message="Blocked: PII detected in response")
+            manager.publish_event(
+                task_id,
+                {
+                    "event": "state_change",
+                    "state": "failed",
+                    "terminal": True,
+                    "task_id": task_id,
+                    "message": "pii_blocked_response",
+                },
+            )
+            return
         artifact_text = TaskArtifact(artifact_type="text", content=response_text)
         manager.add_artifact(task_id, artifact_text)
         manager.publish_event(
