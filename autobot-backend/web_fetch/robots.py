@@ -79,11 +79,11 @@ class RobotsCache:
         Fail-open: ``_fetch_robots_text`` returns ``""`` on any error and
         ``_parse_robots`` parses an empty string into a permissive
         ``RobotFileParser`` whose ``can_fetch`` returns True for every URL.
-        No explicit None guard needed — ``_get_parser`` always returns a
-        parser (#7461).
+        ``_get_parser`` always returns a parser (Issue #7461).
         """
         domain = _extract_domain(url)
         parser = await self._get_parser(domain)
+        assert parser is not None, "robots parser must be initialized"
         return parser.can_fetch(user_agent, url)
 
     async def _get_parser(self, domain: str) -> urllib.robotparser.RobotFileParser:
