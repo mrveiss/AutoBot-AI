@@ -14,7 +14,7 @@ Pre-execution validation engine that checks:
 Issue: Extend DAG executor with causal validation and effect tracing.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from orchestration.causal_models import (
@@ -34,7 +34,7 @@ class ValidationIssue:
         level: str,  # "error", "warning", "info"
         category: str,  # "topology", "conflict", "guard", etc
         message: str,
-        affected_steps: Optional[List[str]] = None,
+        affected_steps: List[str] | None = None,
     ):
         self.level = level
         self.category = category
@@ -328,7 +328,7 @@ class CausalValidator:
     # Helpers
     # -----------------------------------------------------------------------
 
-    def _topological_sort(self, dag: WorkflowDAG) -> Optional[List[str]]:
+    def _topological_sort(self, dag: WorkflowDAG) -> List[str] | None:
         """Return topologically sorted node IDs, or None if cycle detected."""
         if dag.detect_cycle():
             return None

@@ -14,7 +14,7 @@ import asyncio
 import json
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Coroutine, Optional, Protocol
+from typing import Any, Callable, Coroutine, Protocol
 
 from autobot_shared.logging_manager import get_logger
 
@@ -96,7 +96,7 @@ class NeuralMeshRetriever:
         reranker: Any,
         classifier: Any,
         mesh_db: Any,
-        llm: Optional[Callable[..., Coroutine[Any, Any, str]]] = None,
+        llm: Callable[..., Coroutine[Any, Any, str]] | None = None,
     ) -> None:
         """Inject all dependencies.
 

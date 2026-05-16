@@ -17,7 +17,7 @@ Public functions
 """
 
 import asyncio
-from typing import Callable, Optional
+from typing import Callable
 
 from constants.threshold_constants import TimingConstants
 
@@ -62,7 +62,7 @@ async def _init_chromadb_with_retry(
     task_id: str,
     update_progress,
     update_phase,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ):
     """Initialise ChromaDB collection with one retry on failure.
 
@@ -90,7 +90,7 @@ async def _scan_and_log_analysis(
     update_stats,
     code_collection,
     scan_codebase_fn,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ):
     """Run codebase scan and log result counts.
 
@@ -137,7 +137,7 @@ async def _store_analysis_batches(
     update_stats,
     tasks_lock: asyncio.Lock,
     indexing_tasks: dict,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> int:
     """Prepare and store analysis batches to ChromaDB, then persist hardcodes.
 
@@ -182,7 +182,7 @@ async def _run_indexing_phases(
     scan_codebase_fn,
     tasks_lock: asyncio.Lock,
     indexing_tasks: dict,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ):
     """Execute the core indexing phases: init → scan → store → hardcodes.
 

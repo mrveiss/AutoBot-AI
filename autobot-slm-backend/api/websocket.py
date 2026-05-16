@@ -10,7 +10,7 @@ Provides real-time updates for deployments and system events.
 import asyncio
 import logging
 import time
-from typing import Dict, Optional, Set
+from typing import Dict, Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ws", tags=["websocket"])
 
 
-async def _authenticate_websocket_token(websocket: WebSocket) -> Optional[dict]:
+async def _authenticate_websocket_token(websocket: WebSocket) -> dict | None:
     """Authenticate a WebSocket connection via the ``token`` query parameter.
 
     Reads the ``token`` query parameter, validates it as a JWT using the

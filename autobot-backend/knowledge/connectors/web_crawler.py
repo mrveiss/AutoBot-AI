@@ -11,7 +11,7 @@ Issue #7402: Wire dead ``max_depth`` parameter to Frontier + RobotsCache + WebFe
 import hashlib
 import os
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 from urllib.parse import urlparse
 
 from autobot_shared.logging_manager import get_logger
@@ -45,7 +45,7 @@ def _get_domain(url: str) -> str:
         return url
 
 
-def _fetch_result_to_content(result: FetchResult, connector_id: str) -> Optional[ContentResult]:
+def _fetch_result_to_content(result: FetchResult, connector_id: str) -> ContentResult | None:
     """Convert a successful FetchResult to a ContentResult for KB ingestion."""
     if not result.success or not result.markdown.strip():
         return None
@@ -143,7 +143,7 @@ class WebCrawlerConnector(AbstractConnector):
             )
         return sources
 
-    async def fetch_content(self, source_id: str) -> Optional[ContentResult]:
+    async def fetch_content(self, source_id: str) -> ContentResult | None:
         """Fetch a single seed URL by source_id (depth=1 backward-compat path)."""
         url = self._find_url_for_source_id(source_id)
         if url is None:
@@ -152,7 +152,7 @@ class WebCrawlerConnector(AbstractConnector):
         result = await WebFetcher.fetch(url)
         return _fetch_result_to_content(result, self.config.connector_id)
 
-    async def detect_changes(self, since: Optional[datetime] = None) -> List[ChangeInfo]:
+    async def detect_changes(self, since: datetime | None = None) -> List[ChangeInfo]:
         """Return all seed URLs as 'added' changes (crawl runs via sync override)."""
         changes: List[ChangeInfo] = []
         for url in self._seed_urls:
@@ -261,7 +261,7 @@ class WebCrawlerConnector(AbstractConnector):
 
         return all_results
 
-    async def _build_robots_cache(self, respect_robots: bool) -> Optional[RobotsCache]:
+    async def _build_robots_cache(self, respect_robots: bool) -> RobotsCache | None:
         """Return a RobotsCache backed by Redis, or None when robots disabled."""
         if not respect_robots:
             return None
@@ -349,7 +349,7 @@ class WebCrawlerConnector(AbstractConnector):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _find_url_for_source_id(self, source_id: str) -> Optional[str]:
+    def _find_url_for_source_id(self, source_id: str) -> str | None:
         """Return the URL that corresponds to *source_id* from seed list."""
         for url in self._seed_urls:
             if _url_to_source_id(url) == source_id:

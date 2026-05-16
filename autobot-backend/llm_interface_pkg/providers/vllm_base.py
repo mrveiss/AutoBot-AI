@@ -12,7 +12,7 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 from __future__ import annotations
 
 import asyncio
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from llm_interface_pkg.models import LLMRequest, LLMResponse
@@ -34,12 +34,12 @@ class VLLMBaseProvider(BaseProvider):
 
     provider_name = ProviderType.VLLM.value
 
-    def __init__(self, settings: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, settings: Dict[str, Any] | None = None) -> None:
         super().__init__(settings)
         if not self.settings or "model" not in self.settings:
             raise ValueError('VLLMBaseProvider requires "model" in settings')
 
-        self._vllm_provider: Optional[VLLMProvider] = None
+        self._vllm_provider: VLLMProvider | None = None
         self._initialized = False
         self._init_lock = asyncio.Lock()
 

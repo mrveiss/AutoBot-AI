@@ -11,7 +11,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -120,10 +120,10 @@ class SourceAttributionManager:
 
     def add_source(
         self,
-        source_type: Union[SourceType, str],
+        source_type: SourceType | str,
         content: str,
-        reliability: Union[SourceReliability, str] = SourceReliability.UNKNOWN,
-        metadata: Optional[Dict[str, Any]] = None,
+        reliability: SourceReliability | str = SourceReliability.UNKNOWN,
+        metadata: Dict[str, Any] | None = None,
     ) -> Source:
         """Add a new source to the current response"""
         # Handle string inputs
@@ -169,7 +169,7 @@ class SourceAttributionManager:
         content: str,
         entry_id: str,
         confidence: float = 1.0,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Source:
         """Add a Knowledge Base source"""
         kb_metadata = {
@@ -184,8 +184,8 @@ class SourceAttributionManager:
         self,
         content: str,
         url: str,
-        title: Optional[str] = None,
-        domain_reliability: Optional[str] = None,
+        title: str | None = None,
+        domain_reliability: str | None = None,
     ) -> Source:
         """Add a web search source"""
         reliability = SourceReliability.MEDIUM
@@ -202,7 +202,7 @@ class SourceAttributionManager:
 
         return self.add_source(SourceType.WEB_SEARCH, content, reliability, web_metadata)
 
-    def add_system_source(self, content: str, command: Optional[str] = None, output_type: str = "command") -> Source:
+    def add_system_source(self, content: str, command: str | None = None, output_type: str = "command") -> Source:
         """Add a system/tool output source"""
         system_metadata = {"output_type": output_type}
         if command:
@@ -256,7 +256,7 @@ class SourceAttributionManager:
 get_source_manager = lazy_singleton(SourceAttributionManager)
 
 
-def track_source(source_type: Union[SourceType, str], content: str, **kwargs) -> Source:
+def track_source(source_type: SourceType | str, content: str, **kwargs) -> Source:
     """Convenience function to track a source"""
     return get_source_manager().add_source(source_type, content, **kwargs)
 

@@ -13,8 +13,6 @@ Issue #285: Integrated with Embedding Pattern Analyzer for cost tracking.
 import asyncio
 import time
 from datetime import datetime, timezone
-from typing import Optional
-
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
@@ -43,7 +41,7 @@ class BackgroundVectorizer:
     def __init__(self):
         """Initialize background vectorizer with default settings."""
         self.is_running = False
-        self.last_run: Optional[datetime] = None
+        self.last_run: datetime | None = None
         self.check_interval = 300  # 5 minutes
         self.batch_size = 50
         self.batch_delay = 0.5
@@ -278,7 +276,7 @@ class BackgroundVectorizer:
 
 # Global instance (thread-safe)
 
-_background_vectorizer: Optional[BackgroundVectorizer] = None
+_background_vectorizer: BackgroundVectorizer | None = None
 
 
 def get_background_vectorizer() -> BackgroundVectorizer:

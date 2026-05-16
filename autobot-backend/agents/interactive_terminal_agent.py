@@ -15,7 +15,7 @@ import struct
 import termios
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
@@ -38,9 +38,9 @@ class InteractiveTerminalAgent(StandardizedAgent):
         """Initialize interactive terminal agent with PTY session management."""
         super().__init__("interactive_terminal")
         self.chat_id = chat_id
-        self.master_fd: Optional[int] = None
-        self.slave_fd: Optional[int] = None
-        self.process: Optional[asyncio.subprocess.Process] = None
+        self.master_fd: int | None = None
+        self.slave_fd: int | None = None
+        self.process: asyncio.subprocess.Process | None = None
         self.session_active = False
         self.input_mode = "agent"  # "agent" or "user"
         self.pending_sudo = False
@@ -154,7 +154,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
         flags = fcntl.fcntl(self.master_fd, fcntl.F_GETFL)
         fcntl.fcntl(self.master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
-    def _prepare_env_vars(self, env: Optional[dict]) -> dict:
+    def _prepare_env_vars(self, env: dict | None) -> dict:
         """Prepare environment variables for terminal session. Issue #620."""
         env_vars = os.environ.copy()
         if env:
@@ -162,7 +162,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
         env_vars["TERM"] = "xterm-256color"
         return env_vars
 
-    async def _spawn_process(self, command: str, env_vars: dict, cwd: Optional[str]) -> None:
+    async def _spawn_process(self, command: str, env_vars: dict, cwd: str | None) -> None:
         """Spawn the subprocess attached to PTY. Issue #620."""
         self.process = await asyncio.create_subprocess_exec(
             "/bin/bash",
@@ -207,7 +207,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
             await self._send_error(f"Failed to start terminal: {str(e)}")
             raise
 
-    async def _read_terminal_data(self) -> Optional[bytes]:
+    async def _read_terminal_data(self) -> bytes | None:
         """Read data from terminal (Issue #334 - extracted helper).
 
         Returns:
@@ -474,7 +474,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
         # Cleanup
         await self.cleanup()
 
-    async def wait_for_completion(self, timeout: Optional[float] = None) -> Dict[str, Any]:
+    async def wait_for_completion(self, timeout: float | None = None) -> Dict[str, Any]:
         """Wait for the terminal session to complete (thread-safe)"""
         try:
             if self.process:

@@ -17,7 +17,7 @@ Config keys (under ``ConnectorConfig.config``):
 
 import hashlib
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
@@ -83,7 +83,7 @@ class NotionConnector(AbstractConnector):
                 sources.append(_page_to_source_info(page, db_id))
         return sources
 
-    async def fetch_content(self, source_id: str) -> Optional[ContentResult]:
+    async def fetch_content(self, source_id: str) -> ContentResult | None:
         """Fetch block text for the Notion page identified by *source_id* (page ID)."""
         page_result = await self._notion_request("GET", "/pages/%s" % source_id)
         if page_result.get("status_code") != 200:
@@ -123,7 +123,7 @@ class NotionConnector(AbstractConnector):
             },
         )
 
-    async def detect_changes(self, since: Optional[datetime] = None) -> List[ChangeInfo]:
+    async def detect_changes(self, since: datetime | None = None) -> List[ChangeInfo]:
         """Return ChangeInfo for pages added or modified since *since*.
 
         When *since* is None all pages are reported as 'added'.  Otherwise the
@@ -150,7 +150,7 @@ class NotionConnector(AbstractConnector):
         pages: List[Dict[str, Any]] = []
         endpoint = "/databases/%s/query" % database_id
         payload: Dict[str, Any] = {"page_size": self._page_size}
-        cursor: Optional[str] = None
+        cursor: str | None = None
 
         while True:
             if cursor:
@@ -176,8 +176,8 @@ class NotionConnector(AbstractConnector):
         self,
         page_id: str,
         last_edited: str,
-        since: Optional[datetime],
-    ) -> Optional[ChangeInfo]:
+        since: datetime | None,
+    ) -> ChangeInfo | None:
         """Return ChangeInfo when the page is new or was edited after *since*."""
         if since is None:
             return ChangeInfo(
@@ -199,7 +199,7 @@ class NotionConnector(AbstractConnector):
             )
         return None
 
-    async def _load_timestamp(self, page_id: str) -> Optional[str]:
+    async def _load_timestamp(self, page_id: str) -> str | None:
         """Load last-known edited timestamp from Redis."""
         try:
             from autobot_shared.redis_client import get_redis_client
@@ -246,7 +246,7 @@ class NotionConnector(AbstractConnector):
         self,
         method: str,
         endpoint: str,
-        json_data: Optional[Dict[str, Any]] = None,
+        json_data: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Make an authenticated Notion API request."""
         url = "%s%s" % (self._base_url, endpoint)

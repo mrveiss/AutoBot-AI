@@ -23,7 +23,7 @@ from services.rag_service import RAGService
 class TestKnowledgeBaseAdapter:
     """Tests for KnowledgeBaseAdapter unified interface."""
 
-    def test_adapter_initialization(self):
+    def test_adapter_initialization(self) -> None:
         """Test adapter initializes with both KB implementations."""
         # Mock knowledge base
         mock_kb = Mock()
@@ -36,7 +36,7 @@ class TestKnowledgeBaseAdapter:
         assert adapter.implementation_type == "KnowledgeBase"
 
     @pytest.mark.asyncio
-    async def test_search_kb_v1(self):
+    async def test_search_kb_v1(self) -> None:
         """Test search with KnowledgeBase V1 implementation."""
         # Mock KnowledgeBase V1
         mock_kb = AsyncMock()
@@ -56,7 +56,7 @@ class TestKnowledgeBaseAdapter:
         assert results[0]["content"] == "test content"
 
     @pytest.mark.asyncio
-    async def test_search_kb_v2(self):
+    async def test_search_kb_v2(self) -> None:
         """Test search with KnowledgeBase V2 implementation."""
         # Mock KnowledgeBase V2
         mock_kb = AsyncMock()
@@ -75,7 +75,7 @@ class TestKnowledgeBaseAdapter:
         assert len(results) == 1
 
     @pytest.mark.asyncio
-    async def test_get_all_facts(self):
+    async def test_get_all_facts(self) -> None:
         """Test getting all facts through adapter."""
         mock_kb = AsyncMock()
         mock_kb.__class__.__name__ = "KnowledgeBase"
@@ -91,7 +91,7 @@ class TestKnowledgeBaseAdapter:
         mock_kb.get_all_facts.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_stats(self):
+    async def test_get_stats(self) -> None:
         """Test getting stats through adapter."""
         mock_kb = AsyncMock()
         mock_kb.__class__.__name__ = "KnowledgeBase"
@@ -107,7 +107,7 @@ class TestKnowledgeBaseAdapter:
 class TestRAGConfig:
     """Tests for RAG configuration management."""
 
-    def test_default_config(self):
+    def test_default_config(self) -> None:
         """Test default configuration values."""
         config = RAGConfig()
 
@@ -116,7 +116,7 @@ class TestRAGConfig:
         assert config.enable_reranking is True
         assert config.max_results_per_stage == 20
 
-    def test_weight_validation(self, caplog):
+    def test_weight_validation(self, caplog) -> None:
         """Test weight normalization."""
         import logging
 
@@ -130,7 +130,7 @@ class TestRAGConfig:
         # Weights should be normalized
         assert abs(config.hybrid_weight_semantic + config.hybrid_weight_keyword - 1.0) < 0.01
 
-    def test_invalid_weights(self):
+    def test_invalid_weights(self) -> None:
         """Test invalid weight values raise errors or get normalized."""
         # Positive out-of-range values get normalized (#788)
         config = RAGConfig(hybrid_weight_semantic=1.5)
@@ -141,7 +141,7 @@ class TestRAGConfig:
         with pytest.raises(ValueError, match="must be 0-1"):
             RAGConfig(hybrid_weight_keyword=-0.1)
 
-    def test_from_dict(self):
+    def test_from_dict(self) -> None:
         """Test creating config from dictionary."""
         config_dict = {
             "hybrid_weight_semantic": 0.6,
@@ -155,7 +155,7 @@ class TestRAGConfig:
         assert config.hybrid_weight_keyword == 0.4
         assert config.enable_reranking is False
 
-    def test_to_dict(self):
+    def test_to_dict(self) -> None:
         """Test converting config to dictionary."""
         config = RAGConfig()
         config_dict = config.to_dict()
@@ -164,7 +164,7 @@ class TestRAGConfig:
         assert "enable_reranking" in config_dict
         assert config_dict["hybrid_weight_semantic"] == 0.7
 
-    def test_update_config(self):
+    def test_update_config(self) -> None:
         """Test runtime configuration updates."""
         # Reset singleton
         import services.rag_config as rag_config_module
@@ -189,7 +189,7 @@ class TestRAGService:
     """Tests for RAGService functionality."""
 
     @pytest.mark.asyncio
-    async def test_service_initialization(self):
+    async def test_service_initialization(self) -> None:
         """Test RAG service initializes correctly."""
         mock_kb = Mock()
         mock_kb.__class__.__name__ = "KnowledgeBase"
@@ -201,7 +201,7 @@ class TestRAGService:
         assert service._initialized is False
 
     @pytest.mark.asyncio
-    async def test_fallback_when_rag_disabled(self):
+    async def test_fallback_when_rag_disabled(self) -> None:
         """Test fallback to basic search when RAG disabled."""
         mock_kb = AsyncMock()
         mock_kb.__class__.__name__ = "KnowledgeBase"
@@ -217,7 +217,7 @@ class TestRAGService:
         assert results[0].content == "fallback result"
 
     @pytest.mark.asyncio
-    async def test_rerank_results(self):
+    async def test_rerank_results(self) -> None:
         """Test reranking functionality."""
         mock_kb = Mock()
         mock_kb.__class__.__name__ = "KnowledgeBase"
@@ -268,7 +268,7 @@ class TestRAGService:
         assert reranked[0]["rerank_score"] == 0.95
         assert reranked[1]["rerank_score"] == 0.6
 
-    def test_cache_management(self):
+    def test_cache_management(self) -> None:
         """Test result caching functionality."""
         mock_kb = Mock()
         mock_kb.__class__.__name__ = "KnowledgeBase"
@@ -293,7 +293,7 @@ class TestCrossEncoderReranking:
     """Tests for cross-encoder reranking upgrade."""
 
     @pytest.mark.asyncio
-    async def test_cross_encoder_fallback(self):
+    async def test_cross_encoder_fallback(self) -> None:
         """Test fallback when cross-encoder unavailable."""
         from advanced_rag_optimizer import AdvancedRAGOptimizer
 
@@ -323,7 +323,7 @@ class TestCrossEncoderReranking:
 
     @pytest.mark.asyncio
     @patch("advanced_rag_optimizer.CrossEncoder")
-    async def test_cross_encoder_integration(self, mock_cross_encoder_class):
+    async def test_cross_encoder_integration(self, mock_cross_encoder_class) -> None:
         """Test cross-encoder model integration."""
         from advanced_rag_optimizer import AdvancedRAGOptimizer
 
@@ -370,20 +370,20 @@ class TestCrossEncoderReranking:
 class TestKBSynthesisSchemaCache:
     """Tests for module-level synthesis schema caching in RAGService (#4654)."""
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         """Reset the module-level cache before each test."""
         import services.rag_service as rag_module
 
         rag_module._SYNTHESIS_SCHEMA_CACHE = None
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         """Reset the module-level cache after each test."""
         import services.rag_service as rag_module
 
         rag_module._SYNTHESIS_SCHEMA_CACHE = None
 
     @pytest.mark.asyncio
-    async def test_load_synthesis_schema_called_only_once_across_multiple_calls(self):
+    async def test_load_synthesis_schema_called_only_once_across_multiple_calls(self) -> None:
         """load_synthesis_schema is called exactly once even when _get_kb_synthesis_context
         is invoked multiple times — schema is cached after the first load (#4654)."""
         mock_schema = Mock()
@@ -410,7 +410,7 @@ class TestKBSynthesisSchemaCache:
         mock_loader.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_synthesis_schema_returns_same_object_on_repeated_calls(self):
+    async def test_get_synthesis_schema_returns_same_object_on_repeated_calls(self) -> None:
         """_get_synthesis_schema() returns identical object instance on every call (#4654)."""
         import services.rag_service as rag_module
 
@@ -431,31 +431,31 @@ class TestAPIEndpoints:
     """Tests for advanced RAG API endpoints."""
 
     @pytest.mark.asyncio
-    async def test_search_with_reranking_parameter(self):
+    async def test_search_with_reranking_parameter(self) -> None:
         """Test /search endpoint accepts enable_reranking parameter."""
         # This would require FastAPI TestClient integration
         # Placeholder for integration test
 
     @pytest.mark.asyncio
-    async def test_advanced_search_endpoint(self):
+    async def test_advanced_search_endpoint(self) -> None:
         """Test /knowledge_base/rag/advanced_search endpoint."""
         # This would require FastAPI TestClient integration
         # Placeholder for integration test
 
     @pytest.mark.asyncio
-    async def test_rerank_results_endpoint(self):
+    async def test_rerank_results_endpoint(self) -> None:
         """Test /knowledge_base/rag/rerank_results endpoint."""
         # This would require FastAPI TestClient integration
         # Placeholder for integration test
 
     @pytest.mark.asyncio
-    async def test_config_get_endpoint(self):
+    async def test_config_get_endpoint(self) -> None:
         """Test /knowledge_base/rag/config endpoint GET."""
         # This would require FastAPI TestClient integration
         # Placeholder for integration test
 
     @pytest.mark.asyncio
-    async def test_config_update_endpoint(self):
+    async def test_config_update_endpoint(self) -> None:
         """Test /knowledge_base/rag/config endpoint PUT."""
         # This would require FastAPI TestClient integration
         # Placeholder for integration test

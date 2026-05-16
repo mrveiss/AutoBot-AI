@@ -11,7 +11,7 @@ import asyncio
 import json
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiofiles
 import yaml
@@ -54,7 +54,7 @@ class NPUWorkerManager(AsyncInitializable):
     _MIN_BACKOFF_MULTIPLIER = 1
     _MAX_BACKOFF_MULTIPLIER = 8  # Max 8x the health check interval (4 minutes at 30s)
 
-    def __init__(self, config_file: Path = None, redis_client=None):
+    def __init__(self, config_file: Path = None, redis_client=None) -> None:
         """
         Initialize NPU Worker Manager.
 
@@ -67,10 +67,10 @@ class NPUWorkerManager(AsyncInitializable):
         self.redis_client = redis_client
         self._workers: Dict[str, NPUWorkerConfig] = {}
         self._worker_clients: Dict[str, NPUWorkerClient] = {}
-        self._health_check_task: Optional[asyncio.Task] = None
+        self._health_check_task: asyncio.Task | None = None
         self._running = False
         self._load_balancing_config = LoadBalancingConfig()
-        self._failover_monitor_task: Optional[asyncio.Task] = None
+        self._failover_monitor_task: asyncio.Task | None = None
 
         # Issue #699: Track consecutive failures for exponential backoff
         self._worker_failure_counts: Dict[str, int] = {}
@@ -99,7 +99,7 @@ class NPUWorkerManager(AsyncInitializable):
             logger.error("Failed to load worker config: %s", e)
             return False
 
-    def _load_workers_from_config(self):
+    def _load_workers_from_config(self) -> None:
         """Load worker configurations from YAML file"""
         try:
             if not self.config_file.exists():
@@ -125,7 +125,7 @@ class NPUWorkerManager(AsyncInitializable):
         except Exception as e:
             logger.error("Failed to load worker configurations: %s", e)
 
-    async def _save_workers_to_config(self):
+    async def _save_workers_to_config(self) -> None:
         """Save worker configurations to YAML file"""
         try:
             # Ensure config directory exists
@@ -153,7 +153,7 @@ class NPUWorkerManager(AsyncInitializable):
             logger.error("Failed to save worker configurations: %s", e)
             raise
 
-    async def start_health_monitoring(self):
+    async def start_health_monitoring(self) -> None:
         """Start background health monitoring and failover monitor tasks."""
         if self._running:
             logger.warning("Health monitoring already running")
@@ -164,7 +164,7 @@ class NPUWorkerManager(AsyncInitializable):
         self._failover_monitor_task = asyncio.create_task(self.failover_monitor())
         logger.info("Started NPU worker health monitoring and failover monitor")
 
-    async def stop_health_monitoring(self):
+    async def stop_health_monitoring(self) -> None:
         """Stop background health monitoring and failover monitor tasks."""
         self._running = False
 
@@ -251,7 +251,7 @@ class NPUWorkerManager(AsyncInitializable):
         if worker_id in self._worker_next_check:
             del self._worker_next_check[worker_id]
 
-    async def _health_check_loop(self):
+    async def _health_check_loop(self) -> None:
         """Background task that periodically checks worker health"""
         logger.info("NPU worker health check loop started")
 
@@ -276,7 +276,7 @@ class NPUWorkerManager(AsyncInitializable):
                 # Error recovery delay before retry
                 await asyncio.sleep(TimingConstants.LONG_DELAY)
 
-    async def _check_worker_health(self, worker_id: str):
+    async def _check_worker_health(self, worker_id: str) -> None:
         """Check health of a specific worker (Issue #665: refactored with helper)."""
         worker_config = self._workers.get(worker_id)
         if not worker_config:
@@ -364,7 +364,7 @@ class NPUWorkerManager(AsyncInitializable):
             if worker_details:
                 await self._emit_worker_event("worker.status.changed", worker_details)
 
-    async def _store_worker_status(self, worker_id: str, status: NPUWorkerStatus):
+    async def _store_worker_status(self, worker_id: str, status: NPUWorkerStatus) -> None:
         """Store worker status in Redis"""
         if not self.redis_client:
             return
@@ -380,7 +380,7 @@ class NPUWorkerManager(AsyncInitializable):
         except Exception as e:
             logger.error("Failed to store worker status in Redis: %s", e)
 
-    async def _emit_worker_event(self, event_type: str, worker_details: NPUWorkerDetails):
+    async def _emit_worker_event(self, event_type: str, worker_details: NPUWorkerDetails) -> None:
         """Emit worker event via event_manager (Issue #372 - refactored)"""
         try:
             event_data = {
@@ -403,7 +403,7 @@ class NPUWorkerManager(AsyncInitializable):
         except Exception as e:
             logger.error("Failed to emit worker event: %s", e, exc_info=True)
 
-    async def _get_worker_status(self, worker_id: str) -> Optional[NPUWorkerStatus]:
+    async def _get_worker_status(self, worker_id: str) -> NPUWorkerStatus | None:
         """Get worker status from Redis"""
         if not self.redis_client:
             return None
@@ -444,7 +444,7 @@ class NPUWorkerManager(AsyncInitializable):
 
         return workers
 
-    async def get_worker(self, worker_id: str) -> Optional[NPUWorkerDetails]:
+    async def get_worker(self, worker_id: str) -> NPUWorkerDetails | None:
         """Get specific worker details"""
         config = self._workers.get(worker_id)
         if not config:
@@ -549,7 +549,7 @@ class NPUWorkerManager(AsyncInitializable):
 
         logger.debug("Updated worker status from heartbeat: %s", worker_id)
 
-    async def remove_worker(self, worker_id: str):
+    async def remove_worker(self, worker_id: str) -> None:
         """Remove worker from registry"""
         if worker_id not in self._workers:
             raise ValueError(f"Worker with ID '{worker_id}' not found")
@@ -622,11 +622,11 @@ class NPUWorkerManager(AsyncInitializable):
         finally:
             await client.close()
 
-    async def get_worker_metrics(self, worker_id: str) -> Optional[NPUWorkerMetrics]:
+    async def get_worker_metrics(self, worker_id: str) -> NPUWorkerMetrics | None:
         """Get performance metrics for a worker"""
         return await self._get_worker_metrics(worker_id)
 
-    async def _get_worker_metrics(self, worker_id: str) -> Optional[NPUWorkerMetrics]:
+    async def _get_worker_metrics(self, worker_id: str) -> NPUWorkerMetrics | None:
         """Get worker metrics from Redis"""
         if not self.redis_client:
             return None
@@ -869,7 +869,7 @@ class NPUWorkerManager(AsyncInitializable):
         """Get current load balancing configuration"""
         return self._load_balancing_config
 
-    async def update_load_balancing_config(self, config: LoadBalancingConfig):
+    async def update_load_balancing_config(self, config: LoadBalancingConfig) -> None:
         """Update load balancing configuration"""
         self._load_balancing_config = config
         await self._save_workers_to_config()
@@ -879,7 +879,7 @@ class NPUWorkerManager(AsyncInitializable):
 # Global worker manager instance (thread-safe)
 import asyncio as _asyncio_lock
 
-_worker_manager: Optional[NPUWorkerManager] = None
+_worker_manager: NPUWorkerManager | None = None
 _worker_manager_lock = _asyncio_lock.Lock()
 
 

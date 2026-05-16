@@ -19,7 +19,7 @@ import asyncio
 import socket
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -70,10 +70,10 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["log-forwarding"])
 
 # Singleton forwarder instance.
-# #6794: _MissingDep now no-ops on type subscript so Optional[LogForwarder]
+# #6794: _MissingDep now no-ops on type subscript so LogForwarder | None
 # evaluates safely even when scripts.logging is missing — no forward-ref
 # string needed.
-_forwarder: Optional[LogForwarder] = None
+_forwarder: LogForwarder | None = None
 _forwarder_lock = asyncio.Lock()
 
 

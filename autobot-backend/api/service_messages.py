@@ -12,8 +12,6 @@ Endpoints:
 - GET /api/service-messages/chain/{correlation_id} — full correlation chain
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_system import (
@@ -96,9 +94,9 @@ def _msg_to_response(msg) -> ServiceMessageResponse:
 async def get_latest_messages(
     request: Request,
     count: int = Query(50, ge=1, le=500, description="Number of messages"),
-    sender: Optional[str] = Query(None, description="Filter by sender"),
-    receiver: Optional[str] = Query(None, description="Filter by receiver"),
-    msg_type: Optional[str] = Query(None, description="Filter by type"),
+    sender: str | None = Query(None, description="Filter by sender"),
+    receiver: str | None = Query(None, description="Filter by receiver"),
+    msg_type: str | None = Query(None, description="Filter by type"),
     _admin: bool = Depends(_check_admin),
 ):
     """Return the most recent cross-service messages.

@@ -10,7 +10,7 @@ document collections to synthesis targets and prompt templates.
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import yaml
 
@@ -30,7 +30,7 @@ class CollectionConfig:
     paths: List[str]
     synthesis_target: str
     prompt_template: str
-    synthesis_model: Optional[str] = None
+    synthesis_model: str | None = None
     # Issue #4675: alternate prompt variants for evolutionary selection.
     prompt_variants: List[str] = field(default_factory=list)
 
@@ -42,7 +42,7 @@ class SynthesisSchema:
     collections: List[CollectionConfig] = field(default_factory=list)
 
 
-def _parse_collection(raw: dict, index: int, repo_root: Optional[Path] = None) -> CollectionConfig:
+def _parse_collection(raw: dict, index: int, repo_root: Path | None = None) -> CollectionConfig:
     """Parse and validate a single collection entry. Raises ValueError on unknown keys.
 
     Args:
@@ -59,7 +59,7 @@ def _parse_collection(raw: dict, index: int, repo_root: Optional[Path] = None) -
     missing = _REQUIRED_KEYS - set(raw.keys())
     if missing:
         raise ValueError(f"Collection[{index}] is missing required keys: {sorted(missing)}")
-    synthesis_model: Optional[str] = None
+    synthesis_model: str | None = None
     if "synthesis_model" in raw:
         model_val = str(raw["synthesis_model"]).strip()
         if not model_val:
@@ -94,8 +94,8 @@ def _parse_collection(raw: dict, index: int, repo_root: Optional[Path] = None) -
 
 
 def load_synthesis_schema(
-    path: Optional[Path] = None,
-    repo_root: Optional[Path] = None,
+    path: Path | None = None,
+    repo_root: Path | None = None,
 ) -> SynthesisSchema:
     """Load and validate synthesis_schema.yaml.
 

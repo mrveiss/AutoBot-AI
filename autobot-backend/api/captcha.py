@@ -16,8 +16,6 @@ Endpoints:
 Related: Issue #206
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, HTTPException, Path
 from fastapi.responses import JSONResponse
 
@@ -41,7 +39,7 @@ logger = get_logger(__name__)
 )
 async def resolve_captcha(
     captcha_id: str = Path(..., description="CAPTCHA ID to mark as solved"),
-    request: Optional[CaptchaResolutionRequest] = None,
+    request: CaptchaResolutionRequest | None = None,
 ) -> JSONResponse:
     """
     Mark a CAPTCHA as successfully solved by user.
@@ -101,7 +99,7 @@ async def resolve_captcha(
 )
 async def skip_captcha(
     captcha_id: str = Path(..., description="CAPTCHA ID to skip"),
-    request: Optional[CaptchaResolutionRequest] = None,
+    request: CaptchaResolutionRequest | None = None,
 ) -> JSONResponse:
     """
     Mark a CAPTCHA as skipped (user chose not to solve).

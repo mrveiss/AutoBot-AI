@@ -20,7 +20,7 @@ Implements TTL-based caching for frequently requested API endpoints
 
 import functools
 import json
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import Request
 
@@ -69,7 +69,7 @@ class CacheManager:
         """Generate cache key with prefix"""
         return f"{self.cache_prefix}{key}"
 
-    async def get(self, key: str) -> Optional[Metadata]:
+    async def get(self, key: str) -> Metadata | None:
         """Get cached data by key"""
         await self._ensure_redis_client()
 
@@ -92,7 +92,7 @@ class CacheManager:
             logger.error("Error getting cached data for key %s: %s", key, e)
             return None
 
-    async def set(self, key: str, data: Metadata, ttl: Optional[int] = None) -> bool:
+    async def set(self, key: str, data: Metadata, ttl: int | None = None) -> bool:
         """Set cached data with TTL"""
         await self._ensure_redis_client()
 
@@ -192,7 +192,7 @@ class CacheManager:
 cache_manager = CacheManager()
 
 
-def _extract_request_from_call(args, kwargs) -> Optional[Request]:
+def _extract_request_from_call(args, kwargs) -> Request | None:
     """Helper for cache_response. Ref: #1088.
 
     Finds and returns the FastAPI Request object from positional or
@@ -207,7 +207,7 @@ def _extract_request_from_call(args, kwargs) -> Optional[Request]:
     return None
 
 
-def _resolve_cache_key(cache_key: Optional[str], request: Optional[Request], func, kwargs) -> str:
+def _resolve_cache_key(cache_key: str | None, request: Request | None, func, kwargs) -> str:
     """Helper for cache_response. Ref: #1088.
 
     Derives the cache key from an explicit key, the request path+params,

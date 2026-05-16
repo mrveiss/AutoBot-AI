@@ -13,7 +13,7 @@ import asyncio
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -185,7 +185,7 @@ class SuccessCriteriaEvaluator:
     @staticmethod
     async def _check_custom(params: Dict[str, Any], result: Dict[str, Any]) -> tuple[bool, str]:
         """Invoke params['fn'](result) -> bool if provided."""
-        fn: Optional[Callable] = params.get("fn")
+        fn: Callable | None = params.get("fn")
         if fn is None:
             return False, "No callable 'fn' supplied in custom criterion parameters"
         if asyncio.iscoroutinefunction(fn):

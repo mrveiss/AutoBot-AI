@@ -18,7 +18,7 @@ from autobot_shared.logging_manager import get_logger
 """
 
 import asyncio
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List
 
 from skills.sync.mcp_transport import MCPTransport, create_transport
 from type_defs.mcp import (
@@ -69,7 +69,7 @@ class MCPClient:
     # Low-level RPC
     # ------------------------------------------------------------------
 
-    async def _call(self, method: str, params: Optional[Dict[str, Any]] = None) -> Any:
+    async def _call(self, method: str, params: Dict[str, Any] | None = None) -> Any:
         """Send a JSON-RPC request and return the ``result`` value.
 
         Raises :class:`MCPError` if the server returns an ``error`` field.
@@ -113,7 +113,7 @@ class MCPClient:
         logger.info("MCPClient: discovered %d tools", len(tools))
         return tools
 
-    async def call_tool(self, name: str, arguments: Optional[Dict[str, Any]] = None) -> Any:
+    async def call_tool(self, name: str, arguments: Dict[str, Any] | None = None) -> Any:
         """Invoke a named tool on the MCP server.
 
         Args:
@@ -199,7 +199,7 @@ class MCPClient:
         logger.info("MCPClient: found %d prompts", len(prompts))
         return prompts
 
-    async def get_prompt(self, name: str, arguments: Optional[Dict[str, str]] = None) -> Any:
+    async def get_prompt(self, name: str, arguments: Dict[str, str] | None = None) -> Any:
         """Retrieve a rendered prompt template.
 
         Args:

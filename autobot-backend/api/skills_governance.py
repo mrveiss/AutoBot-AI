@@ -3,7 +3,7 @@
 # Author: mrveiss
 """Skills Governance API — gap detection, draft management, approvals, and governance config."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -160,7 +160,7 @@ async def test_draft(
     async with skills_session_context() as session:
         skill = await _get_skill_draft(session, skill_id)
         skill_md = skill.skill_md
-        skill_py: Optional[str] = skill.skill_py
+        skill_py: str | None = skill.skill_py
 
     result = await SkillValidator().validate(skill_md, skill_py)
     return {

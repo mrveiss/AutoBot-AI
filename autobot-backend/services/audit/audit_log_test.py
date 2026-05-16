@@ -53,7 +53,7 @@ def _make_redis_mock(pipeline=None):
 
 
 class TestAuditAction:
-    def test_all_required_values_present(self):
+    def test_all_required_values_present(self) -> None:
         required = {
             "SESSION_CREATE",
             "SESSION_DELETE",
@@ -70,7 +70,7 @@ class TestAuditAction:
         names = {a.name for a in AuditAction}
         assert required == names
 
-    def test_values_are_strings(self):
+    def test_values_are_strings(self) -> None:
         for action in AuditAction:
             assert isinstance(action.value, str)
             assert "." in action.value  # dot-separated namespacing
@@ -83,7 +83,7 @@ class TestAuditAction:
 
 class TestRecordEvent:
     @pytest.mark.asyncio
-    async def test_writes_to_user_and_global_keys(self):
+    async def test_writes_to_user_and_global_keys(self) -> None:
         pipe = _make_pipeline_mock()
         redis = _make_redis_mock(pipe)
 
@@ -141,7 +141,7 @@ class TestRecordEvent:
         assert "created_at" in entry
 
     @pytest.mark.asyncio
-    async def test_noop_when_redis_unavailable(self):
+    async def test_noop_when_redis_unavailable(self) -> None:
         """record_event must not raise when Redis is None."""
         with patch(
             "services.audit.audit_log.get_async_redis_client",
@@ -173,7 +173,7 @@ class TestQueryAuditLog:
         return json.dumps(entry).encode()
 
     @pytest.mark.asyncio
-    async def test_returns_empty_when_redis_unavailable(self):
+    async def test_returns_empty_when_redis_unavailable(self) -> None:
         with patch(
             "services.audit.audit_log.get_async_redis_client",
             new=AsyncMock(return_value=None),
@@ -182,7 +182,7 @@ class TestQueryAuditLog:
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_queries_user_key_when_user_id_given(self):
+    async def test_queries_user_key_when_user_id_given(self) -> None:
         redis = _make_redis_mock()
         with patch(
             "services.audit.audit_log.get_async_redis_client",
@@ -194,7 +194,7 @@ class TestQueryAuditLog:
         assert called_key == "audit_log:eve"
 
     @pytest.mark.asyncio
-    async def test_queries_global_key_when_no_user_id(self):
+    async def test_queries_global_key_when_no_user_id(self) -> None:
         redis = _make_redis_mock()
         with patch(
             "services.audit.audit_log.get_async_redis_client",
@@ -205,7 +205,7 @@ class TestQueryAuditLog:
         assert called_key == _GLOBAL_KEY
 
     @pytest.mark.asyncio
-    async def test_filters_by_action(self):
+    async def test_filters_by_action(self) -> None:
         t = 1_700_000_000.0
         raw_create = self._make_raw_entry("frank", AuditAction.SESSION_CREATE, t)
         raw_delete = self._make_raw_entry("frank", AuditAction.SESSION_DELETE, t + 1)
@@ -222,7 +222,7 @@ class TestQueryAuditLog:
         assert results[0]["action"] == AuditAction.SESSION_CREATE.value
 
     @pytest.mark.asyncio
-    async def test_results_newest_first(self):
+    async def test_results_newest_first(self) -> None:
         t = 1_700_000_000.0
         raws = [
             self._make_raw_entry("grace", AuditAction.KNOWLEDGE_ADD, t),
@@ -242,7 +242,7 @@ class TestQueryAuditLog:
         assert timestamps == sorted(timestamps, reverse=True)
 
     @pytest.mark.asyncio
-    async def test_limit_and_offset(self):
+    async def test_limit_and_offset(self) -> None:
         t = 1_700_000_000.0
         raws = [self._make_raw_entry("hank", AuditAction.USER_CREATE, t + i) for i in range(10)]
         redis = _make_redis_mock()
@@ -263,7 +263,7 @@ class TestQueryAuditLog:
 
 
 class TestAuditRecord:
-    def test_schedules_coroutine_via_run_redis_write(self):
+    def test_schedules_coroutine_via_run_redis_write(self) -> None:
         with patch("services.audit.audit_log.run_redis_write") as mock_rrw:
             audit_record(
                 user_id="ivan",

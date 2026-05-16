@@ -26,7 +26,7 @@ import weakref
 from contextlib import asynccontextmanager
 from datetime import datetime
 from threading import Lock
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 
 import redis
 import redis.asyncio as async_redis
@@ -146,7 +146,7 @@ class RedisConnectionManager:
                     cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Initialize connection manager (only once due to singleton).
 
@@ -175,7 +175,7 @@ class RedisConnectionManager:
         self._initialized = True
         logger.info("Enhanced Redis Connection Manager initialized with consolidated features")
 
-    def _init_pool_and_client_storage(self):
+    def _init_pool_and_client_storage(self) -> None:
         """
         Initialize pool and client storage dictionaries.
 
@@ -184,13 +184,13 @@ class RedisConnectionManager:
         """
         self._sync_pools: Dict[str, ConnectionPool] = {}
         self._async_pools: Dict[str, async_redis.ConnectionPool] = {}
-        self._clients: Dict[str, Union[redis.Redis, async_redis.Redis]] = {}
+        self._clients: Dict[str, redis.Redis | async_redis.Redis] = {}
         self._metrics: Dict[str, ConnectionMetrics] = {}
         self._states: Dict[str, ConnectionState] = {}
         self._init_lock = Lock()
         self._async_lock = asyncio.Lock()
 
-    def _init_circuit_breaker_state(self):
+    def _init_circuit_breaker_state(self) -> None:
         """
         Initialize circuit breaker state tracking.
 
@@ -201,7 +201,7 @@ class RedisConnectionManager:
         self._last_failure_times: Dict[str, float] = {}
         self._circuit_open: Dict[str, bool] = {}
 
-    def _init_tcp_keepalive_options(self):
+    def _init_tcp_keepalive_options(self) -> None:
         """
         Initialize TCP keepalive configuration.
 
@@ -214,7 +214,7 @@ class RedisConnectionManager:
             socket.TCP_KEEPCNT: 5,  # Number of keepalive probes
         }
 
-    def _init_connection_tracking(self):
+    def _init_connection_tracking(self) -> None:
         """
         Initialize connection tracking structures.
 
@@ -232,7 +232,7 @@ class RedisConnectionManager:
         self._active_sync_connections: weakref.WeakSet = weakref.WeakSet()
         self._active_async_connections: weakref.WeakSet = weakref.WeakSet()
 
-    def _init_configurations(self):
+    def _init_configurations(self) -> None:
         """
         Initialize and load all configurations.
 
@@ -247,7 +247,7 @@ class RedisConnectionManager:
         self._config = self._load_redis_config()
         self._pool_config = self._load_pool_config()
 
-    def _init_statistics_tracking(self):
+    def _init_statistics_tracking(self) -> None:
         """
         Initialize enhanced statistics tracking.
 
@@ -263,7 +263,7 @@ class RedisConnectionManager:
         )
         self._start_time = datetime.now()
 
-    def _init_cleanup_configuration(self):
+    def _init_cleanup_configuration(self) -> None:
         """
         Initialize idle connection cleanup and background tasks.
 
@@ -276,7 +276,7 @@ class RedisConnectionManager:
 
         # Background tasks
         self._health_check_tasks: Dict[str, asyncio.Task] = {}
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
 
     def _load_redis_config(self) -> Dict[str, Any]:
         """Load Redis configuration from unified config (#2477)."""
@@ -315,7 +315,7 @@ class RedisConnectionManager:
             circuit_breaker_timeout=redis_config.get("circuit_breaker_timeout", 60),
         )
 
-    def _load_configurations(self):
+    def _load_configurations(self) -> None:
         """
         Load configurations from multiple sources with priority.
 
@@ -544,7 +544,7 @@ class RedisConnectionManager:
         logger.info(f"Created sync pool for '{database_name}' with TCP keepalive tuning")
         return redis.ConnectionPool(**pool_params)  # type: ignore[arg-type]  # GH#7105: valid kwargs; stubs lack **kwargs model  # noqa: E501
 
-    def _update_stats(self, database_name: str, success: bool, error: Optional[str] = None):
+    def _update_stats(self, database_name: str, success: bool, error: str | None = None) -> None:
         """
         Update database statistics.
 
@@ -599,7 +599,7 @@ class RedisConnectionManager:
 
         return self._circuit_open[database_name]
 
-    def _record_failure(self, database_name: str, error: Exception):
+    def _record_failure(self, database_name: str, error: Exception) -> None:
         """Record a connection failure and update circuit breaker."""
         if database_name not in self._failure_counts:
             self._failure_counts[database_name] = 0
@@ -643,7 +643,7 @@ class RedisConnectionManager:
             except Exception as prom_err:
                 logger.debug(f"Failed to record Prometheus circuit breaker metrics: {prom_err}")
 
-    def _record_success(self, database_name: str, response_time_ms: float):
+    def _record_success(self, database_name: str, response_time_ms: float) -> None:
         """Record a successful operation."""
         if database_name in self._failure_counts:
             self._failure_counts[database_name] = 0
@@ -738,7 +738,7 @@ class RedisConnectionManager:
 
         return await self._create_async_pool_with_retry(database_name, config)
 
-    def _check_sync_client_preconditions(self, database_name: str) -> Optional[bool]:
+    def _check_sync_client_preconditions(self, database_name: str) -> bool | None:
         """
         Check preconditions before getting sync client.
 
@@ -793,7 +793,7 @@ class RedisConnectionManager:
         self._update_stats(database_name, success=False, error=str(error))
         self._states[database_name] = ConnectionState.FAILED
 
-    def get_sync_client(self, database_name: str = "main") -> Optional[redis.Redis]:
+    def get_sync_client(self, database_name: str = "main") -> redis.Redis | None:
         """
         Get synchronous Redis client with circuit breaker.
 
@@ -844,7 +844,7 @@ class RedisConnectionManager:
         self._active_async_connections.add(client)
         return client
 
-    async def get_async_client(self, database_name: str = "main") -> Optional[async_redis.Redis]:
+    async def get_async_client(self, database_name: str = "main") -> async_redis.Redis | None:
         """
         Get asynchronous Redis client with circuit breaker.
 
@@ -883,7 +883,7 @@ class RedisConnectionManager:
             self._states[database_name] = ConnectionState.FAILED
             return None
 
-    def get_metrics(self, database_name: Optional[str] = None) -> Dict[str, Any]:
+    def get_metrics(self, database_name: str | None = None) -> Dict[str, Any]:
         """Get connection metrics."""
 
         def _metrics_to_dict(metrics: ConnectionMetrics) -> Dict[str, Any]:
@@ -926,47 +926,47 @@ class RedisConnectionManager:
     # Named Database Methods
     # =========================================================================
 
-    async def main(self) -> Optional[async_redis.Redis]:
+    async def main(self) -> async_redis.Redis | None:
         """Get async client for main database."""
         return await self.get_async_client("main")
 
-    async def knowledge(self) -> Optional[async_redis.Redis]:
+    async def knowledge(self) -> async_redis.Redis | None:
         """Get async client for knowledge database."""
         return await self.get_async_client("knowledge")
 
-    async def prompts(self) -> Optional[async_redis.Redis]:
+    async def prompts(self) -> async_redis.Redis | None:
         """Get async client for prompts database."""
         return await self.get_async_client("prompts")
 
-    async def agents(self) -> Optional[async_redis.Redis]:
+    async def agents(self) -> async_redis.Redis | None:
         """Get async client for agents database."""
         return await self.get_async_client("agents")
 
-    async def metrics(self) -> Optional[async_redis.Redis]:
+    async def metrics(self) -> async_redis.Redis | None:
         """Get async client for metrics database."""
         return await self.get_async_client("metrics")
 
-    async def sessions(self) -> Optional[async_redis.Redis]:
+    async def sessions(self) -> async_redis.Redis | None:
         """Get async client for sessions database."""
         return await self.get_async_client("sessions")
 
-    async def workflows(self) -> Optional[async_redis.Redis]:
+    async def workflows(self) -> async_redis.Redis | None:
         """Get async client for workflows database."""
         return await self.get_async_client("workflows")
 
-    async def vectors(self) -> Optional[async_redis.Redis]:
+    async def vectors(self) -> async_redis.Redis | None:
         """Get async client for vectors database."""
         return await self.get_async_client("vectors")
 
-    async def models(self) -> Optional[async_redis.Redis]:
+    async def models(self) -> async_redis.Redis | None:
         """Get async client for models database."""
         return await self.get_async_client("models")
 
-    async def memory(self) -> Optional[async_redis.Redis]:
+    async def memory(self) -> async_redis.Redis | None:
         """Get async client for memory database."""
         return await self.get_async_client("memory")
 
-    async def analytics(self) -> Optional[async_redis.Redis]:
+    async def analytics(self) -> async_redis.Redis | None:
         """Get async client for analytics database."""
         return await self.get_async_client("analytics")
 
@@ -1074,7 +1074,7 @@ class RedisConnectionManager:
             logger.debug("Could not remove idle connection: %s", e)
             return False
 
-    async def cleanup_idle_connections(self):
+    async def cleanup_idle_connections(self) -> None:
         """Clean up idle connections older than max_idle_time."""
         cleaned_total = 0
 
@@ -1106,7 +1106,7 @@ class RedisConnectionManager:
             logger.error("Error cleaning idle connections for '%s': %s", database_name, e)
             return 0
 
-    async def _cleanup_idle_connections_task(self):
+    async def _cleanup_idle_connections_task(self) -> None:
         """Background task to clean up idle connections periodically."""
         while True:
             try:
@@ -1137,7 +1137,7 @@ class RedisConnectionManager:
 
         return self._manager_stats
 
-    async def close_all(self):
+    async def close_all(self) -> None:
         """Close all connections and cleanup background tasks."""
         if self._cleanup_task and not self._cleanup_task.done():
             self._cleanup_task.cancel()

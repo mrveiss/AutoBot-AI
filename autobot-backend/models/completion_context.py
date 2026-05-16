@@ -9,7 +9,7 @@ Data model for multi-level code context analysis.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 
@@ -33,17 +33,17 @@ class CompletionContext:
     imports: List[str] = field(default_factory=list)
     defined_classes: List[str] = field(default_factory=list)
     defined_functions: List[str] = field(default_factory=list)
-    module_docstring: Optional[str] = None
+    module_docstring: str | None = None
 
     # Function-level context
-    current_function: Optional[str] = None
+    current_function: str | None = None
     function_params: List[Tuple[str, str]] = field(default_factory=list)  # (name, type)
-    function_return_type: Optional[str] = None
+    function_return_type: str | None = None
     decorators: List[str] = field(default_factory=list)
 
     # Block-level context
     variables_in_scope: Dict[str, str] = field(default_factory=dict)  # name -> inferred type
-    control_flow_type: Optional[str] = None  # if/for/while/try/with
+    control_flow_type: str | None = None  # if/for/while/try/with
     indent_level: int = 0
 
     # Line-level context
@@ -52,7 +52,7 @@ class CompletionContext:
     preceding_lines: List[str] = field(default_factory=list)
     following_lines: List[str] = field(default_factory=list)
     partial_statement: str = ""
-    expected_type: Optional[str] = None
+    expected_type: str | None = None
 
     # Semantic context
     detected_frameworks: Set[str] = field(default_factory=set)

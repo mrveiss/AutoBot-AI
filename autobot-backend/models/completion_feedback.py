@@ -8,7 +8,7 @@ Tracks user feedback on code completion suggestions.
 """
 
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict
 
 from sqlalchemy import DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -34,23 +34,23 @@ class CompletionFeedback(Base):
     )
 
     # User context
-    user_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    user_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
 
     # Completion context
     context: Mapped[str] = mapped_column(Text, nullable=False)
     suggestion: Mapped[str] = mapped_column(Text, nullable=False)
-    language: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    language: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Feedback
     action: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
 
     # Pattern reference
-    pattern_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    pattern_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
 
     # Additional metadata
-    confidence_score: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
-    completion_rank: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    confidence_score: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    completion_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     def to_dict(self) -> Dict:
         """Convert feedback to dictionary for API responses."""

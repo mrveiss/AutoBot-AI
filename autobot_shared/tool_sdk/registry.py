@@ -9,7 +9,7 @@ OpenAPI spec generation for every BaseTool subclass registered with it.
 """
 
 import logging
-from typing import Dict, List, Optional, Type
+from typing import Dict, List, Type
 
 from tool_sdk.base import (
     BaseTool,
@@ -123,7 +123,7 @@ class ToolSDKRegistry:
 
     def list_tools(
         self,
-        permission_filter: Optional[ToolPermission] = None,
+        permission_filter: ToolPermission | None = None,
     ) -> List[ToolMetadata]:
         """Return metadata for all registered tools.
 
@@ -219,7 +219,7 @@ class ToolSDKRegistry:
 
     def to_openapi_spec(
         self,
-        permission_filter: Optional[ToolPermission] = None,
+        permission_filter: ToolPermission | None = None,
     ) -> Dict:
         """Generate an OpenAPI-compatible spec for all registered tools.
 
@@ -251,7 +251,7 @@ class ToolSDKRegistry:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_registry: Optional[ToolSDKRegistry] = None
+_registry: ToolSDKRegistry | None = None
 
 
 def get_tool_registry() -> ToolSDKRegistry:

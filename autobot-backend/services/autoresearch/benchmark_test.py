@@ -53,28 +53,28 @@ def _make_optimizer(extra_scorers: dict | None = None) -> PromptOptimizer:
 class TestScorerRegistration:
     """Verify that the three concrete scorers are present and functional."""
 
-    def test_val_bpb_scorer_instantiation(self):
+    def test_val_bpb_scorer_instantiation(self) -> None:
         runner = AsyncMock()
         scorer = ValBpbScorer(runner=runner, baseline_val_bpb=5.0)
         assert scorer.name == "val_bpb"
 
-    def test_val_bpb_scorer_rejects_non_positive_baseline(self):
+    def test_val_bpb_scorer_rejects_non_positive_baseline(self) -> None:
         runner = AsyncMock()
         with pytest.raises(ValueError, match="baseline_val_bpb must be positive"):
             ValBpbScorer(runner=runner, baseline_val_bpb=0.0)
 
-    def test_llm_judge_scorer_instantiation(self):
+    def test_llm_judge_scorer_instantiation(self) -> None:
         scorer = LLMJudgeScorer(
             llm_service=AsyncMock(),
             criteria=["clarity", "specificity"],
         )
         assert scorer.name == "llm_judge"
 
-    def test_human_review_scorer_instantiation(self):
+    def test_human_review_scorer_instantiation(self) -> None:
         scorer = HumanReviewScorer()
         assert scorer.name == "human_review"
 
-    def test_optimizer_holds_all_three_scorers(self):
+    def test_optimizer_holds_all_three_scorers(self) -> None:
         runner = AsyncMock()
         llm = AsyncMock()
         scorers = {
@@ -86,7 +86,7 @@ class TestScorerRegistration:
         assert set(opt._scorers.keys()) == {"val_bpb", "llm_judge", "human_review"}
 
     @pytest.mark.asyncio
-    async def test_val_bpb_scorer_scores_improvement(self):
+    async def test_val_bpb_scorer_scores_improvement(self) -> None:
         from services.autoresearch.models import Experiment, ExperimentResult, ExperimentState
 
         runner = AsyncMock()
@@ -102,7 +102,7 @@ class TestScorerRegistration:
         assert result.scorer_name == "val_bpb"
 
     @pytest.mark.asyncio
-    async def test_llm_judge_scorer_parses_rating(self):
+    async def test_llm_judge_scorer_parses_rating(self) -> None:
         llm = AsyncMock()
         mock_resp = MagicMock()
         mock_resp.content = '{"rating": 7, "reasoning": "good"}'
@@ -115,7 +115,7 @@ class TestScorerRegistration:
         assert result.scorer_name == "llm_judge"
 
     @pytest.mark.asyncio
-    async def test_human_review_scorer_timeout_returns_zero(self):
+    async def test_human_review_scorer_timeout_returns_zero(self) -> None:
         scorer = HumanReviewScorer(poll_interval=0.01, timeout=0.01)
         scorer._redis = AsyncMock()
         scorer._redis.get.return_value = None
@@ -293,11 +293,11 @@ class TestAgentRegistration:
         assert stored_target.agent_name == "my_agent"
         assert stored_bench is _bench
 
-    def test_get_target_returns_none_for_unknown(self):
+    def test_get_target_returns_none_for_unknown(self) -> None:
         opt = _make_optimizer()
         assert opt.get_target("nonexistent") is None
 
-    def test_get_registered_targets_is_empty_initially(self):
+    def test_get_registered_targets_is_empty_initially(self) -> None:
         opt = _make_optimizer()
         assert opt.get_registered_targets() == []
 
@@ -376,7 +376,7 @@ class TestAgentRegistration:
         assert len(invocations) == 1
 
     @pytest.mark.asyncio
-    async def test_start_optimization_unknown_agent_raises(self):
+    async def test_start_optimization_unknown_agent_raises(self) -> None:
         """Requesting an unregistered agent_id must fail with a meaningful error.
 
         This mirrors what the /start route does: it calls optimizer.get_target()

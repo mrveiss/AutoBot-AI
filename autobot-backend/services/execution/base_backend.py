@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
@@ -47,7 +47,7 @@ class ResourceLimits:
     cpu_cores: float = 1.0
     memory_mb: int = 512
     timeout_seconds: int = 300
-    disk_mb: Optional[int] = None
+    disk_mb: int | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -64,8 +64,8 @@ class ExecutionResult:
     stderr: str = ""
     return_code: int = 0
     execution_time_ms: float = 0.0
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     backend_type: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -88,10 +88,10 @@ class ExecutionTask:
     language: str = "python"
     env_vars: Dict[str, str] = field(default_factory=dict)
     resource_limits: ResourceLimits = field(default_factory=ResourceLimits)
-    timeout_seconds: Optional[int] = None
+    timeout_seconds: int | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate and normalize task."""
         if not self.task_id:
             raise ValueError("task_id is required")
@@ -105,7 +105,7 @@ class ExecutionTask:
 class ExecutionBackend(ABC):
     """Abstract base class for execution backends (Issue #4343)."""
 
-    def __init__(self, backend_type: BackendType):
+    def __init__(self, backend_type: BackendType) -> None:
         """Initialize backend with type.
 
         Args:

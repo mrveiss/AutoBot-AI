@@ -11,7 +11,7 @@ LLM-based vision capabilities. Accepts image descriptions or base64-encoded
 image data for analysis.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -104,7 +104,7 @@ class ImageAnalysisAgent(StandardizedAgent):
         instruction = type_instructions.get(analysis_type, type_instructions["general"])
         return f"{query}\n\n{instruction}\n\nImage data:\n{image_data}"
 
-    async def process_query(self, request_text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def process_query(self, request_text: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Process an image analysis query using the vLLM-optimised API (Issue #3389)."""
         try:
             logger.info("Image Analysis Agent processing: %s...", request_text[:50])

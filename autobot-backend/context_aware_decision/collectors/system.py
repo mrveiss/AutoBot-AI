@@ -9,7 +9,7 @@ Specialized collector for system state context information.
 Part of Issue #381 - God Class Refactoring
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -82,7 +82,7 @@ class SystemContextCollector:
             metadata={"type": "active_takeovers", "count": len(active_takeovers)},
         )
 
-    def _create_resource_context(self) -> Optional[ContextElement]:
+    def _create_resource_context(self) -> ContextElement | None:
         """Create context element for system resources."""
         try:
             import psutil

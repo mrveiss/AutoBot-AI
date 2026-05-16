@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 class WorkflowLearningEngine:
     """Machine learning component for workflow optimization"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize learning engine with empty pattern tracking data."""
         self.learning_data = {
             "user_patterns": {},
@@ -35,7 +35,7 @@ class WorkflowLearningEngine:
         user_request: str,
         intent_analysis: Metadata,
         generated_steps: List[SmartWorkflowStep],
-    ):
+    ) -> None:
         """Record workflow generation for learning"""
         try:
             # Extract learning features

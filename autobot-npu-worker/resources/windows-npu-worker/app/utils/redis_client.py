@@ -57,8 +57,6 @@ redis:
 import asyncio
 import logging
 import ssl
-from typing import Optional
-
 import redis.asyncio as async_redis
 from redis.asyncio.connection import ConnectionPool, SSLConnection
 from redis.backoff import ExponentialBackoff
@@ -87,7 +85,7 @@ class RedisConnectionManager:
         self._connection_pool = None
         self._client = None
 
-    async def get_client(self) -> Optional[async_redis.Redis]:
+    async def get_client(self) -> async_redis.Redis | None:
         """
         Get Redis client with connection pooling
 
@@ -281,11 +279,11 @@ class RedisConnectionManager:
 
 
 # Global connection manager instance with thread-safe initialization (Issue #662)
-_connection_manager: Optional[RedisConnectionManager] = None
+_connection_manager: RedisConnectionManager | None = None
 _connection_manager_lock = asyncio.Lock()
 
 
-async def get_redis_client(config: dict) -> Optional[async_redis.Redis]:
+async def get_redis_client(config: dict) -> async_redis.Redis | None:
     """
     Get Redis client with connection pooling (canonical pattern, thread-safe)
 

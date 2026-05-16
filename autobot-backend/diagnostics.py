@@ -14,7 +14,7 @@ import subprocess  # nosec B404 - controlled system diagnostics
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import psutil
 
@@ -344,7 +344,7 @@ class PerformanceOptimizedDiagnostics:
             logger.error("Performance analysis error: %s", e)
             return {"error": "Performance analysis failed"}
 
-    def _get_memory_recommendation(self) -> Optional[Dict[str, str]]:
+    def _get_memory_recommendation(self) -> Dict[str, str] | None:
         """
         Generate memory optimization recommendation if usage exceeds threshold.
 
@@ -363,7 +363,7 @@ class PerformanceOptimizedDiagnostics:
             }
         return None
 
-    def _get_gpu_recommendation(self) -> Optional[Dict[str, str]]:
+    def _get_gpu_recommendation(self) -> Dict[str, str] | None:
         """
         Generate GPU optimization recommendation if utilization is low.
 
@@ -383,7 +383,7 @@ class PerformanceOptimizedDiagnostics:
             }
         return None
 
-    def _get_cpu_recommendation(self) -> Optional[Dict[str, str]]:
+    def _get_cpu_recommendation(self) -> Dict[str, str] | None:
         """
         Generate CPU optimization recommendation for high-core systems.
 

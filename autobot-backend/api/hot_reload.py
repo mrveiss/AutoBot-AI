@@ -6,8 +6,6 @@ Hot Reload API Endpoints
 Provides REST endpoints for hot reloading chat workflow modules during development
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.schemas_common import DataResponse
@@ -187,7 +185,7 @@ async def stop_hot_reload():
 
 @register_health_probe("hot_reload")
 async def probe_hot_reload(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for hot-reload file watcher."""
     try:

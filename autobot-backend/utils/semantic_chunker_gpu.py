@@ -30,7 +30,7 @@ import asyncio
 import concurrent.futures
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -273,7 +273,7 @@ class GPUSemanticChunker(SemanticChunkerBase):
     # GPU-specific performance telemetry
     # ------------------------------------------------------------------
 
-    async def chunk_text(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> List[SemanticChunk]:
+    async def chunk_text(self, text: str, metadata: Dict[str, Any] | None = None) -> List[SemanticChunk]:
         """Override to add GPU-specific timing/perf logging around the shared pipeline."""
         start_time = time.time()
         logger.info("Starting GPU semantic chunking (%s characters)", len(text))

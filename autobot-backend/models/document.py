@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
@@ -38,11 +38,11 @@ class AIDocument(BaseModel):
         default_factory=list,
         description="KB fact IDs that grounded the original AI response",
     )
-    source_session_id: Optional[str] = Field(
+    source_session_id: str | None = Field(
         default=None,
         description="Chat session ID where this document was created",
     )
-    source_message_id: Optional[str] = Field(
+    source_message_id: str | None = Field(
         default=None,
         description="Chat message ID from which the document was created",
     )

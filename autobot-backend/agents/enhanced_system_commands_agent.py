@@ -11,7 +11,7 @@ Handles system operations, shell commands, and system administration tasks.
 import json
 import re
 import shlex
-from typing import Any, Dict, FrozenSet, List, Optional
+from typing import Any, Dict, FrozenSet, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -177,7 +177,7 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
         """Return list of capabilities this agent supports."""
         return self.capabilities.copy()
 
-    def _build_command_messages(self, request: str, context: Optional[Dict[str, Any]]) -> List[Dict[str, str]]:
+    def _build_command_messages(self, request: str, context: Dict[str, Any] | None) -> List[Dict[str, str]]:
         """Build messages for command generation (Issue #398: extracted)."""
         system_prompt = self._get_system_commands_prompt()
         if context:
@@ -220,7 +220,7 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
             "model_used": self.model_name,
         }
 
-    async def process_command_request(self, request: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def process_command_request(self, request: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Process a command request (Issue #398: refactored)."""
         try:
             logger.info("System Commands Agent processing: %s...", request[:50])
@@ -356,7 +356,7 @@ and suggest alternatives."""
 
         return text.strip()
 
-    def _check_dangerous_patterns(self, command: str) -> Optional[Dict[str, Any]]:
+    def _check_dangerous_patterns(self, command: str) -> Dict[str, Any] | None:
         """Check command against dangerous patterns (Issue #398: extracted)."""
         for pattern in self.dangerous_patterns:
             if re.search(pattern, command, re.IGNORECASE):
@@ -405,14 +405,14 @@ and suggest alternatives."""
                 "recommended_action": "reject",
             }
 
-    def _try_extract_message_content(self, response: Dict) -> Optional[str]:
+    def _try_extract_message_content(self, response: Dict) -> str | None:
         """Try to extract content from message dict (Issue #334 - extracted helper)."""
         if "message" not in response or not isinstance(response["message"], dict):
             return None
         content = response["message"].get("content")
         return content.strip() if content else None
 
-    def _try_extract_choices_content(self, response: Dict) -> Optional[str]:
+    def _try_extract_choices_content(self, response: Dict) -> str | None:
         """Try to extract content from choices list (Issue #334 - extracted helper)."""
         if "choices" not in response or not isinstance(response["choices"], list):
             return None

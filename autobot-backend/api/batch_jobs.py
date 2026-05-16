@@ -16,7 +16,7 @@ import json
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -150,8 +150,8 @@ async def create_batch_job(
     error_code_prefix="BATCH_JOBS",
 )
 async def list_batch_jobs(
-    status: Optional[BatchJobStatus] = Query(None, description="Filter by status"),
-    job_type: Optional[BatchJobType] = Query(None, description="Filter by type"),
+    status: BatchJobStatus | None = Query(None, description="Filter by status"),
+    job_type: BatchJobType | None = Query(None, description="Filter by type"),
     pagination: PaginationParams = Depends(),
     current_user: dict = Depends(get_current_user),
 ):
@@ -576,7 +576,7 @@ async def delete_batch_schedule(
 
 @register_health_probe("batch_jobs")
 async def probe_batch_jobs(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #6902: probe with rich data so the frontend can read
     ``probes[name=batch_jobs].data.redis_connected`` from /api/system/health.

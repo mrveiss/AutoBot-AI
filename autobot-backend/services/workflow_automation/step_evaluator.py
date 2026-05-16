@@ -23,7 +23,7 @@ APPROVAL_RECOMMENDATIONS: Set[str] = {"APPROVE", "CONDITIONAL"}
 class WorkflowStepEvaluator:
     """Evaluates workflow steps using LLM judges"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize step evaluator with LLM judges if available."""
         self.judges_enabled = False
         self.workflow_step_judge = None

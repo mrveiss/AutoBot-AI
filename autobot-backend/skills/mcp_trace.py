@@ -21,7 +21,7 @@ import json
 import time
 import uuid
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -51,10 +51,10 @@ class MCPSpan:
     skill_name: str
     tool_name: str
     started_at: float
-    ended_at: Optional[float]
+    ended_at: float | None
     input_params: Dict[str, Any]
-    output: Optional[Dict[str, Any]]
-    error: Optional[str]
+    output: Dict[str, Any] | None
+    error: str | None
     pid: int
 
 

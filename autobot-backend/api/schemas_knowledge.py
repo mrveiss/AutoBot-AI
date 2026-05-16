@@ -8,7 +8,7 @@ Knowledge base collection, category, fact, grounding, and audit schemas.
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -26,8 +26,8 @@ class KnowledgeMetadataTemplateResponse(BaseModel):
     """Response for POST /metadata/templates and PUT /metadata/templates/{id}."""
 
     status: str
-    message: Optional[str] = None
-    template: Optional[Dict[str, Any]] = None
+    message: str | None = None
+    template: Dict[str, Any] | None = None
 
     model_config = {"extra": "allow"}
 
@@ -36,8 +36,8 @@ class KnowledgeMetadataTemplateListResponse(BaseModel):
     """Response for GET /metadata/templates."""
 
     status: str
-    count: Optional[int] = None
-    templates: Optional[List[Any]] = None
+    count: int | None = None
+    templates: List[Any] | None = None
 
     model_config = {"extra": "allow"}
 
@@ -46,7 +46,7 @@ class KnowledgeMetadataTemplateDetailResponse(BaseModel):
     """Response for GET /metadata/templates/{template_id}."""
 
     status: str
-    template: Optional[Dict[str, Any]] = None
+    template: Dict[str, Any] | None = None
 
     model_config = {"extra": "allow"}
 
@@ -55,7 +55,7 @@ class KnowledgeMetadataTemplateDeleteResponse(BaseModel):
     """Response for DELETE /metadata/templates/{template_id}."""
 
     status: str
-    message: Optional[str] = None
+    message: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -63,9 +63,9 @@ class KnowledgeMetadataTemplateDeleteResponse(BaseModel):
 class KnowledgeMetadataValidateResponse(BaseModel):
     """Response for POST /metadata/validate."""
 
-    valid: Optional[bool] = None
-    errors: Optional[List[Any]] = None
-    warnings: Optional[List[Any]] = None
+    valid: bool | None = None
+    errors: List[Any] | None = None
+    warnings: List[Any] | None = None
 
     model_config = {"extra": "allow"}
 
@@ -74,8 +74,8 @@ class KnowledgeMetadataSearchResponse(BaseModel):
     """Response for POST /metadata/search."""
 
     status: str
-    count: Optional[int] = None
-    facts: Optional[List[Any]] = None
+    count: int | None = None
+    facts: List[Any] | None = None
 
     model_config = {"extra": "allow"}
 
@@ -84,9 +84,9 @@ class KnowledgeFactVersionListResponse(BaseModel):
     """Response for GET /facts/{fact_id}/versions."""
 
     status: str
-    fact_id: Optional[str] = None
-    versions: Optional[List[Any]] = None
-    count: Optional[int] = None
+    fact_id: str | None = None
+    versions: List[Any] | None = None
+    count: int | None = None
 
     model_config = {"extra": "allow"}
 
@@ -95,9 +95,9 @@ class KnowledgeFactVersionDetailResponse(BaseModel):
     """Response for GET /facts/{fact_id}/versions/{version}."""
 
     status: str
-    fact_id: Optional[str] = None
-    version: Optional[int] = None
-    content: Optional[Any] = None
+    fact_id: str | None = None
+    version: int | None = None
+    content: Any | None = None
 
     model_config = {"extra": "allow"}
 
@@ -106,8 +106,8 @@ class KnowledgeFactRevertResponse(BaseModel):
     """Response for POST /facts/{fact_id}/revert."""
 
     status: str
-    message: Optional[str] = None
-    new_version: Optional[int] = None
+    message: str | None = None
+    new_version: int | None = None
 
     model_config = {"extra": "allow"}
 
@@ -116,10 +116,10 @@ class KnowledgeFactVersionCompareResponse(BaseModel):
     """Response for POST /facts/{fact_id}/versions/compare."""
 
     status: str
-    fact_id: Optional[str] = None
-    version_a: Optional[int] = None
-    version_b: Optional[int] = None
-    diff: Optional[Any] = None
+    fact_id: str | None = None
+    version_a: int | None = None
+    version_b: int | None = None
+    diff: Any | None = None
 
     model_config = {"extra": "allow"}
 
@@ -128,7 +128,7 @@ class KnowledgeFactVersionHistoryDeleteResponse(BaseModel):
     """Response for DELETE /facts/{fact_id}/versions."""
 
     status: str
-    message: Optional[str] = None
+    message: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -142,8 +142,8 @@ class KnowledgeCollectionCreateResponse(BaseModel):
     """Response for POST /collections."""
 
     status: str
-    collection: Optional[Dict[str, Any]] = None
-    message: Optional[str] = None
+    collection: Dict[str, Any] | None = None
+    message: str | None = None
 
 
 class KnowledgeCollectionListResponse(BaseModel):
@@ -162,56 +162,56 @@ class KnowledgeCollectionDetailResponse(BaseModel):
     """Response for GET /collections/{collection_id}."""
 
     status: str
-    collection: Optional[Dict[str, Any]] = None
+    collection: Dict[str, Any] | None = None
 
 
 class KnowledgeCollectionUpdateResponse(BaseModel):
     """Response for PUT /collections/{collection_id}."""
 
     status: str
-    collection: Optional[Dict[str, Any]] = None
-    message: Optional[str] = None
+    collection: Dict[str, Any] | None = None
+    message: str | None = None
 
 
 class KnowledgeCollectionDeleteResponse(BaseModel):
     """Response for DELETE /collections/{collection_id}."""
 
     status: str
-    collection_id: Optional[str] = None
+    collection_id: str | None = None
     facts_in_collection: int
     facts_deleted: int
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class KnowledgeCollectionAddFactsResponse(BaseModel):
     """Response for POST /collections/{collection_id}/facts."""
 
     status: str
-    collection_id: Optional[str] = None
+    collection_id: str | None = None
     added_count: int
     already_in_collection: int
     not_found: List[Any]
     total_facts: int
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class KnowledgeCollectionRemoveFactsResponse(BaseModel):
     """Response for DELETE /collections/{collection_id}/facts."""
 
     status: str
-    collection_id: Optional[str] = None
+    collection_id: str | None = None
     removed_count: int
     not_in_collection: int
     total_facts: int
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class KnowledgeCollectionFactsListResponse(BaseModel):
     """Response for GET /collections/{collection_id}/facts."""
 
     status: str
-    collection_id: Optional[str] = None
-    collection_name: Optional[str] = None
+    collection_id: str | None = None
+    collection_name: str | None = None
     facts: List[Any]
     total_count: int
     returned_count: int
@@ -224,7 +224,7 @@ class KnowledgeFactCollectionsResponse(BaseModel):
     """Response for GET /facts/{fact_id}/collections."""
 
     status: str
-    fact_id: Optional[str] = None
+    fact_id: str | None = None
     collections: List[Any]
     count: int
 
@@ -233,21 +233,21 @@ class KnowledgeCollectionExportResponse(BaseModel):
     """Response for POST /collections/{collection_id}/export."""
 
     status: str
-    collection: Optional[Dict[str, Any]] = None
+    collection: Dict[str, Any] | None = None
     facts: List[Any]
     total_count: int
-    exported_at: Optional[str] = None
+    exported_at: str | None = None
 
 
 class KnowledgeCollectionBulkDeleteResponse(BaseModel):
     """Response for POST /collections/{collection_id}/bulk-delete."""
 
     status: str
-    collection_id: Optional[str] = None
-    facts_to_delete: Optional[int] = None
+    collection_id: str | None = None
+    facts_to_delete: int | None = None
     deleted_count: int
     confirm_required: bool
-    message: Optional[str] = None
+    message: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -259,8 +259,8 @@ class KnowledgeCategoryCreateResponse(BaseModel):
     """Response for POST /categories."""
 
     status: str
-    category: Optional[Dict[str, Any]] = None
-    message: Optional[str] = None
+    category: Dict[str, Any] | None = None
+    message: str | None = None
 
 
 class KnowledgeCategoryTreeResponse(BaseModel):
@@ -275,15 +275,15 @@ class KnowledgeCategoryDetailResponse(BaseModel):
     """Response for GET /categories/{category_id} and GET /categories/path/{path}."""
 
     status: str
-    category: Optional[Dict[str, Any]] = None
+    category: Dict[str, Any] | None = None
 
 
 class KnowledgeCategoryUpdateResponse(BaseModel):
     """Response for PUT /categories/{category_id}."""
 
     status: str
-    category: Optional[Dict[str, Any]] = None
-    message: Optional[str] = None
+    category: Dict[str, Any] | None = None
+    message: str | None = None
 
 
 class KnowledgeCategoryDeleteResponse(BaseModel):
@@ -292,14 +292,14 @@ class KnowledgeCategoryDeleteResponse(BaseModel):
     status: str
     deleted_count: int
     facts_reassigned: int
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class KnowledgeCategoryChildrenResponse(BaseModel):
     """Response for GET /categories/{category_id}/children."""
 
     status: str
-    parent_id: Optional[str] = None
+    parent_id: str | None = None
     children: List[Any]
     count: int
 
@@ -308,7 +308,7 @@ class KnowledgeCategoryAncestorsResponse(BaseModel):
     """Response for GET /categories/{category_id}/ancestors."""
 
     status: str
-    category_id: Optional[str] = None
+    category_id: str | None = None
     ancestors: List[Any]
     depth: int
 
@@ -317,8 +317,8 @@ class KnowledgeCategoryFactsResponse(BaseModel):
     """Response for GET /categories/{category_id}/facts."""
 
     status: str
-    category_id: Optional[str] = None
-    category_path: Optional[str] = None
+    category_id: str | None = None
+    category_path: str | None = None
     facts: List[Any]
     total_count: int
     returned_count: int
@@ -332,17 +332,17 @@ class KnowledgeFactAssignCategoryResponse(BaseModel):
     """Response for POST /facts/{fact_id}/category."""
 
     status: str
-    fact_id: Optional[str] = None
-    category_id: Optional[str] = None
-    category_path: Optional[str] = None
-    message: Optional[str] = None
+    fact_id: str | None = None
+    category_id: str | None = None
+    category_path: str | None = None
+    message: str | None = None
 
 
 class KnowledgeCategorySearchResponse(BaseModel):
     """Response for POST /categories/search."""
 
     status: str
-    pattern: Optional[str] = None
+    pattern: str | None = None
     categories: List[Any]
     count: int
 
@@ -392,21 +392,21 @@ class KnowledgeDocumentationSearchResponse(BaseModel):
     """Response for GET /unified/documentation/search."""
 
     success: bool
-    query: Optional[str] = None
+    query: str | None = None
     results: List[Any]
-    total_results: Optional[int] = None
-    message: Optional[str] = None
+    total_results: int | None = None
+    message: str | None = None
 
 
 class KnowledgeDocumentationStatsResponse(BaseModel):
     """Response for GET /unified/documentation/stats."""
 
     success: bool
-    indexed: Optional[bool] = None
-    message: Optional[str] = None
-    how_to_index: Optional[str] = None
-    collection_name: Optional[str] = None
-    document_count: Optional[int] = None
+    indexed: bool | None = None
+    message: str | None = None
+    how_to_index: str | None = None
+    collection_name: str | None = None
+    document_count: int | None = None
 
 
 class KnowledgeUnifiedGraphResponse(BaseModel):
@@ -450,7 +450,7 @@ class KnowledgeScopedFactsResponse(BaseModel):
 
     facts: List[Any]
     count: int
-    total: Optional[int] = None
+    total: int | None = None
 
 
 class KnowledgeShareResponse(BaseModel):
@@ -458,7 +458,7 @@ class KnowledgeShareResponse(BaseModel):
 
     success: bool
     fact_id: str
-    visibility: Optional[str] = None
+    visibility: str | None = None
     shared_with: List[Any]
     group_ids: List[Any]
 
@@ -468,7 +468,7 @@ class KnowledgeUnshareResponse(BaseModel):
 
     success: bool
     fact_id: str
-    visibility: Optional[str] = None
+    visibility: str | None = None
     shared_with: List[Any]
     group_ids: List[Any]
 
@@ -478,8 +478,8 @@ class KnowledgePermissionsUpdateResponse(BaseModel):
 
     success: bool
     fact_id: str
-    visibility: Optional[str] = None
-    organization_id: Optional[str] = None
+    visibility: str | None = None
+    organization_id: str | None = None
     group_ids: List[Any]
 
 
@@ -487,9 +487,9 @@ class KnowledgeAccessInfoResponse(BaseModel):
     """Response for GET /knowledge/collaboration/facts/{id}/access."""
 
     fact_id: str
-    owner_id: Optional[str] = None
-    visibility: Optional[str] = None
-    organization_id: Optional[str] = None
+    owner_id: str | None = None
+    visibility: str | None = None
+    organization_id: str | None = None
     group_ids: List[Any]
     shared_with: List[Any]
     can_edit: bool
@@ -508,9 +508,9 @@ class KnowledgeAuditEventsResponse(BaseModel):
 
     events: List[Any]
     count: int
-    user_id: Optional[str] = None
-    fact_id: Optional[str] = None
-    organization_id: Optional[str] = None
+    user_id: str | None = None
+    fact_id: str | None = None
+    organization_id: str | None = None
 
 
 class KnowledgePermissionChangesResponse(BaseModel):
@@ -552,9 +552,9 @@ class KnowledgeVerificationApproveResponse(BaseModel):
 
     status: str
     fact_id: str
-    verified_by: Optional[str] = None
-    verified_at: Optional[str] = None
-    message: Optional[str] = None
+    verified_by: str | None = None
+    verified_at: str | None = None
+    message: str | None = None
 
 
 class KnowledgeVerificationRejectResponse(BaseModel):
@@ -563,7 +563,7 @@ class KnowledgeVerificationRejectResponse(BaseModel):
     status: str
     fact_id: str
     deleted: bool
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class KnowledgeVerificationConfigResponse(BaseModel):
@@ -571,7 +571,7 @@ class KnowledgeVerificationConfigResponse(BaseModel):
 
     status: str
     config: Dict[str, Any]
-    message: Optional[str] = None
+    message: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -588,8 +588,8 @@ class KnowledgeSuggestionsTagsResponse(BaseModel):
     model_config = {"extra": "allow"}
 
     success: bool
-    suggestions: Optional[List[Any]] = None
-    similar_docs_analyzed: Optional[int] = None
+    suggestions: List[Any] | None = None
+    similar_docs_analyzed: int | None = None
 
 
 class KnowledgeSuggestionsCategoriesResponse(BaseModel):
@@ -598,8 +598,8 @@ class KnowledgeSuggestionsCategoriesResponse(BaseModel):
     model_config = {"extra": "allow"}
 
     success: bool
-    suggestions: Optional[List[Any]] = None
-    similar_docs_analyzed: Optional[int] = None
+    suggestions: List[Any] | None = None
+    similar_docs_analyzed: int | None = None
 
 
 class KnowledgeSuggestionsAllResponse(BaseModel):
@@ -616,8 +616,8 @@ class KnowledgeSuggestionsContextResponse(BaseModel):
     model_config = {"extra": "allow"}
 
     success: bool
-    suggestions: Optional[List[Any]] = None
-    total_candidates: Optional[int] = None
+    suggestions: List[Any] | None = None
+    total_candidates: int | None = None
 
 
 class KnowledgeAutoApplySuggestionsResponse(BaseModel):
@@ -639,7 +639,7 @@ class KnowledgeShareFactResponse(BaseModel):
     success: bool
     fact_id: str
     shared_with: List[Any]
-    visibility: Optional[str] = None
+    visibility: str | None = None
 
 
 class KnowledgeUnshareFactResponse(BaseModel):
@@ -648,7 +648,7 @@ class KnowledgeUnshareFactResponse(BaseModel):
     success: bool
     fact_id: str
     shared_with: List[Any]
-    visibility: Optional[str] = None
+    visibility: str | None = None
 
 
 class KnowledgeUpdateVisibilityResponse(BaseModel):
@@ -656,7 +656,7 @@ class KnowledgeUpdateVisibilityResponse(BaseModel):
 
     success: bool
     fact_id: str
-    visibility: Optional[str] = None
+    visibility: str | None = None
 
 
 class KnowledgeMyFactsResponse(BaseModel):
@@ -698,9 +698,9 @@ class KnowledgeVerifyClaimResponse(BaseModel):
     claim_text: str
     kb_status: str
     confidence: float
-    evidence: Optional[List[Any]] = None
-    verification_method: Optional[str] = None
-    kb_source: Optional[str] = None
+    evidence: List[Any] | None = None
+    verification_method: str | None = None
+    kb_source: str | None = None
 
 
 class KnowledgeConflictsListResponse(BaseModel):
@@ -751,7 +751,7 @@ class KnowledgeOrganizationPolicyResponse(BaseModel):
     allow_user_shared: bool
     allow_user_organization: bool
     require_approval_for_system: bool
-    retention_days: Optional[int] = None
+    retention_days: int | None = None
 
 
 class KnowledgeOrganizationStatsResponse(BaseModel):
@@ -787,19 +787,19 @@ class KnowledgeScopedSearchResponse(BaseModel):
 
     model_config = {"extra": "allow"}
 
-    results: Optional[List[Any]] = None
-    total_results: Optional[int] = None
-    query: Optional[str] = None
-    mode: Optional[str] = None
-    user_id: Optional[str] = None
-    filtered_by_permissions: Optional[bool] = None
+    results: List[Any] | None = None
+    total_results: int | None = None
+    query: str | None = None
+    mode: str | None = None
+    user_id: str | None = None
+    filtered_by_permissions: bool | None = None
 
 
 class KnowledgeAccessibleScopesResponse(BaseModel):
     """Response for GET /knowledge/search/accessible-scopes."""
 
-    user_id: Optional[str] = None
-    organization_id: Optional[str] = None
+    user_id: str | None = None
+    organization_id: str | None = None
     group_count: int
     accessible_scopes: List[Any]
 
@@ -1023,7 +1023,7 @@ class SearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=1000)
     limit: int = Field(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=100)
-    category: Optional[str] = Field(default=None, max_length=100)
+    category: str | None = Field(default=None, max_length=100)
 
     @field_validator("category")
     @classmethod
@@ -1045,8 +1045,8 @@ class EnhancedSearchRequest(BaseModel):
         description="Max results to return",
     )
     offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
-    category: Optional[str] = Field(default=None, max_length=100)
-    tags: Optional[List[str]] = Field(
+    category: str | None = Field(default=None, max_length=100)
+    tags: List[str] | None = Field(
         default=None,
         max_items=10,
         description="Filter results by tags (facts must have ALL specified tags)",
@@ -1075,7 +1075,7 @@ class EnhancedSearchRequest(BaseModel):
         description="Filter by access level: all, autobot, general, system, user",
     )
     # Board scoping (Issue #3242)
-    board_id: Optional[str] = Field(
+    board_id: str | None = Field(
         default=None,
         max_length=100,
         description=("Project-scoped board ID for namespaced search. " "None / '__global__' searches all boards."),
@@ -1177,7 +1177,7 @@ class ConsolidatedSearchRequest(BaseModel):
         le=100,
         description="Maximum results to return",
     )
-    category: Optional[str] = Field(default=None, max_length=100, description="Filter by category")
+    category: str | None = Field(default=None, max_length=100, description="Filter by category")
 
     # Search mode
     mode: str = Field(
@@ -1205,7 +1205,7 @@ class ConsolidatedSearchRequest(BaseModel):
     )
 
     # Filtering options
-    tags: Optional[List[str]] = Field(
+    tags: List[str] | None = Field(
         default=None,
         max_items=10,
         description="Filter results by tags",
@@ -1225,20 +1225,20 @@ class ConsolidatedSearchRequest(BaseModel):
     offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
 
     # Advanced filtering (Issue #78 v2 features)
-    created_after: Optional[str] = Field(
+    created_after: str | None = Field(
         default=None,
         description="Filter facts created after this date (ISO format: YYYY-MM-DD)",
     )
-    created_before: Optional[str] = Field(
+    created_before: str | None = Field(
         default=None,
         description="Filter facts created before this date (ISO format: YYYY-MM-DD)",
     )
-    exclude_terms: Optional[List[str]] = Field(
+    exclude_terms: List[str] | None = Field(
         default=None,
         max_items=20,
         description="Exclude results containing these terms",
     )
-    require_terms: Optional[List[str]] = Field(
+    require_terms: List[str] | None = Field(
         default=None,
         max_items=20,
         description="Only include results containing ALL of these terms",
@@ -1255,7 +1255,7 @@ class ConsolidatedSearchRequest(BaseModel):
     )
 
     # Board scoping (Issue #3242)
-    board_id: Optional[str] = Field(
+    board_id: str | None = Field(
         default=None,
         max_length=100,
         description=("Project-scoped board ID for namespaced search. " "None / '__global__' searches all boards."),
@@ -1266,7 +1266,7 @@ class ConsolidatedSearchRequest(BaseModel):
         default=True,
         description="Track this search for analytics (default: true)",
     )
-    session_id: Optional[str] = Field(
+    session_id: str | None = Field(
         default=None,
         max_length=100,
         description="Session ID for analytics correlation",
@@ -1350,8 +1350,8 @@ class PaginationRequest(BaseModel):
 
     limit: int = Field(default=QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT, ge=1, le=1000)
     offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0)
-    cursor: Optional[str] = Field(default=None, max_length=255)
-    category: Optional[str] = Field(default=None, max_length=100)
+    cursor: str | None = Field(default=None, max_length=255)
+    category: str | None = Field(default=None, max_length=100)
 
     @field_validator("cursor")
     @classmethod
@@ -1374,10 +1374,10 @@ class AddTextRequest(BaseModel):
     """Request model for adding text to knowledge base (Issue #688: enhanced, #685: access levels)."""
 
     text: str = Field(..., min_length=1, max_length=1000000)
-    metadata: Optional[Metadata] = Field(default=None)
-    category: Optional[str] = Field(default=CategoryDefaults.GENERAL, max_length=100)
+    metadata: Metadata | None = Field(default=None)
+    category: str | None = Field(default=CategoryDefaults.GENERAL, max_length=100)
     # Issue #688: Ownership fields
-    owner_id: Optional[str] = Field(default=None, max_length=100)
+    owner_id: str | None = Field(default=None, max_length=100)
     visibility: str = Field(
         default="private",
         description="Visibility level: private, shared, group, organization, system, public",
@@ -1386,7 +1386,7 @@ class AddTextRequest(BaseModel):
         default="manual",
         description="Source type: chat, manual, import, system",
     )
-    shared_with: Optional[List[str]] = Field(
+    shared_with: List[str] | None = Field(
         default=None,
         max_items=50,
         description="List of user IDs to share with",
@@ -1396,12 +1396,12 @@ class AddTextRequest(BaseModel):
         default="user",
         description="Access level: autobot, general, system, user",
     )
-    organization_id: Optional[str] = Field(
+    organization_id: str | None = Field(
         default=None,
         max_length=100,
         description="Organization ID for org-level knowledge",
     )
-    group_ids: Optional[List[str]] = Field(
+    group_ids: List[str] | None = Field(
         default=None,
         max_items=20,
         description="List of group/team IDs for group-level knowledge",
@@ -1471,7 +1471,7 @@ class AdvancedSearchRequest(BaseModel):
     )
     enable_reranking: bool = Field(default=True, description="Enable cross-encoder reranking")
     return_context: bool = Field(default=False, description="Return optimized context for RAG")
-    timeout: Optional[float] = Field(default=None, description="Optional timeout in seconds")
+    timeout: float | None = Field(default=None, description="Optional timeout in seconds")
 
 
 class RerankRequest(BaseModel):
@@ -1624,7 +1624,7 @@ class SearchByTagsRequest(BaseModel):
     )
     limit: int = Field(default=QueryDefaults.DEFAULT_PAGE_SIZE, ge=1, le=500)
     offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0)
-    category: Optional[str] = Field(default=None, max_length=100)
+    category: str | None = Field(default=None, max_length=100)
 
     @field_validator("tags", mode="before")
     @classmethod
@@ -1743,18 +1743,18 @@ class UpdateTagStyleRequest(BaseModel):
     Allows setting color and optional icon for visual tag customization.
     """
 
-    color: Optional[str] = Field(
+    color: str | None = Field(
         default=None,
         min_length=7,
         max_length=7,
         description="Hex color code (e.g., '#3B82F6')",
     )
-    icon: Optional[str] = Field(
+    icon: str | None = Field(
         default=None,
         max_length=50,
         description="Optional icon class (e.g., 'fas fa-code')",
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         default=None,
         max_length=200,
         description="Optional tag description",
@@ -1799,21 +1799,21 @@ class CreateCategoryRequest(BaseModel):
         max_length=50,
         description="Category name (lowercase, alphanumeric, hyphens, underscores)",
     )
-    parent_id: Optional[str] = Field(
+    parent_id: str | None = Field(
         default=None,
         description="Parent category ID (None = root category)",
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         default=None,
         max_length=200,
         description="Category description",
     )
-    icon: Optional[str] = Field(
+    icon: str | None = Field(
         default=None,
         max_length=50,
         description="Icon identifier (e.g., 'fas fa-code')",
     )
-    color: Optional[str] = Field(
+    color: str | None = Field(
         default=None,
         min_length=7,
         max_length=7,
@@ -1860,23 +1860,23 @@ class UpdateCategoryRequest(BaseModel):
     Note: Renaming a category updates its path and all descendant paths.
     """
 
-    name: Optional[str] = Field(
+    name: str | None = Field(
         default=None,
         min_length=1,
         max_length=50,
         description="New category name (triggers path update)",
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         default=None,
         max_length=200,
         description="New description",
     )
-    icon: Optional[str] = Field(
+    icon: str | None = Field(
         default=None,
         max_length=50,
         description="New icon identifier",
     )
-    color: Optional[str] = Field(
+    color: str | None = Field(
         default=None,
         min_length=7,
         max_length=7,
@@ -1914,7 +1914,7 @@ class DeleteCategoryRequest(BaseModel):
         default=False,
         description="Delete all descendant categories. If False, fails if has children.",
     )
-    reassign_to: Optional[str] = Field(
+    reassign_to: str | None = Field(
         default=None,
         description="Category ID to reassign facts to. If None, facts become uncategorized.",
     )
@@ -2003,23 +2003,23 @@ class CreateCollectionRequest(BaseModel):
         max_length=100,
         description="Collection name",
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         default=None,
         max_length=500,
         description="Collection description",
     )
-    icon: Optional[str] = Field(
+    icon: str | None = Field(
         default=None,
         max_length=50,
         description="Icon identifier (e.g., 'fas fa-folder')",
     )
-    color: Optional[str] = Field(
+    color: str | None = Field(
         default=None,
         min_length=7,
         max_length=7,
         description="Hex color code (e.g., '#3B82F6')",
     )
-    metadata: Optional[dict] = Field(
+    metadata: dict | None = Field(
         default=None,
         description="Custom metadata for the collection",
     )
@@ -2052,29 +2052,29 @@ class UpdateCollectionRequest(BaseModel):
     All fields are optional; only provided fields are updated.
     """
 
-    name: Optional[str] = Field(
+    name: str | None = Field(
         default=None,
         min_length=1,
         max_length=100,
         description="New collection name",
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         default=None,
         max_length=500,
         description="New description",
     )
-    icon: Optional[str] = Field(
+    icon: str | None = Field(
         default=None,
         max_length=50,
         description="New icon identifier",
     )
-    color: Optional[str] = Field(
+    color: str | None = Field(
         default=None,
         min_length=7,
         max_length=7,
         description="New hex color code",
     )
-    metadata: Optional[dict] = Field(
+    metadata: dict | None = Field(
         default=None,
         description="New custom metadata (replaces existing)",
     )
@@ -2353,16 +2353,16 @@ class MetadataFieldDefinition(BaseModel):
         default=False,
         description="Whether this field is required",
     )
-    default: Optional[str] = Field(
+    default: str | None = Field(
         default=None,
         description="Default value if not provided",
     )
-    validation: Optional[str] = Field(
+    validation: str | None = Field(
         default=None,
         max_length=200,
         description="Optional regex validation pattern",
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         default=None,
         max_length=200,
         description="Field description for UI",
@@ -2408,7 +2408,7 @@ class CreateMetadataTemplateRequest(BaseModel):
         max_length=100,
         description="Template name (e.g., 'API Documentation')",
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         default=None,
         max_length=500,
         description="Template description",
@@ -2419,7 +2419,7 @@ class CreateMetadataTemplateRequest(BaseModel):
         max_items=20,
         description="List of field definitions",
     )
-    applicable_categories: Optional[List[str]] = Field(
+    applicable_categories: List[str] | None = Field(
         default=None,
         max_items=20,
         description="Categories this template applies to",
@@ -2440,23 +2440,23 @@ class UpdateMetadataTemplateRequest(BaseModel):
     Request model for updating a metadata template (Issue #414).
     """
 
-    name: Optional[str] = Field(
+    name: str | None = Field(
         default=None,
         min_length=1,
         max_length=100,
         description="New template name",
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         default=None,
         max_length=500,
         description="New description",
     )
-    fields: Optional[List[MetadataFieldDefinition]] = Field(
+    fields: List[MetadataFieldDefinition] | None = Field(
         default=None,
         max_items=20,
         description="New field definitions (replaces all existing)",
     )
-    applicable_categories: Optional[List[str]] = Field(
+    applicable_categories: List[str] | None = Field(
         default=None,
         max_items=20,
         description="New applicable categories",
@@ -2472,7 +2472,7 @@ class ValidateMetadataRequest(BaseModel):
         ...,
         description="Metadata dict to validate",
     )
-    category: Optional[str] = Field(
+    category: str | None = Field(
         default=None,
         max_length=100,
         description="Category to determine applicable templates",
@@ -2529,7 +2529,7 @@ class RevertToVersionRequest(BaseModel):
         ge=1,
         description="Version number to revert to",
     )
-    created_by: Optional[str] = Field(
+    created_by: str | None = Field(
         default=None,
         max_length=100,
         description="User/agent performing the revert",
@@ -2567,17 +2567,17 @@ class ExportFormat(str, Enum):
 class ExportFilters(BaseModel):
     """Filters for export operations"""
 
-    categories: Optional[List[str]] = Field(default=None, max_items=20)
-    tags: Optional[List[str]] = Field(default=None, max_items=20)
-    date_from: Optional[str] = Field(
+    categories: List[str] | None = Field(default=None, max_items=20)
+    tags: List[str] | None = Field(default=None, max_items=20)
+    date_from: str | None = Field(
         default=None,
         description="ISO date string (YYYY-MM-DD)",
     )
-    date_to: Optional[str] = Field(
+    date_to: str | None = Field(
         default=None,
         description="ISO date string (YYYY-MM-DD)",
     )
-    fact_ids: Optional[List[str]] = Field(default=None, max_items=1000)
+    fact_ids: List[str] | None = Field(default=None, max_items=1000)
 
     @field_validator("date_from", "date_to")
     @classmethod
@@ -2595,7 +2595,7 @@ class ExportRequest(BaseModel):
     """Request model for knowledge base export"""
 
     format: ExportFormat = Field(default=ExportFormat.JSON)
-    filters: Optional[ExportFilters] = Field(default=None)
+    filters: ExportFilters | None = Field(default=None)
     include_metadata: bool = Field(default=True)
     include_tags: bool = Field(default=True)
     include_embeddings: bool = Field(
@@ -2644,7 +2644,7 @@ class DeduplicationRequest(BaseModel):
         default="newest",
         description="Strategy for keeping facts: 'newest', 'oldest', 'longest'",
     )
-    category: Optional[str] = Field(
+    category: str | None = Field(
         default=None,
         description="Limit deduplication to specific category",
     )
@@ -2840,14 +2840,14 @@ class DeleteBackupRequest(BaseModel):
 class UpdateFactRequest(BaseModel):
     """Request model for updating a fact"""
 
-    content: Optional[str] = Field(
+    content: str | None = Field(
         default=None,
         min_length=1,
         max_length=1000000,
         description="New content for the fact",
     )
-    category: Optional[str] = Field(default=None, max_length=100, description="New category")
-    metadata: Optional[Metadata] = Field(default=None, description="New or updated metadata")
+    category: str | None = Field(default=None, max_length=100, description="New category")
+    metadata: Metadata | None = Field(default=None, description="New or updated metadata")
 
     @field_validator("category")
     @classmethod
@@ -2956,7 +2956,7 @@ class ProvenanceMetadata(BaseModel):
         default="manual_upload",
         description="Origin type: manual_upload|url_fetch|web_research|connector",
     )
-    source_connector_id: Optional[str] = Field(
+    source_connector_id: str | None = Field(
         default=None,
         description="Connector ID when source_type='connector'",
     )
@@ -2964,15 +2964,15 @@ class ProvenanceMetadata(BaseModel):
         default="unverified",
         description="Verification state: unverified|pending_review|verified|rejected",
     )
-    verification_method: Optional[str] = Field(
+    verification_method: str | None = Field(
         default=None,
         description="How it was verified: auto_quality|user_approved|connector_trusted",
     )
-    verified_by: Optional[str] = Field(
+    verified_by: str | None = Field(
         default=None,
         description="User or system that performed verification",
     )
-    verified_at: Optional[str] = Field(
+    verified_at: str | None = Field(
         default=None,
         description="ISO-8601 timestamp of verification",
     )
@@ -3026,9 +3026,9 @@ class PendingSourceResponse(BaseModel):
     source_type: str
     quality_score: float
     timestamp: str
-    domain: Optional[str] = None
-    title: Optional[str] = None
-    url: Optional[str] = None
+    domain: str | None = None
+    title: str | None = None
+    url: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -3048,14 +3048,14 @@ class ChatKnowledgeHealthResponse(BaseModel):
 class SessionFactItem(BaseModel):
     """Single fact returned in a session-facts listing."""
 
-    id: Optional[str] = None
+    id: str | None = None
     content: str
     full_content: str
     category: str
     tags: List[str]
     important: bool
     preserve: bool
-    created_at: Optional[str] = None
+    created_at: str | None = None
 
 
 class SessionFactsResponse(BaseModel):
@@ -3074,7 +3074,7 @@ class PreserveSessionFactsResponse(BaseModel):
     session_id: str
     updated_count: int
     failed_count: int
-    errors: Optional[List[str]] = None
+    errors: List[str] | None = None
 
     # ---------------------------------------------------------------------------
     # code_search.py schemas (#5984)
@@ -3100,8 +3100,8 @@ class AIDocumentResponse(BaseModel):
     title: str
     content: str
     source_facts: List[str]
-    source_session_id: Optional[str] = None
-    source_message_id: Optional[str] = None
+    source_session_id: str | None = None
+    source_message_id: str | None = None
     user_id: str
     tags: List[str]
     metadata: Dict[str, Any]
@@ -3180,12 +3180,12 @@ class EnhancedSearchConnectivityResponse(BaseModel):
 
     connectivity: str
     timestamp: float
-    npu_worker_url: Optional[str] = None
-    test_search_results: Optional[int] = None
-    test_device_used: Optional[str] = None
-    test_time_ms: Optional[float] = None
-    error: Optional[str] = None
-    fallback_available: Optional[bool] = None
+    npu_worker_url: str | None = None
+    test_search_results: int | None = None
+    test_device_used: str | None = None
+    test_time_ms: float | None = None
+    error: str | None = None
+    fallback_available: bool | None = None
 
 
 class EnhancedSearchHealthResponse(BaseModel):
@@ -3194,10 +3194,10 @@ class EnhancedSearchHealthResponse(BaseModel):
     status: str
     service: str
     timestamp: float
-    npu_search_engine_ready: Optional[bool] = None
-    knowledge_base_ready: Optional[bool] = None
-    cache_size: Optional[int] = None
-    error: Optional[str] = None
+    npu_search_engine_ready: bool | None = None
+    knowledge_base_ready: bool | None = None
+    cache_size: int | None = None
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -3369,9 +3369,9 @@ class KnowledgeTagFactTagsResponse(BaseModel):
     status: str
     fact_id: str
     tags: List[Any]
-    message: Optional[str] = None
-    added_count: Optional[int] = None
-    removed_count: Optional[int] = None
+    message: str | None = None
+    added_count: int | None = None
+    removed_count: int | None = None
 
 
 class KnowledgeTagGetFactTagsResponse(BaseModel):
@@ -3463,9 +3463,9 @@ class KnowledgeTagInfoResponse(BaseModel):
 
 
 class KnowledgeTagStyleInfo(BaseModel):
-    color: Optional[str] = None
-    icon: Optional[str] = None
-    description: Optional[str] = None
+    color: str | None = None
+    icon: str | None = None
+    description: str | None = None
     is_default: bool
 
 
@@ -3475,7 +3475,7 @@ class KnowledgeTagStyleResponse(BaseModel):
     status: str
     tag: str
     style: Dict[str, Any]
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class KnowledgeTagDeleteStyleResponse(BaseModel):
@@ -3505,12 +3505,12 @@ class ConversationFileInfo(BaseModel):
     filename: str
     original_filename: str
     size: int
-    mime_type: Optional[str] = None
+    mime_type: str | None = None
     session_id: str
     uploaded_at: datetime
     uploaded_by: str
     file_path: str
-    extension: Optional[str] = None
+    extension: str | None = None
 
 
 class ConversationFileListResponse(BaseModel):
@@ -3529,7 +3529,7 @@ class FileUploadResponse(BaseModel):
 
     success: bool
     message: str
-    file_info: Optional[ConversationFileInfo] = None
+    file_info: ConversationFileInfo | None = None
     upload_id: str
 
 
@@ -3538,9 +3538,9 @@ class FileTransferRequest(BaseModel):
 
     file_ids: List[str] = Field(..., min_length=1, description="List of file IDs to transfer")
     destination: FileDestination = Field(..., description="Transfer destination (kb or shared)")
-    target_path: Optional[str] = Field(None, description="Target path in destination")
+    target_path: str | None = Field(None, description="Target path in destination")
     copy_files: bool = Field(False, alias="copy", description="Copy instead of move")
-    tags: Optional[List[str]] = Field(None, description="Tags for KB indexing")
+    tags: List[str] | None = Field(None, description="Tags for KB indexing")
 
     @field_validator("file_ids")
     @classmethod
@@ -3572,8 +3572,8 @@ class ConversationFilePreviewResponse(BaseModel):
 
     file_info: ConversationFileInfo
     preview_available: bool
-    preview_content: Optional[str] = None
-    preview_type: Optional[str] = None
+    preview_content: str | None = None
+    preview_type: str | None = None
 
 
 class ConvFileCreateRequest(BaseModel):
@@ -3599,7 +3599,7 @@ class ConvFileUpdateContentRequest(BaseModel):
 class ConvFileCopyRequest(BaseModel):
     """Request model for copying a file."""
 
-    new_filename: Optional[str] = Field(None, max_length=255, description="Optional new name for the copy")
+    new_filename: str | None = Field(None, max_length=255, description="Optional new name for the copy")
 
 
 class AgentGenerateFileRequest(BaseModel):
@@ -3609,8 +3609,8 @@ class AgentGenerateFileRequest(BaseModel):
     content: str
     file_type: str = Field(default="generated", description="File type tag")
     mime_type: str = Field(default="text/plain")
-    agent_name: Optional[str] = Field(None, description="Name of generating agent")
-    metadata: Optional[Dict[str, str]] = Field(None, description="Extra metadata")
+    agent_name: str | None = Field(None, description="Name of generating agent")
+    metadata: Dict[str, str] | None = Field(None, description="Extra metadata")
 
 
 class MCPToolCallRequest(BaseModel):
@@ -3655,8 +3655,8 @@ class EntityCreateRequest(BaseModel):
     entity_type: str = Field(..., description="Type of entity")
     name: str = Field(..., min_length=1, max_length=200)
     observations: List[str] = Field(..., min_length=1)
-    metadata: Optional[Metadata] = Field(default_factory=dict)
-    tags: Optional[List[str]] = Field(default_factory=list)
+    metadata: Metadata | None = Field(default_factory=dict)
+    tags: List[str] | None = Field(default_factory=list)
 
     @field_validator("entity_type")
     @classmethod
@@ -3676,7 +3676,7 @@ class RelationCreateRequest(BaseModel):
     relation_type: str = Field(..., description="Type of relationship")
     bidirectional: bool = Field(default=False)
     strength: float = Field(default=1.0, ge=0.0, le=1.0)
-    metadata: Optional[Metadata] = Field(default_factory=dict)
+    metadata: Metadata | None = Field(default_factory=dict)
 
     @field_validator("relation_type")
     @classmethod
@@ -3687,14 +3687,14 @@ class RelationCreateRequest(BaseModel):
 
 
 class InvalidateEntityRequest(BaseModel):
-    ended_at: Optional[str] = Field(default=None, description="ISO-8601 timestamp for valid_to")
+    ended_at: str | None = Field(default=None, description="ISO-8601 timestamp for valid_to")
 
 
 class InvalidateRelationRequest(BaseModel):
     from_id: str = Field(..., description="Source entity UUID")
     relation_type: str = Field(..., description="Type of the relation")
     to_id: str = Field(..., description="Target entity UUID")
-    ended_at: Optional[str] = Field(default=None)
+    ended_at: str | None = Field(default=None)
 
 
 class EntityResponse(BaseModel):
@@ -3748,15 +3748,15 @@ class MemoryEntityDetailResponse(BaseModel):
 
 class RAGQueryRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=10000)
-    documents: Optional[List[Metadata]] = None
-    context: Optional[str] = None
+    documents: List[Metadata] | None = None
+    context: str | None = None
     max_results: int = Field(10, ge=1, le=50)
 
 
 class EnhancedChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=50000)
-    context: Optional[str] = None
-    chat_history: Optional[List[Metadata]] = None
+    context: str | None = None
+    chat_history: List[Metadata] | None = None
     use_knowledge_base: bool = Field(True)
     response_style: str = Field("conversational")
 
@@ -3770,7 +3770,7 @@ class KnowledgeExtractionRequest(BaseModel):
 class ResearchRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=5000)
     research_depth: str = Field("comprehensive")
-    sources: Optional[List[str]] = None
+    sources: List[str] | None = None
     include_web: bool = Field(True)
 
 
@@ -3787,13 +3787,13 @@ class KbCodeSearchRequest(BaseModel):
 
 
 class DevelopmentAnalysisRequest(BaseModel):
-    code_path: Optional[str] = None
+    code_path: str | None = None
     analysis_type: str = Field("comprehensive")
 
 
 class ContentClassificationRequest(BaseModel):
     content: str = Field(..., min_length=1)
-    classification_types: Optional[List[str]] = None
+    classification_types: List[str] | None = None
 
 
 # chat_knowledge.py schemas (#6042)
@@ -3814,22 +3814,22 @@ class FileAssociationType(str, Enum):
 
 class CreateContextRequest(BaseModel):
     chat_id: str
-    topic: Optional[str] = None
-    keywords: Optional[List[str]] = None
-    user_id: Optional[str] = None
+    topic: str | None = None
+    keywords: List[str] | None = None
+    user_id: str | None = None
 
 
 class AssociateFileRequest(BaseModel):
     chat_id: str
     file_path: str
     association_type: FileAssociationType
-    metadata: Optional[Metadata] = None
+    metadata: Metadata | None = None
 
 
 class AddKnowledgeRequest(BaseModel):
     chat_id: str
     content: str
-    metadata: Optional[Metadata] = None
+    metadata: Metadata | None = None
 
 
 class KnowledgeDecisionRequest(BaseModel):
@@ -3840,13 +3840,13 @@ class KnowledgeDecisionRequest(BaseModel):
 
 class CompileChatRequest(BaseModel):
     chat_id: str
-    title: Optional[str] = None
+    title: str | None = None
     include_system_messages: bool = False
 
 
 class ChatKnowledgeSearchRequest(BaseModel):
     query: str
-    chat_id: Optional[str] = None
+    chat_id: str | None = None
     include_temporary: bool = True
 
 
@@ -3881,7 +3881,7 @@ class EntityExtractionRequest(BaseModel):
 
     conversation_id: str = Field(..., min_length=1, max_length=200, description="Conversation identifier")
     messages: List[ExtractionMessage] = Field(..., min_length=1, description="Conversation messages")
-    session_metadata: Optional[Metadata] = Field(None, description="Optional session metadata")
+    session_metadata: Metadata | None = Field(None, description="Optional session metadata")
 
     @field_validator("conversation_id")
     @classmethod
@@ -3938,25 +3938,25 @@ class EntityExtractionHealthResponse(BaseModel):
 
 
 class CrossModalSearchRequest(BaseModel):
-    query: Union[str, bytes]
+    query: str | bytes
     query_modality: str = Field(..., description="Type of query: text, image, audio")
-    target_modalities: Optional[List[str]] = Field(default=None, description="Target modalities to search")
+    target_modalities: List[str] | None = Field(default=None, description="Target modalities to search")
     limit: int = Field(
         default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=100, description="Maximum results per modality"
     )
-    similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    similarity_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class TextProcessingRequest(BaseModel):
     text: str = Field(..., description="Text content to process")
     intent: str = Field(default="analysis", description="Processing intent")
-    metadata: Optional[Metadata] = Field(default=None)
+    metadata: Metadata | None = Field(default=None)
 
 
 class EmbeddingRequest(BaseModel):
-    content: Union[str, bytes]
+    content: str | bytes
     modality: str = Field(..., description="Content modality: text, image, audio")
-    preferred_device: Optional[str] = Field(default=None, description="Preferred processing device")
+    preferred_device: str | None = Field(default=None, description="Preferred processing device")
 
 
 class MultiModalResponse(BaseModel):
@@ -3966,8 +3966,8 @@ class MultiModalResponse(BaseModel):
     processing_time: float
     confidence: float
     result_data: Metadata
-    device_used: Optional[str] = None
-    error_message: Optional[str] = None
+    device_used: str | None = None
+    error_message: str | None = None
 
 
 class CrossModalSearchResponse(BaseModel):
@@ -3989,7 +3989,7 @@ class NLSearchRequest(BaseModel):
     query: str = Field(..., description="Natural language query")
     max_results: int = Field(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, description="Maximum results to return")
     include_explanations: bool = Field(default=True, description="Include LLM-generated explanations")
-    language_filter: Optional[str] = Field(default=None, description="Filter by programming language")
+    language_filter: str | None = Field(default=None, description="Filter by programming language")
 
 
 class ParsedQueryResponse(BaseModel):
@@ -4013,9 +4013,9 @@ class SearchResultWithExplanation(BaseModel):
     line_number: int
     content: str
     confidence: float
-    summary: Optional[str] = None
-    explanation: Optional[str] = None
-    key_concepts: Optional[List[str]] = None
+    summary: str | None = None
+    explanation: str | None = None
+    key_concepts: List[str] | None = None
 
 
 class NLSearchResponse(BaseModel):
@@ -4047,7 +4047,7 @@ class AddFactsRequest(BaseModel):
     source: str = Field(default="Manual Entry", max_length=500, description="Content source")
     category: str = Field(default=CategoryDefaults.GENERAL, max_length=100, description="Category")
     tags: List[str] = Field(default_factory=list, description="Tags for the content")
-    board_id: Optional[str] = Field(
+    board_id: str | None = Field(
         default=None, max_length=100, description="Board ID to scope this fact. None means global board."
     )
 
@@ -4067,7 +4067,7 @@ class AddUrlRequest(BaseModel):
     method: str = Field(default="fetch", pattern="^(fetch|raw)$", description="Fetch method")
     category: str = Field(default="web", max_length=100, description="Category")
     tags: List[str] = Field(default_factory=list, description="Tags")
-    board_id: Optional[str] = Field(
+    board_id: str | None = Field(
         default=None, max_length=100, description="Board ID to scope this URL content. None means global board."
     )
 
@@ -4089,7 +4089,7 @@ class AudioIngestRequest(BaseModel):
     whisper_model: str = Field(
         default="base", pattern="^(tiny|base|small|medium|large|large-v2|large-v3)$", description="Whisper model size"
     )
-    language: Optional[str] = Field(default=None, max_length=10, description="ISO-639-1 language hint")
+    language: str | None = Field(default=None, max_length=10, description="ISO-639-1 language hint")
 
     @field_validator("url")
     @classmethod
@@ -4109,16 +4109,16 @@ class AudioIngestRequest(BaseModel):
 class DocsBrowseRequest(BaseModel):
     """Request model for browsing indexed documentation."""
 
-    category: Optional[str] = Field(
+    category: str | None = Field(
         default=None, max_length=100, description="Filter by category (e.g., 'developer', 'api', 'troubleshooting')"
     )
-    doc_type: Optional[str] = Field(
+    doc_type: str | None = Field(
         default=None, max_length=50, description="Filter by document type (e.g., 'markdown', 'code')"
     )
-    file_path_pattern: Optional[str] = Field(
+    file_path_pattern: str | None = Field(
         default=None, max_length=500, description="Filter by file path pattern (e.g., 'docs/api/')"
     )
-    search_query: Optional[str] = Field(
+    search_query: str | None = Field(
         default=None, max_length=500, description="Optional text search within documents"
     )
     page: int = Field(default=1, ge=1, le=1000, description="Page number")
@@ -4132,10 +4132,10 @@ class DocsBrowseRequest(BaseModel):
 class OrgKnowledgeConfigPayload(BaseModel):
     """Per-org LLM + embedding model config payload."""
 
-    llm_provider: Optional[str] = Field(default=None, max_length=64)
-    llm_model: Optional[str] = Field(default=None, max_length=256)
-    embedding_model: Optional[str] = Field(default=None, max_length=256)
-    embedding_dimension: Optional[int] = Field(default=None, ge=1, le=65536)
+    llm_provider: str | None = Field(default=None, max_length=64)
+    llm_model: str | None = Field(default=None, max_length=256)
+    embedding_model: str | None = Field(default=None, max_length=256)
+    embedding_dimension: int | None = Field(default=None, ge=1, le=65536)
 
 
 # ---------------------------------------------------------------------------
@@ -4148,16 +4148,16 @@ class GroundResponseRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=2000, description="User query")
     agent_response: str = Field(..., min_length=1, max_length=5000, description="Agent response to ground")
-    context: Optional[Dict[str, Any]] = Field(None, description="Optional context metadata")
+    context: Dict[str, Any] | None = Field(None, description="Optional context metadata")
 
 
 class VerifyClaimRequest(BaseModel):
     """Request to verify a single claim."""
 
     claim_text: str = Field(..., min_length=1, max_length=500)
-    subject: Optional[str] = Field(None, max_length=200)
-    predicate: Optional[str] = Field(None, max_length=200)
-    object: Optional[str] = Field(None, max_length=200)
+    subject: str | None = Field(None, max_length=200)
+    predicate: str | None = Field(None, max_length=200)
+    object: str | None = Field(None, max_length=200)
 
 
 class ResolveConflictRequest(BaseModel):
@@ -4186,11 +4186,11 @@ class ConflictSchema(BaseModel):
 
     conflict_id: str
     claim_1_id: str
-    claim_2_id: Optional[str] = None
+    claim_2_id: str | None = None
     description: str
     severity: str
     resolution: str
-    chosen_fact: Optional[str] = None
+    chosen_fact: str | None = None
     timestamp: float
 
 
@@ -4205,7 +4205,7 @@ class CreateRelationRequest(BaseModel):
     source_fact_id: str = Field(..., description="ID of the source fact")
     target_fact_id: str = Field(..., description="ID of the target fact")
     relation_type: str = Field(..., description="Type of relation (e.g., relates_to, depends_on, implements)")
-    metadata: Optional[dict] = Field(None, description="Optional metadata for the relation")
+    metadata: dict | None = Field(None, description="Optional metadata for the relation")
 
 
 class DeleteRelationRequest(BaseModel):
@@ -4213,7 +4213,7 @@ class DeleteRelationRequest(BaseModel):
 
     source_fact_id: str = Field(..., description="ID of the source fact")
     target_fact_id: str = Field(..., description="ID of the target fact")
-    relation_type: Optional[str] = Field(None, description="Specific relation type to delete (None = all relations)")
+    relation_type: str | None = Field(None, description="Specific relation type to delete (None = all relations)")
 
 
 class TraverseRequest(BaseModel):
@@ -4221,7 +4221,7 @@ class TraverseRequest(BaseModel):
 
     start_fact_id: str = Field(..., description="Starting fact ID for traversal")
     max_depth: int = Field(2, ge=1, le=5, description="Maximum traversal depth")
-    relation_types: Optional[List[str]] = Field(None, description="Optional list of relation types to follow")
+    relation_types: List[str] | None = Field(None, description="Optional list of relation types to follow")
     include_fact_details: bool = Field(False, description="Include full fact content in results")
 
 
@@ -4232,7 +4232,7 @@ class HybridSearchRequest(BaseModel):
     top_k: int = Field(10, ge=1, le=100, description="Number of vector matches")
     expand_relations: bool = Field(True, description="Expand results with graph relations")
     relation_depth: int = Field(1, ge=1, le=3, description="Relation traversal depth")
-    relation_types: Optional[List[str]] = Field(None, description="Filter by relation types")
+    relation_types: List[str] | None = Field(None, description="Filter by relation types")
 
 
 # ---------------------------------------------------------------------------
@@ -4249,7 +4249,7 @@ class NLQueryRequest(BaseModel):
     db_id: str = Field(
         default="local", max_length=128, description="Database identifier. Use 'local' for autobot_data.db"
     )
-    db_secret_id: Optional[str] = Field(
+    db_secret_id: str | None = Field(
         default=None, max_length=128, description="Secret ID (from secrets manager) containing the database_url"
     )
 
@@ -4268,13 +4268,13 @@ class NLQueryResponse(BaseModel):
     """Response for a natural language query execution."""
 
     question: str
-    sql: Optional[str]
+    sql: str | None
     results: List[Dict[str, Any]]
     columns: List[str]
     row_count: int
     db_id: str
     elapsed_ms: int
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class TrainResponse(BaseModel):
@@ -4282,9 +4282,9 @@ class TrainResponse(BaseModel):
 
     success: bool
     db_id: str
-    schema_length: Optional[int] = None
-    table_count: Optional[int] = None
-    error: Optional[str] = None
+    schema_length: int | None = None
+    table_count: int | None = None
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -4295,24 +4295,24 @@ class TrainResponse(BaseModel):
 class KnowledgeScopeFilter(BaseModel):
     """Filter for knowledge by scope."""
 
-    scope: Optional[VisibilityLevel] = Field(default=None, description="Visibility level to filter by")
-    organization_id: Optional[str] = Field(default=None, description="Organization ID filter")
-    group_ids: Optional[List[str]] = Field(default=None, description="Group IDs to filter by")
+    scope: VisibilityLevel | None = Field(default=None, description="Visibility level to filter by")
+    organization_id: str | None = Field(default=None, description="Organization ID filter")
+    group_ids: List[str] | None = Field(default=None, description="Group IDs to filter by")
 
 
 class ShareKnowledgeRequest(BaseModel):
     """Request to share knowledge with users or groups."""
 
-    user_ids: Optional[List[str]] = Field(default=None, description="User IDs to share with")
-    group_ids: Optional[List[str]] = Field(default=None, description="Group IDs to share with")
+    user_ids: List[str] | None = Field(default=None, description="User IDs to share with")
+    group_ids: List[str] | None = Field(default=None, description="Group IDs to share with")
 
 
 class UpdatePermissionsRequest(BaseModel):
     """Request to update knowledge permissions."""
 
     visibility: VisibilityLevel = Field(description="New visibility level")
-    organization_id: Optional[str] = Field(default=None, description="Organization ID for org-level knowledge")
-    group_ids: Optional[List[str]] = Field(default=None, description="Group IDs for group-level knowledge")
+    organization_id: str | None = Field(default=None, description="Organization ID for org-level knowledge")
+    group_ids: List[str] | None = Field(default=None, description="Group IDs for group-level knowledge")
 
 
 class KnowledgeAccessResponse(BaseModel):
@@ -4321,7 +4321,7 @@ class KnowledgeAccessResponse(BaseModel):
     fact_id: str
     owner_id: str
     visibility: VisibilityLevel
-    organization_id: Optional[str] = None
+    organization_id: str | None = None
     group_ids: List[str] = []
     shared_with: List[str] = []
     can_edit: bool
@@ -4338,7 +4338,7 @@ class PipelineRunRequest(BaseModel):
     """Request to run the ECL pipeline on a document."""
 
     document_id: str = Field(..., description="Document ID to process")
-    config: Optional[dict] = Field(None, description="Pipeline configuration overrides")
+    config: dict | None = Field(None, description="Pipeline configuration overrides")
 
 
 class PipelineRunResponse(BaseModel):
@@ -4357,10 +4357,10 @@ class PipelineRunResponse(BaseModel):
 class EventSearchRequest(BaseModel):
     """Temporal event search parameters."""
 
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-    event_types: Optional[List[str]] = None
-    entity_name: Optional[str] = None
+    start_date: str | None = None
+    end_date: str | None = None
+    event_types: List[str] | None = None
+    entity_name: str | None = None
     limit: int = Field(100, ge=1, le=500)
 
 
@@ -4399,7 +4399,7 @@ class GraphRequest(BaseModel):
     max_depth: int = Field(2, ge=1, le=3, description="Maximum relation depth")
     include_categories: bool = Field(True, description="Include category nodes")
     include_relations: bool = Field(True, description="Include fact relations")
-    category_filter: Optional[str] = Field(None, description="Filter by category path")
+    category_filter: str | None = Field(None, description="Filter by category path")
 
 
 # ---------------------------------------------------------------------------
@@ -4419,7 +4419,7 @@ class OrganizationKnowledgePolicy(BaseModel):
     require_approval_for_system: bool = Field(
         default=True, description="Require admin approval for system-wide knowledge"
     )
-    retention_days: Optional[int] = Field(default=None, description="Knowledge retention period (None = indefinite)")
+    retention_days: int | None = Field(default=None, description="Knowledge retention period (None = indefinite)")
 
 
 class OrganizationKnowledgeStats(BaseModel):
@@ -4450,13 +4450,13 @@ class GraphRAGSearchRequest(BaseModel):
     """Request model for graph-aware RAG search."""
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query string")
-    start_entity: Optional[str] = Field(
+    start_entity: str | None = Field(
         None, max_length=200, description="Optional starting entity name for graph traversal"
     )
     max_depth: int = Field(2, ge=1, le=3, description="Maximum graph traversal depth (1-3 hops)")
     max_results: int = Field(5, ge=1, le=20, description="Maximum number of results to return")
     enable_reranking: bool = Field(True, description="Whether to apply cross-encoder reranking")
-    timeout: Optional[float] = Field(None, ge=1.0, le=30.0, description="Optional timeout in seconds (1-30s)")
+    timeout: float | None = Field(None, ge=1.0, le=30.0, description="Optional timeout in seconds (1-30s)")
 
     @field_validator("query")
     @classmethod
@@ -4494,8 +4494,8 @@ class CreateDocumentRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     content: str = Field(default="")
     source_facts: List[str] = Field(default_factory=list)
-    source_session_id: Optional[str] = None
-    source_message_id: Optional[str] = None
+    source_session_id: str | None = None
+    source_message_id: str | None = None
     tags: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
@@ -4503,10 +4503,10 @@ class CreateDocumentRequest(BaseModel):
 class UpdateDocumentRequest(BaseModel):
     """Partial-update payload — only supplied fields are applied."""
 
-    title: Optional[str] = Field(default=None, min_length=1, max_length=500)
-    content: Optional[str] = None
-    tags: Optional[List[str]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    content: str | None = None
+    tags: List[str] | None = None
+    metadata: Dict[str, Any] | None = None
 
 
 class RefineDocumentRequest(BaseModel):
@@ -4518,7 +4518,7 @@ class RefineDocumentRequest(BaseModel):
         max_length=2000,
         description="Refinement instruction, e.g. 'make the introduction shorter'",
     )
-    section: Optional[str] = Field(default=None, description="Optional section heading to scope the refinement")
+    section: str | None = Field(default=None, description="Optional section heading to scope the refinement")
 
 
 # ---------------------------------------------------------------------------
@@ -4547,7 +4547,7 @@ class EmbeddingUpdate(BaseModel):
 
     provider: str
     selected_model: str
-    endpoint: Optional[str] = None
+    endpoint: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -4559,16 +4559,16 @@ class TaskCreateRequest(BaseModel):
     task_name: str
     description: str
     priority: str = "medium"
-    agent_type: Optional[str] = None
-    inputs: Optional[Metadata] = None
-    parent_task_id: Optional[str] = None
-    metadata: Optional[Metadata] = None
+    agent_type: str | None = None
+    inputs: Metadata | None = None
+    parent_task_id: str | None = None
+    metadata: Metadata | None = None
 
 
 class TaskUpdateRequest(BaseModel):
-    status: Optional[str] = None
-    outputs: Optional[Metadata] = None
-    error_message: Optional[str] = None
+    status: str | None = None
+    outputs: Metadata | None = None
+    error_message: str | None = None
 
 
 class MarkdownReferenceRequest(BaseModel):
@@ -4587,9 +4587,9 @@ class NPUSearchRequest(BaseModel):
 
     query: str = Field(..., description="Search query")
     similarity_top_k: int = Field(10, description="Number of results to return", ge=1, le=100)
-    filters: Optional[Metadata] = Field(None, description="Optional metadata filters")
+    filters: Metadata | None = Field(None, description="Optional metadata filters")
     enable_npu_acceleration: bool = Field(True, description="Enable NPU acceleration")
-    force_device: Optional[str] = Field(None, description="Force specific device (npu/gpu/cpu)")
+    force_device: str | None = Field(None, description="Force specific device (npu/gpu/cpu)")
 
 
 class NPUSearchResponse(BaseModel):
@@ -4640,9 +4640,9 @@ class AIStackKnowledgeExtractionRequest(BaseModel):
     """Request model for knowledge extraction (AI Stack version)."""
 
     content: str = Field(..., min_length=1, description="Content to extract knowledge from")
-    title: Optional[str] = Field(None, description="Content title")
-    source: Optional[str] = Field("api", description="Content source")
-    category: Optional[str] = Field("general", description="Content category")
+    title: str | None = Field(None, description="Content title")
+    source: str | None = Field("api", description="Content source")
+    category: str | None = Field("general", description="Content category")
     content_type: str = Field("text", description="Content type (text, document, url)")
     extraction_mode: str = Field("comprehensive", description="Extraction mode")
     auto_store: bool = Field(True, description="Automatically store extracted knowledge")
@@ -4661,8 +4661,8 @@ class AIStackRAGQueryRequest(BaseModel):
     """Request model for RAG queries (AI Stack version)."""
 
     query: str = Field(..., min_length=1, max_length=5000, description="RAG query")
-    documents: Optional[List[Metadata]] = Field(None, description="Specific documents to query")
-    context: Optional[str] = Field(None, description="Additional context")
+    documents: List[Metadata] | None = Field(None, description="Specific documents to query")
+    context: str | None = Field(None, description="Additional context")
     max_results: int = Field(10, ge=1, le=30, description="Maximum results")
     include_reasoning: bool = Field(False, description="Include reasoning steps")
 
@@ -4681,7 +4681,7 @@ _BOARD_ID_RE = re.compile(r"^[a-z0-9_-]{1,100}$")
 class CreateBoardRequest(BaseModel):
     """Request model for creating a new knowledge board."""
 
-    board_id: Optional[str] = Field(
+    board_id: str | None = Field(
         default=None,
         max_length=100,
         description=(
@@ -4729,7 +4729,7 @@ class RagFeedbackRequest(BaseModel):
     title: str = ""
     query: str
     decision: _Literal["accepted", "rejected"]  # noqa: F821  # Literal alias false-positive
-    user_id: Optional[str] = None
+    user_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -4747,8 +4747,8 @@ class ScopedSearchRequest(BaseModel):
         pattern="^(semantic|keyword|hybrid|auto)$",
         description="Search mode",
     )
-    category: Optional[str] = Field(default=None, description="Filter by category")
-    tags: Optional[List[str]] = Field(default=None, description="Filter by tags")
+    category: str | None = Field(default=None, description="Filter by category")
+    tags: List[str] | None = Field(default=None, description="Filter by tags")
     min_score: float = Field(default=0.0, ge=0.0, le=1.0, description="Minimum score threshold")
     enable_rag: bool = Field(default=False, description="Enable RAG enhancement")
     enable_reranking: bool = Field(default=False, description="Enable reranking")
@@ -4763,9 +4763,9 @@ class KBQuery(BaseModel):
     """Knowledge base query request model."""
 
     query: str
-    max_results: Optional[int] = None
-    similarity_threshold: Optional[float] = None
-    auto_summarize: Optional[bool] = None
+    max_results: int | None = None
+    similarity_threshold: float | None = None
+    auto_summarize: bool | None = None
 
 
 class KBQueryResponse(BaseModel):
@@ -4776,7 +4776,7 @@ class KBQueryResponse(BaseModel):
     query: str
     documents_found: int
     documents: List[Metadata]
-    summary: Optional[str] = None
+    summary: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -4794,10 +4794,10 @@ class AuditEvent(BaseModel):
     id: str
     type: _AuditEventType
     user_id: str
-    fact_id: Optional[str] = None
-    organization_id: Optional[str] = None
+    fact_id: str | None = None
+    organization_id: str | None = None
     details: dict = Field(default_factory=dict)
-    ip_address: Optional[str] = None
+    ip_address: str | None = None
     timestamp: str
 
 
@@ -4806,4 +4806,4 @@ class ComplianceReportRequest(BaseModel):
 
     start_date: _datetime = Field(description="Report start date")
     end_date: _datetime = Field(description="Report end date")
-    organization_id: Optional[str] = Field(default=None, description="Organization ID (defaults to user's org)")
+    organization_id: str | None = Field(default=None, description="Organization ID (defaults to user's org)")

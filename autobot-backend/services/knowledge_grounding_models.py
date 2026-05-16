@@ -16,7 +16,7 @@ Issue: Knowledge Grounding Tier 4 implementation
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class ClaimType(str, Enum):
@@ -70,7 +70,7 @@ class KBSource:
     text: str
     confidence: float
     age_days: float
-    url: Optional[str] = None
+    url: str | None = None
 
 
 @dataclass
@@ -94,7 +94,7 @@ class Claim:
     kb_status: KBStatus
     confidence: float
     sources: List[KBSource] = field(default_factory=list)
-    kb_fact: Optional[str] = None
+    kb_fact: str | None = None
     timestamp: float = field(default_factory=time.time)
     metadata: Dict[str, Any] = field(default_factory=dict)
 

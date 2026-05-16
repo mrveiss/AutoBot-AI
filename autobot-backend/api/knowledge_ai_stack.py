@@ -10,7 +10,7 @@ intelligent content analysis using the AI Stack VM.
 """
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
@@ -106,7 +106,7 @@ async def _search_local_knowledge_base(
 async def _search_rag_enhanced(
     query: str,
     max_results: int,
-    local_docs: Optional[List[Dict[str, Any]]] = None,
+    local_docs: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
     """
     Search using AI Stack RAG capabilities.
@@ -368,9 +368,9 @@ async def _store_single_fact_with_semaphore(
     kb,
     fact: Dict[str, Any],
     semaphore: asyncio.Semaphore,
-    title: Optional[str],
-    source: Optional[str],
-    category: Optional[str],
+    title: str | None,
+    source: str | None,
+    category: str | None,
 ) -> Dict[str, Any]:
     """Store a single fact with semaphore-bounded concurrency."""
     async with semaphore:
@@ -530,7 +530,7 @@ async def analyze_documents(
 )
 async def reformulate_query(
     query: str,
-    context: Optional[str] = None,
+    context: str | None = None,
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -570,7 +570,7 @@ async def reformulate_query(
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
 async def get_system_knowledge_insights(
-    knowledge_category: Optional[str] = None,
+    knowledge_category: str | None = None,
     current_user: dict = Depends(get_current_user),
 ):
     """

@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 # ---------------------------------------------------------------------------
 
 
-def _install_redis_stub():
+def _install_redis_stub() -> None:
     """Inject a fake autobot_shared.redis_client into sys.modules."""
     mod_name = "autobot_shared.redis_client"
     if mod_name in sys.modules:
@@ -96,44 +96,44 @@ def _make_manager(redis_client) -> AlertCooldownManager:
 
 
 class TestNormalise:
-    def test_strips_leading_trailing_whitespace(self):
+    def test_strips_leading_trailing_whitespace(self) -> None:
         assert _normalise("  hello world  ") == "hello world"
 
-    def test_replaces_integers(self):
+    def test_replaces_integers(self) -> None:
         assert _normalise("Disk at 95%") == "Disk at <N>%"
 
-    def test_replaces_floats(self):
+    def test_replaces_floats(self) -> None:
         assert _normalise("Load: 1.23") == "Load: <N>"
 
-    def test_removes_iso_timestamp_with_T(self):
+    def test_removes_iso_timestamp_with_T(self) -> None:
         result = _normalise("Error at 2025-03-31T12:00:00Z on node-3")
         assert "2025" not in result
         assert "12:00" not in result
 
-    def test_removes_iso_timestamp_with_space(self):
+    def test_removes_iso_timestamp_with_space(self) -> None:
         result = _normalise("Error at 2025-03-31 12:00:00 on host")
         assert "2025" not in result
 
-    def test_collapses_whitespace(self):
+    def test_collapses_whitespace(self) -> None:
         assert _normalise("a   b\tc") == "a b c"
 
-    def test_similar_alerts_same_fingerprint(self):
+    def test_similar_alerts_same_fingerprint(self) -> None:
         """Two alerts differing only in a counter produce the same fingerprint."""
         fp1 = _fingerprint("Disk usage at 95% on node-3")
         fp2 = _fingerprint("Disk usage at 96% on node-3")
         assert fp1 == fp2
 
-    def test_different_alerts_different_fingerprint(self):
+    def test_different_alerts_different_fingerprint(self) -> None:
         fp1 = _fingerprint("Disk usage at 95%")
         fp2 = _fingerprint("CPU usage at 95%")
         assert fp1 != fp2
 
-    def test_fingerprint_is_64_char_hex(self):
+    def test_fingerprint_is_64_char_hex(self) -> None:
         fp = _fingerprint("any alert text")
         assert len(fp) == 64
         assert all(c in "0123456789abcdef" for c in fp)
 
-    def test_timestamp_alerts_same_fingerprint(self):
+    def test_timestamp_alerts_same_fingerprint(self) -> None:
         """Alerts identical except for timestamp share a fingerprint."""
         fp1 = _fingerprint("Job failed at 2025-01-01T00:00:00Z")
         fp2 = _fingerprint("Job failed at 2025-06-15T09:30:00Z")
@@ -146,27 +146,27 @@ class TestNormalise:
 
 
 class TestResolveCooldownTtl:
-    def test_first_send_uses_base_cooldown(self):
+    def test_first_send_uses_base_cooldown(self) -> None:
         """Recurrence 0: progressive schedule gives 0 h, so base cooldown wins."""
         ttl = _resolve_cooldown_ttl(AlertTier.FLASH, recurrence=0)
         assert ttl == AlertTier.FLASH.base_cooldown_seconds  # 300 s
 
-    def test_second_send_uses_6h(self):
+    def test_second_send_uses_6h(self) -> None:
         """Recurrence 1 → 6 h, which exceeds FLASH base (5 min)."""
         ttl = _resolve_cooldown_ttl(AlertTier.FLASH, recurrence=1)
         assert ttl == 6 * 3600
 
-    def test_third_send_uses_12h(self):
+    def test_third_send_uses_12h(self) -> None:
         ttl = _resolve_cooldown_ttl(AlertTier.FLASH, recurrence=2)
         assert ttl == 12 * 3600
 
-    def test_fourth_and_beyond_capped_at_24h(self):
+    def test_fourth_and_beyond_capped_at_24h(self) -> None:
         ttl = _resolve_cooldown_ttl(AlertTier.FLASH, recurrence=3)
         assert ttl == 24 * 3600
         ttl_high = _resolve_cooldown_ttl(AlertTier.FLASH, recurrence=99)
         assert ttl_high == 24 * 3600
 
-    def test_routine_base_wins_over_zero_schedule(self):
+    def test_routine_base_wins_over_zero_schedule(self) -> None:
         """ROUTINE has a 60-min base; recurrence 0 schedule is 0 → base wins."""
         ttl = _resolve_cooldown_ttl(AlertTier.ROUTINE, recurrence=0)
         assert ttl == AlertTier.ROUTINE.base_cooldown_seconds  # 3600 s
@@ -178,19 +178,19 @@ class TestResolveCooldownTtl:
 
 
 class TestAlertTierProperties:
-    def test_flash_rate(self):
+    def test_flash_rate(self) -> None:
         assert AlertTier.FLASH.max_per_hour == 6
         assert AlertTier.FLASH.base_cooldown_seconds == 5 * 60
 
-    def test_priority_rate(self):
+    def test_priority_rate(self) -> None:
         assert AlertTier.PRIORITY.max_per_hour == 4
         assert AlertTier.PRIORITY.base_cooldown_seconds == 30 * 60
 
-    def test_routine_rate(self):
+    def test_routine_rate(self) -> None:
         assert AlertTier.ROUTINE.max_per_hour == 2
         assert AlertTier.ROUTINE.base_cooldown_seconds == 60 * 60
 
-    def test_tier_names(self):
+    def test_tier_names(self) -> None:
         assert AlertTier.FLASH.tier_name == "flash"
         assert AlertTier.PRIORITY.tier_name == "priority"
         assert AlertTier.ROUTINE.tier_name == "routine"
@@ -202,31 +202,31 @@ class TestAlertTierProperties:
 
 
 class TestShouldSend:
-    def test_first_alert_always_passes(self):
+    def test_first_alert_always_passes(self) -> None:
         """With no existing rate count and no cooldown key, alert must pass."""
         client = _make_redis(rate_count=0, cooldown_exists=False)
         mgr = _make_manager(client)
         assert mgr.should_send("Service down", AlertTier.FLASH) is True
 
-    def test_suppressed_when_in_cooldown(self):
+    def test_suppressed_when_in_cooldown(self) -> None:
         """If the cooldown key exists, the alert must be suppressed."""
         client = _make_redis(cooldown_exists=True)
         mgr = _make_manager(client)
         assert mgr.should_send("Service down", AlertTier.FLASH) is False
 
-    def test_suppressed_when_rate_limit_reached(self):
+    def test_suppressed_when_rate_limit_reached(self) -> None:
         """When the hourly counter equals max_per_hour, suppress the alert."""
         client = _make_redis(rate_count=AlertTier.FLASH.max_per_hour, cooldown_exists=False)
         mgr = _make_manager(client)
         assert mgr.should_send("Any alert", AlertTier.FLASH) is False
 
-    def test_passes_when_rate_below_limit(self):
+    def test_passes_when_rate_below_limit(self) -> None:
         """Counter below max_per_hour and no cooldown — alert should pass."""
         client = _make_redis(rate_count=AlertTier.FLASH.max_per_hour - 1, cooldown_exists=False)
         mgr = _make_manager(client)
         assert mgr.should_send("Any alert", AlertTier.FLASH) is True
 
-    def test_rate_limit_checked_before_cooldown(self):
+    def test_rate_limit_checked_before_cooldown(self) -> None:
         """Rate limit failure short-circuits before checking cooldown."""
         client = _make_redis(rate_count=AlertTier.PRIORITY.max_per_hour, cooldown_exists=True)
         mgr = _make_manager(client)
@@ -252,7 +252,7 @@ class TestShouldSend:
         assert flash_mgr.should_send("Disk full", AlertTier.FLASH) is False
         assert routine_mgr.should_send("Disk full", AlertTier.ROUTINE) is True
 
-    def test_fail_open_when_redis_unavailable(self):
+    def test_fail_open_when_redis_unavailable(self) -> None:
         """When Redis is None, alert must be allowed through (fail-open)."""
         mgr = AlertCooldownManager()
         mgr._get_client = MagicMock(return_value=None)
@@ -265,7 +265,7 @@ class TestShouldSend:
 
 
 class TestRecordSent:
-    def test_increments_rate_counter(self):
+    def test_increments_rate_counter(self) -> None:
         """record_sent must call pipeline().incr() and pipeline().execute()."""
         client = _make_redis()
         mgr = _make_manager(client)
@@ -276,7 +276,7 @@ class TestRecordSent:
         pipe.expire.assert_called_once()
         pipe.execute.assert_called_once()
 
-    def test_sets_cooldown_key(self):
+    def test_sets_cooldown_key(self) -> None:
         """record_sent must call client.set() for the cooldown key."""
         client = _make_redis()
         mgr = _make_manager(client)
@@ -287,7 +287,7 @@ class TestRecordSent:
         key = call_args[0][0]
         assert "alerts:cooldown:flash:" in key
 
-    def test_cooldown_ttl_matches_base_on_first_send(self):
+    def test_cooldown_ttl_matches_base_on_first_send(self) -> None:
         """First send (recurrence 0): TTL must be tier base cooldown (300 s for FLASH)."""
         client = _make_redis(cooldown_exists=False)
         mgr = _make_manager(client)
@@ -296,7 +296,7 @@ class TestRecordSent:
         call_kwargs = client.set.call_args[1]
         assert call_kwargs.get("ex") == AlertTier.FLASH.base_cooldown_seconds
 
-    def test_cooldown_ttl_escalates_on_recurrence(self):
+    def test_cooldown_ttl_escalates_on_recurrence(self) -> None:
         """Second send (stored recurrence=1): TTL must escalate to 6 h."""
         client = _make_redis(cooldown_exists=True, stored_recurrence=1)
         mgr = _make_manager(client)
@@ -305,7 +305,7 @@ class TestRecordSent:
         call_kwargs = client.set.call_args[1]
         assert call_kwargs.get("ex") == 6 * 3600
 
-    def test_no_op_when_redis_unavailable(self):
+    def test_no_op_when_redis_unavailable(self) -> None:
         """record_sent must not raise when Redis is unavailable."""
         mgr = AlertCooldownManager()
         mgr._get_client = MagicMock(return_value=None)
@@ -319,13 +319,13 @@ class TestRecordSent:
 
 
 class TestKeyNamespacing:
-    def test_cooldown_key_format(self):
+    def test_cooldown_key_format(self) -> None:
         mgr = AlertCooldownManager()
         fp = _fingerprint("test alert")
         key = mgr._cooldown_key(AlertTier.FLASH, fp)
         assert key == f"alerts:cooldown:flash:{fp}"
 
-    def test_rate_window_key_format(self):
+    def test_rate_window_key_format(self) -> None:
         import time
 
         mgr = AlertCooldownManager()
@@ -333,7 +333,7 @@ class TestKeyNamespacing:
         window_ts = int(time.time()) // 3600
         assert key == f"alerts:rate:priority:{window_ts}"
 
-    def test_cooldown_keys_differ_across_tiers(self):
+    def test_cooldown_keys_differ_across_tiers(self) -> None:
         """Same fingerprint must produce different keys for different tiers."""
         mgr = AlertCooldownManager()
         fp = _fingerprint("same alert")
@@ -348,7 +348,7 @@ class TestKeyNamespacing:
 
 
 class TestRoundTrip:
-    def test_send_then_blocked(self):
+    def test_send_then_blocked(self) -> None:
         """After record_sent, should_send must return False (cooldown active)."""
         # Simulate: first check passes, then after record_sent the key exists.
         client_before = _make_redis(rate_count=0, cooldown_exists=False)

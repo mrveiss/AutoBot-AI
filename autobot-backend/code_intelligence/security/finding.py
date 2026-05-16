@@ -8,7 +8,7 @@ Issue #712: Extracted from security_analyzer.py for modularity.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .constants import SecuritySeverity, VulnerabilityType
 
@@ -25,7 +25,7 @@ class SecurityFinding:
     description: str
     recommendation: str
     owasp_category: str
-    cwe_id: Optional[str] = None
+    cwe_id: str | None = None
     current_code: str = ""
     secure_alternative: str = ""
     confidence: float = 1.0

@@ -15,7 +15,7 @@ import asyncio
 import json
 import re
 import uuid
-from typing import Any, Dict, FrozenSet, List, Optional
+from typing import Any, Dict, FrozenSet, List
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
@@ -81,7 +81,7 @@ class ChatWorkflowManager(
     def __init__(self):
         """Initialize the chat workflow manager."""
         self.sessions: Dict[str, WorkflowSession] = {}
-        self.default_workflow: Optional[Any] = None
+        self.default_workflow: Any | None = None
         self._initialized = False
         self._lock = asyncio.Lock()
         self.redis_manager = None  # Async Redis manager
@@ -357,7 +357,7 @@ class ChatWorkflowManager(
         )
         return sources
 
-    def _parse_stream_chunk(self, line: bytes) -> Optional[Dict[str, Any]]:
+    def _parse_stream_chunk(self, line: bytes) -> Dict[str, Any] | None:
         """Parse a single stream chunk line (Issue #315: depth reduction).
 
         Args:
@@ -579,8 +579,8 @@ class ChatWorkflowManager(
 
     def _apply_type_transition(
         self,
-        complete_msg: Optional[WorkflowMessage],
-        new_segment: Optional[str],
+        complete_msg: WorkflowMessage | None,
+        new_segment: str | None,
         new_type: str,
         selected_model: str,
         terminal_session_id: str,
@@ -734,7 +734,7 @@ class ChatWorkflowManager(
         streaming_msg,
         chunk_text: str,
         just_transitioned: bool,
-        transition_content: Optional[str],
+        transition_content: str | None,
         current_message_type: str,
     ) -> None:
         """Stream chunk content to the streaming message. Issue #620, #1140."""
@@ -2006,7 +2006,7 @@ before summarizing.
         selected_model: str,
         execution_history: List[Dict[str, Any]],
         workflow_messages: List[WorkflowMessage],
-        ctx: Optional[LLMIterationContext] = None,
+        ctx: LLMIterationContext | None = None,
     ):
         """Issue #665: Refactored - Process tool calls and collect results.
 
@@ -2695,7 +2695,7 @@ before summarizing.
             logger.error("Failed to persist slash command response: %s", persist_error)
 
     async def _prepare_llm_workflow_params(
-        self, session, message: str, context: Optional[Dict[str, Any]]
+        self, session, message: str, context: Dict[str, Any] | None
     ) -> Dict[str, Any]:
         """
         Prepare LLM request parameters from session and message.
@@ -2742,7 +2742,7 @@ before summarizing.
         terminal_session_id: str,
         message: str,
         workflow_messages: List[WorkflowMessage],
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ) -> LLMIterationContext:
         """
         Create LLMIterationContext from prepared parameters.
@@ -2772,7 +2772,7 @@ before summarizing.
         session_id: str,
         session,
         message: str,
-        context: Optional[Dict[str, Any]],
+        context: Dict[str, Any] | None,
         terminal_session_id: str,
         workflow_messages: List[WorkflowMessage],
     ):
@@ -2821,7 +2821,7 @@ before summarizing.
         session_id: str,
         user_message: str,
         assistant_response: str,
-        user_id: Optional[str],
+        user_id: str | None,
         turn_number: int,
     ) -> None:
         """Invoke stop hook to enqueue memory tasks after turn completion.
@@ -2844,7 +2844,7 @@ before summarizing.
         self,
         session_id: str,
         conversation_history: List[Dict[str, Any]],
-        user_id: Optional[str],
+        user_id: str | None,
         model_name: str,
     ) -> None:
         """Invoke pre-compact hook to snapshot session before context overflow.
@@ -2872,7 +2872,7 @@ before summarizing.
 
     @error_boundary(component="chat_workflow_manager", function="process_message")
     async def process_message(
-        self, session_id: str, message: str, context: Optional[Dict[str, Any]] = None
+        self, session_id: str, message: str, context: Dict[str, Any] | None = None
     ) -> List[WorkflowMessage]:
         """Process a message through the workflow system and return all messages."""
         messages = []
@@ -2938,7 +2938,7 @@ before summarizing.
         workflow_messages.append(error_msg)
         return error_msg
 
-    async def process_message_stream(self, session_id: str, message: str, context: Optional[Dict[str, Any]] = None):
+    async def process_message_stream(self, session_id: str, message: str, context: Dict[str, Any] | None = None):
         """Process a message via LangGraph StateGraph.
 
         Issue #1043: Replaced hand-rolled async generator with LangGraph graph
@@ -2962,7 +2962,7 @@ before summarizing.
         self,
         session_id: str,
         message: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ):
         """Run the LangGraph StateGraph for chat processing.
 
@@ -3045,7 +3045,7 @@ before summarizing.
             queue.put_nowait(None)
 
     async def _process_message_stream_legacy(
-        self, session_id: str, message: str, context: Optional[Dict[str, Any]] = None
+        self, session_id: str, message: str, context: Dict[str, Any] | None = None
     ):
         """Legacy message processing (pre-LangGraph fallback).
 

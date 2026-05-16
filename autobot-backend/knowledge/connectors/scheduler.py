@@ -19,7 +19,7 @@ import os
 import re
 import socket
 import time
-from typing import Dict, Optional
+from typing import Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -38,7 +38,7 @@ _NAMED_SCHEDULES: Dict[str, int] = {
 }
 
 
-def _parse_interval_seconds(schedule: str) -> Optional[int]:
+def _parse_interval_seconds(schedule: str) -> int | None:
     """Return the repeat interval in seconds for a simple schedule string.
 
     Supported formats:
@@ -113,7 +113,7 @@ class ConnectorScheduler:
         self._tasks: Dict[str, asyncio.Task] = {}
         self._is_leader = False
         self._worker_id = "%s-%d" % (socket.gethostname(), os.getpid())
-        self._leader_task: Optional[asyncio.Task] = None
+        self._leader_task: asyncio.Task | None = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -374,7 +374,7 @@ class ConnectorScheduler:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_scheduler: Optional[ConnectorScheduler] = None
+_scheduler: ConnectorScheduler | None = None
 
 
 def get_connector_scheduler() -> ConnectorScheduler:

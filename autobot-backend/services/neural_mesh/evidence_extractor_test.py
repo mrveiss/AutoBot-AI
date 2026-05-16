@@ -62,7 +62,7 @@ class TestExtractReturnsEvidenceObjects:
     """extract() returns Evidence dataclass instances."""
 
     @pytest.mark.asyncio
-    async def test_extract_returns_evidence_objects(self):
+    async def test_extract_returns_evidence_objects(self) -> None:
         """Each returned item must be an Evidence with text, source_chunk_id,
         and relevance."""
         chunk = _make_chunk("The sky is blue. Stars shine at night.", "c1")
@@ -82,7 +82,7 @@ class TestExtractSplitsIntoSentences:
     """extract() splits multi-sentence chunks into individual Evidence items."""
 
     @pytest.mark.asyncio
-    async def test_extract_splits_into_sentences(self):
+    async def test_extract_splits_into_sentences(self) -> None:
         """A chunk with three sentences must produce three Evidence objects."""
         chunk = _make_chunk("Redis is fast. It uses memory. Data expires automatically.", "c2")
         extractor = _make_extractor(scores=[0.9, 0.3, 0.6])
@@ -100,7 +100,7 @@ class TestExtractLimitsToMaxEvidence:
     """extract() returns at most max_evidence items."""
 
     @pytest.mark.asyncio
-    async def test_extract_limits_to_max_evidence(self):
+    async def test_extract_limits_to_max_evidence(self) -> None:
         """With 20 sentences and max_evidence=5 exactly 5 items are returned."""
         sentences = [f"Sentence number {i}." for i in range(20)]
         content = " ".join(sentences)
@@ -117,7 +117,7 @@ class TestExtractSkipsTinyFragments:
     """extract() skips sentence fragments of 10 characters or fewer."""
 
     @pytest.mark.asyncio
-    async def test_extract_skips_tiny_fragments(self):
+    async def test_extract_skips_tiny_fragments(self) -> None:
         """Fragments with 10 or fewer characters must not appear in results."""
         chunk = _make_chunk("Hi. This is a longer sentence that should pass.", "c4")
         # 'Hi.' has 3 chars — must be skipped; second sentence has 47 chars
@@ -133,7 +133,7 @@ class TestExtractEmptyChunksReturnsEmpty:
     """extract() returns an empty list when no chunks are provided."""
 
     @pytest.mark.asyncio
-    async def test_extract_empty_chunks_returns_empty(self):
+    async def test_extract_empty_chunks_returns_empty(self) -> None:
         """An empty chunks list must return an empty list without calling predict."""
         reranker = AsyncMock()
         reranker.predict = AsyncMock()
@@ -149,7 +149,7 @@ class TestExtractPreservesSourceAttribution:
     """Each Evidence carries the chunk_id of the chunk it came from."""
 
     @pytest.mark.asyncio
-    async def test_extract_preserves_source_attribution(self):
+    async def test_extract_preserves_source_attribution(self) -> None:
         """Sentences from chunk_a must reference chunk_a; same for chunk_b."""
         chunk_a = _make_chunk("Alpha sentence one. Alpha sentence two.", "chunk_a")
         chunk_b = _make_chunk("Beta sentence one. Beta sentence two.", "chunk_b")
@@ -164,7 +164,7 @@ class TestExtractPreservesSourceAttribution:
         assert by_id["Beta sentence two."] == "chunk_b"
 
     @pytest.mark.asyncio
-    async def test_extract_preserves_source_attribution_metadata_key(self):
+    async def test_extract_preserves_source_attribution_metadata_key(self) -> None:
         """chunk_id nested under 'metadata' must be resolved correctly."""
         chunk = _make_chunk("One sentence here.", "meta_chunk", use_metadata=True)
         extractor = _make_extractor(scores=[0.5])
@@ -182,7 +182,7 @@ class TestExtractPreservesSourceAttribution:
 class TestSplitSentences:
     """_split_sentences() handles all terminal punctuation types."""
 
-    def test_split_sentences_handles_multiple_delimiters(self):
+    def test_split_sentences_handles_multiple_delimiters(self) -> None:
         """Period, question mark, and exclamation mark all act as delimiters."""
         extractor = EvidenceExtractor(reranker=AsyncMock(), max_evidence=15)
         text = "Is this a question? Yes it is! And this is a statement."
@@ -194,7 +194,7 @@ class TestSplitSentences:
         assert "And this is a statement." in parts
         assert len(parts) == 3
 
-    def test_split_sentences_single_sentence_no_split(self):
+    def test_split_sentences_single_sentence_no_split(self) -> None:
         """A single sentence without trailing whitespace is returned as-is."""
         extractor = EvidenceExtractor(reranker=AsyncMock(), max_evidence=15)
 
@@ -202,7 +202,7 @@ class TestSplitSentences:
 
         assert parts == ["Only one sentence."]
 
-    def test_split_sentences_empty_string_returns_empty(self):
+    def test_split_sentences_empty_string_returns_empty(self) -> None:
         """An empty string yields an empty list."""
         extractor = EvidenceExtractor(reranker=AsyncMock(), max_evidence=15)
 
@@ -210,7 +210,7 @@ class TestSplitSentences:
 
         assert parts == []
 
-    def test_split_does_not_break_on_dr(self):
+    def test_split_does_not_break_on_dr(self) -> None:
         """'Dr. Smith is here.' must not be split into two fragments (#2170)."""
         extractor = EvidenceExtractor(reranker=AsyncMock(), max_evidence=15)
 
@@ -218,7 +218,7 @@ class TestSplitSentences:
 
         assert parts == ["Dr. Smith is here."]
 
-    def test_split_does_not_break_on_eg(self):
+    def test_split_does_not_break_on_eg(self) -> None:
         """'e.g. this example is valid.' must remain as one sentence (#2170)."""
         extractor = EvidenceExtractor(reranker=AsyncMock(), max_evidence=15)
 
@@ -226,7 +226,7 @@ class TestSplitSentences:
 
         assert parts == ["e.g. this example is valid."]
 
-    def test_split_does_not_break_on_us(self):
+    def test_split_does_not_break_on_us(self) -> None:
         """'U.S. is a country.' must not be split after the abbreviation (#2170)."""
         extractor = EvidenceExtractor(reranker=AsyncMock(), max_evidence=15)
 
@@ -234,7 +234,7 @@ class TestSplitSentences:
 
         assert parts == ["U.S. is a country."]
 
-    def test_split_still_breaks_on_real_sentence_end(self):
+    def test_split_still_breaks_on_real_sentence_end(self) -> None:
         """Two genuine sentences still split correctly even with fix applied (#2170)."""
         extractor = EvidenceExtractor(reranker=AsyncMock(), max_evidence=15)
 
@@ -252,7 +252,7 @@ class TestScoredSentencesSortedByRelevance:
     """extract() returns Evidence objects sorted by descending relevance."""
 
     @pytest.mark.asyncio
-    async def test_scored_sentences_sorted_by_relevance(self):
+    async def test_scored_sentences_sorted_by_relevance(self) -> None:
         """The item with the highest raw logit must appear first."""
         chunk = _make_chunk("Low relevance sentence. High relevance sentence. Medium sentence.", "c5")
         # logits: low=0.1, high=5.0, medium=1.5 — after sigmoid: high > medium > low
@@ -266,7 +266,7 @@ class TestScoredSentencesSortedByRelevance:
         assert results[0].relevance > results[1].relevance > results[2].relevance
 
     @pytest.mark.asyncio
-    async def test_relevance_values_are_sigmoid_normalised(self):
+    async def test_relevance_values_are_sigmoid_normalised(self) -> None:
         """Relevance values must be in the 0-1 range (sigmoid of logits)."""
         chunk = _make_chunk("First sentence. Second sentence.", "c6")
         extractor = _make_extractor(scores=[-10.0, 10.0])

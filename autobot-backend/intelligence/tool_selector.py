@@ -8,7 +8,7 @@ Selects appropriate tools based on OS capabilities and goal requirements.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -25,7 +25,7 @@ class ToolSelection:
 
     primary_command: str
     fallback_commands: List[str]
-    install_command: Optional[str]
+    install_command: str | None
     requires_install: bool
     explanation: str
     # #7245: `IntelligentAgent._build_tool_selection_chunks` iterates
@@ -196,7 +196,7 @@ class OSAwareToolSelector:
             },
         }
 
-    def _get_tools_for_os(self, intent_tools: Dict, os_info) -> Optional[List[str]]:
+    def _get_tools_for_os(self, intent_tools: Dict, os_info) -> List[str] | None:
         """Get tools for the current OS/distro (Issue #315 - extracted helper)."""
         if os_info.os_type not in intent_tools:
             return None
@@ -216,7 +216,7 @@ class OSAwareToolSelector:
             list(tools.values())[0] if tools.values() else [],
         )
 
-    def _get_mapped_tools(self, goal: ProcessedGoal, os_info) -> Optional[List[str]]:
+    def _get_mapped_tools(self, goal: ProcessedGoal, os_info) -> List[str] | None:
         """Get mapped tools for goal (Issue #315 - extracted helper)."""
         if goal.category not in self.tool_mappings:
             return None

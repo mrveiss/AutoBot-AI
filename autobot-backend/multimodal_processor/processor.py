@@ -12,7 +12,7 @@ Part of Issue #381 - God Class Refactoring
 
 import asyncio
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from enhanced_memory_manager_async import (
@@ -298,7 +298,7 @@ class UnifiedMultiModalProcessor:
         except Exception as e:
             self.logger.error("Failed to initialize fusion components: %s", e)
 
-    def _extract_embedding_from_result(self, result: ProcessingResult) -> Optional[Any]:
+    def _extract_embedding_from_result(self, result: ProcessingResult) -> Any | None:
         """Extract embedding from a processing result (Issue #315 - extracted method)"""
         if not result.result_data:
             return None
@@ -393,7 +393,7 @@ class UnifiedMultiModalProcessor:
         return fused_embedding
 
     def _extract_modality_contributions(
-        self, attention_weights: Optional[Any], modalities: List[str]
+        self, attention_weights: Any | None, modalities: List[str]
     ) -> Dict[str, float]:
         """Extract modality contributions from attention weights. Issue #620."""
         if attention_weights is not None:

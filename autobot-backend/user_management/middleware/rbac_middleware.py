@@ -13,7 +13,7 @@ import json
 import time
 import uuid
 from functools import wraps
-from typing import Callable, List, Optional, Set
+from typing import Callable, List, Set
 
 from fastapi import HTTPException, Request, status
 
@@ -34,7 +34,7 @@ _REDIS_KEY_PREFIX = "rbac:perm:"
 _permission_cache: dict[str, tuple[Set[str], float]] = {}
 CACHE_TTL_SECONDS = TTL_5_MINUTES
 
-_listener_task: Optional[asyncio.Task] = None
+_listener_task: asyncio.Task | None = None
 
 
 async def _run_invalidation_listener() -> None:
@@ -92,8 +92,8 @@ class RBACMiddleware:
 
     async def get_user_permissions(
         self,
-        user_id: Optional[uuid.UUID],
-        org_id: Optional[uuid.UUID] = None,
+        user_id: uuid.UUID | None,
+        org_id: uuid.UUID | None = None,
     ) -> Set[str]:
         """
         Get all permissions for a user.
@@ -152,9 +152,9 @@ class RBACMiddleware:
 
     async def check_permission(
         self,
-        user_id: Optional[uuid.UUID],
+        user_id: uuid.UUID | None,
         permission: str,
-        org_id: Optional[uuid.UUID] = None,
+        org_id: uuid.UUID | None = None,
     ) -> bool:
         """
         Check if user has a specific permission.
@@ -172,9 +172,9 @@ class RBACMiddleware:
 
     async def check_any_permission(
         self,
-        user_id: Optional[uuid.UUID],
+        user_id: uuid.UUID | None,
         permissions: List[str],
-        org_id: Optional[uuid.UUID] = None,
+        org_id: uuid.UUID | None = None,
     ) -> bool:
         """
         Check if user has any of the specified permissions.
@@ -194,9 +194,9 @@ class RBACMiddleware:
 
     async def check_all_permissions(
         self,
-        user_id: Optional[uuid.UUID],
+        user_id: uuid.UUID | None,
         permissions: List[str],
-        org_id: Optional[uuid.UUID] = None,
+        org_id: uuid.UUID | None = None,
     ) -> bool:
         """
         Check if user has all of the specified permissions.
@@ -214,7 +214,7 @@ class RBACMiddleware:
             return True
         return set(permissions).issubset(user_permissions)
 
-    async def clear_cache(self, user_id: Optional[uuid.UUID] = None) -> None:
+    async def clear_cache(self, user_id: uuid.UUID | None = None) -> None:
         """
         Clear permission cache for one user or all users.
 
@@ -249,7 +249,7 @@ class RBACMiddleware:
 rbac_middleware = RBACMiddleware()
 
 
-def _extract_request(args: tuple, request: Optional[Request]) -> Request:
+def _extract_request(args: tuple, request: Request | None) -> Request:
     """
     Extract Request object from function arguments.
 
@@ -280,7 +280,7 @@ def _extract_request(args: tuple, request: Optional[Request]) -> Request:
 
 def _extract_user_context(
     request: Request,
-) -> tuple[Optional[uuid.UUID], Optional[uuid.UUID]]:
+) -> tuple[uuid.UUID | None, uuid.UUID | None]:
     """
     Extract user_id and org_id from request state.
 
@@ -311,7 +311,7 @@ def _extract_user_context(
     return user_id, org_id
 
 
-def _require_authentication(user_id: Optional[uuid.UUID], permissions_desc: str) -> None:
+def _require_authentication(user_id: uuid.UUID | None, permissions_desc: str) -> None:
     """
     Check that user is authenticated, raise 401 if not.
 

@@ -3,7 +3,7 @@
 # Author: mrveiss
 """Response schemas for the knowledge vectorization API endpoints (#5317)."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -135,7 +135,7 @@ class BackgroundVectorizationResponse(BaseModel):
 
     status: str
     message: str
-    last_run: Optional[str]
+    last_run: str | None
     is_running: bool
 
 
@@ -145,7 +145,7 @@ class VectorizationStatusPollResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     is_running: bool
-    last_run: Optional[str]
+    last_run: str | None
     check_interval: int
     batch_size: int
 
@@ -167,9 +167,9 @@ class ReindexWithContextStatusResponse(BaseModel):
     is_running: bool
     enriched_count: int
     total_count: int
-    started_at: Optional[str]
-    completed_at: Optional[str]
-    error: Optional[str]
+    started_at: str | None
+    completed_at: str | None
+    error: str | None
 
 
 class BatchVectorizeRequest(BaseModel):
@@ -197,7 +197,7 @@ class BatchVectorizeRequest(BaseModel):
 class ReindexWithContextRequest(BaseModel):
     """Request model for POST /reindex_with_context (#1513)."""
 
-    collection_name: Optional[str] = Field(
+    collection_name: str | None = Field(
         default=None,
         max_length=200,
         pattern=_REINDEX_COLLECTION_PATTERN,

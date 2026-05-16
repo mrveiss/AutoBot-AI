@@ -9,8 +9,6 @@ Part of Issue #872 - Session Collaboration API (#608 Phase 3).
 """
 
 import uuid
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,7 +38,7 @@ router = APIRouter(prefix="/sessions", tags=["collaboration"])
 # ====================================================================
 
 
-async def _get_session_collab(session_id: str, db: AsyncSession) -> Optional[SessionCollaboration]:
+async def _get_session_collab(session_id: str, db: AsyncSession) -> SessionCollaboration | None:
     """Get session collaboration record."""
     from sqlalchemy import select
 

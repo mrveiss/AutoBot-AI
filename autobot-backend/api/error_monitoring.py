@@ -12,8 +12,6 @@ import asyncio
 import json
 import os
 import sys
-from typing import Optional
-
 from fastapi import APIRouter, Header, HTTPException, Request, status
 
 from api.schemas_analytics import (
@@ -206,7 +204,7 @@ def _calculate_health_status(critical_errors: int, high_errors: int, total_error
 
 @register_health_probe("error_monitoring")
 async def probe_error_monitoring(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for error-monitoring service."""
     try:
@@ -281,7 +279,7 @@ async def get_error_system_health():
     operation="clear_error_history",
     error_code_prefix="ERROR_MONITORING",
 )
-async def clear_error_history(authorization: Optional[str] = Header(None)):
+async def clear_error_history(authorization: str | None = Header(None)):
     """Clear error history (admin only)"""
     try:
         # This would typically require authentication
@@ -434,7 +432,7 @@ async def get_metrics_summary():
     operation="get_error_timeline_endpoint",
     error_code_prefix="ERROR_MONITORING",
 )
-async def get_error_timeline_endpoint(hours: int = 24, component: Optional[str] = None):
+async def get_error_timeline_endpoint(hours: int = 24, component: str | None = None):
     """
     Get error timeline data for visualization
 

@@ -15,7 +15,7 @@ import asyncio
 import logging
 import warnings
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +179,7 @@ class HookRegistry:
     Allows plugins to register callbacks for system events.
     """
 
-    _instance: Optional["HookRegistry"] = None
+    _instance: "HookRegistry" | None = None
     _hooks: Dict[str, List[Any]] = {}  # Each entry is a dict with callback and plugin_name keys
 
     def __new__(cls):
@@ -192,7 +192,7 @@ class HookRegistry:
         self,
         hook_name: str,
         callback: Callable,
-        plugin_name: Optional[str] = None,
+        plugin_name: str | None = None,
     ) -> None:
         """
         Register a callback for a hook.
@@ -218,7 +218,7 @@ class HookRegistry:
             plugin_name or "unknown",
         )
 
-    def unregister_hook(self, hook_name: str, plugin_name: Optional[str] = None) -> None:
+    def unregister_hook(self, hook_name: str, plugin_name: str | None = None) -> None:
         """
         Unregister callbacks for a hook.
 

@@ -4,7 +4,7 @@
 """Redis Memory Provider (Issue #4344)"""
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 class RedisMemoryProvider:
     """Redis-backed memory provider for fast memory retrieval."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.redis = None
         self.db = DATABASE_MAPPING.get("main", 0)
         self.prefix = "autobot:memory"
@@ -73,7 +73,7 @@ class RedisMemoryProvider:
             logger.error(f"Error syncing to Redis: {e}")
 
     async def search(
-        self, query: str, limit: int = 10, filters: Optional[Dict[str, Any]] = None
+        self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None
     ) -> List[Dict[str, Any]]:
         if not self.redis:
             return []
@@ -89,7 +89,7 @@ class RedisMemoryProvider:
             logger.error(f"Error searching Redis cache: {e}")
             return []
 
-    async def get_entity(self, entity_id: str) -> Optional[Dict[str, Any]]:
+    async def get_entity(self, entity_id: str) -> Dict[str, Any] | None:
         if not self.redis:
             return None
         try:

@@ -11,7 +11,7 @@ used by ``api/adapters.py``.
 """
 
 import time
-from typing import List, Optional
+from typing import List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -35,7 +35,7 @@ class GroqAdapter(AdapterBase):
     single implementation of the Groq request/response logic.
     """
 
-    def __init__(self, config: Optional[AdapterConfig] = None):
+    def __init__(self, config: AdapterConfig | None = None):
         super().__init__("groq_api", config)
         self._provider = None
 

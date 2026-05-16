@@ -14,7 +14,7 @@ FEATURE FLAG SUPPORT:
 - ENFORCED: Full enforcement with access blocking
 """
 
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import HTTPException, Request
 
@@ -137,7 +137,7 @@ class SessionOwnershipValidator:
             await self.redis.hset(ctx_key, mapping=context)
             await self.redis.expire(ctx_key, self.ownership_ttl)
 
-    async def get_session_owner(self, session_id: str) -> Optional[str]:
+    async def get_session_owner(self, session_id: str) -> str | None:
         """
         Get the owner of a chat session.
 
@@ -424,7 +424,7 @@ class SessionOwnershipValidator:
         self,
         session_id: str,
         user_data: Dict,
-    ) -> Optional[Dict]:
+    ) -> Dict | None:
         """Helper for validate_ownership. Ref: #1088.
 
         Checks the two early-exit conditions that bypass ownership lookup:

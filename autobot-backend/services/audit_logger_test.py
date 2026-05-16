@@ -97,14 +97,14 @@ def _make_redis_mock(pipeline=None):
 
 
 class TestAuditEntry:
-    def test_defaults(self):
+    def test_defaults(self) -> None:
         entry = AuditEntry(operation="auth.login", result="success")
         assert entry.id
         assert entry.timestamp > 0
         assert entry.date  # YYYY-MM-DD
         assert entry.result == "success"
 
-    def test_sanitize_removes_sensitive_keys(self):
+    def test_sanitize_removes_sensitive_keys(self) -> None:
         entry = AuditEntry(
             operation="auth.login",
             details={
@@ -120,7 +120,7 @@ class TestAuditEntry:
         assert "api_key" not in entry.details
         assert entry.details["username"] == "alice"
 
-    def test_sanitize_case_insensitive(self):
+    def test_sanitize_case_insensitive(self) -> None:
         entry = AuditEntry(
             operation="auth.login",
             details={"PASSWORD": "bad", "Authorization": "Bearer x"},
@@ -129,7 +129,7 @@ class TestAuditEntry:
         assert "PASSWORD" not in entry.details
         assert "Authorization" not in entry.details
 
-    def test_json_roundtrip(self):
+    def test_json_roundtrip(self) -> None:
         entry = AuditEntry(
             operation="file.upload",
             result="success",
@@ -143,7 +143,7 @@ class TestAuditEntry:
         assert restored.user_id == entry.user_id
         assert restored.details == entry.details
 
-    def test_to_response_dict_keys(self):
+    def test_to_response_dict_keys(self) -> None:
         entry = AuditEntry(operation="session.create", user_id="carol")
         d = entry.to_response_dict()
         expected_keys = {
@@ -182,7 +182,7 @@ class TestAuditLoggerLog:
         return al
 
     @pytest.mark.asyncio
-    async def test_log_returns_true_on_success(self, logger, tmp_path):
+    async def test_log_returns_true_on_success(self, logger, tmp_path) -> None:
         pipe = _make_pipeline_mock()
         redis = _make_redis_mock(pipe)
         with patch(
@@ -200,7 +200,7 @@ class TestAuditLoggerLog:
         assert logger._total_logged == 1
 
     @pytest.mark.asyncio
-    async def test_batch_flushed_when_full(self, tmp_path):
+    async def test_batch_flushed_when_full(self, tmp_path) -> None:
         al = AuditLogger(
             retention_days=7,
             batch_size=3,
@@ -222,7 +222,7 @@ class TestAuditLoggerLog:
         assert pipe.execute.called
 
     @pytest.mark.asyncio
-    async def test_fallback_log_written_when_redis_unavailable(self, tmp_path):
+    async def test_fallback_log_written_when_redis_unavailable(self, tmp_path) -> None:
         al = AuditLogger(
             retention_days=7,
             batch_size=1,
@@ -244,7 +244,7 @@ class TestAuditLoggerLog:
         assert "entry" in data
 
     @pytest.mark.asyncio
-    async def test_flush_drains_queue(self, tmp_path):
+    async def test_flush_drains_queue(self, tmp_path) -> None:
         al = AuditLogger(
             retention_days=7,
             batch_size=100,
@@ -272,7 +272,7 @@ class TestAuditLoggerLog:
 
 class TestAuditLoggerQuery:
     @pytest.mark.asyncio
-    async def test_query_returns_empty_when_redis_unavailable(self, tmp_path):
+    async def test_query_returns_empty_when_redis_unavailable(self, tmp_path) -> None:
         al = AuditLogger(fallback_log_dir=str(tmp_path / "audit"))
         with patch(
             "services.audit_logger.get_async_redis_client",
@@ -283,7 +283,7 @@ class TestAuditLoggerQuery:
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_query_time_range_parses_json_entries(self, tmp_path):
+    async def test_query_time_range_parses_json_entries(self, tmp_path) -> None:
         al = AuditLogger(fallback_log_dir=str(tmp_path / "audit"))
 
         now = datetime.now(tz=timezone.utc)
@@ -319,7 +319,7 @@ class TestAuditLoggerQuery:
 
 class TestSingletonHelpers:
     @pytest.mark.asyncio
-    async def test_get_audit_logger_returns_same_instance(self, tmp_path):
+    async def test_get_audit_logger_returns_same_instance(self, tmp_path) -> None:
         with (
             patch(
                 "services.audit_logger.get_async_redis_client",
@@ -340,7 +340,7 @@ class TestSingletonHelpers:
             _mod._audit_logger = None  # clean up
 
     @pytest.mark.asyncio
-    async def test_close_audit_logger_resets_singleton(self, tmp_path):
+    async def test_close_audit_logger_resets_singleton(self, tmp_path) -> None:
         import services.audit_logger as _mod
 
         _mod._audit_logger = None
@@ -386,7 +386,7 @@ class TestConfigureAudit:
         spec.loader.exec_module(mod)
         return mod.configure_audit
 
-    def test_configure_audit_adds_middleware(self):
+    def test_configure_audit_adds_middleware(self) -> None:
         from fastapi import FastAPI
 
         configure_audit = self._load_configure_audit()
@@ -398,7 +398,7 @@ class TestConfigureAudit:
         middleware_types = [m.cls.__name__ for m in app.user_middleware if hasattr(m, "cls")]
         assert "AuditMiddleware" in middleware_types
 
-    def test_configure_audit_graceful_on_import_error(self):
+    def test_configure_audit_graceful_on_import_error(self) -> None:
         """configure_audit must not raise when AuditMiddleware is unavailable."""
         from fastapi import FastAPI
 

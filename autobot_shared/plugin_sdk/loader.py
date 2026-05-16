@@ -17,7 +17,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Type
+from typing import Dict, List, Tuple, Type
 
 from plugin_sdk.base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
 from plugin_sdk.hooks import validate_hook_names
@@ -33,7 +33,7 @@ class PluginLoader:
     Discovers plugins from filesystem, loads manifests, and instantiates plugins.
     """
 
-    def __init__(self, plugin_dirs: Optional[List[Path]] = None):
+    def __init__(self, plugin_dirs: List[Path] | None = None) -> None:
         """
         Initialize plugin loader.
 
@@ -77,7 +77,7 @@ class PluginLoader:
 
         return manifests
 
-    async def load_plugin(self, manifest: PluginManifest, config: Optional[Dict] = None) -> Optional[BasePlugin]:
+    async def load_plugin(self, manifest: PluginManifest, config: Dict | None = None) -> BasePlugin | None:
         """
         Load a plugin from its manifest.
 
@@ -230,7 +230,7 @@ class PluginLoader:
                     missing_optional.append(env.name)
         return missing_required, missing_optional
 
-    def get_env_status(self, plugin_name: str) -> Optional[Dict[str, Dict[str, object]]]:
+    def get_env_status(self, plugin_name: str) -> Dict[str, Dict[str, object]] | None:
         """
         Return per-env-var configuration status for a loaded plugin.
 
@@ -259,7 +259,7 @@ class PluginLoader:
             for env in plugin.manifest.required_env
         }
 
-    def _import_plugin_class(self, entry_point: str) -> Optional[Type[BasePlugin]]:
+    def _import_plugin_class(self, entry_point: str) -> Type[BasePlugin] | None:
         """
         Import plugin class from entry point.
 
@@ -290,7 +290,7 @@ class PluginLoader:
         """Get all loaded plugins."""
         return self.registry.get_all_plugins()
 
-    def get_plugin_info(self, name: str) -> Optional[Dict]:
+    def get_plugin_info(self, name: str) -> Dict | None:
         """Get plugin information."""
         plugin = self.registry.get_plugin(name)
         return plugin.get_info() if plugin else None

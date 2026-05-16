@@ -66,7 +66,7 @@ class ConfigService:
         return (time.time() - ConfigService._cache_timestamp) > ConfigService.CACHE_DURATION
 
     @staticmethod
-    def clear_cache():
+    def clear_cache() -> None:
         """Force clear the configuration cache"""
         ConfigService._cached_config = None
         ConfigService._cache_timestamp = None

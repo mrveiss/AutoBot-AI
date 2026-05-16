@@ -7,7 +7,7 @@ Code Completion API Router (Issue #903)
 Endpoints for pattern extraction and code completion.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -54,7 +54,7 @@ def _get_db_session():
 class ExtractionRequest(BaseModel):
     """Request to trigger pattern extraction."""
 
-    languages: Optional[List[str]] = Field(
+    languages: List[str] | None = Field(
         default=["python", "typescript", "vue"],
         description="Languages to extract patterns from",
     )
@@ -76,13 +76,13 @@ class PatternResponse(BaseModel):
     id: int
     pattern_type: str
     language: str
-    category: Optional[str]
+    category: str | None
     signature: str
-    body: Optional[str]
+    body: str | None
     frequency: int
     acceptance_rate: float
-    file_path: Optional[str]
-    line_number: Optional[int]
+    file_path: str | None
+    line_number: int | None
 
 
 class PatternListResponse(BaseModel):
@@ -98,8 +98,8 @@ class PatternSearchRequest(BaseModel):
     """Search patterns by context."""
 
     query: str = Field(..., description="Search query")
-    language: Optional[str] = Field(None, description="Filter by language")
-    pattern_type: Optional[str] = Field(None, description="Filter by pattern type")
+    language: str | None = Field(None, description="Filter by language")
+    pattern_type: str | None = Field(None, description="Filter by pattern type")
     limit: int = Field(default=20, le=100)
 
 
@@ -173,9 +173,9 @@ async def extract_patterns(request: ExtractionRequest):
 
 @router.get("/patterns", response_model=PatternListResponse)
 async def list_patterns(
-    language: Optional[str] = Query(None),
-    pattern_type: Optional[str] = Query(None),
-    category: Optional[str] = Query(None),
+    language: str | None = Query(None),
+    pattern_type: str | None = Query(None),
+    category: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     sort_by: str = Query("frequency", pattern="^(frequency|acceptance_rate|created_at)$"),
@@ -237,7 +237,7 @@ async def list_patterns(
 @router.get("/patterns/{category}", response_model=PatternListResponse)
 async def get_patterns_by_category(
     category: str,
-    language: Optional[str] = Query(None),
+    language: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
@@ -339,7 +339,7 @@ class ContextAnalysisRequest(BaseModel):
     file_content: str = Field(..., description="Full file content")
     cursor_line: int = Field(..., ge=0, description="Cursor line (0-indexed)")
     cursor_position: int = Field(..., ge=0, description="Cursor column position")
-    file_path: Optional[str] = Field(None, description="Optional file path")
+    file_path: str | None = Field(None, description="Optional file path")
 
 
 class ContextAnalysisResponse(BaseModel):

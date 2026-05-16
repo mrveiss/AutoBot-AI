@@ -7,7 +7,7 @@ Summary Search Service - Search and navigate hierarchical summaries.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-from typing import List, Optional
+from typing import List
 from uuid import UUID
 
 from autobot_shared.logging_manager import get_logger
@@ -28,7 +28,7 @@ class SummarySearchService:
         self.client = chromadb_client
         self.collection_name = "knowledge_summaries"
 
-    async def search_summaries(self, query: str, level: Optional[str] = None, top_k: int = 10) -> List[dict]:
+    async def search_summaries(self, query: str, level: str | None = None, top_k: int = 10) -> List[dict]:
         """
         Vector search on summary embeddings.
 

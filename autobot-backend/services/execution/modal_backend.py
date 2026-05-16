@@ -8,7 +8,7 @@ Executes tasks on Modal serverless platform.
 Supports cost tracking and automatic scaling.
 """
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 class ModalBackend(ExecutionBackend):
     """Execute tasks on Modal serverless platform (Issue #4343)."""
 
-    def __init__(self, api_token: Optional[str] = None):
+    def __init__(self, api_token: str | None = None) -> None:
         """Initialize Modal backend.
 
         Args:

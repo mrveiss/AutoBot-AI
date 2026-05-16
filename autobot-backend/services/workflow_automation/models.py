@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
 if TYPE_CHECKING:
     from services.notification_service import NotificationConfig
@@ -87,15 +87,15 @@ class PlanApprovalRequest:
     steps_preview: List["WorkflowStep"]
     approval_mode: PlanApprovalMode = PlanApprovalMode.FULL_PLAN_APPROVAL
     status: PlanApprovalStatus = PlanApprovalStatus.PENDING
-    risk_assessment: Optional[str] = None
+    risk_assessment: str | None = None
     estimated_total_duration: float = 0.0
     timeout_seconds: int = 300  # 5 minutes default
-    created_at: Optional[datetime] = None
-    presented_at: Optional[datetime] = None
-    resolved_at: Optional[datetime] = None
-    user_response: Optional[str] = None
+    created_at: datetime | None = None
+    presented_at: datetime | None = None
+    resolved_at: datetime | None = None
+    user_response: str | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Set default created_at timestamp."""
         if self.created_at is None:
             self.created_at = datetime.now(tz=timezone.utc)
@@ -133,21 +133,21 @@ class WorkflowStep:
     step_id: str
     command: str
     description: str
-    explanation: Optional[str] = None
+    explanation: str | None = None
     requires_confirmation: bool = True
     risk_level: str = "low"
     estimated_duration: float = 5.0
-    dependencies: Optional[List[str]] = None
+    dependencies: List[str] | None = None
     status: WorkflowStepStatus = WorkflowStepStatus.PENDING
-    execution_result: Optional[Metadata] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    execution_result: Metadata | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     # Issue #2159: Per-step timeout override (seconds). None uses WorkflowLimits default.
-    timeout_seconds: Optional[int] = None
+    timeout_seconds: int | None = None
     # Issue #2397: Step type — "command_execution" (default) or a vision node type.
     step_type: str = "command_execution"
     # Issue #2397: Step-level configuration dict for vision and future step types.
-    step_config: Optional[Metadata] = None
+    step_config: Metadata | None = None
 
     # === Issue #372: Feature Envy Reduction Methods ===
 
@@ -177,21 +177,21 @@ class ActiveWorkflow:
     automation_mode: AutomationMode = AutomationMode.SEMI_AUTOMATIC
     is_paused: bool = False
     is_cancelled: bool = False
-    created_at: Optional[datetime] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     user_interventions: List[Metadata] = field(default_factory=list)
-    prometheus_start_time: Optional[float] = None  # For Prometheus duration tracking
+    prometheus_start_time: float | None = None  # For Prometheus duration tracking
     # Issue #2153: Owner identifier for workflow secret resolution.
-    owner_id: Optional[str] = None
+    owner_id: str | None = None
     # Issue #2601: Store step execution results keyed by step_id for reference passing.
     step_results: Dict[str, Metadata] = field(default_factory=dict)
     # Issue #3101: Per-workflow notification routing configuration.
-    notification_config: Optional[NotificationConfig] = None
+    notification_config: NotificationConfig | None = None
     # Issue #3178: Trigger payload from the event that fired this workflow.
-    trigger_payload: Optional[Dict[str, Any]] = None
+    trigger_payload: Dict[str, Any] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Set default values for created_at and user_interventions."""
         if self.created_at is None:
             self.created_at = datetime.now(tz=timezone.utc)
@@ -201,10 +201,10 @@ class ActiveWorkflow:
     # === Issue #372: Feature Envy Reduction Methods ===
 
     # Issue #1380: Current workflow phase from state machine
-    phase: Optional[str] = None
-    active_service: Optional[str] = None
+    phase: str | None = None
+    active_service: str | None = None
 
-    def _serialize_notification_config(self) -> Optional[Metadata]:
+    def _serialize_notification_config(self) -> Metadata | None:
         """Serialize notification_config to a plain dict for API responses."""
         if self.notification_config is None:
             return None
@@ -244,19 +244,19 @@ class WorkflowStepRequest(BaseModel):
 
     command: str
     description: str
-    explanation: Optional[str] = None
+    explanation: str | None = None
     requires_confirmation: bool = True
     risk_level: str = "low"
     dependencies: List[str] = []
     # Issue #2159: Per-step timeout in seconds. None means use system default.
-    timeout_seconds: Optional[int] = Field(default=None, ge=1)
+    timeout_seconds: int | None = Field(default=None, ge=1)
 
 
 class AutomatedWorkflowRequest(BaseModel):
     """Request model for creating an automated workflow"""
 
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     steps: List[WorkflowStepRequest]
     session_id: str
     automation_mode: str = "semi_automatic"
@@ -268,8 +268,8 @@ class WorkflowControlRequest(BaseModel):
 
     workflow_id: str
     action: str  # pause, resume, cancel, approve_step, skip_step
-    step_id: Optional[str] = None
-    user_input: Optional[str] = None
+    step_id: str | None = None
+    user_input: str | None = None
 
 
 # Issue #390: Plan Approval API Models
@@ -283,8 +283,8 @@ class PlanApprovalResponse(BaseModel):
     workflow_id: str
     approved: bool
     approval_mode: str = "full_plan"  # full_plan, per_step, hybrid, auto_safe
-    modifications: Optional[List[str]] = None  # Step IDs to modify/skip
-    reason: Optional[str] = None  # User's reason for rejection/modification
+    modifications: List[str] | None = None  # Step IDs to modify/skip
+    reason: str | None = None  # User's reason for rejection/modification
 
 
 class PlanPresentationRequest(BaseModel):
@@ -348,8 +348,8 @@ class NotificationConfigRequest(BaseModel):
 
     enabled: bool = True
     email_recipients: List[str] = Field(default_factory=list)
-    slack_webhook_url: Optional[str] = None
-    webhook_url: Optional[str] = None
+    slack_webhook_url: str | None = None
+    webhook_url: str | None = None
     channels: Dict[str, List[str]] = Field(default_factory=dict)
     templates: Dict[str, str] = Field(default_factory=dict)
 
@@ -364,7 +364,7 @@ class NotificationConfigRequest(BaseModel):
 
     @field_validator("slack_webhook_url", mode="before")
     @classmethod
-    def validate_slack_url(cls, v: Optional[str]) -> Optional[str]:
+    def validate_slack_url(cls, v: str | None) -> str | None:
         """Enforce https://hooks.slack.com/ prefix."""
         if not v:
             return v
@@ -374,7 +374,7 @@ class NotificationConfigRequest(BaseModel):
 
     @field_validator("webhook_url", mode="before")
     @classmethod
-    def validate_webhook_url(cls, v: Optional[str]) -> Optional[str]:
+    def validate_webhook_url(cls, v: str | None) -> str | None:
         """Enforce https and block private IPs."""
         if not v:
             return v

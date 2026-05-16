@@ -11,7 +11,7 @@ method used by ``api/adapters.py``.
 """
 
 import time
-from typing import List, Optional
+from typing import List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -31,11 +31,11 @@ logger = get_logger(__name__)
 class OpenAIAdapter(AdapterBase):
     """Adapter wrapping the canonical OpenAIProvider (#1403)."""
 
-    def __init__(self, config: Optional[AdapterConfig] = None):
+    def __init__(self, config: AdapterConfig | None = None):
         super().__init__("openai_api", config)
         self._provider = None
 
-    def _get_api_key(self) -> Optional[str]:
+    def _get_api_key(self) -> str | None:
         """Resolve OpenAI API key from config or environment."""
         return self.config.settings.get("api_key") or config.openai_api_key
 

@@ -11,7 +11,7 @@ Includes advanced codebase analytics for usage statistics and reusability detect
 import asyncio
 import re
 from collections import defaultdict
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -275,7 +275,7 @@ async def search_code(request: CodeSearchRequest):
 async def search_code_get(
     q: str = Query(..., description="Search query"),
     type: str = Query("semantic", description="Search type"),
-    lang: Optional[str] = Query(None, description="Programming language filter"),
+    lang: str | None = Query(None, description="Programming language filter"),
     max: int = Query(20, description="Maximum results", le=100),
 ):
     """
@@ -599,7 +599,7 @@ _DUPLICATE_DETECTION_PATTERNS = (
 )
 
 
-async def _search_pattern_for_duplicates(pattern: str) -> Optional[dict]:
+async def _search_pattern_for_duplicates(pattern: str) -> dict | None:
     """
     Search for duplicates matching a pattern.
 

@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -54,10 +54,10 @@ class AgentRequest:
     agent_type: str
     action: str
     payload: Dict[str, Any]
-    context: Optional[Dict[str, Any]] = None
+    context: Dict[str, Any] | None = None
     priority: str = "normal"  # low, normal, high, urgent
     timeout: float = 30.0
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, Any] | None = None
 
 
 @dataclass
@@ -68,9 +68,9 @@ class AgentResponse:
     agent_type: str
     status: str  # success, error, partial
     result: Any
-    error: Optional[str] = None
+    error: str | None = None
     execution_time: float = 0.0
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, Any] | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -98,7 +98,7 @@ class AgentHealth:
     error_count: int
     resource_usage: Dict[str, Any]
     capabilities: List[str]
-    details: Optional[Dict[str, Any]] = None
+    details: Dict[str, Any] | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -446,7 +446,7 @@ class BaseAgent(ABC):
             logger.error("Failed to initialize communication for %s: %s", self.agent_id, e)
             return False
 
-    async def _handle_communication_request(self, message: StandardMessage) -> Optional[StandardMessage]:
+    async def _handle_communication_request(self, message: StandardMessage) -> StandardMessage | None:
         """Handle incoming communication requests"""
         try:
             # Convert communication message to AgentRequest
@@ -491,7 +491,7 @@ class BaseAgent(ABC):
                 ),
             )
 
-    async def send_message_to_agent(self, recipient_id: str, message_data: Any, timeout: float = 30.0) -> Optional[Any]:
+    async def send_message_to_agent(self, recipient_id: str, message_data: Any, timeout: float = 30.0) -> Any | None:
         """Send a message to another agent"""
         if not self.communication_protocol:
             logger.error("Communication not initialized for agent %s", self.agent_id)
@@ -619,7 +619,7 @@ def create_agent_request(
     agent_type: str,
     action: str,
     payload: Dict[str, Any],
-    context: Optional[Dict[str, Any]] = None,
+    context: Dict[str, Any] | None = None,
     priority: str = "normal",
     timeout: float = 30.0,
 ) -> AgentRequest:

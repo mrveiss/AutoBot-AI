@@ -10,7 +10,7 @@ and compliance checking throughout the AutoBot system.
 
 import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from constants import SecurityThresholds
@@ -421,7 +421,7 @@ class SecurityRiskJudge(BaseLLMJudge):
         subject: Any,
         criteria: List[JudgmentDimension],
         context: Dict[str, Any],
-        alternatives: Optional[List[Any]] = None,
+        alternatives: List[Any] | None = None,
         **kwargs,
     ) -> str:
         """Prepare the prompt for security risk evaluation"""

@@ -9,7 +9,7 @@ Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -102,16 +102,16 @@ class LLMResponse:
     content: str
     model: str = ""
     provider: str = ""
-    tokens_used: Optional[int] = None
+    tokens_used: int | None = None
     processing_time: float = 0.0
     cached: bool = False
     metadata: Dict[str, Any] = field(default_factory=dict)
     usage: Dict[str, int] = field(default_factory=dict)
     finish_reason: str = "stop"
     request_id: str = ""
-    error: Optional[str] = None
+    error: str | None = None
     fallback_used: bool = False
-    provider_metadata: Optional[Dict[str, Any]] = None
+    provider_metadata: Dict[str, Any] | None = None
     hidden_params: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -129,15 +129,15 @@ class LLMRequest:
     """Standardized LLM request structure."""
 
     messages: List[Dict[str, str]]
-    llm_type: Union[LLMType, str] = LLMType.GENERAL
-    provider: Optional[ProviderType] = None
-    model_name: Optional[str] = None
+    llm_type: LLMType | str = LLMType.GENERAL
+    provider: ProviderType | None = None
+    model_name: str | None = None
     temperature: float = ModelConfig.DEFAULT_TEMPERATURE
-    max_tokens: Optional[int] = None
+    max_tokens: int | None = None
     top_p: float = 1.0
     frequency_penalty: float = 0.0
     presence_penalty: float = 0.0
-    stop: Optional[List[str]] = None
+    stop: List[str] | None = None
     stream: bool = False
     structured_output: bool = False
     timeout: int = None

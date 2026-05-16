@@ -71,7 +71,7 @@ class MissingDep:
         dunder attributes the Python ``typing`` module probes during type
         expression evaluation (#6794).
 
-        Without the dunder short-circuit, ``Optional[missing_dep_instance]``
+        Without the dunder short-circuit, ``missing_dep_instance | None``
         triggers ``hasattr(t, '__typing_subst__')`` which fires this method
         and crashes module load.
         """
@@ -84,13 +84,13 @@ class MissingDep:
         )
 
     def __getitem__(self, _params: object) -> "MissingDep":
-        """Support ``Optional[MissingDep_instance]`` and similar generic-like
+        """Support ``MissingDep_instance | None`` and similar generic-like
         subscripting at module-load time without raising.
 
         #6794: previously every caller had to remember to use string forward-
-        references (``\"Optional[Stub]\"``) to prevent the type expression from
+        references (``\"Stub | None\"``) to prevent the type expression from
         crashing the module at import time. The sentinel now no-ops on
-        subscript so ``Optional[stub]`` evaluates safely; the actual point of
+        subscript so ``stub | None`` evaluates safely; the actual point of
         failure stays at runtime call / non-dunder attribute access.
         """
         return self

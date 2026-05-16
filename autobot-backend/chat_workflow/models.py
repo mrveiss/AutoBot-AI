@@ -12,7 +12,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
 if TYPE_CHECKING:
     from async_chat_workflow import WorkflowMessage
@@ -281,9 +281,9 @@ class AgentContext:
 
     agent_id: str
     level: int = 0
-    parent_id: Optional[str] = None
+    parent_id: str | None = None
     max_depth: int = 3
-    session_id: Optional[str] = None
+    session_id: str | None = None
     created_at: float = field(default_factory=time.time)
 
     def can_delegate(self) -> bool:
@@ -346,10 +346,10 @@ class LLMIterationContext:
     rag_citations: List[Dict[str, Any]]
     workflow_messages: List["WorkflowMessage"]
     execution_history: List[Dict[str, Any]] = field(default_factory=list)
-    system_prompt: Optional[str] = None
-    initial_prompt: Optional[str] = None
-    message: Optional[str] = None
-    agent_context: Optional[AgentContext] = None  # Issue #657: Agent hierarchy
+    system_prompt: str | None = None
+    initial_prompt: str | None = None
+    message: str | None = None
+    agent_context: AgentContext | None = None  # Issue #657: Agent hierarchy
     consecutive_invalid_tool_calls: int = 0  # Issue #2310: Track invalid tool calls
     context: Dict[str, Any] = field(default_factory=dict)  # Issue #4264: Request-level context for hooks
 

@@ -18,7 +18,7 @@ SSE event shapes:
 
 import asyncio
 import json
-from typing import AsyncIterator, Dict, List, Optional
+from typing import AsyncIterator, Dict, List
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -37,7 +37,7 @@ router = APIRouter(tags=["chat"])
 # ---------------------------------------------------------------------------
 
 _init_lock: asyncio.Lock = asyncio.Lock()
-_compare_interface: Optional[object] = None
+_compare_interface: object | None = None
 
 
 async def _get_compare_interface() -> object:

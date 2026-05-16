@@ -13,7 +13,7 @@ from autobot_shared.models.service_message import (
 )
 
 
-def test_service_message_defaults():
+def test_service_message_defaults() -> None:
     """msg_id, ts, and correlation_id auto-generate when not provided."""
     msg = ServiceMessage(
         sender="main-backend",
@@ -31,7 +31,7 @@ def test_service_message_defaults():
     assert msg.meta == {}
 
 
-def test_service_message_explicit_correlation():
+def test_service_message_explicit_correlation() -> None:
     """Explicit correlation_id is preserved, not overwritten."""
     cid = "trace-abc-123"
     msg = ServiceMessage(
@@ -44,7 +44,7 @@ def test_service_message_explicit_correlation():
     assert msg.correlation_id == cid
 
 
-def test_service_message_json_roundtrip():
+def test_service_message_json_roundtrip() -> None:
     """model_dump_json / model_validate_json produces identical object."""
     original = ServiceMessage(
         sender="ai-stack",
@@ -65,7 +65,7 @@ def test_service_message_json_roundtrip():
     assert restored.meta == original.meta
 
 
-def test_service_message_meta_field():
+def test_service_message_meta_field() -> None:
     """Nested dict in meta is preserved through construction."""
     meta = {
         "retry_count": 3,
@@ -89,7 +89,7 @@ def test_service_message_meta_field():
 # ------------------------------------------------------------------
 
 
-def test_serialize_message():
+def test_serialize_message() -> None:
     """serialize_message returns a valid JSON string."""
     msg = ServiceMessage(
         sender="main-backend",
@@ -102,7 +102,7 @@ def test_serialize_message():
     assert '"sender":"main-backend"' in json_str
 
 
-def test_deserialize_message_str():
+def test_deserialize_message_str() -> None:
     """deserialize_message parses a JSON string."""
     msg = ServiceMessage(
         sender="ai-stack",
@@ -117,7 +117,7 @@ def test_deserialize_message_str():
     assert restored.sender == "ai-stack"
 
 
-def test_deserialize_message_bytes():
+def test_deserialize_message_bytes() -> None:
     """deserialize_message handles bytes input (from Redis)."""
     msg = ServiceMessage(
         sender="browser-worker",
@@ -131,13 +131,13 @@ def test_deserialize_message_bytes():
     assert restored.sender == "browser-worker"
 
 
-def test_deserialize_message_invalid():
+def test_deserialize_message_invalid() -> None:
     """deserialize_message returns None on invalid input."""
     result = deserialize_message("not valid json {{{")
     assert result is None
 
 
-def test_create_reply_swaps_sender_receiver():
+def test_create_reply_swaps_sender_receiver() -> None:
     """create_reply swaps sender/receiver and preserves correlation_id."""
     original = ServiceMessage(
         sender="slm-backend",
@@ -156,7 +156,7 @@ def test_create_reply_swaps_sender_receiver():
     assert reply.msg_id != original.msg_id
 
 
-def test_create_reply_custom_type_and_meta():
+def test_create_reply_custom_type_and_meta() -> None:
     """create_reply accepts custom msg_type and meta."""
     original = ServiceMessage(
         sender="ai-stack",

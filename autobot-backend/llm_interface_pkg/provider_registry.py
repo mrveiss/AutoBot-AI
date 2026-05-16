@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.ssot_config import config
 from llm_interface_pkg.model_param_registry import apply_model_defaults, apply_prompt_prefix
@@ -113,11 +113,11 @@ class ProviderRegistry:
         """Remove the per-conversation provider override."""
         self._conversation_overrides.pop(conversation_id, None)
 
-    def get_conversation_provider_name(self, conversation_id: str) -> Optional[str]:
+    def get_conversation_provider_name(self, conversation_id: str) -> str | None:
         """Return the provider name pinned to this conversation, or None."""
         return self._conversation_overrides.get(conversation_id)
 
-    async def _resolve_org_provider(self, org_id: Optional[str]) -> Optional[str]:
+    async def _resolve_org_provider(self, org_id: str | None) -> str | None:
         """Return the org's persisted provider preference, or None (Issue #4451).
 
         Safe to call even when the knowledge Redis DB is unavailable — errors
@@ -204,7 +204,7 @@ class ProviderRegistry:
     # Provider selection
     # ------------------------------------------------------------------
 
-    async def get_provider(self, name: str) -> Optional[BaseProvider]:
+    async def get_provider(self, name: str) -> BaseProvider | None:
         """Return the named provider if registered and available, else None."""
         provider = self._providers.get(name)
         if provider is None:
@@ -217,11 +217,11 @@ class ProviderRegistry:
 
     async def get_provider_for_request(
         self,
-        provider_name: Optional[str] = None,
-        conversation_id: Optional[str] = None,
-        request: Optional[LLMRequest] = None,
-        org_id: Optional[str] = None,
-    ) -> Optional[BaseProvider]:
+        provider_name: str | None = None,
+        conversation_id: str | None = None,
+        request: LLMRequest | None = None,
+        org_id: str | None = None,
+    ) -> BaseProvider | None:
         """
         Return the best provider for a request, applying:
 
@@ -277,7 +277,7 @@ class ProviderRegistry:
     # Introspection
     # ------------------------------------------------------------------
 
-    def get_provider_by_name(self, name: str) -> Optional[BaseProvider]:
+    def get_provider_by_name(self, name: str) -> BaseProvider | None:
         """Return the registered provider with the given name, or None (#5132).
 
         This is the public accessor for ``_providers``; callers should use this
@@ -311,7 +311,7 @@ class ProviderRegistry:
 # Singleton accessor
 # ---------------------------------------------------------------------------
 
-_registry_instance: Optional[ProviderRegistry] = None
+_registry_instance: ProviderRegistry | None = None
 _registry_lock = asyncio.Lock()
 
 

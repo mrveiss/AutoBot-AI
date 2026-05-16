@@ -10,7 +10,7 @@ task decomposition and parallel execution.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 
@@ -23,10 +23,10 @@ class DelegateToolResponse:
 
     success: bool
     message: str
-    subordinate_id: Optional[str] = None
-    result: Optional[str] = None
+    subordinate_id: str | None = None
+    result: str | None = None
     break_loop: bool = False
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, Any] | None = None
 
 
 class DelegateTool:
@@ -150,7 +150,7 @@ class DelegateTool:
             metadata={"error_type": type(error).__name__},
         )
 
-    def _validate_agent(self) -> Optional[DelegateToolResponse]:
+    def _validate_agent(self) -> DelegateToolResponse | None:
         """
         Validate hierarchical agent is available for delegation.
 

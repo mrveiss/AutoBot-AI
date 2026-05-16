@@ -14,7 +14,7 @@ cold-starting across heartbeat runs.
 
 import asyncio
 import uuid
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -102,9 +102,9 @@ class HeartbeatScheduler:
     async def wakeup(
         self,
         agent_id: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
         priority: int = 0,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> str:
         """Queue an event-driven wakeup request. Returns the request UUID (#1407)."""
         async with self._session_factory() as session:
@@ -213,7 +213,7 @@ class HeartbeatScheduler:
         run_id: uuid.UUID,
         timeout: int,
         run_jwt: str,
-    ) -> Tuple[str, Optional[str], Dict[str, Any]]:
+    ) -> Tuple[str, str | None, Dict[str, Any]]:
         """Run _execute_agent with timeout; return (status, error, usage) (#1407)."""
         try:
             result = await asyncio.wait_for(self._execute_agent(agent_id, state_id, run_id, run_jwt), timeout=timeout)
@@ -235,7 +235,7 @@ class HeartbeatScheduler:
         run_id: uuid.UUID,
         state_id: uuid.UUID,
         final_status: str,
-        error_msg: Optional[str],
+        error_msg: str | None,
         usage: Dict[str, Any],
         run_jwt: str,
     ) -> None:
@@ -309,7 +309,7 @@ async def _get_or_create_state(session: AsyncSession, agent_id: str) -> AgentRun
     return state
 
 
-async def _consume_top_wakeup(session: AsyncSession, agent_id: str) -> Optional[AgentWakeupRequest]:
+async def _consume_top_wakeup(session: AsyncSession, agent_id: str) -> AgentWakeupRequest | None:
     """
     Fetch and mark-consumed the highest-priority pending wakeup request (#1407).
 
@@ -335,8 +335,8 @@ async def _append_event(
     session: AsyncSession,
     run_id: uuid.UUID,
     event_type: str,
-    message: Optional[str] = None,
-    payload: Optional[Dict[str, Any]] = None,
+    message: str | None = None,
+    payload: Dict[str, Any] | None = None,
 ) -> None:
     """Append a HeartbeatRunEvent to a run (#1407)."""
     session.add(

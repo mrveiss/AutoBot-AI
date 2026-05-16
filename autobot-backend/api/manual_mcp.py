@@ -13,7 +13,7 @@ Issue #3287: Complete MCP manual integration.
 
 import asyncio
 import json
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends
 
@@ -72,7 +72,7 @@ def _serialize_man_page(content: ManPageContent, cached: bool) -> dict:
     }
 
 
-async def _get_cached_man_page(command: str, section: str) -> Optional[dict]:
+async def _get_cached_man_page(command: str, section: str) -> dict | None:
     """Return cached man page dict from Redis, or None on miss/error."""
     key = _cache_key(command, section)
     try:

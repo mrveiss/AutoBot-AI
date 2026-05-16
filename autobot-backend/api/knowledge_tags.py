@@ -26,8 +26,6 @@ Endpoints:
 Related Issues: #77 (Tags), #185 (Split), #209 (Knowledge split), #409 (Tag CRUD), #410 (Tag Styling)
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from starlette.requests import Request
 
@@ -300,7 +298,7 @@ async def search_facts_by_tags(
 async def list_all_tags(
     admin_check: bool = Depends(check_admin_permission),
     limit: int = Query(default=QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT, ge=1, le=1000),
-    prefix: Optional[str] = Query(default=None, max_length=50),
+    prefix: str | None = Query(default=None, max_length=50),
     req: Request = None,
 ):
     """

@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 from autobot_shared.ssot_config import config
 
@@ -29,8 +29,8 @@ class TestResult:
     status: str  # "pass", "fail", "warning", "skip"
     message: str
     duration: float
-    details: Optional[Dict] = None
-    timestamp: Optional[str] = None
+    details: Dict | None = None
+    timestamp: str | None = None
 
 
 class AutoBotSystemValidator:
@@ -46,7 +46,7 @@ class AutoBotSystemValidator:
         self.redis_host = "10.0.0.23"
         self.redis_port = 6379
 
-    def log_result(self, test_name: str, status: str, message: str, details: Optional[Dict] = None):
+    def log_result(self, test_name: str, status: str, message: str, details: Dict | None = None):
         """Log a test result"""
         result = TestResult(
             test_name=test_name,

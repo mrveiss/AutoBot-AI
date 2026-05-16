@@ -9,7 +9,6 @@ All HTTP fetches are mocked — no network calls.
 
 from __future__ import annotations
 
-from typing import Optional
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -148,7 +147,7 @@ class TestResolveSitemapUrls:
     async def test_sitemapindex_recurses_one_level(self) -> None:
         """sitemapindex fetches child sitemaps and merges their URLs."""
 
-        async def _fake_fetch_xml(url: str) -> Optional[str]:
+        async def _fake_fetch_xml(url: str) -> str | None:
             if url.endswith("sitemap.xml"):
                 return _SITEMAPINDEX_XML
             return _CHILD_SITEMAP_XML  # both children return same content for simplicity

@@ -11,7 +11,7 @@ import asyncio
 import json
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 from fastapi import (
@@ -85,7 +85,7 @@ _PROMETHEUS_URL = f"http://{_ssot.vm.main}:{_ssot.port.prometheus}"
 # External API status (extracted from monitoring_compat.py, Issue #1283)
 
 
-async def _query_prometheus_instant(query: str) -> Optional[float]:
+async def _query_prometheus_instant(query: str) -> float | None:
     """Execute an instant PromQL query and return the scalar value.
 
     Uses the singleton HTTP client for connection reuse (Issue #65).
@@ -275,7 +275,7 @@ class MonitoringWebSocketManager:
     def __init__(self):
         """Initialize WebSocket manager with connection tracking and update task."""
         self.active_connections: List[WebSocket] = []
-        self.update_task: Optional[asyncio.Task] = None
+        self.update_task: asyncio.Task | None = None
         self.update_interval = 2.0  # Send updates every 2 seconds
 
     async def connect(self, websocket: WebSocket):
@@ -763,8 +763,8 @@ async def get_optimization_recommendations_endpoint(
 )
 async def get_performance_alerts(
     admin_check: bool = Depends(check_admin_permission),
-    severity: Optional[str] = Query(None, description="Filter by severity"),
-    category: Optional[str] = Query(None, description="Filter by category"),
+    severity: str | None = Query(None, description="Filter by severity"),
+    category: str | None = Query(None, description="Filter by category"),
     limit: int = Query(50, ge=1, le=500, description="Maximum number of alerts"),
 ):
     """Get performance alerts with optional filtering. Issue #744: Requires admin authentication."""

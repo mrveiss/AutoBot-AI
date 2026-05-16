@@ -7,7 +7,7 @@ Uses Google's Gemma 2B/3 models for ultra-fast classification tasks
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
@@ -184,7 +184,7 @@ Respond with valid JSON:
 
     async def _try_model_classify(
         self, model: str, prompt: str, available_models: List[str]
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """Try classification with single model (Issue #334 - extracted helper)."""
         if model not in available_models:
             return None
@@ -216,7 +216,7 @@ Respond with valid JSON:
                 parsed_result["_model_used"] = model
             return parsed_result
 
-    async def _gemma_classify(self, user_message: str) -> Optional[Dict[str, Any]]:
+    async def _gemma_classify(self, user_message: str) -> Dict[str, Any] | None:
         """Use Gemma models for classification."""
         available_models = await self._get_available_models()
         prompt = self.classification_prompt.format(user_message=user_message)
@@ -245,7 +245,7 @@ Respond with valid JSON:
             logger.warning("Failed to get available models: %s", e)
         return []
 
-    def _parse_json_response(self, response_text: str) -> Optional[Dict[str, Any]]:
+    def _parse_json_response(self, response_text: str) -> Dict[str, Any] | None:
         """Parse JSON response from Gemma model."""
         try:
             # Try to find JSON in response

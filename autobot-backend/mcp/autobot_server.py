@@ -31,7 +31,7 @@ Observability:
 import asyncio
 import json
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
 from autobot_shared.logging_manager import get_logger
@@ -278,7 +278,7 @@ class AutoBotMCPServer:
         return granted
 
     @staticmethod
-    async def _resolve_run_jwt(token: str) -> Tuple[Optional[List[str]], Optional[str]]:
+    async def _resolve_run_jwt(token: str) -> Tuple[List[str] | None, str | None]:
         """Validate a run JWT and return (tool_prefixes, error_message).
 
         Returns (prefixes, None) on success, (None, error) on failure.
@@ -297,7 +297,7 @@ class AutoBotMCPServer:
         return prefixes, None
 
     @staticmethod
-    def _validate_token(token: str) -> Optional[List[str]]:
+    def _validate_token(token: str) -> List[str] | None:
         """Return the list of granted scopes for *token*, or None if invalid.
 
         Token format: ``<secret>:<scope1>,<scope2>`` where the secret
@@ -445,7 +445,7 @@ class AutoBotMCPServer:
     async def _kb_search(
         self,
         query: str,
-        filters: Optional[Dict[str, Any]] = None,
+        filters: Dict[str, Any] | None = None,
         limit: int = 10,
     ) -> Any:
         from knowledge._composed import get_knowledge_base
@@ -491,7 +491,7 @@ class AutoBotMCPServer:
             return {"error": "Entity not found", "name": name}
         return entity
 
-    async def _memory_timeline(self, entity: str, range: Optional[str] = None) -> Any:
+    async def _memory_timeline(self, entity: str, range: str | None = None) -> Any:
         from autobot_memory_graph import AutoBotMemoryGraph
 
         graph = AutoBotMemoryGraph()
@@ -567,7 +567,7 @@ class AutoBotMCPServer:
             "count": len(visited),
         }
 
-    async def _memory_verbatim_search(self, query: str, session_filter: Optional[str] = None) -> Any:
+    async def _memory_verbatim_search(self, query: str, session_filter: str | None = None) -> Any:
         from memory.verbatim_store import VerbatimStore
 
         store = VerbatimStore()

@@ -7,8 +7,6 @@ Provides API endpoints for managing enterprise-grade features.
 """
 
 import asyncio
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
@@ -374,8 +372,8 @@ async def enable_all_enterprise_features():
     error_code_prefix="ENTERPRISE_FEATURES",
 )
 async def list_enterprise_features(
-    category: Optional[FeatureCategory] = Query(None, description="Filter by feature category"),
-    status: Optional[FeatureStatus] = Query(None, description="Filter by feature status"),
+    category: FeatureCategory | None = Query(None, description="Filter by feature category"),
+    status: FeatureStatus | None = Query(None, description="Filter by feature status"),
 ):
     """
     List all available enterprise features with filtering options.

@@ -19,7 +19,7 @@ class MeshDB(Protocol):
 class MeshEdgeSync:
     """Syncs high-weight edges from PostgreSQL to Redis sorted sets."""
 
-    def __init__(self, db: MeshDB, redis, min_weight: float = 0.5):
+    def __init__(self, db: MeshDB, redis, min_weight: float = 0.5) -> None:
         self.db = db
         self.redis = redis
         self.min_weight = min_weight

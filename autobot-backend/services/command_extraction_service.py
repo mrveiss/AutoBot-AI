@@ -20,7 +20,7 @@ Key Features:
 
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 import aiohttp
 
@@ -38,12 +38,12 @@ class ExtractedCommand:
     """Represents an extracted command with its documentation."""
 
     name: str
-    description: Optional[str] = None
-    man_summary: Optional[str] = None
-    category: Optional[str] = None
+    description: str | None = None
+    man_summary: str | None = None
+    category: str | None = None
     source_hosts: List[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize source_hosts list if not provided."""
         if self.source_hosts is None:
             self.source_hosts = []
@@ -207,7 +207,7 @@ COMMAND_CATEGORIES = {
 }
 
 
-def _categorize_command(command_name: str) -> Optional[str]:
+def _categorize_command(command_name: str) -> str | None:
     """Categorize a command based on known patterns."""
     for category, commands in COMMAND_CATEGORIES.items():
         if command_name in commands:
@@ -424,8 +424,8 @@ async def get_commands_for_host(host_id: str) -> List[str]:
 
 async def search_commands(
     query: str,
-    host_id: Optional[str] = None,
-    category: Optional[str] = None,
+    host_id: str | None = None,
+    category: str | None = None,
     limit: int = 50,
 ) -> List[Dict]:
     """

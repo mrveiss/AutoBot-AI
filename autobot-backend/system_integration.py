@@ -5,7 +5,7 @@ import json
 import os
 import platform
 import subprocess  # nosec B404 - required for system commands
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -307,7 +307,7 @@ class SystemIntegration:
         # enhancements (e.g., direct API calls instead of shell)
         return self._run_command([command], shell=True)  # nosec B604 - internal command execution
 
-    def get_process_info(self, process_name: Optional[str] = None, pid: Optional[int] = None) -> Dict[str, Any]:
+    def get_process_info(self, process_name: str | None = None, pid: int | None = None) -> Dict[str, Any]:
         """
         Retrieves information about running processes.
         If no arguments, lists all processes.

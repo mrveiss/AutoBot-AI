@@ -15,7 +15,7 @@ import asyncio
 import json
 import os
 import tempfile
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import yaml
 
@@ -84,7 +84,7 @@ except ImportError as _e:
     SOUNDDEVICE_AVAILABLE = False
 
 
-def _check_vosk_dependencies(vosk_model_path: str, model) -> Optional[Dict[str, Any]]:
+def _check_vosk_dependencies(vosk_model_path: str, model) -> Dict[str, Any] | None:
     """
     Check Vosk dependencies and return error dict if not available.
 
@@ -114,7 +114,7 @@ def _check_vosk_dependencies(vosk_model_path: str, model) -> Optional[Dict[str, 
     return None
 
 
-def _check_vosk_timeout(elapsed: float, timeout: Optional[float], speech_detected: bool) -> Optional[Dict[str, Any]]:
+def _check_vosk_timeout(elapsed: float, timeout: float | None, speech_detected: bool) -> Dict[str, Any] | None:
     """Issue #665: Extracted from _vosk_recognize_blocking to reduce function length.
 
     Check if speech recognition has timed out waiting for speech to start.
@@ -125,8 +125,8 @@ def _check_vosk_timeout(elapsed: float, timeout: Optional[float], speech_detecte
 
 
 def _check_vosk_phrase_limit(
-    elapsed: float, phrase_time_limit: Optional[float], recognizer
-) -> Optional[Dict[str, Any]]:
+    elapsed: float, phrase_time_limit: float | None, recognizer
+) -> Dict[str, Any] | None:
     """Issue #665: Extracted from _vosk_recognize_blocking to reduce function length.
 
     Check phrase time limit and return final result if exceeded.
@@ -140,7 +140,7 @@ def _check_vosk_phrase_limit(
     return None
 
 
-def _process_vosk_audio_data(recognizer, data) -> Optional[Dict[str, Any]]:
+def _process_vosk_audio_data(recognizer, data) -> Dict[str, Any] | None:
     """Issue #665: Extracted from _vosk_recognize_blocking to reduce function length.
 
     Process audio data through recognizer and return result if speech recognized.
@@ -155,8 +155,8 @@ def _process_vosk_audio_data(recognizer, data) -> Optional[Dict[str, Any]]:
 
 def _vosk_recognize_blocking(
     model,
-    timeout: Optional[float],
-    phrase_time_limit: Optional[float],
+    timeout: float | None,
+    phrase_time_limit: float | None,
 ) -> Dict[str, Any]:
     """Issue #665: Refactored blocking Vosk recognition using extracted helpers."""
     import queue
@@ -221,7 +221,7 @@ class VoiceInterface:
         self.recognizer = sr.Recognizer() if SPEECH_RECOGNITION_AVAILABLE else None
 
         # Vosk offline model initialization
-        self._vosk_model: Optional[Model] = None
+        self._vosk_model: Model | None = None
         self._vosk_model_path = self.voice_config.get(
             "vosk_model_path",
             config.vosk_model_path,
@@ -231,7 +231,7 @@ class VoiceInterface:
         self.tts_engine = self._init_tts_engine() if PYTTSX3_AVAILABLE else None
 
         # Coqui TTS initialization
-        self._coqui_tts: Optional[CoquiTTS] = None
+        self._coqui_tts: CoquiTTS | None = None
         self._coqui_model = self.voice_config.get(
             "coqui_model",
             config.coqui_model,
@@ -297,7 +297,7 @@ class VoiceInterface:
             logger.error("Failed to load config from %s: %s", config_path, e)
             return {}
 
-    def _init_tts_engine(self) -> Optional[pyttsx3.Engine]:
+    def _init_tts_engine(self) -> pyttsx3.Engine | None:
         """Initialize pyttsx3 text-to-speech engine if available.
 
         Returns:
@@ -318,7 +318,7 @@ class VoiceInterface:
             logger.error("Failed to initialize pyttsx3: %s", e)
             return None
 
-    def _get_vosk_model(self) -> Optional[Model]:
+    def _get_vosk_model(self) -> Model | None:
         """Get or initialize Vosk model (lazy loading).
 
         Returns:
@@ -344,7 +344,7 @@ class VoiceInterface:
 
         return self._vosk_model
 
-    def _get_coqui_tts(self) -> Optional[CoquiTTS]:
+    def _get_coqui_tts(self) -> CoquiTTS | None:
         """Get or initialize Coqui TTS engine (lazy loading).
 
         Returns:
@@ -403,7 +403,7 @@ class VoiceInterface:
         )
 
     async def listen_and_convert_to_text(
-        self, timeout: Optional[int] = 5, phrase_time_limit: Optional[int] = 5
+        self, timeout: int | None = 5, phrase_time_limit: int | None = 5
     ) -> Dict[str, Any]:
         """
         Captures audio from the microphone and converts it to text.
@@ -463,8 +463,8 @@ class VoiceInterface:
 
     async def _listen_vosk(
         self,
-        timeout: Optional[float] = 10.0,
-        phrase_time_limit: Optional[float] = 5.0,
+        timeout: float | None = 10.0,
+        phrase_time_limit: float | None = 5.0,
     ) -> Dict[str, Any]:
         """
         Vosk-based offline speech recognition.
@@ -540,7 +540,7 @@ class VoiceInterface:
                 "message": f"Coqui TTS failed: {str(e)}",
             }
 
-    def _check_coqui_dependencies(self) -> Optional[Dict[str, Any]]:
+    def _check_coqui_dependencies(self) -> Dict[str, Any] | None:
         """Check Coqui TTS dependencies (Issue #665: extracted helper)."""
         if not COQUI_TTS_AVAILABLE:
             return {
@@ -616,7 +616,7 @@ class VoiceInterface:
             if os.path.exists(output_path):
                 os.unlink(output_path)
 
-    def _check_gtts_dependencies(self) -> Optional[Dict[str, Any]]:
+    def _check_gtts_dependencies(self) -> Dict[str, Any] | None:
         """
         Check gTTS dependencies and return error dict if not available.
 
@@ -697,8 +697,8 @@ class VoiceInterface:
     async def _try_stt_backends(
         self,
         backends: list,
-        timeout: Optional[int],
-        phrase_time_limit: Optional[int],
+        timeout: int | None,
+        phrase_time_limit: int | None,
     ) -> Dict[str, Any]:
         """
         Try STT backends in order until one succeeds.
@@ -733,8 +733,8 @@ class VoiceInterface:
 
     async def listen_with_fallback(
         self,
-        timeout: Optional[int] = 5,
-        phrase_time_limit: Optional[int] = 5,
+        timeout: int | None = 5,
+        phrase_time_limit: int | None = 5,
     ) -> Dict[str, Any]:
         """
         Listen for speech with automatic fallback between backends.

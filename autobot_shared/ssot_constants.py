@@ -27,7 +27,7 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, FrozenSet, List, Optional
+from typing import Dict, FrozenSet, List
 
 # ============================================================================
 # API CONSTANTS
@@ -339,7 +339,7 @@ model_config = ModelConfig()
 
 
 @lru_cache(maxsize=8)
-def get_default_model(provider: Optional[str] = None) -> str:
+def get_default_model(provider: str | None = None) -> str:
     """Get the default model for a specific provider or the system default."""
     if provider == ModelConstants.PROVIDER_OLLAMA:
         return ModelConstants.DEFAULT_OLLAMA_MODEL

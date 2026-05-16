@@ -10,7 +10,7 @@ Part of Issue #381 - God Class Refactoring
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, List, Optional
+from typing import Any, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -137,7 +137,7 @@ async def get_metrics_summary(
     error_count: int,
     api_call_count: int,
     user_interaction_count: int,
-    error_boundary_manager: Optional[Any] = None,
+    error_boundary_manager: Any | None = None,
 ) -> dict:
     """Get a comprehensive summary of tracked metrics"""
     try:

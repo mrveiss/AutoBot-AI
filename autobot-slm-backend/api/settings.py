@@ -7,7 +7,7 @@ SLM Settings API Routes
 
 import json
 import logging
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -43,7 +43,7 @@ class TimeConfig(BaseModel):
 class TimeSyncRequest(BaseModel):
     """Request to trigger time sync on fleet nodes."""
 
-    node_ids: Optional[List[str]] = None  # None = all nodes
+    node_ids: List[str] | None = None  # None = all nodes
 
 
 class TimeSyncResult(BaseModel):
@@ -52,7 +52,7 @@ class TimeSyncResult(BaseModel):
     success: bool
     message: str
     node_count: int
-    output: Optional[str] = None
+    output: str | None = None
 
 
 @router.get("/time/config", response_model=TimeConfig)
@@ -120,7 +120,7 @@ async def sync_time(
     ntp_servers = json.loads(ntp_raw) if ntp_raw else DEFAULT_NTP_SERVERS
 
     # Resolve target nodes for --limit
-    limit: Optional[List[str]] = None
+    limit: List[str] | None = None
     node_count = 0
     if request.node_ids:
         node_result = await db.execute(select(Node).where(Node.node_id.in_(request.node_ids)))

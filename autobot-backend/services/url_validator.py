@@ -11,7 +11,7 @@ consistency across the codebase per #6533.
 import asyncio
 import ipaddress
 import socket
-from typing import List, Optional
+from typing import List
 from urllib.parse import urlparse
 
 from autobot_shared.url_safety import is_public_url
@@ -37,7 +37,7 @@ class URLValidator:
         "metadata.google.internal",  # GCP metadata endpoint (also caught by is_public_url)
     ]
 
-    def __init__(self, allowed_domains: Optional[List[str]] = None):
+    def __init__(self, allowed_domains: List[str] | None = None) -> None:
         """
         Initialize URL validator
 
@@ -90,7 +90,7 @@ class URLValidator:
         except Exception as exc:
             return False, f"Error validating URL: {exc}"
 
-    def sanitize_url(self, url: str) -> Optional[str]:
+    def sanitize_url(self, url: str) -> str | None:
         """
         Sanitize and validate a URL, returning None if invalid
 
@@ -143,7 +143,7 @@ class URLValidator:
         except (socket.gaierror, OSError) as exc:
             raise ValueError(f"Cannot resolve hostname {host}: {exc}") from exc
 
-        safe_ip: Optional[str] = None
+        safe_ip: str | None = None
         for info in infos:
             ip_str = info[4][0]
             try:

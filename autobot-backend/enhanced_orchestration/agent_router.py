@@ -3,7 +3,7 @@
 # Author: mrveiss
 """Agent selection, resolution, and capability coverage extracted from WorkflowRunner (#6393)."""
 
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from orchestration import AgentCapability
@@ -46,7 +46,7 @@ class AgentRouter:
         suitable.sort(key=lambda x: x[1], reverse=True)
         return [a for a, _ in suitable]
 
-    async def get_agent_instance(self, agent_type: str) -> Optional[Any]:
+    async def get_agent_instance(self, agent_type: str) -> Any | None:
         agent = self._agent_client_registry.get_agent(agent_type)
         if agent is not None:
             await self._agent_client_registry.update_agent_health(agent_type)

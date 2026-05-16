@@ -8,8 +8,6 @@ Main service class that composes all agent terminal functionality.
 """
 
 import time
-from typing import Optional
-
 from autobot_logging.terminal_logger import TerminalLogger
 from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
@@ -41,7 +39,7 @@ class AgentTerminalService:
     - Comprehensive audit logging
     """
 
-    def __init__(self, redis_client=None, chat_workflow_manager=None, command_queue=None):
+    def __init__(self, redis_client=None, chat_workflow_manager=None, command_queue=None) -> None:
         """
         Initialize agent terminal service.
 
@@ -88,9 +86,9 @@ class AgentTerminalService:
         self,
         agent_id: str,
         agent_role: AgentRole,
-        conversation_id: Optional[str] = None,
+        conversation_id: str | None = None,
         host: str = "main",
-        metadata: Optional[Metadata] = None,
+        metadata: Metadata | None = None,
     ) -> AgentTerminalSession:
         """Create a new agent terminal session with PTY integration."""
         return await self.session_manager.create_session(
@@ -101,14 +99,14 @@ class AgentTerminalService:
             metadata=metadata,
         )
 
-    async def get_session(self, session_id: str) -> Optional[AgentTerminalSession]:
+    async def get_session(self, session_id: str) -> AgentTerminalSession | None:
         """Get session by ID."""
         return await self.session_manager.get_session(session_id)
 
     async def list_sessions(
         self,
-        agent_id: Optional[str] = None,
-        conversation_id: Optional[str] = None,
+        agent_id: str | None = None,
+        conversation_id: str | None = None,
     ) -> list[AgentTerminalSession]:
         """List agent terminal sessions."""
         return await self.session_manager.list_sessions(agent_id=agent_id, conversation_id=conversation_id)
@@ -119,7 +117,7 @@ class AgentTerminalService:
         await self.approval_handler.cleanup_approval_lock(session_id)
         return await self.session_manager.close_session(session_id)
 
-    async def get_session_info(self, session_id: str) -> Optional[Metadata]:
+    async def get_session_info(self, session_id: str) -> Metadata | None:
         """Get comprehensive session information."""
         session = await self.get_session(session_id)
         if not session:
@@ -145,8 +143,8 @@ class AgentTerminalService:
     # ============================================================================
 
     def _validate_session_for_execution(
-        self, session: Optional[AgentTerminalSession], session_id: str
-    ) -> Optional[Metadata]:
+        self, session: AgentTerminalSession | None, session_id: str
+    ) -> Metadata | None:
         """Validate session exists and is not user-controlled (Issue #281: extracted)."""
         if not session:
             return {
@@ -181,7 +179,7 @@ class AgentTerminalService:
         self,
         session: AgentTerminalSession,
         command: str,
-        description: Optional[str],
+        description: str | None,
         risk,
         reasons: list,
         is_interactive: bool,
@@ -366,7 +364,7 @@ class AgentTerminalService:
         self,
         session: AgentTerminalSession,
         command: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> None:
         """
         Log command approval to terminal logger.
@@ -392,7 +390,7 @@ class AgentTerminalService:
         session: AgentTerminalSession,
         command: str,
         result: Metadata,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> None:
         """
         Log command execution result to terminal logger.
@@ -421,8 +419,8 @@ class AgentTerminalService:
         command: str,
         result: Metadata,
         risk_level: str,
-        user_id: Optional[str],
-        comment: Optional[str],
+        user_id: str | None,
+        comment: str | None,
         auto_approve_future: bool,
     ) -> None:
         """
@@ -474,8 +472,8 @@ class AgentTerminalService:
         command: str,
         command_id: str,
         risk_level: str,
-        user_id: Optional[str],
-        comment: Optional[str],
+        user_id: str | None,
+        comment: str | None,
         auto_approve_future: bool,
     ) -> Metadata:
         """Helper for _execute_approved_command. Ref: #1088."""
@@ -516,8 +514,8 @@ class AgentTerminalService:
         command: str,
         command_id: str,
         risk_level: str,
-        user_id: Optional[str],
-        comment: Optional[str],
+        user_id: str | None,
+        comment: str | None,
         auto_approve_future: bool,
     ) -> Metadata:
         """
@@ -570,8 +568,8 @@ class AgentTerminalService:
         command: str,
         command_id: str,
         risk_level: str,
-        user_id: Optional[str],
-        comment: Optional[str],
+        user_id: str | None,
+        comment: str | None,
     ) -> Metadata:
         """Handle a denied command and update all tracking (Issue #281: extracted)."""
         # Update queue status
@@ -632,8 +630,8 @@ class AgentTerminalService:
         session: AgentTerminalSession,
         command: str,
         approved: bool,
-        user_id: Optional[str],
-        comment: Optional[str],
+        user_id: str | None,
+        comment: str | None,
     ) -> None:
         """Update chat and broadcast approval status (Issue #281: extracted)."""
         await self.approval_handler.update_chat_approval_status(
@@ -657,7 +655,7 @@ class AgentTerminalService:
         session: AgentTerminalSession,
         command: str,
         risk,
-    ) -> Optional[Metadata]:
+    ) -> Metadata | None:
         """
         Check if agent has permission to execute command at given risk level.
 
@@ -681,12 +679,12 @@ class AgentTerminalService:
         self,
         session: AgentTerminalSession,
         command: str,
-        description: Optional[str],
+        description: str | None,
         risk,
         reasons: list,
         is_interactive: bool,
         interactive_reasons: list,
-    ) -> tuple[bool, Optional[Metadata]]:
+    ) -> tuple[bool, Metadata | None]:
         """
         Check auto-approve rules or queue command for manual approval.
 
@@ -731,7 +729,7 @@ class AgentTerminalService:
         self,
         session_id: str,
         command: str,
-        description: Optional[str] = None,
+        description: str | None = None,
         force_approval: bool = False,
     ) -> Metadata:
         """
@@ -793,7 +791,7 @@ class AgentTerminalService:
         command: str,
         result: dict,
         command_type: str = "agent",
-    ):
+    ) -> None:
         """Save command and output to chat history."""
         if not conversation_id:
             return
@@ -835,11 +833,11 @@ class AgentTerminalService:
         self,
         session_id: str,
         approved: bool,
-        user_id: Optional[str] = None,
-        comment: Optional[str] = None,
+        user_id: str | None = None,
+        comment: str | None = None,
         auto_approve_future: bool = False,
         remember_for_project: bool = False,
-        project_path: Optional[str] = None,
+        project_path: str | None = None,
     ) -> Metadata:
         """Approve or deny a pending agent command."""
         # Get per-session lock
@@ -859,11 +857,11 @@ class AgentTerminalService:
         self,
         session_id: str,
         approved: bool,
-        user_id: Optional[str] = None,
-        comment: Optional[str] = None,
+        user_id: str | None = None,
+        comment: str | None = None,
         auto_approve_future: bool = False,
         remember_for_project: bool = False,
-        project_path: Optional[str] = None,
+        project_path: str | None = None,
     ) -> Metadata:
         """
         Internal implementation of approve_command.

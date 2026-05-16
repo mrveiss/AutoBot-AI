@@ -11,7 +11,7 @@ Issue #2092: Added Q-learning RL router between pattern-match and LLM fallback.
 
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import LLMDefaults
@@ -61,8 +61,8 @@ class AgentRouter:
         self.rl_routing_enabled: bool = True
 
     async def _check_learned_strategy(
-        self, request: str, context: Optional[Dict[str, Any]] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, request: str, context: Dict[str, Any] | None = None
+    ) -> Dict[str, Any] | None:
         """Query TaskPatternLearner for a learned strategy (#2105).
 
         Checks Redis for a previously learned strategy matching the
@@ -129,7 +129,7 @@ class AgentRouter:
         """Return all known AgentType values as string IDs."""
         return [at.value for at in self.agent_capabilities]
 
-    async def _check_rl_routing(self, request: str) -> Optional[Dict[str, Any]]:
+    async def _check_rl_routing(self, request: str) -> Dict[str, Any] | None:
         """Attempt Q-learning based routing for *request* (Issue #2092).
 
         Returns a routing result dict when the RL router's confidence exceeds
@@ -179,7 +179,7 @@ class AgentRouter:
     async def determine_routing(
         self,
         request: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Determine the optimal routing strategy for the request.
@@ -235,7 +235,7 @@ class AgentRouter:
             # Fallback to simple routing
             return self.quick_route_analysis(request)
 
-    def _check_chat_patterns(self, request_lower: str) -> Optional[Dict[str, Any]]:
+    def _check_chat_patterns(self, request_lower: str) -> Dict[str, Any] | None:
         """Check for greeting/chat patterns in request. Issue #620.
 
         Args:
@@ -253,7 +253,7 @@ class AgentRouter:
             }
         return None
 
-    def _check_system_command_patterns(self, request_lower: str) -> Optional[Dict[str, Any]]:
+    def _check_system_command_patterns(self, request_lower: str) -> Dict[str, Any] | None:
         """Check for system command patterns in request. Issue #620.
 
         Args:
@@ -271,7 +271,7 @@ class AgentRouter:
             }
         return None
 
-    def _check_research_patterns(self, request_lower: str) -> Optional[Dict[str, Any]]:
+    def _check_research_patterns(self, request_lower: str) -> Dict[str, Any] | None:
         """Check for research patterns in request. Issue #620.
 
         Args:
@@ -290,7 +290,7 @@ class AgentRouter:
             }
         return None
 
-    def _check_knowledge_patterns(self, request_lower: str) -> Optional[Dict[str, Any]]:
+    def _check_knowledge_patterns(self, request_lower: str) -> Dict[str, Any] | None:
         """Check for knowledge/RAG patterns in request. Issue #620.
 
         Args:
@@ -332,7 +332,7 @@ class AgentRouter:
             "reasoning": "Complex request requiring orchestrator analysis",
         }
 
-    def _check_specialized_agent_patterns(self, request_lower: str) -> Optional[Dict[str, Any]]:
+    def _check_specialized_agent_patterns(self, request_lower: str) -> Dict[str, Any] | None:
         """Check for specialized agent patterns (Issue #60)."""
         pattern_agent_map = [
             (DATA_ANALYSIS_PATTERNS, AgentType.DATA_ANALYSIS, "Data analysis pattern"),
@@ -425,14 +425,14 @@ class AgentRouter:
 
         return "\n".join(info_parts)
 
-    def _try_extract_message_content(self, response: dict) -> Optional[str]:
+    def _try_extract_message_content(self, response: dict) -> str | None:
         """Try to extract content from message dict (Issue #334 - extracted helper)."""
         if "message" not in response or not isinstance(response["message"], dict):
             return None
         content = response["message"].get("content")
         return content.strip() if content else None
 
-    def _try_extract_choices_content(self, response: dict) -> Optional[str]:
+    def _try_extract_choices_content(self, response: dict) -> str | None:
         """Try to extract content from choices list (Issue #334 - extracted helper)."""
         if "choices" not in response or not isinstance(response["choices"], list):
             return None

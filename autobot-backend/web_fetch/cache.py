@@ -14,8 +14,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Optional
-
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_24_HOURS
@@ -72,7 +70,7 @@ def _content_cache_key(url: str, render_mode: str) -> str:
     return f"web_fetch:content:{digest}"
 
 
-async def get_cached_result(url: str, render_mode: str, redis_client) -> Optional[dict]:
+async def get_cached_result(url: str, render_mode: str, redis_client) -> dict | None:
     """Return cached FetchResult payload dict or None on cache miss.
 
     Args:

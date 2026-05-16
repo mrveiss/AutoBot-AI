@@ -29,7 +29,7 @@ logger = get_logger(__name__)
 class LocalBackend(ExecutionBackend):
     """Execute tasks locally using subprocess (Issue #4343)."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize local backend."""
         super().__init__(BackendType.LOCAL)
         self._max_processes = 10

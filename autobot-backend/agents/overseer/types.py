@@ -11,7 +11,7 @@ and command explanations.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class TaskStatus(Enum):
@@ -53,7 +53,7 @@ class CommandExplanation:
 
     summary: str  # Brief description of what the command does
     breakdown: List[CommandBreakdownPart]  # Individual parts explained
-    security_notes: Optional[str] = None  # Any security implications
+    security_notes: str | None = None  # Any security implications
 
 
 @dataclass
@@ -62,8 +62,8 @@ class OutputExplanation:
 
     summary: str  # Brief description of what the output shows
     key_findings: List[str]  # Important discoveries from output
-    details: Optional[str] = None  # Detailed explanation if needed
-    next_steps: Optional[List[str]] = None  # Suggested follow-up actions
+    details: str | None = None  # Detailed explanation if needed
+    next_steps: List[str] | None = None  # Suggested follow-up actions
 
 
 @dataclass
@@ -78,14 +78,14 @@ class AgentTask:
     step_number: int
     total_steps: int
     description: str  # What this step accomplishes
-    command: Optional[str] = None  # The command to execute (if applicable)
-    expected_outcome: Optional[str] = None
+    command: str | None = None  # The command to execute (if applicable)
+    expected_outcome: str | None = None
     dependencies: List[str] = field(default_factory=list)  # Task IDs this depends on
     status: StepStatus = StepStatus.PENDING
     created_at: datetime = field(default_factory=datetime.now)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -144,13 +144,13 @@ class StepResult:
     step_number: int
     total_steps: int
     status: StepStatus
-    command: Optional[str] = None
-    command_explanation: Optional[CommandExplanation] = None
-    output: Optional[str] = None
-    output_explanation: Optional[OutputExplanation] = None
-    return_code: Optional[int] = None
+    command: str | None = None
+    command_explanation: CommandExplanation | None = None
+    output: str | None = None
+    output_explanation: OutputExplanation | None = None
+    return_code: int | None = None
     execution_time: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
     is_streaming: bool = False
     stream_complete: bool = False
 
@@ -228,12 +228,12 @@ class OverseerUpdate:
     """
 
     update_type: str  # "plan", "step_start", "stream", "step_complete", "error"
-    plan_id: Optional[str] = None
-    task_id: Optional[str] = None
-    step_number: Optional[int] = None
-    total_steps: Optional[int] = None
-    status: Optional[str] = None
-    content: Optional[Any] = None
+    plan_id: str | None = None
+    task_id: str | None = None
+    step_number: int | None = None
+    total_steps: int | None = None
+    status: str | None = None
+    content: Any | None = None
     timestamp: datetime = field(default_factory=datetime.now)
 
     def to_dict(self) -> Dict[str, Any]:

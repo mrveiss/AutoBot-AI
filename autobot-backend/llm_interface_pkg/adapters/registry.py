@@ -8,7 +8,7 @@ Issue #1403: Provides registration, lookup by type, fallback behavior,
 and runtime adapter switching per agent/task.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -25,7 +25,7 @@ class AdapterRegistry:
     and per-agent adapter configuration.
     """
 
-    _instance: Optional["AdapterRegistry"] = None
+    _instance: "AdapterRegistry" | None = None
 
     def __new__(cls) -> "AdapterRegistry":
         if cls._instance is None:
@@ -56,11 +56,11 @@ class AdapterRegistry:
             del self._adapters[adapter_type]
             logger.info("Unregistered adapter: %s", adapter_type)
 
-    def get(self, adapter_type: str) -> Optional[AdapterBase]:
+    def get(self, adapter_type: str) -> AdapterBase | None:
         """Look up an adapter by type name."""
         return self._adapters.get(adapter_type)
 
-    def get_for_agent(self, agent_id: str) -> Optional[AdapterBase]:
+    def get_for_agent(self, agent_id: str) -> AdapterBase | None:
         """Get the adapter configured for a specific agent."""
         override_type = self._agent_overrides.get(agent_id)
         if override_type:
@@ -74,7 +74,7 @@ class AdapterRegistry:
             )
         return self.get_with_fallback()
 
-    def get_with_fallback(self, preferred: Optional[str] = None) -> Optional[AdapterBase]:
+    def get_with_fallback(self, preferred: str | None = None) -> AdapterBase | None:
         """Get an adapter with fallback behavior."""
         if preferred:
             adapter = self.get(preferred)

@@ -276,7 +276,7 @@ class CommandValidator:
         self.whitelist.update(self._get_network_commands())
         self.whitelist.update(self._get_file_commands())
 
-    def _invalid_result(self, reason: str) -> Dict[str, Union[bool, str, List[str]]]:
+    def _invalid_result(self, reason: str) -> Dict[str, bool | str | List[str]]:
         """Create an invalid validation result."""
         return {
             "valid": False,
@@ -319,7 +319,7 @@ class CommandValidator:
 
         return pattern, None
 
-    def validate_command(self, command_string: str) -> Dict[str, Union[bool, str, List[str]]]:
+    def validate_command(self, command_string: str) -> Dict[str, bool | str | List[str]]:
         """Validate a command string against security policies."""
         try:
             # Check for dangerous patterns
@@ -354,7 +354,7 @@ class CommandValidator:
             self.logger.error("Command validation error: %s", str(e))
             return self._invalid_result("Command validation error")
 
-    def _check_dangerous_patterns(self, command: str) -> Dict[str, Union[bool, str]]:
+    def _check_dangerous_patterns(self, command: str) -> Dict[str, bool | str]:
         """Check if command contains dangerous patterns."""
         # Issue #380: Use pre-compiled patterns from module level
         for compiled_pattern in _DANGEROUS_PATTERNS:
@@ -363,7 +363,7 @@ class CommandValidator:
                 return {"safe": False, "pattern": compiled_pattern.pattern}
         return {"safe": True, "pattern": ""}
 
-    def _validate_arguments(self, args: List[str], pattern: CommandPattern) -> Dict[str, Union[bool, str]]:
+    def _validate_arguments(self, args: List[str], pattern: CommandPattern) -> Dict[str, bool | str]:
         """Validate command arguments against allowed patterns."""
         for arg in args:
             # Check if argument is in allowed list
@@ -394,7 +394,7 @@ class CommandValidator:
 
     def get_whitelist_info(
         self,
-    ) -> Dict[str, Dict[str, Union[str, List[str], int]]]:
+    ) -> Dict[str, Dict[str, str | List[str] | int]]:
         """
         Get information about whitelisted commands for debugging/admin
         purposes.

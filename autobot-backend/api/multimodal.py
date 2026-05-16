@@ -9,7 +9,7 @@ Provides REST API access to GPU-accelerated multi-modal AI capabilities
 
 import time
 import uuid
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
@@ -96,7 +96,7 @@ def _build_image_modal_input(image_data, file, intent: str, question) -> MultiMo
 async def process_image(
     file: UploadFile = File(...),
     intent: str = Form(default="analysis"),
-    question: Optional[str] = Form(default=None),
+    question: str | None = Form(default=None),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -533,9 +533,9 @@ async def _create_audio_input(audio_file: UploadFile, intent: str) -> MultiModal
 
 
 async def _collect_modal_inputs(
-    text: Optional[str],
-    image_file: Optional[UploadFile],
-    audio_file: Optional[UploadFile],
+    text: str | None,
+    image_file: UploadFile | None,
+    audio_file: UploadFile | None,
     intent: str,
 ) -> List[MultiModalInput]:
     """Collect all modal inputs from form data (Issue #398: extracted)."""
@@ -554,9 +554,9 @@ async def _collect_modal_inputs(
 
 
 def _create_combined_input(
-    text: Optional[str],
-    image_file: Optional[UploadFile],
-    audio_file: Optional[UploadFile],
+    text: str | None,
+    image_file: UploadFile | None,
+    audio_file: UploadFile | None,
     intent: str,
 ) -> MultiModalInput:
     """Create combined MultiModalInput for fusion (Issue #398: extracted)."""
@@ -580,9 +580,9 @@ def _create_combined_input(
     error_code_prefix="MULTIMODAL",
 )
 async def combine_multimodal_inputs(
-    text: Optional[str] = Form(default=None),
-    image_file: Optional[UploadFile] = File(default=None),
-    audio_file: Optional[UploadFile] = File(default=None),
+    text: str | None = Form(default=None),
+    image_file: UploadFile | None = File(default=None),
+    audio_file: UploadFile | None = File(default=None),
     intent: str = Form(default="decision_making"),
     current_user: dict = Depends(get_current_user),
 ):
@@ -793,7 +793,7 @@ async def update_batch_size(
 
 @register_health_probe("multimodal")
 async def probe_multimodal(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for multimodal module.
 

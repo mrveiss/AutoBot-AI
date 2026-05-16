@@ -11,7 +11,7 @@ as LLM backends via subprocess execution.
 import asyncio
 import shutil
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -38,12 +38,12 @@ DEFAULT_ALLOWED_TOOLS = {
 class ProcessAdapter(AdapterBase):
     """Adapter that spawns CLI tools as subprocess backends (#1403)."""
 
-    def __init__(self, config: Optional[AdapterConfig] = None):
+    def __init__(self, config: AdapterConfig | None = None):
         super().__init__("process", config)
         self._tools: Dict[str, Dict[str, Any]] = self.config.settings.get("tools", DEFAULT_ALLOWED_TOOLS)
         self._timeout = self.config.settings.get("timeout", 120)
 
-    def _get_tool_config(self, tool_name: Optional[str] = None) -> Dict[str, Any]:
+    def _get_tool_config(self, tool_name: str | None = None) -> Dict[str, Any]:
         """Get configuration for a specific tool."""
         name = tool_name or next(iter(self._tools), None)
         if not name or name not in self._tools:

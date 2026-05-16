@@ -28,7 +28,7 @@ from autobot_shared.logging_manager import get_logger
 import asyncio
 from asyncio import Queue as AsyncQueue
 from dataclasses import dataclass
-from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
+from typing import Any, AsyncGenerator, Callable, Dict, List
 
 from autobot_shared.time_utils import utc_timestamp as get_timestamp
 
@@ -123,7 +123,7 @@ async def execute_shell_command(command: str) -> Dict[str, Any]:
         }
 
 
-def _prepare_process_env(env: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
+def _prepare_process_env(env: Dict[str, str] | None) -> Dict[str, str] | None:
     """
     Prepare environment variables for subprocess execution.
 
@@ -237,7 +237,7 @@ def _create_execution_error_result(args: List[str], error: Exception) -> Command
 async def _communicate_with_process(
     process: asyncio.subprocess.Process,
     args: List[str],
-    timeout: Optional[float],
+    timeout: float | None,
 ) -> CommandResult:
     """
     Communicate with subprocess and handle timeout. Issue #620.
@@ -265,9 +265,9 @@ async def _communicate_with_process(
 
 async def execute_command(
     args: List[str],
-    timeout: Optional[float] = None,
-    cwd: Optional[str] = None,
-    env: Optional[Dict[str, str]] = None,
+    timeout: float | None = None,
+    cwd: str | None = None,
+    env: Dict[str, str] | None = None,
 ) -> CommandResult:
     """
     Execute a command with arguments (exec-style, not shell).
@@ -300,7 +300,7 @@ async def execute_command(
 
 def _create_stream_reader(
     output_queue: AsyncQueue,
-    on_output: Optional[Callable[[StreamChunk], None]],
+    on_output: Callable[[StreamChunk], None] | None,
 ) -> Callable:
     """
     Create a coroutine factory for reading process streams.
@@ -365,7 +365,7 @@ async def _yield_chunks_from_queue(
 
 def _create_final_chunk(
     return_code: int,
-    on_output: Optional[Callable[[StreamChunk], None]],
+    on_output: Callable[[StreamChunk], None] | None,
 ) -> StreamChunk:
     """
     Create the final status chunk after process completion.
@@ -391,7 +391,7 @@ def _create_final_chunk(
 
 def _create_error_chunk(
     error: Exception,
-    on_output: Optional[Callable[[StreamChunk], None]],
+    on_output: Callable[[StreamChunk], None] | None,
 ) -> StreamChunk:
     """
     Create an error chunk for streaming command failures.
@@ -419,7 +419,7 @@ async def _setup_stream_tasks(
     process: asyncio.subprocess.Process,
     output_queue: AsyncQueue,
     done_event: asyncio.Event,
-    on_output: Optional[Callable[[StreamChunk], None]],
+    on_output: Callable[[StreamChunk], None] | None,
 ) -> asyncio.Task:
     """
     Set up stream reading tasks and return the completion task.
@@ -451,7 +451,7 @@ async def _setup_stream_tasks(
 
 async def execute_shell_command_streaming(
     command: str,
-    on_output: Optional[Callable[[StreamChunk], None]] = None,
+    on_output: Callable[[StreamChunk], None] | None = None,
 ) -> AsyncGenerator[StreamChunk, None]:
     """
     Execute a shell command with streaming output.

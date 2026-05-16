@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 class SlackAdapter(BaseAdapter):
     """Slack platform adapter for unified message gateway."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("slack")
 
     async def normalize_message(self, raw_message: Dict[str, Any]) -> UnifiedMessage:

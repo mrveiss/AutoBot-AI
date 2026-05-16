@@ -6,8 +6,6 @@ Cache management endpoints
 """
 
 import asyncio
-from typing import Optional
-
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
@@ -29,7 +27,7 @@ router = APIRouter()
     error_code_prefix="CODEBASE",
 )
 async def clear_codebase_cache(
-    source_id: Optional[str] = Query(None, description="#1772: clear only this source's cache"),
+    source_id: str | None = Query(None, description="#1772: clear only this source's cache"),
 ):
     """Clear codebase analysis cache from storage.
 

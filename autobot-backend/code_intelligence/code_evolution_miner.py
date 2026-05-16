@@ -19,7 +19,7 @@ Features:
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.anti_pattern_detector import AntiPatternDetector
@@ -54,8 +54,8 @@ class PatternLifecycle:
         self.pattern_type = pattern_type
         self.file_path = file_path
         self.line_number = line_number
-        self.first_seen: Optional[datetime] = None
-        self.last_seen: Optional[datetime] = None
+        self.first_seen: datetime | None = None
+        self.last_seen: datetime | None = None
         self.occurrences: List[PatternOccurrence] = []
         self.status: str = "active"  # active, resolved, migrated
 
@@ -91,7 +91,7 @@ class GitHistoryCrawler:
             self.repo = None
 
     def get_commits_in_range(
-        self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
+        self, start_date: datetime | None = None, end_date: datetime | None = None
     ) -> List[Dict]:
         """Get commits within a date range"""
         if self.repo is None:
@@ -261,7 +261,7 @@ class PatternEvolutionTracker:
 
         lifecycle.add_occurrence(occurrence)
 
-    def _find_lifecycle(self, pattern_type: str, file_path: str, line_number: int) -> Optional[PatternLifecycle]:
+    def _find_lifecycle(self, pattern_type: str, file_path: str, line_number: int) -> PatternLifecycle | None:
         """Find existing lifecycle for a pattern"""
         for lifecycle in self.lifecycles:
             if (
@@ -364,8 +364,8 @@ class CodeEvolutionMiner:
 
     def analyze_evolution(
         self,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
     ) -> Dict:
         """Analyze code evolution over time"""
         logger.info("Starting code evolution analysis for %s", self.repo_path)

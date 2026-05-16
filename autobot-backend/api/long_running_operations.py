@@ -21,7 +21,7 @@ Boundary with ProcessAdapterService (#1751):
 import asyncio
 import logging
 import sys
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import (
     APIRouter,
@@ -408,8 +408,8 @@ async def get_operation_status(operation_id: str, manager=Depends(get_operation_
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
 async def list_operations(
-    status: Optional[str] = None,
-    operation_type: Optional[str] = None,
+    status: str | None = None,
+    operation_type: str | None = None,
     limit: int = 50,
     manager=Depends(get_operation_manager),
 ):
@@ -546,7 +546,7 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
 
 @register_health_probe("long_running")
 async def probe_long_running(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333 / #6902: probe with rich data so the frontend can read
     ``probes[name=long_running].data.{active_operations,total_operations,...}``

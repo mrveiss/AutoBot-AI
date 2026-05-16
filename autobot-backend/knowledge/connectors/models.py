@@ -10,7 +10,7 @@ SourceInfo, ContentResult, ChangeInfo, ConnectorConfig, ConnectorStatus, SyncRes
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.time_utils import now_utc
 
@@ -65,9 +65,9 @@ class ConnectorConfig:
     config: Dict[str, Any]  # type-specific config keys
     enabled: bool = True
     verification_mode: str = "collaborative"  # "autonomous" or "collaborative"
-    schedule_cron: Optional[str] = None  # cron-like expression; None = manual only
+    schedule_cron: str | None = None  # cron-like expression; None = manual only
     created_at: datetime = field(default_factory=now_utc)
-    last_sync_at: Optional[datetime] = None
+    last_sync_at: datetime | None = None
     include_patterns: List[str] = field(default_factory=list)
     exclude_patterns: List[str] = field(default_factory=list)
     # Issue #4421: readiness tier copied from the connector class at instance-
@@ -81,10 +81,10 @@ class ConnectorStatus:
 
     connector_id: str
     is_healthy: bool
-    last_sync_at: Optional[datetime]
+    last_sync_at: datetime | None
     last_sync_status: str  # "success", "failed", "running", "never"
     documents_indexed: int
-    last_error: Optional[str] = None
+    last_error: str | None = None
 
 
 @dataclass
@@ -93,7 +93,7 @@ class SyncResult:
 
     connector_id: str
     started_at: datetime
-    completed_at: Optional[datetime]
+    completed_at: datetime | None
     status: str  # "success", "failed", "partial"
     added: int = 0
     updated: int = 0

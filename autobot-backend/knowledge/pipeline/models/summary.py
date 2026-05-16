@@ -8,7 +8,7 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import List, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -38,7 +38,7 @@ class Summary(BaseModel):
     id: UUID = Field(default_factory=uuid4, description="Unique summary ID")
     content: str = Field(..., description="Summary text")
     level: SummaryLevel = Field(..., description="Summary hierarchy level")
-    parent_summary_id: Optional[UUID] = Field(None, description="Parent summary ID (for hierarchical navigation)")
+    parent_summary_id: UUID | None = Field(None, description="Parent summary ID (for hierarchical navigation)")
     child_summary_ids: List[UUID] = Field(default_factory=list, description="Child summary IDs (for drill-down)")
     source_chunk_ids: List[UUID] = Field(default_factory=list, description="Source chunks summarized")
     source_document_id: UUID = Field(..., description="Source document ID")

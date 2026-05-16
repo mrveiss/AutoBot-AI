@@ -10,7 +10,7 @@ and channel adapters.
 """
 
 import asyncio
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 
@@ -35,7 +35,7 @@ class Gateway:
     - Rate limiting and security controls
     """
 
-    _instance: Optional["Gateway"] = None
+    _instance: "Gateway" | None = None
     _lock = asyncio.Lock()
 
     def __new__(cls, *args, **kwargs):
@@ -46,9 +46,9 @@ class Gateway:
 
     def __init__(
         self,
-        config: Optional[GatewayConfig] = None,
-        agent_router: Optional[Any] = None,
-    ):
+        config: GatewayConfig | None = None,
+        agent_router: Any | None = None,
+    ) -> None:
         """
         Initialize the Gateway.
 
@@ -120,8 +120,8 @@ class Gateway:
         self,
         user_id: str,
         channel: ChannelType,
-        connection_params: Optional[Dict] = None,
-        metadata: Optional[Dict] = None,
+        connection_params: Dict | None = None,
+        metadata: Dict | None = None,
     ) -> GatewaySession:
         """
         Create a new Gateway session.
@@ -257,7 +257,7 @@ class Gateway:
         self,
         raw_data: Any,
         session_id: str,
-    ) -> Optional[UnifiedMessage]:
+    ) -> UnifiedMessage | None:
         """
         Receive and parse a message from a channel.
 
@@ -303,7 +303,7 @@ class Gateway:
     async def route_and_process(
         self,
         message: UnifiedMessage,
-        context: Optional[Dict] = None,
+        context: Dict | None = None,
     ) -> Dict[str, Any]:
         """
         Route a message and process with appropriate agent.
@@ -356,7 +356,7 @@ class Gateway:
 
 
 # Singleton instance getter
-_gateway_instance: Optional[Gateway] = None
+_gateway_instance: Gateway | None = None
 
 
 async def get_gateway() -> Gateway:

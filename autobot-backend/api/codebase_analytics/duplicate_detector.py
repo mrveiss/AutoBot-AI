@@ -23,7 +23,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
@@ -614,7 +614,7 @@ class DuplicateCodeDetector(_BaseClass):
 
     def __init__(
         self,
-        project_root: Optional[str] = None,
+        project_root: str | None = None,
         min_similarity: float = LOW_SIMILARITY_THRESHOLD,
         use_semantic_analysis: bool = False,
     ):
@@ -1205,7 +1205,7 @@ class DuplicateCodeDetector(_BaseClass):
 # =============================================================================
 
 
-def detect_duplicates(project_root: Optional[str] = None) -> DuplicateAnalysis:
+def detect_duplicates(project_root: str | None = None) -> DuplicateAnalysis:
     """
     Run duplicate code detection on a project.
 
@@ -1220,7 +1220,7 @@ def detect_duplicates(project_root: Optional[str] = None) -> DuplicateAnalysis:
 
 
 async def detect_duplicates_async(
-    project_root: Optional[str] = None,
+    project_root: str | None = None,
     use_semantic_analysis: bool = True,
 ) -> DuplicateAnalysis:
     """

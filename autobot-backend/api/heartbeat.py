@@ -10,7 +10,7 @@ and agent runtime state inspection.
 
 import asyncio
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -43,7 +43,7 @@ from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_stat
 logger = get_logger(__name__)
 router = APIRouter()
 
-_scheduler: Optional[HeartbeatScheduler] = None
+_scheduler: HeartbeatScheduler | None = None
 
 
 def configure_scheduler(scheduler: HeartbeatScheduler) -> None:

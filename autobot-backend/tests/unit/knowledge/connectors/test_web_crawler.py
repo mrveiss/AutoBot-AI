@@ -11,7 +11,7 @@ All external I/O (_fetch_bs4, RobotsCache, KB ingest) is mocked so
 tests run without network access or ChromaDB.
 """
 
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -71,7 +71,7 @@ _FIXTURE_PAGES: dict = {
 }
 
 
-def _fixture_bs4(url: str, timeout: float = 30.0) -> Tuple[Optional[str], Optional[int]]:
+def _fixture_bs4(url: str, timeout: float = 30.0) -> Tuple[str | None, int | None]:
     """Synchronous helper — used as coroutine side_effect via AsyncMock."""
     entry = _FIXTURE_PAGES.get(url)
     if entry is None:
@@ -109,7 +109,7 @@ def _make_fetch_result(
     url: str,
     markdown: str = "",
     success: bool = True,
-    error_code: Optional[str] = None,
+    error_code: str | None = None,
 ) -> FetchResult:
     return FetchResult(
         url=url,

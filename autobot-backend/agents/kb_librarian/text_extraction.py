@@ -7,7 +7,7 @@ Text Extraction utilities for KB Librarian.
 Extracted from enhanced_kb_librarian.py as part of Issue #381 god class refactoring.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from .types import (
     ADVANCED_FEATURE_KEYWORDS,
@@ -218,7 +218,7 @@ class TextExtractor:
         return "Installation method not found"
 
     @classmethod
-    def _extract_prompt_command(cls, line: str) -> Optional[str]:
+    def _extract_prompt_command(cls, line: str) -> str | None:
         """Extract command from $ or # prompt line (Issue #315 - extracted helper)."""
         if not (line.startswith("$") or line.startswith("#")):
             return None

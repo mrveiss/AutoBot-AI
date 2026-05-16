@@ -13,7 +13,7 @@ from collections import defaultdict, deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from functools import wraps
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 import psutil
@@ -43,10 +43,10 @@ class GPUMetrics:
     power_draw_watts: float
     gpu_clock_mhz: int
     memory_clock_mhz: int
-    fan_speed_percent: Optional[int] = None
-    encoder_utilization: Optional[int] = None
-    decoder_utilization: Optional[int] = None
-    performance_state: Optional[str] = None  # P0-P12
+    fan_speed_percent: int | None = None
+    encoder_utilization: int | None = None
+    decoder_utilization: int | None = None
+    performance_state: str | None = None  # P0-P12
     thermal_throttling: bool = False
     power_throttling: bool = False
 
@@ -102,7 +102,7 @@ class SystemPerformanceMetrics:
     cpu_load_1m: float
     cpu_load_5m: float
     cpu_load_15m: float
-    cpu_temperature_celsius: Optional[float] = None
+    cpu_temperature_celsius: float | None = None
     per_core_usage: List[float] = field(default_factory=list)
 
     # Memory Performance
@@ -111,14 +111,14 @@ class SystemPerformanceMetrics:
     memory_available_gb: float
     memory_usage_percent: float
     swap_usage_percent: float
-    memory_bandwidth_gb_s: Optional[float] = None
+    memory_bandwidth_gb_s: float | None = None
 
     # Storage I/O Performance
     disk_read_mb_s: float
     disk_write_mb_s: float
     disk_usage_percent: float
     disk_queue_depth: float
-    nvme_temperature_celsius: Optional[float] = None
+    nvme_temperature_celsius: float | None = None
 
     # Network Performance
     network_upload_mb_s: float
@@ -244,7 +244,7 @@ class Phase9PerformanceMonitor:
         except Exception:
             return False
 
-    def _parse_nvidia_smi_output(self, output: str) -> Optional[GPUMetrics]:
+    def _parse_nvidia_smi_output(self, output: str) -> GPUMetrics | None:
         """Parse nvidia-smi CSV output into GPUMetrics. Issue #620."""
         parts = [p.strip() for p in output.strip().split(",")]
         if len(parts) < 8:
@@ -261,7 +261,7 @@ class Phase9PerformanceMonitor:
             thermal_throttling = parts[16] == "Active"
             power_throttling = parts[15] == "Active" or parts[17] == "Active"
 
-        def _parse_optional_int(val: str) -> Optional[int]:
+        def _parse_optional_int(val: str) -> int | None:
             """Parse optional integer value from nvidia-smi. Issue #620."""
             return int(float(val)) if val != "[Not Supported]" else None
 
@@ -289,7 +289,7 @@ class Phase9PerformanceMonitor:
             power_throttling=power_throttling,
         )
 
-    async def collect_gpu_metrics(self) -> Optional[GPUMetrics]:
+    async def collect_gpu_metrics(self) -> GPUMetrics | None:
         """Collect comprehensive GPU performance metrics.
 
         Issue #620: Refactored to extract _parse_nvidia_smi_output helper.
@@ -327,7 +327,7 @@ class Phase9PerformanceMonitor:
             self.logger.error(f"Error collecting GPU metrics: {e}")
             return None
 
-    async def collect_npu_metrics(self) -> Optional[NPUMetrics]:
+    async def collect_npu_metrics(self) -> NPUMetrics | None:
         """Collect Intel NPU performance metrics"""
         if not self.npu_available:
             return None
@@ -382,7 +382,7 @@ class Phase9PerformanceMonitor:
         except Exception:
             return False
 
-    async def collect_multimodal_metrics(self) -> Optional[MultiModalMetrics]:
+    async def collect_multimodal_metrics(self) -> MultiModalMetrics | None:
         """Collect multi-modal AI processing performance metrics"""
         try:
             # Get multimodal processing stats from Redis
@@ -772,7 +772,7 @@ class Phase9PerformanceMonitor:
 
     async def _collect_single_service_metrics(
         self, service_config: Dict[str, Any]
-    ) -> Optional[ServicePerformanceMetrics]:
+    ) -> ServicePerformanceMetrics | None:
         """
         Collect metrics for a single service.
 
@@ -838,11 +838,11 @@ class Phase9PerformanceMonitor:
 
     def _store_metrics_in_buffers(
         self,
-        gpu_metrics: Optional["GPUMetrics"],
-        npu_metrics: Optional["NPUMetrics"],
-        multimodal_metrics: Optional["MultiModalMetrics"],
-        system_metrics: Optional["SystemPerformanceMetrics"],
-        service_metrics: Optional[List["ServicePerformanceMetrics"]],
+        gpu_metrics: "GPUMetrics" | None,
+        npu_metrics: "NPUMetrics" | None,
+        multimodal_metrics: "MultiModalMetrics" | None,
+        system_metrics: "SystemPerformanceMetrics" | None,
+        service_metrics: List["ServicePerformanceMetrics"] | None,
     ) -> None:
         """Store collected metrics in appropriate buffers. Issue #620."""
         if gpu_metrics:
@@ -859,11 +859,11 @@ class Phase9PerformanceMonitor:
 
     def _build_metrics_dict(
         self,
-        gpu_metrics: Optional["GPUMetrics"],
-        npu_metrics: Optional["NPUMetrics"],
-        multimodal_metrics: Optional["MultiModalMetrics"],
-        system_metrics: Optional["SystemPerformanceMetrics"],
-        service_metrics: Optional[List["ServicePerformanceMetrics"]],
+        gpu_metrics: "GPUMetrics" | None,
+        npu_metrics: "NPUMetrics" | None,
+        multimodal_metrics: "MultiModalMetrics" | None,
+        system_metrics: "SystemPerformanceMetrics" | None,
+        service_metrics: List["ServicePerformanceMetrics"] | None,
     ) -> Dict[str, Any]:
         """Build raw metrics dictionary for Redis persistence. Issue #620."""
         return {
@@ -1000,7 +1000,7 @@ class Phase9PerformanceMonitor:
         except Exception as e:
             self.logger.error(f"Error analyzing performance: {e}")
 
-    def _analyze_gpu_performance(self, gpu: Optional[Dict[str, Any]], alerts: List[Dict[str, Any]]) -> None:
+    def _analyze_gpu_performance(self, gpu: Dict[str, Any] | None, alerts: List[Dict[str, Any]]) -> None:
         """Analyze GPU metrics and append alerts. Issue #620."""
         if not gpu:
             return
@@ -1028,7 +1028,7 @@ class Phase9PerformanceMonitor:
                 }
             )
 
-    def _analyze_npu_performance(self, npu: Optional[Dict[str, Any]], alerts: List[Dict[str, Any]]) -> None:
+    def _analyze_npu_performance(self, npu: Dict[str, Any] | None, alerts: List[Dict[str, Any]]) -> None:
         """Analyze NPU metrics and append alerts. Issue #620."""
         if not npu:
             return
@@ -1046,7 +1046,7 @@ class Phase9PerformanceMonitor:
                 }
             )
 
-    def _analyze_system_performance(self, system: Optional[Dict[str, Any]], alerts: List[Dict[str, Any]]) -> None:
+    def _analyze_system_performance(self, system: Dict[str, Any] | None, alerts: List[Dict[str, Any]]) -> None:
         """Analyze system metrics and append alerts. Issue #620."""
         if not system:
             return
@@ -1074,7 +1074,7 @@ class Phase9PerformanceMonitor:
             )
 
     def _analyze_service_performance(
-        self, services: Optional[List[Dict[str, Any]]], alerts: List[Dict[str, Any]]
+        self, services: List[Dict[str, Any]] | None, alerts: List[Dict[str, Any]]
     ) -> None:
         """Analyze service metrics and append alerts. Issue #620."""
         if not services:
@@ -1216,7 +1216,7 @@ class Phase9PerformanceMonitor:
             return "decreasing"
         return "stable"
 
-    def _calculate_gpu_utilization_trend(self) -> Optional[Dict[str, Any]]:
+    def _calculate_gpu_utilization_trend(self) -> Dict[str, Any] | None:
         """Calculate GPU utilization trend from recent metrics.
 
         Returns trend data if sufficient GPU metrics are available. Issue #620.
@@ -1421,7 +1421,7 @@ def _log_performance_metric(
     func_name: str,
     execution_time: float,
     success: bool,
-    error: Optional[Exception] = None,
+    error: Exception | None = None,
 ) -> None:
     """
     Log performance metric for a function execution.

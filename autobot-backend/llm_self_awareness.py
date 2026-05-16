@@ -11,7 +11,7 @@ import asyncio
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiofiles
 
@@ -332,7 +332,7 @@ class LLMSelfAwareness:
         # Remove empty categories
         return {k: v for k, v in categories.items() if v}
 
-    def _find_explicit_category(self, capability: str, rules: Dict[str, List[str]]) -> Optional[str]:
+    def _find_explicit_category(self, capability: str, rules: Dict[str, List[str]]) -> str | None:
         """Find category from explicit rules (Issue #315)."""
         for category, keywords in rules.items():
             if capability in keywords:
@@ -593,7 +593,7 @@ You should be aware of your current capabilities and limitations based on the sy
 
         return response
 
-    async def export_awareness_data(self, output_path: Optional[str] = None) -> str:
+    async def export_awareness_data(self, output_path: str | None = None) -> str:
         """Export system awareness data for analysis"""
         if not output_path:
             timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")

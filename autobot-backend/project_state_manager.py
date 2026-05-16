@@ -17,7 +17,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -79,7 +79,7 @@ class PhaseCapability:
     validation_target: str  # path, URL, function name, etc.
     required: bool = True
     implemented: bool = False
-    last_validated: Optional[datetime] = None
+    last_validated: datetime | None = None
     validation_details: str = ""
 
 
@@ -92,7 +92,7 @@ class DevelopmentPhaseInfo:
     description: str
     capabilities: List[PhaseCapability] = field(default_factory=list)
     completion_percentage: float = 0.0
-    last_validated: Optional[datetime] = None
+    last_validated: datetime | None = None
     validation_results: List[ValidationResult] = field(default_factory=list)
     prerequisites: List[DevelopmentPhase] = field(default_factory=list)
     is_active: bool = False
@@ -737,7 +737,7 @@ class ProjectStateManager:
 
         return completion_rate >= 0.9  # 90% threshold
 
-    def suggest_next_phase(self) -> Optional[DevelopmentPhase]:
+    def suggest_next_phase(self) -> DevelopmentPhase | None:
         """Suggest the next phase to work on"""
         # Find completed phases
         completed_phases = {p for p, info in self.phases.items() if info.is_completed}
@@ -799,7 +799,7 @@ class ProjectStateManager:
             "next_suggested": suggested_next.value if suggested_next else None,
         }
 
-    def _check_status_cache(self) -> Optional[Dict[str, Any]]:
+    def _check_status_cache(self) -> Dict[str, Any] | None:
         """Check if cached status data is available and valid."""
         current_time = time.time()
         if (
@@ -809,7 +809,7 @@ class ProjectStateManager:
             return _project_status_cache["data"]
         return None
 
-    def _get_last_validation_time(self) -> Optional[datetime]:
+    def _get_last_validation_time(self) -> datetime | None:
         """Get the most recent validation timestamp across all phases."""
         validated_times = [info.last_validated for info in self.phases.values() if info.last_validated]
         return max(validated_times, default=None) if validated_times else None

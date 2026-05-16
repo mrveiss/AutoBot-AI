@@ -16,7 +16,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 from services.tool_output_filter import _dedup_consecutive, _strip_ansi
 
@@ -78,10 +78,10 @@ class SandboxConfig:
     cpu_limit: float = 1.0
     enable_monitoring: bool = True
     enable_network: bool = False
-    allowed_commands: Optional[List[str]] = None
-    blocked_commands: Optional[List[str]] = None
-    environment: Optional[Dict[str, str]] = None
-    volumes: Optional[Dict[str, Dict[str, str]]] = None
+    allowed_commands: List[str] | None = None
+    blocked_commands: List[str] | None = None
+    environment: Dict[str, str] | None = None
+    volumes: Dict[str, Dict[str, str]] | None = None
 
 
 @dataclass
@@ -112,7 +112,7 @@ class SecureSandboxExecutor:
     - File system restrictions
     """
 
-    def __init__(self, docker_client: "Optional[docker.DockerClient]" = None):
+    def __init__(self, docker_client: "docker.DockerClient | None" = None):
         """Initialize secure sandbox executor with Docker client and Redis monitoring."""
         self.logger = get_logger(f"{__name__}.{self.__class__.__name__}")
 
@@ -161,7 +161,7 @@ class SecureSandboxExecutor:
                 self.logger.error("Failed to pull fallback image: %s", e)
                 raise
 
-    def _create_validation_failure_result(self, command: Union[str, List[str]], container_id: str) -> SandboxResult:
+    def _create_validation_failure_result(self, command: str | List[str], container_id: str) -> SandboxResult:
         """
         Create a SandboxResult for command validation failure.
 
@@ -330,7 +330,7 @@ class SecureSandboxExecutor:
         return result
 
     async def execute_command(
-        self, command: Union[str, List[str]], config: Optional[SandboxConfig] = None
+        self, command: str | List[str], config: SandboxConfig | None = None
     ) -> SandboxResult:
         """
         Execute a command in the secure sandbox.
@@ -376,7 +376,7 @@ class SecureSandboxExecutor:
         self,
         script_content: str,
         language: str = "bash",
-        config: Optional[SandboxConfig] = None,
+        config: SandboxConfig | None = None,
     ) -> SandboxResult:
         """
         Execute a script in the secure sandbox.
@@ -426,7 +426,7 @@ class SecureSandboxExecutor:
             except Exception as e:
                 self.logger.debug("Failed to cleanup script file %s: %s", script_path, e)
 
-    def _validate_command(self, command: Union[str, List[str]], config: SandboxConfig) -> bool:
+    def _validate_command(self, command: str | List[str], config: SandboxConfig) -> bool:
         """Validate command against security policies."""
         command_parts = command.split() if isinstance(command, str) else command
 
@@ -539,7 +539,7 @@ class SecureSandboxExecutor:
                 "/sandbox/tmp": "size=50M,mode=1777",
             }
 
-    def _prepare_container_config(self, command: Union[str, List[str]], config: SandboxConfig) -> Dict[str, Any]:
+    def _prepare_container_config(self, command: str | List[str], config: SandboxConfig) -> Dict[str, Any]:
         """Prepare Docker container configuration"""
         container_config = {
             "image": "autobot/secure-sandbox:latest",
@@ -747,7 +747,7 @@ class SecureSandboxExecutor:
 # Lazy loading prevents startup blocking while ensuring security is available
 
 
-def _create_secure_sandbox() -> Optional[SecureSandboxExecutor]:
+def _create_secure_sandbox() -> SecureSandboxExecutor | None:
     """Factory for the global SecureSandboxExecutor singleton.
 
     Returns None on Docker initialisation failure so callers can degrade
@@ -773,7 +773,7 @@ secure_sandbox = None  # Will be initialized on first access via get_secure_sand
 
 
 async def execute_in_sandbox(
-    command: Union[str, List[str]],
+    command: str | List[str],
     security_level: str = "high",
     timeout: int = int(_ssot_config.timeout.sandbox),
     **kwargs,

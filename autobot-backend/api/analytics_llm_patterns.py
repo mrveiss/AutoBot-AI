@@ -22,7 +22,7 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Query
 from redis.exceptions import RedisError
@@ -150,7 +150,7 @@ class PromptUsageRecord:
     timestamp: datetime
     response_time: float
     success: bool
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 @dataclass
@@ -329,7 +329,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             if category in SIMPLE_PROMPT_CATEGORIES:  # O(1) lookup (Issue #326)
                 recommendations.append("Consider using a smaller model (Haiku/GPT-3.5) for this task type")
 
-    async def analyze_prompt(self, prompt: str, model: Optional[str] = None) -> Dict[str, Any]:
+    async def analyze_prompt(self, prompt: str, model: str | None = None) -> Dict[str, Any]:
         """
         Analyze a single prompt for optimization opportunities.
 
@@ -517,7 +517,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             logger.error("Failed to get usage stats: %s", e)
             raise RuntimeError(f"Failed to get usage stats: {e}")
 
-    def _parse_cache_opportunity(self, key: str, data: str, min_occurrences: int) -> Optional[Dict[str, Any]]:
+    def _parse_cache_opportunity(self, key: str, data: str, min_occurrences: int) -> Dict[str, Any] | None:
         """Parse a cache opportunity from Redis data. (Issue #315 - extracted)"""
         if not data:
             return None
@@ -560,7 +560,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             logger.error("Failed to identify cache opportunities: %s", e)
             raise RuntimeError(f"Failed to identify cache opportunities: {e}")
 
-    def _build_caching_recommendation(self, cache_opportunities: List[Dict]) -> Optional[Dict[str, Any]]:
+    def _build_caching_recommendation(self, cache_opportunities: List[Dict]) -> Dict[str, Any] | None:
         """Build caching recommendation if applicable (Issue #665: extracted helper)."""
         if not cache_opportunities:
             return None
@@ -580,7 +580,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             ],
         }
 
-    def _build_model_downgrade_recommendation(self, stats: Dict, model_usage: Dict) -> Optional[Dict[str, Any]]:
+    def _build_model_downgrade_recommendation(self, stats: Dict, model_usage: Dict) -> Dict[str, Any] | None:
         """Build model downgrade recommendation if applicable (Issue #665: extracted helper)."""
         expensive_models = [m for m in model_usage if any(keyword in m.lower() for keyword in EXPENSIVE_MODELS)]
         if not expensive_models:
@@ -600,7 +600,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             ],
         }
 
-    def _build_batch_processing_recommendation(self, stats: Dict) -> Optional[Dict[str, Any]]:
+    def _build_batch_processing_recommendation(self, stats: Dict) -> Dict[str, Any] | None:
         """Build batch processing recommendation if applicable (Issue #665: extracted helper)."""
         if stats["total_requests"] <= 100:
             return None
@@ -842,7 +842,7 @@ import threading
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-_analyzer: Optional[LLMPatternAnalyzer] = None
+_analyzer: LLMPatternAnalyzer | None = None
 _analyzer_lock = threading.Lock()
 
 

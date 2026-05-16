@@ -13,7 +13,7 @@ Issue #717: Efficient Inference Design implementation.
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Coroutine, Dict, List, Optional
+from typing import Any, Callable, Coroutine, Dict, List
 from uuid import uuid4
 
 from autobot_shared.logging_manager import get_logger
@@ -36,8 +36,8 @@ class BatchResult:
     """Result of a batched request."""
 
     request_id: str
-    response: Optional[Dict[str, Any]] = None
-    error: Optional[Exception] = None
+    response: Dict[str, Any] | None = None
+    error: Exception | None = None
     batch_id: str = ""
     batch_size: int = 0
     wait_time_ms: float = 0.0
@@ -60,7 +60,7 @@ class CloudRequestBatcher:
         self,
         batch_window_ms: int = 50,
         max_batch_size: int = 10,
-        executor: Optional[Callable[[List[Dict]], Coroutine[Any, Any, List]]] = None,
+        executor: Callable[[List[Dict]], Coroutine[Any, Any, List]] | None = None,
     ):
         """
         Initialize the cloud request batcher.
@@ -76,7 +76,7 @@ class CloudRequestBatcher:
 
         self._pending_requests: List[BatchedRequest] = []
         self._lock = asyncio.Lock()
-        self._batch_task: Optional[asyncio.Task] = None
+        self._batch_task: asyncio.Task | None = None
         self._shutdown = False
 
         # Metrics

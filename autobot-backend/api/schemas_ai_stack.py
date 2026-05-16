@@ -10,7 +10,7 @@ Where the external AI Stack service returns opaque JSON, models use
 still giving the OpenAPI schema a meaningful name.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel
 
@@ -24,8 +24,8 @@ class AIStackHealthData(BaseModel):
 
     status: str  # "healthy" or "unhealthy"
     timestamp: str
-    ai_stack_response: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    ai_stack_response: Dict[str, Any] | None = None
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -37,8 +37,8 @@ class AIStackAgentsData(BaseModel):
     """Data payload for GET /ai-stack/agents."""
 
     agents: List[str]
-    total: Optional[int] = None
-    source: Optional[str] = None  # "fallback_config" when stack unavailable
+    total: int | None = None
+    source: str | None = None  # "fallback_config" when stack unavailable
 
 
 # ---------------------------------------------------------------------------

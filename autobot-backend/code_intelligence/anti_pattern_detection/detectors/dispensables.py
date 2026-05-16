@@ -14,7 +14,7 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import ast
-from typing import List, Optional
+from typing import List
 
 from ..models import AntiPatternResult
 from ..severity_utils import get_lazy_class_severity
@@ -90,7 +90,7 @@ class DispensableDetector:
         self,
         node: ast.AST,
         file_path: str,
-    ) -> Optional[AntiPatternResult]:
+    ) -> AntiPatternResult | None:
         """Check for unreachable code after return/raise statements."""
         if not hasattr(node, "body"):
             return None
@@ -119,7 +119,7 @@ class DispensableDetector:
         self,
         node: ast.ExceptHandler,
         file_path: str,
-    ) -> Optional[AntiPatternResult]:
+    ) -> AntiPatternResult | None:
         """Check for empty except blocks."""
         if len(node.body) != 1 or not isinstance(node.body[0], ast.Pass):
             return None
@@ -384,7 +384,7 @@ class DispensableDetector:
         existing_name: str,
         existing_methods: frozenset,
         file_path: str,
-    ) -> Optional[AntiPatternResult]:
+    ) -> AntiPatternResult | None:
         """
         Check if two classes have significant method overlap indicating duplication.
 

@@ -16,7 +16,7 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -55,7 +55,7 @@ class MockKnowledgeBase:
             "workflows": {},
         }
 
-    async def get_tool_knowledge(self, tool_name: str) -> Optional[Dict[str, Any]]:
+    async def get_tool_knowledge(self, tool_name: str) -> Dict[str, Any] | None:
         """Mock get_tool_knowledge"""
         return self.data.get(f"tool:{tool_name}")
 
@@ -63,7 +63,7 @@ class MockKnowledgeBase:
         """Mock store_knowledge"""
         self.data[f"{category}:{content_id}"] = content
 
-    async def store_fact(self, content: str, metadata: Optional[Dict[str, Any]] = None):
+    async def store_fact(self, content: str, metadata: Dict[str, Any] | None = None):
         """Mock store_fact (required by librarian)"""
         fact_id = f"fact:{len(self.data)}"
         self.data[fact_id] = {"content": content, "metadata": metadata or {}}
@@ -128,7 +128,7 @@ class MockMachineAwareSystemKnowledgeManager(MockSystemKnowledgeManager):
         """Mock machine-aware initialize"""
         self.initialized = True
 
-    async def get_machine_info(self) -> Optional[Dict[str, Any]]:
+    async def get_machine_info(self) -> Dict[str, Any] | None:
         """Mock get_machine_info"""
         return self.current_machine_profile.to_dict()
 

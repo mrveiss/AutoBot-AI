@@ -12,7 +12,7 @@ import ast
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 
@@ -70,8 +70,8 @@ class StringOperationChain:
     end_line: int
     operations: List[str] = field(default_factory=list)
     source_code: str = ""
-    function_name: Optional[str] = None
-    class_name: Optional[str] = None
+    function_name: str | None = None
+    class_name: str | None = None
 
     def can_consolidate_to_regex(self) -> bool:
         """Check if this chain can be consolidated to regex."""
@@ -99,8 +99,8 @@ class StringOperationVisitor(ast.NodeVisitor):
         """Initialize visitor with source code context."""
         self.source_lines = source_lines
         self.file_path = file_path
-        self.current_function: Optional[str] = None
-        self.current_class: Optional[str] = None
+        self.current_function: str | None = None
+        self.current_class: str | None = None
         self.operation_chains: List[StringOperationChain] = []
         self._chain_starts: Dict[int, StringOperationChain] = {}
 
@@ -214,7 +214,7 @@ class RegexPatternDetector:
     def __init__(
         self,
         min_chain_length: int = 2,
-        exclude_dirs: Optional[Set[str]] = None,
+        exclude_dirs: Set[str] | None = None,
         use_shared_cache: bool = True,
     ):
         """Initialize the regex pattern detector.
@@ -351,7 +351,7 @@ class RegexPatternDetector:
             return PatternSeverity.MEDIUM
         return PatternSeverity.LOW
 
-    def _chain_to_opportunity(self, chain: StringOperationChain) -> Optional[RegexOpportunity]:
+    def _chain_to_opportunity(self, chain: StringOperationChain) -> RegexOpportunity | None:
         """Convert a string operation chain to a RegexOpportunity.
 
         Issue #620: Refactored with extracted helper methods.

@@ -24,7 +24,7 @@ tokens never cross the WebSocket boundary.
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
@@ -103,8 +103,8 @@ class CausalLink:
 
 
 def build_causal_chain(
-    links: Optional[List[Tuple[str, str, str]]],
-) -> Optional[List[CausalLink]]:
+    links: List[Tuple[str, str, str]] | None,
+) -> List[CausalLink] | None:
     """Construct a list of CausalLink objects from a compact tuple representation.
 
     Convenience factory so callers can pass a list of ``(src, tgt, reason)``
@@ -159,7 +159,7 @@ def _truncate(value: Any, max_len: int = 512) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _causal_payload(causal_chain: Optional[List[CausalLink]]) -> dict:
+def _causal_payload(causal_chain: List[CausalLink] | None) -> dict:
     """Return a dict fragment to merge into an event payload for causal chain.
 
     Returns an empty dict when *causal_chain* is None or empty, so callers
@@ -220,10 +220,10 @@ def _try_publish(event_type: str, payload: dict) -> None:
 
 def emit_step_start(
     step_name: str,
-    session_id: Optional[str] = None,
-    agent_type: Optional[str] = None,
-    step_id: Optional[str] = None,
-    causal_chain: Optional[List[CausalLink]] = None,
+    session_id: str | None = None,
+    agent_type: str | None = None,
+    step_id: str | None = None,
+    causal_chain: List[CausalLink] | None = None,
 ) -> float:
     """Emit an agent.step.start event and return the current monotonic time.
 
@@ -259,10 +259,10 @@ def emit_step_start(
 def emit_step_complete(
     step_name: str,
     start_time: float,
-    output_summary: Optional[str] = None,
-    session_id: Optional[str] = None,
-    step_id: Optional[str] = None,
-    causal_chain: Optional[List[CausalLink]] = None,
+    output_summary: str | None = None,
+    session_id: str | None = None,
+    step_id: str | None = None,
+    causal_chain: List[CausalLink] | None = None,
 ) -> None:
     """Emit an agent.step.complete event.
 
@@ -292,8 +292,8 @@ def emit_step_complete(
 def emit_tool_call(
     tool_name: str,
     arguments: Any,
-    session_id: Optional[str] = None,
-    causal_chain: Optional[List[CausalLink]] = None,
+    session_id: str | None = None,
+    causal_chain: List[CausalLink] | None = None,
 ) -> float:
     """Emit an agent.tool.call event and return start time.
 
@@ -327,9 +327,9 @@ def emit_tool_result(
     result: Any,
     start_time: float,
     success: bool = True,
-    bridge: Optional[str] = None,
-    session_id: Optional[str] = None,
-    causal_chain: Optional[List[CausalLink]] = None,
+    bridge: str | None = None,
+    session_id: str | None = None,
+    causal_chain: List[CausalLink] | None = None,
 ) -> None:
     """Emit an agent.tool.result event.
 
@@ -360,8 +360,8 @@ def emit_tool_result(
 
 def emit_llm_chunk(
     chunk: str,
-    session_id: Optional[str] = None,
-    causal_chain: Optional[List[CausalLink]] = None,
+    session_id: str | None = None,
+    causal_chain: List[CausalLink] | None = None,
 ) -> None:
     """Emit an agent.llm.chunk event for a streaming token.
 
@@ -385,8 +385,8 @@ def emit_llm_chunk(
 
 def emit_plan(
     steps: list[Any],
-    session_id: Optional[str] = None,
-    causal_chain: Optional[List[CausalLink]] = None,
+    session_id: str | None = None,
+    causal_chain: List[CausalLink] | None = None,
 ) -> None:
     """Emit an agent.plan event with a list of plan step descriptions.
 

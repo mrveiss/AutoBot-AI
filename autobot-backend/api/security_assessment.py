@@ -9,8 +9,6 @@ RESTful API for managing security assessments, workflows, and findings.
 Issue: #260
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
@@ -581,8 +579,8 @@ async def add_finding(
 async def get_findings(
     assessment_id: str,
     admin_check: bool = Depends(check_admin_permission),
-    finding_type: Optional[str] = Query(None, description="Filter by type"),
-    severity: Optional[str] = Query(None, description="Filter by severity"),
+    finding_type: str | None = Query(None, description="Filter by type"),
+    severity: str | None = Query(None, description="Filter by severity"),
     manager: SecurityWorkflowManager = Depends(get_workflow_manager),
 ) -> JSONResponse:
     """
@@ -634,7 +632,7 @@ async def get_findings(
     )
 
 
-def _collect_host_vulnerabilities(assessment, severity: Optional[str]) -> list:
+def _collect_host_vulnerabilities(assessment, severity: str | None) -> list:
     """Helper for get_findings. Ref: #1088."""
     vulnerabilities = []
     for host in assessment.hosts:

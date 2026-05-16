@@ -21,7 +21,7 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import websockets
 
@@ -73,7 +73,7 @@ class VNCSessionData:
     depth: int
     xvfb_process: asyncio.subprocess.Process
     vnc_process: asyncio.subprocess.Process
-    novnc_process: Optional[asyncio.subprocess.Process] = None
+    novnc_process: asyncio.subprocess.Process | None = None
     created_at: float = field(default_factory=time.time)
     status: str = "active"
 
@@ -95,7 +95,7 @@ class VNCSessionData:
         }
 
 
-def _terminate_process_safely(process: Optional[subprocess.Popen[bytes]], process_key: str) -> bool:
+def _terminate_process_safely(process: subprocess.Popen[bytes] | None, process_key: str) -> bool:
     """
     Terminate a process safely with fallback to kill.
 
@@ -122,7 +122,7 @@ def _terminate_process_safely(process: Optional[subprocess.Popen[bytes]], proces
         return False
 
 
-async def _terminate_async_process_safely(process: Optional[ProcessType], process_key: str) -> bool:
+async def _terminate_async_process_safely(process: ProcessType | None, process_key: str) -> bool:
     """
     Terminate an async subprocess safely.
 
@@ -388,7 +388,7 @@ class VNCServerManager:
             novnc_process=novnc_process,
         )
 
-    def _find_websockify_command(self) -> Optional[str]:
+    def _find_websockify_command(self) -> str | None:
         """
         Find websockify executable path.
 
@@ -411,7 +411,7 @@ class VNCServerManager:
 
         return None
 
-    async def _start_novnc(self, vnc_port: int, novnc_port: int) -> Optional[ProcessType]:
+    async def _start_novnc(self, vnc_port: int, novnc_port: int) -> ProcessType | None:
         """
         Start NoVNC web proxy.
 
@@ -614,7 +614,7 @@ class VNCServerManager:
             logger.error("Error terminating session %s: %s", session_id, e)
             return False
 
-    def get_session_info(self, session_id: str) -> Optional[SessionDict]:
+    def get_session_info(self, session_id: str) -> SessionDict | None:
         """
         Get information about a VNC session.
 
@@ -711,7 +711,7 @@ class DesktopStreamingManager:
 
         logger.info("Desktop Streaming Manager initialized")
 
-    async def create_streaming_session(self, user_id: str, session_config: Optional[SessionDict] = None) -> SessionDict:
+    async def create_streaming_session(self, user_id: str, session_config: SessionDict | None = None) -> SessionDict:
         """
         Create a new desktop streaming session.
 
@@ -946,7 +946,7 @@ class DesktopStreamingManager:
         if text:
             await _run_xdotool_command(display, "type", text)
 
-    async def _get_session_screenshot(self, session_id: str) -> Optional[str]:
+    async def _get_session_screenshot(self, session_id: str) -> str | None:
         """
         Get screenshot from desktop session.
 

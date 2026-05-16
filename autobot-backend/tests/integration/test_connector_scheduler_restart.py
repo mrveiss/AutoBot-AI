@@ -17,7 +17,7 @@ Scenario covered:
 """
 
 import json
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Dict, Iterator
 from unittest.mock import patch
 
 import pytest
@@ -44,14 +44,14 @@ class SharedFakeRedis:
         self._store = store
 
     async def set(
-        self, key: str, value: Any, nx: bool = False, px: Optional[int] = None, ex: Optional[int] = None
-    ) -> Optional[bool]:
+        self, key: str, value: Any, nx: bool = False, px: int | None = None, ex: int | None = None
+    ) -> bool | None:
         if nx and key in self._store:
             return None
         self._store[key] = value if isinstance(value, str) else value
         return True
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         return self._store.get(key)
 
     async def exists(self, key: str) -> int:

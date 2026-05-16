@@ -12,7 +12,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import yaml
 from performance_benchmark import PerformanceBenchmark
@@ -161,7 +161,7 @@ class MonitoringConfig:
 class MonitorControl:
     """Centralized control for AutoBot performance monitoring system."""
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: str | None = None):
         self.config = self.load_config(config_path)
         self.setup_logging()
         self.logger = logging.getLogger(__name__)
@@ -178,7 +178,7 @@ class MonitorControl:
         self.optimization_task = None
         self.benchmark_task = None
 
-    def load_config(self, config_path: Optional[str] = None) -> MonitoringConfig:
+    def load_config(self, config_path: str | None = None) -> MonitoringConfig:
         """Load monitoring configuration from file."""
         if config_path is None:
             config_path = Path(__file__).parent / "monitoring_config.yaml"

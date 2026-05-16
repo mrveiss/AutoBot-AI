@@ -9,7 +9,7 @@ MySQL, and MongoDB. Supports connection testing, listing databases/tables,
 and executing read-only queries.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -48,9 +48,9 @@ router = APIRouter(
 def _create_integration_config(
     provider: str,
     host: str,
-    port: Optional[int],
-    username: Optional[str],
-    password: Optional[str],
+    port: int | None,
+    username: str | None,
+    password: str | None,
     database: str,
 ) -> IntegrationConfig:
     """

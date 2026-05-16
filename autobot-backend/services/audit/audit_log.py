@@ -23,7 +23,7 @@ import json
 import time
 import uuid
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.fire_and_forget import run_redis_write
 from autobot_shared.logging_manager import get_logger
@@ -57,11 +57,11 @@ class AuditAction(str, Enum):
 async def record_event(
     user_id: str,
     action: AuditAction,
-    resource_type: Optional[str] = None,
-    resource_id: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-    ip_address: Optional[str] = None,
-    session_id: Optional[str] = None,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    metadata: Dict[str, Any] | None = None,
+    ip_address: str | None = None,
+    session_id: str | None = None,
     outcome: str = "success",
 ) -> None:
     """Write a single audit record to Redis.
@@ -120,11 +120,11 @@ async def record_event(
 def audit_record(
     user_id: str,
     action: AuditAction,
-    resource_type: Optional[str] = None,
-    resource_id: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-    ip_address: Optional[str] = None,
-    session_id: Optional[str] = None,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    metadata: Dict[str, Any] | None = None,
+    ip_address: str | None = None,
+    session_id: str | None = None,
     outcome: str = "success",
 ) -> None:
     """Fire-and-forget wrapper around :func:`record_event`.
@@ -159,10 +159,10 @@ def audit_record(
 
 
 async def query_audit_log(
-    user_id: Optional[str] = None,
-    action: Optional[AuditAction] = None,
-    from_ts: Optional[float] = None,
-    to_ts: Optional[float] = None,
+    user_id: str | None = None,
+    action: AuditAction | None = None,
+    from_ts: float | None = None,
+    to_ts: float | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> List[Dict[str, Any]]:

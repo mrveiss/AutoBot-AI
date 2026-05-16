@@ -2,8 +2,6 @@
 
 import uuid
 from datetime import datetime
-from typing import Optional
-
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -19,7 +17,7 @@ class CellOut(BaseModel):
     state: str
     owner: str
     version: int
-    locked_by: Optional[str] = None
+    locked_by: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -60,7 +58,7 @@ class CellAutosaveItem(BaseModel):
 
 
 class CanvasPutRequest(BaseModel):
-    title: Optional[str] = None
+    title: str | None = None
     cells: list[CellAutosaveItem] = Field(default_factory=list)
 
 
@@ -90,7 +88,7 @@ class CellCreateRequest(BaseModel):
 
 class CellTransitionRequest(BaseModel):
     action: str  # accept | edit | discard
-    content: Optional[str] = None  # required when action=edit
+    content: str | None = None  # required when action=edit
 
 
 class CellTransitionResponse(BaseModel):

@@ -22,7 +22,7 @@ for conflict resolution and stats.
 Rate limiting: 50 req/min per user for ground-response, 100 req/min for verify-claim.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
@@ -223,7 +223,7 @@ async def list_conflicts(
         pattern="^(pending|resolved|inconclusive)$",
         description="Filter by resolution status",
     ),
-    severity: Optional[str] = Query(
+    severity: str | None = Query(
         None,
         pattern="^(low|medium|high)$",
         description="Filter by severity",

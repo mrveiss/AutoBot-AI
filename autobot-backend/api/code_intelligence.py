@@ -17,7 +17,7 @@ import asyncio
 import os
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -451,7 +451,7 @@ async def _validate_analysis_path(path: str) -> None:
         raise_invalid_input("path", f"not a directory: {path}")
 
 
-def _filter_results_by_severity(results: list, min_severity: Optional[str]) -> list:
+def _filter_results_by_severity(results: list, min_severity: str | None) -> list:
     """
     Filter analysis results by minimum severity level.
 
@@ -518,7 +518,7 @@ async def _validate_path_is_directory(path: str) -> None:
 
 def _filter_antipatterns_by_severity(
     anti_patterns: list,
-    min_severity: Optional[str],
+    min_severity: str | None,
 ) -> list:
     """
     Filter anti-patterns by minimum severity level.
@@ -546,7 +546,7 @@ def _filter_antipatterns_by_severity(
 async def _run_redis_analysis(
     optimizer: RedisOptimizer,
     path: str,
-    exclude_patterns: Optional[list],
+    exclude_patterns: list | None,
 ) -> list:
     """
     Execute Redis analysis on file or directory.
@@ -573,7 +573,7 @@ async def _run_redis_analysis(
 
 def _filter_redis_results_by_severity(
     results: list,
-    min_severity: Optional[str],
+    min_severity: str | None,
 ) -> list:
     """
     Filter Redis optimization results by minimum severity level.
@@ -1663,8 +1663,8 @@ from code_intelligence.code_evolution_miner import CodeEvolutionMiner
 )
 async def analyze_code_evolution(
     path: str = Query(..., description="Repository path to analyze"),
-    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
-    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    start_date: str | None = Query(None, description="Start date (ISO format)"),
+    end_date: str | None = Query(None, description="End date (ISO format)"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -1719,7 +1719,7 @@ async def analyze_code_evolution(
 )
 async def get_pattern_evolution(
     path: str = Query(..., description="Repository path to analyze"),
-    pattern_type: Optional[str] = Query(None, description="Filter by pattern type"),
+    pattern_type: str | None = Query(None, description="Filter by pattern type"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -1895,8 +1895,8 @@ def _build_evolution_summary(evolution_report: dict) -> dict:
 )
 async def get_full_evolution_report(
     path: str = Query(..., description="Repository path to analyze"),
-    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
-    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    start_date: str | None = Query(None, description="Start date (ISO format)"),
+    end_date: str | None = Query(None, description="End date (ISO format)"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """

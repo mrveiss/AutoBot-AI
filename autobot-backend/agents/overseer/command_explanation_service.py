@@ -13,7 +13,7 @@ Uses caching to reduce LLM calls for common commands.
 
 import hashlib
 import json
-from typing import Dict, Optional
+from typing import Dict
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
@@ -326,7 +326,7 @@ Rules:
 
 
 # Singleton instance
-_service_instance: Optional[CommandExplanationService] = None
+_service_instance: CommandExplanationService | None = None
 
 
 def get_command_explanation_service() -> CommandExplanationService:

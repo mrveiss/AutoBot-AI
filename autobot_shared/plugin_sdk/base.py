@@ -15,7 +15,7 @@ import logging
 import re
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -52,7 +52,7 @@ class RequiredEnvVar(BaseModel):
         min_length=1,
         description="One-line purpose of the variable",
     )
-    docs_url: Optional[str] = Field(
+    docs_url: str | None = Field(
         None,
         description="URL where the credential is obtained",
     )
@@ -133,7 +133,7 @@ class BasePlugin(ABC):
     Plugins must inherit from this class and implement lifecycle methods.
     """
 
-    def __init__(self, manifest: PluginManifest, config: Optional[Dict] = None):
+    def __init__(self, manifest: PluginManifest, config: Dict | None = None) -> None:
         """
         Initialize plugin.
 
@@ -213,7 +213,7 @@ class PluginRegistry:
     Provides centralized plugin management and lifecycle control.
     """
 
-    _instance: Optional["PluginRegistry"] = None
+    _instance: "PluginRegistry" | None = None
     _plugins: Dict[str, BasePlugin] = {}
 
     def __new__(cls):
@@ -250,7 +250,7 @@ class PluginRegistry:
             del self._plugins[name]
             logger.info("Unregistered plugin: %s", name)
 
-    def get_plugin(self, name: str) -> Optional[BasePlugin]:
+    def get_plugin(self, name: str) -> BasePlugin | None:
         """
         Get plugin by name.
 

@@ -18,7 +18,7 @@ import random
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Coroutine, Dict, Optional, TypeVar
+from typing import Any, Callable, Coroutine, Dict, TypeVar
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
@@ -83,7 +83,7 @@ class RetryMetrics:
     failed_requests: int = 0
     total_retry_attempts: int = 0
     total_wait_time_seconds: float = 0.0
-    last_rate_limit_at: Optional[float] = None
+    last_rate_limit_at: float | None = None
     rate_limits_hit: int = 0
 
 
@@ -253,7 +253,7 @@ class RateLimitHandler:
         provider: str,
         attempt: int,
         max_attempts: int,
-        retry_after: Optional[float],
+        retry_after: float | None,
     ) -> None:
         """Wait with backoff before retry. Issue #620."""
         delay = self._calculate_delay(attempt, retry_after)
@@ -276,7 +276,7 @@ class RateLimitHandler:
         provider: str,
         attempt: int,
         max_attempts: int,
-    ) -> Optional[Exception]:
+    ) -> Exception | None:
         """Handle error during attempt. Issue #620."""
         is_rate_limit, retry_after = self._is_rate_limit_error(error)
 

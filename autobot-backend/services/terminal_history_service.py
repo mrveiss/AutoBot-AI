@@ -19,7 +19,7 @@ class TerminalHistoryService(AsyncRedisClientMixin):
 
     _redis_database = "main"
 
-    def __init__(self, max_entries: int = 10000):
+    def __init__(self, max_entries: int = 10000) -> None:
         """Initialize history service.
 
         Args:

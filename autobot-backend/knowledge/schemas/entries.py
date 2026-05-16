@@ -12,7 +12,7 @@ Split from ``facts.py`` per Issue #5486.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -27,7 +27,7 @@ class KnowledgeEntry(BaseModel):
     content: str = ""
     category: str = ""
     type: str = "unknown"
-    created_at: Optional[str] = None
+    created_at: str | None = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -46,8 +46,8 @@ class KnowledgeEntriesResponse(BaseModel):
     count: int = 0
     has_more: bool = False
     # Degraded-path fields: populated on error / KB-uninit, absent on success.
-    message: Optional[str] = None
-    error: Optional[str] = None
+    message: str | None = None
+    error: str | None = None
 
 
 class FactByCategoryEntry(BaseModel):
@@ -75,9 +75,9 @@ class FactsByCategoryResponse(BaseModel):
 
     categories: Dict[str, List[FactByCategoryEntry]] = Field(default_factory=dict)
     total_facts: int = 0
-    category_filter: Optional[str] = None
+    category_filter: str | None = None
     # Error branch returns this + empty categories/total_facts.
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class FactByKeyResponse(BaseModel):

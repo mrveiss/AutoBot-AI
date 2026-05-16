@@ -13,7 +13,7 @@ communication with HMAC-SHA256 signatures.
 import asyncio
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Set, Union
 
 import yaml
 
@@ -151,7 +151,7 @@ class NPUWorkerClient:
         """
         self.npu_endpoint = npu_endpoint or get_service_url("npu-worker")
         self._use_auth = use_auth if use_auth is not None else USE_AUTHENTICATED_CLIENT
-        self._http_client: Optional[Union[HTTPClientManager, "ServiceHTTPClient"]] = None
+        self._http_client: HTTPClientManager | "ServiceHTTPClient" | None = None
         self._auth_client_initialized = False
         self.available = False
         self._check_availability_task = None
@@ -337,7 +337,7 @@ class NPUWorkerPool:
         self.workers: Dict[str, WorkerState] = {}
         self._worker_configs: Dict[str, Dict] = {}
         self._lock = asyncio.Lock()
-        self._health_monitor_task: Optional[asyncio.Task] = None
+        self._health_monitor_task: asyncio.Task | None = None
         self._running = False
 
         # Load initial configuration
@@ -369,7 +369,7 @@ class NPUWorkerPool:
 
         logger.info("NPUWorkerPool initialized with %d workers", len(self.workers))
 
-    async def _select_worker(self, excluded_workers: Set[str]) -> Optional[WorkerState]:
+    async def _select_worker(self, excluded_workers: Set[str]) -> WorkerState | None:
         """
         Select best available worker using priority-first + least-connections.
 
@@ -595,7 +595,7 @@ class NPUWorkerPool:
         data: Dict[str, Any],
         attempt: int,
         excluded_workers: Set[str],
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Run a single task attempt on one worker, updating circuit state. Ref: #1088.
 

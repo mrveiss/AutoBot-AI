@@ -9,7 +9,7 @@ Provides endpoints for testing connections, sending messages, and
 listing channels/guilds.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -110,8 +110,8 @@ async def list_providers() -> List[CommProviderInfo]:
 async def list_channels(
     provider: str,
     token: str,
-    guild_id: Optional[str] = None,
-    team_id: Optional[str] = None,
+    guild_id: str | None = None,
+    team_id: str | None = None,
 ) -> Dict[str, Any]:
     """List channels/teams for the specified provider."""
     provider_lower = provider.lower()

@@ -105,7 +105,7 @@ class ConsoleLogCleaner:
 
     def _resolve_console_log_match(
         self, content: str, line: str, line_start_pos: int, match: "re.Match"
-    ) -> Optional[Tuple[int, int, str]]:
+    ) -> Tuple[int, int, str] | None:
         """Resolve a single console.log match to its full (start, end, text) span. Issue #1183."""
         start_pos = line_start_pos + match.start()
         paren_count = 1

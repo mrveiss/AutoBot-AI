@@ -3,7 +3,7 @@
 # Author: mrveiss
 
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
@@ -369,8 +369,8 @@ async def get_session_messages(
 async def list_sessions(
     request: Request,
     current_user: dict = Depends(get_current_user),
-    scope: Optional[str] = None,
-    team_id: Optional[str] = None,
+    scope: str | None = None,
+    team_id: str | None = None,
 ):
     """List chat sessions with optional org/team/shared scope filtering (#684, #689).
 
@@ -460,7 +460,7 @@ async def _list_scoped_sessions(
     request_id: str,
     chat_history_manager,
     scope: str,
-    team_id: Optional[str],
+    team_id: str | None,
 ):
     """List sessions scoped to org or team.
 
@@ -624,9 +624,9 @@ async def _list_shared_sessions(
 
 
 async def _register_session_ownership(
-    user_data: Optional[dict],
+    user_data: dict | None,
     session_id: str,
-    team_id: Optional[str],
+    team_id: str | None,
 ) -> None:
     """Register session ownership with org/team indices in Redis.
 
@@ -653,7 +653,7 @@ async def _track_session_in_memory_graph(
     request: Request,
     session_id: str,
     session_title: str,
-    user_data: Optional[dict],
+    user_data: dict | None,
     request_id: str,
 ) -> None:
     """
@@ -669,7 +669,7 @@ async def _track_session_in_memory_graph(
         user_data: Authenticated user data
         request_id: Request tracking ID
     """
-    memory_graph: Optional[AutoBotMemoryGraph] = getattr(request.app.state, "memory_graph", None)
+    memory_graph: AutoBotMemoryGraph | None = getattr(request.app.state, "memory_graph", None)
     if not memory_graph or not user_data:
         return
 
@@ -865,7 +865,7 @@ async def update_session(
 # =============================================================================
 
 
-def _validate_delete_session_params(session_id: str, file_action: str, file_options: Optional[str]) -> dict:
+def _validate_delete_session_params(session_id: str, file_action: str, file_options: str | None) -> dict:
     """Validate and parse delete_session parameters.
 
     Issue #281: Extracted from delete_session for better organization.
@@ -1053,7 +1053,7 @@ def _process_kb_deletion_result(result: dict, kb_cleanup_result: dict) -> None:
         kb_cleanup_result["cleanup_error"] = f"{len(result['errors'])} errors during cleanup"
 
 
-def _log_kb_cleanup_result(session_id: str, kb_cleanup_result: dict, errors: Optional[List] = None) -> None:
+def _log_kb_cleanup_result(session_id: str, kb_cleanup_result: dict, errors: List | None = None) -> None:
     """
     Log KB cleanup results appropriately based on outcome.
 
@@ -1286,7 +1286,7 @@ async def delete_session(
     request: Request,
     ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership
     file_action: str = "delete",
-    file_options: Optional[str] = None,
+    file_options: str | None = None,
 ):
     """
     Delete a chat session with comprehensive cleanup.
@@ -1467,7 +1467,7 @@ async def _clear_and_restore_session(chat_manager, session_id: str, messages_to_
     operation="reset_chat",
     error_code_prefix="CHAT_SESSIONS",
 )
-async def reset_chat(request: Request, reset_request: Optional[ChatResetRequest] = None):
+async def reset_chat(request: Request, reset_request: ChatResetRequest | None = None):
     """
     Reset the current chat session.
 
@@ -1522,7 +1522,7 @@ async def reset_chat(request: Request, reset_request: Optional[ChatResetRequest]
 # ====================================================================
 
 
-def _get_memory_graph_or_none(request: Request) -> Optional[AutoBotMemoryGraph]:
+def _get_memory_graph_or_none(request: Request) -> AutoBotMemoryGraph | None:
     """
     Get memory graph from app state or None if unavailable.
 
@@ -1795,8 +1795,8 @@ async def get_session_activities(
     session_id: str,
     request: Request,
     ownership: Dict = Depends(validate_session_ownership),
-    activity_type: Optional[str] = None,
-    user_id: Optional[str] = None,
+    activity_type: str | None = None,
+    user_id: str | None = None,
     limit: int = 100,
 ):
     """
@@ -1820,7 +1820,7 @@ async def get_session_activities(
         raise ValidationError("Invalid session ID format")
 
     # Get memory graph from app state
-    memory_graph: Optional[AutoBotMemoryGraph] = getattr(request.app.state, "memory_graph", None)
+    memory_graph: AutoBotMemoryGraph | None = getattr(request.app.state, "memory_graph", None)
 
     if not memory_graph:
         return create_chat_response(
@@ -1842,7 +1842,7 @@ async def _share_session_facts(
     session_id: str,
     share_with: list[str],
     shared_by: str,
-    knowledge_facts: Optional[list[str]],
+    knowledge_facts: list[str] | None,
 ) -> Dict:
     """Share KB facts from a session with other users.
 

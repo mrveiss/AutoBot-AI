@@ -13,7 +13,7 @@ from prometheus_client import CollectorRegistry
 class BaseMetricsRecorder:
     """Base class for metrics recorders."""
 
-    def __init__(self, registry: CollectorRegistry):
+    def __init__(self, registry: CollectorRegistry) -> None:
         """
         Initialize the metrics recorder.
 

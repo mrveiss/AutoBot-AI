@@ -18,7 +18,7 @@ Issue #1964: Layer-aligned KV cache management for sequential layer processing.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
@@ -135,8 +135,8 @@ class _LayerEntry:
         filled_len: Number of valid positions written into the cache.
     """
 
-    k: Optional["torch.Tensor"] = None  # noqa: F821
-    v: Optional["torch.Tensor"] = None  # noqa: F821
+    k: "torch.Tensor" | None = None  # noqa: F821
+    v: "torch.Tensor" | None = None  # noqa: F821
     filled_len: int = 0
 
 
@@ -178,7 +178,7 @@ class LayerKVCache:
     # Core operations
     # ------------------------------------------------------------------
 
-    def get(self, layer_idx: int) -> Optional[Tuple["torch.Tensor", "torch.Tensor"]]:
+    def get(self, layer_idx: int) -> Tuple["torch.Tensor", "torch.Tensor"] | None:
         """Return the cached (k, v) tensors for a layer, or None.
 
         Only the filled portion is returned — trailing padding is not exposed.

@@ -12,8 +12,6 @@ Features:
 - Audit logging for all operations
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.schemas_system import (
@@ -34,7 +32,7 @@ router = APIRouter(tags=["Redis Service Management"])
 PRIVILEGED_ROLES = {"admin", "operator"}
 
 # Global service manager instance (singleton)
-_service_manager: Optional[RedisServiceManager] = None
+_service_manager: RedisServiceManager | None = None
 _service_manager_started: bool = False
 
 
@@ -275,7 +273,7 @@ async def get_redis_status(manager: RedisServiceManager = Depends(get_service_ma
 
 @register_health_probe("redis_service")
 async def probe_redis_service(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for Redis service-manager health."""
     try:

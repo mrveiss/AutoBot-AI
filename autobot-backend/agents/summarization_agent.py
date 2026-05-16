@@ -11,7 +11,7 @@ and structured summary generation.
 """
 
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import (
@@ -94,7 +94,7 @@ class SummarizationAgent(StandardizedAgent):
         )
         return await self.process_query(prompt)
 
-    async def process_query(self, request_text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def process_query(self, request_text: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Process a summarization query using the vLLM-optimised API (Issue #3389)."""
         try:
             logger.info("Summarization Agent processing: %s...", request_text[:50])

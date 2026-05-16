@@ -21,8 +21,6 @@ import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
-
 import aiohttp
 from aiohttp import web
 
@@ -109,8 +107,8 @@ class SLMAgent:
         admin_url: str = DEFAULT_ADMIN_URL,
         heartbeat_interval: int = DEFAULT_HEARTBEAT_INTERVAL,
         buffer_db: str = DEFAULT_BUFFER_DB,
-        services: Optional[list] = None,
-        node_id: Optional[str] = None,
+        services: list | None = None,
+        node_id: str | None = None,
     ):
         """Initialize agent."""
         self.admin_url = admin_url.rstrip("/")
@@ -122,7 +120,7 @@ class SLMAgent:
         # Issue #741: Initialize version manager
         self.version_manager = get_agent_version()
         self._pending_update = False
-        self._latest_version: Optional[str] = None
+        self._latest_version: str | None = None
 
         self.collector = HealthCollector(services=services or [])
         self._init_buffer_db()
@@ -231,7 +229,7 @@ class SLMAgent:
         """
         return [{"port": p.port, "process": p.process, "pid": p.pid} for p in get_listening_ports()]
 
-    def _build_heartbeat_payload(self, health: dict, os_info: str, code_version: Optional[str]) -> dict:
+    def _build_heartbeat_payload(self, health: dict, os_info: str, code_version: str | None) -> dict:
         """
         Build the complete heartbeat payload.
 

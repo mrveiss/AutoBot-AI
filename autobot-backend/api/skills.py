@@ -10,7 +10,7 @@ configure, execute, and monitor skills.
 Includes metrics and health tracking (Issue #4339).
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
@@ -50,7 +50,7 @@ logger = get_logger(__name__)
 logger = get_logger(__name__)
 router = APIRouter()
 
-_manager: Optional[SkillManager] = None
+_manager: SkillManager | None = None
 
 
 def _get_manager() -> SkillManager:
@@ -74,8 +74,8 @@ def _get_manager() -> SkillManager:
     error_code_prefix="SKILLS",
 )
 async def list_skills(
-    category: Optional[str] = Query(None, description="Filter by category"),
-    search: Optional[str] = Query(None, description="Search query"),
+    category: str | None = Query(None, description="Filter by category"),
+    search: str | None = Query(None, description="Search query"),
     enabled_only: bool = Query(False, description="Only show enabled skills"),
 ) -> Dict[str, Any]:
     """List all registered skills with optional filtering."""
@@ -114,7 +114,7 @@ async def list_categories() -> Dict[str, Any]:
 
 @register_health_probe("skills")
 async def probe_skills(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for skills module."""
     try:
@@ -166,7 +166,7 @@ async def initialize_skills() -> Dict[str, Any]:
     error_code_prefix="SKILLS",
 )
 async def get_skill_traces(
-    skill: Optional[str] = Query(None, description="Filter by skill name"),
+    skill: str | None = Query(None, description="Filter by skill name"),
     limit: int = Query(50, ge=1, le=500, description="Maximum number of traces to return"),
 ) -> Dict[str, Any]:
     """Return recent MCP tool-call spans from Redis (Issue #4413).
@@ -453,7 +453,7 @@ async def get_skill_metrics(
 async def submit_skill_feedback(
     name: str,
     body: SkillFeedbackRequest,
-    action: Optional[str] = Query(None, description="Action that was invoked"),
+    action: str | None = Query(None, description="Action that was invoked"),
 ) -> Dict[str, Any]:
     """Submit user feedback for a skill (Issue #4339)."""
     try:

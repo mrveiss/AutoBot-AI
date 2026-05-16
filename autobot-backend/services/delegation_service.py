@@ -8,7 +8,7 @@ Assigns tasks from managers to direct reports, escalates stuck tasks
 up the chain of command, and provides activity summaries.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +32,7 @@ class DelegationService:
         delegator_id: str,
         assignee_id: str,
         task_description: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ) -> TaskDelegation:
         """
         Assign a task from delegator to assignee (#1753).
@@ -104,7 +104,7 @@ class DelegationService:
         self,
         delegation_id: str,
         new_status: str,
-        result: Optional[Dict[str, Any]] = None,
+        result: Dict[str, Any] | None = None,
     ) -> TaskDelegation:
         """Update delegation status and optional result (#1753)."""
         delegation = await self._get_or_raise(delegation_id)
@@ -115,7 +115,7 @@ class DelegationService:
         await self.session.refresh(delegation)
         return delegation
 
-    async def get_delegation(self, delegation_id: str) -> Optional[TaskDelegation]:
+    async def get_delegation(self, delegation_id: str) -> TaskDelegation | None:
         """Fetch a single delegation by ID (#1753)."""
         import uuid
 
@@ -151,7 +151,7 @@ class DelegationService:
         self,
         agent_id: str,
         role: str = "delegator",
-        status_filter: Optional[str] = None,
+        status_filter: str | None = None,
         limit: int = 50,
     ) -> List[TaskDelegation]:
         """List delegations where agent_id is delegator or assignee (#1753)."""

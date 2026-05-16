@@ -7,7 +7,7 @@ Development Speedup API
 Advanced code analysis endpoints for development acceleration using NPU and Redis.
 """
 
-from typing import Any, Awaitable, Callable, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -208,7 +208,7 @@ async def find_duplicates_endpoint(
 )
 async def analyze_patterns_endpoint(
     path: str = Query(..., description="Root path to analyze"),
-    pattern_type: Optional[str] = Query(None, description="Specific pattern type to search for"),
+    pattern_type: str | None = Query(None, description="Specific pattern type to search for"),
 ):
     """
     Analyze code patterns and anti-patterns.
@@ -371,7 +371,7 @@ async def find_refactoring_opportunities_endpoint(
 )
 async def analyze_quality_endpoint(
     path: str = Query(..., description="Root path to analyze"),
-    severity: Optional[str] = Query(None, description="Filter by severity: low, medium, high, critical"),
+    severity: str | None = Query(None, description="Filter by severity: low, medium, high, critical"),
 ):
     """
     Analyze code quality and consistency.

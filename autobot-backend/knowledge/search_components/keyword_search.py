@@ -10,7 +10,7 @@ Contains keyword-based search functionality using Redis.
 """
 
 import json
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 
@@ -39,7 +39,7 @@ class KeywordSearcher:
     def __init__(self, redis_client=None):
         """Initialize keyword searcher with Redis client."""
         self.redis_client = redis_client
-        self._bm25: Optional[BM25Scorer] = None
+        self._bm25: BM25Scorer | None = None
 
     # ------------------------------------------------------------------
     # Corpus statistics
@@ -158,7 +158,7 @@ class KeywordSearcher:
         self,
         keys: list,
         query_terms: Set[str],
-        category: Optional[str],
+        category: str | None,
         bm25: BM25Scorer,
     ) -> List[Dict[str, Any]]:
         """
@@ -191,7 +191,7 @@ class KeywordSearcher:
     # Search entry point
     # ------------------------------------------------------------------
 
-    async def search(self, query: str, limit: int, category: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def search(self, query: str, limit: int, category: str | None = None) -> List[Dict[str, Any]]:
         """Perform BM25 keyword search using Redis (Issue #1720 upgrade)."""
         try:
             if not self.redis_client:

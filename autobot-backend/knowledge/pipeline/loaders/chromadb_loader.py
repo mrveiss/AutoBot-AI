@@ -7,7 +7,7 @@ ChromaDB Loader - Load chunks and summaries with embeddings to ChromaDB.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-from typing import Any, List, Optional
+from typing import Any, List
 
 from autobot_shared.logging_manager import get_logger
 from knowledge.backends import get_async_default_client
@@ -43,7 +43,7 @@ class ChromaDBLoader(BaseLoader):
         self.summary_collection_name = summary_collection_name
         self.batch_size = batch_size
         self.load_summaries = load_summaries
-        self.client: Optional[Any] = None
+        self.client: Any | None = None
 
     async def load(self, context: PipelineContext) -> None:
         """

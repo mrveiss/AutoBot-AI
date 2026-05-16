@@ -9,7 +9,7 @@ hook invocations across all registered extensions.
 """
 
 import threading
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Type
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.plugin_sdk.unified_registry import get_unified_registry
@@ -108,7 +108,7 @@ class ExtensionManager:
         logger.info("[Issue #658] Unregistered extension '%s'", name)
         return True
 
-    def get_extension(self, name: str) -> Optional[Extension]:
+    def get_extension(self, name: str) -> Extension | None:
         """
         Get an extension by name.
 
@@ -224,7 +224,7 @@ class ExtensionManager:
         self,
         hook: HookPoint,
         context: HookContext,
-    ) -> Optional[Any]:
+    ) -> Any | None:
         """
         Invoke extensions until one returns a truthy value.
 
@@ -377,7 +377,7 @@ class ExtensionManager:
 
 
 # Singleton instance for global access (Issue #662: thread-safe)
-_global_manager: Optional[ExtensionManager] = None
+_global_manager: ExtensionManager | None = None
 _global_manager_lock = threading.Lock()
 
 

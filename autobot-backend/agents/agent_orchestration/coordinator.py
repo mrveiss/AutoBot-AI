@@ -13,7 +13,7 @@ legacy agent routing and distributed agent communication protocols.
 
 import logging
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -225,10 +225,10 @@ class DistributedAgentCoordinator:
     async def _try_distributed_processing(
         self,
         request: str,
-        context: Optional[Dict[str, Any]],
-        chat_history: Optional[List[Dict[str, Any]]],
-        preferred_agents: Optional[List[str]],
-    ) -> Optional[Dict[str, Any]]:
+        context: Dict[str, Any] | None,
+        chat_history: List[Dict[str, Any]] | None,
+        preferred_agents: List[str] | None,
+    ) -> Dict[str, Any] | None:
         """
         Attempt to process request with distributed agents.
 
@@ -292,9 +292,9 @@ class DistributedAgentCoordinator:
     async def process_request(
         self,
         request: str,
-        context: Optional[Dict[str, Any]] = None,
-        chat_history: Optional[List[Dict[str, Any]]] = None,
-        preferred_agents: Optional[List[str]] = None,
+        context: Dict[str, Any] | None = None,
+        chat_history: List[Dict[str, Any]] | None = None,
+        preferred_agents: List[str] | None = None,
     ) -> Dict[str, Any]:
         """
         Enhanced request processing supporting both legacy and distributed agents.

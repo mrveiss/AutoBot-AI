@@ -13,7 +13,7 @@ Extracted from code_fingerprinting.py as part of Issue #381 refactoring.
 
 import ast
 import hashlib
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 # Module-level constant for function definition types (Issue #380)
 _FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
@@ -191,7 +191,7 @@ class SemanticHasher:
                     operations.append(op_str)
         return operations
 
-    def _get_operation_string(self, child: ast.AST) -> Optional[str | List[str]]:
+    def _get_operation_string(self, child: ast.AST) -> str | List[str] | None:
         """
         Get operation string for an AST node.
 
@@ -232,7 +232,7 @@ class SemanticHasher:
                 calls.append(call_name)
         return calls
 
-    def _get_call_name(self, call_node: ast.Call) -> Optional[str]:
+    def _get_call_name(self, call_node: ast.Call) -> str | None:
         """
         Extract the function name from a Call node.
 

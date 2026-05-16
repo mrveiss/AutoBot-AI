@@ -12,7 +12,7 @@ import json
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiofiles
 import yaml
@@ -140,7 +140,7 @@ class SystemKnowledgeManager:
 
         return file_states
 
-    async def _load_file_state_cache(self) -> Optional[Dict[str, str]]:
+    async def _load_file_state_cache(self) -> Dict[str, str] | None:
         """Load cached file states from Redis"""
         try:
             from autobot_shared.redis_client import get_redis_client

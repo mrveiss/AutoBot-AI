@@ -11,7 +11,7 @@ Extracted from code_fingerprinting.py as part of Issue #381 refactoring.
 import ast
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 # =============================================================================
 # Enums and Constants
@@ -59,7 +59,7 @@ class CodeFragment:
     start_line: int
     end_line: int
     source_code: str
-    ast_node: Optional[ast.AST] = None
+    ast_node: ast.AST | None = None
     fragment_type: str = "unknown"  # function, class, block, etc.
     entity_name: str = ""
 

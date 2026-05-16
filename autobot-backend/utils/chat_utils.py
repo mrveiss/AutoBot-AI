@@ -27,7 +27,7 @@ Created: 2025-01-14
 """
 
 import re
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 from fastapi import Request
@@ -184,7 +184,7 @@ def validate_message_content(content: str) -> bool:
 def create_chat_response(
     data: Any,
     message: str = "Success",
-    request_id: Optional[str] = None,
+    request_id: str | None = None,
     status_code: int = 200,
 ) -> JSONResponse:
     """
@@ -338,9 +338,9 @@ def log_chat_error(error: Exception, context: str = "chat", request_id: str = "u
 
 def log_chat_event(
     event_type: str,
-    session_id: Optional[str] = None,
-    details: Optional[Metadata] = None,
-    request_id: Optional[str] = None,
+    session_id: str | None = None,
+    details: Metadata | None = None,
+    request_id: str | None = None,
 ) -> None:
     """
     Log chat-related events for monitoring and debugging.

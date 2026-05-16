@@ -22,8 +22,6 @@ Issue #6534); any change there must be reflected here.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional
-
 import pytest
 from fastapi import FastAPI, Query
 from fastapi.testclient import TestClient
@@ -67,7 +65,7 @@ def _make_app() -> FastAPI:
     async def list_catalog(
         category: CatalogCategory = Query(default=CatalogCategory.ALL),
         sort_by: CatalogSort = Query(default=CatalogSort.DOWNLOADS),
-        search: Optional[str] = Query(default=None),
+        search: str | None = Query(default=None),
     ) -> dict:
         return {"category": category.value, "sort_by": sort_by.value}
 

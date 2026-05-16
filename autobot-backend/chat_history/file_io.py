@@ -20,8 +20,6 @@ import json
 import os
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional
-
 import aiofiles
 
 from autobot_shared.logging_manager import get_logger
@@ -161,7 +159,7 @@ class FileIOMixin:
             except Exception as e:
                 logger.error("Error saving chat history to Redis: %s", str(e))
 
-    async def export_session(self, session_id: str, format: str = "json") -> Optional[str]:
+    async def export_session(self, session_id: str, format: str = "json") -> str | None:
         """
         Export a session in the specified format.
 

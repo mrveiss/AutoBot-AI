@@ -18,7 +18,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
@@ -83,7 +83,7 @@ class DebtItem:
     category: DebtCategory
     severity: DebtSeverity
     file_path: str
-    line_number: Optional[int]
+    line_number: int | None
     description: str
     estimated_hours: float
     fix_complexity: str  # easy, medium, hard
@@ -203,7 +203,7 @@ def _map_problem_to_category(problem_type: str) -> DebtCategory:
     return mapping.get(problem_type.lower(), DebtCategory.ANTI_PATTERNS)
 
 
-def _get_fix_complexity(pattern_type: Optional[str]) -> str:
+def _get_fix_complexity(pattern_type: str | None) -> str:
     """Estimate fix complexity for a pattern type"""
     hard_patterns = {"god_class", "spaghetti_code", "circular_dependency"}
     medium_patterns = {"long_method", "feature_envy", "duplicate_code"}
@@ -445,7 +445,7 @@ def _store_debt_result(debt_result: Dict[str, Any]) -> None:
         logger.warning("Failed to store debt calculation: %s", e)
 
 
-def _get_latest_debt_data() -> Optional[Dict[str, Any]]:
+def _get_latest_debt_data() -> Dict[str, Any] | None:
     """Get latest debt data from Redis (Issue #315 - extracted helper)."""
     redis_client = get_debt_redis()
     if not redis_client:

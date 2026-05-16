@@ -13,7 +13,7 @@ import enum
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 # Forward reference — PromptVariant is defined in prompt_optimizer to avoid
 # circular imports; callers import VariantArchiveEntry directly from models.
@@ -31,7 +31,7 @@ class VariantArchiveEntry:
     variant_id: str
     variant: Any  # PromptVariant — typed as Any to avoid circular import
     score: float
-    parent_id: Optional[str]
+    parent_id: str | None
     generation: int
     valid_parent: bool = True
     created_at: float = field(default_factory=time.time)
@@ -67,8 +67,8 @@ class ExperimentTask:
     """
 
     prompt: str
-    required_temperature: Optional[float] = None
-    system_prompt: Optional[str] = None
+    required_temperature: float | None = None
+    system_prompt: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -141,14 +141,14 @@ class HyperParams:
 class ExperimentResult:
     """Parsed metrics from a completed training run."""
 
-    val_bpb: Optional[float] = None
-    train_loss: Optional[float] = None
-    val_loss: Optional[float] = None
+    val_bpb: float | None = None
+    train_loss: float | None = None
+    val_loss: float | None = None
     steps_completed: int = 0
-    tokens_per_second: Optional[float] = None
+    tokens_per_second: float | None = None
     wall_time_seconds: float = 0.0
     raw_output: str = ""
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     @property
     def success(self) -> bool:
@@ -187,24 +187,24 @@ class Experiment:
     description: str = ""
     code_diff: str = ""
     hyperparams: HyperParams = field(default_factory=HyperParams)
-    result: Optional[ExperimentResult] = None
+    result: ExperimentResult | None = None
     state: ExperimentState = ExperimentState.PENDING
-    baseline_val_bpb: Optional[float] = None
-    parent_experiment_id: Optional[str] = None
+    baseline_val_bpb: float | None = None
+    parent_experiment_id: str | None = None
     tags: List[str] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
-    started_at: Optional[float] = None
-    completed_at: Optional[float] = None
+    started_at: float | None = None
+    completed_at: float | None = None
 
     @property
-    def improvement(self) -> Optional[float]:
+    def improvement(self) -> float | None:
         """Return bpb improvement over baseline (positive = better)."""
         if self.result and self.result.val_bpb is not None and self.baseline_val_bpb is not None:
             return self.baseline_val_bpb - self.result.val_bpb
         return None
 
     @property
-    def improvement_pct(self) -> Optional[float]:
+    def improvement_pct(self) -> float | None:
         """Return percentage improvement over baseline."""
         if self.improvement is not None and self.baseline_val_bpb:
             return (self.improvement / self.baseline_val_bpb) * 100
@@ -256,8 +256,8 @@ class ScorerResult:
     filter_prompts() can distinguish error sentinels from genuine scores.
     """
 
-    score: Optional[float]
-    error: Optional[str] = None
+    score: float | None
+    error: str | None = None
 
     @property
     def is_error(self) -> bool:
@@ -281,8 +281,8 @@ class ExperimentStats:
     failed: int = 0
     kept: int = 0
     discarded: int = 0
-    best_val_bpb: Optional[float] = None
-    baseline_val_bpb: Optional[float] = None
+    best_val_bpb: float | None = None
+    baseline_val_bpb: float | None = None
     avg_wall_time: float = 0.0
     total_wall_time: float = 0.0
     improvement_trend: List[float] = field(default_factory=list)

@@ -12,7 +12,7 @@ duplication.
 import asyncio
 import time
 import uuid
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from tools.code_interpreter import execute_code
 
@@ -40,8 +40,8 @@ class ToolRegistry:
 
     def __init__(
         self,
-        worker_node: Optional["WorkerNode"] = None,
-        knowledge_base: Optional["KnowledgeBase"] = None,
+        worker_node: "WorkerNode" | None = None,
+        knowledge_base: "KnowledgeBase" | None = None,
     ):
         """
         Initialize the tool registry with required dependencies.
@@ -143,7 +143,7 @@ class ToolRegistry:
             "status": result.get("status", "success"),
         }
 
-    async def get_process_info(self, process_name: Optional[str] = None, pid: Optional[str] = None) -> Dict[str, Any]:
+    async def get_process_info(self, process_name: str | None = None, pid: str | None = None) -> Dict[str, Any]:
         """Get process information."""
         task = self._create_base_task("system_get_process_info")
         if process_name:
@@ -349,7 +349,7 @@ class ToolRegistry:
             }
 
     async def add_file_to_knowledge_base(
-        self, file_path: str, file_type: str, metadata: Optional[Dict[str, Any]] = None
+        self, file_path: str, file_type: str, metadata: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
         """Add a file to the knowledge base."""
         if not self.knowledge_base:
@@ -385,7 +385,7 @@ class ToolRegistry:
                 "status": "error",
             }
 
-    async def store_fact(self, content: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def store_fact(self, content: str, metadata: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Store a fact in the knowledge base."""
         if not self.knowledge_base:
             return {
@@ -412,7 +412,7 @@ class ToolRegistry:
                 "status": "error",
             }
 
-    async def get_fact(self, fact_id: Optional[int] = None, query: Optional[str] = None) -> Dict[str, Any]:
+    async def get_fact(self, fact_id: int | None = None, query: str | None = None) -> Dict[str, Any]:
         """Get facts from the knowledge base."""
         if not self.knowledge_base:
             return {
@@ -612,7 +612,7 @@ class ToolRegistry:
         }
         return dispatch.get(tool_name)
 
-    async def _try_sdk_dispatch(self, tool_name: str, tool_args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def _try_sdk_dispatch(self, tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any] | None:
         """Attempt to dispatch via ToolSDKRegistry.
 
         Returns None if the tool is not registered in the SDK registry so the

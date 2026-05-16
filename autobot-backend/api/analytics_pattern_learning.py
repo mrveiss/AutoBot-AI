@@ -22,7 +22,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
@@ -101,9 +101,9 @@ class FeedbackRecord:
     feedback_type: FeedbackType
     file_path: str
     line_number: int
-    code_snippet: Optional[str]
-    developer_comment: Optional[str]
-    suggested_fix: Optional[str]
+    code_snippet: str | None
+    developer_comment: str | None
+    suggested_fix: str | None
     timestamp: datetime
     weight: float = 1.0
 
@@ -518,7 +518,7 @@ class PatternLearningEngine:
 
         return new_feedback_count >= 10
 
-    async def get_confidence_scores(self, pattern_ids: Optional[List[str]] = None) -> List[ConfidenceScore]:
+    async def get_confidence_scores(self, pattern_ids: List[str] | None = None) -> List[ConfidenceScore]:
         """Get confidence scores for patterns."""
         await self.initialize()
 
@@ -843,7 +843,7 @@ class PatternLearningEngine:
 
         return analysis
 
-    async def _apply_pattern_update(self, pattern_id: str, analysis: Dict[str, Any]) -> Optional[PatternUpdate]:
+    async def _apply_pattern_update(self, pattern_id: str, analysis: Dict[str, Any]) -> PatternUpdate | None:
         """Apply an update to a pattern based on learning analysis."""
         if not analysis.get("needs_update"):
             return None
@@ -880,7 +880,7 @@ class PatternLearningEngine:
 # Global Instance
 # =============================================================================
 
-_learning_engine: Optional[PatternLearningEngine] = None
+_learning_engine: PatternLearningEngine | None = None
 _learning_engine_lock = asyncio.Lock()
 
 
@@ -925,7 +925,7 @@ async def submit_pattern_feedback(feedback: PatternFeedback) -> Dict[str, Any]:
     error_code_prefix="ANALYTICS_PATTERN_LEARNING",
 )
 async def get_pattern_confidence(
-    pattern_ids: Optional[str] = Query(None, description="Comma-separated pattern IDs"),
+    pattern_ids: str | None = Query(None, description="Comma-separated pattern IDs"),
 ) -> Dict[str, Any]:
     """Get confidence scores for patterns."""
     engine = await get_learning_engine()
@@ -1038,7 +1038,7 @@ async def run_learning_cycle() -> Dict[str, Any]:
 
 @register_health_probe("analytics_pattern_learning")
 async def probe_analytics_pattern_learning(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for the pattern-learning analytics module.
 

@@ -32,7 +32,7 @@ import json
 import logging
 import resource
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
@@ -99,7 +99,7 @@ async def _invoke_tool(bridge: Any, tool_name: str, arguments: Dict[str, Any]) -
     raise RuntimeError(f"tool {tool_name} not found on bridge {bridge.__name__}")
 
 
-async def _validate_run_jwt_param(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def _validate_run_jwt_param(params: Dict[str, Any]) -> Dict[str, Any] | None:
     """Validate the ``run_jwt`` field in RPC params, returning claims or None.
 
     Returns ``None`` when JWT enforcement is disabled (``MCP_RUN_JWT_ENFORCE``

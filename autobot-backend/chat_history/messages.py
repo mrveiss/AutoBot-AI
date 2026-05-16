@@ -17,7 +17,7 @@ SKIP_WEBSOCKET_PERSISTENCE_TYPES in backend/type_defs/common.py
 
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -43,9 +43,9 @@ class MessagesMixin:
         text: str,
         message_type: str,
         raw_data: Any,
-        tool_markers: Optional[List[Dict[str, Any]]],
-        author_id: Optional[str] = None,
-        sources: Optional[List[Dict[str, Any]]] = None,
+        tool_markers: List[Dict[str, Any]] | None,
+        author_id: str | None = None,
+        sources: List[Dict[str, Any]] | None = None,
     ) -> Dict[str, Any]:
         """
         Build a message dictionary with standard fields.
@@ -147,9 +147,9 @@ class MessagesMixin:
         text: str,
         message_type: str = "default",
         raw_data: Any = None,
-        session_id: Optional[str] = None,
-        tool_markers: Optional[List[Dict[str, Any]]] = None,
-        author_id: Optional[str] = None,
+        session_id: str | None = None,
+        tool_markers: List[Dict[str, Any]] | None = None,
+        author_id: str | None = None,
     ):
         """
         Adds a new message to the history and saves it to file.
@@ -189,17 +189,17 @@ class MessagesMixin:
     async def get_session_messages(
         self,
         session_id: str,
-        limit: Optional[int] = None,
-        model_name: Optional[str] = None,
+        limit: int | None = None,
+        model_name: str | None = None,
     ) -> List[Dict[str, Any]]:
         """
         Gets messages for a specific session with model-aware limits.
 
         Args:
             session_id (str): The session identifier.
-            limit (Optional[int]): Maximum number of messages to return.
+            limit (int | None): Maximum number of messages to return.
                 If None, uses model-aware default.
-            model_name (Optional[str]): LLM model name for context-aware limiting.
+            model_name (str | None): LLM model name for context-aware limiting.
 
         Returns:
             List[Dict[str, Any]]: List of messages in the session.

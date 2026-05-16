@@ -14,8 +14,6 @@ Provides endpoints for managing the data folder:
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.schemas_system import (
@@ -368,7 +366,7 @@ async def get_category_details(
         raise_server_error("STORAGE_0003", "Error getting category details")
 
 
-def _scan_and_remove_files(dir_path: Path, cutoff_time: Optional[float], dry_run: bool) -> tuple:
+def _scan_and_remove_files(dir_path: Path, cutoff_time: float | None, dry_run: bool) -> tuple:
     """Helper for cleanup_category. Ref: #1088. Returns (files_removed, bytes_freed, errors)."""
     files_removed = 0
     bytes_freed = 0

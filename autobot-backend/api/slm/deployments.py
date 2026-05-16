@@ -23,7 +23,7 @@ Related to Issue #3407.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -170,7 +170,7 @@ async def create_deployment(
 
 @router.get("", summary="List active deployments")
 async def list_deployments(
-    status_filter: Optional[str] = Query(None),
+    status_filter: str | None = Query(None),
     orch: DeploymentCoordinator = Depends(_require_orchestrator),
 ) -> Any:
     """Return active deployments, optionally filtered by status string."""

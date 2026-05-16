@@ -20,7 +20,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
@@ -101,7 +101,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
 
     def __init__(
         self,
-        project_root: Optional[str] = None,
+        project_root: str | None = None,
         use_llm: bool = True,
         use_cache: bool = True,
         embedding_model: str = "nomic-embed-text",
@@ -179,7 +179,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
                         self._embedding_cache = None
         return self._embedding_cache
 
-    async def _get_embedding(self, text: str) -> Optional[List[float]]:
+    async def _get_embedding(self, text: str) -> List[float] | None:
         """
         Get embedding for text using the canonical NPU/Ollama fallback helper.
 
@@ -215,7 +215,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         self,
         texts: List[str],
         concurrency: int = EMBEDDING_BATCH_CONCURRENCY,
-    ) -> List[Optional[List[float]]]:
+    ) -> List[List[float] | None]:
         """
         Get embeddings for multiple texts via the canonical batch helper.
 
@@ -241,7 +241,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         cache = await self._get_embedding_cache()
 
         # Resolve cache hits up front; forward only misses to the canonical.
-        results: List[Optional[List[float]]] = [None] * len(texts)
+        results: List[List[float] | None] = [None] * len(texts)
         miss_indices: List[int] = []
         miss_texts: List[str] = []
         for idx, text in enumerate(texts):

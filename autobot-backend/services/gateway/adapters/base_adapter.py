@@ -49,7 +49,7 @@ class BaseAdapter(ABC):
     and back, handling platform-specific quirks and rate limiting.
     """
 
-    def __init__(self, platform_name: str):
+    def __init__(self, platform_name: str) -> None:
         """Initialize adapter for a specific platform."""
         self.platform_name = platform_name
         self.logger = get_logger(f"{__name__}.{platform_name}")

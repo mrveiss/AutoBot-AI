@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List
 
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
@@ -155,12 +155,12 @@ class AnthropicProvider(BaseProvider):
 
     provider_name = ProviderType.ANTHROPIC.value
 
-    def __init__(self, settings: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, settings: Dict[str, Any] | None = None) -> None:
         super().__init__(settings)
-        self._api_key: Optional[str] = None
+        self._api_key: str | None = None
         self._client = None
 
-    def _resolve_api_key(self) -> Optional[str]:
+    def _resolve_api_key(self) -> str | None:
         """Resolve API key from settings or environment."""
         if self._api_key:
             return self._api_key

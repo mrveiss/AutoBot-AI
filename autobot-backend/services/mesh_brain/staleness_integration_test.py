@@ -46,7 +46,7 @@ class TestRedisGraphAdapter:
     """Unit tests for the Redis-backed MeshGraph adapter."""
 
     @pytest.mark.asyncio
-    async def test_get_neighbors_decodes_bytes(self):
+    async def test_get_neighbors_decodes_bytes(self) -> None:
         """Members returned as bytes are decoded to strings."""
         redis = _make_async_redis(zrangebyscore_result=[(b"node-B", 0.9), (b"node-C", 0.5)])
         adapter = RedisGraphAdapter(redis)
@@ -57,7 +57,7 @@ class TestRedisGraphAdapter:
         redis.zrangebyscore.assert_awaited_once_with("mesh:edges:node-A", min=0.0, max="+inf", withscores=True)
 
     @pytest.mark.asyncio
-    async def test_get_neighbors_handles_string_members(self):
+    async def test_get_neighbors_handles_string_members(self) -> None:
         """Members already returned as strings are passed through unchanged."""
         redis = _make_async_redis(zrangebyscore_result=[("node-B", 0.7)])
         adapter = RedisGraphAdapter(redis)
@@ -67,7 +67,7 @@ class TestRedisGraphAdapter:
         assert neighbors == [("node-B", 0.7)]
 
     @pytest.mark.asyncio
-    async def test_get_neighbors_empty_when_no_edges(self):
+    async def test_get_neighbors_empty_when_no_edges(self) -> None:
         """An isolated node returns an empty neighbor list."""
         redis = _make_async_redis(zrangebyscore_result=[])
         adapter = RedisGraphAdapter(redis)
@@ -77,7 +77,7 @@ class TestRedisGraphAdapter:
         assert neighbors == []
 
     @pytest.mark.asyncio
-    async def test_key_format_matches_edge_sync(self):
+    async def test_key_format_matches_edge_sync(self) -> None:
         """Key used is mesh:edges:{node_id}, matching MeshEdgeSync layout."""
         redis = _make_async_redis()
         adapter = RedisGraphAdapter(redis)
@@ -97,7 +97,7 @@ class TestEnqueueForReembedding:
     """Tests for the re-embedding work queue."""
 
     @pytest.mark.asyncio
-    async def test_enqueues_all_node_ids(self):
+    async def test_enqueues_all_node_ids(self) -> None:
         """All provided node IDs are pushed onto mesh:reembed_queue."""
         redis = _make_async_redis()
         node_ids = ["doc/a.md", "doc/b.md", "doc/c.md"]
@@ -108,7 +108,7 @@ class TestEnqueueForReembedding:
         redis.rpush.assert_awaited_once_with("mesh:reembed_queue", *node_ids)
 
     @pytest.mark.asyncio
-    async def test_empty_list_is_noop(self):
+    async def test_empty_list_is_noop(self) -> None:
         """An empty node list makes no Redis calls and returns 0."""
         redis = _make_async_redis()
 
@@ -127,7 +127,7 @@ class TestFullStalenessIntegrationPipeline:
     """End-to-end test of the propagate → store → enqueue pipeline."""
 
     @pytest.mark.asyncio
-    async def test_pipeline_propagates_stores_and_enqueues(self):
+    async def test_pipeline_propagates_stores_and_enqueues(self) -> None:
         """BFS runs over the Redis graph, scores are stored, and stale nodes queued."""
         # Graph: source -> neighbor-B (weight 1.0)
         # decay=0.7 → neighbor-B gets score 0.7 (above default 0.3 threshold)

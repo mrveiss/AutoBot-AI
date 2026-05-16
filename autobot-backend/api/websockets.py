@@ -10,7 +10,7 @@ between the backend and frontend clients.
 
 import asyncio
 import json
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, Tuple
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
@@ -252,7 +252,7 @@ MESSAGE_TYPE_FORMATTERS: Dict[str, Callable[[dict], Tuple[str, str]]] = {
 }
 
 
-def _format_event_for_chat(message_type: str, raw_data: dict) -> Tuple[Optional[str], str]:
+def _format_event_for_chat(message_type: str, raw_data: dict) -> Tuple[str | None, str]:
     """Format event data for chat history (Issue #336 - extracted dispatch helper).
 
     Args:

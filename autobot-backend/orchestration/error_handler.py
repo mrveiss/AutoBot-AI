@@ -26,7 +26,7 @@ import asyncio
 import json
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
@@ -98,7 +98,7 @@ class StepErrorConfig:
     max_retries: int = 3
     base_delay: float = 1.0
     backoff: BackoffStrategy = BackoffStrategy.EXPONENTIAL
-    fallback_step_id: Optional[str] = None
+    fallback_step_id: str | None = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "StepErrorConfig":

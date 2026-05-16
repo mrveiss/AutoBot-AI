@@ -8,7 +8,7 @@ Issue #3395: RAG semantic chunking, fact extraction, entity resolution.
 """
 
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import List, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -49,12 +49,12 @@ class CausalEdge(BaseModel):
 
     id: UUID = Field(default_factory=uuid4, description="Unique causal edge ID")
     source_name: str = Field(..., description="Cause entity name (e.g., 'cache_ttl')")
-    source_entity_id: Optional[UUID] = Field(
+    source_entity_id: UUID | None = Field(
         default=None,
         description="Source entity UUID if resolved to Knowledge Base entity",
     )
     target_name: str = Field(..., description="Effect entity name (e.g., 'query_latency')")
-    target_entity_id: Optional[UUID] = Field(
+    target_entity_id: UUID | None = Field(
         default=None,
         description="Target entity UUID if resolved to Knowledge Base entity",
     )
@@ -70,7 +70,7 @@ class CausalEdge(BaseModel):
         description="Confidence score (1.0=explicit, <0.7=inferred)",
     )
     evidence_text: str = Field(default="", description="Quoted evidence sentence from source text")
-    evidence_source: Optional[str] = Field(default=None, description="Source document/section identifier")
+    evidence_source: str | None = Field(default=None, description="Source document/section identifier")
     source_chunk_ids: List[UUID] = Field(default_factory=list, description="Chunks where relationship was extracted")
     bidirectional: bool = Field(
         default=False,

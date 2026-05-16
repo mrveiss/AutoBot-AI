@@ -11,7 +11,7 @@ Supports OAuth2 (Google, GitHub, Facebook), LDAP/AD, and SAML.
 import logging
 import secrets
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 
@@ -77,7 +77,7 @@ class SSOService(BaseService):
         return provider
 
     async def list_providers(
-        self, org_id: Optional[uuid.UUID] = None, active_only: bool = False
+        self, org_id: uuid.UUID | None = None, active_only: bool = False
     ) -> tuple[list[SSOProvider], int]:
         """List SSO providers with optional filtering."""
         query = select(SSOProvider)
@@ -246,7 +246,7 @@ class SSOService(BaseService):
         user_dn = user_dn_template.format(safe_username)
         return Connection(server, user_dn, password)
 
-    def _search_ldap_user(self, conn: Any, provider: SSOProvider, username: str) -> Optional[dict[str, Any]]:
+    def _search_ldap_user(self, conn: Any, provider: SSOProvider, username: str) -> dict[str, Any] | None:
         """Search for user in LDAP directory."""
         from autobot_shared.security.input_sanitizer import sanitize_ldap_filter
 
@@ -343,7 +343,7 @@ class SSOService(BaseService):
         user_data = self._extract_saml_user_data(authn_response, provider)
         return await self._find_or_provision_user(provider, external_id, user_data)
 
-    async def _find_existing_sso_link(self, provider_id: uuid.UUID, external_id: str) -> Optional[UserSSOLink]:
+    async def _find_existing_sso_link(self, provider_id: uuid.UUID, external_id: str) -> UserSSOLink | None:
         """Find existing SSO link."""
         result = await self.session.execute(
             select(UserSSOLink).where(
@@ -353,7 +353,7 @@ class SSOService(BaseService):
         )
         return result.scalar_one_or_none()
 
-    async def _find_user_by_email(self, email: str) -> Optional[User]:
+    async def _find_user_by_email(self, email: str) -> User | None:
         """Find user by email address."""
         result = await self.session.execute(select(User).where(User.email == email))
         return result.scalar_one_or_none()

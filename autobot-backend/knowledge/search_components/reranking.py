@@ -14,7 +14,7 @@ import asyncio
 import math
 import threading
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -75,7 +75,7 @@ _PROVENANCE_BOOST: Dict[str, float] = {
 }
 
 
-def provenance_adjustment(source_provenance: Optional[str]) -> float:
+def provenance_adjustment(source_provenance: str | None) -> float:
     """Return a score delta in [-0.05, +0.05] for the given source_provenance value.
 
     Issue #4836: Consumes the source_provenance field set by GraphRAGService so
@@ -156,7 +156,7 @@ def apply_mmr_reorder(
     remaining = list(results)
 
     # Pre-extract embeddings once to avoid repeated dict lookups
-    embeddings: List[Optional[List[float]]] = [r.get(embedding_key) for r in remaining]
+    embeddings: List[List[float] | None] = [r.get(embedding_key) for r in remaining]
     has_embeddings = any(e is not None for e in embeddings)
 
     while remaining:
@@ -199,7 +199,7 @@ def compute_blended_score(
     edge_weight: float = 0.0,
     recency_score_value: float = 0.0,
     staleness_penalty_value: float = 1.0,
-    weights: Optional[RerankWeights] = None,
+    weights: RerankWeights | None = None,
 ) -> float:
     """Compute a weighted blend of reranker, vector, edge, recency, and staleness scores.
 
@@ -267,8 +267,8 @@ class ResultReranker:
         self,
         results: List[Dict[str, Any]],
         scores: list,
-        weights: Optional[RerankWeights] = None,
-        staleness_map: Optional[Dict[str, float]] = None,
+        weights: RerankWeights | None = None,
+        staleness_map: Dict[str, float] | None = None,
     ) -> None:
         """Apply rerank scores to results.
 
@@ -321,7 +321,7 @@ class ResultReranker:
         self,
         results: List[Dict[str, Any]],
         weights: RerankWeights,
-    ) -> Optional[Dict[str, float]]:
+    ) -> Dict[str, float] | None:
         """Fetch staleness scores from Redis for all result chunk IDs.
 
         Issue #2547: Pre-fetches scores asynchronously so _apply_rerank_scores()
@@ -356,8 +356,8 @@ class ResultReranker:
         self,
         query: str,
         results: List[Dict[str, Any]],
-        top_k: Optional[int] = None,
-        weights: Optional[RerankWeights] = None,
+        top_k: int | None = None,
+        weights: RerankWeights | None = None,
     ) -> List[Dict[str, Any]]:
         """
         Rerank results using cross-encoder for improved relevance.

@@ -12,7 +12,7 @@ Issue #717: Efficient Inference Design implementation.
 
 import re
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -375,7 +375,7 @@ COMPRESSED_SYSTEM_PROMPTS = {
 }
 
 
-def get_compressed_system_prompt(prompt_type: str) -> Optional[str]:
+def get_compressed_system_prompt(prompt_type: str) -> str | None:
     """
     Get a pre-compressed system prompt.
 

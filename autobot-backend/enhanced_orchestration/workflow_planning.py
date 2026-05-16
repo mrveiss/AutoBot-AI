@@ -17,7 +17,7 @@ is tracked separately in #6820.
 
 import re
 import uuid
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 
@@ -41,7 +41,7 @@ class StrategyPlanner:
         # Created on first ``build_workflow_plan`` call and cached for the
         # planner's lifetime. Each lookup is ``dry_run=True`` so no skill is
         # auto-enabled and no Phase 3 gap-fill runs at plan time.
-        self._skill_router_skill: Optional[Any] = None
+        self._skill_router_skill: Any | None = None
 
     async def build_workflow_plan(self, goal: str, plan_data: Dict[str, Any]) -> WorkflowPlan:
         """Build workflow plan from parsed data.
@@ -122,7 +122,7 @@ class StrategyPlanner:
             status=plan_status,
         )
 
-    def _get_skill_router(self) -> Optional[Any]:
+    def _get_skill_router(self) -> Any | None:
         """Lazily instantiate ``SkillRouterSkill`` for plan-time lookups (#7268).
 
         Returns ``None`` if instantiation fails (skills package import error,

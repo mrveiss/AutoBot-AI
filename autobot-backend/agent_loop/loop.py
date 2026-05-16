@@ -21,7 +21,7 @@ import hashlib
 import json
 import time
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from agent_loop.slack_hook import get_slack_hook
 from agent_loop.think_tool import ThinkTool
@@ -118,10 +118,10 @@ class AgentLoop:
     def __init__(
         self,
         event_stream: EventStreamManager,
-        planner: Optional[PlannerModule] = None,
-        tool_executor: Optional[ParallelToolExecutor] = None,
-        think_tool: Optional[ThinkTool] = None,
-        config: Optional[AgentLoopConfig] = None,
+        planner: PlannerModule | None = None,
+        tool_executor: ParallelToolExecutor | None = None,
+        think_tool: ThinkTool | None = None,
+        config: AgentLoopConfig | None = None,
     ):
         """
         Initialize the agent loop.
@@ -142,7 +142,7 @@ class AgentLoop:
         # State
         self._state = LoopState.IDLE
         self._current_phase = LoopPhase.STANDBY
-        self._current_context: Optional[TaskContext] = None
+        self._current_context: TaskContext | None = None
         self._iteration_count = 0
         self._consecutive_errors = 0
         # Issue #3877: explicit flag set when repetition halt fires; checked by
@@ -165,7 +165,7 @@ class AgentLoop:
         return self._current_phase
 
     @property
-    def context(self) -> Optional[TaskContext]:
+    def context(self) -> TaskContext | None:
         """Get current task context."""
         return self._current_context
 
@@ -182,7 +182,7 @@ class AgentLoop:
         self,
         task_id: str,
         task_description: str,
-        initial_context: Optional[dict],
+        initial_context: dict | None,
     ) -> None:
         """
         Initialize task context and state for new task.
@@ -224,7 +224,7 @@ class AgentLoop:
 
         return results
 
-    async def _create_task_plan(self, task_description: str, initial_context: Optional[dict]) -> None:
+    async def _create_task_plan(self, task_description: str, initial_context: dict | None) -> None:
         """Create execution plan if planner is available.
 
         Issue #620: Extracted from run_task to reduce function length.
@@ -262,8 +262,8 @@ class AgentLoop:
     async def run_task(
         self,
         task_description: str,
-        task_id: Optional[str] = None,
-        initial_context: Optional[dict] = None,
+        task_id: str | None = None,
+        initial_context: dict | None = None,
     ) -> dict[str, Any]:
         """Run a complete task through the agent loop.
 
@@ -633,7 +633,7 @@ class AgentLoop:
     # Message Handling (Manus Pattern)
     # =========================================================================
 
-    async def notify(self, content: str, metadata: Optional[dict] = None) -> None:
+    async def notify(self, content: str, metadata: dict | None = None) -> None:
         """
         Send a non-blocking notification to the user.
 
@@ -658,8 +658,8 @@ class AgentLoop:
     async def ask(
         self,
         content: str,
-        options: Optional[list[str]] = None,
-        metadata: Optional[dict] = None,
+        options: list[str] | None = None,
+        metadata: dict | None = None,
     ) -> str:
         """
         Send a blocking question to the user.
@@ -772,7 +772,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             canonical = repr({"n": tool_name, "a": args})
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
-    def _check_tool_call_repetition(self, tools: list[dict[str, Any]]) -> Optional[str]:
+    def _check_tool_call_repetition(self, tools: list[dict[str, Any]]) -> str | None:
         """Check whether any pending tool call has been issued too many times.
 
         Returns the offending tool name if repetition is detected, else None.
@@ -804,7 +804,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
     # =========================================================================
 
     @staticmethod
-    def _sensitive_tool_name(tool: dict[str, Any]) -> Optional[str]:
+    def _sensitive_tool_name(tool: dict[str, Any]) -> str | None:
         """Return the tool name if it is in SENSITIVE_TOOLS, else None."""
         name = tool.get("tool_name", "").lower()
         if name in SENSITIVE_TOOLS:

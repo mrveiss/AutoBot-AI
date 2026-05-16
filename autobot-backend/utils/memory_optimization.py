@@ -14,7 +14,7 @@ import weakref
 from functools import wraps
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, TypeVar, Union
+from typing import Any, Callable, Dict, List, Set, TypeVar, Union
 
 import psutil
 
@@ -49,7 +49,7 @@ def _get_log_formatter() -> logging.Formatter:
     return logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 
-def _ensure_log_directory(log_file: Union[str, Path]) -> None:
+def _ensure_log_directory(log_file: str | Path) -> None:
     """
     Ensure the log file directory exists.
 
@@ -77,7 +77,7 @@ class MemoryOptimizedLogging:
     @staticmethod
     def setup_rotating_logger(
         name: str,
-        log_file: Union[str, Path],
+        log_file: str | Path,
         level: int = logging.INFO,
         max_bytes: int = int(config.log_max_bytes),  # 50MB default
         backup_count: int = int(config.log_backup_count),
@@ -105,7 +105,7 @@ class MemoryOptimizedLogging:
     @staticmethod
     def setup_timed_rotating_logger(
         name: str,
-        log_file: Union[str, Path],
+        log_file: str | Path,
         level: int = logging.INFO,
         when: str = "midnight",
         interval: int = 1,
@@ -222,7 +222,7 @@ class WeakCache:
         """Maximum capacity."""
         return self.maxsize
 
-    def get(self, key: Any) -> Optional[Any]:
+    def get(self, key: Any) -> Any | None:
         """Get value from cache"""
         if key in self._weak_refs:
             ref = self._weak_refs[key]

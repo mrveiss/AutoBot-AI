@@ -103,7 +103,7 @@ class TestServiceControlWorkflows:
 
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_admin_restart_redis_service(self, authenticated_admin_page, frontend_url):
+    async def test_admin_restart_redis_service(self, authenticated_admin_page, frontend_url) -> None:
         """
         Test Case 1.1: Admin restarts Redis service via UI
 
@@ -163,7 +163,7 @@ class TestServiceControlWorkflows:
 
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_operator_start_stopped_service(self, authenticated_operator_page, frontend_url):
+    async def test_operator_start_stopped_service(self, authenticated_operator_page, frontend_url) -> None:
         """
         Test Case 1.2: Operator starts stopped service
 
@@ -214,7 +214,7 @@ class TestServiceControlWorkflows:
 
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_service_status_refresh(self, authenticated_admin_page):
+    async def test_service_status_refresh(self, authenticated_admin_page) -> None:
         """
         Test Case 1.3: Manual status refresh
 
@@ -264,7 +264,7 @@ class TestRBACRestrictions:
 
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_operator_cannot_stop_service(self, authenticated_operator_page):
+    async def test_operator_cannot_stop_service(self, authenticated_operator_page) -> None:
         """
         Test Case 2.1: Operator cannot access stop button
 
@@ -310,7 +310,7 @@ class TestRBACRestrictions:
 
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_admin_can_stop_service(self, authenticated_admin_page):
+    async def test_admin_can_stop_service(self, authenticated_admin_page) -> None:
         """
         Test Case 2.2: Admin can access all operations
 
@@ -350,7 +350,7 @@ class TestRealTimeUpdates:
 
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_status_updates_on_service_change(self, authenticated_admin_page):
+    async def test_status_updates_on_service_change(self, authenticated_admin_page) -> None:
         """
         Test Case 3.1: Status updates in real-time via WebSocket
 
@@ -395,7 +395,7 @@ class TestRealTimeUpdates:
 
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_auto_recovery_notification(self, authenticated_admin_page, backend_url):
+    async def test_auto_recovery_notification(self, authenticated_admin_page, backend_url) -> None:
         """
         Test Case 3.2: Auto-recovery notification via WebSocket
 
@@ -441,7 +441,7 @@ class TestErrorScenarios:
 
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_service_operation_failure_feedback(self, authenticated_admin_page):
+    async def test_service_operation_failure_feedback(self, authenticated_admin_page) -> None:
         """
         Test Case 4.1: Clear error message on operation failure
 
@@ -476,7 +476,7 @@ class TestErrorScenarios:
 
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_vm_unreachable_error(self, authenticated_admin_page):
+    async def test_vm_unreachable_error(self, authenticated_admin_page) -> None:
         """
         Test Case 4.2: Clear error when Redis VM unreachable
 
@@ -513,7 +513,7 @@ class TestHealthMonitoring:
 
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_health_status_display(self, authenticated_admin_page):
+    async def test_health_status_display(self, authenticated_admin_page) -> None:
         """
         Test Case 5.1: Health status clearly displayed
 

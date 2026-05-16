@@ -83,7 +83,7 @@ class TestRouting:
     """retrieve() dispatches to the correct path based on complexity."""
 
     @pytest.mark.asyncio
-    async def test_simple_query_skips_ppr(self):
+    async def test_simple_query_skips_ppr(self) -> None:
         """SIMPLE complexity must not call ppr.rank."""
         retriever = _make_retriever(complexity_value="simple")
 
@@ -95,7 +95,7 @@ class TestRouting:
         assert result.expanded is False
 
     @pytest.mark.asyncio
-    async def test_moderate_query_uses_ppr_expansion(self):
+    async def test_moderate_query_uses_ppr_expansion(self) -> None:
         """MODERATE complexity must call ppr.rank with seed IDs."""
         retriever = _make_retriever(complexity_value="moderate")
 
@@ -109,7 +109,7 @@ class TestRouting:
         assert result.complexity == "moderate"
 
     @pytest.mark.asyncio
-    async def test_complex_query_checks_anchors(self):
+    async def test_complex_query_checks_anchors(self) -> None:
         """COMPLEX complexity must call mesh_db.get_anchor_neighbors."""
         retriever = _make_retriever(complexity_value="complex")
 
@@ -118,7 +118,7 @@ class TestRouting:
         retriever.mesh_db.get_anchor_neighbors.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_multi_hop_uses_full_pipeline(self):
+    async def test_multi_hop_uses_full_pipeline(self) -> None:
         """MULTI_HOP complexity routes through _full_retrieve (same as complex)."""
         retriever = _make_retriever(complexity_value="multi_hop")
 
@@ -137,7 +137,7 @@ class TestFireLearner:
     """_fire_learner schedules on_retrieval for every retrieval path."""
 
     @pytest.mark.asyncio
-    async def test_fire_learner_called_after_simple_retrieval(self):
+    async def test_fire_learner_called_after_simple_retrieval(self) -> None:
         """EdgeLearner.on_retrieval is scheduled after a SIMPLE retrieval."""
         retriever = _make_retriever(complexity_value="simple")
 
@@ -147,7 +147,7 @@ class TestFireLearner:
         mock_create_task.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_fire_learner_called_after_retrieval(self):
+    async def test_fire_learner_called_after_retrieval(self) -> None:
         """on_retrieval is awaited with final_ranked_ids from ranked results."""
         retriever = _make_retriever(
             complexity_value="simple",
@@ -175,25 +175,25 @@ class TestFireLearner:
 class TestChunkId:
     """_chunk_id extracts the correct ID from dict and object results."""
 
-    def test_chunk_id_extracts_from_dict_with_metadata(self):
+    def test_chunk_id_extracts_from_dict_with_metadata(self) -> None:
         """Dict with metadata.chunk_id returns that chunk_id."""
         retriever = _make_retriever()
         result = {"metadata": {"chunk_id": "abc-123"}, "score": 0.9}
         assert retriever._chunk_id(result) == "abc-123"
 
-    def test_chunk_id_extracts_from_dict_with_top_level_chunk_id(self):
+    def test_chunk_id_extracts_from_dict_with_top_level_chunk_id(self) -> None:
         """Dict with top-level chunk_id (no metadata) returns that ID."""
         retriever = _make_retriever()
         result = {"chunk_id": "top-level-id", "score": 0.7}
         assert retriever._chunk_id(result) == "top-level-id"
 
-    def test_chunk_id_extracts_from_dict_source_path_fallback(self):
+    def test_chunk_id_extracts_from_dict_source_path_fallback(self) -> None:
         """Dict with only source_path falls back to source_path."""
         retriever = _make_retriever()
         result = {"source_path": "/docs/file.md", "score": 0.5}
         assert retriever._chunk_id(result) == "/docs/file.md"
 
-    def test_chunk_id_extracts_from_search_result_object(self):
+    def test_chunk_id_extracts_from_search_result_object(self) -> None:
         """Object with metadata.chunk_id attribute returns that chunk_id."""
         retriever = _make_retriever()
 
@@ -204,7 +204,7 @@ class TestChunkId:
 
         assert retriever._chunk_id(SearchResult()) == "obj-456"
 
-    def test_chunk_id_falls_back_to_source_path_on_object(self):
+    def test_chunk_id_falls_back_to_source_path_on_object(self) -> None:
         """Object without metadata.chunk_id falls back to source_path."""
         retriever = _make_retriever()
 
@@ -215,7 +215,7 @@ class TestChunkId:
 
         assert retriever._chunk_id(SearchResult()) == "/fallback/path.md"
 
-    def test_chunk_id_returns_empty_string_for_empty_dict(self):
+    def test_chunk_id_returns_empty_string_for_empty_dict(self) -> None:
         """Empty dict returns empty string without raising."""
         retriever = _make_retriever()
         assert retriever._chunk_id({}) == ""
@@ -229,7 +229,7 @@ class TestChunkId:
 class TestMergeWithExpansion:
     """_merge_with_expansion combines seeds with PPR-scored expansion nodes."""
 
-    def test_merge_keeps_seed_results(self):
+    def test_merge_keeps_seed_results(self) -> None:
         """All seed results must be present in the merged output."""
         retriever = _make_retriever()
         seeds = [_make_result("s1"), _make_result("s2")]
@@ -241,7 +241,7 @@ class TestMergeWithExpansion:
         assert "s1" in chunk_ids
         assert "s2" in chunk_ids
 
-    def test_merge_appends_expanded_nodes_not_in_seeds(self):
+    def test_merge_appends_expanded_nodes_not_in_seeds(self) -> None:
         """Nodes returned by PPR but absent from seeds are appended."""
         retriever = _make_retriever()
         seeds = [_make_result("s1")]
@@ -252,7 +252,7 @@ class TestMergeWithExpansion:
         merged_ids = {r.get("metadata", {}).get("chunk_id") or r.get("chunk_id") for r in merged}
         assert "new_node" in merged_ids
 
-    def test_merge_boosts_seed_score_with_ppr(self):
+    def test_merge_boosts_seed_score_with_ppr(self) -> None:
         """Seed results receive their PPR score added to the base score."""
         retriever = _make_retriever()
         seeds = [{"metadata": {"chunk_id": "s1"}, "score": 0.3, "content": "x"}]
@@ -263,7 +263,7 @@ class TestMergeWithExpansion:
         s1_result = next(r for r in merged if r.get("metadata", {}).get("chunk_id") == "s1")
         assert abs(s1_result["score"] - 0.8) < 1e-9
 
-    def test_merge_with_empty_expansion(self):
+    def test_merge_with_empty_expansion(self) -> None:
         """Empty expanded_scores returns only seed results unchanged."""
         retriever = _make_retriever()
         seeds = [_make_result("s1")]
@@ -272,7 +272,7 @@ class TestMergeWithExpansion:
 
         assert len(merged) == 1
 
-    def test_merge_deduplicates_expanded_ids(self):
+    def test_merge_deduplicates_expanded_ids(self) -> None:
         """A node already in seeds must not appear twice in merged output."""
         retriever = _make_retriever()
         seeds = [_make_result("shared")]
@@ -293,7 +293,7 @@ class TestAnchorInjection:
     """anchor_used flag and seed expansion when anchors are found."""
 
     @pytest.mark.asyncio
-    async def test_anchor_used_true_when_anchors_found(self):
+    async def test_anchor_used_true_when_anchors_found(self) -> None:
         """anchor_used is True when mesh_db returns non-empty anchor list."""
         retriever = _make_retriever(
             complexity_value="complex",
@@ -305,7 +305,7 @@ class TestAnchorInjection:
         assert result.anchor_used is True
 
     @pytest.mark.asyncio
-    async def test_anchor_used_false_when_no_anchors(self):
+    async def test_anchor_used_false_when_no_anchors(self) -> None:
         """anchor_used is False when mesh_db returns an empty list."""
         retriever = _make_retriever(
             complexity_value="complex",
@@ -317,7 +317,7 @@ class TestAnchorInjection:
         assert result.anchor_used is False
 
     @pytest.mark.asyncio
-    async def test_anchor_failure_is_gracefully_handled(self):
+    async def test_anchor_failure_is_gracefully_handled(self) -> None:
         """If mesh_db.get_anchor_neighbors raises, retrieval still completes."""
         retriever = _make_retriever(complexity_value="complex")
         retriever.mesh_db.get_anchor_neighbors = AsyncMock(side_effect=RuntimeError("db error"))

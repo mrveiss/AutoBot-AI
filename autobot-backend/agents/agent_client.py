@@ -9,7 +9,7 @@ Routes requests to local agents or remote containers based on configuration
 import asyncio
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 class AgentClientConfig:
     """Configuration for agent deployment modes"""
 
-    def __init__(self, config_dict: Optional[Dict[str, Any]] = None):
+    def __init__(self, config_dict: Dict[str, Any] | None = None):
         """Initialize agent client config with deployment settings."""
         self.config = config_dict or {}
         self.default_mode = DeploymentMode.LOCAL
@@ -90,7 +90,7 @@ class AgentRegistry:
                 del self.last_health_check[agent_type]
             logger.info("Unregistered %s agent", agent_type)
 
-    def get_agent(self, agent_type: str) -> Optional[BaseAgent]:
+    def get_agent(self, agent_type: str) -> BaseAgent | None:
         """Get agent by type"""
         return self.agents.get(agent_type)
 
@@ -197,7 +197,7 @@ class AgentClient:
     Routes requests to local agents or remote containers.
     """
 
-    def __init__(self, config: Optional[AgentClientConfig] = None):
+    def __init__(self, config: AgentClientConfig | None = None):
         """Initialize unified agent client with registry and stats tracking."""
         self.config = config or AgentClientConfig()
         self.registry = AgentRegistry()
@@ -233,9 +233,9 @@ class AgentClient:
         agent_type: str,
         action: str,
         payload: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
         priority: str = "normal",
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> AgentResponse:
         """
         Call an agent with automatic local/remote routing.
@@ -357,7 +357,7 @@ class AgentClient:
         else:
             stats["failed_requests"] += 1
 
-    async def get_agent_health_status(self, agent_type: Optional[str] = None) -> Dict[str, Any]:
+    async def get_agent_health_status(self, agent_type: str | None = None) -> Dict[str, Any]:
         """Get health status for all agents or specific agent"""
         if agent_type:
             await self.registry.update_agent_health(agent_type, force=True)
@@ -381,7 +381,7 @@ class AgentClient:
             "agent_stats": {agent_type: agent.get_statistics() for agent_type, agent in self.registry.agents.items()},
         }
 
-    async def discover_container_agents(self, base_url: Optional[str] = None) -> List[str]:
+    async def discover_container_agents(self, base_url: str | None = None) -> List[str]:
         """Discover available container agents"""
         url = base_url or self.config.container_base_url
         discovered = []
@@ -406,11 +406,11 @@ class AgentClient:
 
 
 # Singleton instance for global access (thread-safe)
-_agent_client_instance: Optional[AgentClient] = None
+_agent_client_instance: AgentClient | None = None
 _agent_client_lock = asyncio.Lock()
 
 
-async def get_agent_client(config: Optional[AgentClientConfig] = None) -> AgentClient:
+async def get_agent_client(config: AgentClientConfig | None = None) -> AgentClient:
     """Get or create the global agent client instance (thread-safe)"""
     global _agent_client_instance
 

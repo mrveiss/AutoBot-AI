@@ -23,7 +23,7 @@ import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +37,9 @@ class APICallRecord:
     response_size: int
     response_time: float
     success: bool
-    error_type: Optional[str] = None
-    tool_name: Optional[str] = None
-    context: Optional[str] = None
+    error_type: str | None = None
+    tool_name: str | None = None
+    context: str | None = None
 
 
 @dataclass
@@ -188,7 +188,7 @@ class AlertManager:
         """Add a callback function for alerts"""
         self.alert_callbacks.append(callback)
 
-    def _check_rate_alerts(self, tracker: UsageTracker) -> Optional[UsageAlert]:
+    def _check_rate_alerts(self, tracker: UsageTracker) -> UsageAlert | None:
         """Check rate limit alerts (Issue #315: extracted helper)."""
         rate_1min = tracker.calculate_usage_rate(1)
         rate_60min = tracker.calculate_usage_rate(60)
@@ -210,7 +210,7 @@ class AlertManager:
             )
         return None
 
-    def _check_payload_alert(self, tracker: UsageTracker) -> Optional[UsageAlert]:
+    def _check_payload_alert(self, tracker: UsageTracker) -> UsageAlert | None:
         """Check payload size alerts (Issue #315: extracted helper)."""
         payload_trend = tracker.calculate_payload_trend(30)
         if payload_trend["max"] > 25000:
@@ -222,7 +222,7 @@ class AlertManager:
             )
         return None
 
-    def _check_error_rate_alert(self, tracker: UsageTracker) -> Optional[UsageAlert]:
+    def _check_error_rate_alert(self, tracker: UsageTracker) -> UsageAlert | None:
         """Check error rate alerts (Issue #315: extracted helper)."""
         recent_calls = tracker.get_recent_calls(60)
         if not recent_calls:
@@ -344,9 +344,9 @@ class ClaudeAPIMonitor:
         response_size: int = 0,
         response_time: float = 0.0,
         success: bool = True,
-        error_type: Optional[str] = None,
-        tool_name: Optional[str] = None,
-        context: Optional[str] = None,
+        error_type: str | None = None,
+        tool_name: str | None = None,
+        context: str | None = None,
     ):
         """Record a completed API call"""
 
@@ -474,7 +474,7 @@ class ClaudeAPIMonitor:
             "error_patterns": dict(self.usage_tracker.error_patterns),
         }
 
-    def _check_rate_limit_recommendation(self, stats: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    def _check_rate_limit_recommendation(self, stats: Dict[str, Any]) -> Dict[str, str] | None:
         """Check if rate limit recommendation is needed. Issue #620."""
         if stats["risk_prediction"]["risk_score"] > 70:
             return {
@@ -485,7 +485,7 @@ class ClaudeAPIMonitor:
             }
         return None
 
-    def _check_payload_size_recommendation(self, stats: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    def _check_payload_size_recommendation(self, stats: Dict[str, Any]) -> Dict[str, str] | None:
         """Check if payload size recommendation is needed. Issue #620."""
         if stats["payload_analysis"]["average"] > self.payload_warning_size:
             return {
@@ -511,7 +511,7 @@ class ClaudeAPIMonitor:
                 )
         return recommendations
 
-    def _check_error_rate_recommendation(self) -> Optional[Dict[str, str]]:
+    def _check_error_rate_recommendation(self) -> Dict[str, str] | None:
         """Check if error rate recommendation is needed. Issue #620."""
         recent_calls = self.usage_tracker.get_recent_calls(60)
         if not recent_calls:
@@ -589,7 +589,7 @@ class ClaudeAPIMonitor:
 
 
 # Global monitor instance (thread-safe)
-_global_monitor: Optional[ClaudeAPIMonitor] = None
+_global_monitor: ClaudeAPIMonitor | None = None
 _global_monitor_lock = threading.Lock()
 
 

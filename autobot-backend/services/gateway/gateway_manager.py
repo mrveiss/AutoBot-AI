@@ -16,7 +16,7 @@ Features:
 """
 
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -43,7 +43,7 @@ class GatewayManager:
     unified interface for agent to serve all channels.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize gateway with all platform adapters."""
         self.adapters: Dict[str, BaseAdapter] = {}
         self.queue = MessageQueue()
@@ -224,7 +224,7 @@ class GatewayManager:
         self.logger.info("Shutting down gateway")
         await self.queue.shutdown()
 
-    def get_adapter(self, platform: str) -> Optional[BaseAdapter]:
+    def get_adapter(self, platform: str) -> BaseAdapter | None:
         """Get adapter for platform."""
         return self.adapters.get(platform)
 

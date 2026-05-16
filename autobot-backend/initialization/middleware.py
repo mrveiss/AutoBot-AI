@@ -10,7 +10,7 @@ Configures all middleware for FastAPI application:
 - Service authentication
 """
 
-from typing import List, Optional
+from typing import List
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,7 +26,7 @@ from constants.network_constants import (  # noqa: F401 - used in docstring exam
 logger = get_logger(__name__)
 
 
-def configure_cors(app: FastAPI, allow_origins: Optional[List[str]] = None):
+def configure_cors(app: FastAPI, allow_origins: List[str] | None = None):
     """
     Configure CORS middleware
 
@@ -219,7 +219,7 @@ def configure_sunset_legacy_health(app: FastAPI):
 
 def configure_middleware(
     app: FastAPI,
-    allow_origins: Optional[List[str]] = None,
+    allow_origins: List[str] | None = None,
     gzip_minimum_size: int = 1000,
     enable_service_auth: bool = True,
     enable_llm_awareness: bool = True,

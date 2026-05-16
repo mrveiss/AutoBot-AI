@@ -9,8 +9,6 @@ Handles browser automation for research tasks with user interaction support
 import asyncio
 import os
 from datetime import datetime, timezone
-from typing import Optional
-
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -61,7 +59,7 @@ def _require_browser():
 
 @register_health_probe("research_browser")
 async def probe_research_browser(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for research_browser module.
 

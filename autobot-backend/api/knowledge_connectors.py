@@ -24,7 +24,7 @@ import asyncio
 import json
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from redis.exceptions import RedisError
@@ -103,7 +103,7 @@ async def _save_connector(cfg: ConnectorConfig) -> None:
     )
 
 
-async def _load_connector(connector_id: str) -> Optional[ConnectorConfig]:
+async def _load_connector(connector_id: str) -> ConnectorConfig | None:
     """Load and deserialize a ConnectorConfig from Redis (Issue #1254)."""
     redis = get_redis_client(database="knowledge")
     raw = await asyncio.to_thread(redis.get, _connector_key(connector_id))
@@ -133,7 +133,7 @@ def _deserialize_connector(raw: Any) -> ConnectorConfig:
     )
 
 
-def _parse_dt(value: Optional[str]) -> Optional[datetime]:
+def _parse_dt(value: str | None) -> datetime | None:
     """Parse ISO datetime string or return None (Issue #1254: helper)."""
     if not value:
         return None

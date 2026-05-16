@@ -19,7 +19,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
@@ -113,13 +113,13 @@ class LLMUsageRecord:
     output_tokens: int
     cost_usd: float
     timestamp: str
-    session_id: Optional[str] = None
-    user_id: Optional[str] = None
-    agent_id: Optional[str] = None
-    endpoint: Optional[str] = None
-    latency_ms: Optional[float] = None
+    session_id: str | None = None
+    user_id: str | None = None
+    agent_id: str | None = None
+    endpoint: str | None = None
+    latency_ms: float | None = None
     success: bool = True
-    error_message: Optional[str] = None
+    error_message: str | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -175,14 +175,14 @@ class TrackUsageRequest:
     model: str
     input_tokens: int
     output_tokens: int
-    session_id: Optional[str] = None
-    user_id: Optional[str] = None
-    agent_id: Optional[str] = None
-    endpoint: Optional[str] = None
-    latency_ms: Optional[float] = None
+    session_id: str | None = None
+    user_id: str | None = None
+    agent_id: str | None = None
+    endpoint: str | None = None
+    latency_ms: float | None = None
     success: bool = True
-    error_message: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    error_message: str | None = None
+    metadata: Dict[str, Any] | None = None
 
 
 @dataclass
@@ -220,7 +220,7 @@ class LLMCostTracker(AsyncRedisClientMixin):
     AGENT_BUDGET_KEY = f"{REDIS_KEY_PREFIX}agent_budget"
     BUDGET_ALERTS_KEY = f"{REDIS_KEY_PREFIX}budget_alerts"
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize cost tracker with empty alerts."""
         self._budget_alerts: List[BudgetAlert] = []
         self._current_period_costs: Dict[str, float] = {}
@@ -253,7 +253,7 @@ class LLMCostTracker(AsyncRedisClientMixin):
         ("deepseek-r1", DEEPSEEK_R1_API),
     ]
 
-    def _estimate_pricing_by_pattern(self, model_lower: str) -> Optional[Dict[str, float]]:
+    def _estimate_pricing_by_pattern(self, model_lower: str) -> Dict[str, float] | None:
         """
         Return pricing estimate for an unknown model using name-pattern heuristics.
 
@@ -344,18 +344,18 @@ class LLMCostTracker(AsyncRedisClientMixin):
 
     def _extract_params_from_kwargs(
         self,
-        provider: Optional[str],
-        model: Optional[str],
-        input_tokens: Optional[int],
-        output_tokens: Optional[int],
-        session_id: Optional[str],
-        user_id: Optional[str],
-        agent_id: Optional[str],
-        endpoint: Optional[str],
-        latency_ms: Optional[float],
+        provider: str | None,
+        model: str | None,
+        input_tokens: int | None,
+        output_tokens: int | None,
+        session_id: str | None,
+        user_id: str | None,
+        agent_id: str | None,
+        endpoint: str | None,
+        latency_ms: float | None,
         success: bool,
-        error_message: Optional[str],
-        metadata: Optional[Dict[str, Any]],
+        error_message: str | None,
+        metadata: Dict[str, Any] | None,
     ) -> tuple:
         """Helper for _extract_usage_params. Ref: #1088."""
         if provider is None or model is None or input_tokens is None or output_tokens is None:
@@ -379,19 +379,19 @@ class LLMCostTracker(AsyncRedisClientMixin):
 
     def _extract_usage_params(
         self,
-        request: Optional["TrackUsageRequest"],
-        provider: Optional[str],
-        model: Optional[str],
-        input_tokens: Optional[int],
-        output_tokens: Optional[int],
-        session_id: Optional[str],
-        user_id: Optional[str],
-        agent_id: Optional[str],
-        endpoint: Optional[str],
-        latency_ms: Optional[float],
+        request: "TrackUsageRequest" | None,
+        provider: str | None,
+        model: str | None,
+        input_tokens: int | None,
+        output_tokens: int | None,
+        session_id: str | None,
+        user_id: str | None,
+        agent_id: str | None,
+        endpoint: str | None,
+        latency_ms: float | None,
         success: bool,
-        error_message: Optional[str],
-        metadata: Optional[Dict[str, Any]],
+        error_message: str | None,
+        metadata: Dict[str, Any] | None,
     ) -> tuple:
         """
         Extract usage parameters from request object or individual args.
@@ -434,14 +434,14 @@ class LLMCostTracker(AsyncRedisClientMixin):
         input_tokens: int,
         output_tokens: int,
         cost: float,
-        session_id: Optional[str],
-        user_id: Optional[str],
-        agent_id: Optional[str],
-        endpoint: Optional[str],
-        latency_ms: Optional[float],
+        session_id: str | None,
+        user_id: str | None,
+        agent_id: str | None,
+        endpoint: str | None,
+        latency_ms: float | None,
         success: bool,
-        error_message: Optional[str],
-        metadata: Optional[Dict[str, Any]],
+        error_message: str | None,
+        metadata: Dict[str, Any] | None,
     ) -> "LLMUsageRecord":
         """
         Create LLMUsageRecord with all parameters.
@@ -473,19 +473,19 @@ class LLMCostTracker(AsyncRedisClientMixin):
 
     def _resolve_usage_params(
         self,
-        request: Optional[TrackUsageRequest],
-        provider: Optional[str],
-        model: Optional[str],
-        input_tokens: Optional[int],
-        output_tokens: Optional[int],
-        session_id: Optional[str],
-        user_id: Optional[str],
-        agent_id: Optional[str],
-        endpoint: Optional[str],
-        latency_ms: Optional[float],
+        request: TrackUsageRequest | None,
+        provider: str | None,
+        model: str | None,
+        input_tokens: int | None,
+        output_tokens: int | None,
+        session_id: str | None,
+        user_id: str | None,
+        agent_id: str | None,
+        endpoint: str | None,
+        latency_ms: float | None,
         success: bool,
-        error_message: Optional[str],
-        metadata: Optional[Dict[str, Any]],
+        error_message: str | None,
+        metadata: Dict[str, Any] | None,
     ) -> tuple:
         """Helper for track_usage. Ref: #1088."""
         return self._extract_usage_params(
@@ -510,14 +510,14 @@ class LLMCostTracker(AsyncRedisClientMixin):
         model: str,
         input_tokens: int,
         output_tokens: int,
-        session_id: Optional[str],
-        user_id: Optional[str],
-        agent_id: Optional[str],
-        endpoint: Optional[str],
-        latency_ms: Optional[float],
+        session_id: str | None,
+        user_id: str | None,
+        agent_id: str | None,
+        endpoint: str | None,
+        latency_ms: float | None,
         success: bool,
-        error_message: Optional[str],
-        metadata: Optional[Dict[str, Any]],
+        error_message: str | None,
+        metadata: Dict[str, Any] | None,
     ) -> LLMUsageRecord:
         """Helper for track_usage. Ref: #1088."""
         cost = self.calculate_cost(model, input_tokens, output_tokens)
@@ -553,20 +553,20 @@ class LLMCostTracker(AsyncRedisClientMixin):
 
     async def track_usage(
         self,
-        request: Optional[TrackUsageRequest] = None,
+        request: TrackUsageRequest | None = None,
         *,  # Force keyword-only args for backwards compatibility
-        provider: Optional[str] = None,
-        model: Optional[str] = None,
-        input_tokens: Optional[int] = None,
-        output_tokens: Optional[int] = None,
-        session_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        agent_id: Optional[str] = None,
-        endpoint: Optional[str] = None,
-        latency_ms: Optional[float] = None,
+        provider: str | None = None,
+        model: str | None = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        agent_id: str | None = None,
+        endpoint: str | None = None,
+        latency_ms: float | None = None,
         success: bool = True,
-        error_message: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        error_message: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> LLMUsageRecord:
         """Track an LLM API usage event. Ref: #1088.
 
@@ -736,8 +736,8 @@ class LLMCostTracker(AsyncRedisClientMixin):
 
     async def get_cost_summary(
         self,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
     ) -> Dict[str, Any]:
         """
         Get cost summary for a time period.
@@ -952,7 +952,7 @@ class LLMCostTracker(AsyncRedisClientMixin):
             logger.error("Failed to set agent budget: %s", e)
             return {"agent_id": agent_id, "error": "Failed to set agent budget"}
 
-    async def get_agent_budget(self, agent_id: str) -> Optional[Dict[str, Any]]:
+    async def get_agent_budget(self, agent_id: str) -> Dict[str, Any] | None:
         """Get budget config for an agent (#1401)."""
         try:
             redis = await self.get_redis()
@@ -1123,7 +1123,7 @@ class LLMCostTracker(AsyncRedisClientMixin):
 # Singleton instance (thread-safe)
 import threading
 
-_cost_tracker: Optional[LLMCostTracker] = None
+_cost_tracker: LLMCostTracker | None = None
 _cost_tracker_lock = threading.Lock()
 
 

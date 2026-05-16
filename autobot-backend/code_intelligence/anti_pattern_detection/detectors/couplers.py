@@ -15,7 +15,7 @@ Part of Issue #381 - God Class Refactoring
 
 import ast
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
@@ -182,7 +182,7 @@ class CouplerDetector:
         path: List[str],
         visited: Set[str],
         rec_stack: Set[str],
-    ) -> Optional[List[str]]:
+    ) -> List[str] | None:
         """Recursively find circular dependency cycle using DFS. Issue #620.
 
         Args:
@@ -309,7 +309,7 @@ class CouplerDetector:
         self,
         node: ast.FunctionDef,
         file_path: str,
-        class_name: Optional[str] = None,
+        class_name: str | None = None,
     ) -> List[AntiPatternResult]:
         """
         Detect feature envy - method uses other class's data more than its own.

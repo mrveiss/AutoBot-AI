@@ -9,7 +9,7 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
@@ -31,7 +31,7 @@ class CodeFunction:
     name: str
     line_number: int
     parameters: List[str]
-    return_type: Optional[str]
+    return_type: str | None
     is_async: bool
     complexity: int
     is_public: bool  # Not starting with _
@@ -48,7 +48,7 @@ class TestFunction:
     file_path: str
     name: str
     line_number: int
-    target_function: Optional[str]
+    target_function: str | None
     test_type: str  # unit, integration, e2e
     has_assertions: bool
     has_mocking: bool
@@ -240,7 +240,7 @@ class TestingCoverageAnalyzer:
 
         return functions
 
-    def _analyze_function(self, node: ast.AST, file_path: str, content: str) -> Optional[CodeFunction]:
+    def _analyze_function(self, node: ast.AST, file_path: str, content: str) -> CodeFunction | None:
         """Analyze a function node"""
 
         try:
@@ -388,7 +388,7 @@ class TestingCoverageAnalyzer:
         """Check if function name indicates it's a test"""
         return any(re.search(pattern, function_name) for pattern in self.test_function_patterns)
 
-    def _analyze_test_function(self, node: ast.AST, file_path: str, content: str) -> Optional[TestFunction]:
+    def _analyze_test_function(self, node: ast.AST, file_path: str, content: str) -> TestFunction | None:
         """Analyze a test function"""
 
         try:
@@ -426,7 +426,7 @@ class TestingCoverageAnalyzer:
             logger.error(f"Error analyzing test function {node.name}: {e}")
             return None
 
-    def _extract_target_function_from_name(self, test_name: str) -> Optional[str]:
+    def _extract_target_function_from_name(self, test_name: str) -> str | None:
         """Extract target function from test name"""
         # Remove test prefixes
         cleaned_name = test_name

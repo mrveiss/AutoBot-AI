@@ -27,8 +27,6 @@ All I/O is async-first; no blocking operations.
 """
 
 import time
-from typing import Optional
-
 from api.knowledge_grounding_models import (
     Claim,
     Conflict,
@@ -166,7 +164,7 @@ class ConflictResolver(AsyncRedisClientMixin):
         self,
         kb_fact: KBFact,
         agent_claim: Claim,
-        research_result: Optional[ResearchResult] = None,
+        research_result: ResearchResult | None = None,
     ) -> ResolvedClaim:
         """Resolve conflict between KB fact and agent claim.
 
@@ -435,7 +433,7 @@ class ConflictResolver(AsyncRedisClientMixin):
         resolution: ResolvedClaim,
         resolved_by: str,
         notes: str = "",
-    ) -> Optional[ReviewTicket]:
+    ) -> ReviewTicket | None:
         """Mark a review ticket as resolved by human decision.
 
         Updates ticket status to RESOLVED and persists the human's
@@ -488,7 +486,7 @@ class ConflictResolver(AsyncRedisClientMixin):
             logger.error(f"Failed to resolve review ticket: {e}", exc_info=True)
             return None
 
-    async def dismiss_review_ticket(self, ticket_id: str, dismissed_by: str, notes: str = "") -> Optional[ReviewTicket]:
+    async def dismiss_review_ticket(self, ticket_id: str, dismissed_by: str, notes: str = "") -> ReviewTicket | None:
         """Mark a review ticket as dismissed (false conflict).
 
         Updates ticket status to DISMISSED and records why the conflict

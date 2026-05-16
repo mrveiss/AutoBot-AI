@@ -21,7 +21,7 @@ import asyncio
 import logging
 import re
 import time
-from typing import Callable, Optional
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ SLOW_TASK_HINTS: dict[str, str] = {
 _TASK_NAME_MAX_LEN = 60
 
 
-def _get_slow_task_hint(task_name: str) -> Optional[str]:
+def _get_slow_task_hint(task_name: str) -> str | None:
     """Return an estimated-duration hint for *task_name*, or ``None``.
 
     Tries each pattern in ``SLOW_TASK_HINTS`` against the full task name using
@@ -130,7 +130,7 @@ class TaskProgressTracker:
     def __init__(
         self,
         task_name: str,
-        progress_callback: Optional[Callable],
+        progress_callback: Callable | None,
         *,
         heartbeat_interval: int = HEARTBEAT_INTERVAL_SECONDS,
     ) -> None:
@@ -138,7 +138,7 @@ class TaskProgressTracker:
         self._progress_callback = progress_callback
         self._heartbeat_interval = heartbeat_interval
         self._start_time: float = 0.0
-        self._heartbeat_task: Optional[asyncio.Task] = None
+        self._heartbeat_task: asyncio.Task | None = None
 
     async def __aenter__(self) -> "TaskProgressTracker":
         self._start_time = time.monotonic()

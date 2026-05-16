@@ -11,7 +11,7 @@ import re
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -43,7 +43,7 @@ SUCCESS_INDICATORS = {"thanks", "perfect", "great", "works", "solved"}
 FRUSTRATION_INDICATORS = {"not working", "still", "again", "wrong", "frustrated"}
 
 
-def _parse_timestamp(ts_value: Any) -> Optional[datetime]:
+def _parse_timestamp(ts_value: Any) -> datetime | None:
     """Parse timestamp from various formats (Issue #315)."""
     if not ts_value:
         return None

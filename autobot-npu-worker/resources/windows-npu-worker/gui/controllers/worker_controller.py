@@ -5,8 +5,6 @@ Worker Controller - NPU Worker Process Management
 import logging
 import subprocess
 from pathlib import Path
-from typing import Optional
-
 import requests
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
@@ -75,11 +73,11 @@ class WorkerController(QObject):
     def __init__(self):
         super().__init__()
         logger.debug("WorkerController.__init__")
-        self.worker_process: Optional[subprocess.Popen] = None
+        self.worker_process: subprocess.Popen | None = None
         self.api_url = "http://localhost:8082"
         self.worker_status = "unknown"  # Start as unknown until first check
-        self._status_checker: Optional[StatusChecker] = None
-        self._metrics_worker: Optional[MetricsWorker] = None
+        self._status_checker: StatusChecker | None = None
+        self._metrics_worker: MetricsWorker | None = None
 
         # Paths
         self.worker_dir = Path(__file__).parent.parent.parent

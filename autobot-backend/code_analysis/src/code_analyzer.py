@@ -9,7 +9,7 @@ import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -38,11 +38,11 @@ class CodeFunction:
     source_code: str
     ast_hash: str
     signature: str
-    docstring: Optional[str]
+    docstring: str | None
     imports: List[str]
     calls: List[str]
     complexity: int
-    embedding: Optional[np.ndarray] = None
+    embedding: np.ndarray | None = None
 
 
 @dataclass
@@ -175,7 +175,7 @@ class CodeAnalyzer:
             logger.error(f"Error extracting functions from {file_path}: {e}")
             return []
 
-    def _extract_function_info(self, node: ast.AST, source: str, file_path: str) -> Optional[CodeFunction]:
+    def _extract_function_info(self, node: ast.AST, source: str, file_path: str) -> CodeFunction | None:
         """Extract detailed information about a function"""
 
         try:
@@ -555,7 +555,7 @@ from utils.{module_name}_utils import {func.name}
             except Exception as e:
                 logger.warning(f"Failed to clear cache: {e}")
 
-    async def get_cached_results(self) -> Optional[Dict[str, Any]]:
+    async def get_cached_results(self) -> Dict[str, Any] | None:
         """Get cached analysis results"""
         await self._ensure_redis()
         if self.redis_client:

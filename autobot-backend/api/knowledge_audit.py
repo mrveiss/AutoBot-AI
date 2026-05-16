@@ -8,7 +8,7 @@ Issue #679: Audit logging and compliance reporting for knowledge access and modi
 """
 
 from datetime import timedelta
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -229,7 +229,7 @@ async def get_organization_audit_log(
 async def get_permission_changes(
     request: Request,
     current_user: Dict = Depends(get_current_user),
-    fact_id: Optional[str] = Query(default=None),
+    fact_id: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=1000),
 ):
     """Get history of permission changes.

@@ -86,38 +86,38 @@ def _make_experiment(
 class TestBuildDocument:
     """Tests for ExperimentStore._build_document."""
 
-    def test_includes_hypothesis(self):
+    def test_includes_hypothesis(self) -> None:
         store = _make_store()
         exp = _make_experiment(hypothesis="Increase dropout")
         doc = store._build_document(exp)
         assert "Increase dropout" in doc
 
-    def test_includes_description(self):
+    def test_includes_description(self) -> None:
         store = _make_store()
         exp = _make_experiment(description="Raise dropout from 0.2 to 0.3")
         doc = store._build_document(exp)
         assert "Raise dropout" in doc
 
-    def test_includes_val_bpb(self):
+    def test_includes_val_bpb(self) -> None:
         store = _make_store()
         exp = _make_experiment(val_bpb=5.5)
         doc = store._build_document(exp)
         assert "5.5" in doc
 
-    def test_includes_improvement_when_available(self):
+    def test_includes_improvement_when_available(self) -> None:
         store = _make_store()
         exp = _make_experiment(val_bpb=5.5, baseline=6.0)
         doc = store._build_document(exp)
         assert "Improvement" in doc
         assert "0.5000" in doc
 
-    def test_no_improvement_without_baseline(self):
+    def test_no_improvement_without_baseline(self) -> None:
         store = _make_store()
         exp = _make_experiment(val_bpb=5.5, baseline=None)
         doc = store._build_document(exp)
         assert "Improvement" not in doc
 
-    def test_includes_truncated_code_diff(self):
+    def test_includes_truncated_code_diff(self) -> None:
         store = _make_store()
         long_diff = "x" * 600
         exp = _make_experiment(code_diff=long_diff)
@@ -126,13 +126,13 @@ class TestBuildDocument:
         # Should be truncated to 500 chars
         assert len(doc.split("Code change:\n")[1]) == 500
 
-    def test_no_code_diff_section_when_empty(self):
+    def test_no_code_diff_section_when_empty(self) -> None:
         store = _make_store()
         exp = _make_experiment(code_diff="")
         doc = store._build_document(exp)
         assert "Code change:" not in doc
 
-    def test_no_result_omits_val_bpb(self):
+    def test_no_result_omits_val_bpb(self) -> None:
         store = _make_store()
         exp = _make_experiment(val_bpb=None)
         exp.result = None
@@ -148,51 +148,51 @@ class TestBuildDocument:
 class TestBuildMetadata:
     """Tests for ExperimentStore._build_metadata."""
 
-    def test_includes_state(self):
+    def test_includes_state(self) -> None:
         store = _make_store()
         exp = _make_experiment(state=ExperimentState.KEPT)
         meta = store._build_metadata(exp)
         assert meta["state"] == "kept"
 
-    def test_includes_created_at(self):
+    def test_includes_created_at(self) -> None:
         store = _make_store()
         exp = _make_experiment()
         meta = store._build_metadata(exp)
         assert "created_at" in meta
         assert isinstance(meta["created_at"], float)
 
-    def test_includes_val_bpb_when_available(self):
+    def test_includes_val_bpb_when_available(self) -> None:
         store = _make_store()
         exp = _make_experiment(val_bpb=5.5)
         meta = store._build_metadata(exp)
         assert meta["val_bpb"] == 5.5
 
-    def test_no_val_bpb_when_no_result(self):
+    def test_no_val_bpb_when_no_result(self) -> None:
         store = _make_store()
         exp = _make_experiment(val_bpb=None)
         exp.result = None
         meta = store._build_metadata(exp)
         assert "val_bpb" not in meta
 
-    def test_includes_improvement(self):
+    def test_includes_improvement(self) -> None:
         store = _make_store()
         exp = _make_experiment(val_bpb=5.5, baseline=6.0)
         meta = store._build_metadata(exp)
         assert meta["improvement"] == 0.5
 
-    def test_no_improvement_without_baseline(self):
+    def test_no_improvement_without_baseline(self) -> None:
         store = _make_store()
         exp = _make_experiment(val_bpb=5.5, baseline=None)
         meta = store._build_metadata(exp)
         assert "improvement" not in meta
 
-    def test_includes_tags_as_csv(self):
+    def test_includes_tags_as_csv(self) -> None:
         store = _make_store()
         exp = _make_experiment(tags=["lr_sweep", "dropout"])
         meta = store._build_metadata(exp)
         assert meta["tags"] == "lr_sweep,dropout"
 
-    def test_no_tags_key_when_empty(self):
+    def test_no_tags_key_when_empty(self) -> None:
         store = _make_store()
         exp = _make_experiment(tags=[])
         meta = store._build_metadata(exp)
@@ -208,7 +208,7 @@ class TestIndexInChromadb:
     """Tests for ExperimentStore._index_in_chromadb."""
 
     @pytest.mark.asyncio
-    async def test_upserts_to_collection(self):
+    async def test_upserts_to_collection(self) -> None:
         collection = AsyncMock()
         collection.upsert = AsyncMock()
         store = _make_store(mock_collection=collection)
@@ -223,7 +223,7 @@ class TestIndexInChromadb:
         assert len(call_kwargs["metadatas"]) == 1
 
     @pytest.mark.asyncio
-    async def test_document_contains_hypothesis(self):
+    async def test_document_contains_hypothesis(self) -> None:
         collection = AsyncMock()
         collection.upsert = AsyncMock()
         store = _make_store(mock_collection=collection)
@@ -235,7 +235,7 @@ class TestIndexInChromadb:
         assert "Reduce block size" in doc
 
     @pytest.mark.asyncio
-    async def test_metadata_contains_state(self):
+    async def test_metadata_contains_state(self) -> None:
         collection = AsyncMock()
         collection.upsert = AsyncMock()
         store = _make_store(mock_collection=collection)
@@ -247,7 +247,7 @@ class TestIndexInChromadb:
         assert meta["state"] == "kept"
 
     @pytest.mark.asyncio
-    async def test_chromadb_error_logged_not_raised(self):
+    async def test_chromadb_error_logged_not_raised(self) -> None:
         """ChromaDB failures should be logged but not propagate."""
         collection = AsyncMock()
         collection.upsert = AsyncMock(side_effect=RuntimeError("ChromaDB down"))
@@ -258,7 +258,7 @@ class TestIndexInChromadb:
         await store._index_in_chromadb(exp)
 
     @pytest.mark.asyncio
-    async def test_lazy_init_chromadb_on_first_call(self):
+    async def test_lazy_init_chromadb_on_first_call(self) -> None:
         """When _chromadb_collection is None, _get_chromadb is called."""
         store = _make_store()
         store._chromadb_collection = None  # force lazy init
@@ -290,7 +290,7 @@ class TestSaveExperimentIndexing:
     """Tests for the ChromaDB indexing trigger in save_experiment."""
 
     @pytest.mark.asyncio
-    async def test_completed_experiment_indexed(self):
+    async def test_completed_experiment_indexed(self) -> None:
         collection = AsyncMock()
         collection.upsert = AsyncMock()
         store = _make_store(mock_collection=collection)
@@ -301,7 +301,7 @@ class TestSaveExperimentIndexing:
         collection.upsert.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_kept_experiment_indexed(self):
+    async def test_kept_experiment_indexed(self) -> None:
         collection = AsyncMock()
         collection.upsert = AsyncMock()
         store = _make_store(mock_collection=collection)
@@ -312,7 +312,7 @@ class TestSaveExperimentIndexing:
         collection.upsert.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_failed_experiment_not_indexed(self):
+    async def test_failed_experiment_not_indexed(self) -> None:
         collection = AsyncMock()
         collection.upsert = AsyncMock()
         store = _make_store(mock_collection=collection)
@@ -324,7 +324,7 @@ class TestSaveExperimentIndexing:
         collection.upsert.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_pending_experiment_not_indexed(self):
+    async def test_pending_experiment_not_indexed(self) -> None:
         collection = AsyncMock()
         collection.upsert = AsyncMock()
         store = _make_store(mock_collection=collection)
@@ -336,7 +336,7 @@ class TestSaveExperimentIndexing:
         collection.upsert.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_discarded_experiment_not_indexed(self):
+    async def test_discarded_experiment_not_indexed(self) -> None:
         collection = AsyncMock()
         collection.upsert = AsyncMock()
         store = _make_store(mock_collection=collection)
@@ -347,7 +347,7 @@ class TestSaveExperimentIndexing:
         collection.upsert.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_state_transition_cleans_old_index(self):
+    async def test_state_transition_cleans_old_index(self) -> None:
         """When old_state differs from current, srem is called."""
         store = _make_store()
         exp = _make_experiment(state=ExperimentState.KEPT, val_bpb=5.5)
@@ -359,7 +359,7 @@ class TestSaveExperimentIndexing:
         assert "running" in call_args[0]
 
     @pytest.mark.asyncio
-    async def test_same_state_no_srem(self):
+    async def test_same_state_no_srem(self) -> None:
         """When old_state equals current state, srem should not be called."""
         store = _make_store()
         exp = _make_experiment(state=ExperimentState.PENDING, val_bpb=None)
@@ -378,7 +378,7 @@ class TestSaveExperimentIndexing:
 class TestEnrichedIndexing:
     """Tests for enriched _build_document and _build_metadata (Task 8)."""
 
-    def test_build_document_includes_hyperparams(self):
+    def test_build_document_includes_hyperparams(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test hypothesis",
@@ -397,7 +397,7 @@ class TestEnrichedIndexing:
         assert "Baseline: 5.0" in doc
         assert "Improvement: 0.5" in doc
 
-    def test_build_document_includes_session_context(self):
+    def test_build_document_includes_session_context(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -408,7 +408,7 @@ class TestEnrichedIndexing:
         doc = store._build_document(exp)
         assert "Session: mysession" in doc
 
-    def test_build_document_no_session_tag(self):
+    def test_build_document_no_session_tag(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -419,7 +419,7 @@ class TestEnrichedIndexing:
         doc = store._build_document(exp)
         assert "Session:" not in doc
 
-    def test_build_metadata_includes_hyperparams(self):
+    def test_build_metadata_includes_hyperparams(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -435,7 +435,7 @@ class TestEnrichedIndexing:
         assert "session_id" in meta
         assert meta["session_id"] == "s1"
 
-    def test_build_metadata_key_hyperparams_present(self):
+    def test_build_metadata_key_hyperparams_present(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -456,7 +456,7 @@ class TestEnrichedIndexing:
         assert meta["n_layer"] == 6
         assert meta["n_head"] == 6
 
-    def test_build_metadata_no_session_when_no_session_tag(self):
+    def test_build_metadata_no_session_when_no_session_tag(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -479,7 +479,7 @@ class TestSpecFieldsIterationTrendVariant:
 
     # --- _build_document ---
 
-    def test_document_includes_iteration(self):
+    def test_document_includes_iteration(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -490,7 +490,7 @@ class TestSpecFieldsIterationTrendVariant:
         doc = store._build_document(exp)
         assert "Iteration: 3" in doc
 
-    def test_document_no_iteration_when_tag_absent(self):
+    def test_document_no_iteration_when_tag_absent(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -501,7 +501,7 @@ class TestSpecFieldsIterationTrendVariant:
         doc = store._build_document(exp)
         assert "Iteration:" not in doc
 
-    def test_document_includes_trend(self):
+    def test_document_includes_trend(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -512,7 +512,7 @@ class TestSpecFieldsIterationTrendVariant:
         doc = store._build_document(exp)
         assert "Trend: improving" in doc
 
-    def test_document_no_trend_when_tag_absent(self):
+    def test_document_no_trend_when_tag_absent(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -523,7 +523,7 @@ class TestSpecFieldsIterationTrendVariant:
         doc = store._build_document(exp)
         assert "Trend:" not in doc
 
-    def test_document_includes_variant(self):
+    def test_document_includes_variant(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -534,7 +534,7 @@ class TestSpecFieldsIterationTrendVariant:
         doc = store._build_document(exp)
         assert "Variant: v-abc123" in doc
 
-    def test_document_no_variant_when_tag_absent(self):
+    def test_document_no_variant_when_tag_absent(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -545,7 +545,7 @@ class TestSpecFieldsIterationTrendVariant:
         doc = store._build_document(exp)
         assert "Variant:" not in doc
 
-    def test_document_all_three_spec_fields(self):
+    def test_document_all_three_spec_fields(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Full spec test",
@@ -560,7 +560,7 @@ class TestSpecFieldsIterationTrendVariant:
 
     # --- _build_metadata ---
 
-    def test_metadata_includes_iteration(self):
+    def test_metadata_includes_iteration(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -571,7 +571,7 @@ class TestSpecFieldsIterationTrendVariant:
         meta = store._build_metadata(exp)
         assert meta["iteration"] == 4
 
-    def test_metadata_iteration_is_int(self):
+    def test_metadata_iteration_is_int(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -582,7 +582,7 @@ class TestSpecFieldsIterationTrendVariant:
         meta = store._build_metadata(exp)
         assert isinstance(meta["iteration"], int)
 
-    def test_metadata_no_iteration_when_tag_absent(self):
+    def test_metadata_no_iteration_when_tag_absent(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -593,7 +593,7 @@ class TestSpecFieldsIterationTrendVariant:
         meta = store._build_metadata(exp)
         assert "iteration" not in meta
 
-    def test_metadata_includes_trend_direction(self):
+    def test_metadata_includes_trend_direction(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -604,7 +604,7 @@ class TestSpecFieldsIterationTrendVariant:
         meta = store._build_metadata(exp)
         assert meta["trend_direction"] == "declining"
 
-    def test_metadata_no_trend_when_tag_absent(self):
+    def test_metadata_no_trend_when_tag_absent(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -615,7 +615,7 @@ class TestSpecFieldsIterationTrendVariant:
         meta = store._build_metadata(exp)
         assert "trend_direction" not in meta
 
-    def test_metadata_includes_variant_id(self):
+    def test_metadata_includes_variant_id(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -626,7 +626,7 @@ class TestSpecFieldsIterationTrendVariant:
         meta = store._build_metadata(exp)
         assert meta["variant_id"] == "var-001"
 
-    def test_metadata_no_variant_when_tag_absent(self):
+    def test_metadata_no_variant_when_tag_absent(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Test",
@@ -637,7 +637,7 @@ class TestSpecFieldsIterationTrendVariant:
         meta = store._build_metadata(exp)
         assert "variant_id" not in meta
 
-    def test_metadata_all_three_spec_fields(self):
+    def test_metadata_all_three_spec_fields(self) -> None:
         store = _make_store()
         exp = Experiment(
             hypothesis="Full spec test",

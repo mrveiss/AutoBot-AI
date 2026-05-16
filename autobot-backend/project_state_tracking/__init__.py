@@ -12,7 +12,7 @@ Part of Issue #381 - God Class Refactoring
 
 import json
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 
@@ -85,7 +85,7 @@ logger = get_logger(__name__)
 # ============================================================================
 
 
-async def track_system_error(error: Exception, context: Optional[Dict[str, Any]] = None):
+async def track_system_error(error: Exception, context: Dict[str, Any] | None = None):
     """Convenience function to track system errors from anywhere in the codebase."""
     try:
         tracker = get_state_tracker()
@@ -94,7 +94,7 @@ async def track_system_error(error: Exception, context: Optional[Dict[str, Any]]
         logger.error("Failed to track system error: %s", e)
 
 
-async def track_api_request(endpoint: str, method: str = "GET", status_code: Optional[int] = None):
+async def track_api_request(endpoint: str, method: str = "GET", status_code: int | None = None):
     """Convenience function to track API requests from middleware or endpoints."""
     try:
         tracker = get_state_tracker()
@@ -105,8 +105,8 @@ async def track_api_request(endpoint: str, method: str = "GET", status_code: Opt
 
 async def track_user_action(
     action_type: str,
-    user_id: Optional[str] = None,
-    context: Optional[Dict[str, Any]] = None,
+    user_id: str | None = None,
+    context: Dict[str, Any] | None = None,
 ):
     """Convenience function to track user actions from frontend or API."""
     try:

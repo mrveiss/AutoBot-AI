@@ -54,7 +54,7 @@ class AgentEvolutionTracker:
     specializations.
     """
 
-    def __init__(self, db: AgentSpecializationDB, registry: AgentRegistry | None = None):
+    def __init__(self, db: AgentSpecializationDB, registry: AgentRegistry | None = None) -> None:
         self.db = db
         self.registry = registry
 

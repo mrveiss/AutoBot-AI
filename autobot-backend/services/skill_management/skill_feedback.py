@@ -11,7 +11,7 @@ provide refinement recommendations.
 import json
 from collections import Counter
 from datetime import timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
@@ -36,7 +36,7 @@ class SkillFeedbackAnalyzer(AsyncRedisClientMixin):
         skill_id: str,
         action: str,
         rating: int,
-        feedback_text: Optional[str] = None,
+        feedback_text: str | None = None,
     ) -> None:
         """Log user feedback for a skill invocation.
 

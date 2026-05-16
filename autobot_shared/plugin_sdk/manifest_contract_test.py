@@ -52,21 +52,21 @@ def _plugin_manifest():
 
 
 class TestManifestContractProtocol:
-    def test_fake_dataclass_satisfies_protocol(self):
+    def test_fake_dataclass_satisfies_protocol(self) -> None:
         m = _FakeManifest(name="x", version="1.0.0", description="d", kind="skill")
         assert isinstance(m, ManifestContract)
 
-    def test_plugin_manifest_satisfies_protocol(self):
+    def test_plugin_manifest_satisfies_protocol(self) -> None:
         m = _plugin_manifest()
         assert isinstance(m, ManifestContract)
 
-    def test_extension_manifest_satisfies_protocol(self):
+    def test_extension_manifest_satisfies_protocol(self) -> None:
         from plugin_sdk.extension_manifest import ExtensionManifest
 
         m = ExtensionManifest(name="ext", version="0.1.0", description="an ext")
         assert isinstance(m, ManifestContract)
 
-    def test_object_missing_field_fails_protocol(self):
+    def test_object_missing_field_fails_protocol(self) -> None:
         class Bad:
             name = "x"
             version = "1.0.0"
@@ -75,7 +75,7 @@ class TestManifestContractProtocol:
 
         assert not isinstance(Bad(), ManifestContract)
 
-    def test_plain_dict_fails_protocol(self):
+    def test_plain_dict_fails_protocol(self) -> None:
         assert not isinstance({"name": "x", "version": "1", "description": "d", "kind": "skill"}, ManifestContract)
 
 
@@ -85,29 +85,29 @@ class TestManifestContractProtocol:
 
 
 class TestUnifiedRegistry:
-    def test_singleton(self):
+    def test_singleton(self) -> None:
         a = get_unified_registry()
         b = get_unified_registry()
         assert a is b
 
-    def test_register_and_get(self):
+    def test_register_and_get(self) -> None:
         reg = get_unified_registry()
         m = _FakeManifest(name="alpha", version="1.0.0", description="d", kind="skill")
         reg.register(m)
         assert reg.get("alpha") is m
 
-    def test_get_missing_returns_none(self):
+    def test_get_missing_returns_none(self) -> None:
         reg = get_unified_registry()
         assert reg.get("nonexistent") is None
 
-    def test_list_all_sorted(self):
+    def test_list_all_sorted(self) -> None:
         reg = get_unified_registry()
         for n in ("zebra", "apple", "mango"):
             reg.register(_FakeManifest(name=n, version="1.0.0", description="", kind="plugin"))
         names = [m.name for m in reg.list_all()]
         assert names == ["apple", "mango", "zebra"]
 
-    def test_register_replaces_existing(self):
+    def test_register_replaces_existing(self) -> None:
         reg = get_unified_registry()
         old = _FakeManifest(name="foo", version="1.0.0", description="old", kind="skill")
         new = _FakeManifest(name="foo", version="2.0.0", description="new", kind="skill")
@@ -116,7 +116,7 @@ class TestUnifiedRegistry:
         assert reg.get("foo") is new
         assert len(reg.list_all()) == 1
 
-    def test_register_rejects_non_contract(self):
+    def test_register_rejects_non_contract(self) -> None:
         reg = get_unified_registry()
 
         class Bad:
@@ -125,13 +125,13 @@ class TestUnifiedRegistry:
         with pytest.raises(TypeError):
             reg.register(Bad())  # type: ignore
 
-    def test_accepts_plugin_manifest(self):
+    def test_accepts_plugin_manifest(self) -> None:
         reg = get_unified_registry()
         m = _plugin_manifest()
         reg.register(m)
         assert reg.get("my_plugin") is m
 
-    def test_accepts_extension_manifest(self):
+    def test_accepts_extension_manifest(self) -> None:
         from plugin_sdk.extension_manifest import ExtensionManifest
 
         reg = get_unified_registry()
@@ -139,7 +139,7 @@ class TestUnifiedRegistry:
         reg.register(m)
         assert reg.get("my_ext") is m
 
-    def test_unregister_removes_entry(self):
+    def test_unregister_removes_entry(self) -> None:
         reg = get_unified_registry()
         m = _FakeManifest(name="to_remove", version="1.0.0", description="d", kind="plugin")
         reg.register(m)
@@ -149,7 +149,7 @@ class TestUnifiedRegistry:
         assert reg.get("to_remove") is None
         assert len(reg.list_all()) == 0
 
-    def test_unregister_missing_returns_false(self):
+    def test_unregister_missing_returns_false(self) -> None:
         reg = get_unified_registry()
         assert reg.unregister("nonexistent") is False
 
@@ -189,7 +189,7 @@ def _load_manifest_parser():
 
 
 class TestManifestParserBackwardCompat:
-    def test_manifest_without_kind_loads_with_warning(self):
+    def test_manifest_without_kind_loads_with_warning(self) -> None:
         mp = _load_manifest_parser()
 
         skill_md = "---\nname: my_skill\nversion: 1.0.0\ndescription: test\nentrypoint: main.py\n---\n"
@@ -201,7 +201,7 @@ class TestManifestParserBackwardCompat:
         assert len(deprecation_warns) == 1
         assert "kind" in str(deprecation_warns[0].message)
 
-    def test_manifest_with_kind_no_warning(self):
+    def test_manifest_with_kind_no_warning(self) -> None:
         mp = _load_manifest_parser()
 
         skill_md = "---\nname: my_skill\nversion: 1.0.0\ndescription: test\nentrypoint: main.py\nkind: skill\n---\n"

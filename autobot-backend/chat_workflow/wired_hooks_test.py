@@ -12,7 +12,7 @@ Tests verify:
 5. No-op when no extensions are registered
 """
 
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 
@@ -62,7 +62,7 @@ class _TrackingExtension(Extension):
         self.called_hooks.append("before_prompt_build")
         self.captured_data["context"] = ctx.get("context")
 
-    async def on_after_prompt_build(self, ctx: HookContext) -> Optional[str]:
+    async def on_after_prompt_build(self, ctx: HookContext) -> str | None:
         self.called_hooks.append("after_prompt_build")
         return ctx.get("prompt")
 
@@ -74,11 +74,11 @@ class _TrackingExtension(Extension):
         self.called_hooks.append("during_llm_streaming")
         self.captured_data["chunk"] = ctx.get("chunk")
 
-    async def on_after_llm_response(self, ctx: HookContext) -> Optional[str]:
+    async def on_after_llm_response(self, ctx: HookContext) -> str | None:
         self.called_hooks.append("after_llm_response")
         return ctx.get("response")
 
-    async def on_before_tool_parse(self, ctx: HookContext) -> Optional[str]:
+    async def on_before_tool_parse(self, ctx: HookContext) -> str | None:
         self.called_hooks.append("before_tool_parse")
         return ctx.get("llm_response")
 
@@ -86,7 +86,7 @@ class _TrackingExtension(Extension):
         self.called_hooks.append("before_tool_execute")
         self.captured_data["tool_name"] = ctx.get("tool_name")
 
-    async def on_after_tool_execute(self, ctx: HookContext) -> Optional[Any]:
+    async def on_after_tool_execute(self, ctx: HookContext) -> Any | None:
         self.called_hooks.append("after_tool_execute")
         return ctx.get("tool_result")
 
@@ -98,15 +98,15 @@ class _TrackingExtension(Extension):
         self.called_hooks.append("before_continuation")
         self.captured_data["iteration"] = ctx.get("iteration")
 
-    async def on_after_continuation(self, ctx: HookContext) -> Optional[str]:
+    async def on_after_continuation(self, ctx: HookContext) -> str | None:
         self.called_hooks.append("after_continuation")
         return ctx.get("response")
 
-    async def on_loop_complete(self, ctx: HookContext) -> Optional[str]:
+    async def on_loop_complete(self, ctx: HookContext) -> str | None:
         self.called_hooks.append("loop_complete")
         return ctx.get("final_response")
 
-    async def on_repairable_error(self, ctx: HookContext) -> Optional[bool]:
+    async def on_repairable_error(self, ctx: HookContext) -> bool | None:
         self.called_hooks.append("repairable_error")
         return None  # Not handling it
 
@@ -114,7 +114,7 @@ class _TrackingExtension(Extension):
         self.called_hooks.append("critical_error")
         self.captured_data["error"] = ctx.get("error")
 
-    async def on_before_response_send(self, ctx: HookContext) -> Optional[str]:
+    async def on_before_response_send(self, ctx: HookContext) -> str | None:
         self.called_hooks.append("before_response_send")
         return ctx.get("response")
 
@@ -129,15 +129,15 @@ class _TrackingExtension(Extension):
         self.called_hooks.append("session_destroy")
         self.captured_data["message_count"] = ctx.get("message_count")
 
-    async def on_before_rag_query(self, ctx: HookContext) -> Optional[str]:
+    async def on_before_rag_query(self, ctx: HookContext) -> str | None:
         self.called_hooks.append("before_rag_query")
         return ctx.get("query")
 
-    async def on_after_rag_results(self, ctx: HookContext) -> Optional[list]:
+    async def on_after_rag_results(self, ctx: HookContext) -> list | None:
         self.called_hooks.append("after_rag_results")
         return ctx.get("results")
 
-    async def on_approval_required(self, ctx: HookContext) -> Optional[bool]:
+    async def on_approval_required(self, ctx: HookContext) -> bool | None:
         self.called_hooks.append("approval_required")
         return None
 

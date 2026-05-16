@@ -13,7 +13,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -146,10 +146,10 @@ class TaskRequest:
 
     query: str
     task_type: str  # 'chat', 'code', 'analysis', etc.
-    max_response_time: Optional[float] = None
-    min_quality: Optional[float] = None
+    max_response_time: float | None = None
+    min_quality: float | None = None
     context_length: int = 0
-    user_preference: Optional[str] = None
+    user_preference: str | None = None
 
     def analyze_complexity(self, complexity_keywords: Dict[ModelCapabilityTier, List[str]]) -> ModelCapabilityTier:
         """Tell what complexity this task has (Tell Don't Ask)."""

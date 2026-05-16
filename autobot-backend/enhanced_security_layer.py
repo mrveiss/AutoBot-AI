@@ -12,7 +12,7 @@ import json
 import logging
 import os
 from datetime import timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
@@ -30,7 +30,7 @@ HIGH_RISK_COMMAND_RISKS = {CommandRisk.HIGH, CommandRisk.MODERATE}
 COMMAND_EXECUTION_ACTIONS = {"command_execution_attempt", "command_execution_complete"}
 
 
-def _parse_audit_log_entry(line: str, user: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def _parse_audit_log_entry(line: str, user: str | None = None) -> Dict[str, Any] | None:
     """Parse a single audit log line and filter by user (Issue #315: extracted).
 
     Args:
@@ -144,7 +144,7 @@ class EnhancedSecurityLayer:
             },
         )
 
-    def _check_auto_approve_moderate(self, command_id: str, approval_data: Dict[str, Any]) -> Optional[bool]:
+    def _check_auto_approve_moderate(self, command_id: str, approval_data: Dict[str, Any]) -> bool | None:
         """Check if moderate risk command should be auto-approved. Issue #620.
 
         Returns:
@@ -218,7 +218,7 @@ class EnhancedSecurityLayer:
             self.approval_results[command_id] = approved
             self.pending_approvals[command_id].set()
 
-    def _handle_deprecated_role(self, user_role: str, action_type: str, resource: Optional[str]) -> str:
+    def _handle_deprecated_role(self, user_role: str, action_type: str, resource: str | None) -> str:
         """Handle deprecated privileged roles by logging and downgrading. Issue #620.
 
         Args:
@@ -274,7 +274,7 @@ class EnhancedSecurityLayer:
                     return True
         return False
 
-    def check_permission(self, user_role: str, action_type: str, resource: Optional[str] = None) -> bool:
+    def check_permission(self, user_role: str, action_type: str, resource: str | None = None) -> bool:
         """
         Enhanced permission checking that includes command execution permissions
         SECURITY FIX: Removed god mode bypass - all roles use granular RBAC
@@ -509,7 +509,7 @@ class EnhancedSecurityLayer:
         except Exception as e:
             logger.error("Failed to write to audit log: %s", e)
 
-    def get_command_history(self, user: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_command_history(self, user: str | None = None, limit: int = 100) -> List[Dict[str, Any]]:
         """
         Get command execution history from audit log
 
@@ -535,7 +535,7 @@ class EnhancedSecurityLayer:
         # Return most recent entries
         return command_history[-limit:]
 
-    def authenticate_user(self, username: str, password: str) -> Optional[str]:
+    def authenticate_user(self, username: str, password: str) -> str | None:
         """Authenticate user and return their role"""
         if not self.enable_auth:
             return "admin"

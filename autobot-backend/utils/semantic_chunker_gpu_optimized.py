@@ -29,7 +29,7 @@ divergence from the canonical GPU chunker.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.singleton_factory import lazy_singleton
 from utils.semantic_chunker_base import SemanticChunk
@@ -58,7 +58,7 @@ class OptimizedSemanticChunker(GPUSemanticChunker):
     async def chunk_text_optimized(
         self,
         text: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> List[SemanticChunk]:
         """Chunk ``text`` via the GPU-optimized pipeline.
 

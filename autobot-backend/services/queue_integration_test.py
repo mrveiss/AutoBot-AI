@@ -15,7 +15,7 @@ from models.command_execution import CommandExecution, CommandState, RiskLevel
 from services.command_execution_queue import get_command_queue
 
 
-async def test_queue_integration():
+async def test_queue_integration() -> None:
     """Test complete command lifecycle through the queue"""
 
     print("=" * 80)  # noqa: print

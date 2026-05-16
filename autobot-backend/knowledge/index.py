@@ -11,7 +11,7 @@ Issue #369 - All ChromaDB operations wrapped with asyncio.to_thread() to prevent
 
 import asyncio
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 
@@ -153,7 +153,7 @@ class IndexMixin:
         migrated = await self._migrate_vectors_batch(old_collection, new_collection, old_count)
         return self._build_success_result(target_name, old_count, migrated, hnsw_metadata)
 
-    async def rebuild_chromadb_index(self, new_collection_name: Optional[str] = None) -> dict:
+    async def rebuild_chromadb_index(self, new_collection_name: str | None = None) -> dict:
         """Rebuild ChromaDB collection with optimized HNSW (Issue #398: refactored)."""
         if not self.initialized:
             return {"status": "error", "message": "Knowledge base not initialized"}

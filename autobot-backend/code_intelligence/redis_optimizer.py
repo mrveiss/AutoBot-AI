@@ -20,7 +20,7 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, FrozenSet, List, Optional, Set
+from typing import Any, Dict, FrozenSet, List, Set
 
 from autobot_shared.logging_manager import get_logger
 
@@ -86,7 +86,7 @@ class RedisOperation:
 
     operation: str  # get, set, hget, etc.
     line_number: int
-    key_pattern: Optional[str] = None
+    key_pattern: str | None = None
     is_async: bool = False
     in_loop: bool = False
     context: str = ""  # surrounding code context
@@ -284,7 +284,7 @@ class RedisASTVisitor(ast.NodeVisitor):
 
         self.generic_visit(node)
 
-    def _get_call_name(self, node: ast.Call) -> Optional[str]:
+    def _get_call_name(self, node: ast.Call) -> str | None:
         """Get the full name of a function call."""
         if isinstance(node.func, ast.Name):
             return node.func.id
@@ -332,7 +332,7 @@ class RedisASTVisitor(ast.NodeVisitor):
                 parts.append("{...}")
         return "".join(parts)
 
-    def _extract_key_pattern(self, node: ast.Call) -> Optional[str]:
+    def _extract_key_pattern(self, node: ast.Call) -> str | None:
         """Extract the key pattern from a Redis call."""
         if not node.args:
             return None
@@ -365,7 +365,7 @@ class RedisOptimizer:
     - Connection management patterns
     """
 
-    def __init__(self, project_root: Optional[str] = None):
+    def __init__(self, project_root: str | None = None):
         """
         Initialize the Redis optimizer.
 
@@ -448,8 +448,8 @@ class RedisOptimizer:
 
     def analyze_directory(
         self,
-        directory: Optional[str] = None,
-        exclude_patterns: Optional[List[str]] = None,
+        directory: str | None = None,
+        exclude_patterns: List[str] | None = None,
         max_files: int = 500,
     ) -> List[OptimizationResult]:
         """
@@ -623,7 +623,7 @@ class RedisOptimizer:
 
     def _find_following_write_op(
         self, operations: List[RedisOperation], start_idx: int, read_op: RedisOperation
-    ) -> Optional[RedisOperation]:
+    ) -> RedisOperation | None:
         """Find a write operation following a read (Issue #335 - extracted helper)."""
         for j in range(start_idx + 1, min(start_idx + 5, len(operations))):
             next_op = operations[j]
@@ -861,7 +861,7 @@ class RedisOptimizer:
         get_op: RedisOperation,
         set_op: RedisOperation,
         source_lines: List[str],
-    ) -> Optional[OptimizationResult]:
+    ) -> OptimizationResult | None:
         """Check GET/SET pair for stampede risk (Issue #335 - extracted helper)."""
         line_diff = set_op.line_number - get_op.line_number
         if not (0 < line_diff <= 20):
@@ -1070,7 +1070,7 @@ async def get_with_lock(redis, key, compute_fn, ttl=300):
 # Convenience function for quick analysis
 def analyze_redis_usage(
     path: str,
-    exclude_patterns: Optional[List[str]] = None,
+    exclude_patterns: List[str] | None = None,
 ) -> Dict[str, Any]:
     """
     Analyze Redis usage in a file or directory.

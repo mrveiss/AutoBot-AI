@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.ssot_config import config as _ssot_config
 
@@ -72,7 +72,7 @@ class AsyncChromaCollection:
         return self._collection.name
 
     @property
-    def metadata(self) -> Optional[Dict[str, Any]]:
+    def metadata(self) -> Dict[str, Any] | None:
         """Get collection metadata."""
         return self._collection.metadata
 
@@ -83,9 +83,9 @@ class AsyncChromaCollection:
     async def add(
         self,
         ids: List[str],
-        embeddings: Optional[List[List[float]]] = None,
-        metadatas: Optional[List[Dict[str, Any]]] = None,
-        documents: Optional[List[str]] = None,
+        embeddings: List[List[float]] | None = None,
+        metadatas: List[Dict[str, Any]] | None = None,
+        documents: List[str] | None = None,
     ) -> None:
         """
         Add items to the collection (async).
@@ -128,12 +128,12 @@ class AsyncChromaCollection:
 
     async def query(
         self,
-        query_embeddings: Optional[List[List[float]]] = None,
-        query_texts: Optional[List[str]] = None,
+        query_embeddings: List[List[float]] | None = None,
+        query_texts: List[str] | None = None,
         n_results: int = 10,
-        where: Optional[Dict[str, Any]] = None,
-        where_document: Optional[Dict[str, Any]] = None,
-        include: Optional[List[str]] = None,
+        where: Dict[str, Any] | None = None,
+        where_document: Dict[str, Any] | None = None,
+        include: List[str] | None = None,
     ) -> Dict[str, Any]:
         """
         Query the collection for similar items (async).
@@ -164,12 +164,12 @@ class AsyncChromaCollection:
 
     async def get(
         self,
-        ids: Optional[List[str]] = None,
-        where: Optional[Dict[str, Any]] = None,
-        where_document: Optional[Dict[str, Any]] = None,
-        include: Optional[List[str]] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
+        ids: List[str] | None = None,
+        where: Dict[str, Any] | None = None,
+        where_document: Dict[str, Any] | None = None,
+        include: List[str] | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
     ) -> Dict[str, Any]:
         """
         Get items from the collection by ID or filter (async).
@@ -201,9 +201,9 @@ class AsyncChromaCollection:
     async def update(
         self,
         ids: List[str],
-        embeddings: Optional[List[List[float]]] = None,
-        metadatas: Optional[List[Dict[str, Any]]] = None,
-        documents: Optional[List[str]] = None,
+        embeddings: List[List[float]] | None = None,
+        metadatas: List[Dict[str, Any]] | None = None,
+        documents: List[str] | None = None,
     ) -> None:
         """
         Update items in the collection (async).
@@ -225,9 +225,9 @@ class AsyncChromaCollection:
     async def upsert(
         self,
         ids: List[str],
-        embeddings: Optional[List[List[float]]] = None,
-        metadatas: Optional[List[Dict[str, Any]]] = None,
-        documents: Optional[List[str]] = None,
+        embeddings: List[List[float]] | None = None,
+        metadatas: List[Dict[str, Any]] | None = None,
+        documents: List[str] | None = None,
     ) -> None:
         """
         Upsert (insert or update) items in the collection (async).
@@ -248,9 +248,9 @@ class AsyncChromaCollection:
 
     async def delete(
         self,
-        ids: Optional[List[str]] = None,
-        where: Optional[Dict[str, Any]] = None,
-        where_document: Optional[Dict[str, Any]] = None,
+        ids: List[str] | None = None,
+        where: Dict[str, Any] | None = None,
+        where_document: Dict[str, Any] | None = None,
     ) -> None:
         """
         Delete items from the collection (async).
@@ -273,8 +273,8 @@ class AsyncChromaCollection:
 
     async def modify(
         self,
-        name: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        name: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> None:
         """Modify collection name or metadata (async)."""
         await asyncio.to_thread(
@@ -304,7 +304,7 @@ class AsyncChromaClient:
     async def get_collection(
         self,
         name: str,
-        embedding_function: Optional[Any] = None,
+        embedding_function: Any | None = None,
     ) -> AsyncChromaCollection:
         """
         Get an existing collection by name (async).
@@ -331,8 +331,8 @@ class AsyncChromaClient:
     async def get_or_create_collection(
         self,
         name: str,
-        metadata: Optional[Dict[str, Any]] = None,
-        embedding_function: Optional[Any] = None,
+        metadata: Dict[str, Any] | None = None,
+        embedding_function: Any | None = None,
     ) -> AsyncChromaCollection:
         """
         Get or create a collection (async).
@@ -361,8 +361,8 @@ class AsyncChromaClient:
     async def create_collection(
         self,
         name: str,
-        metadata: Optional[Dict[str, Any]] = None,
-        embedding_function: Optional[Any] = None,
+        metadata: Dict[str, Any] | None = None,
+        embedding_function: Any | None = None,
     ) -> AsyncChromaCollection:
         """
         Create a new collection (async).

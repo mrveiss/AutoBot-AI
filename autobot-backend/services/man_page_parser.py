@@ -19,8 +19,6 @@ import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
-
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -67,7 +65,7 @@ class ManPageContent:
 
     command: str
     section: str
-    file_path: Optional[str] = None
+    file_path: str | None = None
 
     # Core sections
     title: str = ""
@@ -99,7 +97,7 @@ class ManPageContent:
     # Computed fields
     section_description: str = field(init=False, default="")
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Set computed fields after initialization."""
         self.section_description = MAN_SECTION_DESCRIPTIONS.get(self.section, "Unknown Section")
 
@@ -149,7 +147,7 @@ class ManPageContent:
 
         return "\n".join(parts)
 
-    def get_metadata_for_storage(self, system_context: Optional[dict] = None) -> dict:
+    def get_metadata_for_storage(self, system_context: dict | None = None) -> dict:
         """
         Generate metadata dictionary for knowledge base storage.
 
@@ -250,7 +248,7 @@ class ManPageParser:
         "standards": r"^STANDARDS?\s*\n(.*?)(?=^[A-Z]+\s*\n|\Z)",
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the man page parser."""
         self._troff_cleanup_patterns = self._compile_troff_patterns()
 
@@ -309,7 +307,7 @@ class ManPageParser:
 
         return content.strip()
 
-    def read_man_page_file(self, file_path: Path) -> Optional[str]:
+    def read_man_page_file(self, file_path: Path) -> str | None:
         """
         Read content from a man page file, handling gzip compression.
 
@@ -317,7 +315,7 @@ class ManPageParser:
             file_path: Path to the man page file (.gz or plain)
 
         Returns:
-            Optional[str]: File content or None if read fails
+            str | None: File content or None if read fails
         """
         try:
             file_path = Path(file_path)
@@ -443,7 +441,7 @@ class ManPageParser:
                 result.title = result.name.strip()
             result.name = ""
 
-    def parse_man_page_with_subprocess(self, command: str, section: Optional[str] = None) -> ManPageContent:
+    def parse_man_page_with_subprocess(self, command: str, section: str | None = None) -> ManPageContent:
         """
         Parse a man page using the system `man` command.
 
@@ -485,7 +483,7 @@ class ManPageParser:
 
         return result
 
-    def get_man_page_summary(self, command: str, section: Optional[str] = None) -> str:
+    def get_man_page_summary(self, command: str, section: str | None = None) -> str:
         """
         Get a brief summary of a man page using `man -k`.
 
@@ -534,7 +532,7 @@ def parse_man_page(file_path: Path) -> ManPageContent:
     return parser.parse_man_page(file_path)
 
 
-def get_man_page_content(command: str, section: Optional[str] = None) -> ManPageContent:
+def get_man_page_content(command: str, section: str | None = None) -> ManPageContent:
     """
     Get parsed man page content for a command using subprocess.
 

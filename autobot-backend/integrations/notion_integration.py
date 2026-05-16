@@ -19,7 +19,7 @@ Supported actions:
 """
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
@@ -301,7 +301,7 @@ class NotionIntegration(BaseIntegration):
         self,
         method: str,
         endpoint: str,
-        json_data: Optional[Dict[str, Any]] = None,
+        json_data: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Make an authenticated request to the Notion API."""
         url = "%s%s" % (self._base_url, endpoint)

@@ -25,7 +25,7 @@ Issue #1951: Attention backend fallback chain.
 import gc
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, List, Optional
+from typing import Any, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -96,7 +96,7 @@ class ModelConfig:
 
     model_name: str = ""
     model_type: str = ""
-    torch_dtype: Optional[str] = None
+    torch_dtype: str | None = None
     extra: dict = field(default_factory=dict)
 
 
@@ -255,7 +255,7 @@ class AttentionBackendSelector:
         except (ImportError, RuntimeError):
             return False
 
-    def _try_apply_better_transformer(self, model: Any) -> Optional[Any]:
+    def _try_apply_better_transformer(self, model: Any) -> Any | None:
         """Attempt BetterTransformer conversion; return None on failure."""
         bt_cls = _import_better_transformer()
         if bt_cls is None:
@@ -270,7 +270,7 @@ class AttentionBackendSelector:
             return None
 
     @staticmethod
-    def _try_apply_sdpa(model: Any) -> Optional[Any]:
+    def _try_apply_sdpa(model: Any) -> Any | None:
         """Attempt to enable SDPA on the model; return None on failure."""
         try:
             torch = _import_torch()
@@ -310,7 +310,7 @@ def _free_memory() -> None:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_selector: Optional[AttentionBackendSelector] = None
+_selector: AttentionBackendSelector | None = None
 
 
 def get_attention_backend_selector() -> AttentionBackendSelector:

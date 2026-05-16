@@ -13,8 +13,6 @@ The notification config is a simple dataclass so we serialise it with
 
 import json
 from dataclasses import asdict
-from typing import Optional
-
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from constants.redis_constants import REDIS_KEY
@@ -32,7 +30,7 @@ def _notif_config_key(workflow_id: str) -> str:
 
 async def save_notification_config(
     workflow_id: str,
-    config: Optional[NotificationConfig],
+    config: NotificationConfig | None,
 ) -> None:
     """Persist *config* to Redis, or delete the key when *config* is None."""
     redis = await get_async_redis_client(database="main")
@@ -54,7 +52,7 @@ async def save_notification_config(
 
 async def load_notification_config(
     workflow_id: str,
-) -> Optional[NotificationConfig]:
+) -> NotificationConfig | None:
     """Load notification config from Redis; returns None when not found."""
     redis = await get_async_redis_client(database="main")
     if redis is None:

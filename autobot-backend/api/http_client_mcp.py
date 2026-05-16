@@ -26,7 +26,7 @@ Issue #49 - Additional MCP Bridges (Browser, HTTP, Database, Git)
 
 import asyncio
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from urllib.parse import urlparse
 
 import aiohttp
@@ -116,7 +116,7 @@ DEFAULT_TIMEOUT = 30  # seconds
 MAX_TIMEOUT = 120  # seconds
 
 
-def _try_parse_json(body: Optional[str]) -> Optional[JSONObject]:
+def _try_parse_json(body: str | None) -> JSONObject | None:
     """Attempt to parse body as JSON. (Issue #315 - extracted to reduce nesting)"""
     if not body:
         return None
@@ -131,9 +131,9 @@ def _build_request_kwargs(
     url: str,
     headers: Dict[str, str],
     timeout: int,
-    params: Optional[Dict[str, str]] = None,
-    json_body: Optional[JSONObject] = None,
-    form_data: Optional[Dict[str, str]] = None,
+    params: Dict[str, str] | None = None,
+    json_body: JSONObject | None = None,
+    form_data: Dict[str, str] | None = None,
 ) -> Dict[str, Any]:
     """
     Build request kwargs dictionary for aiohttp session.request.
@@ -171,8 +171,8 @@ def _build_request_kwargs(
 def _build_http_response(
     response,
     method: str,
-    body: Optional[str],
-    json_response: Optional[JSONObject],
+    body: str | None,
+    json_response: JSONObject | None,
 ) -> JSONObject:
     """
     Build standardized HTTP response dictionary.
@@ -578,10 +578,10 @@ async def get_http_client_mcp_tools() -> List[HTTPClientMCPTool]:
 async def execute_http_request(
     method: str,
     url: str,
-    headers: Optional[Dict[str, str]] = None,
-    params: Optional[Dict[str, str]] = None,
-    json_body: Optional[JSONObject] = None,
-    form_data: Optional[Dict[str, str]] = None,
+    headers: Dict[str, str] | None = None,
+    params: Dict[str, str] | None = None,
+    json_body: JSONObject | None = None,
+    form_data: Dict[str, str] | None = None,
     timeout: int = DEFAULT_TIMEOUT,
 ) -> JSONObject:
     """

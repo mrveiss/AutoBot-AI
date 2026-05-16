@@ -29,7 +29,7 @@ SSOT Migration (Issue #763, #3829):
 import asyncio
 import time
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -71,7 +71,7 @@ class ConfigManager(
     def __init__(
         self,
         config_dir: str = "config",
-        settings: Optional[ConfigSettings] = None,
+        settings: ConfigSettings | None = None,
     ):
         """Initialize config manager with directory paths and settings."""
         # Use centralized PathConstants (Issue #380)
@@ -86,7 +86,7 @@ class ConfigManager(
         # Configuration cache
         self._config: Dict[str, Any] = {}
         self._cache_timestamps: Dict[str, datetime] = {}
-        self._sync_cache_timestamp: Optional[float] = None
+        self._sync_cache_timestamp: float | None = None
         self.CACHE_DURATION = 30  # 30 seconds for sync cache
 
         # Async support

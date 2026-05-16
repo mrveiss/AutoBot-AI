@@ -18,7 +18,7 @@ All models include foreign key relationships to User entities.
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
@@ -57,7 +57,7 @@ class TerminalActivityModel(Base):
     )
 
     # Session context (optional - may be executed outside chat)
-    session_id: Mapped[Optional[str]] = mapped_column(
+    session_id: Mapped[str | None] = mapped_column(
         String(128),
         nullable=True,
         index=True,
@@ -66,14 +66,14 @@ class TerminalActivityModel(Base):
     # Command details
     command: Mapped[str] = mapped_column(Text, nullable=False)
 
-    working_directory: Mapped[Optional[str]] = mapped_column(
+    working_directory: Mapped[str | None] = mapped_column(
         String(1024),
         nullable=True,
     )
 
-    exit_code: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    output: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    output: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Secret usage tracking
     secrets_used: Mapped[list[uuid.UUID]] = mapped_column(
@@ -129,7 +129,7 @@ class FileActivityModel(Base):
     )
 
     # Session context
-    session_id: Mapped[Optional[str]] = mapped_column(
+    session_id: Mapped[str | None] = mapped_column(
         String(128),
         nullable=True,
         index=True,
@@ -144,17 +144,17 @@ class FileActivityModel(Base):
 
     path: Mapped[str] = mapped_column(String(2048), nullable=False)
 
-    new_path: Mapped[Optional[str]] = mapped_column(
+    new_path: Mapped[str | None] = mapped_column(
         String(2048),
         nullable=True,
     )
 
-    file_type: Mapped[Optional[str]] = mapped_column(
+    file_type: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
 
-    size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Additional metadata (permissions, owner, hash, etc.)
     extra_data: Mapped[dict] = mapped_column(
@@ -203,7 +203,7 @@ class BrowserActivityModel(Base):
     )
 
     # Session context
-    session_id: Mapped[Optional[str]] = mapped_column(
+    session_id: Mapped[str | None] = mapped_column(
         String(128),
         nullable=True,
         index=True,
@@ -218,12 +218,12 @@ class BrowserActivityModel(Base):
         index=True,
     )
 
-    selector: Mapped[Optional[str]] = mapped_column(
+    selector: Mapped[str | None] = mapped_column(
         String(512),
         nullable=True,
     )
 
-    input_value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    input_value: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Secret usage tracking
     secrets_used: Mapped[list[uuid.UUID]] = mapped_column(
@@ -281,7 +281,7 @@ class DesktopActivityModel(Base):
     )
 
     # Session context
-    session_id: Mapped[Optional[str]] = mapped_column(
+    session_id: Mapped[str | None] = mapped_column(
         String(128),
         nullable=True,
         index=True,
@@ -294,19 +294,19 @@ class DesktopActivityModel(Base):
         index=True,
     )
 
-    coordinates: Mapped[Optional[tuple[int, int]]] = mapped_column(
+    coordinates: Mapped[tuple[int, int] | None] = mapped_column(
         ARRAY(Integer, dimensions=1),
         nullable=True,
     )
 
-    window_title: Mapped[Optional[str]] = mapped_column(
+    window_title: Mapped[str | None] = mapped_column(
         String(512),
         nullable=True,
     )
 
-    input_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    input_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    screenshot_path: Mapped[Optional[str]] = mapped_column(
+    screenshot_path: Mapped[str | None] = mapped_column(
         String(1024),
         nullable=True,
     )
@@ -376,7 +376,7 @@ class SecretUsageModel(Base):
         index=True,
     )
 
-    session_id: Mapped[Optional[str]] = mapped_column(
+    session_id: Mapped[str | None] = mapped_column(
         String(128),
         nullable=True,
         index=True,
@@ -389,7 +389,7 @@ class SecretUsageModel(Base):
         default=True,
     )
 
-    denial_reason: Mapped[Optional[str]] = mapped_column(
+    denial_reason: Mapped[str | None] = mapped_column(
         String(512),
         nullable=True,
     )

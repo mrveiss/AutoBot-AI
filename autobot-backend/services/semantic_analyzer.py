@@ -59,7 +59,7 @@ class SemanticAnalyzer:
         },
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.detected_frameworks: Set[str] = set()
         self.detected_patterns: List[str] = []
         self.coding_style = "pep8"  # Default

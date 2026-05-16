@@ -32,7 +32,7 @@ _API_STATUS_RESPONSES = {
 class OllamaHealth(BaseProviderHealth):
     """Health checker for Ollama (local LLM provider)"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Ollama health checker with host configuration."""
         super().__init__("ollama")
         self.ollama_host = get_ollama_url()
@@ -102,7 +102,7 @@ class OllamaHealth(BaseProviderHealth):
 class OpenAIHealth(BaseProviderHealth):
     """Health checker for OpenAI API"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize OpenAI health checker with API key configuration."""
         super().__init__("openai")
         self.api_key = config.openai_api_key
@@ -201,7 +201,7 @@ class OpenAIHealth(BaseProviderHealth):
 class AnthropicHealth(BaseProviderHealth):
     """Health checker for Anthropic Claude API"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Anthropic health checker with API key configuration."""
         super().__init__("anthropic")
         self.api_key = config.anthropic_api_key
@@ -303,7 +303,7 @@ class AnthropicHealth(BaseProviderHealth):
 class GoogleHealth(BaseProviderHealth):
     """Health checker for Google Gemini API"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Google health checker with API key from environment."""
         super().__init__("google")
         self.api_key = config.google_api_key
@@ -403,7 +403,7 @@ class GoogleHealth(BaseProviderHealth):
 class LMStudioHealth(BaseProviderHealth):
     """Health checker for LM Studio (local LLM provider, Issue #746)"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize LM Studio health checker with host configuration."""
         super().__init__("lmstudio")
         # LM Studio default port is 1234
@@ -475,7 +475,7 @@ class LMStudioHealth(BaseProviderHealth):
 class VLLMHealth(BaseProviderHealth):
     """Health checker for vLLM (high-performance inference server, Issue #746)"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize vLLM health checker with host configuration."""
         super().__init__("vllm")
         # vLLM default port is 8000

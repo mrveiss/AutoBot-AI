@@ -11,7 +11,7 @@ port conflicts and node placement constraints.
 
 import logging
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -402,7 +402,7 @@ async def seed_default_roles(db: AsyncSession) -> int:
     return created
 
 
-async def get_role(db: AsyncSession, role_name: str) -> Optional[Role]:
+async def get_role(db: AsyncSession, role_name: str) -> Role | None:
     """Get role by name."""
     result = await db.execute(select(Role).where(Role.name == role_name))
     return result.scalar_one_or_none()
@@ -422,7 +422,7 @@ async def check_role_uniqueness(
     db: AsyncSession,
     role_name: str,
     target_node_id: str,
-) -> Optional[str]:
+) -> str | None:
     """Check if a role is already assigned to another node (#1389).
 
     Returns the node_id that currently owns the role, or None if available.

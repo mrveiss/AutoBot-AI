@@ -28,7 +28,7 @@ import os
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 import yaml
@@ -102,8 +102,8 @@ class ServiceRegistry:
     """
 
     # Issue #380: Cache service configs to avoid repeated dict creation/config lookups
-    _cached_default_services: Optional[Dict] = None
-    _cached_host_patterns: Optional[Dict] = None
+    _cached_default_services: Dict | None = None
+    _cached_host_patterns: Dict | None = None
 
     # Service configurations from unified config - NO HARDCODED VALUES
     @classmethod
@@ -188,7 +188,7 @@ class ServiceRegistry:
         }
         return cls._cached_host_patterns
 
-    def __init__(self, config_file: Optional[str] = None):
+    def __init__(self, config_file: str | None = None):
         """Initialize service registry with optional configuration file"""
         self.logger = get_logger(__name__)
         self.services: Dict[str, ServiceConfig] = {}
@@ -366,7 +366,7 @@ class ServiceRegistry:
 
         return f"{base_url}{full_path}"
 
-    def get_service_config(self, service_name: str) -> Optional[ServiceConfig]:
+    def get_service_config(self, service_name: str) -> ServiceConfig | None:
         """Get service configuration"""
         return self.services.get(service_name)
 
@@ -478,11 +478,11 @@ class ServiceRegistry:
 # Global service registry instance (thread-safe)
 import threading
 
-_registry: Optional[ServiceRegistry] = None
+_registry: ServiceRegistry | None = None
 _registry_lock = threading.Lock()
 
 
-def get_service_registry(config_file: Optional[str] = None) -> ServiceRegistry:
+def get_service_registry(config_file: str | None = None) -> ServiceRegistry:
     """Get global service registry instance (singleton, thread-safe)"""
     global _registry
     if _registry is None:

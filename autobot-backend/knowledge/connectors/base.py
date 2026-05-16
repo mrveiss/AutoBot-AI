@@ -11,7 +11,7 @@ Concrete connectors subclass AbstractConnector and register via
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 
 from autobot_shared.datetime_utils import datetime_now
 from autobot_shared.logging_manager import get_logger
@@ -66,11 +66,11 @@ class AbstractConnector(ABC):
         """Return all sources currently available from this connector."""
 
     @abstractmethod
-    async def fetch_content(self, source_id: str) -> Optional[ContentResult]:
+    async def fetch_content(self, source_id: str) -> ContentResult | None:
         """Fetch and return the content for a single source by ID."""
 
     @abstractmethod
-    async def detect_changes(self, since: Optional[datetime] = None) -> List[ChangeInfo]:
+    async def detect_changes(self, since: datetime | None = None) -> List[ChangeInfo]:
         """Return sources that changed since *since* (or all if since is None)."""
 
     # ------------------------------------------------------------------

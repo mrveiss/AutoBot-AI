@@ -25,7 +25,7 @@ steps can detect them rather than silently operating on empty strings.
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from constants.status_enums import TaskStatus
@@ -56,7 +56,7 @@ class StepOutput:
 
     status: str
     stdout: str = ""
-    parsed_json: Optional[Dict[str, Any]] = None
+    parsed_json: Dict[str, Any] | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -70,7 +70,7 @@ class StepOutput:
         Issue #2141.
         """
         stdout = result.get("stdout", "") or ""
-        parsed_json: Optional[Dict[str, Any]] = None
+        parsed_json: Dict[str, Any] | None = None
         if stdout:
             try:
                 parsed_json = json.loads(stdout)

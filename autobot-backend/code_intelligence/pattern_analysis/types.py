@@ -10,7 +10,7 @@ Issue #208: Data classes and enums for pattern detection system.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class PatternType(Enum):
@@ -45,8 +45,8 @@ class CodeLocation:
     file_path: str
     start_line: int
     end_line: int
-    function_name: Optional[str] = None
-    class_name: Optional[str] = None
+    function_name: str | None = None
+    class_name: str | None = None
 
     @property
     def line_count(self) -> int:
@@ -231,7 +231,7 @@ class PatternCluster:
     pattern_type: PatternType
     patterns: List[CodePattern]
     representative_code: str = ""
-    embedding_centroid: Optional[List[float]] = None
+    embedding_centroid: List[float] | None = None
 
     @property
     def size(self) -> int:

@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
@@ -106,7 +106,7 @@ class RetryExhaustedError(Exception):
 class RetryMechanism:
     """Retry mechanism with various backoff strategies"""
 
-    def __init__(self, config: Optional[RetryConfig] = None):
+    def __init__(self, config: RetryConfig | None = None):
         """Initialize retry mechanism with optional configuration."""
         self.config = config or RetryConfig()
         self._stats_lock = threading.Lock()

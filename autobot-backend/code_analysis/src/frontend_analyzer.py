@@ -10,7 +10,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
@@ -305,7 +305,7 @@ class FrontendAnalyzer:
 
         return components
 
-    async def _analyze_file_component(self, file_path: str) -> Optional[FrontendComponent]:
+    async def _analyze_file_component(self, file_path: str) -> FrontendComponent | None:
         """Analyze a single file as a frontend component"""
 
         try:
@@ -343,7 +343,7 @@ class FrontendAnalyzer:
             logger.error(f"Error analyzing component {file_path}: {e}")
             return None
 
-    def _detect_framework(self, content: str, file_path: str) -> Optional[str]:
+    def _detect_framework(self, content: str, file_path: str) -> str | None:
         """Detect frontend framework"""
 
         # Check file extension first

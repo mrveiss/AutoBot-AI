@@ -15,7 +15,7 @@ import re
 import socket
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 import aiohttp
@@ -279,7 +279,7 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
         ) from exc
 
 
-async def get_source_by_id(source_id: str) -> Optional[MarketplaceSource]:
+async def get_source_by_id(source_id: str) -> MarketplaceSource | None:
     """Look up a single source by id (built-in or user-added)."""
     if source_id == BUILTIN_SOURCE_ID:
         return _builtin_source()

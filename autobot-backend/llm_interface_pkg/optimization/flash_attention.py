@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
@@ -43,7 +43,7 @@ def _get_torch() -> Any:
 
 
 # Lazy imports for optional dependencies
-_flash_attn_available: Optional[bool] = None
+_flash_attn_available: bool | None = None
 _flash_attn_modules: dict = {}
 
 
@@ -69,10 +69,10 @@ class FlashAttentionConfig:
     """
 
     dropout_p: float = 0.0
-    softmax_scale: Optional[float] = None
+    softmax_scale: float | None = None
     causal: bool = True
     kv_cache_chunk_size: int = 256
-    num_kv_heads: Optional[int] = None
+    num_kv_heads: int | None = None
     max_sequence_length: int = 8192
 
 
@@ -101,7 +101,7 @@ class KVCacheState:
         chunk_size: Number of positions to grow by when cache is full.
     """
 
-    cache: Optional[torch.Tensor] = None
+    cache: torch.Tensor | None = None
     seq_offset: int = 0
     chunk_size: int = 256
 
@@ -215,7 +215,7 @@ class GrowingKVCache:
     def __init__(
         self,
         chunk_size: int = 256,
-        device: Optional[torch.device] = None,
+        device: torch.device | None = None,
         dtype: torch.dtype = None,
     ):
         _t = _get_torch()
@@ -317,7 +317,7 @@ class FlashAttentionV2:
         config: Flash attention configuration.
     """
 
-    def __init__(self, config: Optional[FlashAttentionConfig] = None):
+    def __init__(self, config: FlashAttentionConfig | None = None):
         self.config = config or FlashAttentionConfig()
         self.backend = detect_backend()
         self.kv_cache = GrowingKVCache(
@@ -329,7 +329,7 @@ class FlashAttentionV2:
         self,
         q: torch.Tensor,
         kv: torch.Tensor,
-        key_padding_mask: Optional[torch.Tensor] = None,
+        key_padding_mask: torch.Tensor | None = None,
     ) -> AttentionOutput:
         """Run attention with automatic backend and path selection.
 
@@ -366,7 +366,7 @@ class FlashAttentionV2:
         self,
         q: torch.Tensor,
         kv: torch.Tensor,
-        key_padding_mask: Optional[torch.Tensor],
+        key_padding_mask: torch.Tensor | None,
     ) -> AttentionOutput:
         """Execute using Flash Attention v2 backend."""
         if key_padding_mask is None:
@@ -438,7 +438,7 @@ class FlashAttentionV2:
         self,
         q: torch.Tensor,
         kv: torch.Tensor,
-        key_padding_mask: Optional[torch.Tensor],
+        key_padding_mask: torch.Tensor | None,
     ) -> AttentionOutput:
         """Fallback: PyTorch scaled_dot_product_attention.
 
@@ -466,10 +466,10 @@ class FlashAttentionV2:
 
     def _build_sdpa_mask(
         self,
-        key_padding_mask: Optional[torch.Tensor],
+        key_padding_mask: torch.Tensor | None,
         seq_len: int,
         device: torch.device,
-    ) -> Optional[torch.Tensor]:
+    ) -> torch.Tensor | None:
         """Build combined causal + padding mask for SDPA."""
         if key_padding_mask is None and not self.config.causal:
             return None
@@ -489,7 +489,7 @@ class FlashAttentionV2:
         self,
         q: torch.Tensor,
         kv: torch.Tensor,
-        key_padding_mask: Optional[torch.Tensor],
+        key_padding_mask: torch.Tensor | None,
     ) -> AttentionOutput:
         """Lowest-tier fallback: manual scaled dot-product attention.
 
@@ -518,7 +518,7 @@ class FlashAttentionV2:
     def _apply_masks_to_scores(
         self,
         scores: torch.Tensor,
-        key_padding_mask: Optional[torch.Tensor],
+        key_padding_mask: torch.Tensor | None,
         seq_len: int,
         device: torch.device,
     ) -> torch.Tensor:
@@ -620,7 +620,7 @@ def _rotate_half_apply(
 
 
 def create_flash_attention(
-    config: Optional[FlashAttentionConfig] = None,
+    config: FlashAttentionConfig | None = None,
 ) -> FlashAttentionV2:
     """Factory function to create a FlashAttentionV2 instance.
 

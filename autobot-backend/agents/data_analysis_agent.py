@@ -11,7 +11,7 @@ and provide insights from structured and unstructured data.
 """
 
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import (
@@ -35,7 +35,7 @@ class DataAnalysisAgent(StandardizedAgent):
 
     def __init__(
         self,
-        agent_type: Optional[str] = None,
+        agent_type: str | None = None,
         deployment_mode: DeploymentMode = DeploymentMode.LOCAL,
     ):
         """Initialize the Data Analysis Agent with LLM configuration.
@@ -100,7 +100,7 @@ class DataAnalysisAgent(StandardizedAgent):
         prompt = f"Detect {pattern_type} patterns in the following data:\n\n{data}"
         return await self.process_query(prompt)
 
-    async def process_query(self, request_text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def process_query(self, request_text: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Process a data analysis query using the vLLM-optimised API (Issue #3389)."""
         try:
             logger.info("Data Analysis Agent processing: %s...", request_text[:50])

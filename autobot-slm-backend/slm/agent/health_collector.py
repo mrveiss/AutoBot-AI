@@ -15,7 +15,7 @@ import platform
 import socket
 import subprocess  # nosec B404 - required for systemctl interaction
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import psutil
 
@@ -39,8 +39,8 @@ class HealthCollector:
 
     def __init__(
         self,
-        services: Optional[List[str]] = None,
-        ports: Optional[List[Dict]] = None,
+        services: List[str] | None = None,
+        ports: List[Dict] | None = None,
         discover_services: bool = True,
     ):
         """
@@ -165,7 +165,7 @@ class HealthCollector:
         self._detect_and_publish_state_changes(services)
         return services
 
-    def _run_systemctl_list_units(self) -> Optional[str]:
+    def _run_systemctl_list_units(self) -> str | None:
         """Run systemctl list-units command. Issue #620."""
         result = subprocess.run(  # nosec B607 - systemctl is trusted
             [
@@ -186,7 +186,7 @@ class HealthCollector:
             return None
         return result.stdout
 
-    def _parse_service_line(self, line: str) -> Optional[Dict]:
+    def _parse_service_line(self, line: str) -> Dict | None:
         """Parse a single line of systemctl output. Issue #620."""
         if not line.strip():
             return None
@@ -361,7 +361,7 @@ class HealthCollector:
                 error_context=svc.get("error_message", ""),
             )
 
-    def is_healthy(self, thresholds: Optional[Dict] = None) -> bool:
+    def is_healthy(self, thresholds: Dict | None = None) -> bool:
         """Quick health check against thresholds."""
         defaults = {
             "cpu_percent": 90,

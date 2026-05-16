@@ -12,7 +12,7 @@ import asyncio
 import hashlib
 import time
 from collections import OrderedDict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -101,7 +101,7 @@ class EmbeddingCache:
                 evicted += 1
         return evicted
 
-    async def get(self, query: str) -> Optional[List[float]]:
+    async def get(self, query: str) -> List[float] | None:
         """
         Get embedding from cache if available and not expired.
 

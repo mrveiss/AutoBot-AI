@@ -8,7 +8,7 @@ Executes tasks in isolated Docker containers with resource limits.
 Provides CPU, memory, and timeout constraints.
 """
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
@@ -34,7 +34,7 @@ logger = get_logger(__name__)
 class DockerBackend(ExecutionBackend):
     """Execute tasks in Docker containers (Issue #4343)."""
 
-    def __init__(self, docker_host: Optional[str] = None):
+    def __init__(self, docker_host: str | None = None) -> None:
         """Initialize Docker backend.
 
         Args:

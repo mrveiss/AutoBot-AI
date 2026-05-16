@@ -12,7 +12,7 @@ Issue #717: Efficient Inference Design implementation.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Set
 
 from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_5_MINUTES
@@ -242,7 +242,7 @@ class OptimizationRouter:
             summary[opt.value] = enabled
         return summary
 
-    def get_quantization_kwargs(self, model_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def get_quantization_kwargs(self, model_config: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Return ``from_pretrained`` kwargs for active quantization config (#1943).
 
         When ``quantization_enabled`` is True and ``quantization_type`` is not

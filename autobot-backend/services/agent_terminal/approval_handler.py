@@ -9,7 +9,7 @@ Manages command approval workflow and auto-approval rules.
 
 import asyncio
 import time
-from typing import Dict, Optional
+from typing import Dict
 
 from autobot_shared.logging_manager import get_logger
 from secure_command_executor import CommandRisk
@@ -28,7 +28,7 @@ class ApprovalHandler:
         approval_manager: CommandApprovalManager,
         chat_history_manager=None,
         command_queue=None,
-    ):
+    ) -> None:
         """
         Initialize approval handler.
 
@@ -61,7 +61,7 @@ class ApprovalHandler:
                 self._approval_locks[session_id] = asyncio.Lock()
             return self._approval_locks[session_id]
 
-    async def cleanup_approval_lock(self, session_id: str):
+    async def cleanup_approval_lock(self, session_id: str) -> None:
         """Clean up approval lock when session is closed."""
         async with self._approval_locks_lock:
             self._approval_locks.pop(session_id, None)
@@ -103,7 +103,7 @@ class ApprovalHandler:
             permissions=self.approval_manager.agent_permissions,
         )
 
-    async def store_auto_approve_rule(self, user_id: str, command: str, risk_level: str):
+    async def store_auto_approve_rule(self, user_id: str, command: str, risk_level: str) -> None:
         """
         Store an auto-approve rule for future similar commands.
 
@@ -141,9 +141,9 @@ class ApprovalHandler:
         session: AgentTerminalSession,
         command: str,
         approved: bool,
-        comment: Optional[str] = None,
+        comment: str | None = None,
         pre_approved: bool = False,
-    ):
+    ) -> None:
         """
         Broadcast approval status update to WebSocket clients. Ref: #1088.
 
@@ -199,8 +199,8 @@ class ApprovalHandler:
         session: AgentTerminalSession,
         command: str,
         approved: bool,
-        user_id: Optional[str],
-        comment: Optional[str],
+        user_id: str | None,
+        comment: str | None,
     ) -> None:
         """Helper for update_chat_approval_status. Ref: #1088."""
         updated = await self.chat_history_manager.update_message_metadata(
@@ -250,9 +250,9 @@ class ApprovalHandler:
         session: AgentTerminalSession,
         command: str,
         approved: bool,
-        user_id: Optional[str] = None,
-        comment: Optional[str] = None,
-    ):
+        user_id: str | None = None,
+        comment: str | None = None,
+    ) -> None:
         """Update chat message metadata to persist approval status. Ref: #1088."""
         if not session.conversation_id or not self.chat_history_manager:
             return
@@ -263,14 +263,14 @@ class ApprovalHandler:
 
     async def update_command_queue_status(
         self,
-        command_id: Optional[str],
+        command_id: str | None,
         approved: bool,
-        user_id: Optional[str] = None,
-        comment: Optional[str] = None,
+        user_id: str | None = None,
+        comment: str | None = None,
         output: str = "",
         stderr: str = "",
         return_code: int = 0,
-    ):
+    ) -> None:
         """Update command queue status after approval or denial. Ref: #1088."""
         if not command_id or not self.command_queue:
             return

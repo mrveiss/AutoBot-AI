@@ -14,7 +14,7 @@ Security Integration:
 - User interrupt capability
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
@@ -40,7 +40,7 @@ class TerminalTool:
         self.active_sessions: Dict[str, str] = {}  # conversation_id -> session_id
 
     # Issue #321: Delegation methods to reduce message chains (Law of Demeter)
-    def get_session(self, session_id: str) -> Optional[Any]:
+    def get_session(self, session_id: str) -> Any | None:
         """Get session from agent terminal service sessions dict."""
         if self.agent_terminal_service:
             return self.agent_terminal_service.sessions.get(session_id)
@@ -161,7 +161,7 @@ class TerminalTool:
         return session_id
 
     def _format_execution_result(
-        self, result: Dict[str, Any], command: str, description: Optional[str]
+        self, result: Dict[str, Any], command: str, description: str | None
     ) -> Dict[str, Any]:
         """Format command execution result for agent response."""
         if result.get("status") == "pending_approval":
@@ -192,7 +192,7 @@ class TerminalTool:
             }
 
     async def execute_command(
-        self, conversation_id: str, command: str, description: Optional[str] = None
+        self, conversation_id: str, command: str, description: str | None = None
     ) -> Dict[str, Any]:
         """Execute a command in the agent's terminal session with auto-session recovery."""
         if not self.agent_terminal_service:
@@ -395,7 +395,7 @@ class TerminalTool:
                 return data.get("sessions", [])
         return []
 
-    async def _restore_session_mapping_from_db(self, conversation_id: str) -> Optional[str]:
+    async def _restore_session_mapping_from_db(self, conversation_id: str) -> str | None:
         """Restore session ID from database when active_sessions dict is empty (Issue #281 refactor)."""
         try:
             sessions = await self._query_agent_terminal_sessions(conversation_id)
@@ -560,7 +560,7 @@ class TerminalTool:
 # Global instance (will be initialized with service)
 import threading as _threading_terminal
 
-_terminal_tool_instance: Optional[TerminalTool] = None
+_terminal_tool_instance: TerminalTool | None = None
 _terminal_tool_lock = _threading_terminal.Lock()
 
 

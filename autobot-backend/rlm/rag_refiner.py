@@ -12,7 +12,7 @@ Issue #1382: Follow-up from #1373.
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
 from autobot_shared.logging_manager import get_logger
 from rlm.types import RLMConfig
@@ -61,7 +61,7 @@ class AdaptiveRAGRefiner:
     the existing ``_expand_query`` heuristic.
     """
 
-    def __init__(self, config: Optional[RLMConfig] = None):
+    def __init__(self, config: RLMConfig | None = None):
         self.config = config or RLMConfig(
             max_reflections=2,
             quality_threshold=0.6,

@@ -17,7 +17,7 @@ Environment variables:
                                   (default: same as SLACK_NOTIFICATIONS_CHANNEL)
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -31,7 +31,7 @@ class _NullSlackHook:
     """No-op hook returned when Slack is not configured."""
 
     async def post_agent_status(
-        self, agent_name: str, status: str, message: str, thread_ts: Optional[str] = None
+        self, agent_name: str, status: str, message: str, thread_ts: str | None = None
     ) -> None:
         pass
 
@@ -74,7 +74,7 @@ class _SlackHook:
         self._approvals_channel = approvals_channel
 
     async def post_agent_status(
-        self, agent_name: str, status: str, message: str, thread_ts: Optional[str] = None
+        self, agent_name: str, status: str, message: str, thread_ts: str | None = None
     ) -> None:
         params: Dict[str, Any] = {
             "channel": self._notifications_channel,
@@ -135,7 +135,7 @@ class _SlackHook:
 
 
 # Module-level singleton; resolved lazily on first call to get_slack_hook().
-_hook: Optional[Any] = None
+_hook: Any | None = None
 
 
 def get_slack_hook() -> Any:

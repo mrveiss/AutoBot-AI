@@ -9,8 +9,6 @@ Tracks all security-relevant actions for compliance.
 
 import uuid
 from datetime import datetime
-from typing import Optional
-
 from sqlalchemy import DateTime, ForeignKey, Index, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -35,7 +33,7 @@ class AuditLog(Base):
     )
 
     # Organization context (nullable for platform-level events)
-    org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    org_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("organizations.id", ondelete="SET NULL"),
         nullable=True,
@@ -43,7 +41,7 @@ class AuditLog(Base):
     )
 
     # Actor (who performed the action)
-    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
@@ -65,7 +63,7 @@ class AuditLog(Base):
     )
 
     # Resource ID affected
-    resource_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    resource_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -85,12 +83,12 @@ class AuditLog(Base):
     )
 
     # Request context
-    ip_address: Mapped[Optional[str]] = mapped_column(
+    ip_address: Mapped[str | None] = mapped_column(
         String(45),  # IPv6 max length
         nullable=True,
     )
 
-    user_agent: Mapped[Optional[str]] = mapped_column(
+    user_agent: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
     )

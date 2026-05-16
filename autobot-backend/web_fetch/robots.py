@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import urllib.robotparser
-from typing import Optional
 from urllib.parse import urlparse
 
 from autobot_shared.logging_manager import get_logger
@@ -100,7 +99,7 @@ class RobotsCache:
             self._local[domain] = parser
             return parser
 
-    async def _load_from_redis(self, domain: str) -> Optional[str]:
+    async def _load_from_redis(self, domain: str) -> str | None:
         """Return cached robots.txt text from Redis, or None on miss."""
         if self._redis is None:
             return None

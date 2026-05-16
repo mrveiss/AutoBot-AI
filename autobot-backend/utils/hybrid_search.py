@@ -9,7 +9,7 @@ Combines semantic search with keyword-based search for improved relevance and co
 import math
 import re
 from collections import defaultdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from config.manager import get_config_manager
@@ -315,7 +315,7 @@ class HybridSearchEngine:
         }
 
     async def _fallback_semantic_search(
-        self, query: str, top_k: int, filters: Optional[Dict], error: Exception
+        self, query: str, top_k: int, filters: Dict | None, error: Exception
     ) -> List[Dict[str, Any]]:
         """
         Fallback to regular semantic search when hybrid search fails.
@@ -355,7 +355,7 @@ class HybridSearchEngine:
         unique_results = self.deduplicate_results(enhanced_results)
         return unique_results[: min(top_k, self.final_top_k)]
 
-    async def search(self, query: str, top_k: int = 10, filters: Optional[Dict] = None) -> List[Dict[str, Any]]:
+    async def search(self, query: str, top_k: int = 10, filters: Dict | None = None) -> List[Dict[str, Any]]:
         """
         Perform hybrid search combining semantic and keyword-based approaches.
 

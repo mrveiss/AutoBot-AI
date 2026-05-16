@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import hashlib
 from collections import deque
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 from urllib.parse import urljoin, urlparse
 
 from autobot_shared.logging_manager import get_logger
@@ -107,7 +107,7 @@ class Frontier:
             self._visited.add(key)
             self._queue.append((url, depth))
 
-    def next(self) -> Optional[Tuple[str, int]]:
+    def next(self) -> Tuple[str, int] | None:
         """Pop the next (url, depth) pair, or return None when frontier is empty."""
         if not self._queue or self._pages_emitted >= self._max_pages:
             return None

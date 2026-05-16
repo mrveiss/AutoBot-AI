@@ -8,7 +8,7 @@ Pydantic models for the code source registry (#1133).
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import List, Optional
+from typing import List
 
 from pydantic import BaseModel, Field
 
@@ -43,14 +43,14 @@ class CodeSource(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     source_type: SourceType = SourceType.LOCAL
-    repo: Optional[str] = None  # "owner/repo" for GitHub mode
+    repo: str | None = None  # "owner/repo" for GitHub mode
     branch: str = "main"
-    credential_id: Optional[str] = None  # References secrets store entry ID
-    clone_path: Optional[str] = None  # /opt/autobot/data/code-sources/<id>/
-    last_synced: Optional[str] = None
+    credential_id: str | None = None  # References secrets store entry ID
+    clone_path: str | None = None  # /opt/autobot/data/code-sources/<id>/
+    last_synced: str | None = None
     status: SourceStatus = SourceStatus.CONFIGURED
-    error_message: Optional[str] = None
-    owner_id: Optional[str] = None
+    error_message: str | None = None
+    owner_id: str | None = None
     access: SourceAccess = SourceAccess.PRIVATE
     shared_with: List[str] = Field(default_factory=list)
     created_at: str = Field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
@@ -61,19 +61,19 @@ class CodeSourceCreateRequest(BaseModel):
 
     name: str
     source_type: SourceType = SourceType.LOCAL
-    repo: Optional[str] = None
+    repo: str | None = None
     branch: str = "main"
-    credential_id: Optional[str] = None
+    credential_id: str | None = None
     access: SourceAccess = SourceAccess.PRIVATE
 
 
 class CodeSourceUpdateRequest(BaseModel):
     """Request to update an existing code source."""
 
-    name: Optional[str] = None
-    branch: Optional[str] = None
-    credential_id: Optional[str] = None
-    access: Optional[SourceAccess] = None
+    name: str | None = None
+    branch: str | None = None
+    credential_id: str | None = None
+    access: SourceAccess | None = None
 
 
 class SourceShareRequest(BaseModel):

@@ -26,7 +26,7 @@ import ssl
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Coroutine, Dict, List, Optional, Set
+from typing import Any, Callable, Coroutine, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -65,7 +65,7 @@ class DAGEdge:
 
     source: str
     target: str
-    label: Optional[bool] = None  # None = unconditional; True/False = condition branch
+    label: bool | None = None  # None = unconditional; True/False = condition branch
 
 
 @dataclass
@@ -99,7 +99,7 @@ class DAGExecutionContext:
     # Issue #2141: typed step outputs for structured variable piping
     step_outputs: Dict[str, Any] = field(default_factory=dict)
     status: str = "in_progress"
-    error: Optional[str] = None
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +153,7 @@ class WorkflowDAG:
                 logger.warning("DAG edge (%s → %s) references unknown node; skipping", src, tgt)
                 continue
             label_raw = raw.get("label")
-            label: Optional[bool] = None if label_raw is None else bool(label_raw)
+            label: bool | None = None if label_raw is None else bool(label_raw)
             edge = DAGEdge(source=src, target=tgt, label=label)
             self._successors[src].append(edge)
             self._predecessors[tgt].append(src)
@@ -188,7 +188,7 @@ class WorkflowDAG:
         """True when at least one node is a CONDITION node."""
         return any(n.node_type == NodeType.CONDITION for n in self._nodes.values())
 
-    def detect_cycle(self) -> Optional[List[str]]:
+    def detect_cycle(self) -> List[str] | None:
         """
         Return the first cycle found (as a path) or None if the graph is acyclic.
 
@@ -196,7 +196,7 @@ class WorkflowDAG:
         """
         WHITE, GREY, BLACK = 0, 1, 2
         colour: Dict[str, int] = {nid: WHITE for nid in self._nodes}
-        parent: Dict[str, Optional[str]] = {nid: None for nid in self._nodes}
+        parent: Dict[str, str | None] = {nid: None for nid in self._nodes}
 
         for start in self._nodes:
             if colour[start] != WHITE:
@@ -336,7 +336,7 @@ class DAGExecutor:
         self,
         dag: WorkflowDAG,
         workflow_id: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ) -> DAGExecutionContext:
         """
         Execute *dag* from all root nodes.
@@ -567,7 +567,7 @@ class DAGExecutor:
         self,
         node: DAGNode,
         dag: WorkflowDAG,
-        condition_result: Optional[bool],
+        condition_result: bool | None,
         skipped: bool = False,
     ) -> List[str]:
         """
@@ -756,7 +756,7 @@ def build_dag(steps: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> Workf
     payload without an explicit adapter.
     """
 
-    def _condition_to_label(value: Any) -> Optional[bool]:
+    def _condition_to_label(value: Any) -> bool | None:
         if value is None or isinstance(value, bool):
             return value
         if isinstance(value, str):

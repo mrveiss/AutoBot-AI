@@ -9,7 +9,7 @@ import asyncio
 import os
 import shlex
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -30,7 +30,7 @@ class TerminalCompletionService:
     """Bash-like tab completion using compgen subprocess."""
 
     async def get_completions(
-        self, text: str, cursor_pos: int, cwd: str, env: Optional[dict] = None
+        self, text: str, cursor_pos: int, cwd: str, env: dict | None = None
     ) -> CompletionResult:
         """
         Get completions based on context.
@@ -117,7 +117,7 @@ class TerminalCompletionService:
                 result.append(c)
         return result
 
-    async def _run_compgen(self, cmd: str, env: dict, cwd: Optional[str] = None) -> List[str]:
+    async def _run_compgen(self, cmd: str, env: dict, cwd: str | None = None) -> List[str]:
         """Run compgen command and return results."""
         try:
             proc = await asyncio.create_subprocess_shell(

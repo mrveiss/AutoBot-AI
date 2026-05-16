@@ -9,7 +9,7 @@ JWT-based authentication and user management.
 
 import logging
 from datetime import timedelta
-from typing import Callable, Optional
+from typing import Callable
 
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -34,7 +34,7 @@ class AuthService:
         """Hash a password."""
         return hash_password(password)
 
-    def create_access_token(self, data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    def create_access_token(self, data: dict, expires_delta: timedelta | None = None) -> str:
         """Create a JWT access token."""
         default_delta = timedelta(minutes=settings.access_token_expire_minutes)
         return encode_jwt(
@@ -43,7 +43,7 @@ class AuthService:
             expires_delta=expires_delta if expires_delta is not None else default_delta,
         )
 
-    def decode_token(self, token: str) -> Optional[dict]:
+    def decode_token(self, token: str) -> dict | None:
         """Decode and validate a JWT token."""
         return decode_jwt_or_none(token, settings.secret_key)
 
@@ -72,7 +72,7 @@ class AuthService:
 
         return UserResponse.model_validate(user)
 
-    async def get_user_by_username(self, db: AsyncSession, username: str) -> Optional[User]:
+    async def get_user_by_username(self, db: AsyncSession, username: str) -> User | None:
         """Get a user by username."""
         result = await db.execute(select(User).where(User.username == username))
         return result.scalar_one_or_none()

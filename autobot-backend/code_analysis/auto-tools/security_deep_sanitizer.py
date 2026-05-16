@@ -101,7 +101,7 @@ import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 
 class EnhancedSecurityFixAgent:
@@ -392,7 +392,7 @@ class EnhancedSecurityFixAgent:
 
         return fixed_content, fixes_applied
 
-    def get_safe_replacement(self, vuln_type: str, original: str) -> Optional[str]:
+    def get_safe_replacement(self, vuln_type: str, original: str) -> str | None:
         """Get safe replacement for specific vulnerability types."""
         replacements = {
             "direct_innerHTML": self.fix_innerHTML_assignment,

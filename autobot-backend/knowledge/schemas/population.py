@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from pydantic import BaseModel, ConfigDict
 
@@ -18,7 +18,7 @@ class PopulateSystemCommandsResponse(BaseModel):
     status: str
     message: str
     items_added: int = 0
-    total_commands: Optional[int] = None
+    total_commands: int | None = None
 
 
 class PopulateManPagesResponse(BaseModel):
@@ -29,7 +29,7 @@ class PopulateManPagesResponse(BaseModel):
     status: str
     message: str
     items_added: int = 0
-    background: Optional[bool] = None
+    background: bool | None = None
 
 
 class RefreshSystemKnowledgeResponse(BaseModel):
@@ -50,10 +50,10 @@ class JobStatusResponse(BaseModel):
 
     task_id: str
     status: str
-    message: Optional[str] = None
-    result: Optional[Any] = None
-    error: Optional[str] = None
-    meta: Optional[Dict[str, Any]] = None
+    message: str | None = None
+    result: Any | None = None
+    error: str | None = None
+    meta: Dict[str, Any] | None = None
 
 
 class TaskQueuedResponse(BaseModel):
@@ -81,14 +81,14 @@ class TaskStatusResponse(BaseModel):
 
     task_id: str
     status: str
-    message: Optional[str] = None
-    progress_percent: Optional[float] = None
-    items_processed: Optional[int] = None
-    items_total: Optional[int] = None
-    error: Optional[str] = None
-    elapsed_seconds: Optional[float] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    message: str | None = None
+    progress_percent: float | None = None
+    items_processed: int | None = None
+    items_total: int | None = None
+    error: str | None = None
+    elapsed_seconds: float | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 class ScanManPagesResponse(BaseModel):
@@ -102,13 +102,13 @@ class ScanManPagesResponse(BaseModel):
 
     status: str
     message: str
-    background: Optional[bool] = None
-    machine_id: Optional[str] = None
-    limit: Optional[int] = None
-    sections: Optional[Any] = None
-    items_added: Optional[int] = None
-    items_failed: Optional[int] = None
-    total_scanned: Optional[int] = None
+    background: bool | None = None
+    machine_id: str | None = None
+    limit: int | None = None
+    sections: Any | None = None
+    items_added: int | None = None
+    items_failed: int | None = None
+    total_scanned: int | None = None
 
 
 class ScanManPagesChangesResponse(BaseModel):
@@ -119,6 +119,6 @@ class ScanManPagesChangesResponse(BaseModel):
     status: str
     machine_id: str
     scan_duration_seconds: float = 0.0
-    summary: Optional[Dict[str, Any]] = None
+    summary: Dict[str, Any] | None = None
     items_stored: int = 0
     parsed_count: int = 0

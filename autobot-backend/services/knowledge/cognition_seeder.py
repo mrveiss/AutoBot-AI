@@ -18,7 +18,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
 import yaml
 
@@ -75,7 +75,7 @@ class SeedStatus:
     """Status of a seeded collection returned by get_seed_status()."""
 
     collection: str
-    seeded_at: Optional[str]
+    seeded_at: str | None
     document_count: int
     sources: List[str]
 
@@ -147,7 +147,7 @@ class CognitionSeeder:
         # Backend-agnostic handles (#5062, #5194). Resolved in
         # ``_ensure_initialized()`` to a ``BaseClient``; the concrete
         # production backend is ChromaDB today.
-        self._client: Optional["BaseClient"] = None
+        self._client: "BaseClient" | None = None
         self._embed_model = None
         self._initialized = False
         self._root_dir: Path = PATH.PROJECT_ROOT
@@ -388,7 +388,7 @@ class CognitionSeeder:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_seeder: Optional[CognitionSeeder] = None
+_seeder: CognitionSeeder | None = None
 _seeder_lock = asyncio.Lock()
 
 

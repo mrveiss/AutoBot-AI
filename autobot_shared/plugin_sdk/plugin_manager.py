@@ -12,7 +12,7 @@ Issue #3278 - Plugin and extension system for third-party integrations.
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from plugin_sdk.base import PluginRegistry, PluginStatus
 from plugin_sdk.hooks import HookRegistry
@@ -29,7 +29,7 @@ class PluginManager:
     management.  Intended as a singleton owned by the FastAPI application.
     """
 
-    def __init__(self, plugin_dirs: Optional[List[Path]] = None) -> None:
+    def __init__(self, plugin_dirs: List[Path] | None = None) -> None:
         """
         Initialize plugin manager.
 

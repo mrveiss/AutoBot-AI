@@ -10,7 +10,7 @@ passed together, improving code maintainability and type safety.
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
 if TYPE_CHECKING:
     from worker_node import WorkerNode
@@ -50,7 +50,7 @@ class TaskExecutionContext:
         self,
         action: str,
         status: str,
-        details: Optional[Dict[str, Any]] = None,
+        details: Dict[str, Any] | None = None,
     ) -> None:
         """
         Log an audit event using the context's security layer.
@@ -175,7 +175,7 @@ class FactContentContext:
     fact_id: str
     content: str
     metadata: Dict[str, Any]
-    embedding: Optional[list] = None
+    embedding: list | None = None
 
 
 @dataclass
@@ -239,7 +239,7 @@ class ConnectionCredentials:
     port: int = 22
     username: str = "autobot"
     key_path: str = "~/.ssh/autobot_key"
-    passphrase: Optional[str] = None
+    passphrase: str | None = None
 
     def get_pool_key(self) -> str:
         """Generate a unique key for connection pooling."""
@@ -264,7 +264,7 @@ class SearchQueryContext:
     query: str
     max_results: int = 10
     enable_reranking: bool = True
-    timeout: Optional[float] = None
+    timeout: float | None = None
     score_threshold: float = 0.0
 
 
@@ -291,10 +291,10 @@ class EnhancedSearchQuery:
     query: str
     limit: int = 10
     offset: int = 0
-    tags: Optional[List[str]] = None
+    tags: List[str] | None = None
     tags_match_any: bool = False
-    exclude_terms: Optional[List[str]] = None
-    require_terms: Optional[List[str]] = None
+    exclude_terms: List[str] | None = None
+    require_terms: List[str] | None = None
 
 
 @dataclass
@@ -312,10 +312,10 @@ class EnhancedSearchFilters:
         verified_only: Only return verified results
     """
 
-    category: Optional[str] = None
-    created_after: Optional[str] = None
-    created_before: Optional[str] = None
-    exclude_sources: Optional[List[str]] = None
+    category: str | None = None
+    created_after: str | None = None
+    created_before: str | None = None
+    exclude_sources: List[str] | None = None
     verified_only: bool = False
 
 
@@ -363,7 +363,7 @@ class EnhancedSearchContext:
     query_params: EnhancedSearchQuery
     filters: EnhancedSearchFilters = field(default_factory=EnhancedSearchFilters)
     options: EnhancedSearchOptions = field(default_factory=EnhancedSearchOptions)
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
     @classmethod
     def from_params(
@@ -371,8 +371,8 @@ class EnhancedSearchContext:
         query: str,
         limit: int = 10,
         offset: int = 0,
-        category: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        category: str | None = None,
+        tags: List[str] | None = None,
         tags_match_any: bool = False,
         mode: str = "hybrid",
         enable_reranking: bool = False,
@@ -381,13 +381,13 @@ class EnhancedSearchContext:
         enable_relevance_scoring: bool = False,
         enable_clustering: bool = False,
         track_analytics: bool = True,
-        created_after: Optional[str] = None,
-        created_before: Optional[str] = None,
-        exclude_terms: Optional[List[str]] = None,
-        require_terms: Optional[List[str]] = None,
-        exclude_sources: Optional[List[str]] = None,
+        created_after: str | None = None,
+        created_before: str | None = None,
+        exclude_terms: List[str] | None = None,
+        require_terms: List[str] | None = None,
+        exclude_sources: List[str] | None = None,
         verified_only: bool = False,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> "EnhancedSearchContext":
         """
         Create an EnhancedSearchContext from individual parameters.
@@ -453,10 +453,10 @@ class SearchResponseContext:
 
     results: List[Dict[str, Any]]
     unclustered: List[Dict[str, Any]]
-    clusters: Optional[List[Dict[str, Any]]]
+    clusters: List[Dict[str, Any]] | None
     query_processed: str
     mode: str
-    tags: Optional[List[str]]
+    tags: List[str] | None
     min_score: float
     enable_reranking: bool
     enable_query_expansion: bool
@@ -491,10 +491,10 @@ class SearchAnalyticsContext:
     query: str
     result_count: int
     duration_ms: int
-    session_id: Optional[str]
+    session_id: str | None
     mode: str
-    tags: Optional[List[str]]
-    category: Optional[str]
+    tags: List[str] | None
+    category: str | None
     query_expansion: bool
     relevance_scoring: bool
     track_analytics: bool = True

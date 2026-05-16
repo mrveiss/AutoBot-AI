@@ -11,7 +11,7 @@ iteration results, and configuration.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
-from typing import Any, Optional
+from typing import Any
 
 from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import BatchConfig, RetryConfig
@@ -87,7 +87,7 @@ class ThinkResult:
     alternatives_considered: list[str] = field(default_factory=list)
     risks_identified: list[str] = field(default_factory=list)
     timestamp: datetime = field(default_factory=now_utc)
-    task_id: Optional[str] = None
+    task_id: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for event content."""
@@ -118,10 +118,10 @@ class IterationResult:
     tools_executed: list[str] = field(default_factory=list)
     tool_results: dict[str, Any] = field(default_factory=dict)
     events_analyzed: int = 0
-    plan_progress: Optional[float] = None  # 0.0 to 1.0
+    plan_progress: float | None = None  # 0.0 to 1.0
     think_results: list[ThinkResult] = field(default_factory=list)
     should_continue: bool = True
-    error: Optional[str] = None
+    error: str | None = None
     timestamp: datetime = field(default_factory=now_utc)
 
     def to_dict(self) -> dict:
@@ -219,10 +219,10 @@ class AgentMessage:
 
     message_type: MessageType
     content: str
-    options: Optional[list[str]] = None  # For ASK messages
+    options: list[str] | None = None  # For ASK messages
     metadata: dict = field(default_factory=dict)
     timestamp: datetime = field(default_factory=now_utc)
-    task_id: Optional[str] = None
+    task_id: str | None = None
     requires_response: bool = False
 
     def __post_init__(self):
@@ -259,8 +259,8 @@ class TaskContext:
     errors: list[str] = field(default_factory=list)
     user_messages: list[str] = field(default_factory=list)
     think_history: list[ThinkResult] = field(default_factory=list)
-    plan_id: Optional[str] = None
-    current_step_id: Optional[str] = None
+    plan_id: str | None = None
+    current_step_id: str | None = None
     metadata: dict = field(default_factory=dict)
     # Repetitive tool-call detection: maps content-hash -> call count (#3255)
     tool_call_hashes: dict[str, int] = field(default_factory=dict)

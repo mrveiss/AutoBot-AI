@@ -107,7 +107,7 @@ async def bus_and_redis(mock_redis):
 
 
 @pytest.mark.asyncio
-async def test_publish_stores_message(bus_and_redis, sample_message):
+async def test_publish_stores_message(bus_and_redis, sample_message) -> None:
     """Publish should call hset, xadd, sadd, and publish on Redis."""
     bus, mock_redis = bus_and_redis
 
@@ -136,7 +136,7 @@ async def test_publish_stores_message(bus_and_redis, sample_message):
 
 
 @pytest.mark.asyncio
-async def test_publish_sets_ttl(bus_and_redis, sample_message):
+async def test_publish_sets_ttl(bus_and_redis, sample_message) -> None:
     """Publish should set TTL on the message hash and correlation set."""
     bus, mock_redis = bus_and_redis
 
@@ -159,7 +159,7 @@ async def test_publish_sets_ttl(bus_and_redis, sample_message):
 
 
 @pytest.mark.asyncio
-async def test_get_message(bus_and_redis, sample_message):
+async def test_get_message(bus_and_redis, sample_message) -> None:
     """get_message should retrieve and deserialize from hash."""
     bus, mock_redis = bus_and_redis
 
@@ -177,7 +177,7 @@ async def test_get_message(bus_and_redis, sample_message):
 
 
 @pytest.mark.asyncio
-async def test_get_message_not_found(bus_and_redis):
+async def test_get_message_not_found(bus_and_redis) -> None:
     """get_message should return None when message doesn't exist."""
     bus, mock_redis = bus_and_redis
 

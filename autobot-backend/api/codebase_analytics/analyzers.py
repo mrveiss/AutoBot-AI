@@ -11,7 +11,7 @@ import json
 import re
 import threading
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 import aiofiles
 
@@ -31,9 +31,9 @@ try:
     from code_intelligence.bug_predictor import BugPredictor
     from code_intelligence.performance_analyzer import PerformanceAnalyzer
 
-    _anti_pattern_detector: Optional[AntiPatternDetector] = None
-    _performance_analyzer: Optional[PerformanceAnalyzer] = None
-    _bug_predictor: Optional[BugPredictor] = None
+    _anti_pattern_detector: AntiPatternDetector | None = None
+    _performance_analyzer: PerformanceAnalyzer | None = None
+    _bug_predictor: BugPredictor | None = None
     _analyzers_available = True
 except ImportError as e:
     from autobot_shared.missing_dep import MissingDep as _MissingDep
@@ -281,7 +281,7 @@ def _check_subscript_modification(
     lock_protected_vars: Set[str],
     is_async: bool,
     func_name: str,
-) -> Optional[Dict]:
+) -> Dict | None:
     """
     Check for unprotected subscript assignments to global mutables.
 
@@ -317,7 +317,7 @@ def _check_mutating_method_call(
     lock_protected_vars: Set[str],
     is_async: bool,
     func_name: str,
-) -> Optional[Dict]:
+) -> Dict | None:
     """
     Check for unprotected mutating method calls on global mutables.
 
@@ -371,7 +371,7 @@ def _check_mutating_method_call(
 def _check_lazy_init_pattern(
     stmt: ast.If,
     global_vars: Dict[str, int],
-) -> Optional[Dict]:
+) -> Dict | None:
     """
     Check for thread-unsafe lazy initialization patterns.
 
@@ -517,7 +517,7 @@ def _is_safe_file_write_context(
     return False
 
 
-def _check_file_write_without_lock(stmt: ast.With, file_path: str = "", func_name: str = "") -> Optional[Dict]:
+def _check_file_write_without_lock(stmt: ast.With, file_path: str = "", func_name: str = "") -> Dict | None:
     """
     Check for file writes without explicit locking.
 
@@ -589,7 +589,7 @@ def _check_statement_for_global_modification(
     lock_protected_vars: Set[str],
     is_async: bool,
     func_name: str,
-) -> Optional[Dict]:
+) -> Dict | None:
     """
     Check a single statement for unprotected global modifications.
 
@@ -744,7 +744,7 @@ def _extract_function_info(node: ast.FunctionDef) -> Dict:
     }
 
 
-def _check_long_function(node: ast.FunctionDef) -> Optional[Dict]:
+def _check_long_function(node: ast.FunctionDef) -> Dict | None:
     """Check if function exceeds 50 lines and return problem if so."""
     if not hasattr(node, "end_lineno") or not node.end_lineno:
         return None
@@ -812,7 +812,7 @@ def normalize_hardcode_record(record: dict) -> dict:
     return normalized
 
 
-def _check_hardcoded_ip(ip: str, line_num: int, line_content: str, file_path: str) -> Optional[Dict]:
+def _check_hardcoded_ip(ip: str, line_num: int, line_content: str, file_path: str) -> Dict | None:
     """Check if IP address is a known infrastructure IP."""
     # Issue #380: Use module-level constant for local IP prefixes
     if not ip.startswith(NetworkConstants.PRIVATE_IP_PREFIXES):
@@ -828,7 +828,7 @@ def _check_hardcoded_ip(ip: str, line_num: int, line_content: str, file_path: st
     }
 
 
-def _check_hardcoded_port(port: str, line_num: int, line_content: str, file_path: str) -> Optional[Dict]:
+def _check_hardcoded_port(port: str, line_num: int, line_content: str, file_path: str) -> Dict | None:
     """Check if port is a known infrastructure port."""
     known_ports = [
         str(NetworkConstants.BACKEND_PORT),
@@ -1320,7 +1320,7 @@ def _analyze_content_lines(content: str, file_path: str) -> Tuple[List[Dict], Li
 # =============================================================================
 
 
-def _parse_llm_json_response(result_text: str) -> Optional[Dict]:
+def _parse_llm_json_response(result_text: str) -> Dict | None:
     """Parse JSON from LLM response text (Issue #398: extracted)."""
     if result_text.startswith("{") and result_text.endswith("}"):
         return json.loads(result_text)
@@ -1355,7 +1355,7 @@ async def detect_hardcodes_and_debt_with_llm(
         return empty_result
 
 
-def _check_async_global_state_issue(node: ast.AsyncFunctionDef, has_async_lock_import: bool) -> Optional[Dict]:
+def _check_async_global_state_issue(node: ast.AsyncFunctionDef, has_async_lock_import: bool) -> Dict | None:
     """
     Check if async function uses global state without lock import.
 
@@ -1523,7 +1523,7 @@ def _extract_js_hardcodes(line: str, line_num: int, file_path: str) -> List[Dict
     return hardcodes
 
 
-def _check_js_console_log(line: str, line_num: int) -> Optional[Dict]:
+def _check_js_console_log(line: str, line_num: int) -> Dict | None:
     """Check for console.log debugging statements (Issue #398: extracted)."""
     if "console.log" in line and not line.strip().startswith("//"):
         return {

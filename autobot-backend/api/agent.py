@@ -17,7 +17,7 @@ import json
 import logging
 import shlex
 import time
-from typing import List, Optional
+from typing import List
 
 import aiohttp
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -132,7 +132,7 @@ AGENT_CAPABILITIES = {
 
 
 async def _kill_timed_out_process(
-    process: Optional[asyncio.subprocess.Process],
+    process: asyncio.subprocess.Process | None,
 ) -> None:
     """Kill a timed out subprocess safely (Issue #315: extracted)."""
     if not process:
@@ -144,7 +144,7 @@ async def _kill_timed_out_process(
         pass  # Process already terminated
 
 
-def _validate_command_request(command: Optional[str], security_layer, user_role: str) -> Optional[JSONResponse]:
+def _validate_command_request(command: str | None, security_layer, user_role: str) -> JSONResponse | None:
     """
     Validate command request: check if command provided and user has permission.
 
@@ -216,7 +216,7 @@ async def _run_subprocess(command: str, security_layer, user_role: str) -> tuple
     Raises:
         SubprocessError: If subprocess creation or execution fails
     """
-    process: Optional[asyncio.subprocess.Process] = None
+    process: asyncio.subprocess.Process | None = None
     try:
         cmd_parts = shlex.split(command)
         process = await asyncio.create_subprocess_exec(
@@ -328,7 +328,7 @@ def _build_error_response(
     )
 
 
-def _check_approval_permission(security_layer, user_role: str, task_id: str, approved: bool) -> Optional[JSONResponse]:
+def _check_approval_permission(security_layer, user_role: str, task_id: str, approved: bool) -> JSONResponse | None:
     """
     Check if user has permission to approve/deny commands.
 
@@ -533,7 +533,7 @@ def _record_goal_metrics(task_start_time: float, status: str) -> None:
     )
 
 
-def _check_goal_permission(security_layer, user_role: str, goal: str) -> Optional[JSONResponse]:
+def _check_goal_permission(security_layer, user_role: str, goal: str) -> JSONResponse | None:
     """
     Check if user has permission to submit a goal.
 

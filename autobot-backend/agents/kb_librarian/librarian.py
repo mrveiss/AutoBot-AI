@@ -11,7 +11,7 @@ discovery. Refactored from god class into focused package (Issue #381).
 import asyncio
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from agents.web_researcher import WebResearcher as WebResearchAssistant
 from autobot_shared.logging_manager import get_logger
@@ -369,7 +369,7 @@ class EnhancedKBLibrarian:
 
         return {"name": tool_name, "error": "Could not find instructions for this tool"}
 
-    async def _research_specific_tool(self, tool_name: str) -> Optional[ToolInfoData]:
+    async def _research_specific_tool(self, tool_name: str) -> ToolInfoData | None:
         """Research a specific tool comprehensively."""
         research_queries = {
             "installation": f"how to install {tool_name} linux ubuntu debian",
@@ -488,7 +488,7 @@ Found {len(tools)} tools for {tool_type}:
         for tool in tools:
             await self.store_tool_knowledge(tool)
 
-    async def _get_detailed_tool_info(self, tool_name: str) -> Optional[Dict[str, Any]]:
+    async def _get_detailed_tool_info(self, tool_name: str) -> Dict[str, Any] | None:
         """Get detailed information about a specific tool."""
         query = f"{tool_name} tool description features"
         results = await self.web_assistant.research_query(query)

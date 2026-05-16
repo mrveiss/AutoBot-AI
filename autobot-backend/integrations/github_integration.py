@@ -12,7 +12,7 @@ window) with automatic Retry-After and X-RateLimit-Reset handling.
 
 import asyncio
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
@@ -267,8 +267,8 @@ class GitHubIntegration(BaseIntegration):
         self,
         method: str,
         path: str,
-        query_params: Optional[Dict[str, Any]] = None,
-        json_data: Optional[Dict[str, Any]] = None,
+        query_params: Dict[str, Any] | None = None,
+        json_data: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Rate-limited HTTP request to the GitHub REST API.
 

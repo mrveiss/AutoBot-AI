@@ -7,8 +7,6 @@ Provides native API access to containerized Playwright functionality
 """
 
 import base64
-from typing import Optional
-
 import aiohttp
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
@@ -79,7 +77,7 @@ async def get_playwright_status():
 
 @register_health_probe("playwright")
 async def probe_playwright(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for playwright module.
 

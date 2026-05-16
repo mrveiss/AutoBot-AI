@@ -26,7 +26,7 @@ import os
 import ssl
 import time
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict
 
 import aiohttp
 import websockets
@@ -90,7 +90,7 @@ class CacheEntry:
 class ServiceDiscoveryCache:
     """Cache for discovered service URLs with TTL."""
 
-    def __init__(self, ttl_seconds: int = 60):
+    def __init__(self, ttl_seconds: int = 60) -> None:
         """
         Initialize service discovery cache.
 
@@ -100,7 +100,7 @@ class ServiceDiscoveryCache:
         self._cache: Dict[str, CacheEntry] = {}
         self._ttl = ttl_seconds
 
-    def get(self, service_name: str) -> Optional[str]:
+    def get(self, service_name: str) -> str | None:
         """
         Get cached URL for service.
 
@@ -143,7 +143,7 @@ _LOOPBACK_HOSTS: frozenset = frozenset({"127.0.0.1", "localhost", "::1", "ip6-lo
 _loopback_permissive_warned: bool = False
 
 
-def _is_loopback_target(target_url: Optional[str]) -> bool:
+def _is_loopback_target(target_url: str | None) -> bool:
     """Return True iff target_url's host resolves to a loopback address.
 
     Loopback targets cannot be MITM'd (no off-host network path), so trusting
@@ -160,7 +160,7 @@ def _is_loopback_target(target_url: Optional[str]) -> bool:
     return host in _LOOPBACK_HOSTS
 
 
-def _create_permissive_ssl_context(target_url: Optional[str] = None):
+def _create_permissive_ssl_context(target_url: str | None = None):
     """Create SSL context for internal SLM communication (#1048, #2852, #4664, #6654).
 
     Trust hierarchy (first match wins):
@@ -235,7 +235,7 @@ ENV_VAR_MAP = {
 class AgentConfigCache:
     """In-memory cache for agent configurations with TTL."""
 
-    def __init__(self, ttl_seconds: int = TTL_5_MINUTES):
+    def __init__(self, ttl_seconds: int = TTL_5_MINUTES) -> None:
         """
         Initialize cache with specified TTL.
 
@@ -244,10 +244,10 @@ class AgentConfigCache:
         """
         self._cache: Dict[str, CacheEntry] = {}
         self._ttl = ttl_seconds
-        self._default_config: Optional[dict] = None
+        self._default_config: dict | None = None
         self._lock = asyncio.Lock()
 
-    def get(self, agent_id: str) -> Optional[dict]:
+    def get(self, agent_id: str) -> dict | None:
         """
         Get cached config for agent.
 
@@ -309,7 +309,7 @@ class AgentConfigCache:
         self._default_config = config
         logger.debug("Set default agent config")
 
-    def get_default(self) -> Optional[dict]:
+    def get_default(self) -> dict | None:
         """
         Get default agent configuration.
 
@@ -331,9 +331,9 @@ class SLMClient:
     def __init__(
         self,
         slm_url: str = DEFAULT_SLM_URL,
-        auth_token: Optional[str] = None,
+        auth_token: str | None = None,
         cache_ttl: int = TTL_5_MINUTES,
-    ):
+    ) -> None:
         """
         Initialize SLM client.
 
@@ -347,7 +347,7 @@ class SLMClient:
         self.cache = AgentConfigCache(ttl_seconds=cache_ttl)
 
         # WebSocket state
-        self._ws_task: Optional[asyncio.Task] = None
+        self._ws_task: asyncio.Task | None = None
         self._ws_connected = False
         self._reconnect_delay = 1.0  # Start with 1 second
         self._max_reconnect_delay = 60.0  # Max 60 seconds
@@ -355,7 +355,7 @@ class SLMClient:
         self._shutdown = False
 
         # HTTP session
-        self._http_session: Optional[aiohttp.ClientSession] = None
+        self._http_session: aiohttp.ClientSession | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create HTTP session."""
@@ -444,7 +444,7 @@ class SLMClient:
             logger.error("Error fetching agents: %s", e)
             raise
 
-    async def _fetch_agent_llm_config(self, agent_id: str) -> Optional[dict]:
+    async def _fetch_agent_llm_config(self, agent_id: str) -> dict | None:
         """
         Fetch LLM config for specific agent via HTTP.
 
@@ -706,7 +706,7 @@ class SLMClient:
             response.raise_for_status()
             return await response.json()
 
-    async def list_deployments(self, node_id: Optional[str] = None) -> dict:
+    async def list_deployments(self, node_id: str | None = None) -> dict:
         """
         List deployments via GET /api/deployments, optionally filtered by node.
 
@@ -730,13 +730,13 @@ class SLMClient:
 
 
 # Module-level singleton instance
-_slm_client: Optional[SLMClient] = None
+_slm_client: SLMClient | None = None
 
 # Module-level service discovery cache
 _discovery_cache = ServiceDiscoveryCache(ttl_seconds=60)
 
 
-def get_slm_client() -> Optional[SLMClient]:
+def get_slm_client() -> SLMClient | None:
     """
     Get the global SLM client instance.
 
@@ -748,7 +748,7 @@ def get_slm_client() -> Optional[SLMClient]:
 
 async def init_slm_client(
     slm_url: str = DEFAULT_SLM_URL,
-    auth_token: Optional[str] = None,
+    auth_token: str | None = None,
     cache_ttl: int = TTL_5_MINUTES,
 ) -> SLMClient:
     """
@@ -792,7 +792,7 @@ async def shutdown_slm_client() -> None:
 # =============================================================================
 
 
-async def _fetch_from_slm(service_name: str) -> Optional[str]:
+async def _fetch_from_slm(service_name: str) -> str | None:
     """
     Fetch service URL from SLM discovery API.
 
@@ -829,7 +829,7 @@ async def _fetch_from_slm(service_name: str) -> Optional[str]:
     return None
 
 
-def _get_env_fallback(service_name: str) -> Optional[str]:
+def _get_env_fallback(service_name: str) -> str | None:
     """
     Get service URL from environment variable.
 

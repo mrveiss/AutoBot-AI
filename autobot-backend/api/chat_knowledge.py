@@ -39,7 +39,7 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -110,9 +110,9 @@ class ChatKnowledgeContext:
     """Knowledge context for a specific chat session (Issue #688: added user_id)."""
 
     chat_id: str
-    topic: Optional[str] = None
+    topic: str | None = None
     keywords: List[str] = field(default_factory=list)
-    summary: Optional[str] = None
+    summary: str | None = None
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     temporary_knowledge: List[Metadata] = field(default_factory=list)
@@ -120,7 +120,7 @@ class ChatKnowledgeContext:
     file_associations: List[Metadata] = field(default_factory=list)
     metadata: Metadata = field(default_factory=dict)
     # Issue #688: Track user ownership for chat-derived facts
-    user_id: Optional[str] = None
+    user_id: str | None = None
 
 
 @dataclass
@@ -134,8 +134,8 @@ class ChatFileAssociation:
     association_type: FileAssociationType
     created_at: datetime = field(default_factory=datetime.now)
     metadata: Metadata = field(default_factory=dict)
-    content_hash: Optional[str] = None
-    size_bytes: Optional[int] = None
+    content_hash: str | None = None
+    size_bytes: int | None = None
 
 
 class ChatKnowledgeManager:
@@ -164,9 +164,9 @@ class ChatKnowledgeManager:
     async def create_or_update_context(
         self,
         chat_id: str,
-        topic: Optional[str] = None,
-        keywords: Optional[List[str]] = None,
-        user_id: Optional[str] = None,
+        topic: str | None = None,
+        keywords: List[str] | None = None,
+        user_id: str | None = None,
     ) -> ChatKnowledgeContext:
         """Create or update knowledge context for a chat (Issue #688: added user_id)."""
         if chat_id in self.chat_contexts:
@@ -202,7 +202,7 @@ class ChatKnowledgeManager:
         chat_id: str,
         file_path: str,
         association_type: FileAssociationType,
-        metadata: Optional[Metadata] = None,
+        metadata: Metadata | None = None,
     ) -> ChatFileAssociation:
         """Associate a file with a chat session"""
         file_id = str(uuid.uuid4())
@@ -242,7 +242,7 @@ class ChatKnowledgeManager:
         logger.info(f"File associated with chat {chat_id}: {file_name} ({association_type.value})")
         return association
 
-    async def add_temporary_knowledge(self, chat_id: str, content: str, metadata: Optional[Metadata] = None) -> str:
+    async def add_temporary_knowledge(self, chat_id: str, content: str, metadata: Metadata | None = None) -> str:
         """Add temporary knowledge to chat context"""
         knowledge_id = str(uuid.uuid4())
 
@@ -361,7 +361,7 @@ class ChatKnowledgeManager:
         return True
 
     def _build_compiled_knowledge_dict(
-        self, chat_id: str, title: Optional[str], context, messages: list, summary: str
+        self, chat_id: str, title: str | None, context, messages: list, summary: str
     ) -> dict:
         """Helper for compile_chat_to_knowledge. Ref: #1088."""
         return {
@@ -402,7 +402,7 @@ class ChatKnowledgeManager:
     async def compile_chat_to_knowledge(
         self,
         chat_id: str,
-        title: Optional[str] = None,
+        title: str | None = None,
         include_system_messages: bool = False,
     ) -> Metadata:
         """Compile entire chat conversation to knowledge base"""
@@ -439,7 +439,7 @@ class ChatKnowledgeManager:
         return compiled_knowledge
 
     async def search_chat_knowledge(
-        self, query: str, chat_id: Optional[str] = None, include_temporary: bool = True
+        self, query: str, chat_id: str | None = None, include_temporary: bool = True
     ) -> List[Metadata]:
         """Search knowledge across chats or within specific chat"""
         results = []
@@ -762,7 +762,7 @@ async def get_chat_context(chat_id: str):
 
 @register_health_probe("chat_knowledge")
 async def probe_chat_knowledge(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for the chat-knowledge manager."""
     try:

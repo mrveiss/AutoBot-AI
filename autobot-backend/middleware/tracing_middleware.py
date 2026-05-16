@@ -18,7 +18,7 @@ AutoBot-specific attributes and custom trace handling.
 
 import re
 import time
-from typing import Callable, Optional
+from typing import Callable
 
 from opentelemetry.trace import SpanKind, Status, StatusCode
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -109,7 +109,7 @@ class TracingMiddleware(BaseHTTPMiddleware):
         # Build span attributes (Issue #665: extracted helper)
         attributes = self._build_span_attributes(request, path)
 
-        response: Optional[Response] = None
+        response: Response | None = None
 
         # Use the tracing service's span context manager
         with self.tracing.span(
@@ -177,7 +177,7 @@ class TracingMiddleware(BaseHTTPMiddleware):
         pattern = _NUMERIC_PATH_RE.sub("/{id}", path)
         return pattern
 
-    def _get_client_ip(self, request: Request) -> Optional[str]:
+    def _get_client_ip(self, request: Request) -> str | None:
         """
         Extract client IP from request.
 

@@ -39,7 +39,7 @@ import asyncio
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import pytest
 
@@ -60,9 +60,9 @@ class ScenarioResult:
     name: str
     passed: bool
     duration_ms: float
-    engine_duration_ms: Optional[float] = None
-    recovery_duration_ms: Optional[float] = None
-    prediction_duration_ms: Optional[float] = None
+    engine_duration_ms: float | None = None
+    recovery_duration_ms: float | None = None
+    prediction_duration_ms: float | None = None
     output_summary: str = ""
     issues: List[str] = None
 

@@ -16,7 +16,7 @@ Issue #3295: replace the hardcoded endpoint list in llm_self_awareness.py.
 import asyncio
 import hashlib
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Request
 from fastapi.openapi.utils import get_openapi
@@ -35,7 +35,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 _CACHE_TTL: int = TTL_5_MINUTES  # seconds
 
-_cache: Optional[Dict[str, Any]] = None
+_cache: Dict[str, Any] | None = None
 _cache_ts: float = 0.0
 _cache_schema_hash: str = ""
 _cache_lock = asyncio.Lock()

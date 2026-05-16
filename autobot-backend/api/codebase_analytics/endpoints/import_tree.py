@@ -8,7 +8,7 @@ Import tree visualization endpoints
 import ast
 import asyncio
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import aiofiles
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
@@ -50,7 +50,7 @@ def _build_module_to_file_mapping(python_files: List[Path], project_root: Path) 
     return module_to_file
 
 
-def _process_import_node(module_name: str, module_to_file: Dict[str, str]) -> Tuple[Dict, Optional[str]]:
+def _process_import_node(module_name: str, module_to_file: Dict[str, str]) -> Tuple[Dict, str | None]:
     """Process a single import and return import info and target file (Issue #315)."""
     base_module = module_name.split(".")[0]
     is_external = base_module in STDLIB_MODULES or base_module not in INTERNAL_MODULE_PREFIXES

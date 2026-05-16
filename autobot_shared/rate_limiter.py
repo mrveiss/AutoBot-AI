@@ -43,8 +43,6 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Optional
-
 from autobot_shared.redis_client import get_async_redis_client
 
 logger = logging.getLogger(__name__)
@@ -121,8 +119,8 @@ class RateLimiter:
         self,
         scope_prefix: str,
         default_tier: str = "authenticated",
-        requests_per_minute: Optional[int] = None,
-        requests_per_hour: Optional[int] = None,
+        requests_per_minute: int | None = None,
+        requests_per_hour: int | None = None,
         redis_database: str = "main",
     ) -> None:
         self._prefix = scope_prefix
@@ -145,8 +143,8 @@ class RateLimiter:
     async def is_allowed(
         self,
         key: str,
-        requests_per_minute: Optional[int] = None,
-        requests_per_hour: Optional[int] = None,
+        requests_per_minute: int | None = None,
+        requests_per_hour: int | None = None,
     ) -> bool:
         """Return True when the request may proceed without exceeding limits.
 
@@ -240,8 +238,8 @@ class RateLimiter:
     async def acquire(
         self,
         key: str,
-        requests_per_minute: Optional[int] = None,
-        requests_per_hour: Optional[int] = None,
+        requests_per_minute: int | None = None,
+        requests_per_hour: int | None = None,
     ) -> bool:
         """Check and record atomically.  Returns True when the request is allowed.
 

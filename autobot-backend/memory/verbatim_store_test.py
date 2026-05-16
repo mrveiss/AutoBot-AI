@@ -12,7 +12,7 @@ Tests cover:
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -24,7 +24,7 @@ from memory.verbatim_store import VerbatimStore
 # ---------------------------------------------------------------------------
 
 
-def _make_collection(stored: Optional[List[Dict[str, Any]]] = None) -> MagicMock:
+def _make_collection(stored: List[Dict[str, Any]] | None = None) -> MagicMock:
     """Return a mock AsyncChromaCollection pre-wired with canned query results."""
     if stored is None:
         stored = []

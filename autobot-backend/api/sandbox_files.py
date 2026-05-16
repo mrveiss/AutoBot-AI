@@ -13,8 +13,6 @@ import logging
 import shutil
 import urllib.parse
 from pathlib import Path
-from typing import Optional
-
 import aiofiles
 from fastapi import APIRouter, Form, HTTPException, Request
 
@@ -98,7 +96,7 @@ async def view_file(request: Request, file_path: str):
     relative_path = str(target_file.relative_to(SANDBOX_FILES_ROOT))
     file_info = await run_in_file_executor(get_file_info, target_file, relative_path)
 
-    content: Optional[str] = None
+    content: str | None = None
     if file_info.mime_type and file_info.mime_type.startswith("text/"):
         try:
             async with aiofiles.open(target_file, "r", encoding="utf-8") as f:
@@ -174,7 +172,7 @@ async def preview_file(request: Request, path: str):
     else:
         file_type = "binary"
 
-    content: Optional[str] = None
+    content: str | None = None
     if file_type == "text":
         try:
             async with aiofiles.open(target_file, "r", encoding="utf-8") as f:

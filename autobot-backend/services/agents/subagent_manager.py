@@ -14,7 +14,7 @@ Core functionality:
 """
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 class SubagentManager:
     """Manages lifecycle and coordination of spawned subagents."""
 
-    def __init__(self, redis_client=None):
+    def __init__(self, redis_client=None) -> None:
         """Initialize manager with optional Redis client."""
         self.redis = redis_client
         self.local_results: Dict[str, TaskResult] = {}
@@ -55,7 +55,7 @@ class SubagentManager:
         return task.task_id
 
     async def set_task_status(
-        self, task_id: str, status: TaskStatus, metadata: Optional[Dict[str, Any]] = None
+        self, task_id: str, status: TaskStatus, metadata: Dict[str, Any] | None = None
     ) -> None:
         """Update task status."""
         if not self.redis:
@@ -97,7 +97,7 @@ class SubagentManager:
         # Store in local cache
         self.local_results[result.task_id] = result
 
-    async def get_task_result(self, task_id: str) -> Optional[TaskResult]:
+    async def get_task_result(self, task_id: str) -> TaskResult | None:
         """Get result of a completed task."""
         # Check local cache first
         if task_id in self.local_results:
@@ -113,7 +113,7 @@ class SubagentManager:
 
         return None
 
-    async def get_batch_results(self, task_ids: List[str]) -> Dict[str, Optional[TaskResult]]:
+    async def get_batch_results(self, task_ids: List[str]) -> Dict[str, TaskResult | None]:
         """Get results for multiple tasks."""
         results = {}
         for task_id in task_ids:
@@ -271,7 +271,7 @@ class SubagentManager:
         task_ids: List[str],
         timeout_seconds: int,
         check_interval: float = 0.5,
-    ) -> Dict[str, Optional[TaskResult]]:
+    ) -> Dict[str, TaskResult | None]:
         """
         Wait for results from multiple tasks.
 

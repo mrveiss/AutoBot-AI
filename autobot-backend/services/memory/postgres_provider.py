@@ -3,7 +3,7 @@
 # Author: mrveiss
 """PostgreSQL Memory Provider (Issue #4344)"""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.logging_manager import get_logger
@@ -14,8 +14,8 @@ logger = get_logger(__name__)
 class PostgresMemoryProvider:
     """PostgreSQL-backed memory provider using AutoBotMemoryGraph."""
 
-    def __init__(self):
-        self.memory_graph: Optional[AutoBotMemoryGraph] = None
+    def __init__(self) -> None:
+        self.memory_graph: AutoBotMemoryGraph | None = None
 
     async def initialize(self) -> None:
         try:
@@ -96,7 +96,7 @@ class PostgresMemoryProvider:
             raise
 
     async def search(
-        self, query: str, limit: int = 10, filters: Optional[Dict[str, Any]] = None
+        self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None
     ) -> List[Dict[str, Any]]:
         if not self.memory_graph:
             logger.warning("Memory graph not initialized for search")
@@ -108,7 +108,7 @@ class PostgresMemoryProvider:
             logger.error(f"Error searching memory: {e}")
             return []
 
-    async def get_entity(self, entity_id: str) -> Optional[Dict[str, Any]]:
+    async def get_entity(self, entity_id: str) -> Dict[str, Any] | None:
         if not self.memory_graph:
             return None
         try:

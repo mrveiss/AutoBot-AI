@@ -18,7 +18,7 @@ Endpoints:
 """
 
 import asyncio
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
@@ -642,7 +642,7 @@ def _process_category_tree(
     tree: List[Dict[str, Any]],
     nodes: List[Dict],
     edges: List[Dict],
-    parent_id: Optional[str] = None,
+    parent_id: str | None = None,
 ) -> None:
     """Recursively process category tree into nodes and edges.
 
@@ -669,7 +669,7 @@ def _process_category_tree(
             _process_category_tree(children, nodes, edges, node["id"])
 
 
-async def _get_facts_for_graph(kb: Any, category_filter: Optional[str], max_facts: int) -> List[Dict[str, Any]]:
+async def _get_facts_for_graph(kb: Any, category_filter: str | None, max_facts: int) -> List[Dict[str, Any]]:
     """Get facts for the graph with optional category filtering.
 
     Issue #707: Extracted helper for unified graph building.

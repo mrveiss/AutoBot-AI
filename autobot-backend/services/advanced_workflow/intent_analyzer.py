@@ -33,7 +33,7 @@ _INTENT_KEYWORDS = {
 class IntentAnalyzer:
     """Analyzes user intent using AI and fallback heuristics"""
 
-    def __init__(self, llm_interface=None):
+    def __init__(self, llm_interface=None) -> None:
         """Initialize intent analyzer with optional LLM interface."""
         self.llm_interface = llm_interface or get_llm_service()
 

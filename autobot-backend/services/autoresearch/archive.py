@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import random
-from typing import List, Optional
+from typing import List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -29,7 +29,7 @@ class Archive:
     but low-scoring ones are never completely excluded.
     """
 
-    def __init__(self, max_size: Optional[int] = None) -> None:
+    def __init__(self, max_size: int | None = None) -> None:
         self._entries: List[VariantArchiveEntry] = []
         self._max_size = max_size
 
@@ -59,7 +59,7 @@ class Archive:
     # Selection
     # ------------------------------------------------------------------
 
-    def select_parent(self, strategy: str = "random_weighted") -> Optional[VariantArchiveEntry]:
+    def select_parent(self, strategy: str = "random_weighted") -> VariantArchiveEntry | None:
         """Return a parent entry using *strategy*.
 
         Supported strategies
@@ -99,7 +99,7 @@ class Archive:
         return [e for e in self._entries if e.valid_parent]
 
     @property
-    def best(self) -> Optional[VariantArchiveEntry]:
+    def best(self) -> VariantArchiveEntry | None:
         """Highest-scoring entry across the entire archive."""
         if not self._entries:
             return None

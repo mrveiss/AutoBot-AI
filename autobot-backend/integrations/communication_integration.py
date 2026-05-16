@@ -12,7 +12,7 @@ workflows.
 import asyncio
 import re
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
@@ -226,8 +226,8 @@ class SlackIntegration(BaseIntegration):
         self,
         method: str,
         url: str,
-        headers: Optional[Dict[str, str]] = None,
-        data: Optional[Dict[str, Any]] = None,
+        headers: Dict[str, str] | None = None,
+        data: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Rate-limited HTTP request to the Slack API.
 
@@ -278,7 +278,7 @@ class SlackIntegration(BaseIntegration):
         status: IntegrationStatus,
         latency: float,
         message: str,
-        details: Optional[Dict[str, Any]] = None,
+        details: Dict[str, Any] | None = None,
     ) -> IntegrationHealth:
         """Create IntegrationHealth response."""
         return IntegrationHealth(
@@ -412,7 +412,7 @@ class TeamsIntegration(BaseIntegration):
         self,
         method: str,
         url: str,
-        headers: Optional[Dict[str, str]] = None,
+        headers: Dict[str, str] | None = None,
     ) -> Dict[str, Any]:
         """Make HTTP request to Microsoft Graph API."""
         try:
@@ -527,8 +527,8 @@ class DiscordIntegration(BaseIntegration):
         self,
         method: str,
         url: str,
-        headers: Optional[Dict[str, str]] = None,
-        data: Optional[Dict[str, Any]] = None,
+        headers: Dict[str, str] | None = None,
+        data: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Make HTTP request to Discord API."""
         try:
@@ -554,7 +554,7 @@ class DiscordIntegration(BaseIntegration):
         status: IntegrationStatus,
         latency: float,
         message: str,
-        details: Optional[Dict[str, Any]] = None,
+        details: Dict[str, Any] | None = None,
     ) -> IntegrationHealth:
         """Create IntegrationHealth response."""
         return IntegrationHealth(

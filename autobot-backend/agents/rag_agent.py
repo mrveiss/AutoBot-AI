@@ -9,7 +9,7 @@ and context ranking. Handles knowledge base integration and document analysis.
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import (
@@ -160,7 +160,7 @@ class RAGAgent(StandardizedAgent):
         self,
         query: str,
         documents: List[Dict[str, Any]],
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Process a query against retrieved documents and synthesize response.
@@ -204,7 +204,7 @@ class RAGAgent(StandardizedAgent):
                 "model_used": self.model_name,
             }
 
-    async def reformulate_query(self, original_query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def reformulate_query(self, original_query: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """
         Reformulate a query to improve retrieval effectiveness.
 
@@ -459,14 +459,14 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
                 "search_strategy": "Error in extraction",
             }
 
-    def _try_extract_from_message(self, response: Dict) -> Optional[str]:
+    def _try_extract_from_message(self, response: Dict) -> str | None:
         """Try to extract content from message dict (Issue #334 - extracted helper)."""
         if "message" not in response or not isinstance(response["message"], dict):
             return None
         content = response["message"].get("content")
         return content.strip() if content else None
 
-    def _try_extract_from_choices(self, response: Dict) -> Optional[str]:
+    def _try_extract_from_choices(self, response: Dict) -> str | None:
         """Try to extract content from choices list (Issue #334 - extracted helper)."""
         if "choices" not in response or not isinstance(response["choices"], list):
             return None

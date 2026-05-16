@@ -15,7 +15,7 @@ Part of EPIC #217 - Advanced Code Intelligence Methods
 
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.base_analyzer import (
@@ -317,7 +317,7 @@ class VueAnalyzer(BaseLanguageAnalyzer):
         logger.debug("Vue Analyzer found %d issues in %s", len(self.issues), file_path)
         return self.issues
 
-    def _extract_section(self, section_name: str) -> Optional[Dict[str, Any]]:
+    def _extract_section(self, section_name: str) -> Dict[str, Any] | None:
         """Extract a section from the Vue SFC.
 
         Returns dict with 'content', 'start_line', 'end_line', 'attributes'.

@@ -22,7 +22,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiofiles
 import aiosqlite
@@ -60,10 +60,10 @@ class FileInfo:
     file_path: Path
     file_size: int
     file_hash: str
-    mime_type: Optional[str] = None
-    uploaded_by: Optional[str] = None
-    message_id: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    mime_type: str | None = None
+    uploaded_by: str | None = None
+    message_id: str | None = None
+    metadata: Dict[str, Any] | None = None
     deduplicated: bool = False
 
     def to_response_dict(self) -> Dict[str, Any]:
@@ -127,18 +127,18 @@ class ConversationFileManager:
         db = Path(config.data_db or str(_PROJECT_ROOT / "data" / "conversation_files.db"))
         return storage, db
 
-    def _init_redis_config(self, redis_host: Optional[str], redis_port: Optional[int]) -> None:
+    def _init_redis_config(self, redis_host: str | None, redis_port: int | None) -> None:
         """Initialize Redis configuration from params or unified config."""
         redis_config = unified_config_manager.get_redis_config()
         self.redis_host = redis_host or redis_config.get("host")
         self.redis_port = redis_port or redis_config.get("port")
         self._redis_manager = None
-        self._redis_sessions: Optional[async_redis.Redis] = None
+        self._redis_sessions: async_redis.Redis | None = None
 
     def __init__(
         self,
-        storage_dir: Optional[Path] = None,
-        db_path: Optional[Path] = None,
+        storage_dir: Path | None = None,
+        db_path: Path | None = None,
         redis_host: str = None,
         redis_port: int = None,
     ):
@@ -230,9 +230,9 @@ class ConversationFileManager:
         filename: str,
         content: str,
         mime_type: str = "text/plain",
-        created_by: Optional[str] = None,
+        created_by: str | None = None,
         file_type: str = "generated",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Create a file programmatically in a session (Issue #70).
 
@@ -392,7 +392,7 @@ class ConversationFileManager:
             finally:
                 await connection.close()
 
-    async def copy_file(self, session_id: str, file_id: str, new_filename: Optional[str] = None) -> Dict[str, Any]:
+    async def copy_file(self, session_id: str, file_id: str, new_filename: str | None = None) -> Dict[str, Any]:
         """Copy a file within a session (Issue #70).
 
         Args:
@@ -702,7 +702,7 @@ class ConversationFileManager:
         connection,
         session_id: str,
         file_id: str,
-        message_id: Optional[str],
+        message_id: str | None,
         association_type: str,
     ) -> None:
         """Create session file association record."""
@@ -853,10 +853,10 @@ class ConversationFileManager:
         session_id: str,
         file_content: bytes,
         original_filename: str,
-        mime_type: Optional[str] = None,
-        uploaded_by: Optional[str] = None,
-        message_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        mime_type: str | None = None,
+        uploaded_by: str | None = None,
+        message_id: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Add a file to the conversation file system."""
         async with self._lock:
@@ -961,7 +961,7 @@ class ConversationFileManager:
         finally:
             await connection.close()
 
-    async def _try_get_cached_files(self, session_id: str) -> Optional[List[Dict[str, Any]]]:
+    async def _try_get_cached_files(self, session_id: str) -> List[Dict[str, Any]] | None:
         """Try to get cached files from Redis, return None on miss or error."""
         try:
             redis_db = await self._get_redis_sessions()
@@ -1119,8 +1119,8 @@ class ConversationFileManager:
         self,
         file_id: str,
         access_type: str,
-        accessed_by: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        accessed_by: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> None:
         """
         Log file access to audit trail.

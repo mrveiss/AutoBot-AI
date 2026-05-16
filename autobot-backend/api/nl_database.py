@@ -14,7 +14,7 @@ Endpoints:
 - GET  /nl-database/history       - Retrieve query history
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
@@ -45,7 +45,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-async def _resolve_db_url(db_secret_id: Optional[str], request: Request) -> Optional[str]:
+async def _resolve_db_url(db_secret_id: str | None, request: Request) -> str | None:
     """
     Resolve a database URL from a secret ID.
 
@@ -87,7 +87,7 @@ async def _resolve_db_url(db_secret_id: Optional[str], request: Request) -> Opti
         ) from exc
 
 
-def _extract_user_id(request: Request) -> Optional[str]:
+def _extract_user_id(request: Request) -> str | None:
     """
     Extract user ID from the request state if available.
 

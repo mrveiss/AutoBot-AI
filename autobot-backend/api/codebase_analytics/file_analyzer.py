@@ -9,7 +9,7 @@ Issue #2013: Decomposed from scanner.py god module.
 
 import asyncio
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -72,7 +72,7 @@ _FILE_TYPE_MAP = [
 ]
 
 
-def _determine_analyzer_type(extension: str) -> Tuple[Optional[str], str]:
+def _determine_analyzer_type(extension: str) -> Tuple[str | None, str]:
     """
     Determine analyzer type and stat key from file extension.
 
@@ -92,8 +92,8 @@ def _determine_analyzer_type(extension: str) -> Tuple[Optional[str], str]:
 
 async def _run_file_analyzer(
     file_path: Path,
-    analyzer_type: Optional[str],
-) -> Optional[Dict]:
+    analyzer_type: str | None,
+) -> Dict | None:
     """
     Run the appropriate analyzer for a file.
 
@@ -152,7 +152,7 @@ def _build_file_analysis_result(
     file_category: str,
     file_hash: str,
     file_analysis: Dict,
-    analyzer_type: Optional[str],
+    analyzer_type: str | None,
     stat_key: str,
 ) -> FileAnalysisResult:
     """

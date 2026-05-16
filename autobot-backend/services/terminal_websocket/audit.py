@@ -9,7 +9,7 @@ Audit logging for terminal command activity.
 
 import json
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from api.schemas_terminal import SecurityLevel
 from autobot_shared.logging_manager import get_logger
@@ -25,7 +25,7 @@ class TerminalAuditLogger:
         session_id: str,
         security_level: SecurityLevel,
         user_role: str = "user",
-    ):
+    ) -> None:
         """Initialize audit logger with session and security context."""
         self.session_id = session_id
         self.security_level = security_level
@@ -85,7 +85,7 @@ class TerminalAuditLogger:
             },
         )
 
-    def log_workflow_control(self, action: str, workflow_id: Optional[str]) -> None:
+    def log_workflow_control(self, action: str, workflow_id: str | None) -> None:
         """Log workflow control event"""
         self.log_activity(
             "workflow_control",

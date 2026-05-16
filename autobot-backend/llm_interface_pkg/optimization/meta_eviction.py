@@ -23,7 +23,7 @@ Issue #1952: Meta device eviction for processed layers.
 
 import gc
 from dataclasses import dataclass
-from typing import Any, Optional, Set
+from typing import Any, Set
 
 from autobot_shared.logging_manager import get_logger
 
@@ -116,8 +116,8 @@ def get_gpu_memory_allocated() -> int:
 
 def evict_layer_to_meta(
     layer: Any,
-    model: Optional[Any] = None,
-    quantizer: Optional[Any] = None,
+    model: Any | None = None,
+    quantizer: Any | None = None,
 ) -> None:
     """Move a transformer layer's parameters to the PyTorch meta device.
 
@@ -320,8 +320,8 @@ class MetaDeviceEvictionManager:
         self,
         layer_idx: int,
         layer: Any,
-        model: Optional[Any] = None,
-        quantizer: Optional[Any] = None,
+        model: Any | None = None,
+        quantizer: Any | None = None,
     ) -> bool:
         """Evict *layer* to the meta device and record the index.
 

@@ -16,7 +16,7 @@ import traceback
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import aiofiles
 import psutil
@@ -31,21 +31,21 @@ class NPUMetrics:
     """NPU (Neural Processing Unit) performance metrics.
 
     Fields that require Intel NPU monitoring tools or benchmark_app are typed
-    Optional[float] and set to None when the hardware is detected but the data
+    float | None and set to None when the hardware is detected but the data
     cannot be retrieved.  Callers must check for None before using these values.
     Ref: #2871.
     """
 
     timestamp: str
     device_id: str
-    utilization_percent: Optional[float]  # None when Intel NPU tools unavailable
-    memory_used_mb: Optional[float]  # None when Intel NPU tools unavailable
-    memory_total_mb: Optional[float]  # None when Intel NPU tools unavailable
-    power_draw_watts: Optional[float]
-    temperature_celsius: Optional[float]
-    operations_per_second: Optional[float]
-    inference_latency_ms: Optional[float]  # None when benchmark not performed
-    throughput_mbps: Optional[float]  # None when not measurable
+    utilization_percent: float | None  # None when Intel NPU tools unavailable
+    memory_used_mb: float | None  # None when Intel NPU tools unavailable
+    memory_total_mb: float | None  # None when Intel NPU tools unavailable
+    power_draw_watts: float | None
+    temperature_celsius: float | None
+    operations_per_second: float | None
+    inference_latency_ms: float | None  # None when benchmark not performed
+    throughput_mbps: float | None  # None when not measurable
     error_count: int = 0
 
 
@@ -62,10 +62,10 @@ class MultiModalMetrics:
     post_processing_time_ms: float
     memory_peak_mb: float
     cpu_utilization_percent: float
-    gpu_utilization_percent: Optional[float]
-    npu_utilization_percent: Optional[float]
+    gpu_utilization_percent: float | None
+    npu_utilization_percent: float | None
     throughput_items_per_second: float
-    accuracy_score: Optional[float]
+    accuracy_score: float | None
 
 
 @dataclass
@@ -99,8 +99,8 @@ class LLMPerformanceMetrics:
     processing_time_ms: float
     tokens_per_second: float
     memory_usage_mb: float
-    gpu_utilization: Optional[float]
-    npu_utilization: Optional[float]
+    gpu_utilization: float | None
+    npu_utilization: float | None
     temperature: float
     max_tokens: int
     context_length: int
@@ -151,7 +151,7 @@ class AIPerformanceAnalytics:
             self.logger.error(f"❌ Failed to connect to Redis for AI metrics: {e}")
             self.redis_client = None
 
-    async def collect_npu_metrics(self) -> Optional[NPUMetrics]:
+    async def collect_npu_metrics(self) -> NPUMetrics | None:
         """Collect NPU (Intel AI Boost) performance metrics."""
         try:
             # Check for Intel NPU via OpenVINO using async subprocess
@@ -209,7 +209,7 @@ else:
 
         return None
 
-    async def _get_npu_utilization(self) -> Optional[float]:
+    async def _get_npu_utilization(self) -> float | None:
         """Get current NPU utilization percentage.
 
         Returns None when Intel NPU monitoring tools are unavailable.  Callers
@@ -218,7 +218,7 @@ else:
         self.logger.debug("NPU utilization unavailable: Intel NPU monitoring tools not present (#2871)")
         return None
 
-    async def _get_npu_memory(self) -> Tuple[Optional[float], Optional[float]]:
+    async def _get_npu_memory(self) -> Tuple[float | None, float | None]:
         """Get NPU memory usage in MB.
 
         Returns (None, None) when Intel NPU monitoring tools are unavailable.
@@ -227,7 +227,7 @@ else:
         self.logger.debug("NPU memory unavailable: Intel NPU monitoring tools not present (#2871)")
         return None, None
 
-    async def _benchmark_npu_inference(self) -> Optional[float]:
+    async def _benchmark_npu_inference(self) -> float | None:
         """Benchmark NPU inference latency.
 
         Returns None when a real inference benchmark cannot be performed.
@@ -336,7 +336,7 @@ else:
             self.logger.error(f"Error monitoring multimodal pipeline: {e}")
             return self._build_zero_multimodal_metrics(pipeline_type)
 
-    async def _get_gpu_utilization(self) -> Optional[float]:
+    async def _get_gpu_utilization(self) -> float | None:
         """Get GPU utilization percentage."""
         try:
             process = await asyncio.create_subprocess_exec(
@@ -559,7 +559,7 @@ else:
             self.logger.error(f"Error monitoring LLM performance: {e}")
             return self._build_zero_llm_metrics(request_data)
 
-    def _compute_npu_trend(self) -> Optional[Dict[str, Any]]:
+    def _compute_npu_trend(self) -> Dict[str, Any] | None:
         """Compute NPU utilization trend from history.
 
         Helper for analyze_performance_trends. Ref: #1088.
@@ -576,7 +576,7 @@ else:
             ),
         }
 
-    def _compute_multimodal_trend(self) -> Optional[Dict[str, Any]]:
+    def _compute_multimodal_trend(self) -> Dict[str, Any] | None:
         """Compute multi-modal pipeline trend from history.
 
         Helper for analyze_performance_trends. Ref: #1088.
@@ -590,7 +590,7 @@ else:
             "memory_efficiency": statistics.mean([m.memory_peak_mb for m in mm_metrics]),
         }
 
-    def _compute_knowledge_trend(self) -> Optional[Dict[str, Any]]:
+    def _compute_knowledge_trend(self) -> Dict[str, Any] | None:
         """Compute knowledge base search trend from history.
 
         Helper for analyze_performance_trends. Ref: #1088.
@@ -604,7 +604,7 @@ else:
             "relevance_trend": statistics.mean([m.relevance_score for m in kb_metrics]),
         }
 
-    def _compute_llm_trend(self) -> Optional[Dict[str, Any]]:
+    def _compute_llm_trend(self) -> Dict[str, Any] | None:
         """Compute LLM performance trend from history.
 
         Helper for analyze_performance_trends. Ref: #1088.

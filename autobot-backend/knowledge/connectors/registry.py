@@ -21,7 +21,7 @@ Usage:
 
 import asyncio
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Type
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Type
 
 if TYPE_CHECKING:
     from .base import AbstractConnector  # noqa: F401  # forward-ref for string annotations
@@ -92,7 +92,7 @@ class ConnectorRegistry:
         logger.debug("Removed connector instance: %s", connector_id)
 
     @classmethod
-    def get(cls, connector_id: str) -> Optional["object"]:
+    def get(cls, connector_id: str) -> "object" | None:
         """Return a running connector by ID, or None if not found."""
         return cls._instances.get(connector_id)
 
@@ -112,7 +112,7 @@ class ConnectorRegistry:
         return MappingProxyType(cls._connectors)
 
     @classmethod
-    def get_registered_class(cls, type_name: str) -> Optional[Type["AbstractConnector"]]:
+    def get_registered_class(cls, type_name: str) -> Type["AbstractConnector"] | None:
         """Return the registered connector class for *type_name*, or None (Issue #5057).
 
         Public accessor that replaces ``ConnectorRegistry._connectors.get(...)``

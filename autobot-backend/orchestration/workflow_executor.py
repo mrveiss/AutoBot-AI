@@ -23,7 +23,7 @@ import asyncio
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from circuit_breaker import circuit_breaker_async
@@ -91,8 +91,8 @@ class WorkflowExecutor:
         reserve_agent_callback: Callable[[str], None],
         release_agent_callback: Callable[[str], None],
         update_performance_callback: Callable[[str, bool, float], None],
-        workflow_fetcher: Optional[Callable[[str], Optional[Dict[str, Any]]]] = None,
-        memory: Optional[WorkflowMemory] = None,
+        workflow_fetcher: Callable[[str], Dict[str, Any] | None] | None = None,
+        memory: WorkflowMemory | None = None,
     ):
         """
         Initialize the workflow executor.
@@ -125,7 +125,7 @@ class WorkflowExecutor:
         self._checkpoint_manager = WorkflowCheckpointManager()
         self._error_handler = StepErrorHandler()
         # Issue #2143: sub-workflow executor (None when fetcher not provided)
-        self._sub_workflow_executor: Optional[SubWorkflowExecutor] = (
+        self._sub_workflow_executor: SubWorkflowExecutor | None = (
             SubWorkflowExecutor(workflow_executor=self, workflow_fetcher=workflow_fetcher)
             if workflow_fetcher is not None
             else None
@@ -244,7 +244,7 @@ class WorkflowExecutor:
         workflow_id: str,
         step_id: str,
         error: str,
-        execution_context: Optional[Dict[str, Any]] = None,
+        execution_context: Dict[str, Any] | None = None,
     ) -> None:
         """Fire a STEP_FAILED notification (#3101, #3168)."""
         from services.notification_service import NotificationEvent
@@ -567,11 +567,11 @@ class WorkflowExecutor:
         workflow_id: str,
         steps: List[Dict[str, Any]],
         context: Dict[str, Any],
-        edges: Optional[List[Dict[str, Any]]] = None,
+        edges: List[Dict[str, Any]] | None = None,
         resume_from_checkpoint: bool = False,
         mode: ExecutionMode = ExecutionMode.NORMAL,
-        debug_controller: Optional[DebugController] = None,
-        notification_config: Optional[Any] = None,
+        debug_controller: DebugController | None = None,
+        notification_config: Any | None = None,
     ) -> Dict[str, Any]:
         """
         Execute workflow with coordinated agent management.
@@ -781,7 +781,7 @@ class WorkflowExecutor:
         steps: List[Dict[str, Any]],
         context: Dict[str, Any],
         controller: DebugController,
-        notification_config: Optional[Any] = None,
+        notification_config: Any | None = None,
     ) -> Dict[str, Any]:
         """Step-by-step execution gated by an external DebugController.
 
@@ -861,7 +861,7 @@ class WorkflowExecutor:
         steps: List[Dict[str, Any]],
         edges: List[Dict[str, Any]],
         context: Dict[str, Any],
-        notification_config: Optional[Any] = None,
+        notification_config: Any | None = None,
     ) -> Dict[str, Any]:
         """
         Execute a branching workflow via DAGExecutor.
@@ -1019,7 +1019,7 @@ class WorkflowExecutor:
     def _build_step_success_result(
         self,
         result: Dict[str, Any],
-        agent_id: Optional[str],
+        agent_id: str | None,
         step_id: str,
     ) -> Dict[str, Any]:
         """
@@ -1045,7 +1045,7 @@ class WorkflowExecutor:
     def _build_step_failure_result(
         self,
         error: Exception,
-        agent_id: Optional[str],
+        agent_id: str | None,
         step_id: str,
     ) -> Dict[str, Any]:
         """
@@ -1099,7 +1099,7 @@ class WorkflowExecutor:
 
         logger.info("Executing step %s with agent %s", step_id, agent_id)
 
-        interaction: Optional[AgentInteraction] = None
+        interaction: AgentInteraction | None = None
         if agent_id:
             interaction = self._create_agent_interaction(step, execution_context)
 
@@ -1197,7 +1197,7 @@ class WorkflowExecutor:
         workflow_id: str,
         user_request: str,
         plan_summary: Dict[str, Any],
-        approval_callback: Optional[callable] = None,
+        approval_callback: callable | None = None,
     ) -> Dict[str, Any]:
         """
         Request approval for the workflow plan before execution.

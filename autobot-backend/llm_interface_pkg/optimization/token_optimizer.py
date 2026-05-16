@@ -21,7 +21,7 @@ import threading
 import time
 from collections import OrderedDict
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_5_MINUTES
@@ -141,7 +141,7 @@ class L1Cache:
         self._ttl_seconds = ttl_seconds
         self._lock = threading.Lock()
 
-    def get(self, fingerprint: str) -> Optional[CompactionEntry]:
+    def get(self, fingerprint: str) -> CompactionEntry | None:
         """Retrieve a compaction entry if present and not expired. Thread-safe."""
         with self._lock:
             entry = self._cache.get(fingerprint)
@@ -196,7 +196,7 @@ class L2Cache:
             logger.warning("Failed to connect to Redis for L2 token cache")
             return None
 
-    def get(self, fingerprint: str) -> Optional[CompactionEntry]:
+    def get(self, fingerprint: str) -> CompactionEntry | None:
         """Retrieve a compaction entry from Redis."""
         redis = self._get_redis()
         if redis is None:
@@ -283,7 +283,7 @@ class TokenOptimizer:
         optimized_messages, record = optimizer.optimize(request.messages, request_id)
     """
 
-    def __init__(self, config: Optional[TokenOptimizerConfig] = None):
+    def __init__(self, config: TokenOptimizerConfig | None = None):
         self._config = config or TokenOptimizerConfig()
         self._fingerprinter = ContextFingerprinter()
         self._l1 = L1Cache(
@@ -304,7 +304,7 @@ class TokenOptimizer:
         self._lock = threading.Lock()
 
     @staticmethod
-    def _init_compressor() -> Optional["PromptCompressor"]:
+    def _init_compressor() -> "PromptCompressor" | None:
         """Initialize PromptCompressor if available. Issue #2098."""
         if not _COMPRESSOR_AVAILABLE:
             return None
@@ -369,7 +369,7 @@ class TokenOptimizer:
 
         return optimized, total_saved, blocks_compacted
 
-    def _get_or_create_compaction(self, fp: str, content: str) -> Optional[str]:
+    def _get_or_create_compaction(self, fp: str, content: str) -> str | None:
         """Look up cached compaction or create one if eligible."""
         entry = self._lookup(fp)
         if entry is not None:
@@ -408,7 +408,7 @@ class TokenOptimizer:
             blocks_compacted=blocks_compacted,
         )
 
-    def _lookup(self, fingerprint: str) -> Optional[CompactionEntry]:
+    def _lookup(self, fingerprint: str) -> CompactionEntry | None:
         """Look up a compaction entry in L1, then L2."""
         entry = self._l1.get(fingerprint)
         if entry is not None:
@@ -462,11 +462,11 @@ class TokenOptimizer:
 
 
 # Module-level singleton
-_optimizer: Optional[TokenOptimizer] = None
+_optimizer: TokenOptimizer | None = None
 
 
 def get_token_optimizer(
-    config: Optional[TokenOptimizerConfig] = None,
+    config: TokenOptimizerConfig | None = None,
 ) -> TokenOptimizer:
     """Get or create the global TokenOptimizer instance."""
     global _optimizer

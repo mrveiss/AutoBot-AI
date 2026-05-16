@@ -15,7 +15,7 @@ Provides:
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List
 from uuid import UUID
 
 from autobot_shared.logging_manager import get_logger
@@ -44,7 +44,7 @@ class RootCauseReport:
     """Structured root cause analysis report."""
 
     task_id: str
-    root_event: Optional[CausalEvent] = None
+    root_event: CausalEvent | None = None
     causal_chain: List[CausalEvent] = field(default_factory=list)
     confidence: float = 0.0
     explanations: List[str] = field(default_factory=list)
@@ -52,7 +52,7 @@ class RootCauseReport:
     chain_depth: int = 0
     timestamp: str = field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
     analysis_status: str = "success"  # success, partial, failed
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     def to_dict(self) -> dict:
         """Convert report to dictionary for API serialization."""
@@ -70,7 +70,7 @@ class RootCauseReport:
         }
 
     @staticmethod
-    def _event_to_dict(event: Optional[CausalEvent]) -> Optional[dict]:
+    def _event_to_dict(event: CausalEvent | None) -> dict | None:
         """Convert CausalEvent to dictionary."""
         if not event:
             return None
@@ -165,7 +165,7 @@ class RootCauseAnalyzer:
                 error_message=f"Analysis error: {str(e)}",
             )
 
-    async def _get_error_event_id(self, task_id: str) -> Optional[str]:
+    async def _get_error_event_id(self, task_id: str) -> str | None:
         """
         Lookup error event ID from task_id.
 

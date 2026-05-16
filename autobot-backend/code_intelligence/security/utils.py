@@ -7,13 +7,13 @@ Convenience functions for security analysis.
 Issue #712: Extracted from security_analyzer.py for modularity.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .analyzer import SecurityAnalyzer
 from .constants import OWASP_MAPPING, VulnerabilityType
 
 
-def analyze_security(directory: Optional[str] = None, exclude_patterns: Optional[List[str]] = None) -> Dict[str, Any]:
+def analyze_security(directory: str | None = None, exclude_patterns: List[str] | None = None) -> Dict[str, Any]:
     """
     Convenience function to analyze security of a directory.
 
@@ -47,8 +47,8 @@ def get_vulnerability_types() -> List[Dict[str, str]]:
 
 
 async def analyze_security_async(
-    directory: Optional[str] = None,
-    exclude_patterns: Optional[List[str]] = None,
+    directory: str | None = None,
+    exclude_patterns: List[str] | None = None,
     use_semantic_analysis: bool = True,
     find_semantic_duplicates: bool = True,
 ) -> Dict[str, Any]:

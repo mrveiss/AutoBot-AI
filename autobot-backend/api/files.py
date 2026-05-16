@@ -16,8 +16,6 @@ import mimetypes
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
-
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -211,7 +209,7 @@ def _check_file_permission(request: Request, permission: str) -> dict:
     return user_data
 
 
-def _calculate_parent_path(path: str) -> Optional[str]:
+def _calculate_parent_path(path: str) -> str | None:
     """
     Calculate parent path from current path.
 
@@ -897,7 +895,7 @@ async def rename_file_or_directory(request: Request, path: str = Form(...), new_
     }
 
 
-def _determine_file_type(mime_type: Optional[str]) -> str:
+def _determine_file_type(mime_type: str | None) -> str:
     """
     Determine the preview file type from MIME type.
 

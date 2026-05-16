@@ -12,7 +12,7 @@ import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
@@ -98,8 +98,8 @@ def calculate_health_score(metrics: dict[str, float]) -> HealthScore:
 
 
 async def get_quality_data_from_storage(
-    source_root: Optional["Path"] = None,
-    source_id: Optional[str] = None,
+    source_root: "Path" | None = None,
+    source_id: str | None = None,
 ) -> dict[str, Any]:
     """Retrieve quality data from Redis or ChromaDB.
 
@@ -169,8 +169,8 @@ async def get_quality_data_from_storage(
 
 
 async def _get_problems_from_chromadb(
-    source_root: Optional["Path"] = None,
-    source_id: Optional[str] = None,
+    source_root: "Path" | None = None,
+    source_id: str | None = None,
 ) -> tuple[list[dict], dict[str, Any]]:
     """Fetch problems and stats from ChromaDB.
 
@@ -622,9 +622,9 @@ def _calculate_all_quality_scores(
 
 
 async def calculate_real_quality_metrics(
-    source_root: Optional["Path"] = None,
-    source_id: Optional[str] = None,
-) -> Optional[dict[str, Any]]:
+    source_root: "Path" | None = None,
+    source_id: str | None = None,
+) -> dict[str, Any] | None:
     """Calculate real quality metrics from ChromaDB analysis data.
 
     Issue #541: This replaces static demo values with actual calculated metrics.
@@ -702,7 +702,7 @@ _CATEGORY_TYPE_MAP: dict[str, set[str]] = {
 }
 
 
-def _filter_problems_by_category(problems: list[dict], category: str, severity: Optional[str]) -> list[dict]:
+def _filter_problems_by_category(problems: list[dict], category: str, severity: str | None) -> list[dict]:
     """
     Filter problems by category type and optional severity.
 
@@ -725,7 +725,7 @@ def _filter_problems_by_category(problems: list[dict], category: str, severity: 
     return category_problems
 
 
-def _group_problems_by_file(problems: list[dict], file_filter: Optional[str]) -> dict[str, list[dict]]:
+def _group_problems_by_file(problems: list[dict], file_filter: str | None) -> dict[str, list[dict]]:
     """
     Group problems by file path with optional filtering.
 
@@ -901,7 +901,7 @@ manager = ConnectionManager()
 )
 async def get_health_score(
     admin_check: bool = Depends(check_admin_permission),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get current codebase health score with breakdown.
@@ -943,9 +943,9 @@ async def get_health_score(
     error_code_prefix="ANALYTICS_QUALITY",
 )
 async def get_quality_metrics(
-    category: Optional[MetricCategory] = Query(None, description="Filter by category"),
+    category: MetricCategory | None = Query(None, description="Filter by category"),
     admin_check: bool = Depends(check_admin_permission),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get all quality metrics or filter by category.
@@ -1007,10 +1007,10 @@ async def get_quality_metrics(
     error_code_prefix="ANALYTICS_QUALITY",
 )
 async def get_pattern_distribution(
-    severity: Optional[str] = Query(None, description="Filter by severity"),
+    severity: str | None = Query(None, description="Filter by severity"),
     limit: int = Query(20, ge=1, le=100),
     admin_check: bool = Depends(check_admin_permission),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get distribution of code patterns detected in the codebase.
@@ -1067,7 +1067,7 @@ async def get_pattern_distribution(
 async def get_complexity_metrics(
     top_n: int = Query(10, ge=1, le=50, description="Number of hotspots to return"),
     admin_check: bool = Depends(check_admin_permission),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get code complexity analysis with hotspots.
@@ -1186,9 +1186,9 @@ def _calculate_trend_statistics(scores: list) -> dict:
 )
 async def get_quality_trends(
     period: str = Query("30d", pattern="^(7d|14d|30d|90d)$"),
-    metric: Optional[str] = Query(None, description="Specific metric to trend"),
+    metric: str | None = Query(None, description="Specific metric to trend"),
     admin_check: bool = Depends(check_admin_permission),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get quality score trends over time.
@@ -1226,7 +1226,7 @@ async def get_quality_trends(
 )
 async def get_quality_snapshot(
     admin_check: bool = Depends(check_admin_permission),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get complete quality snapshot for the current state.
@@ -1295,11 +1295,11 @@ async def get_quality_snapshot(
 )
 async def drill_down_category(
     category: str,
-    file_filter: Optional[str] = Query(None, description="Filter by file path"),
-    severity: Optional[str] = Query(None),
+    file_filter: str | None = Query(None, description="Filter by file path"),
+    severity: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     admin_check: bool = Depends(check_admin_permission),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Drill down into a specific quality category.

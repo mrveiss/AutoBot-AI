@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import time
 from datetime import datetime, timezone
-from typing import Awaitable, Callable, Literal, Optional
+from typing import Awaitable, Callable, Literal
 
 from fastapi import Request
 from pydantic import BaseModel
@@ -41,9 +41,9 @@ class ComponentHealth(BaseModel):
 
     name: str
     status: HealthStatus
-    detail: Optional[str] = None
-    latency_ms: Optional[float] = None
-    data: Optional[dict] = None
+    detail: str | None = None
+    latency_ms: float | None = None
+    data: dict | None = None
 
 
 class SystemHealth(BaseModel):
@@ -54,7 +54,7 @@ class SystemHealth(BaseModel):
     timestamp: datetime
 
 
-ProbeFn = Callable[[Optional[Request]], Awaitable[ComponentHealth]]
+ProbeFn = Callable[[Request | None], Awaitable[ComponentHealth]]
 
 _PROBES: dict[str, ProbeFn] = {}
 
@@ -91,7 +91,7 @@ def register_health_probe(name: str) -> Callable[[ProbeFn], ProbeFn]:
     return _decorate
 
 
-async def _run_probe(name: str, fn: ProbeFn, request: Optional[Request]) -> ComponentHealth:
+async def _run_probe(name: str, fn: ProbeFn, request: Request | None) -> ComponentHealth:
     started = time.perf_counter()
     try:
         result = await asyncio.wait_for(fn(request), timeout=_PROBE_TIMEOUT_S)
@@ -124,7 +124,7 @@ def _aggregate_status(components: list[ComponentHealth]) -> HealthStatus:
 
 
 async def collect_system_health(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> SystemHealth:
     """Run every registered probe concurrently and return an aggregated result."""
     if not _PROBES:
@@ -186,7 +186,7 @@ def probe_singleton(
     to be awaited (e.g. ``get_async_redis_client`` style factories).
     """
 
-    async def _probe(request: Optional[Request] = None) -> ComponentHealth:
+    async def _probe(request: Request | None = None) -> ComponentHealth:
         try:
             instance = await getter() if async_getter else getter()
             if instance is None:
@@ -213,7 +213,7 @@ def probe_redis_db(probe_name: str, *, database: str = "main") -> ProbeFn:
     no probe blocks the asyncio event loop (regression class fixed in PR #6870).
     """
 
-    async def _probe(request: Optional[Request] = None) -> ComponentHealth:
+    async def _probe(request: Request | None = None) -> ComponentHealth:
         try:
             from autobot_shared.redis_client import get_async_redis_client
 
@@ -243,7 +243,7 @@ def probe_app_state(probe_name: str, attr: str) -> ProbeFn:
     without a request context) and ``down`` when it is explicitly ``None``.
     """
 
-    async def _probe(request: Optional[Request] = None) -> ComponentHealth:
+    async def _probe(request: Request | None = None) -> ComponentHealth:
         if request is None or not hasattr(request.app.state, attr):
             return ComponentHealth(
                 name=probe_name,

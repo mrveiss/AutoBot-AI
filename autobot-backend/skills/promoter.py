@@ -11,7 +11,7 @@ and optionally commits it to git.
 import asyncio
 import os
 import re
-from typing import List, Optional
+from typing import List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 class SkillPromoter:
     """Promotes a draft skill package to the builtin codebase directory."""
 
-    def __init__(self, skills_base_dir: Optional[str] = None) -> None:
+    def __init__(self, skills_base_dir: str | None = None) -> None:
         """Initialize with optional override for the builtin skills directory."""
         base = config.base_dir
         self.skills_dir = skills_base_dir or os.path.join(base, "autobot-backend", "skills", "builtin")
@@ -31,7 +31,7 @@ class SkillPromoter:
         self,
         name: str,
         skill_md: str,
-        skill_py: Optional[str],
+        skill_py: str | None,
         issue_ref: str = "",
         auto_commit: bool = True,
     ) -> str:

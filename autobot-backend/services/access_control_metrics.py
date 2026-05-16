@@ -19,7 +19,7 @@ import asyncio
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
@@ -42,7 +42,7 @@ class AccessControlMetrics(AsyncRedisClientMixin):
 
     _redis_database = "metrics"
 
-    def __init__(self, retention_days: int = 7):
+    def __init__(self, retention_days: int = 7) -> None:
         """
         Initialize metrics collection service
 
@@ -440,7 +440,7 @@ class AccessControlMetrics(AsyncRedisClientMixin):
             logger.error("Failed to get user statistics: %s", e)
             return {"username": username, "error": "Failed to retrieve user statistics"}
 
-    async def cleanup_old_metrics(self):
+    async def cleanup_old_metrics(self) -> None:
         """
         Manually cleanup metrics older than retention period
 
@@ -477,7 +477,7 @@ class AccessControlMetrics(AsyncRedisClientMixin):
 
 
 # Global metrics instance
-_metrics_service: Optional[AccessControlMetrics] = None
+_metrics_service: AccessControlMetrics | None = None
 _metrics_lock = asyncio.Lock()
 
 

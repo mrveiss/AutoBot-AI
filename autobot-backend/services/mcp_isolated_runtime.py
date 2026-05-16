@@ -11,7 +11,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
@@ -51,7 +51,7 @@ class IsolatedBridgeClient:
         self._last_restart_ts = 0.0
         self._permanently_failed = False
 
-    async def start(self):
+    async def start(self) -> None:
         """Spawn the worker subprocess with scrubbed env."""
         if self._proc is not None and self._proc.returncode is None:
             return
@@ -86,7 +86,7 @@ class IsolatedBridgeClient:
         metrics.set_mcp_worker_uptime(self._bridge, 0.0)
         metrics.set_mcp_worker_permanently_failed(self._bridge, False)
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Send shutdown RPC then terminate if still alive."""
         if self._proc is None:
             return
@@ -102,7 +102,7 @@ class IsolatedBridgeClient:
                 self._proc.kill()
         self._proc = None
 
-    async def _ensure_alive(self):
+    async def _ensure_alive(self) -> None:
         """Restart worker if it died; honour circuit breaker."""
         if self._proc is None or self._proc.returncode is not None:
             if self._proc is not None:
@@ -158,7 +158,7 @@ class IsolatedBridgeClient:
         tool_name: str,
         arguments: Dict[str, Any],
         timeout: float = 30.0,
-        run_jwt: Optional[str] = None,
+        run_jwt: str | None = None,
     ) -> Dict[str, Any]:
         """Invoke a tool on the isolated bridge.
 
@@ -227,7 +227,7 @@ class IsolatedBridgeClient:
 class IsolatedBridgeRegistry:
     """Singleton registry of IsolatedBridgeClient per bridge name."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialise empty registry."""
         self._clients = {}
         self._lock = asyncio.Lock()
@@ -244,7 +244,7 @@ class IsolatedBridgeRegistry:
                 self._clients[bridge] = client
             return client
 
-    async def shutdown_all(self):
+    async def shutdown_all(self) -> None:
         """Stop every managed worker; used on backend graceful shutdown."""
         async with self._lock:
             for client in self._clients.values():

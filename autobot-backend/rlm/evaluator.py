@@ -12,8 +12,6 @@ to generate_response with the critique as a refinement hint.
 Issue #1373: Initial RLM prototype.
 """
 
-from typing import Optional
-
 from autobot_shared.logging_manager import get_logger
 from rlm.types import ReflectionResult, ReflectionVerdict, RLMConfig
 
@@ -59,7 +57,7 @@ class ResponseQualityEvaluator:
     that even small models can produce valid output.
     """
 
-    def __init__(self, config: Optional[RLMConfig] = None):
+    def __init__(self, config: RLMConfig | None = None):
         self.config = config or RLMConfig()
 
     async def evaluate(

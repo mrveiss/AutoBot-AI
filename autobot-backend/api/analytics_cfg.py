@@ -18,7 +18,7 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -138,7 +138,7 @@ class ControlFlowGraph:
     file_path: str
     nodes: List[CFGNode] = field(default_factory=list)
     edges: List[CFGEdge] = field(default_factory=list)
-    entry_node_id: Optional[str] = None
+    entry_node_id: str | None = None
     exit_node_ids: List[str] = field(default_factory=list)
     issues: List[CFGIssue] = field(default_factory=list)
     metrics: Dict[str, Any] = field(default_factory=dict)
@@ -171,9 +171,9 @@ class CFGBuilder(ast.NodeVisitor):
         self.source_lines = source_code.split("\n")
         self.file_path = file_path
         self.graphs: List[ControlFlowGraph] = []
-        self._current_graph: Optional[ControlFlowGraph] = None
+        self._current_graph: ControlFlowGraph | None = None
         self._node_counter = 0
-        self._current_node_id: Optional[str] = None
+        self._current_node_id: str | None = None
         self._loop_stack: List[Tuple[str, str]] = []  # (header_id, exit_id)
         self._try_stack: List[str] = []
 
@@ -198,7 +198,7 @@ class CFGBuilder(ast.NodeVisitor):
         node_type: NodeType,
         ast_node: ast.AST,
         code_snippet: str = "",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> CFGNode:
         """Add a node to the current graph."""
         node_id = self._generate_node_id()
@@ -229,7 +229,7 @@ class CFGBuilder(ast.NodeVisitor):
         target_id: str,
         edge_type: EdgeType,
         condition: str = "",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> CFGEdge:
         """Add an edge to the current graph."""
         edge = CFGEdge(

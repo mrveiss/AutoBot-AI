@@ -53,7 +53,7 @@ class TestMeshPrunerAllSteps:
     """Verify that prune() calls every db method exactly once."""
 
     @pytest.mark.asyncio
-    async def test_prune_runs_all_steps(self):
+    async def test_prune_runs_all_steps(self) -> None:
         """All five db methods are awaited during a single prune() call."""
         db = _make_db_mock()
         pruner = _make_pruner(db)
@@ -71,7 +71,7 @@ class TestDecayExcludesSeeder:
     """Seeder edges must not appear in the origins list passed to decay_edges."""
 
     @pytest.mark.asyncio
-    async def test_decay_excludes_seeder_edges(self):
+    async def test_decay_excludes_seeder_edges(self) -> None:
         """decay_edges is called with origins=['learner','discoverer'], never 'seeder'."""
         db = _make_db_mock()
         pruner = _make_pruner(db)
@@ -88,7 +88,7 @@ class TestDeleteWeakEdges:
     """delete_edges must receive min_weight as max_weight."""
 
     @pytest.mark.asyncio
-    async def test_delete_weak_edges_uses_min_weight(self):
+    async def test_delete_weak_edges_uses_min_weight(self) -> None:
         """delete_edges is called with max_weight equal to min_weight config."""
         db = _make_db_mock()
         pruner = _make_pruner(db)
@@ -102,7 +102,7 @@ class TestArchiveOrphans:
     """archive_orphan_nodes must use a cutoff derived from orphan_days."""
 
     @pytest.mark.asyncio
-    async def test_archive_orphans_uses_orphan_days(self):
+    async def test_archive_orphans_uses_orphan_days(self) -> None:
         """archive_orphan_nodes receives a datetime roughly orphan_days ago."""
         db = _make_db_mock()
         pruner = _make_pruner(db)
@@ -124,7 +124,7 @@ class TestDensityWarning:
     """density_warning reflects whether avg edges/node exceeds max_avg_edges."""
 
     @pytest.mark.asyncio
-    async def test_density_warning_set_when_exceeded(self):
+    async def test_density_warning_set_when_exceeded(self) -> None:
         """density > max_avg_edges → PruningReport.density_warning is True."""
         db = _make_db_mock(density=25.0)
         pruner = _make_pruner(db)
@@ -134,7 +134,7 @@ class TestDensityWarning:
         assert report.density_warning is True
 
     @pytest.mark.asyncio
-    async def test_density_warning_false_when_normal(self):
+    async def test_density_warning_false_when_normal(self) -> None:
         """density < max_avg_edges → PruningReport.density_warning is False."""
         db = _make_db_mock(density=10.0)
         pruner = _make_pruner(db)
@@ -148,7 +148,7 @@ class TestEdgeSyncBehaviour:
     """edge_sync.sync() is called after pruning only when a sync object is provided."""
 
     @pytest.mark.asyncio
-    async def test_edge_sync_called_after_prune(self):
+    async def test_edge_sync_called_after_prune(self) -> None:
         """edge_sync.sync() is awaited once at the end of prune()."""
         db = _make_db_mock()
         edge_sync = AsyncMock()
@@ -160,7 +160,7 @@ class TestEdgeSyncBehaviour:
         edge_sync.sync.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_edge_sync_skipped_when_none(self):
+    async def test_edge_sync_skipped_when_none(self) -> None:
         """prune() completes without error when edge_sync is None."""
         db = _make_db_mock()
         pruner = _make_pruner(db, edge_sync=None)
@@ -175,7 +175,7 @@ class TestPruningReportCounts:
     """PruningReport is populated with return values from every db method."""
 
     @pytest.mark.asyncio
-    async def test_report_contains_all_counts(self):
+    async def test_report_contains_all_counts(self) -> None:
         """PruningReport fields mirror the int values returned by each db method."""
         db = _make_db_mock(density=5.0)
         db.decay_edges = AsyncMock(return_value=7)

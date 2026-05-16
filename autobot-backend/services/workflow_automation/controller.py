@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 class WorkflowController:
     """Handles workflow control actions from user"""
 
-    def __init__(self, messenger: WorkflowMessenger, executor: WorkflowExecutor):
+    def __init__(self, messenger: WorkflowMessenger, executor: WorkflowExecutor) -> None:
         """Initialize controller with messenger and executor components."""
         self.messenger = messenger
         self.executor = executor

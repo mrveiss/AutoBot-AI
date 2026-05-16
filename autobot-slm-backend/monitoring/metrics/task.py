@@ -8,8 +8,6 @@ Metrics for task execution tracking.
 Extracted from PrometheusMetricsManager as part of Issue #394.
 """
 
-from typing import Optional
-
 from prometheus_client import Counter, Gauge, Histogram
 
 from .base import BaseMetricsRecorder
@@ -61,7 +59,7 @@ class TaskMetricsRecorder(BaseMetricsRecorder):
         task_type: str,
         agent_type: str,
         status: str,
-        duration: Optional[float] = None,
+        duration: float | None = None,
     ) -> None:
         """Record a task execution."""
         self.tasks_executed_total.labels(task_type=task_type, agent_type=agent_type, status=status).inc()

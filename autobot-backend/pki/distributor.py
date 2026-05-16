@@ -15,7 +15,7 @@ Issue #697: Added OpenTelemetry tracing for SSH operations.
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import asyncssh
 from opentelemetry import trace
@@ -55,13 +55,13 @@ class CertificateDistributor:
     - Certificate verification after distribution
     """
 
-    def __init__(self, config: Optional[TLSConfig] = None):
+    def __init__(self, config: TLSConfig | None = None):
         """Initialize distributor with configuration."""
         self.config = config or TLSConfig()
 
     async def distribute_all(
         self,
-        exclude_vms: Optional[List[str]] = None,
+        exclude_vms: List[str] | None = None,
     ) -> Dict[str, DistributionResult]:
         """
         Distribute certificates to all VMs.
@@ -189,7 +189,7 @@ class CertificateDistributor:
         self,
         span: trace.Span,
         error: Exception,
-        error_type: Optional[str] = None,
+        error_type: str | None = None,
     ) -> None:
         """
         Record error information on OpenTelemetry span.

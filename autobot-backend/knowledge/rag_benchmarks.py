@@ -20,7 +20,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Set
+from typing import Callable, Dict, List, Set
 
 import pytest
 
@@ -1453,7 +1453,7 @@ def touched_test_leakage(dataset: BenchmarkDataset, split: BenchmarkSplit) -> bo
 def run_benchmark_suite(
     chroma_collection,
     k: int = 5,
-    dataset: Optional[BenchmarkDataset] = None,
+    dataset: BenchmarkDataset | None = None,
     split: BenchmarkSplit = BenchmarkSplit.ALL,
 ) -> List["BenchmarkResult"]:
     """Run the precision@k benchmark suite against *chroma_collection*.

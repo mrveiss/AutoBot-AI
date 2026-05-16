@@ -257,7 +257,7 @@ class TestAPIResponseTimeBenchmarks:
 
     def test_pydantic_validation_benchmark(self, runner):
         """Benchmark Pydantic model validation"""
-        from typing import List, Optional
+        from typing import List
 
         from pydantic import BaseModel
 
@@ -266,7 +266,7 @@ class TestAPIResponseTimeBenchmarks:
             name: str
             status: str
             tasks: List[int]
-            metadata: Optional[dict] = None
+            metadata: dict | None = None
 
         test_data = {
             "id": "agent_001",

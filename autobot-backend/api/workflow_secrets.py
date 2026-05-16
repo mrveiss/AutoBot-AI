@@ -18,7 +18,7 @@ Routes:
 Issue #2153 — Secret management for workflow credentials.
 """
 
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -125,7 +125,7 @@ async def create_workflow_secret(
     error_code_prefix="WORKFLOW_SECRETS",
 )
 async def list_workflow_secrets(
-    workflow_id: Optional[str] = Query(default=None, max_length=128),
+    workflow_id: str | None = Query(default=None, max_length=128),
     current_user: dict = Depends(get_current_user),
 ) -> List[WorkflowSecretMetadata]:
     """

@@ -17,7 +17,7 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 from __future__ import annotations
 
 import time
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List
 
 import aiohttp
 
@@ -54,11 +54,11 @@ class HuggingFaceProvider(BaseProvider):
 
     provider_name = ProviderType.HUGGINGFACE.value
 
-    def __init__(self, settings: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, settings: Dict[str, Any] | None = None) -> None:
         super().__init__(settings)
-        self._api_token: Optional[str] = None
+        self._api_token: str | None = None
 
-    def _resolve_api_token(self) -> Optional[str]:
+    def _resolve_api_token(self) -> str | None:
         """Resolve HF token from settings or environment."""
         if self._api_token:
             return self._api_token

@@ -29,7 +29,7 @@ API contract::
     }
 """
 
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -54,7 +54,7 @@ class SiteMapUrlEntry(BaseModel):
     """A single discovered URL in the site-map response."""
 
     url: str
-    title: Optional[str] = None
+    title: str | None = None
     depth: int
 
 

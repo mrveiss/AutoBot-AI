@@ -33,8 +33,6 @@ Related modules:
 import asyncio
 import json
 import logging
-from typing import Optional
-
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -594,7 +592,7 @@ def _build_ownership_metadata(
     organization_id,
     group_ids: list,
     shared_with: list,
-    board_id: Optional[str] = None,
+    board_id: str | None = None,
 ) -> dict:
     """Helper for add_text_to_knowledge. Ref: #1088.
 
@@ -1263,7 +1261,7 @@ async def _ingest_audio_source(
     category: str,
     tags: list,
     whisper_model: str,
-    language: Optional[str],
+    language: str | None,
 ) -> AudioIngestResponse:
     """Run transcription and store result in KB. Helper for audio endpoints.
 
@@ -1467,7 +1465,7 @@ async def upload_audio_file(
 
 @register_health_probe("knowledge")
 async def probe_knowledge(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for the knowledge base.
 
@@ -1571,7 +1569,7 @@ def _empty_entries_response(message: str = "", error: str = "") -> dict:
     return resp
 
 
-def _parse_and_filter_facts(items: dict, category: Optional[str], limit: int) -> list:
+def _parse_and_filter_facts(items: dict, category: str | None, limit: int) -> list:
     """Parse and filter facts from HSCAN results (Issue #398: extracted)."""
     entries = []
     for fact_id, fact_json in items.items():
@@ -1597,8 +1595,8 @@ async def get_knowledge_entries(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
     limit: int = Query(default=QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT, ge=1, le=1000),
-    cursor: Optional[str] = Query(default="0", pattern=r"^[0-9]+$"),
-    category: Optional[str] = Query(default=None, pattern=r"^[a-zA-Z0-9_-]*$"),
+    cursor: str | None = Query(default="0", pattern=r"^[0-9]+$"),
+    category: str | None = Query(default=None, pattern=r"^[a-zA-Z0-9_-]*$"),
 ):
     """Get knowledge base entries with cursor-based pagination.
 
@@ -2126,7 +2124,7 @@ async def query_knowledge(
 # =============================================================================
 
 
-async def _check_facts_cache(kb, category: Optional[str], limit: int) -> tuple:
+async def _check_facts_cache(kb, category: str | None, limit: int) -> tuple:
     """Check cache for facts_by_category result (Issue #281: extracted)."""
     import json
 
@@ -2177,7 +2175,7 @@ async def _batch_fetch_facts(kb, category_fact_ids: dict) -> tuple:
     return all_fact_keys, fact_results
 
 
-def _process_fact_data(fact_data: dict, cat: str, fact_key: str) -> Optional[dict]:
+def _process_fact_data(fact_data: dict, cat: str, fact_key: str) -> dict | None:
     """Process a single fact from Redis data (Issue #281: extracted)."""
     import json
 
@@ -2258,7 +2256,7 @@ def _build_categories_dict(all_fact_keys: list, fact_results: list) -> dict:
 async def get_facts_by_category(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
-    category: Optional[str] = None,
+    category: str | None = None,
     limit: int = 100,
 ):
     """Get facts grouped by category for browsing with caching.
@@ -2338,7 +2336,7 @@ def _decode_bytes(raw, default: str = "") -> str:
     return str(raw) if raw else default
 
 
-def _parse_fact_entry(fact_key_bytes, fact_data, get_category_for_source) -> Optional[tuple]:
+def _parse_fact_entry(fact_key_bytes, fact_data, get_category_for_source) -> tuple | None:
     """Parse a single fact entry (Issue #398: extracted).
 
     Returns:
@@ -2361,7 +2359,7 @@ def _parse_fact_entry(fact_key_bytes, fact_data, get_category_for_source) -> Opt
         return None
 
 
-async def _get_facts_by_category_legacy(kb, category: Optional[str], limit: int):
+async def _get_facts_by_category_legacy(kb, category: str | None, limit: int):
     """Legacy fallback: Get facts by scanning all keys (Issue #398: refactored)."""
     from knowledge_categories import get_category_for_source
 
@@ -2507,8 +2505,8 @@ async def get_fact_by_key(
 async def get_import_status(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
-    file_path: Optional[str] = None,
-    category: Optional[str] = None,
+    file_path: str | None = None,
+    category: str | None = None,
 ):
     """Get import status for files
 
@@ -2912,7 +2910,7 @@ async def control_documentation_watcher(
 # fallback chain org config -> SSOT default (see OrgKnowledgeConfigService).
 
 
-def _resolve_target_org_id(current_user: dict, override_org_id: Optional[str]) -> Optional[str]:
+def _resolve_target_org_id(current_user: dict, override_org_id: str | None) -> str | None:
     """Pick the org_id a config request should target.
 
     Admins can target another org via ``?org_id=`` query param. Non-admins
@@ -2934,7 +2932,7 @@ def _resolve_target_org_id(current_user: dict, override_org_id: Optional[str]) -
     error_code_prefix="KNOWLEDGE",
 )
 async def get_org_model_config(
-    org_id: Optional[str] = Query(default=None, max_length=128),
+    org_id: str | None = Query(default=None, max_length=128),
     current_user: dict = Depends(get_current_user),
 ):
     """Return the org's persisted model config with SSOT-resolved defaults.
@@ -2967,7 +2965,7 @@ async def get_org_model_config(
 )
 async def set_org_model_config(
     payload: OrgKnowledgeConfigPayload,
-    org_id: Optional[str] = Query(default=None, max_length=128),
+    org_id: str | None = Query(default=None, max_length=128),
     current_user: dict = Depends(get_current_user),
     admin_check: bool = Depends(check_admin_permission),
 ):

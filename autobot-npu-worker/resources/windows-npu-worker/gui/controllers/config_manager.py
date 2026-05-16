@@ -7,7 +7,7 @@ Issue #640: Added re-pairing functionality to reset worker pairing with master.
 import logging
 import yaml
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -171,7 +171,7 @@ class ConfigManager:
         """Get path to bootstrap cache file"""
         return self.config_dir / ".bootstrap_cache"
 
-    def get_current_worker_id(self) -> Optional[str]:
+    def get_current_worker_id(self) -> str | None:
         """Get current worker ID if paired"""
         worker_id_file = self.get_worker_id_file()
         if worker_id_file.exists():

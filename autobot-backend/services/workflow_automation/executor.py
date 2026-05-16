@@ -11,7 +11,7 @@ import asyncio
 import re
 import time
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet
 
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from .messaging import WorkflowMessenger
 
 # Lazy import to avoid circular dependency at module level.
-_notification_event_mod: Optional[type] = None
+_notification_event_mod: type | None = None
 
 
 def _get_notification_event():
@@ -186,8 +186,8 @@ class WorkflowExecutor:
     def __init__(
         self,
         messenger: "WorkflowMessenger",
-        notification_service: Optional["NotificationService"] = None,
-    ):
+        notification_service: "NotificationService" | None = None,
+    ) -> None:
         """Initialize executor with messenger and step evaluator."""
         self.messenger = messenger
         # Issue #3101: Notification service for workflow lifecycle events.
@@ -198,7 +198,7 @@ class WorkflowExecutor:
         self._pending_plan_approvals: Dict[str, PlanApprovalRequest] = {}
         self._plan_approval_events: Dict[str, asyncio.Event] = {}
         # Issue #1367: Called when a workflow finishes (completed/cancelled)
-        self.on_workflow_finished: Optional[Callable[[str], None]] = None
+        self.on_workflow_finished: Callable[[str], None] | None = None
         # Issue #1380: State machine for explicit routing
         self.state_machine = WorkflowStateMachine()
         # Issue #2159: Safety limits infrastructure
@@ -426,7 +426,7 @@ class WorkflowExecutor:
         self,
         workflow: ActiveWorkflow,
         to_phase: str,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> None:
         """Transition workflow state machine and sync phase."""
         try:

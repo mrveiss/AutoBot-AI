@@ -21,7 +21,7 @@ from autobot_shared.logging_manager import get_logger
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 logger = get_logger(__name__)
 
@@ -115,13 +115,13 @@ async def reset_embedding_stats() -> None:
 # NPU CLIENT CACHING
 # =============================================================================
 
-_npu_client_cache: Optional[Any] = None
-_npu_available_cache: Optional[bool] = None
+_npu_client_cache: Any | None = None
+_npu_available_cache: bool | None = None
 _npu_cache_timestamp: float = 0.0
 _npu_cache_lock = asyncio.Lock()
 
 
-async def _get_npu_client_cached() -> Tuple[Optional[Any], bool]:
+async def _get_npu_client_cached() -> Tuple[Any | None, bool]:
     """
     Get cached NPU client and availability status.
 
@@ -183,7 +183,7 @@ async def _get_npu_client_cached() -> Tuple[Optional[Any], bool]:
 # FALLBACK EMBEDDING (LOCAL SEMANTIC CHUNKER)
 # =============================================================================
 
-_semantic_chunker_cache: Optional[Any] = None
+_semantic_chunker_cache: Any | None = None
 _semantic_chunker_lock = asyncio.Lock()
 
 
@@ -267,7 +267,7 @@ async def _generate_fallback_embeddings(
 async def _generate_npu_embeddings(
     documents: List[str],
     batch_size: int = NPU_BATCH_SIZE,
-) -> Optional[List[List[float]]]:
+) -> List[List[float]] | None:
     """Generate embeddings using NPU worker with GPU/NPU acceleration. Ref: #1088."""
     if not documents:
         return []

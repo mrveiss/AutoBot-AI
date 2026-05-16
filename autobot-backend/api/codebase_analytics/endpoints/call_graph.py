@@ -9,7 +9,7 @@ import ast
 import asyncio
 import json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import aiofiles
 from fastapi import APIRouter, Query
@@ -353,7 +353,7 @@ def _resolve_callee_id(
     module_path: str,
     current_class: str,
     functions: Dict,
-    import_context: Optional[ImportContext] = None,
+    import_context: ImportContext | None = None,
 ) -> tuple[str | None, bool]:
     """
     Resolve a callee name to its full function ID.
@@ -437,7 +437,7 @@ def _build_function_info(
     }
 
 
-def _compute_func_identity(node_name: str, module_path: str, current_class: Optional[str]) -> tuple:
+def _compute_func_identity(node_name: str, module_path: str, current_class: str | None) -> tuple:
     """
     Compute function ID and full display name.
 
@@ -503,8 +503,8 @@ class FunctionCallVisitor(ast.NodeVisitor):
         module_path: str,
         functions: Dict,
         call_edges: List,
-        external_calls: Optional[List] = None,
-        import_context: Optional[ImportContext] = None,
+        external_calls: List | None = None,
+        import_context: ImportContext | None = None,
     ):
         """Initialize visitor with file path, module context, and data stores."""
         self.file_path = file_path
@@ -590,7 +590,7 @@ class FunctionCallVisitor(ast.NodeVisitor):
 # =============================================================================
 
 
-async def _get_cached_call_graph(project_root: str) -> Optional[dict]:
+async def _get_cached_call_graph(project_root: str) -> dict | None:
     """
     Get cached call graph from Redis.
 
@@ -644,7 +644,7 @@ async def _analyze_python_files(
     project_root: Path,
     functions: Dict[str, Dict],
     call_edges: List[Dict],
-    external_calls: Optional[List[Dict]] = None,
+    external_calls: List[Dict] | None = None,
 ) -> None:
     """Analyze Python files and populate functions/call_edges.
 
@@ -723,7 +723,7 @@ def _build_call_graph_response(
 )
 async def get_call_graph(
     refresh: bool = Query(False, description="Force refresh, bypass cache"),
-    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
+    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
 ):
     """Get function call graph.
 

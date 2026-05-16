@@ -8,7 +8,7 @@ Issue #712: Extracted from security_analyzer.py for modularity.
 """
 
 import ast
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 
@@ -40,8 +40,8 @@ class SecurityASTVisitor(ast.NodeVisitor):
         self.source_lines = source_lines
         self.findings: List[SecurityFinding] = []
         self.imports: Set[str] = set()
-        self.function_context: Optional[str] = None
-        self.class_context: Optional[str] = None
+        self.function_context: str | None = None
+        self.class_context: str | None = None
         self.has_input_validation: Dict[str, bool] = {}
 
     def visit_Import(self, node: ast.Import) -> None:
@@ -368,7 +368,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                     )
                 )
 
-    def _get_module_name(self, node: ast.Attribute) -> Optional[str]:
+    def _get_module_name(self, node: ast.Attribute) -> str | None:
         """Get module name from attribute access."""
         if isinstance(node.value, ast.Name):
             return node.value.id

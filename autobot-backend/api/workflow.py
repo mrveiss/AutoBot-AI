@@ -10,7 +10,7 @@ import asyncio
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Awaitable, Callable, Dict, Optional
+from typing import Awaitable, Callable, Dict
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
@@ -253,7 +253,7 @@ def _validate_orchestrator(request: Request):
 _conversation_patterns = conversation_patterns
 
 
-def _try_simple_response(user_message: str) -> Optional[Dict]:
+def _try_simple_response(user_message: str) -> Dict | None:
     """Return a canned response for trivial messages, or None for complex ones.
 
     Consolidated from LightweightOrchestrator (Issue #2181).  Uses the

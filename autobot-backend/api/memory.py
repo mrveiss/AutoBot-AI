@@ -27,7 +27,7 @@ Performance:
 - Relation traversal: <100ms
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
@@ -121,7 +121,7 @@ async def _get_entity_name_by_id(memory_graph: AutoBotMemoryGraph, entity_id: st
     return entity["name"]
 
 
-def _parse_tag_list(tags: Optional[str]) -> Optional[List[str]]:
+def _parse_tag_list(tags: str | None) -> List[str] | None:
     """Parse comma-separated tags into list. Issue #398: Extracted."""
     if not tags:
         return None
@@ -255,7 +255,7 @@ def _build_related_entities_response(
     entity_id: str,
     entity_name: str,
     related: List[Dict],
-    relation_type: Optional[str],
+    relation_type: str | None,
     direction: str,
     max_depth: int,
 ) -> JSONResponse:
@@ -299,7 +299,7 @@ def _build_related_entities_response(
 def _build_list_entities_response(
     request_id: str,
     entities: List[Dict],
-    entity_type: Optional[str],
+    entity_type: str | None,
     limit: int,
 ) -> JSONResponse:
     """
@@ -408,7 +408,7 @@ async def create_entity(
 )
 async def list_all_entities(
     admin_check: bool = Depends(check_admin_permission),
-    entity_type: Optional[str] = Query(None, description="Filter by entity type"),
+    entity_type: str | None = Query(None, description="Filter by entity type"),
     limit: int = Query(100, ge=1, le=500, description="Maximum results to return"),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
@@ -1082,7 +1082,7 @@ async def create_relation(
 async def get_related_entities(
     entity_id: str = Path(..., description="Entity UUID"),
     admin_check: bool = Depends(check_admin_permission),
-    relation_type: Optional[str] = Query(None, description="Filter by relation type"),
+    relation_type: str | None = Query(None, description="Filter by relation type"),
     direction: str = Query("both", pattern="^(outgoing|incoming|both)$", description="Relation direction"),
     max_depth: int = Query(1, ge=1, le=3, description="Relationship traversal depth (1-3)"),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
@@ -1201,9 +1201,9 @@ async def delete_relation(
 async def search_entities(
     admin_check: bool = Depends(check_admin_permission),
     query: str = Query(..., min_length=1, description="Search query"),
-    entity_type: Optional[str] = Query(None, description="Filter by entity type"),
-    tags: Optional[str] = Query(None, description="Filter by tags (comma-separated)"),
-    status: Optional[str] = Query(None, description="Filter by status"),
+    entity_type: str | None = Query(None, description="Filter by entity type"),
+    tags: str | None = Query(None, description="Filter by tags (comma-separated)"),
+    status: str | None = Query(None, description="Filter by status"),
     limit: int = Query(50, ge=1, le=500, description="Maximum results to return"),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
@@ -1271,7 +1271,7 @@ async def search_entities(
 )
 async def get_entity_graph(
     admin_check: bool = Depends(check_admin_permission),
-    entity_id: Optional[str] = Query(None, description="Root entity ID (optional)"),
+    entity_id: str | None = Query(None, description="Root entity ID (optional)"),
     max_depth: int = Query(2, ge=1, le=3, description="Graph traversal depth"),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
@@ -1326,7 +1326,7 @@ async def get_entity_graph(
 
 @register_health_probe("memory")
 async def probe_memory(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for the memory graph."""
     if request is None:

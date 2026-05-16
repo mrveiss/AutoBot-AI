@@ -11,7 +11,7 @@ Implements Issue #71 - O(1) atomic counter operations for fact/document/vector c
 import asyncio
 import json
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
@@ -740,7 +740,7 @@ class StatsMixin:
             return "last_year"
         return "older"
 
-    def _parse_fact_timestamp(self, fact: Dict[str, Any]) -> Optional[datetime]:
+    def _parse_fact_timestamp(self, fact: Dict[str, Any]) -> datetime | None:
         """Parse timestamp from a fact (Issue #398: extracted)."""
         timestamp_str = fact.get("timestamp") or fact.get("metadata", {}).get("created_at")
         if not timestamp_str or not isinstance(timestamp_str, str):

@@ -8,7 +8,7 @@ Exposes branch health metrics including divergence, staleness,
 and file conflict density for branch management and alerts.
 """
 
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends
 
@@ -33,7 +33,7 @@ logger = get_logger(__name__)
     error_code_prefix="BRANCH_HEALTH",
 )
 async def get_all_branch_health(
-    repo_path: Optional[str] = None,
+    repo_path: str | None = None,
     base_branch: str = "Dev_new_gui",
 ) -> List[BranchHealthResponse]:
     """
@@ -63,7 +63,7 @@ async def get_all_branch_health(
     error_code_prefix="BRANCH_HEALTH",
 )
 async def get_unhealthy_branch_health(
-    repo_path: Optional[str] = None,
+    repo_path: str | None = None,
     base_branch: str = "Dev_new_gui",
     threshold: float = 50.0,
 ) -> List[BranchHealthResponse]:
@@ -97,7 +97,7 @@ async def get_unhealthy_branch_health(
     error_code_prefix="BRANCH_HEALTH",
 )
 async def get_diverged_branch_health(
-    repo_path: Optional[str] = None,
+    repo_path: str | None = None,
     base_branch: str = "Dev_new_gui",
     threshold: int = 20,
 ) -> List[BranchHealthResponse]:
@@ -132,7 +132,7 @@ async def get_diverged_branch_health(
     error_code_prefix="BRANCH_HEALTH",
 )
 async def get_stale_branch_health(
-    repo_path: Optional[str] = None,
+    repo_path: str | None = None,
     base_branch: str = "Dev_new_gui",
     threshold_days: int = 30,
 ) -> List[BranchHealthResponse]:

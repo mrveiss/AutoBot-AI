@@ -16,8 +16,6 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
 import asyncio
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Query
 
 from api.schemas_analytics import (
@@ -130,7 +128,7 @@ async def get_recent_events(
     error_code_prefix="ANALYTICS_BEHAVIOR",
 )
 async def get_feature_metrics(
-    feature: Optional[str] = Query(None, description="Specific feature to get metrics for"),
+    feature: str | None = Query(None, description="Specific feature to get metrics for"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """

@@ -9,7 +9,7 @@ direct reports, reporting-line updates with cycle detection, and role defaults.
 """
 
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,14 +61,14 @@ class AgentOrgService:
         result = await self.session.execute(select(AgentOrgNode))
         return list(result.scalars().all())
 
-    async def get_node(self, agent_id: str) -> Optional[AgentOrgNode]:
+    async def get_node(self, agent_id: str) -> AgentOrgNode | None:
         """Return the org node for agent_id or None if not registered."""
         result = await self.session.execute(select(AgentOrgNode).where(AgentOrgNode.agent_id == agent_id))
         return result.scalar_one_or_none()
 
     # -- Tree / hierarchy --------------------------------------------------
 
-    def _build_tree(self, nodes: List[AgentOrgNode], parent_id: Optional[str]) -> List[Dict[str, Any]]:
+    def _build_tree(self, nodes: List[AgentOrgNode], parent_id: str | None) -> List[Dict[str, Any]]:
         """Recursively build tree from flat node list. Helper (#1405)."""
         children = [n for n in nodes if n.reports_to == parent_id]
         return [
@@ -107,7 +107,7 @@ class AgentOrgService:
             raise ValueError(f"Agent not found in org hierarchy: {agent_id!r}")
 
         chain: List[Dict[str, Any]] = []
-        current_id: Optional[str] = agent_id
+        current_id: str | None = agent_id
         seen: set = set()
 
         while current_id is not None:
@@ -155,7 +155,7 @@ class AgentOrgService:
         nodes = await self.get_all_nodes()
         index = {n.agent_id: n for n in nodes}
 
-        current: Optional[str] = proposed_manager_id
+        current: str | None = proposed_manager_id
         visited: set = set()
 
         while current is not None:
@@ -174,10 +174,10 @@ class AgentOrgService:
     async def update_reporting_line(
         self,
         agent_id: str,
-        new_manager_id: Optional[str],
-        org_role: Optional[str] = None,
-        title: Optional[str] = None,
-        capabilities: Optional[str] = None,
+        new_manager_id: str | None,
+        org_role: str | None = None,
+        title: str | None = None,
+        capabilities: str | None = None,
     ) -> AgentOrgNode:
         """
         Update reporting line with cycle detection (#1405).
@@ -224,9 +224,9 @@ class AgentOrgService:
         agent_id: str,
         name: str,
         org_role: str = OrgRole.WORKER.value,
-        reports_to: Optional[str] = None,
-        title: Optional[str] = None,
-        capabilities: Optional[str] = None,
+        reports_to: str | None = None,
+        title: str | None = None,
+        capabilities: str | None = None,
     ) -> AgentOrgNode:
         """
         Create or update an agent_org_nodes record (#1405).

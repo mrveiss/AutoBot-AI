@@ -27,7 +27,7 @@ against ssot_config.ollama_url with a configurable timeout.
 
 import threading
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from services.context_sufficiency import (
@@ -118,7 +118,7 @@ class AgenticSearchTool:
     and receive a plain-text context block suitable for injection into a prompt.
     """
 
-    def __init__(self, rag_service: Any, config: Optional[AgenticSearchConfig] = None):
+    def __init__(self, rag_service: Any, config: AgenticSearchConfig | None = None):
         """Initialise the agentic search tool.
 
         Args:
@@ -137,8 +137,8 @@ class AgenticSearchTool:
         query: str,
         *,
         max_results: int = 5,
-        context: Optional[str] = None,
-        categories: Optional[List[str]] = None,
+        context: str | None = None,
+        categories: List[str] | None = None,
     ) -> str:
         """Search the knowledge base and return plain-text context.
 
@@ -217,7 +217,7 @@ class AgenticSearchTool:
         query: str,
         *,
         max_results: int = 5,
-        categories: Optional[List[str]] = None,
+        categories: List[str] | None = None,
     ) -> Tuple[list, dict]:
         """Run up to max_search_iterations search rounds with sufficiency checking.
 
@@ -299,7 +299,7 @@ class AgenticSearchTool:
         self,
         query: str,
         max_results: int,
-        categories: Optional[List[str]],
+        categories: List[str] | None,
     ) -> str:
         """Direct pass-through to RAGService when agentic search is disabled."""
         results, _ = await self.rag_service.advanced_search(
@@ -399,13 +399,13 @@ class AgenticSearchTool:
 # Module-level singleton (thread-safe)
 # ---------------------------------------------------------------------------
 
-_agentic_tool: Optional[AgenticSearchTool] = None
+_agentic_tool: AgenticSearchTool | None = None
 _agentic_tool_lock = threading.Lock()
 
 
 def get_agentic_search_tool(
     rag_service: Any,
-    config: Optional[AgenticSearchConfig] = None,
+    config: AgenticSearchConfig | None = None,
 ) -> AgenticSearchTool:
     """Return (or create) the shared AgenticSearchTool singleton.
 
@@ -439,9 +439,9 @@ async def knowledge_search_tool(
     rag_service: Any,
     *,
     max_results: int = 5,
-    context: Optional[str] = None,
-    categories: Optional[List[str]] = None,
-    config: Optional[AgenticSearchConfig] = None,
+    context: str | None = None,
+    categories: List[str] | None = None,
+    config: AgenticSearchConfig | None = None,
 ) -> str:
     """Module-level callable for registering as an LLM tool in the chat graph.
 

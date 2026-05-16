@@ -12,8 +12,6 @@ Updated in Issue #453 to use real Ollama integration.
 """
 
 import asyncio
-from typing import Optional
-
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
@@ -34,7 +32,7 @@ class LocalLLM:
         self._ollama_host = config.ollama_host
         self._ollama_port = config.ollama_port
         self._ollama_available = bool(self._ollama_host and self._ollama_port)
-        self._ollama_url: Optional[str] = None
+        self._ollama_url: str | None = None
         self._default_model = config.default_llm_model
 
         if self._ollama_available:
@@ -109,7 +107,7 @@ class LocalLLM:
             },
         }
 
-    async def generate(self, prompt: str, model: Optional[str] = None) -> dict:
+    async def generate(self, prompt: str, model: str | None = None) -> dict:
         """Generate response using local Ollama model.
 
         Falls back to mock response if Ollama is not available.

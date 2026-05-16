@@ -15,7 +15,7 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.fire_and_forget import run_redis_write
 from autobot_shared.logging_manager import get_logger
@@ -151,7 +151,7 @@ class MCPProcessManager:
         logger.debug("mcp_trace: starting trace_id=%s", span.trace_id)
 
         result = None
-        error_str: Optional[str] = None
+        error_str: str | None = None
         try:
             async with entry._lock:
                 await self._send(

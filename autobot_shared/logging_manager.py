@@ -11,7 +11,7 @@ import logging.handlers
 import os
 import threading
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Dict
 
 if TYPE_CHECKING:
     from config.manager import ConfigManager
@@ -97,7 +97,7 @@ class LoggingManager:
             return logger
 
     @classmethod
-    def _setup_logging_internal(cls):
+    def _setup_logging_internal(cls) -> None:
         """Setup basic logging configuration (internal, called under lock)"""
         # Create logs directory if it doesn't exist
         logs_dir_path = os.getenv("AUTOBOT_LOGS_DIR", "logs")
@@ -112,14 +112,14 @@ class LoggingManager:
         cls._initialized = True
 
     @classmethod
-    def _setup_logging(cls):
+    def _setup_logging(cls) -> None:
         """Setup basic logging configuration (thread-safe public method)"""
         with cls._lock:
             if not cls._initialized:
                 cls._setup_logging_internal()
 
     @classmethod
-    def _get_file_handler(cls, log_type: str) -> Optional[logging.Handler]:
+    def _get_file_handler(cls, log_type: str) -> logging.Handler | None:
         """Get file handler for specific log type"""
         log_file = _get_config_manager().get(f"logging.file_handlers.{log_type}")
         if not log_file:
@@ -161,7 +161,7 @@ class LoggingManager:
         return cls.get_logger(component_name, log_type)
 
     @classmethod
-    def rotate_logs(cls, log_type: Optional[str] = None):
+    def rotate_logs(cls, log_type: str | None = None) -> None:
         """
         Manually rotate log files
 
@@ -234,6 +234,6 @@ def get_audit_logger(name: str) -> logging.Logger:
 
 
 # Maintain backward compatibility with existing logging setup
-def setup_logging():
+def setup_logging() -> None:
     """Setup logging - backward compatibility function"""
     LoggingManager._setup_logging()

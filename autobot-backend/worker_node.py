@@ -7,7 +7,7 @@ import os
 import platform
 import subprocess  # nosec B404 - required for GPU detection
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import psutil
 
@@ -259,7 +259,7 @@ class WorkerNode:
             logger.debug("Worker capabilities detected (local mode): %s", capabilities)
             await get_event_manager().publish("worker_capability_report", capabilities)
 
-    def _validate_user_role(self, task_type: str, task_id: str, user_role: Optional[str]) -> Optional[Dict[str, Any]]:
+    def _validate_user_role(self, task_type: str, task_id: str, user_role: str | None) -> Dict[str, Any] | None:
         """Validate that user_role is provided for task execution.
 
         Args:
@@ -289,7 +289,7 @@ class WorkerNode:
         task_id: str,
         task_payload: Dict[str, Any],
         user_role: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """Check if user has permission to execute the task type.
 
         Args:

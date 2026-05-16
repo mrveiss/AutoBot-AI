@@ -19,7 +19,7 @@ import os
 import socket
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
@@ -46,8 +46,8 @@ class BackendTelemetryClient:
         worker_url: str,
         platform: str = "windows",
         heartbeat_interval: int = 30,
-        service_id: Optional[str] = None,
-        service_key: Optional[str] = None,
+        service_id: str | None = None,
+        service_key: str | None = None,
     ):
         """
         Initialize telemetry client.
@@ -75,8 +75,8 @@ class BackendTelemetryClient:
         self._auth_enabled = bool(service_id and service_key)
 
         self.backend_url = f"http://{backend_host}:{backend_port}"
-        self._session: Optional[aiohttp.ClientSession] = None
-        self._heartbeat_task: Optional[asyncio.Task] = None
+        self._session: aiohttp.ClientSession | None = None
+        self._heartbeat_task: asyncio.Task | None = None
         self._running = False
         self._start_time = time.time()
 
@@ -142,12 +142,12 @@ class BackendTelemetryClient:
 
     def update_metrics(
         self,
-        current_load: Optional[int] = None,
-        tasks_completed: Optional[int] = None,
-        tasks_failed: Optional[int] = None,
-        npu_available: Optional[bool] = None,
-        loaded_models: Optional[List[str]] = None,
-        metrics: Optional[Dict[str, Any]] = None,
+        current_load: int | None = None,
+        tasks_completed: int | None = None,
+        tasks_failed: int | None = None,
+        npu_available: bool | None = None,
+        loaded_models: List[str] | None = None,
+        metrics: Dict[str, Any] | None = None,
     ) -> None:
         """
         Update metrics to be sent with next heartbeat.
@@ -365,11 +365,11 @@ SERVICE_KEY_FILE_PATHS = [
 # Thread-safe global state (Issue #68 - Race condition fix)
 # =============================================================================
 _telemetry_lock = asyncio.Lock()
-_telemetry_client: Optional[BackendTelemetryClient] = None
-_local_ip_cache: Optional[str] = None  # Cache to avoid repeated socket calls
+_telemetry_client: BackendTelemetryClient | None = None
+_local_ip_cache: str | None = None  # Cache to avoid repeated socket calls
 
 
-def _load_service_credentials(config: dict) -> tuple[Optional[str], Optional[str]]:
+def _load_service_credentials(config: dict) -> tuple[str | None, str | None]:
     """
     Load service authentication credentials.
 
@@ -429,7 +429,7 @@ def _load_service_credentials(config: dict) -> tuple[Optional[str], Optional[str
     return None, None
 
 
-def _read_key_from_file(key_file: str) -> Optional[str]:
+def _read_key_from_file(key_file: str) -> str | None:
     """
     Read service key from .env-style file.
 
@@ -489,7 +489,7 @@ def _get_local_ip(backend_host: str) -> str:
                 logger.debug("Suppressed exception in try block", exc_info=True)
 
 
-async def get_telemetry_client(config: dict) -> Optional[BackendTelemetryClient]:
+async def get_telemetry_client(config: dict) -> BackendTelemetryClient | None:
     """
     Get or create the global telemetry client.
 

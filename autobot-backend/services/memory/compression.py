@@ -9,7 +9,7 @@ retrieved memory.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import yaml
 
@@ -55,8 +55,8 @@ class ContextCompressionService:
 
     def __init__(
         self,
-        config_path: Optional[Path] = None,
-        model_thresholds: Optional[Dict[str, int]] = None,
+        config_path: Path | None = None,
+        model_thresholds: Dict[str, int] | None = None,
     ) -> None:
         if model_thresholds is not None:
             self._model_thresholds: Dict[str, int] = model_thresholds

@@ -20,7 +20,7 @@ import hashlib
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 from urllib.parse import urlparse
 
 import aiohttp
@@ -48,8 +48,8 @@ class ThreatLevel(Enum):
 class ThreatScore:
     """Aggregated threat score from multiple sources"""
 
-    virustotal_score: Optional[float] = None
-    urlvoid_score: Optional[float] = None
+    virustotal_score: float | None = None
+    urlvoid_score: float | None = None
     overall_score: float = 0.5
     threat_level: ThreatLevel = ThreatLevel.UNKNOWN
     details: Dict[str, Any] = field(default_factory=dict)
@@ -79,7 +79,7 @@ class ThreatIntelligenceCache:
         """Generate cache key from URL."""
         return hashlib.sha256(url.lower().encode()).hexdigest()[:32]
 
-    async def get(self, url: str) -> Optional[ThreatScore]:
+    async def get(self, url: str) -> ThreatScore | None:
         """Get cached threat score if not expired."""
         async with self._lock:
             cache_key = self._get_cache_key(url)
@@ -95,7 +95,7 @@ class ThreatIntelligenceCache:
             result.cached = True
             return result
 
-    async def set(self, url: str, result: ThreatScore, ttl: Optional[int] = None):
+    async def set(self, url: str, result: ThreatScore, ttl: int | None = None):
         """Cache threat score with TTL."""
         async with self._lock:
             cache_key = self._get_cache_key(url)
@@ -160,7 +160,7 @@ class VirusTotalClient:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         rate_limit: int = 4,
         timeout: float = 10.0,
     ):
@@ -188,7 +188,7 @@ class VirusTotalClient:
 
         return base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
 
-    def _build_error_response(self, error_msg: str, score: Optional[float] = None) -> Dict[str, Any]:
+    def _build_error_response(self, error_msg: str, score: float | None = None) -> Dict[str, Any]:
         """
         Build a standardized error response dictionary.
 
@@ -329,7 +329,7 @@ class URLVoidClient:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         rate_limit: int = 10,
         timeout: float = 10.0,
     ):
@@ -423,7 +423,7 @@ class URLVoidClient:
                 "score": None,
             }
 
-    def _check_xml_error(self, root: Any) -> Optional[Dict[str, Any]]:
+    def _check_xml_error(self, root: Any) -> Dict[str, Any] | None:
         """Check for error response in URLVoid XML.
 
         Args:
@@ -539,8 +539,8 @@ class ThreatIntelligenceService:
 
     def __init__(
         self,
-        virustotal_api_key: Optional[str] = None,
-        urlvoid_api_key: Optional[str] = None,
+        virustotal_api_key: str | None = None,
+        urlvoid_api_key: str | None = None,
         cache_ttl: int = 7200,
         virustotal_rate_limit: int = 4,
         urlvoid_rate_limit: int = 10,
@@ -718,7 +718,7 @@ class ThreatIntelligenceService:
 
 
 # Module-level singleton for easy access
-_threat_intel_service: Optional[ThreatIntelligenceService] = None
+_threat_intel_service: ThreatIntelligenceService | None = None
 _threat_intel_lock = asyncio.Lock()
 
 

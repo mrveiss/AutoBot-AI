@@ -9,7 +9,7 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
@@ -28,12 +28,12 @@ class SecurityVulnerability:
 
     file_path: str
     line_number: int
-    function_name: Optional[str]
+    function_name: str | None
     vulnerability_type: str  # injection, xss, auth, crypto, etc.
     severity: str  # critical, high, medium, low
     description: str
     code_snippet: str
-    cwe_id: Optional[str]  # Common Weakness Enumeration ID
+    cwe_id: str | None  # Common Weakness Enumeration ID
     fix_suggestion: str
     confidence: float  # 0.0 to 1.0
 
@@ -431,7 +431,7 @@ class SecurityAnalyzer:
 
     def _check_node_for_vulnerabilities(
         self, node: ast.AST, file_path: str, lines: List[str]
-    ) -> Optional[SecurityVulnerability]:
+    ) -> SecurityVulnerability | None:
         """Check a single AST node for vulnerabilities (Issue #315 - extracted)"""
 
         # Check for dangerous function calls
@@ -450,7 +450,7 @@ class SecurityAnalyzer:
 
     def _analyze_dangerous_call(
         self, node: ast.Call, file_path: str, lines: List[str]
-    ) -> Optional[SecurityVulnerability]:
+    ) -> SecurityVulnerability | None:
         """Analyze function calls for security issues"""
 
         call_name = self._get_call_name(node)
@@ -482,7 +482,7 @@ class SecurityAnalyzer:
 
     def _analyze_insecure_assignment(
         self, node: ast.Assign, file_path: str, lines: List[str]
-    ) -> Optional[SecurityVulnerability]:
+    ) -> SecurityVulnerability | None:
         """Analyze assignments for security issues"""
 
         # Check for hardcoded secrets in assignments
@@ -512,7 +512,7 @@ class SecurityAnalyzer:
 
     def _analyze_dangerous_import(
         self, node: ast.AST, file_path: str, lines: List[str]
-    ) -> Optional[SecurityVulnerability]:
+    ) -> SecurityVulnerability | None:
         """Analyze imports for security concerns"""
 
         dangerous_modules = {
@@ -549,7 +549,7 @@ class SecurityAnalyzer:
         description: str,
         cwe_id: str,
         lines: List[str],
-    ) -> Optional[SecurityVulnerability]:
+    ) -> SecurityVulnerability | None:
         """Create a SecurityVulnerability object"""
 
         # Get context
@@ -650,7 +650,7 @@ class SecurityAnalyzer:
         else:
             return str(node.func)
 
-    def _get_containing_function(self, node: ast.AST) -> Optional[str]:
+    def _get_containing_function(self, node: ast.AST) -> str | None:
         """Get the name of the function containing this node"""
         # This would require maintaining parent references in AST
         return None

@@ -10,7 +10,7 @@ Config is stored in the Setting table and pushed to fleet nodes via Ansible.
 
 import json
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -83,13 +83,13 @@ class LLMTestResponse(BaseModel):
     success: bool
     message: str
     provider: str
-    latency_ms: Optional[float] = None
+    latency_ms: float | None = None
 
 
 class LLMApplyRequest(BaseModel):
     """Request to push LLM config to fleet nodes."""
 
-    node_ids: Optional[List[str]] = None
+    node_ids: List[str] | None = None
 
 
 class LLMApplyResponse(BaseModel):
@@ -98,7 +98,7 @@ class LLMApplyResponse(BaseModel):
     success: bool
     message: str
     node_count: int
-    output: Optional[str] = None
+    output: str | None = None
 
 
 def _mask_api_key(key: str) -> str:
@@ -321,7 +321,7 @@ async def apply_llm_config(
 
     # Resolve target nodes
     node_count = 0
-    limit: Optional[List[str]] = None
+    limit: List[str] | None = None
     if request.node_ids:
         node_result = await db.execute(select(Node).where(Node.node_id.in_(request.node_ids)))
         nodes = node_result.scalars().all()

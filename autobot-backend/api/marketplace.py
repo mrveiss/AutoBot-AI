@@ -11,7 +11,7 @@ Issue #1803 - Plugin and agent marketplace: package, share, and install extensio
 
 import json
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -218,7 +218,7 @@ def _remote_plugin_to_entry(plugin: dict[str, Any], source_name: str) -> dict[st
     }
 
 
-def _safe_remote_plugin_to_entry(plugin: Any, source_name: str) -> Optional[dict[str, Any]]:
+def _safe_remote_plugin_to_entry(plugin: Any, source_name: str) -> dict[str, Any] | None:
     """Per-item wrapper that turns one bad plugin into a logged skip.
 
     #6525: pre-fix, ``[_remote_plugin_to_entry(p, ...) for p in remote_plugins]``

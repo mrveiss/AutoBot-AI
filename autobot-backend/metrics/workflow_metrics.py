@@ -32,7 +32,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -74,8 +74,8 @@ class WorkflowExecutionStats:
     failed_steps: int
     agents_involved: List[str]
     start_time: datetime
-    end_time: Optional[datetime]
-    total_duration_ms: Optional[float]
+    end_time: datetime | None
+    total_duration_ms: float | None
     avg_step_duration_ms: float
     step_timings: Dict[str, float]
     approval_wait_time_ms: float
@@ -448,7 +448,7 @@ class WorkflowMetricsCollector:
         except Exception as e:
             logger.error("Failed to update aggregated stats: %s", e)
 
-    def get_workflow_stats(self, workflow_id: str) -> Optional[Dict[str, Any]]:
+    def get_workflow_stats(self, workflow_id: str) -> Dict[str, Any] | None:
         """Get statistics for a specific workflow"""
         try:
             # Check if workflow is still active

@@ -14,8 +14,6 @@ import subprocess  # nosec B404
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.schemas_analytics import (
@@ -228,7 +226,7 @@ def get_staged_files() -> list[str]:
         return []
 
 
-def get_file_content(filepath: str) -> Optional[str]:
+def get_file_content(filepath: str) -> str | None:
     """Get content of a file."""
     try:
         # Try to get staged content first
