@@ -13,8 +13,8 @@ Provides deduplication of streaming and duplicate messages:
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from autobot_shared.time_utils import parse_utc_iso
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import parse_utc_iso
 
 logger = get_logger(__name__)
 

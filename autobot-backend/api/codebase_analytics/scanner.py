@@ -24,7 +24,6 @@ Sub-module responsibilities
 - file_counter         — file discovery and stats logging
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import logging
 import os
@@ -32,10 +31,11 @@ import threading
 from collections import deque
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import HTTPException
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.path_constants import PATH
 from type_defs.common import Metadata
 

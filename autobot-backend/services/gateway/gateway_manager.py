@@ -18,6 +18,8 @@ Features:
 import time
 from typing import Any, Callable, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
+
 from .adapters import (
     BaseAdapter,
     DiscordAdapter,
@@ -29,7 +31,6 @@ from .adapters import (
     WhatsAppAdapter,
 )
 from .message_queue import MessageQueue
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -11,9 +11,9 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
 
 logger = get_logger(__name__)

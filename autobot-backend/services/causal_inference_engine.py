@@ -30,8 +30,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from context_aware_decision.counterfactual_reasoner import CounterfactualReasoner
 from knowledge.temporal_search import TemporalSearchService

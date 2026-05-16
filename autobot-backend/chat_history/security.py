@@ -13,8 +13,8 @@ Provides secure data handling for chat history with:
 import json
 from typing import Any, Dict
 
-from encryption_service import decrypt_data, encrypt_data, get_encryption_service
 from autobot_shared.logging_manager import get_logger
+from encryption_service import decrypt_data, encrypt_data, get_encryption_service
 
 logger = get_logger(__name__)
 

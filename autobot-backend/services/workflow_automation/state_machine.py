@@ -25,12 +25,12 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.message_bus import get_message_bus
 from autobot_shared.models.service_message import ServiceMessage
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.redis_constants import REDIS_KEY
 from constants.ttl_constants import TTL_24_HOURS
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

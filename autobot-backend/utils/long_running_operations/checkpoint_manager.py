@@ -16,12 +16,12 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import redis.asyncio as redis
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from constants.path_constants import PATH
 from constants.ttl_constants import TTL_7_DAYS
 
 from .types import OperationCheckpoint
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -9,6 +9,7 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 import os
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

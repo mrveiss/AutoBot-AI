@@ -6,8 +6,8 @@ Test script for the advanced monitoring alerts system
 import asyncio
 import logging
 from datetime import datetime
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from tests.test_helpers import get_test_backend_url
 
 # Setup logging

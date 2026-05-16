@@ -11,11 +11,11 @@ import logging
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import FastAPI, Request
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from circuit_breaker import get_circuit_breaker_manager
 
 logger = get_logger(__name__)

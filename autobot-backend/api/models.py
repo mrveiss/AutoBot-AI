@@ -10,7 +10,6 @@ Results are cached for 60 seconds to avoid latency on every dropdown open.
 """
 
 import logging
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -18,6 +17,7 @@ from fastapi.responses import JSONResponse
 from api.schemas_common import DataResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -9,11 +9,11 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 
 from .base import PipelineContext, PipelineResult
 from .registry import TaskRegistry
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

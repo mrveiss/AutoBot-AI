@@ -18,9 +18,9 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from knowledge.temporal_search import TemporalSearchService
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -11,6 +11,7 @@ simple fact retrieval, and quick question answering without complex synthesis.
 import time
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -22,7 +23,6 @@ from services.llm_service import get_llm_service
 
 from .base_agent import DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

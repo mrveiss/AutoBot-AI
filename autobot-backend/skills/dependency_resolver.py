@@ -9,6 +9,7 @@ correct loading order and detect circular dependencies.
 """
 
 from typing import Dict, List, Set, Tuple
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

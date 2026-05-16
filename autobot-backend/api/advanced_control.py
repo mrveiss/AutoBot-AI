@@ -8,7 +8,6 @@ Provides monitoring, desktop streaming, and takeover management endpoints
 
 import asyncio
 import logging
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
@@ -37,6 +36,7 @@ from api.schemas_workflows import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.threshold_constants import TimingConstants
 from desktop_streaming_manager import get_desktop_streaming

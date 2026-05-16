@@ -18,7 +18,6 @@ from collections import defaultdict, deque
 from datetime import timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import numpy as np
 import yaml
@@ -26,6 +25,7 @@ from sklearn.cluster import DBSCAN
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants

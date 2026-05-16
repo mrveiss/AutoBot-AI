@@ -8,7 +8,6 @@ Integration with state-of-the-art AI models including
 GPT-4V, Claude-3, Gemini for enhanced capabilities.
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import base64
 import json
@@ -19,9 +18,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_config import config
 from constants.model_constants import (
     ANTHROPIC_CLAUDE3_OPUS_DATED,
     GOOGLE_GEMINI_PRO,

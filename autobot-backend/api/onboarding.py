@@ -13,7 +13,6 @@ Provides first-run UX endpoints:
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import logging
 from typing import Any
@@ -23,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from api.schemas_common import DataResponse
 from api.schemas_system import ApplyPresetRequest, OnboardingStatus
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.logging_manager import get_logger
 from onboarding.doctor import run_doctor
 from onboarding.presets import get_all_presets, get_preset
 

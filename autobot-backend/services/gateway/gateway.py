@@ -12,12 +12,13 @@ and channel adapters.
 import asyncio
 from typing import Any, Dict, Optional
 
+from autobot_shared.logging_manager import get_logger
+
 from .channel_adapters.base import BaseChannelAdapter
 from .config import GatewayConfig
 from .message_router import MessageRouter
 from .session_manager import SessionManager
 from .types import ChannelType, GatewaySession, MessageType, UnifiedMessage
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

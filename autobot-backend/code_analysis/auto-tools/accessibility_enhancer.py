@@ -12,12 +12,13 @@ Focuses on:
 
 import json
 import os
-from autobot_shared.ssot_config import config
 import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
+
+from autobot_shared.ssot_config import config
 
 # Default Vue root: resolves relative to this file so any machine works.
 # Override with AUTOBOT_VUE_ROOT env var. Issue #1183.

@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from tests.fixtures import make_async_redis
-
 from web_fetch.robots import (
     RobotsCache,
     _extract_domain,

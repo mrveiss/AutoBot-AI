@@ -16,9 +16,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any, List, Optional, Sequence
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.backends.async_base import AsyncBaseClient, AsyncBaseCollection
 from knowledge.backends.base import Embedding, Metadata, Where, WhereDocument
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

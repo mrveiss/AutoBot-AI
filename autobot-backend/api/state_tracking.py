@@ -10,7 +10,6 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -31,6 +30,7 @@ from api.schemas_workflows import (
     StateTrackingTrendsResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from enhanced_project_state_tracker import (
     StateChangeType,
     TrackingMetric,

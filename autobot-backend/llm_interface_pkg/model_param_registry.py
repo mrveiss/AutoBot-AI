@@ -29,14 +29,14 @@ Usage::
 Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
-from autobot_shared.ssot_config import config
-from autobot_shared.logging_manager import get_logger
-
 import logging
 import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 

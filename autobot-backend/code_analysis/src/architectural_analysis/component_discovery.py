@@ -12,12 +12,13 @@ import ast
 from pathlib import Path
 from typing import List, Optional
 
+from autobot_shared.logging_manager import get_logger
+
 from .cohesion_calculator import CohesionCalculator
 from .complexity_calculator import ComplexityCalculator
 from .dependency_analyzer import DependencyAnalyzer
 from .pattern_detector import PatternDetector
 from .types import ArchitecturalComponent
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

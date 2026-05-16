@@ -16,8 +16,9 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from .models import ExperimentResult
 from autobot_shared.logging_manager import get_logger
+
+from .models import ExperimentResult
 
 logger = get_logger(__name__)
 

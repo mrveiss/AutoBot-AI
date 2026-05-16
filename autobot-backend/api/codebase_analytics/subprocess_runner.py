@@ -19,13 +19,14 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
+
 from .indexing_executor import (
     _SUBPROCESS_HARD_TIMEOUT,
     _SUBPROCESS_PROGRESS_TIMEOUT,
     _SUBPROCESS_WATCHDOG_INTERVAL,
 )
 from .progress_tracker import _load_task_from_redis
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

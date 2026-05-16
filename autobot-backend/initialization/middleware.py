@@ -17,11 +17,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from autobot_shared.logging_manager import get_logger
 from config.manager import get_config_manager
 from constants.network_constants import (  # noqa: F401 - used in docstring example
     NetworkConstants,
 )
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

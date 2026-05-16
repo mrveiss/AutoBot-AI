@@ -17,13 +17,14 @@ Trigger points
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import hashlib
 import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
+
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

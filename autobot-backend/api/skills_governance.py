@@ -26,6 +26,7 @@ from api.schemas_code import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from skills.db import skills_session_context
 from skills.generator import SkillGenerator
@@ -38,7 +39,6 @@ from skills.models import (
 )
 from skills.promoter import SkillPromoter
 from skills.validator import SkillValidator
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter()

@@ -11,10 +11,10 @@ enabling AutoBot to query metrics, monitors, and application health data.
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,

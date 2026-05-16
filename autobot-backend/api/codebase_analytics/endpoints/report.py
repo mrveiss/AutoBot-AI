@@ -14,12 +14,12 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.bug_predictor import BugPredictor, PredictionResult
 
 # Issue #244: Cross-Language Pattern Detection

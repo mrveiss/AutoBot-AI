@@ -27,8 +27,8 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.ttl_constants import TTL_30_DAYS
 

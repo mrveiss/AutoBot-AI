@@ -11,19 +11,19 @@ Supports multiple backends:
 Updated in Issue #454 to use real Vosk/Coqui TTS integration.
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import json
 import logging
 import os
 import tempfile
 from typing import Any, Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
 import yaml
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 

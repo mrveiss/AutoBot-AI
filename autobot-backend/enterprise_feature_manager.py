@@ -7,14 +7,15 @@ Enterprise Feature Manager - Phase 4 Implementation
 Enables and manages enterprise-grade features for AutoBot system.
 """
 
-from autobot_shared.ssot_config import config
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 

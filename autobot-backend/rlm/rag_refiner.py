@@ -14,8 +14,8 @@ Issue #1382: Follow-up from #1373.
 import logging
 from dataclasses import dataclass
 from typing import List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from rlm.types import RLMConfig
 
 logger = get_logger(__name__)

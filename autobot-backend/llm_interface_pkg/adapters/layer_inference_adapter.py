@@ -9,13 +9,14 @@ LLM provider so it can be accessed via the unified adapter API.
 Issue #3140: Updated to use LayerInferencePipeline for end-to-end generation.
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import logging
 import os
 import time
 from typing import Any, Dict, List, Optional
+
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 from ..models import LLMRequest, LLMResponse
 from .base import (

@@ -8,8 +8,8 @@ import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from orchestration.primitives import bounded_gather
 
 logger = get_logger(__name__)

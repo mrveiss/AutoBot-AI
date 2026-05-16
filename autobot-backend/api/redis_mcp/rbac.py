@@ -13,6 +13,7 @@ Roles:
 
 from enum import Enum
 from typing import Optional
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

@@ -9,10 +9,10 @@ AI-driven workflow optimization strategies.
 
 from typing import List
 
+from autobot_shared.logging_manager import get_logger
 from type_defs.common import Metadata
 
 from .models import SmartWorkflowStep, WorkflowIntent
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

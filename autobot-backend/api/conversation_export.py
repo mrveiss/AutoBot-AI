@@ -22,6 +22,7 @@ from api.schemas_agent import ConversationImportRequest, ConversationImportRespo
 from api.schemas_common import DataResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from exceptions import get_exceptions_lazy
 from services.conversation_export import (
     export_all_conversations_json,
@@ -30,7 +31,6 @@ from services.conversation_export import (
     import_conversation,
 )
 from utils.chat_utils import get_chat_history_manager, validate_chat_session_id
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

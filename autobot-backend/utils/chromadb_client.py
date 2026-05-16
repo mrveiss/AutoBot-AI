@@ -18,7 +18,6 @@ async variants to prevent event loop blocking. See Issue #369.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import json
 import logging
@@ -28,6 +27,7 @@ import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 
 # Re-export async utilities for convenient imports

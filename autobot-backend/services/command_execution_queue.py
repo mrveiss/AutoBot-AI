@@ -16,11 +16,11 @@ import asyncio
 import json
 from typing import List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.ttl_constants import TTL_24_HOURS
 from models.command_execution import CommandExecution, CommandState
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

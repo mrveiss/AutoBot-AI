@@ -15,14 +15,14 @@ Public API:
 
 from __future__ import annotations
 
-from autobot_shared.ssot_config import config
-from autobot_shared.logging_manager import get_logger
-
 import logging
 import os
 from typing import Any
 
 import psutil
+
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 

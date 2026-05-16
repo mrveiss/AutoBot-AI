@@ -117,7 +117,6 @@ import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
@@ -157,6 +156,7 @@ from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
+from autobot_shared.logging_manager import get_logger
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 from services.simple_pty import simple_pty_manager

@@ -9,7 +9,6 @@ Tracks development phases, capabilities, and completion criteria for AutoBot
 Issue #357: Added async wrappers for database operations to prevent blocking in async contexts.
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import json
 import os
@@ -22,6 +21,7 @@ from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_config import config
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PATH
 from utils.service_registry import get_service_url

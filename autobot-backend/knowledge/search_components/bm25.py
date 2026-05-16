@@ -10,6 +10,7 @@ Provides IDF with Laplace smoothing and document length normalization.
 
 import math
 from typing import Dict, List
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

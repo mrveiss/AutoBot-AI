@@ -11,9 +11,9 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.threshold_constants import RetryConfig, TimingConstants
 from utils.async_initializable import AsyncInitializable

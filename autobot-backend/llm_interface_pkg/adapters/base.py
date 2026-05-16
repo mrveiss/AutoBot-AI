@@ -14,8 +14,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
-from ..models import LLMRequest, LLMResponse
 from autobot_shared.logging_manager import get_logger
+
+from ..models import LLMRequest, LLMResponse
 
 logger = get_logger(__name__)
 

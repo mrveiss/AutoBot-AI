@@ -20,7 +20,6 @@ Issue #2153 — Secret management for workflow credentials.
 
 import logging
 from typing import List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -32,6 +31,7 @@ from api.schemas_workflows import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.workflow_secret_service import (
     WorkflowSecretService,
     get_workflow_secret_service,

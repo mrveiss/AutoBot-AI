@@ -12,6 +12,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+
 from autobot_shared.logging_manager import get_logger
 
 from .types import CLASSIFICATION_TERMS, CODE_SEARCH_TERMS, AgentType

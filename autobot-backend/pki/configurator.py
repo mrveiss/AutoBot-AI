@@ -17,10 +17,10 @@ Services configured:
 import logging
 from dataclasses import dataclass
 from typing import Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
 import asyncssh
 
+from autobot_shared.logging_manager import get_logger
 from pki.config import VM_DEFINITIONS, TLSConfig
 
 logger = get_logger(__name__)

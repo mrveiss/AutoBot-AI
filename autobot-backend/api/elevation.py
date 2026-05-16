@@ -12,7 +12,6 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -30,6 +29,7 @@ from api.schemas_workflows import (
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

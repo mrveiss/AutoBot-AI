@@ -11,8 +11,8 @@ replacing the manual config handling with validated, type-safe configuration mod
 import os
 from typing import Dict, List, Optional
 
-from type_defs.common import Metadata
 from autobot_shared.logging_manager import get_logger
+from type_defs.common import Metadata
 
 logger = get_logger(__name__)
 import yaml

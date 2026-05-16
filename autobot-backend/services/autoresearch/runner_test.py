@@ -11,7 +11,6 @@ Issue #3261: Tests for append_result, reorg_results, filter_prompts.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import json
@@ -21,6 +20,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
 from services.autoresearch.config import AutoResearchConfig
 from services.autoresearch.models import (
     Experiment,

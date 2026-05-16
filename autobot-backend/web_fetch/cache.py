@@ -17,10 +17,9 @@ import json
 import os
 from typing import Optional
 
-from autobot_shared.ssot_config import config
-
-from constants.ttl_constants import TTL_24_HOURS
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+from constants.ttl_constants import TTL_24_HOURS
 
 logger = get_logger(__name__)
 

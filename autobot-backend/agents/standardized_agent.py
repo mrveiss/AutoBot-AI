@@ -18,8 +18,8 @@ import time
 from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from memory.manager import UnifiedMemoryManager
 from prompt_manager import get_language_instruction, resolve_language
 

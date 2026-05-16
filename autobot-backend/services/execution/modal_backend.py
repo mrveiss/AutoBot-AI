@@ -10,8 +10,8 @@ Supports cost tracking and automatic scaling.
 
 import logging
 from typing import Any, Dict, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
 
 try:

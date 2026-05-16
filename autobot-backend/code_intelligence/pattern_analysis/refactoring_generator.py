@@ -11,6 +11,8 @@ detected patterns, duplicates, and complexity hotspots.
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
+
 from .types import (
     CodeLocation,
     CodePattern,
@@ -21,7 +23,6 @@ from .types import (
     PatternType,
     RegexOpportunity,
 )
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

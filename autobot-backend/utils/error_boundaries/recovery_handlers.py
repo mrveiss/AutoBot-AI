@@ -12,10 +12,10 @@ import asyncio
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import RetryConfig
 
 from .types import ErrorContext
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

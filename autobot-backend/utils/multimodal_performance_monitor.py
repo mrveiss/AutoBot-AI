@@ -14,11 +14,11 @@ import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Any, Dict, List
-from autobot_shared.logging_manager import get_logger
 
 import numpy as np
 import psutil
 
+from autobot_shared.logging_manager import get_logger
 from monitoring.prometheus_metrics import get_metrics_manager
 
 try:

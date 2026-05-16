@@ -10,8 +10,8 @@ import logging
 import os
 from typing import Any, Dict
 from urllib.parse import urlparse
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from config.registry import ConfigRegistry
 from constants.network_constants import NetworkConstants

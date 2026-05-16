@@ -19,6 +19,7 @@ Related Issue: #159 - Prevent Premature Conversation Endings
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

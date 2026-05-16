@@ -12,17 +12,17 @@ Tests comprehensive database initialization functionality including:
 Test Coverage Target: 100% for initialization code
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import logging
 import sqlite3
 import tempfile
 from pathlib import Path
 from typing import Any, List, Tuple
-from autobot_shared.logging_manager import get_logger
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from conversation_file_manager import ConversationFileManager
 
 # Configure logging for tests

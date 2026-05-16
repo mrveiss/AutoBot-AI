@@ -8,17 +8,17 @@ Handles secure storage, retrieval, and management of secrets with dual-scope sup
 
 import json
 import sqlite3
-from autobot_shared.ssot_config import config
 from pathlib import Path
 from typing import Dict, List, Optional
 from uuid import uuid4
 
 from cryptography.fernet import Fernet
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from config.manager import get_config_manager as _get_config_manager
 from type_defs.common import Metadata
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

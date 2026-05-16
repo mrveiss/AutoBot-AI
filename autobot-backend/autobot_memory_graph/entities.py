@@ -16,8 +16,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from .core import ENTITY_TYPES, AutoBotMemoryGraphCore
 from autobot_shared.logging_manager import get_logger
+
+from .core import ENTITY_TYPES, AutoBotMemoryGraphCore
 
 logger = get_logger(__name__)
 

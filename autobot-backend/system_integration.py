@@ -7,6 +7,7 @@ import os
 import platform
 import subprocess  # nosec B404 - required for system commands
 from typing import Any, Dict, List, Optional
+
 from autobot_shared.logging_manager import get_logger
 
 # #7166: markdownify is an optional dependency. Hard-import made the whole

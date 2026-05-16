@@ -17,8 +17,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from pki.config import VM_DEFINITIONS, CertificateStatus, TLSConfig, VMCertificateInfo
 from autobot_shared.logging_manager import get_logger
+from pki.config import VM_DEFINITIONS, CertificateStatus, TLSConfig, VMCertificateInfo
 
 logger = get_logger(__name__)
 

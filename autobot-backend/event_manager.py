@@ -8,9 +8,9 @@ from typing import Any, Awaitable, Callable, Dict, Optional
 import yaml
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.path_constants import PATH
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

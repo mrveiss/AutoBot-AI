@@ -11,8 +11,8 @@ import re
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
-from config.manager import get_config_manager
 from autobot_shared.logging_manager import get_logger
+from config.manager import get_config_manager
 
 config = get_config_manager()
 

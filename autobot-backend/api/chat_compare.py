@@ -20,7 +20,6 @@ import asyncio
 import json
 import logging
 from typing import AsyncIterator, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -28,6 +27,7 @@ from fastapi.responses import StreamingResponse
 from api.schemas_chat import CompareRequest
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -15,9 +15,10 @@ import sys
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import psutil
+
+from autobot_shared.logging_manager import get_logger
 
 try:
     from autobot_shared.redis_client import get_redis_client

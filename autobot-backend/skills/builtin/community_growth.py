@@ -13,10 +13,10 @@ import asyncio
 import json
 import logging
 from typing import Any, Dict, List, Tuple
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_ollama_url
 from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 

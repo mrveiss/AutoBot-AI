@@ -8,7 +8,6 @@ Copyright (c) 2025 mrveiss
 Author: mrveiss
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import os
 import sys
@@ -17,6 +16,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
+from autobot_shared.ssot_config import config
 
 # Ensure autobot-backend and autobot_shared are importable
 project_root = Path(__file__).parent.parent

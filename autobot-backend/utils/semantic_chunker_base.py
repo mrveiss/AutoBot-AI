@@ -12,8 +12,9 @@ distance, boundary detection, chunk assembly with min/max-size
 constraints, fallback chunking, document-format conversion) lives here.
 """
 
-from autobot_shared.ssot_config import config
 import os
+
+from autobot_shared.ssot_config import config
 
 # CRITICAL FIX: Force tf-keras usage before importing transformers/sentence-transformers.
 # The subclasses import torch/sentence_transformers lazily, but having these set at module

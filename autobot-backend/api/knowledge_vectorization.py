@@ -18,6 +18,7 @@ from redis.exceptions import RedisError
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from background_vectorization import get_background_vectorizer
 from exceptions import InternalError
@@ -44,7 +45,6 @@ from knowledge.schemas.vectorization import (
 )
 from knowledge_factory import get_or_create_knowledge_base
 from type_defs.common import Metadata
-from autobot_shared.logging_manager import get_logger
 
 # Set up logging
 logger = get_logger(__name__)

@@ -23,8 +23,8 @@ import uuid
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Optional
 
-from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_client import get_async_redis_client
 
 logger = get_logger(__name__)
 

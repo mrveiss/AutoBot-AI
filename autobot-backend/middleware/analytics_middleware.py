@@ -12,6 +12,7 @@ from typing import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

@@ -12,8 +12,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
 

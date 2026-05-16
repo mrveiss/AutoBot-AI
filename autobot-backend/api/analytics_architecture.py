@@ -15,7 +15,6 @@ Key Features:
 - AutoBot-specific pattern detection
 """
 
-from autobot_shared.ssot_config import config
 import ast
 import asyncio
 import os
@@ -46,8 +45,9 @@ from api.schemas_analytics import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.status_enums import Severity
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+from autobot_shared.status_enums import Severity
 
 logger = get_logger(__name__)
 

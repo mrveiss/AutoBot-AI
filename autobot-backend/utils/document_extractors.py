@@ -36,6 +36,7 @@ import aiofiles
 import numpy as np
 from docx import Document as DocxDocument
 from pypdf import PdfReader
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

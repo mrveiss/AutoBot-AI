@@ -41,7 +41,6 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -64,6 +63,7 @@ from api.schemas_knowledge import (
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
 
 # Import existing components

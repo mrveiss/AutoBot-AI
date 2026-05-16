@@ -25,10 +25,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from autobot_shared.logging_manager import get_logger
 from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH
 from middleware.proxy_utils import get_client_ip
 from services.tracing_service import get_tracing_service
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

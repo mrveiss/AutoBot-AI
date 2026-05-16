@@ -6,8 +6,8 @@
 import asyncio
 import logging
 from typing import Any, Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from utils.async_initializable import AsyncInitializable
 

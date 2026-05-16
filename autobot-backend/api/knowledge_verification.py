@@ -33,9 +33,9 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import QueryDefaults
 from knowledge_factory import get_or_create_knowledge_base
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

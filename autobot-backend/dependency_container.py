@@ -14,11 +14,11 @@ from typing import Any, AsyncGenerator, Callable, Dict, Optional, Type, TypeVar
 
 import redis.asyncio as async_redis
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from config.manager import ConfigManager, get_config_manager
 from services.llm_service import LLMService, get_llm_service  # Phase 2D #3185
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

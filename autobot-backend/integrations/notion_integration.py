@@ -21,10 +21,10 @@ Supported actions:
 import logging
 import time
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,

@@ -7,7 +7,6 @@ NPU-Enhanced Semantic Search for AutoBot
 Integrates Intel NPU acceleration with ChromaDB and Redis vector store
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import json
 import time
@@ -26,6 +25,7 @@ from ai_hardware_accelerator import (
 )
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.ssot_config import config
 from config import cfg
 
 # Import existing AutoBot components

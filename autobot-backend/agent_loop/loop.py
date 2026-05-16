@@ -23,7 +23,6 @@ import logging
 import time
 import uuid
 from typing import Any, Optional
-from autobot_shared.logging_manager import get_logger
 
 from agent_loop.slack_hook import get_slack_hook
 from agent_loop.think_tool import ThinkTool
@@ -37,6 +36,7 @@ from agent_loop.types import (
     TaskContext,
     ThinkCategory,
 )
+from autobot_shared.logging_manager import get_logger
 from events import EventStreamManager, EventType
 from events.event_types import APPROVAL_REQUIRED as EVT_APPROVAL_REQUIRED
 from events.types import create_approval_required_event, create_message_event

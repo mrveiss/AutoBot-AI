@@ -3,7 +3,6 @@
 # Author: mrveiss
 import asyncio
 import logging
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -18,6 +17,7 @@ from api.schemas_agent import (
 from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import now_utc
 from config.manager import get_config_manager

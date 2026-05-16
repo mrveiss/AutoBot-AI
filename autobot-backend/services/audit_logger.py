@@ -34,17 +34,17 @@ import logging
 import os
 import socket
 import uuid
-from autobot_shared.ssot_config import config
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
-from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 import redis.asyncio as async_redis
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_config import config
 from constants.network_constants import NetworkConstants
 from models.task_context import AuditQueryContext
 from type_defs.common import Metadata

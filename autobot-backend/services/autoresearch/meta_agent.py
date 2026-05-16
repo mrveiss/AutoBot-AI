@@ -33,8 +33,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .config import AutoResearchConfig
 from autobot_shared.logging_manager import get_logger
+
+from .config import AutoResearchConfig
 
 logger = get_logger(__name__)
 

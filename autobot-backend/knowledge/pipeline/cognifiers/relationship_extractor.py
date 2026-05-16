@@ -11,6 +11,7 @@ Issue #2026: Dual-mode extraction — LLM + NLP co-occurrence/keyword patterns.
 from itertools import combinations
 from typing import Any, Dict, List, Set, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import (
     build_entity_map,
@@ -21,7 +22,6 @@ from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.models.relationship import Relationship, RelationType
 from knowledge.pipeline.registry import TaskRegistry
 from services.llm_service import get_llm_service
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -9,8 +9,8 @@ import sys
 
 sys.path.append(config.project_root)
 
-from autobot_shared.ssot_config import config
 from agents.security_scanner_agent import security_scanner_agent
+from autobot_shared.ssot_config import config
 
 
 async def test_tool_research_workflow():

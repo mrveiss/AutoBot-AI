@@ -27,8 +27,8 @@ Use ``create_mesh_db_adapter()`` at application startup to get an engine-wired i
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from services.mesh_brain.mesh_db import MeshDB
 from autobot_shared.logging_manager import get_logger
+from services.mesh_brain.mesh_db import MeshDB
 
 logger = get_logger(__name__)
 

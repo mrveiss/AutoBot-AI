@@ -10,9 +10,10 @@ Extracted from ArchitecturalPatternAnalyzer as part of Issue #394.
 
 from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
+
 from .dependency_analyzer import DependencyAnalyzer
 from .types import ArchitecturalComponent, ArchitecturalIssue, ArchitecturalMetrics
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

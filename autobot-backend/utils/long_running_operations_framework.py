@@ -37,9 +37,9 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
 # Re-export all public API from the package

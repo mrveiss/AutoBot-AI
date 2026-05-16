@@ -10,6 +10,7 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 import copy
 import re
 from typing import Any, Dict
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

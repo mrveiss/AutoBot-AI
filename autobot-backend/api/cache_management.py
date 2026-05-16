@@ -11,7 +11,6 @@ import asyncio
 import json
 import logging
 from typing import Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -34,6 +33,7 @@ from api.schemas_system import (
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from type_defs.common import Metadata
 from utils.advanced_cache_manager import advanced_cache

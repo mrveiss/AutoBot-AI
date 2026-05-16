@@ -11,10 +11,10 @@ resolving conflicts, and selecting optimal agent responses in multi-agent scenar
 import json
 from typing import Any, Dict, FrozenSet, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from constants import AgentThresholds
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

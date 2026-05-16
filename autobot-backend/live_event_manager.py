@@ -14,8 +14,8 @@ from typing import Dict, Set
 from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
-from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)
 

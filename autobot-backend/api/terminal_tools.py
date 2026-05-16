@@ -19,12 +19,12 @@ These endpoints are imported into terminal.py via router inclusion.
 
 import logging
 from typing import Any, Dict
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter
 
 from api.schemas_terminal import PackageManagersResponse, ToolInstallRequest
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -18,11 +18,11 @@ import os
 import sys
 from pathlib import Path
 
-from autobot_shared.ssot_config import config
-
 # Load environment variables from .env file BEFORE any other imports
 # This ensures AUTOBOT_SECRETS_KEY is available for SecretsService
 from dotenv import load_dotenv
+
+from autobot_shared.ssot_config import config
 
 _env_path = Path(__file__).parent.parent / ".env"
 if _env_path.exists():

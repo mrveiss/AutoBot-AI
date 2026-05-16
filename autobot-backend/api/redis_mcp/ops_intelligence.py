@@ -10,10 +10,10 @@ Agents can chain these tools for composite diagnostics.
 
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value as _decode
 from type_defs.common import Metadata
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

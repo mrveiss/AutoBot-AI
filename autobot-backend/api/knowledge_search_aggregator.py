@@ -20,7 +20,6 @@ Endpoints:
 import asyncio
 import logging
 from typing import Any, Dict, List, Optional, Set
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
@@ -36,6 +35,7 @@ from api.schemas_knowledge import (
     UnifiedSearchRequest,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)

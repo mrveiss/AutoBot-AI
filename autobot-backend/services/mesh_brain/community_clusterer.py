@@ -13,6 +13,7 @@ process start. The import only occurs when cluster_graph() is called.
 
 import logging
 from typing import Any
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

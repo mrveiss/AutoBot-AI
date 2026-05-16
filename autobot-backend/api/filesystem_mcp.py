@@ -22,7 +22,6 @@ Issue #718: Uses dedicated thread pool for file I/O to prevent blocking
 when the main asyncio thread pool is saturated by indexing operations.
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import base64
 import logging
@@ -31,10 +30,11 @@ import os
 import shutil
 from datetime import datetime
 from typing import Dict, List
-from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from type_defs.common import Metadata
 from utils.io_executor import run_in_file_executor
 

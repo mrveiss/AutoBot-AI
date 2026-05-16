@@ -4,7 +4,6 @@ AutoBot Phase 9 Comprehensive System Validation
 Comprehensive testing and validation suite for production readiness
 """
 
-from autobot_shared.ssot_config import config
 import json
 import os
 import socket
@@ -15,6 +14,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
+
+from autobot_shared.ssot_config import config
 
 # Add AutoBot paths
 sys.path.append(config.project_root)

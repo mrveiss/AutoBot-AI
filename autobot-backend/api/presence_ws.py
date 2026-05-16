@@ -11,8 +11,8 @@ Issue #3282: collaborative multi-user support — shared sessions and workspaces
 from fastapi import APIRouter, Query, WebSocket
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from websocket.presence import presence_websocket_handler
 from autobot_shared.logging_manager import get_logger
+from websocket.presence import presence_websocket_handler
 
 logger = get_logger(__name__)
 

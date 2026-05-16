@@ -25,6 +25,7 @@ import psutil
 import redis
 
 from api.schemas_analytics import CodeAnalysisRequest, CommunicationPattern
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from autobot_shared.ssot_config import config as _ssot
 from constants import PATH
@@ -34,7 +35,6 @@ from utils.system_metrics import get_metrics_collector
 
 # Import existing monitoring infrastructure
 from .monitoring_hardware import hardware_monitor
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

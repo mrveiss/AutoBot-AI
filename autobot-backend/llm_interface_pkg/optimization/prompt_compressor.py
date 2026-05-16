@@ -13,6 +13,7 @@ Issue #717: Efficient Inference Design implementation.
 import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

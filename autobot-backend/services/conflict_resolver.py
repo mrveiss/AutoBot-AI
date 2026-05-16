@@ -29,7 +29,6 @@ All I/O is async-first; no blocking operations.
 import logging
 import time
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 from api.knowledge_grounding_models import (
     Claim,
@@ -42,6 +41,7 @@ from api.knowledge_grounding_models import (
     ReviewTicketPriority,
     ReviewTicketStatus,
 )
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
 logger = get_logger(__name__)

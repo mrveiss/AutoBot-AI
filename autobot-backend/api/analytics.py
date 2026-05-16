@@ -14,7 +14,6 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Tuple
-from autobot_shared.logging_manager import get_logger
 
 import httpx
 from fastapi import (
@@ -53,6 +52,7 @@ from api.schemas_analytics import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.time_utils import parse_utc_iso
 from constants.network_constants import NetworkConstants

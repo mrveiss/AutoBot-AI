@@ -10,12 +10,12 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import logging
 from typing import Any, AsyncIterator, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 

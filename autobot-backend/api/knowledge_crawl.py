@@ -39,10 +39,10 @@ from typing import Any, Dict, List, Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.web_crawler import WebCrawlerConnector
 from web_fetch import FetchResult, RenderMode
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

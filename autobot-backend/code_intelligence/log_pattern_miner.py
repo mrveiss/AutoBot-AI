@@ -27,6 +27,7 @@ from enum import Enum
 from pathlib import Path
 from statistics import mean, stdev
 from typing import Any, Optional
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

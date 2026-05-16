@@ -32,8 +32,9 @@ Note: Uses lazy imports via __getattr__ to avoid circular import with NetworkCon
 """
 
 import logging
-from autobot_shared.ssot_config import config
 from typing import TYPE_CHECKING
+
+from autobot_shared.ssot_config import config
 
 # Use stdlib logging here to avoid circular import:
 # constants → network_constants → autobot_shared/network_constants → config.registry →

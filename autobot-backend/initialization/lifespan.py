@@ -14,10 +14,10 @@ import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import FastAPI
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.tracing import (
     instrument_aiohttp,
     instrument_redis,

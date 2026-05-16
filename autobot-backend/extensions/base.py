@@ -11,9 +11,9 @@ can hook into 22 lifecycle points to modify agent behavior.
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.plugin_sdk.extension_manifest import ExtensionManifest
 from extensions.hooks import HookPoint
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

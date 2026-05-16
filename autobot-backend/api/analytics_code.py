@@ -11,7 +11,6 @@ import asyncio
 import logging
 import threading
 from datetime import datetime, timezone
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -26,6 +25,7 @@ from api.schemas_analytics import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
 
 # Import shared analytics controller from analytics module

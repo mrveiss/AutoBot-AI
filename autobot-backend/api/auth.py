@@ -12,7 +12,6 @@ import os
 from collections import defaultdict
 from time import time
 from typing import Dict, List
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -32,6 +31,7 @@ from api.schemas_common import DataResponse
 from auth_middleware import get_auth_middleware
 from autobot_shared.auth.jwt_core import JWTDecodeError, decode_jwt_no_verify_exp
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
 from services.event_log import EventType

@@ -20,8 +20,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from autobot_shared.time_utils import parse_utc_iso
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import parse_utc_iso
 
 logger = get_logger(__name__)
 

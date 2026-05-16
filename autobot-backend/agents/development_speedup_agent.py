@@ -22,9 +22,9 @@ from typing import Any, Dict, List, Optional, Tuple
 import aiofiles
 
 from agents.npu_code_search_agent import get_npu_code_search
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

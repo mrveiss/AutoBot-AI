@@ -11,6 +11,7 @@ each agent excels at and updates agent profiles accordingly.
 
 from dataclasses import dataclass
 from typing import Protocol
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

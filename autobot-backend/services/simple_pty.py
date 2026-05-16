@@ -14,8 +14,8 @@ import signal
 import subprocess
 import threading
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 

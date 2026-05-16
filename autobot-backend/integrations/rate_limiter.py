@@ -18,8 +18,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
-from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 
 logger = get_logger(__name__)
 

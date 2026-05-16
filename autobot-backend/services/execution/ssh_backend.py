@@ -11,8 +11,8 @@ Supports key-based and password authentication.
 import asyncio
 import logging
 from typing import Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 
 try:

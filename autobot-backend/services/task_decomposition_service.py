@@ -17,10 +17,10 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 from models.process_run import ProcessRun, ProcessRunStatus, TaskDecomposition
 from services.process_adapter_service import ProcessAdapterService
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

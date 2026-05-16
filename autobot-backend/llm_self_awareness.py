@@ -7,7 +7,6 @@ LLM Self-Awareness Module
 Provides context injection for LLM agents to be aware of current system state, capabilities, and phase
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import json
 import os
@@ -17,11 +16,12 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
 from enhanced_project_state_tracker import get_state_tracker
 from phase_progression_manager import get_progression_manager
 from project_state_manager import get_project_state_manager
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

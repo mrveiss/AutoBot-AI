@@ -21,8 +21,8 @@ import asyncio
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from utils.file_categorization import FILE_CATEGORY_CODE, SKIP_DIRS
 from utils.file_categorization import get_file_category as _get_file_category
 

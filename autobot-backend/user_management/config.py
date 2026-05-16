@@ -12,10 +12,11 @@ Supports 4 deployment modes:
 """
 
 import os
-from autobot_shared.ssot_config import config
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
+
+from autobot_shared.ssot_config import config
 
 
 def _get_default_postgres_host() -> str:

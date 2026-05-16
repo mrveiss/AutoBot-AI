@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from itertools import combinations
 from typing import Optional, Protocol, runtime_checkable
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

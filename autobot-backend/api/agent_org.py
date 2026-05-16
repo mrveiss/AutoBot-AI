@@ -25,9 +25,9 @@ from api.schemas_agent import (
 )
 from api.user_management.dependencies import get_db_session
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.agent_org_service import AgentOrgService
 from services.delegation_service import DelegationService
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter()

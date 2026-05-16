@@ -25,10 +25,10 @@ if TYPE_CHECKING:
 # Re-export the canonical type instead of redefining locally so callers
 # keep working unchanged and worker-health code shares one source of truth.
 from autobot_shared.http_client import HTTPClientManager, get_http_client
+from autobot_shared.logging_manager import get_logger
 from circuit_breaker import CircuitState
 from constants.threshold_constants import LLMDefaults, TimingConstants
 from utils.service_registry import get_service_url
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

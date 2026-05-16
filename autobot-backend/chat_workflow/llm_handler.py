@@ -12,10 +12,10 @@ import asyncio
 import json
 import logging
 from typing import Any, Dict, List
-from autobot_shared.logging_manager import get_logger
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConstants

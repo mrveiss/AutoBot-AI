@@ -11,12 +11,12 @@ import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
     from intelligence.intelligent_agent import IntelligentAgent

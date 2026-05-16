@@ -32,7 +32,6 @@ autoresearch sessions only.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import dataclasses
@@ -46,6 +45,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.ttl_constants import TTL_7_DAYS, TTL_24_HOURS
 

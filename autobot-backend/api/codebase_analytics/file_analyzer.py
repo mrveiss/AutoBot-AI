@@ -7,12 +7,13 @@ Per-file analysis orchestration for codebase analytics.
 Issue #2013: Decomposed from scanner.py god module.
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from utils.file_categorization import (
     ALL_CODE_EXTENSIONS,
     CONFIG_EXTENSIONS,
@@ -33,7 +34,6 @@ from .analyzers import (
     analyze_python_file,
 )
 from .types import FileAnalysisResult
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

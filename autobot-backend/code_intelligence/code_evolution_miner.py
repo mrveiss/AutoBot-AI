@@ -21,8 +21,8 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.anti_pattern_detector import AntiPatternDetector
 
 logger = get_logger(__name__)

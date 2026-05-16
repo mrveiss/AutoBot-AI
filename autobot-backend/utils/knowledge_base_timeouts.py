@@ -10,10 +10,10 @@ for knowledge_base.py operations.
 Part of KB-ASYNC-014: Timeout Configuration Centralization
 """
 
-from autobot_shared.ssot_config import config
 import os
 from typing import Dict
 
+from autobot_shared.ssot_config import config
 from config.manager import get_config_manager
 
 config = get_config_manager()

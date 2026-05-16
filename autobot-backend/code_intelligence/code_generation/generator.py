@@ -13,6 +13,7 @@ import hashlib
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
+
 from autobot_shared.logging_manager import get_logger
 
 from .diff import DiffGenerator

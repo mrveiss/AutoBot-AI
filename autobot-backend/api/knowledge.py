@@ -34,7 +34,6 @@ import asyncio
 import json
 import logging
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import (
     APIRouter,
@@ -56,6 +55,7 @@ from api.schemas_knowledge import (
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import QueryDefaults
 from exceptions import InternalError
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document

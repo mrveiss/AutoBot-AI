@@ -26,9 +26,6 @@ Bridge resolution strategy:
 
 from __future__ import annotations
 
-from autobot_shared.ssot_config import config
-from autobot_shared.logging_manager import get_logger
-
 import asyncio
 import importlib
 import json
@@ -40,6 +37,8 @@ from typing import Any, Dict, Optional
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger("mcp_worker")
 

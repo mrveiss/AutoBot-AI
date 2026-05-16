@@ -10,8 +10,6 @@ Pydantic models for TLS/PKI configuration, integrated with SSOT config system.
 
 from __future__ import annotations
 
-from autobot_shared.ssot_config import config
-
 import os
 from dataclasses import dataclass, field
 from enum import Enum
@@ -22,6 +20,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from autobot_shared.ssot_config import TLSMode  # noqa: F401 — canonical enum
+from autobot_shared.ssot_config import config
 
 
 def _find_project_root() -> Path:

@@ -12,8 +12,8 @@ import hashlib
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from knowledge.backends import get_async_default_client, get_default_client
 from autobot_shared.logging_manager import get_logger
+from knowledge.backends import get_async_default_client, get_default_client
 
 logger = get_logger(__name__)
 

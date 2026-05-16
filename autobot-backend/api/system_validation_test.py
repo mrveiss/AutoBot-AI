@@ -5,6 +5,7 @@ Test script for the comprehensive system validation
 
 import asyncio
 import logging
+
 from autobot_shared.logging_manager import get_logger
 
 # Setup logging

@@ -11,9 +11,10 @@ and optionally commits it to git.
 import asyncio
 import os
 import re
-from autobot_shared.ssot_config import config
 from typing import List, Optional
+
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 

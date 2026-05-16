@@ -22,9 +22,10 @@ mirrors the data into the PropertyGraph so the two stores stay in sync.
 
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
+
 from .core import AutoBotMemoryGraphCore
 from .property_graph import PropertyGraph
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

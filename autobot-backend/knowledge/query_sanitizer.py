@@ -61,13 +61,14 @@ Tuning decisions are recorded here for quarterly review cadence.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
+
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -28,10 +28,10 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import HTTPException
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_management.cache_wrapper import RedisCache
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import parse_utc_iso

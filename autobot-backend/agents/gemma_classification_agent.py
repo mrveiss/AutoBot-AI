@@ -9,13 +9,13 @@ Uses Google's Gemma 2B/3 models for ultra-fast classification tasks
 import json
 import logging
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
 from agents.classification_agent import ClassificationResult
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,

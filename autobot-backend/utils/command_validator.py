@@ -20,6 +20,7 @@ import re
 import shlex
 from dataclasses import dataclass
 from typing import Dict, List, Pattern, Union
+
 from autobot_shared.logging_manager import get_logger
 
 # Issue #380: Pre-compiled dangerous patterns for command validation

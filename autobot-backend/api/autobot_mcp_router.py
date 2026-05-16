@@ -14,8 +14,8 @@ which handles auth, rate limiting, and tool dispatch internally.
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from mcp.autobot_server import AutoBotMCPServer
 from autobot_shared.logging_manager import get_logger
+from mcp.autobot_server import AutoBotMCPServer
 
 logger = get_logger(__name__)
 

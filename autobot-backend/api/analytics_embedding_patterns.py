@@ -29,10 +29,10 @@ from fastapi.responses import JSONResponse
 from api.schemas_analytics import EmbeddingStatsResponse, EmbeddingUsageRequest
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 from constants.ttl_constants import TTL_30_DAYS, TTL_90_DAYS
-from autobot_shared.logging_manager import get_logger
 
 router = APIRouter()
 logger = get_logger(__name__)

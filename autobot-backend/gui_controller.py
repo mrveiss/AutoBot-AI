@@ -1,16 +1,16 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-from autobot_shared.ssot_config import config
 import asyncio
 import logging
 import os
 import subprocess
-from autobot_shared.logging_manager import get_logger
 
 import pyautogui
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 
 logger = get_logger(__name__)

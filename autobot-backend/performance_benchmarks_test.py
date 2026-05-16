@@ -16,8 +16,8 @@ from unittest.mock import MagicMock, patch
 import psutil
 import pytest
 
-from memory.compat import EnhancedMemoryManager
 from knowledge import KnowledgeBase
+from memory.compat import EnhancedMemoryManager
 
 # Import components to benchmark
 from orchestrator import Orchestrator

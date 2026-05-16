@@ -6,9 +6,9 @@
 import json
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.redis_management.types import DATABASE_MAPPING
-from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_24_HOURS
 
 logger = get_logger(__name__)

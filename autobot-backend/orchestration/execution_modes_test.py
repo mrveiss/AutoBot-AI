@@ -16,9 +16,10 @@ Covers:
 
 import asyncio
 import logging
-from autobot_shared.logging_manager import get_logger
 
 import pytest
+
+from autobot_shared.logging_manager import get_logger
 
 from .execution_modes import (
     DebugController,

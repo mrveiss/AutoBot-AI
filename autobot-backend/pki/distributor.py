@@ -21,8 +21,8 @@ import asyncssh
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-from pki.config import VM_DEFINITIONS, TLSConfig, VMCertificateInfo
 from autobot_shared.logging_manager import get_logger
+from pki.config import VM_DEFINITIONS, TLSConfig, VMCertificateInfo
 
 logger = get_logger(__name__)
 

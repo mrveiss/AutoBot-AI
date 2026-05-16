@@ -27,9 +27,9 @@ import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
-from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.error_boundaries import error_boundary
+from autobot_shared.logging_manager import get_logger
 
 # Issue #5064: prompt-injection sanitizer applied pre-embedding.
 from knowledge.query_sanitizer import sanitize_query as _sanitize_query

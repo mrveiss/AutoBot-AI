@@ -12,14 +12,14 @@ import logging
 import os
 import threading
 import uuid
-from autobot_shared.ssot_config import config
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.status_enums import AgentStatus  # #7504 consolidation
 
 # Import communication protocol

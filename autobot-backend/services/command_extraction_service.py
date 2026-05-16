@@ -21,12 +21,13 @@ Key Features:
 import logging
 import os
 import re
-from autobot_shared.ssot_config import config
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
+
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 

@@ -31,8 +31,8 @@ import re
 import tempfile
 from datetime import datetime, timezone
 from typing import List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (

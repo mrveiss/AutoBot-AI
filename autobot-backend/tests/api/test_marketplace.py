@@ -21,8 +21,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from tests.fixtures import make_async_redis
-
 from api.marketplace import (
     _BUILTIN_CATALOG,
     _CATALOG_KEY,
@@ -48,6 +46,7 @@ from api.schemas_workflows import (
     MarketplaceCatalogResponse,
     MarketplaceEntry,
 )
+from tests.fixtures import make_async_redis
 
 # Derived from CatalogCategory / CatalogSort enums (#6534) — replaces the
 # pre-enum ``_VALID_CATEGORIES`` / ``_VALID_SORT`` constants the tests used

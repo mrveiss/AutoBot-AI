@@ -13,10 +13,10 @@ import re
 import threading
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
-from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 from services.llm_service import get_llm_service
 from type_defs.common import Metadata

@@ -16,9 +16,10 @@ import fcntl
 import logging
 import threading
 from typing import Dict
-from autobot_shared.logging_manager import get_logger
 
 import yaml
+
+from autobot_shared.logging_manager import get_logger
 
 # SSOT Migration (Issue #602): Import SSOT config as primary source
 from autobot_shared.ssot_config import get_config as get_ssot_config

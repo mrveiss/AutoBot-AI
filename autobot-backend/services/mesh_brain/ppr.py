@@ -4,6 +4,7 @@
 """Personalized PageRank over the mesh graph for importance-weighted expansion (#1994, #2057)."""
 
 from typing import Protocol
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

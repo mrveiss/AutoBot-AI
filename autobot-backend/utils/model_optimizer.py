@@ -18,13 +18,13 @@ performance requirements, and system resources.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config

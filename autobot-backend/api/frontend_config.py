@@ -3,11 +3,11 @@
 # Author: mrveiss
 import logging
 from typing import Any, Dict
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PathConstants
 from services.config_service import ConfigService

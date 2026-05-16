@@ -19,7 +19,6 @@ Endpoints:
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -31,6 +30,7 @@ from api.schemas_system import (
 )
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.time_utils import parse_utc_iso
 from services.audit_logger import AuditResult, get_audit_logger

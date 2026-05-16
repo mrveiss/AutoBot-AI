@@ -19,14 +19,13 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 
 from __future__ import annotations
 
-from autobot_shared.ssot_config import config
-from autobot_shared.logging_manager import get_logger
-
 import logging
 import os
 import time
 from typing import Any, AsyncIterator, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 
 from ..base_provider import BaseProvider

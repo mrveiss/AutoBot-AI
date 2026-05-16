@@ -11,8 +11,8 @@ import asyncio
 import logging
 import time
 from typing import Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from secure_command_executor import CommandRisk
 from services.command_approval_manager import CommandApprovalManager
 

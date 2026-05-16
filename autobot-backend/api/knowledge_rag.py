@@ -12,12 +12,12 @@ Issue #4681: Added GET /entity/{id}/history for evolutionary lineage tracking.
 """
 
 import logging
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from knowledge.schemas.rag import (
     AdvancedSearchRequest,
     AdvancedSearchResponse,

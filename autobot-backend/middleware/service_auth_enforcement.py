@@ -7,7 +7,6 @@ Enforces service-to-service authentication on internal endpoints
 Week 3 Phase 2: Comprehensive endpoint categorization and selective enforcement
 """
 
-from autobot_shared.ssot_config import config
 import os
 import random
 import secrets
@@ -19,6 +18,7 @@ import structlog
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from autobot_shared.ssot_config import config
 from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH
 from security.service_auth import validate_service_auth
 

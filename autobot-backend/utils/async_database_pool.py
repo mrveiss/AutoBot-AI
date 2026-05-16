@@ -17,9 +17,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
-from autobot_shared.logging_manager import get_logger
 
 import aiosqlite
+
+from autobot_shared.logging_manager import get_logger
 
 # Import shared database helpers (Issue #292 - Eliminate duplicate code)
 from constants.threshold_constants import TimingConstants

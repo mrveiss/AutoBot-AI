@@ -8,8 +8,8 @@ Terminal history service for persistent command history in Redis.
 import time
 from typing import List
 
-from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
 logger = get_logger(__name__)
 

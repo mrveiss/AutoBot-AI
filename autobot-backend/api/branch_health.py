@@ -15,9 +15,9 @@ from fastapi import APIRouter, Depends
 from api.schemas_system import BranchDivergenceResponse, BranchHealthResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from utils.branch_metrics import BranchMetrics, BranchMetricsCollector
-from autobot_shared.logging_manager import get_logger
 
 router = APIRouter(
     tags=["branch_health", "monitoring"],

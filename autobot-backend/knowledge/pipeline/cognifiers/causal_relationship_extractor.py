@@ -13,13 +13,13 @@ extraction with condition detection and evidence tracking.
 
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
 from knowledge.pipeline.models.causal_edge import CausalEdge
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.registry import TaskRegistry
 from services.llm_service import get_llm_service
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

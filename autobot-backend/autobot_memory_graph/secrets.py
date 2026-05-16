@@ -14,10 +14,10 @@ Part of the modular autobot_memory_graph package (Issue #716).
 
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 
 from .core import AutoBotMemoryGraphCore
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

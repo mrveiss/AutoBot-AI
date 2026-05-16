@@ -8,13 +8,14 @@ Provides cross-platform display resolution detection for optimal
 Playwright viewport configuration based on the current environment.
 """
 
-from autobot_shared.ssot_config import config
 import logging
 import os
 import subprocess
 import sys
 from typing import Dict, Optional, Tuple
+
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 

@@ -13,8 +13,8 @@ import re
 import time
 import uuid
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata

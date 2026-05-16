@@ -10,8 +10,8 @@ Handles health checks, resource management, and routing decisions.
 
 import logging
 from typing import Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from services.execution.base_backend import (
     BackendType,
     ExecutionBackend,

@@ -9,7 +9,6 @@ baseline management, status, and cancellation.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -17,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from autobot_shared.logging_manager import get_logger
 from services.autoresearch.models import (
     Experiment,
     ExperimentState,

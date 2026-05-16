@@ -14,8 +14,8 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from enhanced_memory_manager_async import Priority  # Import Priority for backward compatibility

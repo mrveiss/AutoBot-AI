@@ -10,8 +10,8 @@ Provides CPU, memory, and timeout constraints.
 
 import logging
 from typing import Dict, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 
 try:

@@ -32,6 +32,7 @@ from api.schemas_knowledge import (
 from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from dependencies import get_knowledge_base
 from services.ai_stack_client import AIStackError, get_ai_stack_client
@@ -39,7 +40,6 @@ from type_defs.common import Metadata
 
 # Import shared response utilities (Issue #292 - Eliminate duplicate code)
 from utils.response_helpers import create_success_response
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

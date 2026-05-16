@@ -12,8 +12,8 @@ import json
 import re
 from dataclasses import dataclass, field
 
-from security.prompt_injection_detector import PromptInjectionDetector
 from autobot_shared.logging_manager import get_logger
+from security.prompt_injection_detector import PromptInjectionDetector
 
 logger = get_logger(__name__)
 

@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_5_MINUTES
 
@@ -34,7 +35,6 @@ from .payload_optimizer import PayloadOptimizer
 from .request_batcher import BatchableRequest, IntelligentRequestBatcher
 from .todowrite_optimizer import get_todowrite_optimizer
 from .tool_pattern_analyzer import get_tool_pattern_analyzer
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

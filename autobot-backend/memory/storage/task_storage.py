@@ -11,11 +11,11 @@ from typing import Any, Dict, List, Optional, Union
 
 import aiosqlite
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
 from ..enums import TaskPriority, TaskStatus
 from ..models import TaskExecutionRecord
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

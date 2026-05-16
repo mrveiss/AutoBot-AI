@@ -22,10 +22,10 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_constants import TTL_1_HOUR
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
 from .extractors import PythonPatternExtractor, TypeScriptPatternExtractor
 from .models import (

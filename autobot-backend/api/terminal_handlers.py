@@ -27,7 +27,6 @@ import os
 import time
 from datetime import datetime, timezone
 from typing import Awaitable, Callable, Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import WebSocket
 
@@ -36,6 +35,7 @@ from api.schemas_terminal import (
     CommandRiskLevel,
     SecurityLevel,
 )
+from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
 from constants.path_constants import PATH
 from constants.terminal_constants import (

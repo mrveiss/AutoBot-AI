@@ -9,11 +9,11 @@ Issue #322: Refactored to use TaskExecutionContext to eliminate data clump patte
 
 from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.task_result import task_error, task_success
 from models.task_context import TaskExecutionContext
 
 from .base import TaskHandler
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

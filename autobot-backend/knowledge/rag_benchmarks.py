@@ -22,9 +22,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set
-from autobot_shared.logging_manager import get_logger
 
 import pytest
+
+from autobot_shared.logging_manager import get_logger
 
 # Add project root and shared infrastructure to path so benchmark_base is importable
 _repo_root = Path(__file__).parent.parent.parent

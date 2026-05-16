@@ -19,9 +19,9 @@ from api.schemas_system import (
 )
 from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from project_state_manager import DevelopmentPhase, get_project_state_manager
 from utils.advanced_cache_manager import smart_cache
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

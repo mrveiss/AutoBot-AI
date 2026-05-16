@@ -11,8 +11,8 @@ Part of Issue #381 - God Class Refactoring
 
 import logging
 from typing import Any
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from enhanced_memory_manager_async import get_async_enhanced_memory_manager
 
 from .models import MultiModalInput, ProcessingResult

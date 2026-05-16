@@ -46,12 +46,12 @@ from api.schemas_analytics import (
 from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 
 # LLM Service for real code generation
 from services.llm_service import get_llm_service
-from autobot_shared.logging_manager import get_logger
 
 LLM_INTERFACE_AVAILABLE = True
 

@@ -28,11 +28,11 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from knowledge.ownership import VisibilityLevel
 from knowledge.search_filters import extract_user_context_from_request
 from knowledge_factory import get_or_create_knowledge_base
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

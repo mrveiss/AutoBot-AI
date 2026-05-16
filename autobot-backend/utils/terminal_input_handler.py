@@ -14,13 +14,12 @@ import os
 import queue
 import sys
 import threading
-
-from autobot_shared.ssot_config import config
 from contextlib import contextmanager
 from typing import Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_config import config
 from constants.network_constants import NetworkConstants
 from utils.service_registry import get_service_url
 

@@ -16,8 +16,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from pki.config import VM_DEFINITIONS, TLSConfig, TLSMode
 from pki.configurator import ServiceConfigurator
 from pki.distributor import CertificateDistributor

@@ -10,10 +10,10 @@ Contains individual optimization strategy implementations.
 
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from utils.performance_monitor import performance_monitor
 
 from .types import GPUCapabilities, GPUOptimizationConfig
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

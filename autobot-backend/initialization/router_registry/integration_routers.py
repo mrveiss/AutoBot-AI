@@ -13,6 +13,7 @@ Issue #4203: Consolidates integration routers into a dedicated registry module.
 
 import importlib
 from typing import List, Tuple
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

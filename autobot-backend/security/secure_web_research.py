@@ -12,11 +12,12 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, FrozenSet, Optional
 
+from autobot_shared.logging_manager import get_logger
+
 from ..agents.web_researcher import ResearchType
 from ..agents.web_researcher import WebResearcher as WebResearchIntegration
 from .domain_security import DomainSecurityConfig, DomainSecurityManager
 from .input_validator import WebResearchInputValidator
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

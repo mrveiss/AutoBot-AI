@@ -16,7 +16,6 @@ Endpoints:
 
 import logging
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
@@ -29,6 +28,7 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.nl_database_service import get_nl_database_service
 
 logger = get_logger(__name__)

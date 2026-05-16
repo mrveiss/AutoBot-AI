@@ -14,10 +14,10 @@ import logging
 import os
 import uuid
 from typing import Any
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from skills.manifest_parser import parse_manifest
 from skills.models import SkillPackage, SkillState, TrustLevel
 

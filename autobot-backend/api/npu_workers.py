@@ -34,13 +34,13 @@ Endpoints:
 
 import logging
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL, DEFAULT_LLM_MODEL
 from autobot_shared.time_utils import utc_timestamp

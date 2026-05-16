@@ -9,7 +9,6 @@ and approval workflows.
 """
 
 from __future__ import annotations
-from autobot_shared.logging_manager import get_logger
 
 import ast
 import asyncio
@@ -20,6 +19,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.logging_manager import get_logger
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
 

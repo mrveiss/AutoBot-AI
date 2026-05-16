@@ -21,10 +21,11 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Set
-from autobot_shared.logging_manager import get_logger
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
+
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

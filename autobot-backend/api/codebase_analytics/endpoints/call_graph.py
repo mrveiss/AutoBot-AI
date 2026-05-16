@@ -11,13 +11,13 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from constants.ttl_constants import TTL_5_MINUTES
 from utils.io_executor import get_analytics_executor

@@ -11,14 +11,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests.fixtures import make_async_redis
-
 from services.llm_api_key_service import (
     LLMApiKeyRecord,
     LLMApiKeyService,
     _hash_raw_key,
     _parse_key_id_from_bearer,
 )
+from tests.fixtures import make_async_redis
 
 
 def _make_record(**kwargs) -> LLMApiKeyRecord:

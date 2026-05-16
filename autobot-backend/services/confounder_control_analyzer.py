@@ -22,10 +22,10 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -10,8 +10,8 @@ Based on Cursor's dependency detection patterns.
 
 from typing import Callable, Optional
 
-from tools.parallel.types import DependencyType, ToolCall
 from autobot_shared.logging_manager import get_logger
+from tools.parallel.types import DependencyType, ToolCall
 
 logger = get_logger(__name__)
 

@@ -13,6 +13,7 @@ module can be imported without triggering the full backend stack.
 """
 
 import logging
+
 from autobot_shared.logging_manager import get_logger
 
 from .types import AgentCapabilities, AgentCard, AgentSkill

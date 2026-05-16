@@ -8,15 +8,15 @@ Configuration loading and merging logic.
 
 import json
 import os
-from autobot_shared.ssot_config import config
 from pathlib import Path
 from typing import Any, Dict, List
 
 import yaml
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from config.defaults import get_default_config
 from constants.threshold_constants import StringParsingConstants
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

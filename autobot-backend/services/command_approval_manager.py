@@ -25,8 +25,8 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from secure_command_executor import CommandRisk
 from type_defs.common import Metadata
 

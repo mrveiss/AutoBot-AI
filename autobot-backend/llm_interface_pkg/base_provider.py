@@ -14,8 +14,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from .models import LLMRequest, LLMResponse
 from autobot_shared.logging_manager import get_logger
+
+from .models import LLMRequest, LLMResponse
 
 logger = get_logger(__name__)
 

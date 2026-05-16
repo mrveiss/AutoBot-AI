@@ -42,11 +42,11 @@ except ImportError:
         """Stub raised when docker SDK is not installed."""
 
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_optional_singleton
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.ttl_constants import TTL_1_HOUR
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -12,7 +12,6 @@ Includes:
 """
 
 import logging
-from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -29,6 +28,7 @@ from api.schemas_system import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from enhanced_security_layer import EnhancedSecurityLayer
 from security.domain_security import get_domain_security_manager
 from security.threat_intelligence import ThreatLevel, get_threat_intelligence_service

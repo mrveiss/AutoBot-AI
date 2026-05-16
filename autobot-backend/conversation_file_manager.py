@@ -17,8 +17,6 @@ import asyncio
 import hashlib
 import importlib
 import json
-from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
 import sqlite3
 import uuid
 from dataclasses import dataclass
@@ -33,7 +31,9 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import RedisError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
+from autobot_shared.ssot_config import config
 from config import unified_config_manager
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_1_HOUR

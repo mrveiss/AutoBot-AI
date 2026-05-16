@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional, FrozenSet
+from typing import Dict, FrozenSet, List, Optional
 
 # ============================================================================
 # API CONSTANTS
@@ -65,15 +65,17 @@ ERR_INVALID_TOKEN = "Invalid token"
 # MODEL CONSTANTS (imported from ssot_config)
 # ============================================================================
 
+from autobot_shared.ssot_config import CLASSIFICATION_MODEL as SSOT_CLASSIFICATION_MODEL
 from autobot_shared.ssot_config import (
-    CLASSIFICATION_MODEL as SSOT_CLASSIFICATION_MODEL,
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_LLM_MODEL,
-    INSTRUCTION_MODEL as SSOT_INSTRUCTION_MODEL,
-    LIGHT_PROCESSING_MODEL as SSOT_LIGHT_PROCESSING_MODEL,
-    QUALITY_MODEL as SSOT_QUALITY_MODEL,
-    ROUTING_MODEL as SSOT_ROUTING_MODEL,
-    SYSTEM_MODEL as SSOT_SYSTEM_MODEL,
+)
+from autobot_shared.ssot_config import INSTRUCTION_MODEL as SSOT_INSTRUCTION_MODEL
+from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL as SSOT_LIGHT_PROCESSING_MODEL
+from autobot_shared.ssot_config import QUALITY_MODEL as SSOT_QUALITY_MODEL
+from autobot_shared.ssot_config import ROUTING_MODEL as SSOT_ROUTING_MODEL
+from autobot_shared.ssot_config import SYSTEM_MODEL as SSOT_SYSTEM_MODEL
+from autobot_shared.ssot_config import (
     config,
 )
 

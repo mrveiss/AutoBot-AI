@@ -20,7 +20,6 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -37,6 +36,7 @@ from api.schemas_knowledge import (
 )
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

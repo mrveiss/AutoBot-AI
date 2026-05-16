@@ -14,11 +14,11 @@ import os
 import ssl
 import urllib.parse
 from pathlib import Path
-from autobot_shared.logging_manager import get_logger
 
 from celery import Celery
 from celery.schedules import crontab
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager

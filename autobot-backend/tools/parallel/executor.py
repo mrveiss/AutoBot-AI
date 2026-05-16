@@ -13,6 +13,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional
 
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.code_generation.diff import DiffGenerator
 from constants.status_enums import TaskStatus
 from constants.threshold_constants import BatchConfig, RetryConfig
@@ -25,7 +26,6 @@ from events.types import (
 )
 from tools.parallel.analyzer import DependencyAnalyzer
 from tools.parallel.types import ExecutionMetrics, ToolCall
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

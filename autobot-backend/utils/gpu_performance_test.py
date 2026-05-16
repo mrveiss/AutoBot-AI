@@ -4,7 +4,6 @@ Performance test for AutoBot GPU optimization
 Tests semantic chunking performance and identifies optimization opportunities.
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import os
 import sys
@@ -12,6 +11,8 @@ import time
 
 import psutil
 import torch
+
+from autobot_shared.ssot_config import config
 
 # Add AutoBot to path
 sys.path.insert(0, config.project_root)

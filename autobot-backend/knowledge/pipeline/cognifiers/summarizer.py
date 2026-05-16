@@ -11,10 +11,10 @@ Issue #2027: RAPTOR recursive clustering for multi-level retrieval.
 import logging
 from typing import Dict, List, Tuple
 from uuid import UUID
-from autobot_shared.logging_manager import get_logger
 
 import numpy as np
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import (
     build_entity_map,

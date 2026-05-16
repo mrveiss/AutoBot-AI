@@ -30,8 +30,8 @@ from api.schemas_workflows import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from type_defs.common import Metadata
 from autobot_shared.logging_manager import get_logger
+from type_defs.common import Metadata
 
 logger = get_logger(__name__)
 router = APIRouter(

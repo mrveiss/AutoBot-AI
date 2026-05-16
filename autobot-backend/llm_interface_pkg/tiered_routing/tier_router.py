@@ -12,10 +12,11 @@ Selects the appropriate model tier based on task complexity scoring.
 import logging
 from typing import Dict, List, Optional, Tuple
 
+from autobot_shared.logging_manager import get_logger
+
 from ..optimization.model_inspector import inspect_model
 from .complexity_scorer import TaskComplexityScorer
 from .tier_config import ComplexityResult, TierConfig, TierMetrics
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

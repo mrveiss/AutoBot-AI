@@ -16,13 +16,13 @@ Related Issue: #964 - Multi-profile personality system
 import json
 import os
 import uuid
-from autobot_shared.ssot_config import config
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from autobot_shared.time_utils import now_utc
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+from autobot_shared.time_utils import now_utc
 
 logger = get_logger(__name__)
 

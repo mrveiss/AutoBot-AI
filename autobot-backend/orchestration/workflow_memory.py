@@ -43,9 +43,9 @@ ensuring they do not race on a single key when ordering matters.
 import json
 from typing import Any, Dict, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from constants.ttl_constants import TTL_1_HOUR
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

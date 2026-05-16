@@ -29,9 +29,9 @@ from api.schemas_code import (
 )
 from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.logging_manager import get_logger
 
 router = APIRouter()
 logger = get_logger(__name__)

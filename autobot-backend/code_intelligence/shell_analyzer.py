@@ -16,8 +16,8 @@ import logging
 import re
 from pathlib import Path
 from typing import Dict, List, Set, Tuple
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.base_analyzer import (
     AnalysisIssue,
     BaseLanguageAnalyzer,

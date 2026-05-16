@@ -18,13 +18,13 @@ framework and existing AutoBot components, including:
 import asyncio
 import logging
 from typing import Any, Callable, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import redis.asyncio as redis
 from fastapi import APIRouter, BackgroundTasks, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from constants.network_constants import ServiceURLs
 from constants.threshold_constants import TimingConstants
 from utils.catalog_http_exceptions import (

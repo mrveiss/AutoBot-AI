@@ -22,9 +22,9 @@ from api.schemas_system import VncProxyStatusResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
-from autobot_shared.logging_manager import get_logger
 
 router = APIRouter()
 logger = get_logger(__name__)

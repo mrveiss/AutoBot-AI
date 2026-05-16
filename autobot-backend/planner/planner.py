@@ -14,6 +14,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.threshold_constants import (
     BatchConfig,
@@ -23,7 +24,6 @@ from constants.threshold_constants import (
 )
 from events.types import create_plan_event
 from planner.types import ExecutionPlan, PlanStatus, PlanStep, StepStatus
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

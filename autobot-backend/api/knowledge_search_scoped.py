@@ -8,7 +8,6 @@ Issue #679: Permission-filtered knowledge search that respects hierarchical acce
 """
 
 import logging
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -19,6 +18,7 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from knowledge.search_filters import (
     augment_search_request_with_permissions,
     extract_user_context_from_request,

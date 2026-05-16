@@ -12,10 +12,10 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 from ..storage import get_redis_connection
 from .shared import _in_memory_storage
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

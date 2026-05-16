@@ -14,6 +14,7 @@ import asyncio
 import threading
 from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.base import KnowledgeBaseCore
 from knowledge.bulk import BulkOperationsMixin
 from knowledge.categories import CategoriesMixin
@@ -28,7 +29,6 @@ from knowledge.stats import StatsMixin
 from knowledge.suggestions import SuggestionsMixin
 from knowledge.tags import TagsMixin
 from knowledge.versioning import VersioningMixin
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -11,11 +11,11 @@ hook invocations across all registered extensions.
 import threading
 from typing import Any, Dict, List, Optional, Type
 
-from extensions.base import Extension, HookContext
-from autobot_shared.plugin_sdk.extension_manifest import ExtensionManifest
-from extensions.hooks import HookPoint
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.plugin_sdk.extension_manifest import ExtensionManifest
 from autobot_shared.plugin_sdk.unified_registry import get_unified_registry
+from extensions.base import Extension, HookContext
+from extensions.hooks import HookPoint
 
 logger = get_logger(__name__)
 

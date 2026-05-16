@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
 from services.autoresearch.config import AutoResearchConfig
 from services.autoresearch.models import (
     Experiment,
@@ -22,7 +23,6 @@ from services.autoresearch.models import (
     HyperParams,
 )
 from services.autoresearch.store import ExperimentStore
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

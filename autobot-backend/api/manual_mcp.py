@@ -15,7 +15,6 @@ import asyncio
 import json
 import logging
 from typing import List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends
 
@@ -27,6 +26,7 @@ from api.schemas_code import (
 from api.schemas_common import DataResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from services.man_page_parser import ManPageContent, get_man_page_content
 

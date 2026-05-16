@@ -17,9 +17,9 @@ import json
 import logging
 import time
 from typing import Any, Dict, List
-from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_1_HOUR
 
 # Issue #394: Import from architectural_analysis package

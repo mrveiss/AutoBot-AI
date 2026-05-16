@@ -26,10 +26,10 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from knowledge_base_factory import get_knowledge_base
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -15,8 +15,8 @@ import logging
 import time
 from datetime import datetime, timezone
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 from constants.threshold_constants import TimingConstants

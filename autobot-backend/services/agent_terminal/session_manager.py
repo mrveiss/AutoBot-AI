@@ -12,8 +12,8 @@ import json
 import logging
 import uuid
 from typing import Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
 from services.command_approval_manager import AgentRole
 from type_defs.common import Metadata

@@ -10,12 +10,12 @@ Handles workflow control actions (pause, resume, cancel, approve, skip).
 from datetime import datetime, timezone
 from typing import Dict
 
+from autobot_shared.logging_manager import get_logger
 from monitoring.prometheus_metrics import get_metrics_manager
 
 from .executor import WorkflowExecutor
 from .messaging import WorkflowMessenger
 from .models import ActiveWorkflow, WorkflowControlRequest
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

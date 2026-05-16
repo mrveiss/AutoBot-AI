@@ -13,6 +13,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+
 from autobot_shared.logging_manager import get_logger
 
 from .types import CodeLocation, ComplexityHotspot, PatternSeverity

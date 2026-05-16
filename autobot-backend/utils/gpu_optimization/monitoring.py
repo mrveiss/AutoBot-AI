@@ -11,10 +11,10 @@ Contains GPU monitoring and efficiency calculation functionality.
 import time
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from utils.performance_monitor import performance_monitor
 
 from .types import DEFAULT_PERFORMANCE_BASELINES, GPUCapabilities
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -16,12 +16,12 @@ import logging
 import sys
 from pathlib import Path
 from typing import Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

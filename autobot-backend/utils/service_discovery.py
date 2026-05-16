@@ -14,11 +14,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH, PATH_OLLAMA_TAGS
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PATH

@@ -12,11 +12,11 @@ from typing import Any, Dict, List, Union
 
 import aiosqlite
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
 from ..enums import MemoryCategory
 from ..models import MemoryEntry
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

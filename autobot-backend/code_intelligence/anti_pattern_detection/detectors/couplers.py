@@ -17,10 +17,11 @@ import ast
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
+from autobot_shared.logging_manager import get_logger
+
 from ..models import AntiPatternResult
 from ..severity_utils import get_feature_envy_severity, get_message_chain_severity
 from ..types import AntiPatternSeverity, AntiPatternType, Thresholds
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

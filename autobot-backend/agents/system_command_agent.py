@@ -9,11 +9,12 @@ terminal streaming
 
 import asyncio
 import os
-from autobot_shared.ssot_config import config
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from agents.interactive_terminal_agent import InteractiveTerminalAgent
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 from event_manager import get_event_manager
 from security.command_patterns import (
@@ -26,7 +27,6 @@ from security_layer import SecurityLayer
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

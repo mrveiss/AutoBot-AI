@@ -12,9 +12,10 @@ Contains keyword-based search functionality using Redis.
 import json
 from typing import Any, Dict, List, Optional, Set
 
+from autobot_shared.logging_manager import get_logger
+
 from .bm25 import BM25Scorer
 from .helpers import build_search_result, decode_redis_hash, matches_category
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

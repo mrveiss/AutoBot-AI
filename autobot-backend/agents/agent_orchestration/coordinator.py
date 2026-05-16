@@ -14,8 +14,8 @@ legacy agent routing and distributed agent communication protocols.
 import logging
 import uuid
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,

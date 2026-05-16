@@ -42,6 +42,7 @@ from api.schemas_code import (
 from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from code_intelligence.anti_pattern_detector import (
     AntiPatternDetector,
@@ -52,7 +53,6 @@ from code_intelligence.performance_analyzer import (
     PerformanceSeverity,
     get_performance_issue_types,
 )
-from autobot_shared.logging_manager import get_logger
 from code_intelligence.redis_optimizer import OptimizationSeverity, RedisOptimizer
 from code_intelligence.security_analyzer import (
     SecurityAnalyzer,

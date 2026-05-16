@@ -12,7 +12,6 @@ This module provides:
 Consolidated from chat.py and chat_enhanced.py per Issue #708.
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import json
 import logging
@@ -20,7 +19,9 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
+
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 # Phase 4 (#7590): feature flag — default-off; enable in staging then flip to default-on.
 # Reads env at import time (process restart required to change).

@@ -30,8 +30,8 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from utils.async_initializable import AsyncInitializable

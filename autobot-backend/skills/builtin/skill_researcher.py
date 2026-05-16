@@ -14,8 +14,8 @@ import json
 import logging
 import re
 from typing import Any, Dict, List
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from skills.base_skill import BaseSkill, SkillManifest
 
 logger = get_logger(__name__)

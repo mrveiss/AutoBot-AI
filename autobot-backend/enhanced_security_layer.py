@@ -6,7 +6,6 @@ Enhanced Security Layer with Command Execution Controls
 Integrates secure command execution with role-based permissions
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import datetime
 import json
@@ -14,9 +13,10 @@ import logging
 import os
 from datetime import timezone
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 # Import the centralized ConfigManager
 from config import config as global_config_manager

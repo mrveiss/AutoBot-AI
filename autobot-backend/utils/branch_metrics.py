@@ -13,9 +13,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc, parse_utc_iso
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

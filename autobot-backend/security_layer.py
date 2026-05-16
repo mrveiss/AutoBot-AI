@@ -1,7 +1,6 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-from autobot_shared.ssot_config import config
 import datetime
 import json
 import logging
@@ -11,9 +10,10 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from config import config as global_config_manager
 from constants.network_constants import NetworkConstants
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

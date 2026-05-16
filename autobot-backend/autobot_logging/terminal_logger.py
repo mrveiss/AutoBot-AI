@@ -16,9 +16,10 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, FrozenSet, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import aiofiles
+
+from autobot_shared.logging_manager import get_logger
 
 # Issue #765: Use centralized strip_ansi_codes from encoding_utils
 from utils.encoding_utils import strip_ansi_codes

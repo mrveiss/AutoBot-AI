@@ -30,13 +30,13 @@ import json
 import uuid
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
 
 from .tracing import TraceContext, TraceEvent, new_trace_id
 from .types import A2ATaskStatus, Task, TaskArtifact, TaskState
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

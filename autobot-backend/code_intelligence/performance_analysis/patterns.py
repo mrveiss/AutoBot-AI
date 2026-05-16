@@ -9,6 +9,7 @@ Contains pattern dictionaries for blocking I/O, database operations, and HTTP op
 """
 
 from typing import FrozenSet
+
 from autobot_shared.logging_manager import get_logger
 
 # Issue #380: Module-level frozenset for legacy DB operation fallback

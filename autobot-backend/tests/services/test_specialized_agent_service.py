@@ -11,10 +11,10 @@ of SpecializedAgentService, using tmp_path for filesystem isolation.
 import logging
 from pathlib import Path
 from unittest.mock import patch
-from autobot_shared.logging_manager import get_logger
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
 from services.specialized_agent_service import (
     SpecializedAgentService,
     _categorize_agent,

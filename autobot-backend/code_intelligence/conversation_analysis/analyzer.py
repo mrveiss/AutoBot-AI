@@ -12,8 +12,8 @@ import logging
 from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
 from .classifiers import IntentClassifier, ResponseClassifier

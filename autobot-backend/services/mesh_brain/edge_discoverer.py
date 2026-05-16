@@ -10,6 +10,7 @@ relationship types by asking an LLM to classify the pair of chunks.
 
 from dataclasses import dataclass
 from typing import Callable, Coroutine, Protocol
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)

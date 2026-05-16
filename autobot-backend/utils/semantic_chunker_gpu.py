@@ -20,8 +20,9 @@ Public API (preserved):
     - get_gpu_semantic_chunker()
 """
 
-from autobot_shared.ssot_config import config
 import os
+
+from autobot_shared.ssot_config import config
 
 # GPU optimization environment variables (must be set before torch import)
 config.cuda_launch_blocking = "0"  # Allow async CUDA operations

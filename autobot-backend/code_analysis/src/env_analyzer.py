@@ -8,9 +8,6 @@ Analyzes codebase for hardcoded values that should be environment variables
 
 from __future__ import annotations
 
-from autobot_shared.ssot_config import config
-from autobot_shared.logging_manager import get_logger
-
 import ast
 import json
 import logging
@@ -22,7 +19,8 @@ from pathlib import Path
 from typing import Any
 
 from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.ssot_config import QUALITY_MODEL
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import QUALITY_MODEL, config
 from autobot_shared.ssot_constants import TTL_1_HOUR
 
 # Issue #542: Handle imports for both standalone execution and backend import

@@ -13,11 +13,11 @@ diagnostic method used by ``api/adapters.py``.
 import logging
 import time
 from typing import List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_ollama_url
 from constants.api_constants import PATH_OLLAMA_TAGS
 

@@ -13,7 +13,6 @@ import logging
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 from fastapi import (
@@ -58,6 +57,7 @@ from auth_middleware import check_admin_permission
 # Import AutoBot monitoring system
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_config
 from config.registry import ConfigRegistry
 

@@ -21,9 +21,10 @@ Usage:
 
 from typing import Callable, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
+
 from .coordinator import CacheCoordinator, get_cache_coordinator
 from .protocols import CacheProtocol
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

@@ -24,8 +24,8 @@ from api.schemas_agent import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from services.personality_service import SUPPORTED_LANGUAGES, get_personality_manager
 from autobot_shared.logging_manager import get_logger
+from services.personality_service import SUPPORTED_LANGUAGES, get_personality_manager
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["personality"])

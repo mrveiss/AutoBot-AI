@@ -5,8 +5,9 @@
 
 from typing import Any, Dict
 
-from .base_adapter import BaseAdapter, NormalizedResponse, UnifiedMessage
 from autobot_shared.logging_manager import get_logger
+
+from .base_adapter import BaseAdapter, NormalizedResponse, UnifiedMessage
 
 logger = get_logger(__name__)
 

@@ -26,16 +26,15 @@ import logging
 import os
 import ssl
 import time
-from autobot_shared.ssot_config import config
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional
-from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL, config
 from constants.ttl_constants import TTL_5_MINUTES
 
 logger = get_logger(__name__)

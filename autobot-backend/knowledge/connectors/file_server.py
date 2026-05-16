@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
     ChangeInfo,
@@ -25,7 +26,6 @@ from knowledge.connectors.models import (
     SourceInfo,
 )
 from knowledge.connectors.registry import ConnectorRegistry
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

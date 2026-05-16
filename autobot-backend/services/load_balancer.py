@@ -29,11 +29,11 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import RetryConfig, TimingConstants
 from event_manager import get_event_manager
 from npu_integration import NPUWorkerClient
 from type_defs.common import Metadata
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

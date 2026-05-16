@@ -10,6 +10,7 @@ Main orchestrator that coordinates all workflow components.
 import uuid
 from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from knowledge_base import KnowledgeBase
 from orchestrator import get_orchestrator_sync as get_orchestrator
 from services.llm_service import get_llm_service
@@ -27,7 +28,6 @@ from .optimizer import WorkflowOptimizer
 from .risk_analyzer import RiskAnalyzer
 from .step_generator import StepGenerator
 from .templates import TemplateManager
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

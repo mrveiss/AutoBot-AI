@@ -30,11 +30,12 @@ remote endpoints on every request.
 
 import logging
 import os
-from autobot_shared.ssot_config import config
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
+
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 

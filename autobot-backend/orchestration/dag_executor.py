@@ -21,7 +21,6 @@ DAGExecutor
     have no shared join node are executed concurrently via asyncio.gather.
 """
 
-from autobot_shared.ssot_config import config
 import asyncio
 import logging
 import os
@@ -30,8 +29,9 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional, Set
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.status_enums import TaskStatus
 
 logger = get_logger(__name__)

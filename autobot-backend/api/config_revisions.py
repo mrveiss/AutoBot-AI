@@ -17,9 +17,9 @@ from api.schemas_system import ConfigRevisionResponse
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from services.config_revision_service import ConfigRevisionService
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter()

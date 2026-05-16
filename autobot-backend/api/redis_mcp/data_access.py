@@ -10,11 +10,11 @@ All handlers use autobot_shared.redis_client — no direct redis.Redis().
 
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value as _decode
 from constants.ttl_constants import TTL_24_HOURS
 from type_defs.common import Metadata
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

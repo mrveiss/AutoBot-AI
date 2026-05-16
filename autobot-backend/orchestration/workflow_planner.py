@@ -10,11 +10,12 @@ Contains workflow planning, step estimation, and capability determination.
 
 from typing import Any, Dict, List, Optional, Set
 
+from autobot_shared.logging_manager import get_logger
+
 # Issue #673: Import from autobot_types to avoid circular import with src.orchestrator
 from autobot_types import TaskComplexity
 
 from .types import AgentCapability, AgentProfile
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

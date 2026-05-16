@@ -12,10 +12,10 @@ import asyncio
 import time
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
 from .types import GPUCapabilities
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

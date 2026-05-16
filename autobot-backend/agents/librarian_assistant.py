@@ -16,12 +16,12 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from config import config
 from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
 from utils.service_registry import get_service_url
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

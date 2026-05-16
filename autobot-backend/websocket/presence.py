@@ -15,8 +15,8 @@ from typing import Dict, List, Set
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
 
 logger = get_logger(__name__)
 

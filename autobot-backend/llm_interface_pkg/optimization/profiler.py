@@ -20,7 +20,6 @@ Usage:
     profiler.log_summary()
 """
 
-from autobot_shared.ssot_config import config
 import json
 import logging
 import os
@@ -28,7 +27,9 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 

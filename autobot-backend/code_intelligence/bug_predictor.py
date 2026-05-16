@@ -36,9 +36,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

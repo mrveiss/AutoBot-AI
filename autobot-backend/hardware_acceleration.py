@@ -10,15 +10,15 @@ Optimizes model execution across different hardware targets.
 
 import logging
 import os
-from autobot_shared.ssot_config import config
 import platform
 import subprocess  # nosec B404 - hardware detection requires subprocess
 from typing import Any, Dict
-from autobot_shared.logging_manager import get_logger
 
 import psutil
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_config import config
 from config import config_manager
 
 logger = get_logger(__name__)

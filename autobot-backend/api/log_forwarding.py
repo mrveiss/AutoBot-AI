@@ -21,12 +21,12 @@ import socket
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 

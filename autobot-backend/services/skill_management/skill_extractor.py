@@ -14,8 +14,8 @@ import json
 import logging
 from dataclasses import dataclass
 from typing import Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from services.ai_stack_client import AIStackClient, AIStackError
 
 logger = get_logger(__name__)

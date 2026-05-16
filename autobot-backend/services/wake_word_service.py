@@ -20,8 +20,8 @@ try:
 except ImportError:
     _psutil = None  # psutil optional – CPU monitoring disabled without it
 
-from type_defs.common import Metadata
 from autobot_shared.logging_manager import get_logger
+from type_defs.common import Metadata
 
 logger = get_logger(__name__)
 

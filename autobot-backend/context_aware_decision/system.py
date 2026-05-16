@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
+from autobot_shared.logging_manager import get_logger
 from enhanced_memory_manager_async import TaskPriority
 from memory import EnhancedMemoryManager
 from task_execution_tracker import get_task_tracker
@@ -24,7 +25,6 @@ from .decision_engine import DecisionEngine
 from .models import Decision, DecisionContext
 from .time_provider import TimeProvider
 from .types import DecisionType
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

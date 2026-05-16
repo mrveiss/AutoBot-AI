@@ -16,8 +16,8 @@ import logging
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_30_DAYS

@@ -36,12 +36,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
+
 from .archive import Archive
 from .auto_research_agent import ApprovalGate
 from .config import AutoResearchConfig
 from .meta_agent import MetaPatch
 from .models import VariantArchiveEntry
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

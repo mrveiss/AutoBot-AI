@@ -13,8 +13,8 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
-from autobot_shared.logging_manager import get_logger
 
+from autobot_shared.logging_manager import get_logger
 from chat_workflow.models import AgentContext
 from utils.errors import RepairableException
 

@@ -11,10 +11,10 @@ Contains execution strategy implementations for workflow orchestration.
 import asyncio
 from typing import Any, Dict, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
 from .types import AgentTask, ExecutionStrategy, WorkflowDependencies, WorkflowPlan
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
