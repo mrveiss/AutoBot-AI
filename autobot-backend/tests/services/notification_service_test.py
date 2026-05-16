@@ -15,6 +15,7 @@ from services.notification_service import (
     NotificationService,
     NotificationStore,
 )
+from tests.fixtures.mocks import make_async_redis
 
 # ===========================================================================
 # Helpers
@@ -33,17 +34,6 @@ def _make_config(**kwargs) -> NotificationConfig:
     )
     defaults.update(kwargs)
     return NotificationConfig(**defaults)
-
-
-def _make_async_redis(lrange_return=None, get_return=None):
-    """Build an async Redis mock suitable for NotificationStore tests."""
-    mock = AsyncMock()
-    mock.lpush = AsyncMock(return_value=1)
-    mock.expire = AsyncMock(return_value=True)
-    mock.set = AsyncMock(return_value=True)
-    mock.lrange = AsyncMock(return_value=lrange_return or [])
-    mock.get = AsyncMock(return_value=get_return)
-    return mock
 
 
 # ===========================================================================
@@ -414,7 +404,7 @@ class TestNotificationStoreStore:
     @pytest.mark.asyncio
     async def test_returns_notification_id_on_success(self):
         store = NotificationStore()
-        mock_redis = _make_async_redis()
+        mock_redis = make_async_redis()
         with patch(
             "services.notification_service.get_redis_client",
             new_callable=AsyncMock,
@@ -432,7 +422,7 @@ class TestNotificationStoreStore:
     @pytest.mark.asyncio
     async def test_calls_lpush_with_list_key(self):
         store = NotificationStore()
-        mock_redis = _make_async_redis()
+        mock_redis = make_async_redis()
         with patch(
             "services.notification_service.get_redis_client",
             new_callable=AsyncMock,
@@ -467,7 +457,7 @@ class TestNotificationStoreStore:
     @pytest.mark.asyncio
     async def test_returns_none_on_redis_error(self):
         store = NotificationStore()
-        mock_redis = _make_async_redis()
+        mock_redis = make_async_redis()
         mock_redis.lpush = AsyncMock(side_effect=ConnectionError("redis gone"))
         with patch(
             "services.notification_service.get_redis_client",
@@ -487,7 +477,7 @@ class TestNotificationStoreStore:
                 stored_records.append(json.loads(value))
             return True
 
-        mock_redis = _make_async_redis()
+        mock_redis = make_async_redis()
         mock_redis.set = AsyncMock(side_effect=_capture_set)
 
         with patch(
@@ -532,7 +522,7 @@ class TestNotificationStoreList:
             "read": False,
         }
         raw = [json.dumps(record).encode()]
-        mock_redis = _make_async_redis(lrange_return=raw)
+        mock_redis = make_async_redis(lrange_returns=raw)
         with patch(
             "services.notification_service.get_redis_client",
             new_callable=AsyncMock,
@@ -556,7 +546,7 @@ class TestNotificationStoreList:
     @pytest.mark.asyncio
     async def test_limit_is_passed_to_lrange(self):
         store = NotificationStore()
-        mock_redis = _make_async_redis()
+        mock_redis = make_async_redis()
         with patch(
             "services.notification_service.get_redis_client",
             new_callable=AsyncMock,
@@ -569,7 +559,7 @@ class TestNotificationStoreList:
     async def test_malformed_record_is_skipped(self):
         store = NotificationStore()
         raw = [b"not-json", json.dumps({"id": "ok"}).encode()]
-        mock_redis = _make_async_redis(lrange_return=raw)
+        mock_redis = make_async_redis(lrange_returns=raw)
         with patch(
             "services.notification_service.get_redis_client",
             new_callable=AsyncMock,
@@ -582,7 +572,7 @@ class TestNotificationStoreList:
     @pytest.mark.asyncio
     async def test_returns_empty_list_on_redis_error(self):
         store = NotificationStore()
-        mock_redis = _make_async_redis()
+        mock_redis = make_async_redis()
         mock_redis.lrange = AsyncMock(side_effect=ConnectionError("redis gone"))
         with patch(
             "services.notification_service.get_redis_client",
@@ -615,7 +605,7 @@ class TestNotificationStoreMarkRead:
     @pytest.mark.asyncio
     async def test_returns_true_on_success(self):
         store = NotificationStore()
-        mock_redis = _make_async_redis(get_return=self._make_record())
+        mock_redis = make_async_redis(get_returns=self._make_record())
         with patch(
             "services.notification_service.get_redis_client",
             new_callable=AsyncMock,
@@ -633,7 +623,7 @@ class TestNotificationStoreMarkRead:
             written_records.append(json.loads(value))
             return True
 
-        mock_redis = _make_async_redis(get_return=self._make_record())
+        mock_redis = make_async_redis(get_returns=self._make_record())
         mock_redis.set = AsyncMock(side_effect=_capture_set)
 
         with patch(
@@ -649,7 +639,7 @@ class TestNotificationStoreMarkRead:
     @pytest.mark.asyncio
     async def test_returns_false_when_record_not_found(self):
         store = NotificationStore()
-        mock_redis = _make_async_redis(get_return=None)
+        mock_redis = make_async_redis(get_returns=None)
         with patch(
             "services.notification_service.get_redis_client",
             new_callable=AsyncMock,
@@ -672,7 +662,7 @@ class TestNotificationStoreMarkRead:
     @pytest.mark.asyncio
     async def test_returns_false_on_redis_error(self):
         store = NotificationStore()
-        mock_redis = _make_async_redis(get_return=self._make_record())
+        mock_redis = make_async_redis(get_returns=self._make_record())
         mock_redis.set = AsyncMock(side_effect=ConnectionError("redis gone"))
         with patch(
             "services.notification_service.get_redis_client",
