@@ -2,7 +2,7 @@
   <div class="session-manager">
     <!-- Header -->
     <div class="manager-header">
-      <div class="flex items-center space-x-3">
+      <div class="flex items-center gap-3">
         <i class="fas fa-window-restore text-green-600 text-xl"></i>
         <div>
           <h3 class="text-lg font-semibold text-autobot-text-primary">{{ $t('browser.sessionManager.title') }}</h3>
@@ -10,7 +10,7 @@
         </div>
       </div>
 
-      <div class="flex items-center space-x-2">
+      <div class="flex items-center gap-2">
         <BaseButton
           variant="primary"
           size="sm"
@@ -91,7 +91,7 @@
         >
           <!-- Session Header -->
           <div class="session-header">
-            <div class="flex items-center space-x-3 flex-1">
+            <div class="flex items-center gap-3 flex-1">
               <div class="session-icon" :class="getSessionIconClass(session.status)">
                 <i :class="getSessionIcon(session.status)"></i>
               </div>
@@ -101,7 +101,7 @@
               </div>
             </div>
 
-            <div class="flex items-center space-x-2">
+            <div class="flex items-center gap-2">
               <StatusBadge :variant="getStatusVariant(session.status)" size="small">
                 {{ session.status.toUpperCase() }}
               </StatusBadge>

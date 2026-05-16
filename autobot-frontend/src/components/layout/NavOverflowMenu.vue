@@ -5,7 +5,7 @@
       aria-haspopup="menu"
       :aria-label="$t('nav.moreItems')"
       :class="[
-        'px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-1',
+        'px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-1',
         hasActiveItem
           ? 'bg-autobot-primary text-white'
           : 'text-autobot-text-primary hover:bg-autobot-bg-tertiary'
@@ -43,7 +43,7 @@
           role="menuitem"
           active-class=""
           exact-active-class="text-autobot-primary"
-          class="flex items-center space-x-2 px-3 py-2 text-sm transition-colors duration-150 hover:bg-autobot-bg-tertiary text-autobot-text-primary"
+          class="flex items-center gap-2 px-3 py-2 text-sm transition-colors duration-150 hover:bg-autobot-bg-tertiary text-autobot-text-primary"
           @click="close"
         >
           <svg
