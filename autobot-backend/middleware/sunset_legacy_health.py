@@ -21,16 +21,14 @@ prior notice.
 
 Issue #6919: Logging and Prometheus metering added so external audits can
 identify which scrapers are still calling deprecated endpoints.  Each hit
-is logged at WARNING level (deprecated API surface being called) and
-increments a ``autobot_legacy_health_hits_total`` counter labelled by
-``path``.  This allows Prometheus queries such as
-``topk(10, autobot_legacy_health_hits_total)`` to surface active scrapers
-during the sunset window.
+is logged at INFO level and increments
+``autobot_legacy_health_hits_total{path, user_agent}`` so operators can
+query ``sum by (path, user_agent) (autobot_legacy_health_hits_total)``
+to identify the caller and the targeted endpoint.
 """
 
 from __future__ import annotations
 
-from prometheus_client import Counter
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -54,13 +52,30 @@ _CANONICAL_PATHS = frozenset(
     }
 )
 
-# Issue #6919: Prometheus counter — one time-series per deprecated path so
-# Prometheus / Grafana can show which endpoints are still being scraped.
-_LEGACY_HEALTH_HITS = Counter(
-    "autobot_legacy_health_hits_total",
-    "Number of requests to deprecated /api/<module>/health endpoints (Issue #6919)",
-    ["path"],
-)
+
+class _NoopCounter:
+    """Fallback counter used when prometheus_client is unavailable."""
+
+    def labels(self, **_kwargs: object) -> "_NoopCounter":
+        return self
+
+    def inc(self, _amount: int = 1) -> None:
+        return None
+
+
+try:  # pragma: no cover - exercised in environments with the dep
+    from prometheus_client import Counter as _PromCounter
+
+    autobot_legacy_health_hits_total: _NoopCounter | _PromCounter = _PromCounter(
+        "autobot_legacy_health_hits_total",
+        (
+            "Count of requests to deprecated /api/<module>/health endpoints "
+            "during grace period (#6919). Query over 14 days before deletion."
+        ),
+        ("path", "user_agent"),
+    )
+except Exception:  # pragma: no cover - defensive fallback
+    autobot_legacy_health_hits_total = _NoopCounter()
 
 
 def _is_legacy_module_health(path: str) -> bool:
@@ -77,12 +92,7 @@ def _is_legacy_module_health(path: str) -> bool:
 
 
 class SunsetLegacyHealthMiddleware(BaseHTTPMiddleware):
-    """Add ``Sunset`` / ``Deprecation`` / ``Link`` headers to legacy /health responses.
-
-    Issue #6919: Also logs each hit at WARNING level and increments a
-    per-path Prometheus counter so external audits can identify remaining
-    scrapers during the sunset window.
-    """
+    """Add ``Sunset`` / ``Deprecation`` / ``Link`` headers to legacy /health responses."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
         response = await call_next(request)
@@ -91,15 +101,8 @@ class SunsetLegacyHealthMiddleware(BaseHTTPMiddleware):
             response.headers["Sunset"] = SUNSET_DATE_HTTP
             response.headers["Deprecation"] = "true"
             response.headers["Link"] = '</api/system/health>; rel="successor-version"'
-
             client_ip = get_client_ip(request) or "unknown"
-            logger.warning(
-                "Deprecated legacy health endpoint called — migrate to /api/system/health "
-                "(sunset: %s). path=%s client_ip=%s",
-                SUNSET_DATE_HTTP,
-                path,
-                client_ip,
-            )
-            _LEGACY_HEALTH_HITS.labels(path=path).inc()
-
+            ua = request.headers.get("user-agent", "unknown")[:120]
+            logger.info("Legacy health hit: %s from %s (%s)", path, client_ip, ua)
+            autobot_legacy_health_hits_total.labels(path=path, user_agent=ua).inc()
         return response
