@@ -16,6 +16,7 @@ import yaml
 
 from autobot_shared.error_boundaries import ErrorCategory
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.path_constants import PATH
 
 logger = get_logger(__name__)
@@ -419,27 +420,19 @@ class ErrorCatalog:
     Singleton error catalog loader with caching and validation
 
     Usage:
-        catalog = ErrorCatalog.get_instance()
+        catalog = get_error_catalog_instance()
         error = catalog.get_error("KB_0001")
         if error:
             logger.info("%s - Retry: %s", error.message, error.retry)
     """
 
-    _instance: "ErrorCatalog" | None = None
     _initialized: bool = False
 
     def __init__(self):
-        """Initialize error catalog (use get_instance() instead)"""
+        """Initialize error catalog (use get_error_catalog_instance() instead)"""
         self._catalog: Dict[str, ErrorDefinition] = {}
         self._raw_data: dict | None = None
         self._catalog_path: Path | None = None
-
-    @classmethod
-    def get_instance(cls) -> "ErrorCatalog":
-        """Get singleton instance of error catalog"""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
 
     def _resolve_catalog_path(self) -> Path | None:
         """Find error_messages.yaml searching backend static dir then infrastructure.
@@ -647,6 +640,10 @@ class ErrorCatalog:
         return self.load_catalog(self._catalog_path)
 
 
+get_error_catalog_instance = lazy_singleton(ErrorCatalog)
+"""Get the singleton ErrorCatalog instance (thread-safe)."""
+
+
 # Convenience functions for direct access
 def get_error(error_code: str) -> ErrorDefinition | None:
     """
@@ -663,7 +660,7 @@ def get_error(error_code: str) -> ErrorDefinition | None:
         if error:
             logger.info("%s - Status: %s", error.message, error.status_code)
     """
-    catalog = ErrorCatalog.get_instance()
+    catalog = get_error_catalog_instance()
     return catalog.get_error(error_code)
 
 
@@ -681,7 +678,7 @@ def get_error_message(error_code: str, default: str = "Unknown error") -> str:
     Example:
         message = get_error_message("LLM_0001", "LLM service unavailable")
     """
-    catalog = ErrorCatalog.get_instance()
+    catalog = get_error_catalog_instance()
     return catalog.get_error_message(error_code, default)
 
 
@@ -699,10 +696,10 @@ def validate_error_code(error_code: str) -> bool:
         if validate_error_code("AUTH_0001"):
             logger.info("Valid error code")
     """
-    catalog = ErrorCatalog.get_instance()
+    catalog = get_error_catalog_instance()
     return catalog.validate_code(error_code)
 
 
 # Pre-load catalog on module import
-_catalog_instance = ErrorCatalog.get_instance()
+_catalog_instance = get_error_catalog_instance()
 _catalog_instance.load_catalog()

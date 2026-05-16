@@ -28,6 +28,7 @@ from uuid import uuid4
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 
@@ -276,8 +277,6 @@ class NLDatabaseService:
     databases. Enforces read-only access and logs all queries for audit.
     """
 
-    _instance: "NLDatabaseService" | None = None
-
     def __init__(self) -> None:
         """Initialize the NLDatabaseService."""
         self._vanna: Any | None = None
@@ -286,13 +285,6 @@ class NLDatabaseService:
         self._local_schema: str = ""
         self._vanna_available = False
         self._initialized = False
-
-    @classmethod
-    def get_instance(cls) -> "NLDatabaseService":
-        """Get or create singleton instance."""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
 
     async def initialize(self) -> None:
         """Initialize Vanna.ai and train on local schema."""
@@ -773,6 +765,5 @@ class NLDatabaseService:
             logger.warning("Failed to save query history: %s", exc)
 
 
-def get_nl_database_service() -> NLDatabaseService:
-    """Get the singleton NLDatabaseService instance."""
-    return NLDatabaseService.get_instance()
+get_nl_database_service = lazy_singleton(NLDatabaseService)
+"""Get the singleton NLDatabaseService instance."""

@@ -11,6 +11,7 @@ Focuses on quick, natural interactions without complex reasoning.
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -361,19 +362,5 @@ For complex technical tasks, analysis, or system commands, you should "
         return len(message.split()) <= 10
 
 
-# Singleton instance (thread-safe)
-import threading
-
-_chat_agent_instance = None
-_chat_agent_lock = threading.Lock()
-
-
-def get_chat_agent() -> ChatAgent:
-    """Get the singleton Chat Agent instance (thread-safe)."""
-    global _chat_agent_instance
-    if _chat_agent_instance is None:
-        with _chat_agent_lock:
-            # Double-check after acquiring lock
-            if _chat_agent_instance is None:
-                _chat_agent_instance = ChatAgent()
-    return _chat_agent_instance
+get_chat_agent = lazy_singleton(ChatAgent)
+"""Get the singleton Chat Agent instance (thread-safe)."""

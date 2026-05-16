@@ -10,10 +10,10 @@ Handles code generation from natural language descriptions, code explanation,
 and multi-language programming support.
 """
 
-import threading
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -157,15 +157,5 @@ class CodeGenerationAgent(StandardizedAgent):
         return str(response)
 
 
-_code_generation_agent_instance = None
-_code_generation_agent_lock = threading.Lock()
-
-
-def get_code_generation_agent() -> CodeGenerationAgent:
-    """Get the singleton Code Generation Agent instance (thread-safe)."""
-    global _code_generation_agent_instance
-    if _code_generation_agent_instance is None:
-        with _code_generation_agent_lock:
-            if _code_generation_agent_instance is None:
-                _code_generation_agent_instance = CodeGenerationAgent()
-    return _code_generation_agent_instance
+get_code_generation_agent = lazy_singleton(CodeGenerationAgent)
+"""Get the singleton Code Generation Agent instance (thread-safe)."""
