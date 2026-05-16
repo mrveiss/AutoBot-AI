@@ -16,6 +16,7 @@ from datetime import datetime
 from functools import wraps
 from typing import Any, Dict, List, Optional
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
 import aiohttp
 import psutil
@@ -1464,7 +1465,7 @@ def _store_performance_in_redis(
                 ): time.time()
             },
         )
-        phase9_monitor.redis_client.expire(key, 3600)  # 1 hour retention
+        phase9_monitor.redis_client.expire(key, TTL_1_HOUR)  # 1 hour retention
     except Exception:
         logger.debug("Suppressed exception in try block", exc_info=True)
 

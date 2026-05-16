@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, List, Optional
 from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
+from autobot_shared.ssot_constants import TTL_24_HOURS
 from constants.ttl_constants import TTL_1_HOUR, TTL_5_MINUTES
 
 logger = get_logger(__name__)
@@ -473,7 +474,7 @@ class AdvancedCacheManager:
                 pipe.hincrby(stats_key, "misses", 1)
 
             pipe.hset(stats_key, "last_access", current_time)
-            pipe.expire(stats_key, 86400)  # Stats expire after 24 hours
+            pipe.expire(stats_key, TTL_24_HOURS)  # Stats expire after 24 hours
 
             await pipe.execute()
 

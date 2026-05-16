@@ -67,6 +67,9 @@ jobs:
       with:
         python-version: '3.12'
         cache: 'pip'
+        cache-dependency-path: |
+          requirements*.txt
+          autobot-backend/requirements*.txt
 
     - name: Install Python dependencies
       run: |
@@ -141,6 +144,9 @@ jobs:
       with:
         python-version: '3.12'
         cache: 'pip'
+        cache-dependency-path: |
+          requirements*.txt
+          autobot-backend/requirements*.txt
 
     - name: Install SAST tools
       run: |

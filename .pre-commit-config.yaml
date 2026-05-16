@@ -113,6 +113,24 @@ repos:
         stages: [pre-commit]
         description: "patch('src.…') silently no-ops — autobot-backend has no src/ package"
 
+  # AutoBot custom: regression-prevention for #6743 (chat-session TTL drift).
+  # The root cause was a literal `3600` in setex() with no env-var knob.
+  # This hook blocks any new literal integer/float in the TTL position of
+  # Redis calls (setex, expire, pexpire) and Cache.set(ttl=N).
+  # Use named constants from autobot_shared.ssot_constants (TTL_1_HOUR, etc.).
+  # Allowlist: autobot-backend/constants/ttl_constants.py and
+  # autobot_shared/ssot_constants.py (where the constants live).
+  - repo: local
+    hooks:
+      - id: no-literal-ttl-seconds
+        name: Ban literal TTL seconds in Redis calls (#6743 / #7080)
+        entry: pipeline-scripts/check_no_literal_ttl_seconds.py
+        language: python
+        files: \.py$
+        exclude: ^(autobot-backend/constants/ttl_constants\.py|autobot_shared/ssot_constants.*\.py)$
+        stages: [pre-commit]
+        description: "Use TTL_* named constants from autobot_shared.ssot_constants instead of literal ints in setex/expire/pexpire/Cache.set(ttl=)"
+
   # AutoBot custom: regression-prevention for #7150 git safe.directory migration.
   # When code_source/ is owned by `autobot` (cloned by install.sh) and the
   # Ansible playbook runs as root via sudo, git 2.35+ aborts read-only

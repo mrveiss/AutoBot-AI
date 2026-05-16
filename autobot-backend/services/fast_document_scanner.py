@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TTL_7_DAYS
 
 from services.man_page_parser import ManPageContent, ManPageParser
 
@@ -205,7 +206,7 @@ class FastDocumentScanner:
             },
         )
         # Expire after 7 days
-        self.redis.expire(cache_key, 604800)
+        self.redis.expire(cache_key, TTL_7_DAYS)
 
     def _check_file_changes(
         self,
@@ -303,7 +304,7 @@ class FastDocumentScanner:
         if commands_to_check:
             self.redis.delete(cache_key)
             self.redis.sadd(cache_key, *commands_to_check)
-            self.redis.expire(cache_key, 604800)  # 7 days
+            self.redis.expire(cache_key, TTL_7_DAYS)  # 7 days
 
         return changes
 

@@ -14,6 +14,7 @@ import uuid
 from typing import Optional
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_constants import TTL_1_HOUR
 from models.completion_context import CompletionContext
 from services.dependency_tracker import DependencyTracker
 from services.semantic_analyzer import SemanticAnalyzer
@@ -284,7 +285,7 @@ class ContextAnalyzer:
         try:
             self.redis_client.setex(
                 f"completion_context:{context.context_id}",
-                3600,
+                TTL_1_HOUR,
                 json.dumps(context.to_dict()),
             )
         except Exception as e:

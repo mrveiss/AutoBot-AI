@@ -15,6 +15,7 @@ import logging
 import time
 from functools import wraps
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
 logger = get_logger(__name__)
 
@@ -53,7 +54,7 @@ def _store_performance_in_redis(
                 ): time.time()
             },
         )
-        _redis_client.expire(key, 3600)  # 1 hour retention
+        _redis_client.expire(key, TTL_1_HOUR)  # 1 hour retention
     except Exception:
         logger.debug("Suppressed exception in try block", exc_info=True)
 
