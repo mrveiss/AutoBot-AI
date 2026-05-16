@@ -39,6 +39,7 @@ from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 
 from ..base_provider import BaseProvider
+from .cache_utils import sorted_for_cache
 
 logger = get_logger(__name__)
 
@@ -139,6 +140,7 @@ class OpenAIProvider(BaseProvider):
                     params["max_tokens"] = request.max_tokens
                 if request.stop:
                     params["stop"] = request.stop
+                params = sorted_for_cache(params)
                 response = await client.chat.completions.create(**params)
                 choice = response.choices[0]
                 processing_time = time.time() - start
@@ -197,6 +199,7 @@ class OpenAIProvider(BaseProvider):
             }
             if request.max_tokens:
                 params["max_tokens"] = request.max_tokens
+            params = sorted_for_cache(params)
             stream = await client.chat.completions.create(**params)
             async for chunk in stream:
                 delta = chunk.choices[0].delta.content

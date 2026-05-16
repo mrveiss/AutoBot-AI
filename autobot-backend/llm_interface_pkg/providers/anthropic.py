@@ -53,6 +53,7 @@ from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 
 from ..base_provider import BaseProvider
+from .cache_utils import sorted_for_cache
 
 logger = get_logger(__name__)
 
@@ -242,6 +243,7 @@ class AnthropicProvider(BaseProvider):
                 call_kwargs: Dict[str, Any] = dict(kwargs)
                 if extra_headers:
                     call_kwargs["extra_headers"] = extra_headers
+                call_kwargs = sorted_for_cache(call_kwargs)
 
                 response = await client.messages.create(**call_kwargs)
                 content = _extract_text_content(response.content, preserve_reasoning)
@@ -304,6 +306,7 @@ class AnthropicProvider(BaseProvider):
             call_kwargs: Dict[str, Any] = dict(kwargs)
             if extra_headers:
                 call_kwargs["extra_headers"] = extra_headers
+            call_kwargs = sorted_for_cache(call_kwargs)
 
             async with client.messages.stream(**call_kwargs) as stream:
                 async for text in stream.text_stream:
