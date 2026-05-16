@@ -33,6 +33,7 @@ from collections import deque
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -41,8 +42,8 @@ from services.tts_client import get_tts_client
 logger = get_logger(__name__)
 router = APIRouter()
 
-# Maximum TTS text length per chunk (characters)
-_MAX_TTS_CHUNK_CHARS = 200
+# Maximum TTS text length per chunk (characters). Override via AUTOBOT_TTS_MAX_CHUNK_CHARS.
+_MAX_TTS_CHUNK_CHARS = env_int_clamped("AUTOBOT_TTS_MAX_CHUNK_CHARS", 200, 50, 1000)
 
 
 def _split_text_for_tts(text: str) -> list[str]:
@@ -98,13 +99,7 @@ async def _cancel_pending_task(task: "asyncio.Task | None") -> None:
 # typical jitter without piling backlog. Override with AUTOBOT_TTS_PIPELINE_DEPTH
 # (clamped to 1..8 to prevent ops typos OOMing the worker).
 def _resolve_tts_pipeline_depth() -> int:
-    raw = config.tts_pipeline_depth
-    try:
-        value = int(raw)
-    except ValueError:
-        logger.warning("Invalid AUTOBOT_TTS_PIPELINE_DEPTH=%r; using 2", raw)
-        return 2
-    return max(1, min(8, value))
+    return env_int_clamped("AUTOBOT_TTS_PIPELINE_DEPTH", 2, 1, 8)
 
 
 _TTS_PIPELINE_DEPTH = _resolve_tts_pipeline_depth()
