@@ -275,6 +275,30 @@ server {
         proxy_set_header Host $host;
     }
 
+    # FastAPI OpenAPI docs (#6843 — without these, the SPA fallback serves
+    # index.html for /openapi.json /docs /redoc instead of the spec).
+    # Use `=` for /openapi.json (exact match) so it can't shadow real routes;
+    # `^~` for /docs and /redoc so prefix match takes priority over the SPA
+    # catch-all.
+    location = /openapi.json {
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    location ^~ /docs {
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    location ^~ /redoc {
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
 {% endif %}
 
     # Grafana Live WebSocket (must be before the general /grafana/ block)
