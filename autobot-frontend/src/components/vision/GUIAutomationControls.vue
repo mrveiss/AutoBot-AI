@@ -161,7 +161,7 @@
 import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
-import { useToast } from '@/composables/useToast';
+import { useNotificationBus } from '@/composables/useNotificationBus';
 import {
   visionMultimodalApiClient,
   type AutomationOpportunity,
@@ -171,7 +171,7 @@ import {
 
 const { t } = useI18n();
 const logger = createLogger('GUIAutomationControls');
-const { showToast } = useToast();
+const { showToast } = useNotificationBus();
 
 // Props
 const props = defineProps<{

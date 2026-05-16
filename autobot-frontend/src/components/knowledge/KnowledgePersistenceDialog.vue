@@ -256,7 +256,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useToast } from '@/composables/useToast';
+import { useNotificationBus } from '@/composables/useNotificationBus';
 import { useBatchSelection } from '@/composables/useBatchSelection';
 import { apiService } from '@/services/api';
 import { getApiBase } from '@/config/ssot-config';
@@ -289,7 +289,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'decisions-applied', 'chat-compiled']);
 
 // Composables
-const { showToast } = useToast();
+const { showToast } = useNotificationBus();
 
 // Reactive data
 const pendingItems = ref([]);

@@ -280,7 +280,7 @@ import { useVoiceConversation } from '@/composables/useVoiceConversation'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useAppStore } from '@/stores/useAppStore'
-import { useToast } from '@/composables/useToast'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 import { usePreferences } from '@/composables/usePreferences'
 import { useOverseerAgent } from '@/composables/useOverseerAgent'
 import ApiClient from '@/utils/ApiClient'
@@ -439,7 +439,7 @@ function closeVoicePanel(): void {
 }
 
 // Toast notifications
-const { showToast } = useToast()
+const { showToast } = useNotificationBus()
 const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
   showToast(message, type, type === 'error' ? 0 : type === 'warning' ? 6000 : 4000)
 }

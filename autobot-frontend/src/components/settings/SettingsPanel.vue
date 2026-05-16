@@ -77,7 +77,7 @@ const { t } = useI18n()
 
 // Import error handling composables
 import { useAsyncHandler } from '@/composables/useErrorHandler'
-import { useToast } from '@/composables/useToast'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 
 // Import sub-components
 import ErrorBoundary from '../common/ErrorBoundary.vue'
@@ -140,7 +140,7 @@ const cacheActivity = ref<CacheActivityItem[]>([])
 const cacheStats = ref<CacheStats | null>(null)
 
 // Toast notifications
-const { showToast } = useToast()
+const { showToast } = useNotificationBus()
 
 // Notification helper for useAsyncHandler
 const notify = (message: string, type: 'success' | 'error' | 'info') => {

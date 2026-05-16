@@ -657,7 +657,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
-import { useToast } from '@/composables/useToast';
+import { useNotificationBus } from '@/composables/useNotificationBus';
 import {
   useWorkflowBuilder,
   type WorkflowNode,
@@ -691,7 +691,7 @@ const route = useRoute();
 
 /** True when a child route (e.g. /automation/browser-automation) is active (#2368) */
 const isChildRoute = computed(() => route.matched.length > 1);
-const { showToast } = useToast();
+const { showToast } = useNotificationBus();
 
 // Section Types
 type SectionType =

@@ -350,7 +350,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useToast } from '@/composables/useToast'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 import { useGroupingMemo, useAggregationMemo } from '@/composables/useComputedMemo'
 import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
@@ -415,7 +415,7 @@ interface Pattern {
 }
 
 // State
-const { showToast } = useToast()
+const { showToast } = useNotificationBus()
 const loading = ref(false)
 const hasAnalyzed = ref(false)
 const selectedPath = ref('')

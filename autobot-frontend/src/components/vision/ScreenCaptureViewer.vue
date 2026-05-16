@@ -202,7 +202,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
-import { useToast } from '@/composables/useToast';
+import { useNotificationBus } from '@/composables/useNotificationBus';
 import { usePollingJob } from '@/composables/usePollingJob';
 import {
   visionMultimodalApiClient,
@@ -213,7 +213,7 @@ import {
 
 const { t } = useI18n();
 const logger = createLogger('ScreenCaptureViewer');
-const { showToast } = useToast();
+const { showToast } = useNotificationBus();
 
 // Emits
 const emit = defineEmits<{
