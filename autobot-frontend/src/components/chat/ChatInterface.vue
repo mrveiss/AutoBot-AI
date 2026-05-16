@@ -441,7 +441,7 @@ function closeVoicePanel(): void {
 // Toast notifications
 const { showToast } = useToast()
 const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
-  showToast(message, type, type === 'error' ? 5000 : 3000)
+  showToast(message, type, type === 'error' ? 0 : type === 'warning' ? 6000 : 4000)
 }
 
 // Issue #4414: multi-model compare panel toggle
