@@ -226,25 +226,25 @@ def configure_middleware(
     enable_validation: bool = True,
 ):
     """
-    Configure all middleware for FastAPI application
+        Configure all middleware for FastAPI application
 
-    Args:
-        app: FastAPI application instance
-        allow_origins: List of allowed CORS origins (default: load from config)
-        gzip_minimum_size: Minimum size for GZip compression (default: 1000 bytes)
-        enable_service_auth: Enable service authentication middleware (default: True)
-        enable_llm_awareness: Enable LLM awareness context injection (default: True)
-        enable_audit: Enable audit logging middleware (default: True)
-        enable_validation: Enable centralised input validation middleware (default: True)
+        Args:
+            app: FastAPI application instance
+            allow_origins: List of allowed CORS origins (default: load from config)
+            gzip_minimum_size: Minimum size for GZip compression (default: 1000 bytes)
+            enable_service_auth: Enable service authentication middleware (default: True)
+            enable_llm_awareness: Enable LLM awareness context injection (default: True)
+            enable_audit: Enable audit logging middleware (default: True)
+            enable_validation: Enable centralised input validation middleware (default: True)
 
-    Example:
-        ```python
-        from initialization.middleware import configure_middleware
-from autobot_shared.logging_manager import get_logger
+        Example:
+            ```python
+            from initialization.middleware import configure_middleware
+    from autobot_shared.logging_manager import get_logger
 
-        app = FastAPI()
-        configure_middleware(app)
-        ```
+            app = FastAPI()
+            configure_middleware(app)
+            ```
     """
     logger.info("Configuring middleware...")
 

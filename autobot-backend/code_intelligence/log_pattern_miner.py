@@ -818,13 +818,13 @@ class LogPatternMiner:
 
     def _detect_error_rate_anomalies(self) -> None:
         """
-        Detect hourly error rate anomalies using statistical deviation.
+                Detect hourly error rate anomalies using statistical deviation.
 
-        Identifies hours with error rates that deviate significantly
-        from the average hourly error rate.
-from autobot_shared.logging_manager import get_logger
+                Identifies hours with error rates that deviate significantly
+                from the average hourly error rate.
+        from autobot_shared.logging_manager import get_logger
 
-        Issue #620.
+                Issue #620.
         """
         hourly_errors, hourly_total = self._compute_hourly_error_counts()
 

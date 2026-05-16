@@ -8,7 +8,6 @@ The caller must present the current (not-yet-expired, not-revoked) JWT as a
 Bearer token.  The old token is atomically revoked and a fresh one returned.
 """
 
-
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 

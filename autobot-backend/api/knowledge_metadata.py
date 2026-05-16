@@ -14,7 +14,6 @@ Endpoints:
 - Version History: List, view, compare, and revert fact versions
 """
 
-
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_knowledge import (

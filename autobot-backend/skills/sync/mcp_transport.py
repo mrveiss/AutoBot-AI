@@ -232,9 +232,9 @@ async def _iter_sse_lines(stream: aiohttp.StreamReader) -> AsyncIterator[str]:
 class HTTPTransport(MCPTransport):
     """Stateless HTTP JSON-RPC transport.
 
-    Each request opens a new HTTP session so this transport is safe to use
-    from multiple coroutines without shared session state.
-from autobot_shared.logging_manager import get_logger
+        Each request opens a new HTTP session so this transport is safe to use
+        from multiple coroutines without shared session state.
+    from autobot_shared.logging_manager import get_logger
     """
 
     def __init__(self, base_url: str, timeout: float = 10.0) -> None:

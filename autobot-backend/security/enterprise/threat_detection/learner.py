@@ -53,16 +53,16 @@ _MIN_OBSERVATIONS: int = 5
 
 class ThreatDetectionLearner:
     """
-    Adaptive learning layer for the threat detection engine.
+        Adaptive learning layer for the threat detection engine.
 
-    Tracks per-pattern true/false-positive counts and per-mitigation EMA
-    effectiveness scores in Redis so learning persists across restarts and
-    scales across multiple engine instances.
+        Tracks per-pattern true/false-positive counts and per-mitigation EMA
+        effectiveness scores in Redis so learning persists across restarts and
+        scales across multiple engine instances.
 
-    All Redis operations are synchronous (async_client=False) to match the
-    engine's synchronous initialisation path; individual methods are called
-    from async context via normal awaited coroutines in the engine.
-from autobot_shared.logging_manager import get_logger
+        All Redis operations are synchronous (async_client=False) to match the
+        engine's synchronous initialisation path; individual methods are called
+        from async context via normal awaited coroutines in the engine.
+    from autobot_shared.logging_manager import get_logger
     """
 
     def __init__(self) -> None:

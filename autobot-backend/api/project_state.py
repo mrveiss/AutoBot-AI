@@ -7,7 +7,6 @@ Project State API
 Exposes project development phase information and validation status
 """
 
-
 from fastapi import APIRouter, HTTPException
 
 from api.schemas_common import DataResponse

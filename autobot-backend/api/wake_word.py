@@ -6,7 +6,6 @@ Wake Word Detection API Endpoints
 Issue #54 - Advanced Wake Word Detection Optimization
 """
 
-
 from fastapi import APIRouter, HTTPException
 
 from api.schemas_system import (

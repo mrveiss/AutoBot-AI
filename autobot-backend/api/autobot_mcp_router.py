@@ -11,7 +11,6 @@ The router delegates every request to AutoBotMCPServer.handle_request(),
 which handles auth, rate limiting, and tool dispatch internally.
 """
 
-
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 

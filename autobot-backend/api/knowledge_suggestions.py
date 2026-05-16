@@ -18,7 +18,6 @@ Endpoints:
 - POST /facts/{fact_id}/auto-apply - Auto-apply suggestions to fact
 """
 
-
 from fastapi import APIRouter, HTTPException
 
 from api.schemas_knowledge import (

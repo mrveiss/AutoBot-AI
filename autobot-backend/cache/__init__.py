@@ -116,22 +116,22 @@ def _register_single_cache(
 
 async def register_all_caches() -> int:
     """
-    Register all known caches with the CacheCoordinator.
+        Register all known caches with the CacheCoordinator.
 
-    Issue #743: Central registration function for coordinated cache management.
-    Issue #3390: Migrated to async to use lazy-initialized coordinator.
+        Issue #743: Central registration function for coordinated cache management.
+        Issue #3390: Migrated to async to use lazy-initialized coordinator.
 
-    This function should be called at application startup to enable
-    memory-pressure-aware coordinated eviction across all caches.
+        This function should be called at application startup to enable
+        memory-pressure-aware coordinated eviction across all caches.
 
-    Returns:
-        Number of caches successfully registered
+        Returns:
+            Number of caches successfully registered
 
-    Example:
-        from cache import register_all_caches
-from autobot_shared.logging_manager import get_logger
-        count = await register_all_caches()
-        logger.info(f"Registered {count} caches with coordinator")
+        Example:
+            from cache import register_all_caches
+    from autobot_shared.logging_manager import get_logger
+            count = await register_all_caches()
+            logger.info(f"Registered {count} caches with coordinator")
     """
     coordinator = await get_cache_coordinator()
     registered = 0

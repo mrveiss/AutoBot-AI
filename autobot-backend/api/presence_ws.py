@@ -8,7 +8,6 @@ Exposes the real-time presence WebSocket endpoint for collaborative sessions.
 Issue #3282: collaborative multi-user support — shared sessions and workspaces.
 """
 
-
 from fastapi import APIRouter, Query, WebSocket
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
