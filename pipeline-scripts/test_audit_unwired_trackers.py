@@ -2,7 +2,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Unit tests for pipeline-scripts/audit-unwired-trackers.py (#6929).
+"""Unit tests for pipeline-scripts/audit_unwired_trackers.py (#6929).
 
 Covers the surfaces flagged in #6927 (SCAN_DIRS gap), #6928 (regex gap),
 and #6929 (no tests). The script is the Tier-3 cron defense for the
@@ -12,7 +12,6 @@ dedup paths erode the entire defense, so these tests pin the contract.
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -21,13 +20,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# The script's filename has a hyphen, so we have to load it via importlib.
-_SCRIPT_PATH = Path(__file__).parent / "audit-unwired-trackers.py"
-_SPEC = importlib.util.spec_from_file_location("audit_unwired_trackers", _SCRIPT_PATH)
-assert _SPEC is not None and _SPEC.loader is not None
-audit = importlib.util.module_from_spec(_SPEC)
-sys.modules["audit_unwired_trackers"] = audit
-_SPEC.loader.exec_module(audit)
+import audit_unwired_trackers as audit
 
 
 # ---------------------------------------------------------------------------

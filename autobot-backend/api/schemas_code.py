@@ -662,7 +662,7 @@ class DatabaseMCPStatusResponse(BaseModel):
 # class ≥1 production caller, surface a ``useSandboxFiles`` composable.
 #
 # Until #7409 lands, these classes are intentionally caller-less. The
-# closure-gate audit (``audit-unwired-trackers.py``) will keep flagging
+# closure-gate audit (``audit_unwired_trackers.py``) will keep flagging
 # them; that's expected — the cure is implementing #7409, not deleting.
 # ---------------------------------------------------------------------------
 
