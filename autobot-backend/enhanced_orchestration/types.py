@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Dict, FrozenSet, List
 
 if TYPE_CHECKING:
-    from .success_criteria import SuccessCriteria
+    from orchestration.success_criteria import SuccessCriteria
 
 from autobot_shared.workflow import ExecutionStrategy as ExecutionStrategy  # noqa: F401  # re-export
 from autobot_shared.workflow import WorkflowPlan as _SharedWorkflowPlan
