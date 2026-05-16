@@ -38,7 +38,7 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 # Cache TTL in seconds for remote capability checks.
-_CACHE_TTL = int(os.environ.get("AUTOBOT_A2A_CAPABILITY_TTL", "300"))
+_CACHE_TTL = int(os.environ.get("AUTOBOT_A2A_CAPABILITY_TTL", "300"))  # ssot-config-exempt: int-wrapping type conversion per GH#7743
 
 
 @dataclass

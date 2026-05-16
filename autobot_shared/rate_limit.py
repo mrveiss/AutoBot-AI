@@ -96,7 +96,7 @@ class IPRateLimiter:
     def limit(self) -> int:
         """Read the limit from env each call so dynamic config is respected."""
         try:
-            return int(os.environ.get(self._limit_env, self._default_limit))
+            return int(os.environ.get(self._limit_env, self._default_limit))  # ssot-config-exempt: dynamic env var name
         except (TypeError, ValueError):
             return self._default_limit
 

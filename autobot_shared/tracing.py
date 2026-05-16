@@ -159,7 +159,7 @@ def _create_exporter():
         logger.info("No AUTOBOT_OTEL_ENDPOINT configured, traces will not be exported")
         return None
 
-    protocol = os.getenv("AUTOBOT_OTEL_PROTOCOL", "grpc").lower()
+    protocol = os.getenv("AUTOBOT_OTEL_PROTOCOL", "grpc").lower()  # ssot-config-exempt: pre-init OTEL
 
     try:
         if protocol == "http":

@@ -47,7 +47,7 @@ def _resolve_yaml_path() -> str | None:
         "/app/config/redis-databases.yaml",  # Container
         "./config/redis-databases.yaml",  # Host relative
         os.path.join(
-            os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"),
+            os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")  # ssot-config-exempt: bootstrap before config available,
             "config/redis-databases.yaml",
         ),
     ]

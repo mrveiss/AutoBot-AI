@@ -841,7 +841,7 @@ def _get_env_fallback(service_name: str) -> str | None:
     """
     env_var = ENV_VAR_MAP.get(service_name)
     if env_var:
-        return os.environ.get(env_var)
+        return os.environ.get(env_var)  # ssot-config-exempt: dynamic env var name
     return None
 
 

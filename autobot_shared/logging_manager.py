@@ -105,7 +105,7 @@ class LoggingManager:
         logs_dir.mkdir(exist_ok=True)
 
         # Create backup directory
-        backup_dir_name = os.getenv("AUTOBOT_LOGS_BACKUP_DIR", "backup")
+        backup_dir_name = os.getenv("AUTOBOT_LOGS_BACKUP_DIR", "backup")  # ssot-config-exempt: pre-init logging
         backup_dir = logs_dir / backup_dir_name
         backup_dir.mkdir(exist_ok=True)
 

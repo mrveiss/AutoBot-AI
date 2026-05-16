@@ -239,7 +239,7 @@ _DETECTORS: List[_DetectorEntry] = _build_detectors()
 
 # Customer ID regex loaded from env at startup (optional extension point)
 _CUSTOMER_ID_RE: re.Pattern | None = None
-_raw_cid = os.environ.get("AUTOBOT_A2A_CUSTOMER_ID_PATTERN", "")
+_raw_cid = os.environ.get("AUTOBOT_A2A_CUSTOMER_ID_PATTERN", "")  # ssot-config-exempt: A2A security module — reads live env, bypasses cache
 if _raw_cid:
     try:
         _CUSTOMER_ID_RE = re.compile(_raw_cid)

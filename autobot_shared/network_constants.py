@@ -32,7 +32,7 @@ from functools import cached_property
 from config.registry import ConfigRegistry
 
 # Deprecation flag - set to True to enable deprecation warnings
-_SHOW_DEPRECATION_WARNINGS = os.getenv("AUTOBOT_SHOW_DEPRECATION_WARNINGS", "").lower() == "true"
+_SHOW_DEPRECATION_WARNINGS = os.getenv("AUTOBOT_SHOW_DEPRECATION_WARNINGS", "").lower() == "true"  # ssot-config-exempt: module-level init
 
 
 def _emit_deprecation_warning(old_pattern: str, new_pattern: str) -> None:

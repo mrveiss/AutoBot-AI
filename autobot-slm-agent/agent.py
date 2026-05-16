@@ -45,7 +45,7 @@ def sd_notify(state: str) -> bool:
     Returns:
         True if notification was sent successfully, False otherwise.
     """
-    notify_socket = os.environ.get("NOTIFY_SOCKET")
+    notify_socket = os.environ.get("NOTIFY_SOCKET")  # ssot-config-exempt: systemd notify socket
     if not notify_socket:
         return False
 
@@ -68,7 +68,7 @@ def sd_notify(state: str) -> bool:
 logger = logging.getLogger(__name__)
 
 # Local notification server port (for git hooks)
-DEFAULT_NOTIFY_PORT = int(os.getenv("SLM_NOTIFY_PORT", "8000"))
+DEFAULT_NOTIFY_PORT = int(os.getenv("SLM_NOTIFY_PORT", "8000"))  # ssot-config-exempt: SLM agent module
 
 # Standalone agent defaults - agent runs on remote VMs, not AutoBot main host
 # These are configured via CLI args or environment variables at deployment
