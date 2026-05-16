@@ -298,16 +298,18 @@ onBeforeUnmount(() => {
                 <span class="count">{{ categoryPrompts.length }}</span>
               </div>
               <div class="category-prompts">
-                <div
+                <button
                   v-for="prompt in categoryPrompts"
                   :key="prompt.id"
                   class="prompt-item"
                   :class="{ selected: selectedPrompt?.id === prompt.id }"
+                  type="button"
+                  :aria-pressed="selectedPrompt?.id === prompt.id"
                   @click="selectPrompt(prompt)"
                 >
                   <span class="prompt-name">{{ prompt.name }}</span>
                   <span v-if="prompt.description" class="prompt-desc">{{ prompt.description }}</span>
-                </div>
+                </button>
               </div>
             </div>
           </template>
@@ -607,8 +609,13 @@ onBeforeUnmount(() => {
 }
 
 .prompt-item {
+  display: block;
+  width: 100%;
   padding: var(--spacing-2-5) var(--spacing-3);
+  border: none;
   border-radius: var(--radius-md);
+  background: transparent;
+  text-align: left;
   cursor: pointer;
   transition: all var(--duration-150);
 }
