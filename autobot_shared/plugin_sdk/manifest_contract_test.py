@@ -140,6 +140,20 @@ class TestUnifiedRegistry:
         reg.register(m)
         assert reg.get("my_ext") is m
 
+    def test_unregister_removes_entry(self):
+        reg = get_unified_registry()
+        m = _FakeManifest(name="to_remove", version="1.0.0", description="d", kind="plugin")
+        reg.register(m)
+        assert reg.get("to_remove") is m
+        result = reg.unregister("to_remove")
+        assert result is True
+        assert reg.get("to_remove") is None
+        assert len(reg.list_all()) == 0
+
+    def test_unregister_missing_returns_false(self):
+        reg = get_unified_registry()
+        assert reg.unregister("nonexistent") is False
+
 
 # ---------------------------------------------------------------------------
 # Backward-compat: old skill manifests without `kind` load without error

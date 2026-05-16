@@ -104,6 +104,7 @@ class ExtensionManager:
 
         extension = self._extension_map.pop(name)
         self.extensions.remove(extension)
+        get_unified_registry().unregister(name)
 
         logger.info("[Issue #658] Unregistered extension '%s'", name)
         return True

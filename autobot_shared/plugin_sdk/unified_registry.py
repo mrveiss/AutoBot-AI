@@ -9,7 +9,7 @@ Single registry for all manifest types: plugins, skills, and extensions.
 
 import logging
 import threading
-from typing import Callable, Optional
+from typing import Optional
 
 from plugin_sdk.manifest_contract import ManifestContract
 
@@ -28,17 +28,23 @@ class UnifiedRegistry:
                 if cls._instance is None:
                     instance = super().__new__(cls)
                     instance._manifests: dict[str, ManifestContract] = {}
-                    instance._loaders: dict[str, Optional[Callable]] = {}
                     cls._instance = instance
         return cls._instance
 
-    def register(self, manifest: ManifestContract, loader_fn: Optional[Callable] = None) -> None:
-        """Register a manifest by name, optionally with a loader callable."""
+    def register(self, manifest: ManifestContract) -> None:
+        """Register a manifest by name."""
         if not isinstance(manifest, ManifestContract):
             raise TypeError(f"Object does not satisfy ManifestContract: {type(manifest)}")
         self._manifests[manifest.name] = manifest
-        self._loaders[manifest.name] = loader_fn
         logger.debug("UnifiedRegistry: registered %s (%s)", manifest.name, manifest.kind)
+
+    def unregister(self, name: str) -> bool:
+        """Remove a manifest by name. Returns True if it was present."""
+        if name in self._manifests:
+            del self._manifests[name]
+            logger.debug("UnifiedRegistry: unregistered %s", name)
+            return True
+        return False
 
     def get(self, name: str) -> Optional[ManifestContract]:
         """Return manifest by name, or None if not registered."""
@@ -51,7 +57,6 @@ class UnifiedRegistry:
     def clear(self) -> None:
         """Clear registry (primarily for test isolation)."""
         self._manifests.clear()
-        self._loaders.clear()
 
 
 def get_unified_registry() -> UnifiedRegistry:

@@ -155,8 +155,9 @@ class PluginLoader:
             await plugin.shutdown()
             plugin.status = PluginStatus.UNLOADED
 
-            # Unregister from registry
+            # Unregister from plugin registry and unified registry
             self.registry.unregister(name)
+            get_unified_registry().unregister(name)
 
             logger.info("Unloaded plugin: %s", name)
             return True
