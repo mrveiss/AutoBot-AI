@@ -517,7 +517,7 @@ function buildConfig(): AutoBotConfig {
       // Nginx proxies / -> slm-admin:5174, /api/ -> slm-server:8000
       // Issue #1875: When vm.slm is empty, use relative /slm path
       if (!vm.slm) return '/slm';
-      return `https://${vm.slm}`;
+      return `${runtimeHttpProto()}://${vm.slm}`;
     },
   };
 
