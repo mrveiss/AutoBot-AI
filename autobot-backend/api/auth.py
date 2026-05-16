@@ -58,7 +58,7 @@ def _dev_auth_bypass_enabled() -> bool:
     is opt-in. Without the flag, /login behaves like production modes and
     refuses to mint tokens without a real user store backing the request.
     """
-    return os.getenv("AUTOBOT_DEV_AUTH_BYPASS", "").strip().lower() in _DEV_AUTH_BYPASS_TRUTHY
+    return config.dev_auth_bypass.strip().lower() in _DEV_AUTH_BYPASS_TRUTHY
 
 
 async def _enrich_user_with_org_context(user_data: Dict) -> Dict:

@@ -27,6 +27,7 @@ Usage::
 Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
+from autobot_shared.ssot_config import config
 from __future__ import annotations
 
 import logging
@@ -61,7 +62,7 @@ _NO_TEMPERATURE_MODELS: frozenset[str] = frozenset({"o1", "o1-mini", "o3", "o3-m
 
 def _yaml_path() -> Path:
     """Return the path to llm_models.yaml (overridable in tests via env var)."""
-    override = os.getenv("AUTOBOT_LLM_MODELS_YAML")
+    override = config.llm_models_yaml
     return Path(override) if override else _YAML_PATH
 
 

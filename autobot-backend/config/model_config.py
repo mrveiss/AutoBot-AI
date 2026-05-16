@@ -8,6 +8,7 @@ LLM and model configuration management.
 
 import logging
 import os
+from autobot_shared.ssot_config import config
 from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ class ModelConfigMixin:
             return selected_model
 
         # Only fall back to environment if config.yaml doesn't have the value
-        env_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL")
+        env_model = config.default_llm_model
         if env_model:
             logger.info("UNIFIED CONFIG: Selected model from environment: %s", env_model)
             return env_model

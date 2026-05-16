@@ -24,6 +24,7 @@ import os
 import re
 import sqlite3
 import time
+from autobot_shared.ssot_config import config
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -60,8 +61,8 @@ _DANGEROUS_KEYWORDS = frozenset(
 _HISTORY_KEY_PREFIX = "nl_database:history:"
 
 # Local DB path (autobot_data.db)
-_DEFAULT_BASE = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
-_LOCAL_DB_PATH = os.environ.get("AUTOBOT_DATA_DB", os.path.join(_DEFAULT_BASE, "autobot_data.db"))
+_DEFAULT_BASE = config.base_dir
+_LOCAL_DB_PATH = config.data_db)
 
 
 def _validate_readonly_sql(sql: str) -> bool:

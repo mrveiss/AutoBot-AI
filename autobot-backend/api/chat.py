@@ -12,6 +12,7 @@ This module provides:
 Consolidated from chat.py and chat_enhanced.py per Issue #708.
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import json
 import logging
@@ -22,7 +23,7 @@ from uuid import uuid4
 
 # Phase 4 (#7590): feature flag — default-off; enable in staging then flip to default-on.
 # Reads env at import time (process restart required to change).
-_CHAT_SSOT_STRICT = os.environ.get("AUTOBOT_CHAT_SSOT_STRICT", "false").lower() == "true"
+_CHAT_SSOT_STRICT = config.chat_ssot_strict.lower() == "true"
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -832,7 +833,7 @@ async def send_message(
 
     # Process the chat message with a configurable timeout (Issue #1907).
     # Override via AUTOBOT_CHAT_TIMEOUT env var (seconds, float). Default: 30.0.
-    chat_timeout = float(os.getenv("AUTOBOT_CHAT_TIMEOUT", "30.0"))
+    chat_timeout = float(config.chat_timeout)
     try:
         response_data = await asyncio.wait_for(
             process_chat_message(

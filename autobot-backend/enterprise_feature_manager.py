@@ -7,6 +7,7 @@ Enterprise Feature Manager - Phase 4 Implementation
 Enables and manages enterprise-grade features for AutoBot system.
 """
 
+from autobot_shared.ssot_config import config
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -60,12 +61,7 @@ class EnterpriseFeatureManager:
 
     def __init__(self, config_path: Optional[Path] = None):
         """Initialize enterprise feature manager with VM topology and resource pools."""
-        import os
-
-        base_dir = os.getenv(
-            "AUTOBOT_BASE_DIR",
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        )
+        base_dir = config.path.base_dir
         self.config_path = config_path or Path(base_dir) / "config" / "enterprise_features.json"
         self.features: Dict[str, EnterpriseFeature] = {}
         self.vm_topology = self._initialize_vm_topology()
@@ -82,19 +78,19 @@ class EnterpriseFeatureManager:
         import os
 
         return {
-            "backend_host": os.getenv("AUTOBOT_BACKEND_HOST"),
-            "backend_port": os.getenv("AUTOBOT_BACKEND_PORT"),
-            "vnc_port": os.getenv("AUTOBOT_VNC_PORT"),
-            "frontend_host": os.getenv("AUTOBOT_FRONTEND_HOST"),
-            "frontend_port": os.getenv("AUTOBOT_FRONTEND_PORT"),
-            "npu_worker_host": os.getenv("AUTOBOT_NPU_WORKER_HOST"),
-            "npu_worker_port": os.getenv("AUTOBOT_NPU_WORKER_PORT"),
-            "redis_host": os.getenv("AUTOBOT_REDIS_HOST"),
-            "redis_port": os.getenv("AUTOBOT_REDIS_PORT"),
-            "ai_stack_host": os.getenv("AUTOBOT_AI_STACK_HOST"),
-            "ai_stack_port": os.getenv("AUTOBOT_AI_STACK_PORT"),
-            "browser_host": os.getenv("AUTOBOT_BROWSER_SERVICE_HOST"),
-            "browser_port": os.getenv("AUTOBOT_BROWSER_SERVICE_PORT"),
+            "backend_host": config.backend_host,
+            "backend_port": config.backend_port,
+            "vnc_port": config.vnc_port,
+            "frontend_host": config.frontend_host,
+            "frontend_port": config.frontend_port,
+            "npu_worker_host": config.npu_worker_host,
+            "npu_worker_port": config.npu_worker_port,
+            "redis_host": config.redis_host,
+            "redis_port": config.redis_port,
+            "ai_stack_host": config.ai_stack_host,
+            "ai_stack_port": config.ai_stack_port,
+            "browser_host": config.browser_service_host,
+            "browser_port": config.browser_service_port,
         }
 
     def _validate_vm_env_config(self, cfg: Dict[str, Optional[str]]) -> None:
@@ -870,12 +866,12 @@ class EnterpriseFeatureManager:
         """Get fallback service endpoints"""
         import os
 
-        backend_host = os.getenv("AUTOBOT_BACKEND_HOST")
-        backend_port = os.getenv("AUTOBOT_BACKEND_PORT")
-        frontend_host = os.getenv("AUTOBOT_FRONTEND_HOST")
-        frontend_port = os.getenv("AUTOBOT_FRONTEND_PORT")
-        ai_stack_host = os.getenv("AUTOBOT_AI_STACK_HOST")
-        ai_stack_port = os.getenv("AUTOBOT_AI_STACK_PORT")
+        backend_host = config.backend_host
+        backend_port = config.backend_port
+        frontend_host = config.frontend_host
+        frontend_port = config.frontend_port
+        ai_stack_host = config.ai_stack_host
+        ai_stack_port = config.ai_stack_port
 
         if not all(
             [

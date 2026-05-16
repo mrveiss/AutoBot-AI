@@ -8,6 +8,7 @@ Runs hourly (configurable via AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES)
 and auto-revokes keys whose expires_at has passed.
 """
 
+from autobot_shared.ssot_config import config
 from __future__ import annotations
 
 import logging
@@ -19,7 +20,7 @@ from services.llm_api_key_service import get_llm_api_key_service
 
 logger = logging.getLogger(__name__)
 
-_ROTATION_INTERVAL_MINUTES = int(os.environ.get("AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES", "60"))
+_ROTATION_INTERVAL_MINUTES = int(config.llm_key_rotation_interval_minutes)
 
 
 class LLMKeyRotationScheduler:

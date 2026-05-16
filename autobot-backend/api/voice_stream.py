@@ -27,6 +27,7 @@ Protocol (JSON messages):
     {"type": "pong"}
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import base64
 import logging
@@ -100,7 +101,7 @@ async def _cancel_pending_task(task: "asyncio.Task | None") -> None:
 # typical jitter without piling backlog. Override with AUTOBOT_TTS_PIPELINE_DEPTH
 # (clamped to 1..8 to prevent ops typos OOMing the worker).
 def _resolve_tts_pipeline_depth() -> int:
-    raw = os.getenv("AUTOBOT_TTS_PIPELINE_DEPTH", "2")
+    raw = config.tts_pipeline_depth
     try:
         value = int(raw)
     except ValueError:

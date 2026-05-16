@@ -12,6 +12,7 @@ Issue #281: Refactored from 716 lines of repetitive try/except blocks to
 data-driven configuration pattern for improved maintainability.
 """
 
+from autobot_shared.ssot_config import config
 import importlib
 import logging
 import os
@@ -641,7 +642,7 @@ def load_feature_routers() -> List[Tuple]:
             len(failed),
             ", ".join(r["name"] for r in failed),
         )
-        if os.getenv("AUTOBOT_FEATURE_ROUTERS_STRICT", "").lower() in {"1", "true", "yes"}:
+        if config.feature_routers_strict.lower() in {"1", "true", "yes"}:
             raise RuntimeError(
                 f"AUTOBOT_FEATURE_ROUTERS_STRICT=1 — {len(failed)} feature router(s) "
                 f"failed to load: {', '.join(r['name'] for r in failed)}"

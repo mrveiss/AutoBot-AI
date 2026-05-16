@@ -28,6 +28,7 @@ Observability:
     and wall-clock duration.
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import json
 import logging
@@ -315,7 +316,7 @@ class AutoBotMCPServer:
             secret_part, scopes_part = token.split(":", 1)
         except ValueError:
             return None
-        expected = os.environ.get("AUTOBOT_MCP_TOKEN", "dev")
+        expected = config.mcp_token
         if secret_part != expected:
             return None
         scopes = [s.strip() for s in scopes_part.split(",") if s.strip()]
@@ -596,7 +597,7 @@ class AutoBotMCPServer:
         """Read JSON-RPC requests from stdin line-by-line, write responses to stdout."""
         import sys
 
-        token = os.environ.get("AUTOBOT_MCP_TOKEN", "")
+        token = config.mcp_token
         loop = asyncio.get_event_loop()
 
         reader = asyncio.StreamReader()

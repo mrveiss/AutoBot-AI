@@ -27,6 +27,7 @@ Features:
 import logging
 import os
 import threading
+from autobot_shared.ssot_config import config
 from contextlib import contextmanager
 from typing import Any, Dict, Optional
 
@@ -95,15 +96,14 @@ class TracingService:
         self._service_version: str = "1.0.0"
 
         # Configuration from environment
-        self._jaeger_endpoint = os.getenv(
-            "AUTOBOT_JAEGER_ENDPOINT",
-            f"http://{NetworkConstants.REDIS_VM_IP}:4317",  # Default: Redis VM
+        self._jaeger_endpoint = (
+            config.misc.jaeger_endpoint or f"http://{NetworkConstants.REDIS_VM_IP}:4317"
         )
-        self._console_export = os.getenv("AUTOBOT_TRACE_CONSOLE", "false").lower() == "true"
+        self._console_export = config.trace_console.lower() == "true"
 
         # Issue #697: Configurable sampling strategy
         # AUTOBOT_TRACE_SAMPLE_RATE: 0.0-1.0 (0.1 = 10% sampling in production)
-        self._sample_rate = float(os.getenv("AUTOBOT_TRACE_SAMPLE_RATE", "1.0"))
+        self._sample_rate = float(config.trace_sample_rate)
         self._redis_instrumented = False
         self._aiohttp_instrumented = False
 
@@ -141,7 +141,7 @@ class TracingService:
             {
                 SERVICE_NAME: self._service_name,
                 SERVICE_VERSION: self._service_version,
-                "deployment.environment": os.getenv("AUTOBOT_ENV", "development"),
+                "deployment.environment": config.env,
                 "service.namespace": "autobot",
             }
         )

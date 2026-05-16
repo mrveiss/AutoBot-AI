@@ -6,6 +6,7 @@ Enhanced Security Layer with Command Execution Controls
 Integrates secure command execution with role-based permissions
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import datetime
 import json
@@ -66,7 +67,7 @@ class EnhancedSecurityLayer:
         self.enable_auth = self.security_config.get("enable_auth", False)
         self.enable_command_security = self.security_config.get("enable_command_security", True)
         self.audit_log_file = self.security_config.get(
-            "audit_log_file", os.getenv("AUTOBOT_AUDIT_LOG_FILE", "data/audit.log")
+            "audit_log_file", config.audit_log_file
         )
         self.roles = self.security_config.get("roles", {})
         self.allowed_users = self.security_config.get("allowed_users", {})

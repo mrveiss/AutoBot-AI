@@ -31,6 +31,7 @@ Key Features:
 - Cache invalidation endpoints
 """
 
+from autobot_shared.ssot_config import config
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -70,8 +71,8 @@ router = APIRouter(
 # ============================================================================
 
 # Load cache configuration from environment
-CACHE_ENABLED = os.getenv("MCP_REGISTRY_CACHE_ENABLED", "true").lower() == "true"
-CACHE_TTL_SECONDS = int(os.getenv("MCP_REGISTRY_CACHE_TTL", "60"))
+CACHE_ENABLED = config.mcp_registry_cache_enabled.lower() == "true"
+CACHE_TTL_SECONDS = int(config.mcp_registry_cache_ttl)
 
 logger.info("MCP Registry Cache: enabled=%s, TTL=%ss", CACHE_ENABLED, CACHE_TTL_SECONDS)
 

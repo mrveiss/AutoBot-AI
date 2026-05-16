@@ -4,13 +4,14 @@ Test knowledge base with GPU-optimized semantic chunking
 Verifies that the knowledge base is using 5x faster processing.
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import os
 import sys
 import time
 
 # Add AutoBot to path
-sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.insert(0, config.project_root)
 
 from knowledge_base import get_knowledge_base
 

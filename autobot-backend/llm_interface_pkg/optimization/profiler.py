@@ -20,6 +20,7 @@ Usage:
     profiler.log_summary()
 """
 
+from autobot_shared.ssot_config import config
 import json
 import logging
 import os
@@ -44,7 +45,7 @@ INFERENCE_STAGES: List[str] = [
 
 def _is_profiling_enabled() -> bool:
     """Check if inference profiling is enabled via environment variable."""
-    return os.environ.get("AUTOBOT_INFERENCE_PROFILING", "0").lower() in (
+    return config.inference_profiling.lower() in (
         "1",
         "true",
         "yes",
@@ -53,7 +54,7 @@ def _is_profiling_enabled() -> bool:
 
 def _get_history_dir() -> Path:
     """Get the directory for storing profiling history. Issue #1956."""
-    base = Path(os.environ.get("AUTOBOT_DATA_DIR", "/opt/autobot/data"))
+    base = Path(config.data_dir)
     history_dir = base / "profiling" / "inference"
     history_dir.mkdir(parents=True, exist_ok=True)
     return history_dir

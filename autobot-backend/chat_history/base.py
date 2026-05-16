@@ -61,11 +61,11 @@ class ChatHistoryBase:
 
         self.history_file = history_file or data_config.get(
             "chat_history_file",
-            os.getenv("AUTOBOT_CHAT_HISTORY_FILE", "data/chat_history.json"),
+            _ssot_config.misc.chat_history_file or "data/chat_history.json",
         )
         self.use_redis = use_redis if use_redis is not None else _ssot_config.redis.enabled
-        self.redis_host = redis_host or os.getenv("AUTOBOT_REDIS_HOST", _ssot_config.vm.redis)
-        self.redis_port = redis_port or int(os.getenv("AUTOBOT_REDIS_PORT", str(_ssot_config.port.redis)))
+        self.redis_host = redis_host or _ssot_config.vm.redis
+        self.redis_port = redis_port or _ssot_config.port.redis
 
     def _init_state_and_settings(self) -> None:
         """
@@ -203,7 +203,7 @@ class ChatHistoryBase:
         data_config = global_config_manager.get("data", {})
         return data_config.get(
             "chats_directory",
-            os.getenv("AUTOBOT_CHATS_DIRECTORY", "data/chats"),
+            _ssot_config.misc.chats_directory or "data/chats",
         )
 
     def _load_history(self):

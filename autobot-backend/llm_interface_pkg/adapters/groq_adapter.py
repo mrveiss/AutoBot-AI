@@ -10,6 +10,7 @@ adapter's sole responsibility is the ``test_environment()`` diagnostic method
 used by ``api/adapters.py``.
 """
 
+from autobot_shared.ssot_config import config
 import logging
 import os
 import time
@@ -43,7 +44,7 @@ class GroqAdapter(AdapterBase):
         if self._provider is None:
             from llm_interface_pkg.providers.groq import GroqProvider
 
-            api_key = self.config.settings.get("api_key") or os.getenv("GROQ_API_KEY", "")
+            api_key = self.config.settings.get("api_key") or config.groq_api_key
             self._provider = GroqProvider(settings={"api_key": api_key} if api_key else {})
         return self._provider
 
@@ -57,7 +58,7 @@ class GroqAdapter(AdapterBase):
         diagnostics: List[DiagnosticMessage] = []
         start = time.time()
 
-        api_key = self.config.settings.get("api_key") or os.getenv("GROQ_API_KEY", "")
+        api_key = self.config.settings.get("api_key") or config.groq_api_key
         if not api_key:
             diagnostics.append(
                 DiagnosticMessage(

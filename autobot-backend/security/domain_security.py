@@ -12,6 +12,7 @@ import asyncio
 import ipaddress
 import logging
 import os
+from autobot_shared.ssot_config import config
 import re
 import socket
 import time
@@ -118,10 +119,7 @@ class DomainSecurityConfig:
         return [
             {
                 "name": "urlhaus",
-                "url": os.getenv(
-                    "AUTOBOT_URLHAUS_FEED_URL",
-                    "https://urlhaus.abuse.ch/downloads/text/",
-                ),
+                "url": config.misc.urlhaus_feed_url or "https://urlhaus.abuse.ch/downloads/text/",
                 "format": "text",
                 "enabled": True,
                 "update_interval": 3600,

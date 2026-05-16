@@ -24,6 +24,7 @@ Bridge resolution strategy:
     keeps the existing in-process bridge code reusable without rewrites.
 """
 
+from autobot_shared.ssot_config import config
 from __future__ import annotations
 
 import asyncio
@@ -42,21 +43,21 @@ logger = logging.getLogger("mcp_worker")
 
 # When set to "1" the worker enforces run-scoped JWT on every ``call`` request.
 # Workers spawned without JWT support can opt out by leaving this unset.
-_JWT_ENFORCE = os.environ.get("MCP_RUN_JWT_ENFORCE", "1") == "1"
+_JWT_ENFORCE = config.mcp_run_jwt_enforce == "1"
 
 _JSONRPC = "2.0"
 
 
 def _apply_rlimits() -> None:
     """Apply RLIMIT_CPU, RLIMIT_AS, RLIMIT_NOFILE from env (#3229)."""
-    cpu = int(os.environ.get("MCP_WORKER_CPU_SECONDS", "0") or 0)
+    cpu = int(config.mcp_worker_cpu_seconds or 0)
     if cpu > 0:
         resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu))
-    mem_mb = int(os.environ.get("MCP_WORKER_MEM_MB", "0") or 0)
+    mem_mb = int(config.mcp_worker_mem_mb or 0)
     if mem_mb > 0:
         mem_bytes = mem_mb * 1024 * 1024
         resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
-    nofile = int(os.environ.get("MCP_WORKER_NOFILE", "0") or 0)
+    nofile = int(config.mcp_worker_nofile or 0)
     if nofile > 0:
         resource.setrlimit(resource.RLIMIT_NOFILE, (nofile, nofile))
     # Prevent fork bombs — cap total user processes
@@ -108,7 +109,7 @@ async def _validate_run_jwt_param(params: Dict[str, Any]) -> Optional[Dict[str, 
     if not _JWT_ENFORCE:
         return None
 
-    token = params.get("run_jwt") or os.environ.get("MCP_RUN_JWT", "")
+    token = params.get("run_jwt") or config.mcp_run_jwt
     if not token:
         raise PermissionError("run_jwt: no token provided and MCP_RUN_JWT is unset")
 
@@ -213,7 +214,7 @@ async def _serve(bridge_module: str) -> None:
 def main() -> None:
     """CLI entrypoint: worker_entrypoint.py <bridge_module>."""
     logging.basicConfig(
-        level=os.environ.get("MCP_WORKER_LOG_LEVEL", "INFO"),
+        level=config.mcp_worker_log_level,
         format="%(asctime)s mcp_worker[%(process)d] %(levelname)s %(message)s",
         stream=sys.stderr,
     )

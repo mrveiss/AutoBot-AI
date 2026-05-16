@@ -14,6 +14,7 @@ API tokens are never logged.
 Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
+from autobot_shared.ssot_config import config
 from __future__ import annotations
 
 import logging
@@ -62,7 +63,7 @@ class HuggingFaceProvider(BaseProvider):
         """Resolve HF token from settings or environment."""
         if self._api_token:
             return self._api_token
-        self._api_token = self._get_setting("api_token") or os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_API_TOKEN")
+        self._api_token = self._get_setting("api_token") or config.hf_token or config.huggingface_api_token
         return self._api_token
 
     def _build_headers(self) -> Dict[str, str]:

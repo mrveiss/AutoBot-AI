@@ -7,6 +7,7 @@ Context Generator Cognifier - prepend LLM-generated context to each chunk.
 Issue #1498: Contextual Retrieval - +35% RAG retrieval accuracy.
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import json
 import logging
@@ -46,8 +47,8 @@ class ContextGeneratorCognifier(BaseCognifier):
     """Prepend LLM-generated context sentences to each chunk (Issue #1498)."""
 
     def __init__(self, model=None, ttl_days=None):
-        self.model = model or os.getenv("CONTEXT_MODEL", QUALITY_MODEL)
-        days = ttl_days or int(os.getenv("CONTEXT_SUMMARY_TTL_DAYS", "30"))
+        self.model = model or config.context_model
+        days = ttl_days or int(config.context_summary_ttl_days)
         self.ttl_seconds = days * 86400
         self.llm = get_llm_service()
 
@@ -116,4 +117,4 @@ class ContextGeneratorCognifier(BaseCognifier):
 
     @staticmethod
     def is_enabled() -> bool:
-        return os.getenv("CONTEXT_ENABLED", "false").lower() == "true"
+        return config.context_enabled.lower() == "true"

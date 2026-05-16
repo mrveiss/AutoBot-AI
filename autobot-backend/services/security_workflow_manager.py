@@ -17,6 +17,7 @@ import asyncio
 import json
 import logging
 import uuid
+from autobot_shared.ssot_config import config
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, List, Optional
@@ -268,7 +269,7 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         from constants.network_constants import NetworkConstants
 
         manager = SecurityWorkflowManager()
-        target_network = os.environ.get("NETWORK_SUBNET", NetworkConstants.DEFAULT_SCAN_NETWORK)
+        target_network = config.network_subnet
 
         # Create assessment
         assessment = await manager.create_assessment(

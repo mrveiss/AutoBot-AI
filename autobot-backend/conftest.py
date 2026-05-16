@@ -8,6 +8,7 @@ Copyright (c) 2025 mrveiss
 Author: mrveiss
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import os
 import sys
@@ -306,8 +307,8 @@ def set_test_environment():
     """
     original_env = dict(os.environ)
 
-    os.environ["AUTOBOT_TEST_MODE"] = "true"
-    os.environ["AUTOBOT_ENV"] = "test"
+    config.test_mode = "true"
+    config.env = "test"
 
     yield
 

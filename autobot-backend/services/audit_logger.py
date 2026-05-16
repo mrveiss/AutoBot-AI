@@ -34,6 +34,7 @@ import logging
 import os
 import socket
 import uuid
+from autobot_shared.ssot_config import config
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -217,7 +218,7 @@ class AuditLogger(AsyncInitializable):
         self.batch_timeout_seconds = batch_timeout_seconds
 
         # Get VM identification
-        self.vm_source = os.getenv("AUTOBOT_BACKEND_HOST", NetworkConstants.MAIN_MACHINE_IP)
+        self.vm_source = config.backend_host
         self.vm_name = self._get_vm_name()
 
         # Batch processing

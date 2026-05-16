@@ -9,6 +9,7 @@ Provides network mapping and asset discovery capabilities
 import ipaddress
 import logging
 import os
+from autobot_shared.ssot_config import config
 from datetime import datetime, timezone
 from typing import Any, Dict, FrozenSet, List
 
@@ -43,7 +44,7 @@ class NetworkDiscoveryAgent(StandardizedAgent):
         self.description = "Discovers network assets and creates network maps"
         self.supported_tasks = _SUPPORTED_DISCOVERY_TASKS
 
-        self.default_network = os.getenv("AUTOBOT_DEFAULT_SCAN_NETWORK", NetworkConstants.DEFAULT_SCAN_NETWORK)
+        self.default_network = config.default_scan_network
 
         # Register action handlers for StandardizedAgent routing
         self.register_actions(

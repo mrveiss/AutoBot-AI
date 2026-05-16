@@ -16,6 +16,7 @@ Environment variables (read lazily so tests can override):
     MCP_BRIDGE_RESTART_MAX          restarts before permanent failure
 """
 
+from autobot_shared.ssot_config import config
 from __future__ import annotations
 
 import os
@@ -59,7 +60,7 @@ def _env_int(name: str, default: int) -> int:
 
 def _global_mode() -> IsolationMode:
     """Resolve global default isolation mode from env."""
-    raw = os.environ.get("MCP_ISOLATION_MODE", "inprocess").lower()
+    raw = config.mcp_isolation_mode.lower()
     try:
         return IsolationMode(raw)
     except ValueError:

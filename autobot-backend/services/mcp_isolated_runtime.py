@@ -3,6 +3,7 @@
 # Author: mrveiss
 """Isolated MCP bridge runtime (#3229)."""
 
+from autobot_shared.ssot_config import config
 from __future__ import annotations
 
 import asyncio
@@ -61,7 +62,7 @@ class IsolatedBridgeClient:
         env["MCP_WORKER_CPU_SECONDS"] = str(self._policy.cpu_seconds)
         env["MCP_WORKER_MEM_MB"] = str(self._policy.memory_mb)
         env["MCP_WORKER_NOFILE"] = str(self._policy.nofile)
-        env["MCP_WORKER_LOG_LEVEL"] = os.environ.get("LOG_LEVEL", "INFO")
+        env["MCP_WORKER_LOG_LEVEL"] = config.log_level
 
         logger.info(
             "mcp_isolation: spawning worker bridge=%s cpu=%ss mem=%sMB nofile=%s",

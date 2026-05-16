@@ -15,6 +15,7 @@ Key Features:
 - Insight generation and dashboards
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import hashlib
 import logging
@@ -531,7 +532,7 @@ class FileMonitor:
     def __init__(self, base_path: str = None):
         """Initialize file monitor with base path and tracking state."""
         if base_path is None:
-            base_path = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+            base_path = config.base_dir
         self.base_path = Path(base_path)
         self.state = MonitoringState.STOPPED
         self.started_at: Optional[datetime] = None

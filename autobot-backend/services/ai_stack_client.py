@@ -14,6 +14,7 @@ import logging
 import os
 import time
 import uuid
+from autobot_shared.ssot_config import config
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
@@ -156,8 +157,8 @@ class AIStackClient:
 
         # Ollama backing URL: when the dedicated AI Stack service is absent,
         # use the local Ollama instance for health/capability signalling (#6228).
-        _ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST", "")
-        _ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT", "11434")
+        _ollama_host = config.ollama_host
+        _ollama_port = config.ollama_port
         self._ollama_url: Optional[str] = f"http://{_ollama_host}:{_ollama_port}" if _ollama_host else None
 
         # Get timeout, retry, and connection configuration from config

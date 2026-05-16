@@ -145,13 +145,13 @@ class ConnectionTester:
         if not model:
             model = global_config_manager.get_nested(
                 "backend.ollama_model",
-                os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL),
+                _ssot_config.misc.default_llm_model or ModelConstants.DEFAULT_OLLAMA_MODEL,
             )
         # Final fallbacks
         if not endpoint:
             endpoint = f"{get_ollama_url()}/api/generate"
         if not model:
-            model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL)
+            model = _ssot_config.misc.default_llm_model or ModelConstants.DEFAULT_OLLAMA_MODEL
         return endpoint, model
 
     @staticmethod
@@ -234,11 +234,8 @@ class ConnectionTester:
 
         if task_transport_config.get("type") == "redis":
             redis_config = task_transport_config.get("redis", {})
-            host = redis_config.get("host", os.getenv("AUTOBOT_REDIS_HOST", "localhost"))
-            port = redis_config.get(
-                "port",
-                int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))),
-            )
+            host = redis_config.get("host", _ssot_config.vm.redis)
+            port = redis_config.get("port", _ssot_config.port.redis)
             return host, port, None
 
         # Check memory.redis config (current structure)
@@ -255,11 +252,8 @@ class ConnectionTester:
                 },
             )
 
-        host = redis_config.get("host", os.getenv("AUTOBOT_REDIS_HOST", "localhost"))
-        port = redis_config.get(
-            "port",
-            int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))),
-        )
+        host = redis_config.get("host", _ssot_config.vm.redis)
+        port = redis_config.get("port", _ssot_config.port.redis)
         return host, port, None
 
     @staticmethod

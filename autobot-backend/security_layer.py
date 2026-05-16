@@ -1,6 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+from autobot_shared.ssot_config import config
 import datetime
 import json
 import logging
@@ -29,7 +30,7 @@ class SecurityLayer:
         self.security_config = global_config_manager.get("security_config", {})
 
         # Check for single-user mode (development/personal use)
-        self.single_user_mode = os.getenv("AUTOBOT_SINGLE_USER_MODE", "true").lower() in BOOLEAN_TRUE_VALUES
+        self.single_user_mode = config.single_user_mode.lower() in BOOLEAN_TRUE_VALUES
 
         # If single-user mode is enabled, disable all authentication
         # Issue #745: Added security warning for production awareness
@@ -46,7 +47,7 @@ class SecurityLayer:
             logger.info("Multi-user mode - authentication enabled by default")
 
         self.audit_log_file = self.security_config.get(
-            "audit_log_file", os.getenv("AUTOBOT_AUDIT_LOG_FILE", "data/audit.log")
+            "audit_log_file", config.audit_log_file
         )
         self.roles = self.security_config.get("roles", {})
         self.allowed_users = self.security_config.get("allowed_users", {})  # For simple demo auth

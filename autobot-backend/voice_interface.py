@@ -11,6 +11,7 @@ Supports multiple backends:
 Updated in Issue #454 to use real Vosk/Coqui TTS integration.
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import json
 import logging
@@ -223,7 +224,7 @@ class VoiceInterface:
         self._vosk_model: Optional[Model] = None
         self._vosk_model_path = self.voice_config.get(
             "vosk_model_path",
-            os.getenv("AUTOBOT_VOSK_MODEL_PATH", "models/vosk-model-small-en-us-0.15"),
+            config.vosk_model_path,
         )
 
         # TTS engines
@@ -233,7 +234,7 @@ class VoiceInterface:
         self._coqui_tts: Optional[CoquiTTS] = None
         self._coqui_model = self.voice_config.get(
             "coqui_model",
-            os.getenv("AUTOBOT_COQUI_MODEL", "tts_models/en/ljspeech/tacotron2-DDC"),
+            config.coqui_model,
         )
 
         # Configuration options

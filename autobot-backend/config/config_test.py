@@ -7,6 +7,7 @@ terminal input functions to prevent hanging in automated test environments.
 
 import os
 import sys
+from autobot_shared.ssot_config import config
 from typing import List
 
 import pytest
@@ -24,9 +25,9 @@ from utils.terminal_input_handler import (
 def configure_test_environment():
     """Configure the test environment for non-blocking input."""
     # Set environment variables to indicate testing
-    os.environ["CI"] = "1"
-    os.environ["TESTING"] = "1"
-    os.environ["PYTEST_RUNNING"] = "1"
+    config.ci = "1"
+    config.testing = "1"
+    config.pytest_running = "1"
 
     # Configure terminal input handler for testing
     handler = get_terminal_input_handler()
@@ -59,9 +60,9 @@ def non_interactive_environment():
     original_env = os.environ.copy()
 
     # Set testing environment variables
-    os.environ["CI"] = "1"
-    os.environ["TESTING"] = "1"
-    os.environ["PYTEST_RUNNING"] = "1"
+    config.ci = "1"
+    config.testing = "1"
+    config.pytest_running = "1"
 
     yield
 

@@ -17,6 +17,7 @@ Configuration (via settings dict or environment variables):
 Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
+from autobot_shared.ssot_config import config
 from __future__ import annotations
 
 import logging
@@ -54,7 +55,7 @@ class CustomOpenAIProvider(BaseProvider):
 
     def _resolve_base_url(self) -> str:
         """Resolve the endpoint base URL from settings or environment."""
-        url = self._get_setting("base_url") or os.getenv("CUSTOM_OPENAI_BASE_URL", "")
+        url = self._get_setting("base_url") or config.custom_openai_base_url
         if not url:
             raise ValueError(
                 "Custom OpenAI base_url not configured. "
@@ -64,7 +65,7 @@ class CustomOpenAIProvider(BaseProvider):
 
     def _resolve_api_key(self) -> str:
         """Resolve the API key (many local servers accept any non-empty string)."""
-        return self._get_setting("api_key") or os.getenv("CUSTOM_OPENAI_API_KEY") or "none"
+        return self._get_setting("api_key") or config.custom_openai_api_key or "none"
 
     def _ensure_client(self):
         """Lazily initialize the async OpenAI client pointed at the custom URL."""

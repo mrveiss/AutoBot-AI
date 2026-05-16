@@ -8,6 +8,7 @@ Pin the regression: chat:session:* keys must use a configurable TTL with
 #4 of issue #6743.
 """
 
+from autobot_shared.ssot_config import config
 import importlib
 import logging
 import os
@@ -20,7 +21,7 @@ def _reload_cache_with_env(env_value):
     if env_value is None:
         os.environ.pop("AUTOBOT_CHAT_SESSION_CACHE_TTL", None)
     else:
-        os.environ["AUTOBOT_CHAT_SESSION_CACHE_TTL"] = env_value
+        config.chat_session_cache_ttl = env_value
     import chat_history.cache as cache_mod
 
     importlib.reload(cache_mod)
@@ -29,12 +30,12 @@ def _reload_cache_with_env(env_value):
 
 @pytest.fixture(autouse=True)
 def _restore_env():
-    saved = os.environ.get("AUTOBOT_CHAT_SESSION_CACHE_TTL")
+    saved = config.chat_session_cache_ttl
     yield
     if saved is None:
         os.environ.pop("AUTOBOT_CHAT_SESSION_CACHE_TTL", None)
     else:
-        os.environ["AUTOBOT_CHAT_SESSION_CACHE_TTL"] = saved
+        config.chat_session_cache_ttl = saved
     import chat_history.cache as cache_mod
 
     importlib.reload(cache_mod)
@@ -84,7 +85,7 @@ def _reload_cache_with_recent_env(env_value):
     if env_value is None:
         os.environ.pop("AUTOBOT_CHAT_RECENT_MAX_ENTRIES", None)
     else:
-        os.environ["AUTOBOT_CHAT_RECENT_MAX_ENTRIES"] = env_value
+        config.chat_recent_max_entries = env_value
     import chat_history.cache as cache_mod
 
     importlib.reload(cache_mod)
@@ -93,12 +94,12 @@ def _reload_cache_with_recent_env(env_value):
 
 @pytest.fixture(autouse=False)
 def _restore_recent_env():
-    saved = os.environ.get("AUTOBOT_CHAT_RECENT_MAX_ENTRIES")
+    saved = config.chat_recent_max_entries
     yield
     if saved is None:
         os.environ.pop("AUTOBOT_CHAT_RECENT_MAX_ENTRIES", None)
     else:
-        os.environ["AUTOBOT_CHAT_RECENT_MAX_ENTRIES"] = saved
+        config.chat_recent_max_entries = saved
     import chat_history.cache as cache_mod
 
     importlib.reload(cache_mod)

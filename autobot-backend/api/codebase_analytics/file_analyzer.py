@@ -7,6 +7,7 @@ Per-file analysis orchestration for codebase analytics.
 Issue #2013: Decomposed from scanner.py god module.
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import logging
 import os
@@ -45,7 +46,7 @@ logger = logging.getLogger(__name__)
 # Higher values = faster scanning but more memory/CPU usage
 # Default: 50, Range: 1-200
 try:
-    _parallel_concurrency = int(os.getenv("CODEBASE_INDEX_PARALLEL_FILES", "50"))
+    _parallel_concurrency = int(config.codebase_index_parallel_files)
     PARALLEL_FILE_CONCURRENCY = max(1, min(_parallel_concurrency, 200))
 except ValueError:
     logger.warning("Invalid CODEBASE_INDEX_PARALLEL_FILES, using default 50")
@@ -55,7 +56,7 @@ except ValueError:
 # When True, files are processed in parallel using asyncio.gather with semaphore
 # When False, falls back to sequential processing (original behavior)
 # Default: True (parallel mode enabled)
-PARALLEL_MODE_ENABLED = os.getenv("CODEBASE_PARALLEL_MODE", "true").lower() == "true"
+PARALLEL_MODE_ENABLED = config.codebase_parallel_mode.lower() == "true"
 
 
 # Issue #398: File type mapping for cleaner dispatch

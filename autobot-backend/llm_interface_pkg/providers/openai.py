@@ -77,7 +77,7 @@ class OpenAIProvider(BaseProvider):
         """Resolve API key from settings, environment, or config."""
         if self._api_key:
             return self._api_key
-        key = self._get_setting("api_key") or os.getenv("OPENAI_API_KEY")
+        key = self._get_setting("api_key") or config.openai_api_key
         if not key:
             try:
                 from autobot_shared.ssot_config import config as _ssot_config
@@ -101,7 +101,7 @@ class OpenAIProvider(BaseProvider):
             raise ValueError(
                 "OpenAI API key not configured. " "Set OPENAI_API_KEY or provide api_key in provider settings."
             )
-        base_url = self._get_setting("base_url") or os.getenv("OPENAI_API_BASE_URL")
+        base_url = self._get_setting("base_url") or config.openai_api_base_url
         kwargs: Dict[str, Any] = {"api_key": api_key}
         if base_url:
             kwargs["base_url"] = base_url
