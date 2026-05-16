@@ -19,6 +19,7 @@ Each anti-pattern includes:
 """
 
 import ast
+import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -150,6 +151,8 @@ class AntiPatternType(Enum):
     # Issue #6684: consolidation opportunities (missing-inheritance siblings to LSP)
     DUPLICATE_ENUM = "duplicate_enum"
     DUPLICATE_CLASS_SHAPE = "duplicate_class_shape"
+    # Issue #6871: modules with zero production callers (closed tracker, unwired code)
+    UNWIRED_TRACKER = "unwired_tracker"
 
 
 @dataclass
@@ -395,6 +398,8 @@ class AntiPatternDetector:
         # Issue #6684: consolidation opportunities (missing-inheritance siblings to LSP)
         anti_patterns.extend(await self._detect_duplicate_enums())
         anti_patterns.extend(await self._detect_duplicate_class_shapes())
+        # Issue #6871: modules with zero production callers (closed tracker, unwired code)
+        anti_patterns.extend(await self._detect_unwired_trackers(root_path))
 
         # Phase 3: Generate report
         analysis_time = time.time() - start_time
@@ -445,6 +450,8 @@ class AntiPatternDetector:
         results.extend(await self._detect_lsp_violations())
         results.extend(await self._detect_duplicate_enums())
         results.extend(await self._detect_duplicate_class_shapes())
+        # Issue #6871: include unwired-tracker findings in the cross-file pass
+        results.extend(await self._detect_unwired_trackers(root_path))
         return results
 
     async def _parse_codebase(self, root_path: str, patterns: List[str], exclude_patterns: List[str]) -> None:
@@ -1652,6 +1659,155 @@ class AntiPatternDetector:
 
         return issues
 
+    # ========== Unwired Tracker Detection (Issue #6871) ==========
+
+    # Regex matching issue/tracker references in file headers (first N lines).
+    # Mirrors the ISSUE_REF_RE in pipeline-scripts/audit_unwired_trackers.py
+    # but scoped to the most common forms for simplicity.
+    _ISSUE_REF_RE = re.compile(
+        r"(?:^|\W)(?:Issue|Closes|Fixes|Resolves|See|Related|Tracking)\s+#(\d+)\b"
+        r"|(?:^|\s)#(\d+):"
+        r"|\(#(\d+)\)"
+        r"|\[#(\d+)\]"
+        r"|/issues/(\d+)\b",
+        re.MULTILINE,
+    )
+
+    # Ambiguous module stems — skipped to avoid false positives (mirrors audit script).
+    _AMBIGUOUS_STEMS = frozenset(
+        {
+            "__init__",
+            "types",
+            "utils",
+            "common",
+            "base",
+            "config",
+            "constants",
+            "helpers",
+            "main",
+            "index",
+        }
+    )
+
+    # Number of lines from the top of each file to scan for issue references.
+    _TRACKER_SCAN_LINES = 40
+
+    def _extract_issue_refs(self, file_path: Path) -> List[int]:
+        """Return list of issue numbers found in the first _TRACKER_SCAN_LINES of the file."""
+        try:
+            with file_path.open("r", encoding="utf-8") as f:
+                head = "".join(line for _, line in zip(range(self._TRACKER_SCAN_LINES), f))
+        except (OSError, UnicodeDecodeError):
+            return []
+        refs: List[int] = []
+        for m in self._ISSUE_REF_RE.finditer(head):
+            n = m.group(1) or m.group(2) or m.group(3) or m.group(4) or m.group(5)
+            if n:
+                refs.append(int(n))
+        # Dedupe while preserving order
+        return list(dict.fromkeys(refs))
+
+    async def _detect_unwired_trackers(self, root_path: str = ".") -> List[AntiPatternInstance]:
+        """Detect Python modules whose header cites an issue tracker but has
+        zero production callers (Issue #6871 — Tier 4 of #6836).
+
+        A module is flagged when:
+        - Its first _TRACKER_SCAN_LINES contain an Issue #N reference, AND
+        - Its stem is not in _AMBIGUOUS_STEMS, AND
+        - No other non-test Python module in root_path imports it.
+
+        Severity is LOW: the module may still be valid scaffolding. The finding
+        guides human review rather than demanding immediate deletion.
+        """
+        issues: List[AntiPatternInstance] = []
+        root = Path(root_path)
+        if not root.exists():
+            return issues
+
+        # Collect all Python source files (non-test) under root_path.
+        py_files: List[Path] = []
+        for f in root.rglob("*.py"):
+            path_str = str(f)
+            if any(pat in path_str for pat in _DEFAULT_EXCLUDE_PATTERNS):
+                continue
+            py_files.append(f)
+
+        # Separate candidates (files with issue refs) from the full corpus.
+        # We build a lookup: stem → set of files that import it (by stem name).
+        stem_to_importers: dict = {}
+        for f in py_files:
+            stem = f.stem
+            if stem in self._AMBIGUOUS_STEMS:
+                continue
+            if stem not in stem_to_importers:
+                stem_to_importers[stem] = set()
+
+        # Single pass: parse each file for its imports to build the caller index.
+        for f in py_files:
+            try:
+                content = f.read_text(encoding="utf-8")
+                tree = ast.parse(content, filename=str(f))
+            except Exception:
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        imported_stem = alias.name.split(".")[-1]
+                        if imported_stem in stem_to_importers:
+                            stem_to_importers[imported_stem].add(str(f))
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    imported_stem = node.module.split(".")[-1]
+                    if imported_stem in stem_to_importers:
+                        stem_to_importers[imported_stem].add(str(f))
+                    # also check names imported from the module
+                    for alias in node.names:
+                        name_stem = alias.name
+                        if name_stem in stem_to_importers:
+                            stem_to_importers[name_stem].add(str(f))
+
+        # Identify candidate files with issue refs AND zero external callers.
+        for f in py_files:
+            stem = f.stem
+            if stem in self._AMBIGUOUS_STEMS:
+                continue
+            refs = self._extract_issue_refs(f)
+            if not refs:
+                continue
+            callers = stem_to_importers.get(stem, set())
+            # Remove self-reference
+            callers = {c for c in callers if c != str(f)}
+            if callers:
+                continue  # has at least one production caller
+
+            issues.append(
+                AntiPatternInstance(
+                    pattern_type=AntiPatternType.UNWIRED_TRACKER,
+                    severity=Severity.LOW,
+                    file_path=str(f),
+                    line_number=1,
+                    entity_name=stem,
+                    description=(
+                        f"Module '{stem}' cites tracker #{refs[0]} in its header "
+                        f"but has 0 production callers in the analyzed codebase. "
+                        f"The associated tracker may have been closed prematurely."
+                    ),
+                    metrics={
+                        "tracker_number": refs[0],
+                        "all_tracker_refs": refs,
+                        "production_callers": 0,
+                    },
+                    suggestion=(
+                        "Either wire this module into a production code path, "
+                        f"reopen tracker #{refs[0]} if the integration was unfinished, "
+                        "or document the deliberate deferral with a comment."
+                    ),
+                    refactoring_effort="low",
+                )
+            )
+
+        logger.info("[#6871] Unwired-tracker scan: %d findings in %s", len(issues), root_path)
+        return issues
+
     # ========== Report Generation ==========
 
     def _generate_report(self, anti_patterns: List[AntiPatternInstance], analysis_time: float) -> AntiPatternReport:
@@ -1728,6 +1884,11 @@ class AntiPatternDetector:
         (
             "dead_code",
             "🟢 LOW: Remove Dead Code - " "Delete verified unused classes and functions",
+        ),
+        # Issue #6871: unwired tracker modules
+        (
+            "unwired_tracker",
+            "🟢 LOW: Wire or document tracker-closed modules with zero production callers",
         ),
     ]
 
