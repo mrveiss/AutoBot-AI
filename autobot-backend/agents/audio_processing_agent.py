@@ -10,10 +10,10 @@ Handles audio content analysis, transcription processing, and audio metadata
 interpretation using LLM capabilities.
 """
 
-import threading
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -164,15 +164,5 @@ class AudioProcessingAgent(StandardizedAgent):
         return str(response)
 
 
-_audio_processing_agent_instance = None
-_audio_processing_agent_lock = threading.Lock()
-
-
-def get_audio_processing_agent() -> AudioProcessingAgent:
-    """Get the singleton Audio Processing Agent instance (thread-safe)."""
-    global _audio_processing_agent_instance
-    if _audio_processing_agent_instance is None:
-        with _audio_processing_agent_lock:
-            if _audio_processing_agent_instance is None:
-                _audio_processing_agent_instance = AudioProcessingAgent()
-    return _audio_processing_agent_instance
+get_audio_processing_agent = lazy_singleton(AudioProcessingAgent)
+"""Get the singleton Audio Processing Agent instance (thread-safe)."""

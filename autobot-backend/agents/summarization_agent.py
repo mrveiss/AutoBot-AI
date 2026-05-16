@@ -10,10 +10,10 @@ Handles text summarization with configurable length, key point extraction,
 and structured summary generation.
 """
 
-import threading
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -160,15 +160,5 @@ class SummarizationAgent(StandardizedAgent):
         return str(response)
 
 
-_summarization_agent_instance = None
-_summarization_agent_lock = threading.Lock()
-
-
-def get_summarization_agent() -> SummarizationAgent:
-    """Get the singleton Summarization Agent instance (thread-safe)."""
-    global _summarization_agent_instance
-    if _summarization_agent_instance is None:
-        with _summarization_agent_lock:
-            if _summarization_agent_instance is None:
-                _summarization_agent_instance = SummarizationAgent()
-    return _summarization_agent_instance
+get_summarization_agent = lazy_singleton(SummarizationAgent)
+"""Get the singleton Summarization Agent instance (thread-safe)."""

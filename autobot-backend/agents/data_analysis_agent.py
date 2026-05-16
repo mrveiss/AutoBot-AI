@@ -10,10 +10,10 @@ Handles data analysis tasks using LLM to identify patterns, compute statistics,
 and provide insights from structured and unstructured data.
 """
 
-import threading
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -166,15 +166,5 @@ class DataAnalysisAgent(StandardizedAgent):
         return str(response)
 
 
-_data_analysis_agent_instance = None
-_data_analysis_agent_lock = threading.Lock()
-
-
-def get_data_analysis_agent() -> DataAnalysisAgent:
-    """Get the singleton Data Analysis Agent instance (thread-safe)."""
-    global _data_analysis_agent_instance
-    if _data_analysis_agent_instance is None:
-        with _data_analysis_agent_lock:
-            if _data_analysis_agent_instance is None:
-                _data_analysis_agent_instance = DataAnalysisAgent()
-    return _data_analysis_agent_instance
+get_data_analysis_agent = lazy_singleton(DataAnalysisAgent)
+"""Get the singleton Data Analysis Agent instance (thread-safe)."""

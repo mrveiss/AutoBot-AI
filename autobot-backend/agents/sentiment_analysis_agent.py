@@ -10,10 +10,10 @@ Handles sentiment analysis (positive/negative/neutral) and fine-grained
 emotion classification from text input.
 """
 
-import threading
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -188,15 +188,5 @@ class SentimentAnalysisAgent(StandardizedAgent):
         return str(response)
 
 
-_sentiment_analysis_agent_instance = None
-_sentiment_analysis_agent_lock = threading.Lock()
-
-
-def get_sentiment_analysis_agent() -> SentimentAnalysisAgent:
-    """Get the singleton Sentiment Analysis Agent instance (thread-safe)."""
-    global _sentiment_analysis_agent_instance
-    if _sentiment_analysis_agent_instance is None:
-        with _sentiment_analysis_agent_lock:
-            if _sentiment_analysis_agent_instance is None:
-                _sentiment_analysis_agent_instance = SentimentAnalysisAgent()
-    return _sentiment_analysis_agent_instance
+get_sentiment_analysis_agent = lazy_singleton(SentimentAnalysisAgent)
+"""Get the singleton Sentiment Analysis Agent instance (thread-safe)."""

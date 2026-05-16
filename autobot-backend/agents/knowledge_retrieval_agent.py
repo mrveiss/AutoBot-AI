@@ -12,6 +12,7 @@ import time
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -599,19 +600,5 @@ If the information is not in the provided text, respond with "Information not fo
         return False
 
 
-# Singleton instance (thread-safe)
-import threading
-
-_knowledge_retrieval_agent_instance = None
-_knowledge_retrieval_agent_lock = threading.Lock()
-
-
-def get_knowledge_retrieval_agent() -> KnowledgeRetrievalAgent:
-    """Get the singleton Knowledge Retrieval Agent instance (thread-safe)."""
-    global _knowledge_retrieval_agent_instance
-    if _knowledge_retrieval_agent_instance is None:
-        with _knowledge_retrieval_agent_lock:
-            # Double-check after acquiring lock
-            if _knowledge_retrieval_agent_instance is None:
-                _knowledge_retrieval_agent_instance = KnowledgeRetrievalAgent()
-    return _knowledge_retrieval_agent_instance
+get_knowledge_retrieval_agent = lazy_singleton(KnowledgeRetrievalAgent)
+"""Get the singleton Knowledge Retrieval Agent instance (thread-safe)."""

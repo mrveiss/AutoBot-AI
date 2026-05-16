@@ -12,6 +12,7 @@ import json
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -594,19 +595,5 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
         return any(pattern in message_lower for pattern in rag_patterns)
 
 
-# Singleton instance (thread-safe)
-import threading
-
-_rag_agent_instance = None
-_rag_agent_lock = threading.Lock()
-
-
-def get_rag_agent() -> RAGAgent:
-    """Get the singleton RAG Agent instance (thread-safe)."""
-    global _rag_agent_instance
-    if _rag_agent_instance is None:
-        with _rag_agent_lock:
-            # Double-check after acquiring lock
-            if _rag_agent_instance is None:
-                _rag_agent_instance = RAGAgent()
-    return _rag_agent_instance
+get_rag_agent = lazy_singleton(RAGAgent)
+"""Get the singleton RAG Agent instance (thread-safe)."""

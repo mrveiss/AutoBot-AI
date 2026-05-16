@@ -25,6 +25,7 @@ from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)
 
@@ -94,8 +95,6 @@ class DocumentationWatcherService:
     Issue #165: Provides real-time sync between docs/ changes and the knowledge base.
     """
 
-    _instance: "DocumentationWatcherService" | None = None
-
     def __init__(self) -> None:
         """Initialize the documentation watcher service."""
         self._observer: Observer | None = None
@@ -111,13 +110,6 @@ class DocumentationWatcherService:
             "last_change": None,
             "errors": 0,
         }
-
-    @classmethod
-    def get_instance(cls) -> "DocumentationWatcherService":
-        """Get or create singleton instance."""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
 
     async def start(self) -> bool:
         """
@@ -403,9 +395,8 @@ class DocumentationWatcherService:
 
 
 # Convenience functions
-def get_documentation_watcher() -> DocumentationWatcherService:
-    """Get the documentation watcher singleton instance."""
-    return DocumentationWatcherService.get_instance()
+get_documentation_watcher = lazy_singleton(DocumentationWatcherService)
+"""Get the documentation watcher singleton instance."""
 
 
 async def start_documentation_watcher() -> bool:
