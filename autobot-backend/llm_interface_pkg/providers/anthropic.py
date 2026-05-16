@@ -32,6 +32,7 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 
 from __future__ import annotations
 
+from autobot_shared.ssot_config import config
 import logging
 import os
 import re
@@ -164,7 +165,7 @@ class AnthropicProvider(BaseProvider):
         """Resolve API key from settings or environment."""
         if self._api_key:
             return self._api_key
-        self._api_key = self._get_setting("api_key") or os.getenv("ANTHROPIC_API_KEY")
+        self._api_key = self._get_setting("api_key") or config.anthropic_api_key
         return self._api_key
 
     def _ensure_client(self):

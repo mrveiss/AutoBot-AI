@@ -24,6 +24,7 @@ Sub-module responsibilities
 - file_counter         — file discovery and stats logging
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import logging
 import os
@@ -96,7 +97,7 @@ logger = logging.getLogger(__name__)
 # Default: 50, Range: 1-100
 # =============================================================================
 try:
-    _parallel_files = int(os.getenv("CODEBASE_SCAN_PARALLEL_FILES", "50"))
+    _parallel_files = int(config.codebase_scan_parallel_files)
     PARALLEL_FILE_PROCESSING = max(1, min(_parallel_files, 100))
 except ValueError:
     logger.warning("Invalid CODEBASE_SCAN_PARALLEL_FILES, using default 50")

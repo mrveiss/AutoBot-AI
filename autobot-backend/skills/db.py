@@ -5,6 +5,7 @@
 
 import os
 import threading
+from autobot_shared.ssot_config import config
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
 
@@ -28,7 +29,7 @@ class _SkillsEngineManager:
         if self._engine is None:
             with self._lock:
                 if self._engine is None:
-                    base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+                    base = config.base_dir
                     db_path = os.path.join(base, "data", "autobot_data.db")
                     self._engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
         return self._engine

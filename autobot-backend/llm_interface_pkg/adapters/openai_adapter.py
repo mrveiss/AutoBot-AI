@@ -10,6 +10,7 @@ This adapter's sole responsibility is the ``test_environment()`` diagnostic
 method used by ``api/adapters.py``.
 """
 
+from autobot_shared.ssot_config import config
 import logging
 import os
 import time
@@ -36,7 +37,7 @@ class OpenAIAdapter(AdapterBase):
 
     def _get_api_key(self) -> Optional[str]:
         """Resolve OpenAI API key from config or environment."""
-        return self.config.settings.get("api_key") or os.getenv("OPENAI_API_KEY")
+        return self.config.settings.get("api_key") or config.openai_api_key
 
     def _ensure_provider(self):
         """Lazily construct the canonical OpenAIProvider."""

@@ -9,6 +9,7 @@ Provides endpoints for configuring and monitoring AI agents used throughout the 
 Each agent can have its own LLM model configuration and status monitoring.
 """
 
+from autobot_shared.ssot_config import config
 import logging
 import os
 from datetime import datetime, timezone
@@ -46,20 +47,17 @@ from autobot_shared.ssot_config import ROUTING_MODEL as _SSOT_ROUTING
 from autobot_shared.ssot_config import SYSTEM_MODEL as _SSOT_SYSTEM
 
 # Routing tier — orchestrator only, no tool use
-ROUTING_TIER_MODEL = os.getenv("AUTOBOT_ROUTING_MODEL", _SSOT_ROUTING)
+ROUTING_TIER_MODEL = config.routing_model
 # Classification tier — intent detection
-CLASSIFICATION_TIER_MODEL = os.getenv("AUTOBOT_CLASSIFICATION_MODEL", _SSOT_CLASSIFICATION)
+CLASSIFICATION_TIER_MODEL = config.classification_model
 # Light processing tier — extraction, formatting, lightweight tasks
-LIGHT_TIER_MODEL = os.getenv("AUTOBOT_LIGHT_PROCESSING_MODEL", _SSOT_LIGHT)
+LIGHT_TIER_MODEL = config.light_processing_model
 # Instruction following tier — RAG, entity extraction, instruction following
-INSTRUCTION_TIER_MODEL = os.getenv("AUTOBOT_INSTRUCTION_MODEL", _SSOT_INSTRUCTION)
+INSTRUCTION_TIER_MODEL = config.instruction_model
 # System/uncensored tier — system commands, security tasks
-SYSTEM_TIER_MODEL = os.getenv("AUTOBOT_SYSTEM_MODEL", _SSOT_SYSTEM)
+SYSTEM_TIER_MODEL = config.system_model
 # Quality tier — user-facing chat, research, code analysis
-QUALITY_TIER_MODEL = os.getenv(
-    "AUTOBOT_DEFAULT_LLM_MODEL",
-    os.getenv("AUTOBOT_DEFAULT_AGENT_MODEL", _SSOT_QUALITY),
-)
+QUALITY_TIER_MODEL = config.misc.default_llm_model or config.default_agent_model
 
 router = APIRouter()
 

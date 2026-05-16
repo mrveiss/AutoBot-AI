@@ -28,6 +28,7 @@ Issue: #751 - Consolidate Common Utilities
 
 import logging
 import os
+from autobot_shared.ssot_config import config
 import threading
 import time
 from typing import Any, Dict, Optional
@@ -81,7 +82,7 @@ class ConfigRegistry:
 
             # Try environment variable (AUTOBOT_REDIS_HOST format)
             env_key = f"AUTOBOT_{key.upper().replace('.', '_')}"
-            env_value = os.getenv(env_key)
+            env_value = os.getenv(env_key)  # ssot-config-exempt: dynamic config key lookup
             if env_value is not None:
                 cls._update_cache(key, env_value)
                 return env_value

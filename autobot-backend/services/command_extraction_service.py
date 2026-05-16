@@ -21,6 +21,7 @@ Key Features:
 import logging
 import os
 import re
+from autobot_shared.ssot_config import config
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -28,8 +29,8 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_SLM_URL = os.environ.get("SLM_URL", "")
-_DEFAULT_SLM_TOKEN = os.environ.get("SLM_AUTH_TOKEN", "")
+_DEFAULT_SLM_URL = config.slm_url
+_DEFAULT_SLM_TOKEN = config.slm_auth_token
 
 
 @dataclass

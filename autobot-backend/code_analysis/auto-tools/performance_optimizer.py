@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shutil
+from autobot_shared.ssot_config import config
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -457,7 +458,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) == 1:
         # Default to AutoBot frontend directory
-        project_root = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")  # noqa: ssot-path
+        project_root = config.base_dir  # noqa: ssot-path
         target_dir = "autobot-frontend/src"
 
         print("🚀 AutoBot Console.log Performance Fix Agent")  # noqa: print

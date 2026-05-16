@@ -15,6 +15,7 @@ Security Features:
 - Environment variable-based key management
 """
 
+from autobot_shared.ssot_config import config
 import base64
 import hashlib
 import logging
@@ -59,10 +60,10 @@ class EncryptionService:
 
     def _load_master_key(self) -> Optional[str]:
         """Load master key from environment variables."""
-        key = os.getenv("AUTOBOT_ENCRYPTION_KEY")
+        key = config.encryption_key
         if not key:
             # Try alternative environment variable names
-            key = os.getenv("ENCRYPTION_KEY") or os.getenv("MASTER_KEY")
+            key = config.encryption_key or config.master_key
 
         if not key:
             logger.error("No encryption key found in environment variables. " "Please set AUTOBOT_ENCRYPTION_KEY.")

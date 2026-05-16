@@ -27,6 +27,7 @@ Usage:
 
 from __future__ import annotations
 
+from autobot_shared.ssot_config import config
 import asyncio
 import logging
 import time
@@ -354,7 +355,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     # Ollama (local) — always registered, highest priority
     try:
         ssot = get_ssot_config()
-        ollama_url = ssot.ollama_url if ssot else os.getenv("AUTOBOT_OLLAMA_ENDPOINT", "http://127.0.0.1:11434")
+        ollama_url = ssot.ollama_url if ssot else config.ollama_endpoint
         from llm_interface_pkg.providers.ollama_provider import OllamaProvider
 
         ollama_provider = OllamaProvider(settings={"base_url": ollama_url})
@@ -364,7 +365,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
         logger.debug("Ollama provider not registered: %s", exc)
 
     # OpenAI — registered when API key is present
-    openai_key = os.getenv("OPENAI_API_KEY")
+    openai_key = config.openai_api_key
     if openai_key:
         openai_provider = OpenAIProvider(settings={"api_key": openai_key})
         registry.register(openai_provider)
@@ -373,7 +374,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
         logger.debug("OPENAI_API_KEY not set — OpenAI provider not registered")
 
     # Anthropic — registered when API key is present
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    anthropic_key = config.anthropic_api_key
     if anthropic_key:
         anthropic_provider = AnthropicProvider(settings={"api_key": anthropic_key})
         registry.register(anthropic_provider)
@@ -382,7 +383,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
         logger.debug("ANTHROPIC_API_KEY not set — Anthropic provider not registered")
 
     # Groq — registered when API key is present
-    groq_key = os.getenv("GROQ_API_KEY")
+    groq_key = config.groq_api_key
     if groq_key:
         groq_provider = GroqProvider(settings={"api_key": groq_key})
         registry.register(groq_provider)
@@ -391,7 +392,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
         logger.debug("GROQ_API_KEY not set — Groq provider not registered")
 
     # HuggingFace — registered when HF token is present
-    hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_API_TOKEN")
+    hf_token = config.hf_token or config.huggingface_api_token
     if hf_token:
         hf_provider = HuggingFaceProvider(settings={"api_token": hf_token})
         registry.register(hf_provider)
@@ -400,13 +401,13 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
         logger.debug("HF_TOKEN not set — HuggingFace provider not registered")
 
     # Custom OpenAI-compatible endpoint — registered when base URL is configured
-    custom_url = os.getenv("CUSTOM_OPENAI_BASE_URL")
+    custom_url = config.custom_openai_base_url
     if custom_url:
         custom_provider = CustomOpenAIProvider(
             settings={
                 "base_url": custom_url,
-                "api_key": os.getenv("CUSTOM_OPENAI_API_KEY", "none"),
-                "default_model": os.getenv("CUSTOM_OPENAI_DEFAULT_MODEL", ""),
+                "api_key": config.custom_openai_api_key,
+                "default_model": config.custom_openai_default_model,
             }
         )
         registry.register(custom_provider)
@@ -415,13 +416,13 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
         logger.debug("CUSTOM_OPENAI_BASE_URL not set — custom OpenAI provider not registered")
 
     # OpenRouter — registered when API key is present (Issue #4341)
-    openrouter_key = os.getenv("OPENROUTER_API_KEY")
+    openrouter_key = config.openrouter_api_key
     if openrouter_key:
         try:
             openrouter_provider = OpenRouterProvider(
                 settings={
                     "api_key": openrouter_key,
-                    "default_model": os.getenv("OPENROUTER_DEFAULT_MODEL", "gpt-3.5-turbo"),
+                    "default_model": config.openrouter_default_model,
                 }
             )
             registry.register(openrouter_provider)
@@ -432,16 +433,13 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
         logger.debug("OPENROUTER_API_KEY not set — OpenRouter provider not registered")
 
     # Nous Portal — registered when API key is present (Issue #4341)
-    nous_key = os.getenv("NOUS_API_KEY") or os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_API_TOKEN")
+    nous_key = config.nous_api_key or config.hf_token or config.huggingface_api_token
     if nous_key:
         try:
             nous_provider = NousPortalProvider(
                 settings={
                     "api_key": nous_key,
-                    "default_model": os.getenv(
-                        "NOUS_DEFAULT_MODEL",
-                        "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO",
-                    ),
+                    "default_model": config.misc.nous_default_model or "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO",
                 }
             )
             registry.register(nous_provider)
@@ -452,15 +450,15 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
         logger.debug("NOUS_API_KEY not set — Nous Portal provider not registered")
 
     # vLLM — registered when model configuration is provided (Issue #4341)
-    vllm_model = os.getenv("VLLM_MODEL")
+    vllm_model = config.vllm_model
     if vllm_model:
         try:
             vllm_provider = VLLMBaseProvider(
                 settings={
                     "model": vllm_model,
-                    "tensor_parallel_size": int(os.getenv("VLLM_TENSOR_PARALLEL_SIZE", "1")),
-                    "gpu_memory_utilization": float(os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.9")),
-                    "dtype": os.getenv("VLLM_DTYPE", "auto"),
+                    "tensor_parallel_size": int(config.vllm_tensor_parallel_size),
+                    "gpu_memory_utilization": float(config.vllm_gpu_memory_utilization),
+                    "dtype": config.vllm_dtype,
                 }
             )
             registry.register(vllm_provider)

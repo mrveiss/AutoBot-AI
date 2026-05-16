@@ -9,6 +9,7 @@ Configuration loading and merging logic.
 import json
 import logging
 import os
+from autobot_shared.ssot_config import config
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -160,7 +161,7 @@ def apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
     env_overrides = {}
 
     for env_var, config_path in ENV_VAR_MAPPINGS.items():
-        env_value = os.getenv(env_var)
+        env_value = os.getenv(env_var)  # ssot-config-exempt: dynamic config key mapped from ENV_VAR_MAPPINGS
         if env_value is not None:
             converted_value = _convert_env_value(env_value)
             set_nested_value(env_overrides, config_path, converted_value)

@@ -43,14 +43,14 @@ _backend_ssl_options = None
 
 if _redis_tls_enabled:
     # Check for explicit cert paths first (set by SLM enable-tls playbook)
-    _ca_cert = os.getenv("AUTOBOT_TLS_CA_PATH")
-    _client_cert = os.getenv("AUTOBOT_TLS_CERT_PATH")
-    _client_key = os.getenv("AUTOBOT_TLS_KEY_PATH")
+    _ca_cert = config.tls_ca_path
+    _client_cert = config.tls_cert_path
+    _client_key = config.tls_key_path
 
     # Fallback to legacy cert_dir pattern for backwards compatibility
     if not _ca_cert or not _client_cert or not _client_key:
         _project_root = Path(__file__).parent.parent
-        _cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")
+        _cert_dir = config.tls_cert_dir
         _ca_cert = str(_project_root / _cert_dir / "ca" / "ca-cert.pem")
         _client_cert = str(_project_root / _cert_dir / "main-host" / "server-cert.pem")
         _client_key = str(_project_root / _cert_dir / "main-host" / "server-key.pem")
@@ -83,8 +83,8 @@ _worker_max_tasks = _celery_config.get("worker_max_tasks_per_child", 100)
 # Configure Celery with Redis broker and result backend
 celery_app = Celery(
     "autobot",
-    broker=os.environ.get("CELERY_BROKER_URL", _default_broker_url),
-    backend=os.environ.get("CELERY_RESULT_BACKEND", _default_backend_url),
+    broker=config.celery_broker_url,
+    backend=config.celery_result_backend,
 )
 
 # Celery configuration

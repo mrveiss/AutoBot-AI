@@ -16,6 +16,7 @@ Key Features:
 - Automatic recovery and retry logic
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import logging
 import os
@@ -76,7 +77,7 @@ class BackgroundLLMSync:
             ),
             (
                 "openai",
-                os.getenv("OPENAI_API_BASE_URL", "https://api.openai.com/v1"),
+                config.openai_api_base_url,
             ),
             (
                 "local_llm",

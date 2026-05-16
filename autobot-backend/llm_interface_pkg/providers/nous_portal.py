@@ -14,6 +14,7 @@ Configuration:
 Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
+from autobot_shared.ssot_config import config
 from __future__ import annotations
 
 import logging
@@ -63,9 +64,9 @@ class NousPortalProvider(BaseProvider):
             return self._api_key
         key = (
             self._get_setting("api_key")
-            or os.getenv("HF_TOKEN")
-            or os.getenv("HUGGINGFACE_API_TOKEN")
-            or os.getenv("NOUS_API_KEY")
+            or config.hf_token
+            or config.huggingface_api_token
+            or config.nous_api_key
         )
         self._api_key = key
         return self._api_key
@@ -75,7 +76,7 @@ class NousPortalProvider(BaseProvider):
         if self._base_url:
             return self._base_url
         url = (
-            self._get_setting("base_url") or os.getenv("NOUS_API_BASE_URL") or "https://api-inference.huggingface.co/v1"
+            self._get_setting("base_url") or config.nous_api_base_url or "https://api-inference.huggingface.co/v1"
         )
         self._base_url = url
         return url

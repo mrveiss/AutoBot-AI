@@ -3,6 +3,7 @@ Security Vulnerability Analyzer using Redis and NPU acceleration
 Analyzes codebase for security vulnerabilities and defensive coding issues
 """
 
+from autobot_shared.ssot_config import config
 import ast
 import json
 import logging
@@ -714,7 +715,7 @@ class SecurityAnalyzer:
             },
             "hardcoded_secrets": {
                 "before": 'API_KEY = "sk-1234567890abcdef"',
-                "after": 'API_KEY = os.getenv("API_KEY")',
+                "after": 'API_KEY = config.api_key',
             },
             "insecure_crypto": {
                 "before": "hashlib.md5(password.encode()).hexdigest()",

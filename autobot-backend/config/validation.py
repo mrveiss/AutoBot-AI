@@ -11,6 +11,7 @@ Issue #3398: enhanced validation — startup warnings, conflict detection,
 
 import logging
 import os
+from autobot_shared.ssot_config import config
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
@@ -138,7 +139,7 @@ def validate_startup_config(raw_config: Dict[str, Any]) -> ConfigValidationResul
     # Build a snapshot of what the file-based config would look like *without*
     # applying env overrides so we can compare.
     for env_var, config_path in ENV_VAR_MAPPINGS.items():
-        env_value_raw = os.getenv(env_var)
+        env_value_raw = os.getenv(env_var)  # ssot-config-exempt: dynamic config key mapped from ENV_VAR_MAPPINGS
         if env_value_raw is None:
             continue  # env var not set — no override
 

@@ -6,6 +6,7 @@ Environment Variable Analyzer using Redis and NPU acceleration
 Analyzes codebase for hardcoded values that should be environment variables
 """
 
+from autobot_shared.ssot_config import config
 from __future__ import annotations
 
 import ast
@@ -1283,8 +1284,8 @@ class EnvironmentAnalyzer:
         """Use LLM to filter false positives. Issue #633."""
         import os
 
-        ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST", "localhost")
-        ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT", "11434")
+        ollama_host = config.ollama_host
+        ollama_port = config.ollama_port
         ollama_url = f"http://{ollama_host}:{ollama_port}/api/generate"
 
         candidates = self._select_llm_candidates(hardcoded_values, priority_filter)

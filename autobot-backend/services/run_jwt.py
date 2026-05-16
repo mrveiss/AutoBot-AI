@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import logging
 import os
+from autobot_shared.ssot_config import config
 import time
 import uuid
 from datetime import timedelta

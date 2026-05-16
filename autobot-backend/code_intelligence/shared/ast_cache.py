@@ -32,6 +32,7 @@ Usage:
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
+from autobot_shared.ssot_config import config
 import ast
 import logging
 import os
@@ -47,8 +48,8 @@ from autobot_shared.singleton_factory import lazy_singleton
 logger = logging.getLogger(__name__)
 
 # Configuration via environment variables
-DEFAULT_CACHE_SIZE = int(os.getenv("AST_CACHE_MAX_SIZE", "1000"))
-DEFAULT_CONTENT_CACHE_SIZE = int(os.getenv("CONTENT_CACHE_MAX_SIZE", "500"))
+DEFAULT_CACHE_SIZE = int(config.ast_cache_max_size)
+DEFAULT_CONTENT_CACHE_SIZE = int(config.content_cache_max_size)
 
 
 @dataclass

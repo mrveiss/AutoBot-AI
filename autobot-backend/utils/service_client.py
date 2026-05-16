@@ -333,17 +333,17 @@ def load_service_credentials_from_env() -> tuple[str, str]:
     from pathlib import Path
 
     # Try SERVICE_ID from environment
-    service_id = os.getenv("SERVICE_ID")
+    service_id = config.service_id
     if not service_id:
         raise ValueError("SERVICE_ID not set in environment")
 
     # Try SERVICE_KEY directly from environment
-    service_key = os.getenv("SERVICE_KEY")
+    service_key = config.service_key
     if service_key:
         return service_id, service_key
 
     # Try loading from SERVICE_KEY_FILE
-    key_file_path = os.getenv("SERVICE_KEY_FILE")
+    key_file_path = config.service_key_file
     if not key_file_path:
         raise ValueError("Neither SERVICE_KEY nor SERVICE_KEY_FILE set in environment")
 
@@ -379,8 +379,8 @@ def create_service_client_from_env() -> ServiceHTTPClient:
         from constants.network_constants import ServiceURLs
 
         # Set environment variables
-        os.environ["SERVICE_ID"] = "main-backend"
-        os.environ["SERVICE_KEY_FILE"] = str(PATH.USER_HOME / ".autobot/service-keys/main-backend.env")
+        config.service_id = "main-backend"
+        config.service_key_file = str(PATH.USER_HOME / ".autobot/service-keys/main-backend.env")
 
         # Create client
         client = create_service_client_from_env()
@@ -393,7 +393,7 @@ def create_service_client_from_env() -> ServiceHTTPClient:
     logger.info(
         "Creating service client from environment",
         service_id=service_id,
-        key_file=os.getenv("SERVICE_KEY_FILE"),
+        key_file=config.service_key_file,
     )
 
     return ServiceHTTPClient(service_id=service_id, service_key=service_key)

@@ -32,6 +32,7 @@ Note: Uses lazy imports via __getattr__ to avoid circular import with NetworkCon
 """
 
 import logging
+from autobot_shared.ssot_config import config
 from typing import TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
@@ -78,10 +79,10 @@ class _ConfigStub:
         import os
 
         return {
-            "enabled": os.getenv("AUTOBOT_REDIS_ENABLED", "true").lower() == "true",
-            "host": os.getenv("AUTOBOT_REDIS_HOST", os.getenv("REDIS_HOST", "localhost")),
-            "port": int(os.getenv("AUTOBOT_REDIS_PORT", os.getenv("REDIS_PORT", "6379"))),
-            "db": int(os.getenv("AUTOBOT_REDIS_DB_MAIN", "0")),
+            "enabled": config.redis_enabled.lower() == "true",
+            "host": config.redis_host),
+            "port": int(config.redis_port)),
+            "db": int(config.redis_db_main),
         }
 
     def get_llm_config(self):

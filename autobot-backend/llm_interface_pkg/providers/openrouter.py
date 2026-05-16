@@ -14,6 +14,7 @@ Configuration:
 Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
+from autobot_shared.ssot_config import config
 from __future__ import annotations
 
 import logging
@@ -56,7 +57,7 @@ class OpenRouterProvider(BaseProvider):
         """Resolve API key from settings or environment."""
         if self._api_key:
             return self._api_key
-        key = self._get_setting("api_key") or os.getenv("OPENROUTER_API_KEY")
+        key = self._get_setting("api_key") or config.openrouter_api_key
         self._api_key = key
         return self._api_key
 
@@ -64,7 +65,7 @@ class OpenRouterProvider(BaseProvider):
         """Resolve base URL with default."""
         if self._base_url:
             return self._base_url
-        url = self._get_setting("base_url") or os.getenv("OPENROUTER_API_BASE_URL") or "https://openrouter.ai/api/v1"
+        url = self._get_setting("base_url") or config.openrouter_api_base_url or "https://openrouter.ai/api/v1"
         self._base_url = url
         return url
 

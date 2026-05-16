@@ -12,6 +12,7 @@ Stores key metadata in Redis MAIN database:
   llm:usage:stream            → Redis Stream (audit events)
 """
 
+from autobot_shared.ssot_config import config
 from __future__ import annotations
 
 import hashlib
@@ -30,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 # Rotation grace period: after a key is rotated the old hash remains valid for
 # this many seconds so in-flight requests finish cleanly.
-_ROTATION_GRACE_SECS = int(os.environ.get("AUTOBOT_LLM_KEY_ROTATION_GRACE_SECS", "86400"))
+_ROTATION_GRACE_SECS = int(config.llm_key_rotation_grace_secs)
 
 _KEY_TTL_STREAM_SECS = 7 * 24 * 3600  # usage stream events retained 7 days
 

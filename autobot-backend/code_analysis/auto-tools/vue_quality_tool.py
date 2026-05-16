@@ -15,6 +15,7 @@ Date: 2025-08-12
 import json
 import logging
 import re
+from autobot_shared.ssot_config import config
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -29,7 +30,7 @@ class VueSpecificFixAgent:
         """Initialize the Vue fix agent."""
         import os  # noqa: PLC0415
 
-        self.project_root = Path(project_root or os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
+        self.project_root = Path(project_root or config.base_dir)
         self.vue_dir = self.project_root / "autobot-frontend" / "src"
         self.fixes_applied = []
         self.errors = []

@@ -21,6 +21,7 @@ DAGExecutor
     have no shared join node are executed concurrently via asyncio.gather.
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import logging
 import os
@@ -587,7 +588,7 @@ class DAGExecutor:
 def _build_slm_ssl_context() -> ssl.SSLContext:
     """Create SSL context for SLM HTTP calls (mirrors slm_client pattern)."""
     ctx = ssl.create_default_context()
-    if os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() == "true":
+    if config.skip_tls_verify.lower() == "true":
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
     return ctx
@@ -662,8 +663,8 @@ async def execute_distributed_shell(node: DAGNode, ctx: DAGExecutionContext) -> 
     Returns a result dict whose ``success`` is True only when all nodes
     return exit_code 0.  Per-node details are in ``node_results``.
     """
-    slm_url = os.environ.get("SLM_URL", "").rstrip("/")
-    auth_token = os.environ.get("SLM_AUTH_TOKEN", "")
+    slm_url = config.slm_url.rstrip("/")
+    auth_token = config.slm_auth_token
     if not slm_url:
         return {
             "success": False,

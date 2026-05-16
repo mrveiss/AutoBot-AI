@@ -9,6 +9,7 @@ Handles secure storage, retrieval, and management of secrets with dual-scope sup
 import json
 import logging
 import sqlite3
+from autobot_shared.ssot_config import config
 from pathlib import Path
 from typing import Dict, List, Optional
 from uuid import uuid4
@@ -69,7 +70,7 @@ class SecretsService:
             # 3. Key file in data directory
             import os
 
-            env_key = os.getenv("AUTOBOT_SECRETS_KEY")
+            env_key = config.secrets_key
             if not env_key:
                 env_key = config_manager.get("security.secrets_key", None)
             if not env_key:

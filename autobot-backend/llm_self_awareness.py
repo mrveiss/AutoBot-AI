@@ -7,6 +7,7 @@ LLM Self-Awareness Module
 Provides context injection for LLM agents to be aware of current system state, capabilities, and phase
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import json
 import logging
@@ -143,7 +144,7 @@ class LLMSelfAwareness:
         """
         return {
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            "environment": os.getenv("AUTOBOT_ENVIRONMENT", "production"),
+            "environment": config.environment,
             "api_endpoints_available": await self._get_available_endpoints_async(),
             "data_sources": [
                 "knowledge_base",

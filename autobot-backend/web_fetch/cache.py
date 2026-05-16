@@ -18,6 +18,8 @@ import logging
 import os
 from typing import Optional
 
+from autobot_shared.ssot_config import config
+
 from constants.ttl_constants import TTL_24_HOURS
 
 logger = logging.getLogger(__name__)
@@ -28,7 +30,7 @@ def _resolve_web_fetch_cache_ttl() -> int:
 
     Override via AUTOBOT_WEB_FETCH_CACHE_TTL.  Falls back to 24h (86400s).
     """
-    raw = os.getenv("AUTOBOT_WEB_FETCH_CACHE_TTL")
+    raw = config.web_fetch_cache_ttl
     if raw is None:
         return TTL_24_HOURS
     try:
@@ -58,19 +60,8 @@ _DEFAULT_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 
 def _resolve_max_bytes() -> int:
     """Return max content size in bytes from env var (default 10 MB)."""
-    raw = os.getenv(_MAX_BYTES_ENV)
-    if raw is None:
-        return _DEFAULT_MAX_BYTES
-    try:
-        return int(raw)
-    except ValueError:
-        logger.warning(
-            "%s=%r is not an integer; falling back to %d bytes",
-            _MAX_BYTES_ENV,
-            raw,
-            _DEFAULT_MAX_BYTES,
-        )
-        return _DEFAULT_MAX_BYTES
+    raw = config.misc.web_fetch_max_bytes
+    return raw if raw else _DEFAULT_MAX_BYTES
 
 
 WEB_FETCH_MAX_BYTES: int = _resolve_max_bytes()

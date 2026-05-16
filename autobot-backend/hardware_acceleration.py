@@ -10,6 +10,7 @@ Optimizes model execution across different hardware targets.
 
 import logging
 import os
+from autobot_shared.ssot_config import config
 import platform
 import subprocess  # nosec B404 - hardware detection requires subprocess
 from typing import Any, Dict
@@ -597,7 +598,7 @@ class HardwareAccelerationManager:
             # Store environment variables in config and apply them
             config_manager.set("runtime.environment_overrides", env_vars)
             for key, value in env_vars.items():
-                os.environ[key] = value
+                os.environ[key] = value  # ssot-config-exempt: runtime env mutation for hardware optimization
                 logger.debug("Set %s=%s", key, value)
 
             logger.info("System environment configured for hardware optimization")

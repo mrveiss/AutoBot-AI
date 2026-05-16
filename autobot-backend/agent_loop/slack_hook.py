@@ -17,6 +17,7 @@ Environment variables:
                                   (default: same as SLACK_NOTIFICATIONS_CHANNEL)
 """
 
+from autobot_shared.ssot_config import config
 import logging
 import os
 from typing import Any, Dict, Optional
@@ -147,14 +148,14 @@ def get_slack_hook() -> Any:
     if _hook is not None:
         return _hook
 
-    token = os.getenv("SLACK_BOT_TOKEN", "").strip()
+    token = config.slack_bot_token.strip()
     if not token:
         logger.debug("SLACK_BOT_TOKEN not set — Slack notifications disabled")
         _hook = _NullSlackHook()
         return _hook
 
-    notifications_channel = os.getenv("SLACK_NOTIFICATIONS_CHANNEL", _SLACK_NOTIFICATIONS_CHANNEL_DEFAULT).strip()
-    approvals_channel = os.getenv("SLACK_APPROVALS_CHANNEL", notifications_channel).strip()
+    notifications_channel = config.slack_notifications_channel.strip()
+    approvals_channel = config.slack_approvals_channel.strip()
 
     logger.info(
         "Slack notifications enabled (channel=%s, approvals=%s)",

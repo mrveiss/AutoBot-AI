@@ -73,7 +73,7 @@ async def update_app_state_multi(**kwargs) -> None:
 
 def configure_logging():
     """Configure logging level from environment variable"""
-    LOG_LEVEL = os.getenv("AUTOBOT_LOG_LEVEL", "INFO").upper()
+    LOG_LEVEL = config.log_level.upper()
     LOG_LEVEL_VALUE = getattr(logging, LOG_LEVEL, logging.INFO)
     logging.root.setLevel(LOG_LEVEL_VALUE)
 
@@ -923,8 +923,8 @@ async def _init_slm_client():
         # Issue #768: Get SLM URL from SSOT config, fallback to env var
         from autobot_shared.ssot_config import get_config
 
-        slm_url = os.getenv("SLM_URL") or get_config().slm_url
-        slm_token = os.getenv("SLM_AUTH_TOKEN")
+        slm_url = config.slm_url or get_config().slm_url
+        slm_token = config.slm_auth_token
 
         await init_slm_client(slm_url, slm_token)
         logger.info("✅ [ 89%] SLM Client: Connected to SLM server at %s", slm_url)

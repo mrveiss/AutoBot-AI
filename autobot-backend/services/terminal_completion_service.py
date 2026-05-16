@@ -9,6 +9,7 @@ import asyncio
 import logging
 import os
 import shlex
+from autobot_shared.ssot_config import config
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -104,7 +105,7 @@ class TerminalCompletionService:
         expanded_prefix = os.path.expanduser(prefix)
         safe_prefix = shlex.quote(expanded_prefix)
         cmd = f"compgen -f -- {safe_prefix} 2>/dev/null"
-        completions = await self._run_compgen(cmd, {"HOME": os.environ.get("HOME", "")}, cwd)
+        completions = await self._run_compgen(cmd, {"HOME": config.home}, cwd)
 
         result = []
         for c in completions:

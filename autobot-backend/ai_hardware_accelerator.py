@@ -191,8 +191,8 @@ class AIHardwareAccelerator:
         self.task_history = []
         import os
 
-        npu_worker_host = os.getenv("AUTOBOT_NPU_WORKER_HOST")
-        npu_worker_port = os.getenv("AUTOBOT_NPU_WORKER_PORT")
+        npu_worker_host = config.npu_worker_host
+        npu_worker_port = config.npu_worker_port
         if not npu_worker_host or not npu_worker_port:
             raise ValueError(
                 "NPU Worker configuration missing: AUTOBOT_NPU_WORKER_HOST and "

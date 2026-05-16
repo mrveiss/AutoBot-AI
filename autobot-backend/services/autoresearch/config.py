@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from autobot_shared.ssot_config import config
+
 from constants.model_constants import ANTHROPIC_CLAUDE_SONNET4_6
 
 
@@ -24,23 +26,20 @@ class AutoResearchConfig:
     # Path to the cloned autoresearch repo on the GPU node
     autoresearch_dir: Path = field(
         default_factory=lambda: Path(
-            os.getenv(
-                "AUTOBOT_AUTORESEARCH_DIR",
-                "/opt/autobot/autoresearch",
-            )
+            config.misc.autoresearch_dir or "/opt/autobot/autoresearch"
         )
     )
 
     # Training defaults
-    default_training_timeout: int = field(default_factory=lambda: int(os.getenv("AUTOBOT_AUTORESEARCH_TIMEOUT", "600")))
-    default_max_steps: int = field(default_factory=lambda: int(os.getenv("AUTOBOT_AUTORESEARCH_MAX_STEPS", "5000")))
+    default_training_timeout: int = field(default_factory=lambda: int(config.autoresearch_timeout))
+    default_max_steps: int = field(default_factory=lambda: int(config.autoresearch_max_steps))
 
     # Experiment evaluation
     improvement_threshold: float = field(
-        default_factory=lambda: float(os.getenv("AUTOBOT_AUTORESEARCH_IMPROVEMENT_THRESHOLD", "0.01"))
+        default_factory=lambda: float(config.autoresearch_improvement_threshold)
     )
     significant_improvement_threshold: float = field(
-        default_factory=lambda: float(os.getenv("AUTOBOT_AUTORESEARCH_SIGNIFICANT_THRESHOLD", "0.05"))
+        default_factory=lambda: float(config.autoresearch_significant_threshold)
     )
 
     # Redis key prefixes
@@ -56,57 +55,51 @@ class AutoResearchConfig:
 
     # Staged evaluation (cheap-first gating)
     staged_eval_fraction: float = field(
-        default_factory=lambda: float(os.getenv("AUTOBOT_AUTORESEARCH_STAGED_EVAL_FRACTION", "0.3"))
+        default_factory=lambda: float(config.autoresearch_staged_eval_fraction)
     )
     staged_eval_threshold: float = field(
-        default_factory=lambda: float(os.getenv("AUTOBOT_AUTORESEARCH_STAGED_EVAL_THRESHOLD", "0.5"))
+        default_factory=lambda: float(config.autoresearch_staged_eval_threshold)
     )
 
     # Docker isolation (issue #3223)
     # Set AUTOBOT_AUTORESEARCH_DOCKER_ENABLED=true via Ansible/env to activate.
     docker_enabled: bool = field(
-        default_factory=lambda: os.getenv("AUTOBOT_AUTORESEARCH_DOCKER_ENABLED", "false").lower() == "true"
+        default_factory=lambda: bool(config.autoresearch_docker_enabled)
     )
     docker_image: str = field(
-        default_factory=lambda: os.getenv(
-            "AUTOBOT_AUTORESEARCH_DOCKER_IMAGE",
-            "ghcr.io/mrveiss/autobot-autoresearch:latest",
-        )
+        default_factory=lambda: config.misc.autoresearch_docker_image or "ghcr.io/mrveiss/autobot-autoresearch:latest"
     )
-    docker_memory_limit: str = field(default_factory=lambda: os.getenv("AUTOBOT_AUTORESEARCH_DOCKER_MEMORY", "4g"))
-    docker_cpu_limit: float = field(default_factory=lambda: float(os.getenv("AUTOBOT_AUTORESEARCH_DOCKER_CPUS", "2.0")))
-    docker_timeout: int = field(default_factory=lambda: int(os.getenv("AUTOBOT_AUTORESEARCH_DOCKER_TIMEOUT", "300")))
+    docker_memory_limit: str = field(default_factory=lambda: config.autoresearch_docker_memory)
+    docker_cpu_limit: float = field(default_factory=lambda: float(config.autoresearch_docker_cpus))
+    docker_timeout: int = field(default_factory=lambda: int(config.autoresearch_docker_timeout))
 
     # Meta-agent settings (issue #3224)
     meta_agent_max_module_lines: int = field(
-        default_factory=lambda: int(os.getenv("AUTOBOT_META_AGENT_MAX_MODULE_LINES", "500"))
+        default_factory=lambda: int(config.meta_agent_max_module_lines)
     )
     meta_agent_llm_model: str = field(
-        default_factory=lambda: os.getenv("AUTOBOT_META_AGENT_LLM_MODEL", ANTHROPIC_CLAUDE_SONNET4_6)
+        default_factory=lambda: config.meta_agent_llm_model
     )
     meta_agent_test_timeout: int = field(
-        default_factory=lambda: int(os.getenv("AUTOBOT_META_AGENT_TEST_TIMEOUT", "60"))
+        default_factory=lambda: int(config.meta_agent_test_timeout)
     )
     meta_agent_approval_threshold: float = field(
-        default_factory=lambda: float(os.getenv("AUTOBOT_META_AGENT_APPROVAL_THRESHOLD", "0.1"))
+        default_factory=lambda: float(config.meta_agent_approval_threshold)
     )
 
     # Data directory for experiment outputs
     data_dir: Path = field(
         default_factory=lambda: Path(
-            os.getenv(
-                "AUTOBOT_AUTORESEARCH_DATA_DIR",
-                "/opt/autobot/autoresearch/data",
-            )
+            config.misc.autoresearch_data_dir or "/opt/autobot/autoresearch/data"
         )
     )
 
     # Human-in-the-loop research checkpoints (issue #3291)
     checkpoints_enabled: bool = field(
-        default_factory=lambda: os.getenv("AUTOBOT_RESEARCH_CHECKPOINTS_ENABLED", "true").lower() == "true"
+        default_factory=lambda: bool(config.research_checkpoints_enabled)
     )
     checkpoint_timeout_seconds: float = field(
-        default_factory=lambda: float(os.getenv("AUTOBOT_RESEARCH_CHECKPOINT_TIMEOUT", "300"))
+        default_factory=lambda: float(config.research_checkpoint_timeout)
     )
 
     @property

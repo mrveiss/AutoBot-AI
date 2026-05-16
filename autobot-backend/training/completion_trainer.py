@@ -10,6 +10,7 @@ Training orchestration for code completion model.
 import json
 import logging
 import os
+from autobot_shared.ssot_config import config
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -35,7 +36,7 @@ class CompletionTrainer:
 
     def __init__(
         self,
-        model_dir: str = os.path.join(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"), "models"),
+        model_dir: str = os.path.join(config.base_dir, "models"),
         language: Optional[str] = None,
         pattern_type: Optional[str] = None,
         device: Optional[str] = None,

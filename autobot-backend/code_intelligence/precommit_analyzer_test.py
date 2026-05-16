@@ -19,6 +19,7 @@ import textwrap
 
 import pytest
 
+from autobot_shared.ssot_config import config
 from code_intelligence.precommit_analyzer import (
     CheckCategory,
     CheckDefinition,
@@ -585,7 +586,7 @@ class TestEdgeCases:
 
             def get_password():
                 """Get password from environment."""
-                return os.getenv("PASSWORD")
+                return config.password
         ''')
 
         analyzer = PrecommitAnalyzer()

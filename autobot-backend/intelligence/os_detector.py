@@ -19,6 +19,8 @@ from typing import Dict, FrozenSet, Optional, Set, Tuple
 
 import aiofiles
 
+from autobot_shared.ssot_config import config
+
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level cached tool category sets to avoid repeated set creation
@@ -175,9 +177,9 @@ class OSDetector:
         """
         version = platform.release()
         architecture = platform.machine()
-        user = os.getenv("USER", os.getenv("USERNAME", "unknown"))
+        user = config.user or config.username or "unknown"
         is_root = os.geteuid() == 0 if hasattr(os, "geteuid") else False
-        shell = os.getenv("SHELL", "unknown")
+        shell = config.shell or "unknown"
         return version, architecture, user, is_root, shell
 
     def _log_detection_results(

@@ -10,6 +10,7 @@ Provides caching functionality for chat sessions:
 - TTL handling
 """
 
+from autobot_shared.ssot_config import config
 import json
 import logging
 import os
@@ -33,7 +34,7 @@ logger = logging.getLogger(__name__)
 # by default). Override via env var when tuning memory pressure.
 def _resolve_chat_session_cache_ttl() -> int:
     """Return TTL seconds for chat:session:* Redis keys."""
-    raw = os.getenv("AUTOBOT_CHAT_SESSION_CACHE_TTL")
+    raw = config.chat_session_cache_ttl
     if raw is None:
         return TTL_24_HOURS
     try:
@@ -71,7 +72,7 @@ _CHAT_RECENT_MAX_ENTRIES_DEFAULT = 1000
 
 def _resolve_chat_recent_max_entries() -> int:
     """Return max members for the chat:recent sorted set."""
-    raw = os.getenv("AUTOBOT_CHAT_RECENT_MAX_ENTRIES")
+    raw = config.chat_recent_max_entries
     if raw is None:
         return _CHAT_RECENT_MAX_ENTRIES_DEFAULT
     try:

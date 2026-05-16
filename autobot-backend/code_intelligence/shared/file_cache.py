@@ -38,6 +38,7 @@ import logging
 import os
 import threading
 import time
+from autobot_shared.ssot_config import config
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Optional
@@ -49,7 +50,7 @@ from utils.file_categorization import SKIP_DIRS
 logger = logging.getLogger(__name__)
 
 # Configuration via environment variables
-DEFAULT_CACHE_TTL = int(os.getenv("FILE_CACHE_TTL_SECONDS", "300"))  # 5 minutes
+DEFAULT_CACHE_TTL = int(config.file_cache_ttl_seconds)  # 5 minutes
 DEFAULT_ROOT_PATH = PATH.PROJECT_ROOT
 
 # File extension sets for different categories

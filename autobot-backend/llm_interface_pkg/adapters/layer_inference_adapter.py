@@ -9,6 +9,7 @@ LLM provider so it can be accessed via the unified adapter API.
 Issue #3140: Updated to use LayerInferencePipeline for end-to-end generation.
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import logging
 import os
@@ -44,7 +45,7 @@ class LayerInferenceAdapter(AdapterBase):
 
             model_name = self.config.settings.get(
                 "model_name",
-                os.environ.get("LAYER_INFERENCE_MODEL", ""),
+                config.layer_inference_model,
             )
             if not model_name:
                 return None

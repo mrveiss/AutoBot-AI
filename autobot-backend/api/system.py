@@ -473,7 +473,7 @@ async def admin_check(admin_check: bool = Depends(check_admin_permission)):
     import os
 
     admin_status = {
-        "user": os.getenv("USER", "unknown"),
+        "user": config.user,
         "admin": os.getuid() == 0 if hasattr(os, "getuid") else False,
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }

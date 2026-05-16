@@ -33,6 +33,7 @@ import smtplib
 import ssl
 import time
 import uuid
+from autobot_shared.ssot_config import config
 from dataclasses import dataclass, field
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -409,12 +410,12 @@ class NotificationService:
         """
         import os
 
-        smtp_host = os.environ.get("AUTOBOT_SMTP_HOST", "localhost")
-        smtp_port = int(os.environ.get("AUTOBOT_SMTP_PORT", "587"))
-        smtp_user = os.environ.get("AUTOBOT_SMTP_USER", "")
-        smtp_password = os.environ.get("AUTOBOT_SMTP_PASSWORD", "")
-        smtp_from = os.environ.get("AUTOBOT_SMTP_FROM", "autobot@localhost")
-        use_tls = os.environ.get("AUTOBOT_SMTP_TLS", "true").lower() != "false"
+        smtp_host = config.smtp_host
+        smtp_port = int(config.smtp_port)
+        smtp_user = config.smtp_user
+        smtp_password = config.smtp_password
+        smtp_from = config.smtp_from
+        use_tls = config.smtp_tls.lower() != "false"
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject

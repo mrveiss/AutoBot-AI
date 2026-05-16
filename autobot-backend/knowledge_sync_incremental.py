@@ -15,6 +15,7 @@ Features:
 - Advanced RAG optimization with hybrid search
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import glob
 import hashlib
@@ -191,7 +192,7 @@ class IncrementalKnowledgeSync:
         import os
 
         if project_root is None:
-            project_root = os.getenv("AUTOBOT_BASE_DIR")
+            project_root = config.base_dir
             if not project_root:
                 raise ValueError(
                     "Project root configuration missing: AUTOBOT_BASE_DIR environment variable must be set"

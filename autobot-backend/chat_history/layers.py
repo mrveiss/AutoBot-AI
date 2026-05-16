@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # Feature flag
 # ---------------------------------------------------------------------------
 
-TIERED_CONTEXT_ENABLED: bool = os.getenv("TIERED_CONTEXT_ENABLED", "false").lower() == "true"
+TIERED_CONTEXT_ENABLED: bool = config.tiered_context_enabled.lower() == "true"
 
 # ---------------------------------------------------------------------------
 # Retrieval-trigger keywords for L3

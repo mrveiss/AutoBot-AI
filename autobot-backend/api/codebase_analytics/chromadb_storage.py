@@ -7,6 +7,7 @@ ChromaDB batch storage, embeddings, and verification for codebase analytics.
 Issue #2013: Decomposed from scanner.py god module.
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import json
 import logging
@@ -33,7 +34,7 @@ logger = logging.getLogger(__name__)
 # Higher values = fewer batches but more memory usage
 # Default: 5000 (current behavior), Range: 100-50000
 try:
-    _batch_size = int(os.getenv("CODEBASE_INDEX_BATCH_SIZE", "5000"))
+    _batch_size = int(config.codebase_index_batch_size)
     CHROMADB_BATCH_SIZE = max(100, min(_batch_size, 50000))
 except ValueError:
     logger.warning("Invalid CODEBASE_INDEX_BATCH_SIZE, using default 5000")
@@ -43,7 +44,7 @@ except ValueError:
 # Higher values = faster indexing but more CPU/memory usage
 # Default: 1 (sequential processing), Range: 1-8
 try:
-    _parallel = int(os.getenv("CODEBASE_INDEX_PARALLEL_BATCHES", "1"))
+    _parallel = int(config.codebase_index_parallel_batches)
     PARALLEL_BATCH_COUNT = max(1, min(_parallel, 8))
 except ValueError:
     logger.warning("Invalid CODEBASE_INDEX_PARALLEL_BATCHES, using default 1")
@@ -52,7 +53,7 @@ except ValueError:
 # Issue #660: Embedding mode for ChromaDB storage
 # Options: "precompute" (5-10x faster), "auto" (let ChromaDB handle), "skip" (no embeddings)
 # Default: "precompute" for optimal performance
-CHROMADB_EMBEDDING_MODE = os.getenv("CODEBASE_INDEX_EMBEDDING_MODE", "precompute").lower()
+CHROMADB_EMBEDDING_MODE = config.codebase_index_embedding_mode.lower()
 if CHROMADB_EMBEDDING_MODE not in ("precompute", "auto", "skip"):
     logger.warning("Invalid CODEBASE_INDEX_EMBEDDING_MODE, using 'precompute'")
     CHROMADB_EMBEDDING_MODE = "precompute"
@@ -61,7 +62,7 @@ if CHROMADB_EMBEDDING_MODE not in ("precompute", "auto", "skip"):
 # Larger batches = more efficient GPU/NPU utilization, more memory
 # Default: 100, Range: 10-500
 try:
-    _embed_batch = int(os.getenv("CODEBASE_INDEX_EMBED_BATCH_SIZE", "100"))
+    _embed_batch = int(config.codebase_index_embed_batch_size)
     EMBEDDING_BATCH_SIZE = max(10, min(_embed_batch, 500))
 except ValueError:
     logger.warning("Invalid CODEBASE_INDEX_EMBED_BATCH_SIZE, using default 100")
@@ -69,7 +70,7 @@ except ValueError:
 
 # Enable incremental indexing (only re-index changed files)
 # Default: False (full re-index - current behavior)
-INCREMENTAL_INDEXING_ENABLED = os.getenv("CODEBASE_INDEX_INCREMENTAL", "false").lower() == "true"
+INCREMENTAL_INDEXING_ENABLED = config.codebase_index_incremental.lower() == "true"
 
 # Redis key prefix for file hashes — imported from progress_tracker (SSOT)
 
