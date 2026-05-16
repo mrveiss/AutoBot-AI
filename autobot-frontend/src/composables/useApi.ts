@@ -1,11 +1,27 @@
 /**
  * Vue Composable for API Client Access
  *
- * @deprecated This composable family is deprecated. Migrate to the canonical alternatives:
- * - Data loading (GET): use `useFetchEndpoint` from `@/composables/api/useFetchEndpoint`
- * - Imperative HTTP calls (POST/DELETE/mutations): use `useApiClient()` from `@/plugins/api`
+ * @deprecated This composable family has been superseded. GH#7446 audit found zero
+ * active callers outside legacy test mocks — do not add new callers.
  *
- * Sunset: Q3 2026. See GitHub issue #6487 for migration guide.
+ * ## Decision rule: which API surface to use
+ *
+ * | Need                                            | Use                                                      |
+ * |-------------------------------------------------|----------------------------------------------------------|
+ * | Reactive GET with loading/error/data refs       | `useApiResource` → `useFetchEndpoint` (canonical layer)  |
+ * | Imperative POST / PUT / DELETE                  | `useApiClient()` from `@/plugins/api`                    |
+ * | One-off authenticated GET (no reactivity)       | `fetchWithAuth` from `@/utils/fetchWithAuth`             |
+ * | Error wrapping + notifications for any call     | `useAsyncHandler` from `@/composables/useErrorHandler`   |
+ *
+ * ### useApi vs useApiResource vs useFetchEndpoint
+ *
+ * - `useApi` (this file) — legacy inject-based accessor. Deprecated, no new callers.
+ * - `useApiResource` — lower-level reactive wrapper around any `async () => T` fetcher.
+ *   Race-condition safe, AbortController integrated. Used internally by useFetchEndpoint.
+ * - `useFetchEndpoint` — canonical GET data-loader built on useApiResource. Handles URL
+ *   resolution, auth, and source-scoping. **Use this for all new reactive data loading.**
+ *
+ * Sunset: Q3 2026. See GH#6487 for migration history, GH#7446 for consolidation audit.
  */
 
 import { inject } from 'vue'
