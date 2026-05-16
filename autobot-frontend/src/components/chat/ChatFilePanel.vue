@@ -171,7 +171,7 @@
                 @keyup.escape="renamingFileId = null"
                 class="w-full text-xs px-1 py-0.5 border border-autobot-primary rounded focus:outline-none"
               />
-              <button @click="handleRename" class="action-btn" :title="$t('common.save')">
+              <button @click="handleRename" class="action-btn" :title="$t('common.save')" :aria-label="$t('common.save')">
                 <i class="fas fa-check text-xs text-green-600"></i>
               </button>
             </div>
@@ -217,7 +217,7 @@
               @click="handleDownload(file.file_id, file.filename)"
               class="action-btn"
               :title="$t('chat.filePanel.download')"
-              :aria-label="$t('common.download')"
+              :aria-label="$t('chat.filePanel.download')"
             >
               <i class="fas fa-download text-xs"></i>
             </button>

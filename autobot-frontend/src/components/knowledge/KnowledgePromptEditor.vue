@@ -271,7 +271,7 @@ onBeforeUnmount(() => {
     <div v-if="error" class="alert alert-error">
       <i class="fas fa-exclamation-circle"></i>
       {{ error }}
-      <button @click="error = null" class="close-btn"><i class="fas fa-times"></i></button>
+      <button @click="error = null" class="close-btn" :aria-label="$t('common.dismiss')"><i class="fas fa-times"></i></button>
     </div>
 
     <div v-if="successMessage" class="alert alert-success">

@@ -11,18 +11,18 @@
     <div class="smt-header">
       <h3>{{ t('serviceMessages.title') }}</h3>
       <div class="smt-controls">
-        <select v-model="senderFilter" class="smt-select" @change="refresh">
+        <select v-model="senderFilter" class="smt-select" aria-label="Filter by sender" @change="refresh">
           <option value="">{{ t('serviceMessages.allSenders') }}</option>
           <option v-for="s in senderOptions" :key="s" :value="s">{{ s }}</option>
         </select>
-        <select v-model="typeFilter" class="smt-select" @change="refresh">
+        <select v-model="typeFilter" class="smt-select" aria-label="Filter by message type" @change="refresh">
           <option value="">{{ t('serviceMessages.allTypes') }}</option>
           <option v-for="mt in typeOptions" :key="mt" :value="mt">{{ mt }}</option>
         </select>
-        <button class="smt-btn" :class="{ active: isPolling }" @click="togglePolling">
+        <button class="smt-btn" :class="{ active: isPolling }" :aria-label="isPolling ? t('serviceMessages.stopPolling') : t('serviceMessages.startPolling')" @click="togglePolling">
           <i :class="isPolling ? 'fas fa-pause' : 'fas fa-play'"></i>
         </button>
-        <button class="smt-btn" @click="refresh">
+        <button class="smt-btn" :aria-label="t('common.refresh')" @click="refresh">
           <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
         </button>
       </div>
@@ -62,7 +62,7 @@
     <div v-if="selected" class="smt-detail">
       <div class="smt-detail-head">
         <strong>{{ t('serviceMessages.messageDetail') }}</strong>
-        <button class="smt-btn" @click="selected = null"><i class="fas fa-times"></i></button>
+        <button class="smt-btn" :aria-label="t('common.close')" @click="selected = null"><i class="fas fa-times"></i></button>
       </div>
       <table class="smt-table">
         <tr><td>ID</td><td><code>{{ selected.msg_id }}</code></td></tr>
@@ -71,7 +71,7 @@
         <tr><td>{{ t('serviceMessages.type') }}</td><td><span class="smt-badge" :class="`t-${selected.msg_type}`">{{ selected.msg_type }}</span></td></tr>
         <tr>
           <td>{{ t('serviceMessages.correlationId') }}</td>
-          <td><code class="smt-link" @click="loadChain(selected!.correlation_id)">{{ selected.correlation_id.slice(0, 12) }}… <i class="fas fa-link"></i></code></td>
+          <td><code class="smt-link" role="button" tabindex="0" :aria-label="`View correlation chain for ${selected.correlation_id.slice(0, 12)}`" @click="loadChain(selected!.correlation_id)" @keydown.enter="loadChain(selected!.correlation_id)" @keydown.space.prevent="loadChain(selected!.correlation_id)">{{ selected.correlation_id.slice(0, 12) }}… <i class="fas fa-link"></i></code></td>
         </tr>
       </table>
       <pre class="smt-pre">{{ formatPayload(selected.content) }}</pre>
