@@ -23,6 +23,9 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, useSlots, Comment } from 'vue'
 import type { ButtonVariant, ComponentSize } from '@/types/component-props'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('BaseButton')
 
 interface Props {
   variant?: ButtonVariant
@@ -63,8 +66,8 @@ if (import.meta.env.DEV) {
       (vnode: any) => vnode.type !== Comment && vnode.children
     )
     if (!hasVisibleText && !props.ariaLabel) {
-      console.warn(
-        '[BaseButton] Icon-only button rendered without ariaLabel prop. ' +
+      logger.warn(
+        'Icon-only button rendered without ariaLabel prop. ' +
         'This is a WCAG 4.1.2 failure. Add :ariaLabel="$t(\'common.actionName\')" to the button.'
       )
     }

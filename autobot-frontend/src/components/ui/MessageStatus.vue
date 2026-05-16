@@ -7,12 +7,12 @@
         size="xs"
         :animated="true"
       />
-      <CheckIcon v-else-if="status === 'sent'" class="h-3 w-3" />
-      <CheckCircleIcon v-else-if="status === 'delivered'" class="h-3 w-3" />
-      <ExclamationTriangleIcon v-else-if="status === 'failed'" class="h-3 w-3" />
-      <ClockIcon v-else-if="status === 'queued'" class="h-3 w-3" />
-      <EyeIcon v-else-if="status === 'read'" class="h-3 w-3" />
-      <ArrowPathIcon v-else-if="status === 'retrying'" class="h-3 w-3 animate-spin" />
+      <Icon v-else-if="status === 'sent'" name="check" size="xs" />
+      <Icon v-else-if="status === 'delivered'" name="check-circle" size="xs" />
+      <Icon v-else-if="status === 'failed'" name="exclamation-triangle" size="xs" />
+      <Icon v-else-if="status === 'queued'" name="clock" size="xs" />
+      <Icon v-else-if="status === 'read'" name="eye" size="xs" />
+      <Icon v-else-if="status === 'retrying'" name="redo" size="xs" :spin="true" />
     </div>
 
     <span v-if="showText" class="status-text">{{ statusText }}</span>
@@ -23,7 +23,7 @@
       class="retry-button"
       :title="t('ui.messageStatus.retrySending')"
     >
-      <ArrowPathIcon class="h-3 w-3" />
+      <Icon name="redo" size="xs" />
     </button>
   </div>
 </template>
@@ -31,14 +31,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  CheckIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  ClockIcon,
-  EyeIcon,
-  ArrowPathIcon
-} from '@heroicons/vue/24/outline'
+import Icon from '@/components/ui/Icon.vue'
 import LoadingSpinner from './LoadingSpinner.vue'
 
 type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed' | 'queued' | 'retrying'
