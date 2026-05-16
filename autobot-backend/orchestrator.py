@@ -22,6 +22,7 @@ import asyncio
 import json
 import time
 import uuid
+import warnings
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -452,9 +453,17 @@ class Orchestrator:
     ) -> Dict[str, Any]:
         """Process user request. Issue #281, #620, #5058.
 
+        .. deprecated::
+            No live callers exist. Call execute_enhanced_workflow directly (GH#7423).
+
         SIMPLE mode: direct LLM call (fast path, no workflow planning).
         All other modes: delegate to execute_enhanced_workflow (unified path).
         """
+        warnings.warn(
+            "process_user_request is deprecated and has no live callers — use execute_enhanced_workflow directly. (GH#7423)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         start_time = time.time()
         task_id = str(uuid.uuid4())
         logger.info("Processing user request %s: %s...", task_id, user_message[:100])
