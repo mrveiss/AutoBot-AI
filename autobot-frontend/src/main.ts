@@ -44,6 +44,7 @@ import i18n from './i18n'
 import rumPlugin from './plugins/rum'
 import errorHandlerPlugin from './plugins/errorHandler'
 import ApiPlugin from './plugins/api'
+import { mountAllPlugins } from '@/plugins/registry'
 
 // Import global services
 import './services/GlobalWebSocketService'
@@ -86,6 +87,9 @@ app.use(router)
 app.use(rumPlugin, { router })
 app.use(errorHandlerPlugin)
 app.use(ApiPlugin)
+
+// Register plugin UI components from the plugin mount registry (#6972 / #7793)
+mountAllPlugins(app)
 
 // Global error handler for uncaught errors
 app.config.errorHandler = (err, _instance, info) => {
