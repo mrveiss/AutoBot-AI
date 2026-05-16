@@ -1,3 +1,25 @@
+{#
+  NOTE: This template is NOT currently deployed by any Ansible task.
+  It is retained as a reference / future wiring point.
+
+  Actual deployed Redis configurations (as of issues #6701 / #7257):
+    1. roles/redis/templates/redis-stack.conf.j2
+         → deployed by roles/redis/tasks/main.yml (task "Redis | Configure Redis Stack")
+         → dest: /etc/redis-stack.conf
+    2. playbooks/deploy-native-services.yml (~line 103, literal copy: block)
+         → dest: /etc/redis/redis.conf
+         → writes a minimal inline config directly; does NOT use this template.
+
+  To activate this template instead of the literal copy: block:
+    - Replace the copy: task in deploy-native-services.yml with a template: task:
+        template:
+          src: ../roles/redis/templates/redis.conf.j2
+          dest: /etc/redis/redis.conf
+    - Ensure all required vars (redis_bind, redis_port, etc.) are set for the
+      target host group.
+
+  References: #6701 (TLS wiring), #7257 (discovery: template is unreferenced)
+#}
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
