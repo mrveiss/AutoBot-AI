@@ -58,7 +58,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 pipeline-scripts/audit-unwired-trackers.py --json > findings.json || true
+          python3 pipeline-scripts/audit_unwired_trackers.py --json > findings.json || true
           count=$(jq 'length' findings.json)
           echo "count=${count}" >> "$GITHUB_OUTPUT"
           jq -r '"\(.file)\t#\(.tracker)"' findings.json | head -50
@@ -79,7 +79,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAX_ISSUES: ${{ github.event.inputs.max_issues || '10' }}
         run: |
-          python3 pipeline-scripts/audit-unwired-trackers.py \
+          python3 pipeline-scripts/audit_unwired_trackers.py \
             --file-issues --max-issues "$MAX_ISSUES"
 
       - name: Summary

@@ -9,10 +9,10 @@ features whose tracker was closed prematurely — code complete, integration
 skipped — the pattern surfaced by the orchestration audit (#4048 → #6836).
 
 Usage:
-    pipeline-scripts/audit-unwired-trackers.py [--json]
+    pipeline-scripts/audit_unwired_trackers.py [--json]
         Print findings to stdout (human-readable or JSON).
 
-    pipeline-scripts/audit-unwired-trackers.py --file-issues
+    pipeline-scripts/audit_unwired_trackers.py --file-issues
         File a GitHub discovery issue for each finding (deduped against
         existing open issues by tracker number).
 
@@ -443,7 +443,7 @@ def file_discovery_issue(finding: Finding) -> Optional[int]:
     )
     body = f"""## Discovered by
 
-`pipeline-scripts/audit-unwired-trackers.py` — automated tracker cross-reference (#6836 process gate).
+`pipeline-scripts/audit_unwired_trackers.py` — automated tracker cross-reference (#6836 process gate).
 
 ## Finding
 
