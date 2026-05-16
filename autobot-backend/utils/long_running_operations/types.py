@@ -11,7 +11,7 @@ Contains enums and dataclasses for long-running operations.
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from constants.threshold_constants import TimingConstants
 
@@ -105,14 +105,14 @@ class LongRunningOperation:
     priority: OperationPriority = OperationPriority.NORMAL
     status: OperationStatus = OperationStatus.QUEUED
     created_at: datetime = field(default_factory=datetime.now)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     progress: OperationProgress = None
     checkpoints: List[OperationCheckpoint] = field(default_factory=list)
     result: Any = None
-    error_message: Optional[str] = None
+    error_message: str | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
-    _operation_function: Optional[Callable] = field(default=None, repr=False)
+    _operation_function: Callable | None = field(default=None, repr=False)
 
     def __post_init__(self):
         """Initialize progress tracking if not provided."""
@@ -189,7 +189,7 @@ class LongRunningOperation:
         """Get progress report interval for this operation type."""
         return LongRunningTimeoutConfig.get_timeout_config(self.operation_type)["progress_interval"]
 
-    def get_operation_function(self) -> Optional[Callable]:
+    def get_operation_function(self) -> Callable | None:
         """Get the operation function if set."""
         return self._operation_function
 

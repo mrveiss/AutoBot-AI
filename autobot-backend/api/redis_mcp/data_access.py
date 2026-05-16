@@ -8,7 +8,7 @@ Issue #2511: get/set, hash, list, sorted set, stream, scan, type, ttl, delete.
 All handlers use autobot_shared.redis_client — no direct redis.Redis().
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -26,7 +26,7 @@ AGENT_MEMORY_TTL_SECONDS = TTL_24_HOURS
 AGENT_MEMORY_PREFIX = "autobot:agent:memory:"
 
 
-def _resolve_ttl(ttl: Optional[int], key: str) -> Optional[int]:
+def _resolve_ttl(ttl: int | None, key: str) -> int | None:
     """Return the effective TTL for a write operation.
 
     Rules (Issue #2793):
@@ -67,7 +67,7 @@ async def handle_redis_get(key: str, database: str = "main") -> Metadata:
 async def handle_redis_set(
     key: str,
     value: str,
-    ttl: Optional[int] = None,
+    ttl: int | None = None,
     database: str = "main",
 ) -> Metadata:
     """Set a string value with optional TTL.
@@ -169,7 +169,7 @@ async def handle_redis_lrange(key: str, start: int = 0, stop: int = -1, database
 async def handle_redis_lpush(
     key: str,
     values: List[str],
-    ttl: Optional[int] = None,
+    ttl: int | None = None,
     database: str = "main",
 ) -> Metadata:
     """Push values to the left of a list.
@@ -194,7 +194,7 @@ async def handle_redis_lpush(
 async def handle_redis_rpush(
     key: str,
     values: List[str],
-    ttl: Optional[int] = None,
+    ttl: int | None = None,
     database: str = "main",
 ) -> Metadata:
     """Push values to the right of a list.
@@ -258,7 +258,7 @@ async def handle_redis_xrange(
     key: str,
     start: str = "-",
     end: str = "+",
-    count: Optional[int] = None,
+    count: int | None = None,
     database: str = "main",
 ) -> Metadata:
     """Read stream entries."""
@@ -279,8 +279,8 @@ async def handle_redis_xrange(
 async def handle_redis_xadd(
     key: str,
     fields: Dict[str, str],
-    maxlen: Optional[int] = None,
-    ttl: Optional[int] = None,
+    maxlen: int | None = None,
+    ttl: int | None = None,
     database: str = "main",
 ) -> Metadata:
     """Add an entry to a stream.

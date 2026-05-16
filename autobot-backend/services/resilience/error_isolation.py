@@ -23,7 +23,7 @@ T = TypeVar("T")
 class IsolatedError(Exception):
     """Error occurred in isolated component but was handled gracefully."""
 
-    def __init__(self, component: str, original_error: Exception, fallback_value: Any = None):
+    def __init__(self, component: str, original_error: Exception, fallback_value: Any = None) -> None:
         """Initialize isolated error with context."""
         self.component = component
         self.original_error = original_error

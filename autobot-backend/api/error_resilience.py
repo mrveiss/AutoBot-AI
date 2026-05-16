@@ -8,7 +8,7 @@ Issue #4342: Expose error health status, circuit breaker status, error budgets.
 Allows monitoring of system resilience and graceful degradation state.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -35,7 +35,7 @@ router = APIRouter(prefix="/api/resilience", tags=["resilience"])
 
 @register_health_probe("error_resilience")
 async def probe_error_resilience(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333 / #6907: probe reflects actual breaker + budget state.
 

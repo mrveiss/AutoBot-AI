@@ -21,7 +21,7 @@ import asyncio
 import hashlib
 import json
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from fastapi import APIRouter, Request
 
@@ -313,7 +313,7 @@ class IDEIntegrationEngine:
         # Build O(1) lookup dict for rules by ID (Issue #315)
         self._rules_by_id: Dict[str, dict] = {r["id"]: r for r in self.rules}
 
-    def _find_rule_by_id(self, rule_id: str) -> Optional[dict]:
+    def _find_rule_by_id(self, rule_id: str) -> dict | None:
         """Find a rule by its ID using O(1) lookup. (Issue #315 - extracted)"""
         return self._rules_by_id.get(rule_id)
 
@@ -910,7 +910,7 @@ class IDEIntegrationEngine:
 # Global Instance
 # =============================================================================
 
-_engine: Optional[IDEIntegrationEngine] = None
+_engine: IDEIntegrationEngine | None = None
 _engine_lock = asyncio.Lock()
 
 
@@ -1085,7 +1085,7 @@ async def get_completions(request: CompletionRequest) -> CompletionResponse:
 
 @register_health_probe("ide_integration")
 async def probe_ide_integration(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for ide_integration module."""
     try:

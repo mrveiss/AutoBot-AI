@@ -29,13 +29,13 @@ pytestmark = pytest.mark.skipif(
 class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
     """Test security memory integration functionality."""
 
-    async def asyncSetUp(self):
+    async def asyncSetUp(self) -> None:
         """Set up test fixtures."""
         self.mock_memory_graph = AsyncMock()
         self.integration = SecurityMemoryIntegration(memory_graph=self.mock_memory_graph)
         self.integration._initialized = True
 
-    async def test_create_assessment_entity(self):
+    async def test_create_assessment_entity(self) -> None:
         """Test creating assessment entity with correct observations."""
         self.mock_memory_graph.create_entity = AsyncMock(
             return_value={"name": "Security Assessment: Test Assessment", "id": "123"}
@@ -57,7 +57,7 @@ class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertIn("security", call_args[1]["tags"])
         self.assertEqual(result["name"], "Security Assessment: Test Assessment")
 
-    async def test_create_host_entity(self):
+    async def test_create_host_entity(self) -> None:
         """Test creating host entity and assessment-host relation."""
         self.mock_memory_graph.create_entity = AsyncMock(return_value={"name": "Host: 192.168.1.10", "id": "host-123"})
         self.mock_memory_graph.create_relation = AsyncMock(return_value=True)
@@ -86,7 +86,7 @@ class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
             mock_index.assert_called_once()
             self.assertEqual(result["name"], "Host: 192.168.1.10")
 
-    async def test_create_service_entity(self):
+    async def test_create_service_entity(self) -> None:
         """Test creating service entity and host-service relation."""
         self.mock_memory_graph.create_entity = AsyncMock(
             return_value={
@@ -121,7 +121,7 @@ class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
             mock_index.assert_called_once()
             self.assertIn("Service: 192.168.1.10:80/tcp", result["name"])
 
-    async def test_create_vulnerability_entity(self):
+    async def test_create_vulnerability_entity(self) -> None:
         """Test creating vulnerability entity and relations."""
         self.mock_memory_graph.create_entity = AsyncMock(
             return_value={
@@ -152,7 +152,7 @@ class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
             mock_index.assert_called_once()
             self.assertIn("CVE-2024-1234", result["name"])
 
-    async def test_search_security_findings(self):
+    async def test_search_security_findings(self) -> None:
         """Test filtering for security entities."""
         mock_results = [
             {"name": "Host: 192.168.1.10", "metadata": {"type": "target_host"}},
@@ -166,7 +166,7 @@ class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(results), 2)
         self.assertTrue(all(r["metadata"]["type"] in ["target_host", "service"] for r in results))
 
-    async def test_chromadb_indexing_on_entity_creation(self):
+    async def test_chromadb_indexing_on_entity_creation(self) -> None:
         """Test ChromaDB index is called when entities are created."""
         self.mock_memory_graph.create_entity = AsyncMock(return_value={"name": "Host: 10.0.0.1", "id": "123"})
         self.mock_memory_graph.create_relation = AsyncMock(return_value=True)
@@ -180,7 +180,7 @@ class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
             self.assertIn("Host 10.0.0.1", call_args[0][1])
             self.assertEqual(call_args[0][2]["type"], "host")
 
-    async def test_chromadb_failure_doesnt_break_flow(self):
+    async def test_chromadb_failure_doesnt_break_flow(self) -> None:
         """Test ChromaDB errors are handled gracefully."""
         self.mock_memory_graph.create_entity = AsyncMock(return_value={"name": "Host: 10.0.0.1", "id": "123"})
         self.mock_memory_graph.create_relation = AsyncMock(return_value=True)

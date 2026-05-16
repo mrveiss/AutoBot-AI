@@ -28,7 +28,7 @@ Redis key layout:
 
 import json
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
@@ -102,7 +102,7 @@ def _task_from_json(raw: str) -> Task:
         )
         for a in d.get("artifacts", [])
     ]
-    tc: Optional[TraceContext] = None
+    tc: TraceContext | None = None
     if d.get("trace_id"):
         tc = TraceContext(
             trace_id=d["trace_id"],
@@ -158,7 +158,7 @@ class TaskManager:
         self._redis.sadd(_KEY_TASKS, task.id)
         self._redis.expire(_KEY_TASKS, ttl)
 
-    def _load(self, task_id: str) -> Optional[Task]:
+    def _load(self, task_id: str) -> Task | None:
         raw = self._redis.get(_KEY_TASK.format(task_id))
         if raw is None:
             return None
@@ -176,9 +176,9 @@ class TaskManager:
     def create_task(
         self,
         input_text: str,
-        context: Optional[Dict] = None,
+        context: Dict | None = None,
         caller_id: str = "anonymous",
-        trace_id: Optional[str] = None,
+        trace_id: str | None = None,
     ) -> Task:
         """Create and register a new task in SUBMITTED state."""
         task_id = str(uuid.uuid4())
@@ -206,7 +206,7 @@ class TaskManager:
         )
         return task
 
-    def get_task(self, task_id: str) -> Optional[Task]:
+    def get_task(self, task_id: str) -> Task | None:
         """Retrieve a task by ID, sliding its TTL on each access.
 
         Issue #4554: Resetting the TTL on every GET means any client that
@@ -243,8 +243,8 @@ class TaskManager:
         self,
         task_id: str,
         state: TaskState,
-        message: Optional[str] = None,
-    ) -> Optional[Task]:
+        message: str | None = None,
+    ) -> Task | None:
         """Transition a task to a new state.
 
         Returns the updated task, or None if task not found or already terminal.
@@ -306,7 +306,7 @@ class TaskManager:
         logger.info("A2A task cancelled: %s", task_id)
         return True
 
-    def get_audit_log(self, task_id: str) -> Optional[List[Dict[str, Any]]]:
+    def get_audit_log(self, task_id: str) -> List[Dict[str, Any]] | None:
         """Return the full trace event log for a task, or None if not found."""
         if not self._load(task_id):
             return None

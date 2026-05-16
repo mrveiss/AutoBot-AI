@@ -7,7 +7,7 @@ Hardware Detection - Detect and select optimal hardware acceleration backends.
 Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 """
 
-from typing import List, Optional, Set
+from typing import List, Set
 
 from autobot_shared.logging_manager import get_logger
 
@@ -28,7 +28,7 @@ except (ImportError, RuntimeError):
 class HardwareDetector:
     """Detect and select optimal hardware acceleration backends."""
 
-    def __init__(self, priority: Optional[List[str]] = None):
+    def __init__(self, priority: List[str] | None = None):
         """
         Initialize hardware detector.
 
@@ -96,7 +96,7 @@ class HardwareDetector:
 
         return "cpu"
 
-    def _try_backend_selection(self, priority: str, detected_hardware: Set[str]) -> Optional[str]:
+    def _try_backend_selection(self, priority: str, detected_hardware: Set[str]) -> str | None:
         """
         Try to select a specific backend.
 
@@ -120,11 +120,11 @@ class HardwareDetector:
             return selector()
         return None
 
-    def _select_openvino_npu(self, detected_hardware: Set[str]) -> Optional[str]:
+    def _select_openvino_npu(self, detected_hardware: Set[str]) -> str | None:
         """Select OpenVINO NPU if available."""
         return "openvino_npu" if "openvino_npu" in detected_hardware else None
 
-    def _select_openvino_variant(self, detected_hardware: Set[str]) -> Optional[str]:
+    def _select_openvino_variant(self, detected_hardware: Set[str]) -> str | None:
         """Select OpenVINO variant."""
         if "intel_arc" in detected_hardware:
             return "openvino_gpu"
@@ -132,17 +132,17 @@ class HardwareDetector:
             return "openvino_cpu"
         return None
 
-    def _select_cuda(self, detected_hardware: Set[str]) -> Optional[str]:
+    def _select_cuda(self, detected_hardware: Set[str]) -> str | None:
         """Select CUDA if available."""
         return "cuda" if "cuda" in detected_hardware else None
 
-    def _select_onnxruntime(self, detected_hardware: Set[str]) -> Optional[str]:
+    def _select_onnxruntime(self, detected_hardware: Set[str]) -> str | None:
         """Select ONNX Runtime."""
         if "cuda" in detected_hardware:
             return "onnxruntime_cuda"
         return "onnxruntime_cpu"
 
-    def _select_cpu(self, detected_hardware: Set[str]) -> Optional[str]:
+    def _select_cpu(self, detected_hardware: Set[str]) -> str | None:
         """Select CPU backend if available."""
         return "cpu" if "cpu" in detected_hardware else None
 
@@ -179,7 +179,7 @@ class HardwareDetector:
         Returns:
             Selected backend name.
         """
-        model_info: Optional[ModelInfo] = inspect_model(model_name)
+        model_info: ModelInfo | None = inspect_model(model_name)
         preferred = self.select_backend()
 
         if model_info is None:

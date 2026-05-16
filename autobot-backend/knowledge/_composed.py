@@ -12,8 +12,6 @@ pulling in the full dependency tree.
 
 import asyncio
 import threading
-from typing import Optional
-
 from autobot_shared.logging_manager import get_logger
 from knowledge.base import KnowledgeBaseCore
 from knowledge.bulk import BulkOperationsMixin
@@ -64,7 +62,7 @@ class KnowledgeBase(
 
 
 # Singleton factory
-_knowledge_base_instance: Optional[KnowledgeBase] = None
+_knowledge_base_instance: KnowledgeBase | None = None
 _initialization_lock = asyncio.Lock()
 _reset_lock = threading.Lock()
 

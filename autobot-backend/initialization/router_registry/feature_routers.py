@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 # #6797: load-result registry — populated by load_feature_routers() so callers
 # (health endpoint, dashboards) can introspect what loaded vs failed without
 # scraping logs. Each entry: {"name": str, "module": str, "loaded": bool,
-# "error": Optional[str]}.
+# "error": str | None}.
 _LOAD_RESULTS: List[Dict[str, Any]] = []
 
 

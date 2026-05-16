@@ -11,8 +11,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
-
 from autobot_shared.ssot_config import config
 
 
@@ -44,7 +42,7 @@ class AutoResearchConfig:
 
     # Runner settings
     max_concurrent_experiments: int = 1
-    python_executable: Optional[str] = None
+    python_executable: str | None = None
 
     # Staged evaluation (cheap-first gating)
     staged_eval_fraction: float = field(default_factory=lambda: float(config.autoresearch_staged_eval_fraction))

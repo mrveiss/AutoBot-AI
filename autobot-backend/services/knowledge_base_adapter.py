@@ -45,7 +45,7 @@ class KnowledgeBaseAdapter:
     knowing the specific version or method signatures.
     """
 
-    def __init__(self, knowledge_base: Any):
+    def __init__(self, knowledge_base: Any) -> None:
         """
         Initialize adapter with a knowledge base instance.
 

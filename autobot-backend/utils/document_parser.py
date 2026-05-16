@@ -8,7 +8,7 @@ Supports: PDF, DOC, DOCX, XLSX, PPT, PPTX, ODT, ODS, ODP, ODG
 
 import asyncio
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
@@ -41,7 +41,7 @@ class DocumentParser:
             ".odg": "application/vnd.oasis.opendocument.graphics",
         }
 
-    async def extract_text(self, file_path: Path, mime_type: Optional[str] = None) -> Tuple[str, Dict[str, any]]:
+    async def extract_text(self, file_path: Path, mime_type: str | None = None) -> Tuple[str, Dict[str, any]]:
         """
         Extract text from document
 

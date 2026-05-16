@@ -15,7 +15,7 @@ import os
 import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Tuple
 
 from sqlalchemy import select
 
@@ -50,7 +50,7 @@ class CodeDistributor:
         self.package_dir = CODE_PACKAGE_DIR
         self.package_dir.mkdir(parents=True, exist_ok=True)
 
-    async def get_current_commit(self) -> Optional[str]:
+    async def get_current_commit(self) -> str | None:
         """Get current commit hash from database settings."""
         try:
             async with db_service.session() as db:
@@ -62,7 +62,7 @@ class CodeDistributor:
             logger.error("Failed to get commit hash from database: %s", e)
         return None
 
-    async def build_package(self, commit_hash: Optional[str] = None) -> Optional[Path]:
+    async def build_package(self, commit_hash: str | None = None) -> Path | None:
         """
         Build a code package tarball for distribution.
 
@@ -454,7 +454,7 @@ class CodeDistributor:
 
 
 # Singleton instance
-_distributor_instance: Optional[CodeDistributor] = None
+_distributor_instance: CodeDistributor | None = None
 
 
 def get_code_distributor(

@@ -8,7 +8,7 @@ Handles simple conversational responses with lightweight Llama 3.2 1B model.
 Focuses on quick, natural interactions without complex reasoning.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import (
@@ -134,8 +134,8 @@ class ChatAgent(StandardizedAgent):
     async def process_chat_message(
         self,
         message: str,
-        context: Optional[List[Dict[str, str]]] = None,
-        chat_history: Optional[List[Dict[str, Any]]] = None,
+        context: List[Dict[str, str]] | None = None,
+        chat_history: List[Dict[str, Any]] | None = None,
     ) -> Dict[str, Any]:
         """
         Process a conversational message and generate appropriate response.
@@ -221,7 +221,7 @@ For complex technical tasks, analysis, or system commands, you should "
 
         return messages
 
-    def _try_extract_message_content(self, response: Dict) -> Optional[str]:
+    def _try_extract_message_content(self, response: Dict) -> str | None:
         """Try to extract content from message dict (Issue #334 - extracted helper)."""
         if "message" not in response:
             return None
@@ -231,7 +231,7 @@ For complex technical tasks, analysis, or system commands, you should "
         content = message.get("content")
         return content.strip() if content else None
 
-    def _try_extract_choices_content(self, response: Dict) -> Optional[str]:
+    def _try_extract_choices_content(self, response: Dict) -> str | None:
         """Try to extract content from choices list (Issue #334 - extracted helper)."""
         if "choices" not in response:
             return None

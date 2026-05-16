@@ -11,7 +11,7 @@ Issue #4344: Provider-based memory architecture with external provider support
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -65,7 +65,7 @@ class MemoryProvider(ABC):
 
     @abstractmethod
     async def search(
-        self, query: str, limit: int = 10, filters: Optional[Dict[str, Any]] = None
+        self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None
     ) -> List[Dict[str, Any]]:
         """
         Find similar memories by semantic similarity.
@@ -80,7 +80,7 @@ class MemoryProvider(ABC):
         """
 
     @abstractmethod
-    async def get_entity(self, entity_id: str) -> Optional[Dict[str, Any]]:
+    async def get_entity(self, entity_id: str) -> Dict[str, Any] | None:
         """Get a specific entity by ID."""
 
     @abstractmethod

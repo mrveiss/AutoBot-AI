@@ -7,7 +7,7 @@ LRU Cache Manager - In-memory LRU caching with statistics
 
 import threading
 from collections import OrderedDict
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -55,7 +55,7 @@ class LRUCacheManager:
         """Maximum capacity."""
         return self._max_size
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Get item from cache (thread-safe)"""
         with self._lock:
             if key in self._cache:

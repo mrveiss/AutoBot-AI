@@ -15,7 +15,7 @@ Consolidated from chat.py and chat_enhanced.py per Issue #708.
 import asyncio
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from uuid import uuid4
 
 from autobot_shared.logging_manager import get_logger
@@ -100,7 +100,7 @@ def get_system_state(request: Request) -> Dict:
     return getattr(request.app.state, "system_state", {})
 
 
-def get_memory_interface(request: Request) -> Optional[Any]:
+def get_memory_interface(request: Request) -> Any | None:
     """Get memory interface from app state"""
     return getattr(request.app.state, "memory_interface", None)
 
@@ -149,7 +149,7 @@ def log_request_context(request: Request, endpoint: str, request_id: str) -> Non
 # ====================================================================
 
 
-def _parse_message_timestamp(msg_ts_str: str) -> Optional[datetime]:
+def _parse_message_timestamp(msg_ts_str: str) -> datetime | None:
     """Parse message timestamp from various formats (Issue #315)."""
     if not isinstance(msg_ts_str, str) or not msg_ts_str:
         return None
@@ -161,7 +161,7 @@ def _parse_message_timestamp(msg_ts_str: str) -> Optional[datetime]:
         return None
 
 
-def _should_start_new_streaming_group(current_ts: datetime, last_streaming_ts: Optional[datetime]) -> bool:
+def _should_start_new_streaming_group(current_ts: datetime, last_streaming_ts: datetime | None) -> bool:
     """Check if a new streaming group should start (Issue #315)."""
     if last_streaming_ts is None:
         return False
@@ -340,7 +340,7 @@ STREAMING_CHUNK_SIZE = 1024
 # ====================================================================
 
 
-def _validate_session_id(session_id: Optional[str]) -> None:
+def _validate_session_id(session_id: str | None) -> None:
     """
     Validate session ID format if provided.
 
@@ -409,7 +409,7 @@ async def _store_and_log_user_message(
     message: "ChatMessage",
     session_id: str,
     chat_history_manager,
-    author_id: Optional[str] = None,
+    author_id: str | None = None,
 ) -> str:
     """
     Store user message and log the event.
@@ -483,7 +483,7 @@ async def _store_and_log_user_message(
     return user_message_id
 
 
-async def _get_chat_context(chat_history_manager, session_id: str, model_name: Optional[str]) -> List[Dict]:
+async def _get_chat_context(chat_history_manager, session_id: str, model_name: str | None) -> List[Dict]:
     """
     Get chat context from history with model-aware retrieval.
 
@@ -514,7 +514,7 @@ def _build_llm_context(
     chat_context: List[Dict],
     message: "ChatMessage",
     chat_history_manager,
-    model_name: Optional[str],
+    model_name: str | None,
 ) -> List[Dict]:
     """
     Build LLM context with model-aware message limits.
@@ -650,7 +650,7 @@ async def process_chat_message(
     knowledge_base,
     config: Metadata,
     request_id: str,
-    author_id: Optional[str] = None,
+    author_id: str | None = None,
 ) -> ChatMessageData:
     """Process a chat message and generate response (Issue #398: refactored,
     Issue #3282: author_id for multi-user attribution, Issue #6502: typed return)."""
@@ -1555,7 +1555,7 @@ async def _enhance_with_knowledge_base(
     return enhanced_context, knowledge_sources
 
 
-def _get_ai_stack_message_limit(chat_history_manager, model_name: Optional[str]) -> int:
+def _get_ai_stack_message_limit(chat_history_manager, model_name: str | None) -> int:
     """Helper for _generate_ai_stack_chat_response. Ref: #1088."""
     context_manager = getattr(chat_history_manager, "context_manager", None)
     if context_manager:
@@ -1573,9 +1573,9 @@ def _get_ai_stack_message_limit(chat_history_manager, model_name: Optional[str])
 async def _generate_ai_stack_chat_response(
     message: EnhancedChatMessage,
     chat_context: list,
-    enhanced_context: Optional[str],
+    enhanced_context: str | None,
     chat_history_manager,
-    preferences: Optional[ChatPreferences],
+    preferences: ChatPreferences | None,
 ) -> Metadata:
     """Generate response using AI Stack."""
     try:
@@ -1690,7 +1690,7 @@ async def _execute_enhanced_chat_pipeline(
     chat_history_manager,
     knowledge_base,
     request_id: str,
-    preferences: Optional[ChatPreferences],
+    preferences: ChatPreferences | None,
 ) -> EnhancedChatData:
     """Helper for process_enhanced_chat_message. Ref: #1088, #6502 (typed return).
 
@@ -1738,7 +1738,7 @@ async def process_enhanced_chat_message(
     knowledge_base,
     config: Metadata,
     request_id: str,
-    preferences: Optional[ChatPreferences] = None,
+    preferences: ChatPreferences | None = None,
 ) -> EnhancedChatData:
     """
     Process a chat message with AI Stack enhanced capabilities.
@@ -1783,7 +1783,7 @@ async def _stream_ai_stack_response(
     session_id: str,
     chat_history_manager,
     request_id: str,
-    preferences: Optional[ChatPreferences],
+    preferences: ChatPreferences | None,
 ):
     """Stream AI Stack enhanced response in chunks."""
     try:
@@ -1843,7 +1843,7 @@ async def _generate_enhanced_stream(
     message: EnhancedChatMessage,
     request: Request,
     request_id: str,
-    preferences: Optional[ChatPreferences],
+    preferences: ChatPreferences | None,
 ):
     """Generate streaming response with AI Stack integration."""
     try:
@@ -1888,7 +1888,7 @@ async def enhanced_chat(
     current_user: dict = Depends(get_current_user),
     message: EnhancedChatMessage = None,
     request: Request = None,
-    preferences: Optional[ChatPreferences] = None,
+    preferences: ChatPreferences | None = None,
     config=Depends(get_config),
     knowledge_base=Depends(get_knowledge_base),
 ):
@@ -1956,7 +1956,7 @@ async def stream_enhanced_chat(
     current_user: dict = Depends(get_current_user),
     message: EnhancedChatMessage = None,
     request: Request = None,
-    preferences: Optional[ChatPreferences] = None,
+    preferences: ChatPreferences | None = None,
 ):
     """
     Stream enhanced chat response for real-time communication.

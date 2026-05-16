@@ -9,8 +9,6 @@ Detects brute force authentication attacks.
 Part of Issue #381 - God Class Refactoring
 """
 
-from typing import Optional
-
 from ..models import AnalysisContext, SecurityEvent, ThreatEvent
 from ..types import ThreatCategory, ThreatLevel
 from .base import ThreatAnalyzer
@@ -19,7 +17,7 @@ from .base import ThreatAnalyzer
 class BruteForceAnalyzer(ThreatAnalyzer):
     """Analyzes events for brute force attacks"""
 
-    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> Optional[ThreatEvent]:
+    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> ThreatEvent | None:
         """Detect brute force attacks"""
         if not event.is_authentication_failure():
             return None

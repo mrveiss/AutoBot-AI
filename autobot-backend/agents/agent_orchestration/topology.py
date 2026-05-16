@@ -15,7 +15,7 @@ selection toward historically effective collaborations.
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from itertools import combinations
-from typing import Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from autobot_shared.logging_manager import get_logger
 
@@ -34,7 +34,7 @@ class AgentConnection:
     id: str
     from_agent: str
     to_agent: str
-    task_type: Optional[str]  # None means the connection applies to all task types
+    task_type: str | None  # None means the connection applies to all task types
     weight: float
     co_success_count: int
     co_failure_count: int
@@ -52,7 +52,7 @@ class AgentTopologyDB(Protocol):
     async def get_agent_connections(
         self,
         from_agent: str,
-        task_type: Optional[str],
+        task_type: str | None,
         min_weight: float,
         limit: int,
     ) -> list[AgentConnection]:
@@ -60,7 +60,7 @@ class AgentTopologyDB(Protocol):
         ...
 
     async def get_or_create_agent_connection(
-        self, from_agent: str, to_agent: str, task_type: Optional[str]
+        self, from_agent: str, to_agent: str, task_type: str | None
     ) -> AgentConnection:
         """Fetch the connection or create it with a neutral starting weight."""
         ...
@@ -69,9 +69,9 @@ class AgentTopologyDB(Protocol):
         self,
         connection_id: str,
         weight: float,
-        co_success_count: Optional[int] = None,
-        co_failure_count: Optional[int] = None,
-        last_updated: Optional[datetime] = None,
+        co_success_count: int | None = None,
+        co_failure_count: int | None = None,
+        last_updated: datetime | None = None,
     ) -> None:
         """Persist updated weight, counter, and timestamp fields (#2213)."""
         ...
@@ -79,7 +79,7 @@ class AgentTopologyDB(Protocol):
     async def record_agent_task(
         self,
         agent_id: str,
-        task_type: Optional[str],
+        task_type: str | None,
         workflow_id: str,
         success: bool,
     ) -> None:
@@ -113,7 +113,7 @@ class AgentTopology:
     async def get_collaborators(
         self,
         agent_id: str,
-        task_type: Optional[str] = None,
+        task_type: str | None = None,
         min_weight: float = 0.3,
         limit: int = 5,
     ) -> list[AgentConnection]:
@@ -140,7 +140,7 @@ class AgentTopology:
         self,
         workflow_id: str,
         agents: list[str],
-        task_type: Optional[str],
+        task_type: str | None,
         success: bool,
     ) -> None:
         """Update connection weights after a multi-agent workflow completes.
@@ -165,7 +165,7 @@ class AgentTopology:
         self,
         workflow_id: str,
         agents: list[str],
-        task_type: Optional[str],
+        task_type: str | None,
         success: bool,
     ) -> None:
         """Persist per-agent task history and emit a summary log entry.
@@ -186,7 +186,7 @@ class AgentTopology:
         self,
         from_agent: str,
         to_agent: str,
-        task_type: Optional[str],
+        task_type: str | None,
         success: bool,
     ) -> None:
         """Apply one Hebbian update to a single agent pair.

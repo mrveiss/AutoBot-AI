@@ -27,7 +27,7 @@ class PaginationParams:
 
     Use with ``Depends()``::
 
-        async def my_endpoint(pagination: PaginationParams = Depends()):
+        async def my_endpoint(pagination: PaginationParams = Depends()) -> None:
             ...
             results = await svc.list(limit=pagination.limit, offset=pagination.offset)
 

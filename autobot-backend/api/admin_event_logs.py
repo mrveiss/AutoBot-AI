@@ -17,8 +17,6 @@ Filters:
 Access: admin role required.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Query, Request
 
 from auth_middleware import get_auth_middleware
@@ -49,10 +47,10 @@ def _require_admin(request: Request) -> bool:
 )
 async def list_event_logs(
     request: Request,
-    user_id: Optional[str] = Query(None, description="Filter by user ID"),
-    event_type: Optional[str] = Query(None, description="Filter by event type"),
-    from_ts: Optional[float] = Query(None, description="Unix timestamp lower bound"),
-    to_ts: Optional[float] = Query(None, description="Unix timestamp upper bound"),
+    user_id: str | None = Query(None, description="Filter by user ID"),
+    event_type: str | None = Query(None, description="Filter by event type"),
+    from_ts: float | None = Query(None, description="Unix timestamp lower bound"),
+    to_ts: float | None = Query(None, description="Unix timestamp upper bound"),
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
     _admin: bool = Depends(_require_admin),

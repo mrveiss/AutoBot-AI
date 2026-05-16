@@ -9,7 +9,7 @@ Issue #748: Tiered Model Distribution Implementation.
 Selects the appropriate model tier based on task complexity scoring.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
@@ -33,8 +33,8 @@ class TieredModelRouter:
 
     def __init__(
         self,
-        config: Optional[TierConfig] = None,
-        scorer: Optional[TaskComplexityScorer] = None,
+        config: TierConfig | None = None,
+        scorer: TaskComplexityScorer | None = None,
     ):
         """
         Initialize tiered model router.
@@ -55,7 +55,7 @@ class TieredModelRouter:
     def route(
         self,
         messages: List[Dict],
-        requested_model: Optional[str] = None,
+        requested_model: str | None = None,
     ) -> Tuple[str, ComplexityResult]:
         """
         Route a request to the appropriate model tier.
@@ -96,7 +96,7 @@ class TieredModelRouter:
 
     def _log_routing_decision(
         self,
-        requested_model: Optional[str],
+        requested_model: str | None,
         selected_model: str,
         result: ComplexityResult,
     ) -> None:
@@ -202,11 +202,11 @@ class TieredModelRouter:
 
 
 # Module-level singleton for easy access
-_router_instance: Optional[TieredModelRouter] = None
+_router_instance: TieredModelRouter | None = None
 
 
 def get_tiered_router(
-    config: Optional[TierConfig] = None,
+    config: TierConfig | None = None,
     force_new: bool = False,
 ) -> TieredModelRouter:
     """

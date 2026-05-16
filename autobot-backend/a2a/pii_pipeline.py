@@ -34,7 +34,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,7 @@ _DEFAULT_POLICY: Dict[PIIType, PIIAction] = {
 class PIIBlocked(Exception):
     """Raised when an outbound A2A message is blocked by the PII pipeline."""
 
-    def __init__(self, blocked_types: List[PIIType], peer_id: Optional[str] = None) -> None:
+    def __init__(self, blocked_types: List[PIIType], peer_id: str | None = None) -> None:
         self.blocked_types = blocked_types
         self.peer_id = peer_id
         types_str = ", ".join(t.value for t in blocked_types)
@@ -150,7 +150,7 @@ def _high_entropy(s: str, threshold: float = 4.2) -> bool:
 # ---------------------------------------------------------------------------
 
 # (PIIType, compiled-regex, optional post-match validator)
-_DetectorEntry = Tuple[PIIType, re.Pattern, Optional[Callable[[str], bool]]]
+_DetectorEntry = Tuple[PIIType, re.Pattern, Callable[[str], bool] | None]
 
 
 def _build_detectors() -> List[_DetectorEntry]:
@@ -238,7 +238,7 @@ def _build_detectors() -> List[_DetectorEntry]:
 _DETECTORS: List[_DetectorEntry] = _build_detectors()
 
 # Customer ID regex loaded from env at startup (optional extension point)
-_CUSTOMER_ID_RE: Optional[re.Pattern] = None
+_CUSTOMER_ID_RE: re.Pattern | None = None
 _raw_cid = os.environ.get("AUTOBOT_A2A_CUSTOMER_ID_PATTERN", "")
 if _raw_cid:
     try:
@@ -291,8 +291,8 @@ class PIIPipeline:
     def scrub(
         self,
         text: str,
-        peer_id: Optional[str] = None,
-        message_id: Optional[str] = None,
+        peer_id: str | None = None,
+        message_id: str | None = None,
     ) -> ScrubResult:
         """
         Apply all PII detectors to *text* and return a ScrubResult.
@@ -367,8 +367,8 @@ class PIIPipeline:
         pii_type: PIIType,
         action: PIIAction,
         count: int,
-        peer_id: Optional[str],
-        message_id: Optional[str],
+        peer_id: str | None,
+        message_id: str | None,
     ) -> None:
         logger.info(
             "a2a.pii_pipeline type=%s action=%s count=%d peer=%s message_id=%s",
@@ -384,7 +384,7 @@ class PIIPipeline:
 # Singleton
 # ---------------------------------------------------------------------------
 
-_pipeline: Optional[PIIPipeline] = None
+_pipeline: PIIPipeline | None = None
 
 
 def get_pii_pipeline() -> PIIPipeline:
@@ -397,8 +397,8 @@ def get_pii_pipeline() -> PIIPipeline:
 
 def scrub_outbound(
     text: str,
-    peer_id: Optional[str] = None,
-    message_id: Optional[str] = None,
+    peer_id: str | None = None,
+    message_id: str | None = None,
 ) -> ScrubResult:
     """
     Scrub an outbound A2A payload and raise PIIBlocked if any BLOCK type is found.

@@ -3,7 +3,7 @@
 # Author: mrveiss
 # src/gui_controller_dummy.py
 import asyncio
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
@@ -23,7 +23,7 @@ class GUIController:
             "Initializing Dummy GUIController for Linux environment. " "GUI automation features will be skipped."
         )
 
-    async def _screenshot(self, region: Optional[Tuple[int, int, int, int]] = None) -> Any:
+    async def _screenshot(self, region: Tuple[int, int, int, int] | None = None) -> Any:
         """Return None as screenshot is not supported in dummy controller."""
         logger.debug("Dummy GUIController: _screenshot skipped.")
         await asyncio.sleep(0)

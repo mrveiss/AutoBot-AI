@@ -17,7 +17,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ class ToolResult:
     data: Any = None
     """Payload produced by the tool on success (structure depends on the tool)."""
 
-    error: Optional[str] = None
+    error: str | None = None
     """Human-readable error description when ``success`` is False."""
 
     duration_ms: float = 0.0
@@ -136,7 +136,7 @@ class ToolResult:
 class ToolInputError(ValueError):
     """Raised by ``BaseTool.validate_input()`` when input does not satisfy the schema."""
 
-    def __init__(self, message: str, field: Optional[str] = None) -> None:
+    def __init__(self, message: str, field: str | None = None) -> None:
         super().__init__(message)
         self.field = field
 

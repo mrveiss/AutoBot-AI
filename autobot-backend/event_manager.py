@@ -3,7 +3,7 @@
 # Author: mrveiss
 # src/event_manager.py
 import asyncio  # Added back asyncio import
-from typing import Any, Awaitable, Callable, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict
 
 import yaml
 
@@ -21,7 +21,7 @@ class EventManager:
     def __init__(self):
         """Initialize event manager with empty listeners and no WebSocket callback."""
         self._listeners: Dict[str, list[Callable[[Dict[str, Any]], Awaitable[None]]]] = {}
-        self._websocket_broadcast_callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None
+        self._websocket_broadcast_callback: Callable[[Dict[str, Any]], Awaitable[None]] | None = None
         self._config = self._load_config()  # Load config on init
 
     def _load_config(self):
@@ -42,7 +42,7 @@ class EventManager:
         """Check if debug mode is enabled in configuration."""
         return self._config.get("agent_behavior", {}).get("debug_mode", False)
 
-    def register_websocket_broadcast(self, callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]]):
+    def register_websocket_broadcast(self, callback: Callable[[Dict[str, Any]], Awaitable[None]] | None):
         """Registers a callback function to broadcast events via WebSocket."""
         self._websocket_broadcast_callback = callback
 

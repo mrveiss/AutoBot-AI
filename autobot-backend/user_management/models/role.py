@@ -8,7 +8,7 @@ Implements database-driven RBAC (Role-Based Access Control).
 """
 
 import uuid
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -51,7 +51,7 @@ class Permission(Base):
         index=True,
     )
 
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -102,7 +102,7 @@ class Role(Base):
     )
 
     # Nullable org_id means system role
-    org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    org_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
@@ -114,7 +114,7 @@ class Role(Base):
         nullable=False,
     )
 
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -133,7 +133,7 @@ class Role(Base):
     )
 
     # Relationships
-    organization: Mapped[Optional["Organization"]] = relationship(
+    organization: Mapped["Organization" | None] = relationship(
         "Organization",
         back_populates="roles",
     )
@@ -226,7 +226,7 @@ class UserRole(Base):
     )
 
     # Who assigned this role
-    assigned_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    assigned_by: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,

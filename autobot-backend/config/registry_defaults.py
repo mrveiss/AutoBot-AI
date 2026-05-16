@@ -13,8 +13,6 @@ These match the values from the distributed VM architecture.
 Issue: #751 - Consolidate Common Utilities
 """
 
-from typing import Optional
-
 from autobot_shared.ssot_config import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_LLM_MODEL,
@@ -87,6 +85,6 @@ REGISTRY_DEFAULTS = {
 }
 
 
-def get_default(key: str) -> Optional[str]:
+def get_default(key: str) -> str | None:
     """Get default value for a config key."""
     return REGISTRY_DEFAULTS.get(key)

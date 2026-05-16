@@ -35,7 +35,7 @@ Design choices
 import time
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.status_enums import TaskStatus
 
@@ -64,7 +64,7 @@ class PromptSpec:
     """
 
     user_prompt: str
-    system_prompt: Optional[str] = None
+    system_prompt: str | None = None
     template_vars: Dict[str, Any] = field(default_factory=dict)
     version: str = "1"
 
@@ -95,17 +95,17 @@ class WorkflowTask:
     task_id: str
     description: str = ""
 
-    agent_type: Optional[str] = None
-    action: Optional[str] = None
-    command: Optional[str] = None
+    agent_type: str | None = None
+    action: str | None = None
+    command: str | None = None
 
-    prompt: Optional[PromptSpec] = None
-    tools_allowed: Optional[List[str]] = None
+    prompt: PromptSpec | None = None
+    tools_allowed: List[str] | None = None
     tools_denied: List[str] = field(default_factory=list)
 
     inputs: Dict[str, Any] = field(default_factory=dict)
-    expected_outputs: Optional[Dict[str, str]] = None
-    outputs: Optional[Dict[str, Any]] = None
+    expected_outputs: Dict[str, str] | None = None
+    outputs: Dict[str, Any] | None = None
 
     dependencies: List[str] = field(default_factory=list)
     requires_approval: bool = False
@@ -118,9 +118,9 @@ class WorkflowTask:
     estimated_duration_seconds: float = 0.0
 
     status: str = "pending"
-    error: Optional[str] = None
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
+    error: str | None = None
+    start_time: float | None = None
+    end_time: float | None = None
 
     # Skill binding (#7268 Phase 1, ADR-006: Skill-Bound Planning).
     # Populated at plan time by StrategyPlanner via skill_router lookup
@@ -129,9 +129,9 @@ class WorkflowTask:
     # action to invoke at execute time; ``skill_resolution_method`` records
     # how it was resolved (``"keyword"`` / ``"llm"`` / ``None``).
     # WorkflowExecutor consumes ``skill_name``/``skill_action`` since #7430.
-    skill_name: Optional[str] = None
-    skill_action: Optional[str] = None
-    skill_resolution_method: Optional[str] = None
+    skill_name: str | None = None
+    skill_action: str | None = None
+    skill_resolution_method: str | None = None
 
     # Async gap-fill marker (#7431 Phase 3, ADR-006). Set when the planner
     # found no matching skill for the task's intent and triggered Phase 3
@@ -141,7 +141,7 @@ class WorkflowTask:
     # the resume path re-binds the task (clears + re-runs ``bind_skills``).
     # ``skill_name`` and ``pending_skill_id`` are mutually exclusive on a
     # skill-binding step.
-    pending_skill_id: Optional[str] = None
+    pending_skill_id: str | None = None
 
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -270,7 +270,7 @@ class WorkflowPlan:
     approved: bool = False
     status: str = "pending"
 
-    created_at_epoch: Optional[float] = None
+    created_at_epoch: float | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:

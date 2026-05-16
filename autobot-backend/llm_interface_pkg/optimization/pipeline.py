@@ -22,7 +22,7 @@ Issue #3140: Assemble end-to-end LayerInference pipeline.
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 
@@ -68,7 +68,7 @@ class PipelineConfig:
     compression: str = "none"
     max_seq_len: int = 2048
     batch_size: int = 1
-    cache_dir: Optional[str] = None
+    cache_dir: str | None = None
 
     def __post_init__(self) -> None:
         """Validate configuration."""

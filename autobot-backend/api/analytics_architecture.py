@@ -22,7 +22,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiofiles
 from fastapi import APIRouter, Depends, Query
@@ -369,7 +369,7 @@ class ArchitectureAnalyzer:
         self.layers: List[ArchitectureLayer] = []
 
     def _determine_target_patterns(
-        self, patterns_to_detect: Optional[List[PatternType]], include_autobot: bool
+        self, patterns_to_detect: List[PatternType] | None, include_autobot: bool
     ) -> List[PatternType]:
         """Determine which patterns to detect (Issue #398: extracted)."""
         if patterns_to_detect:
@@ -418,7 +418,7 @@ class ArchitectureAnalyzer:
     async def analyze(
         self,
         paths: List[str],
-        patterns_to_detect: Optional[List[PatternType]] = None,
+        patterns_to_detect: List[PatternType] | None = None,
         include_autobot_patterns: bool = True,
     ) -> ArchitectureReport:
         """Analyze architecture of specified paths (Issue #398: refactored)."""
@@ -560,7 +560,7 @@ class ArchitectureAnalyzer:
                 matches = self._match_pattern(analysis, content, PATTERN_TEMPLATES[pattern_type])
                 analysis.patterns_found.extend(matches)
 
-    async def _analyze_file(self, file_path: str, target_patterns: List[PatternType]) -> Optional[FileAnalysis]:
+    async def _analyze_file(self, file_path: str, target_patterns: List[PatternType]) -> FileAnalysis | None:
         """Analyze a single Python file (Issue #398: refactored)."""
         try:
             async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -719,7 +719,7 @@ class ArchitectureAnalyzer:
         template: PatternTemplate,
         analysis: FileAnalysis,
         content: str,
-    ) -> Optional[PatternMatch]:
+    ) -> PatternMatch | None:
         """Match module-level patterns (Issue #398: extracted)."""
         if analysis.classes or not template.code_patterns:
             return None
@@ -820,7 +820,7 @@ class ArchitectureAnalyzer:
 
         return {"violations": violations, "consistent_count": consistent_count}
 
-    def _process_layer_definition(self, layer_def: Dict[str, Any]) -> Optional[ArchitectureLayer]:
+    def _process_layer_definition(self, layer_def: Dict[str, Any]) -> ArchitectureLayer | None:
         """
         Process a layer definition and extract components.
 
@@ -1059,7 +1059,7 @@ class ArchitectureAnalyzer:
 # Global Instance
 # =============================================================================
 
-_analyzer: Optional[ArchitectureAnalyzer] = None
+_analyzer: ArchitectureAnalyzer | None = None
 _analyzer_lock = asyncio.Lock()
 
 
@@ -1238,7 +1238,7 @@ async def get_diagram(
 )
 async def check_consistency(
     admin_check: bool = Depends(check_admin_permission),
-    pattern: Optional[PatternType] = Query(None, description="Specific pattern"),
+    pattern: PatternType | None = Query(None, description="Specific pattern"),
 ) -> Dict[str, Any]:
     """
     Check consistency of pattern implementations.

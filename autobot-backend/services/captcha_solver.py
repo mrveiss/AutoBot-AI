@@ -38,7 +38,7 @@ import io
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from autobot_shared.singleton_factory import lazy_singleton
 
@@ -83,9 +83,9 @@ class CaptchaSolveResult:
 
     success: bool
     captcha_type: CaptchaType
-    solution: Optional[str] = None
+    solution: str | None = None
     confidence: SolverConfidence = SolverConfidence.NONE
-    error_message: Optional[str] = None
+    error_message: str | None = None
     processing_time_ms: float = 0.0
     requires_human: bool = True
 
@@ -106,7 +106,7 @@ class CaptchaSolver:
     NUMERIC_ONLY = "0123456789"
     ALPHA_ONLY = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-    def __init__(self, use_gpu: bool = False):
+    def __init__(self, use_gpu: bool = False) -> None:
         """
         Initialize the CAPTCHA solver.
 
@@ -143,8 +143,8 @@ class CaptchaSolver:
         self,
         image: Image.Image,
         captcha_type: CaptchaType,
-        expected_length: Optional[int],
-        char_set: Optional[str],
+        expected_length: int | None,
+        char_set: str | None,
     ) -> CaptchaSolveResult:
         """
         Route CAPTCHA to appropriate solver based on type.
@@ -183,8 +183,8 @@ class CaptchaSolver:
         self,
         image_data: bytes,
         captcha_type: CaptchaType = CaptchaType.UNKNOWN,
-        expected_length: Optional[int] = None,
-        char_set: Optional[str] = None,
+        expected_length: int | None = None,
+        char_set: str | None = None,
     ) -> CaptchaSolveResult:
         """
         Attempt to automatically solve a CAPTCHA.
@@ -257,7 +257,7 @@ class CaptchaSolver:
 
         return CaptchaType.TEXT
 
-    def _get_tesseract_config(self, char_set: Optional[str]) -> str:
+    def _get_tesseract_config(self, char_set: str | None) -> str:
         """Get Tesseract config based on character set (Issue #315: extracted helper)."""
         config = "--psm 7 --oem 3"  # Single line of text
         if char_set == self.NUMERIC_ONLY:
@@ -272,8 +272,8 @@ class CaptchaSolver:
         self,
         image,
         config: str,
-        char_set: Optional[str],
-        expected_length: Optional[int],
+        char_set: str | None,
+        expected_length: int | None,
     ) -> tuple:
         """Process single OCR attempt (Issue #315: extracted helper).
 
@@ -317,7 +317,7 @@ class CaptchaSolver:
             return SolverConfidence.MEDIUM
         return SolverConfidence.LOW
 
-    def _build_text_captcha_failure(self, best_result: Optional[str]) -> CaptchaSolveResult:
+    def _build_text_captcha_failure(self, best_result: str | None) -> CaptchaSolveResult:
         """
         Build failure result for text CAPTCHA solving. Issue #620.
         """
@@ -332,8 +332,8 @@ class CaptchaSolver:
     async def _solve_text_captcha(
         self,
         image: Image.Image,
-        expected_length: Optional[int] = None,
-        char_set: Optional[str] = None,
+        expected_length: int | None = None,
+        char_set: str | None = None,
     ) -> CaptchaSolveResult:
         """
         Solve a simple text-based CAPTCHA using OCR.
@@ -481,7 +481,7 @@ class CaptchaSolver:
         gray = image.convert("L")
         return pytesseract.image_to_string(gray, config="--psm 7").strip()
 
-    def _clean_ocr_result(self, text: str, char_set: Optional[str]) -> str:
+    def _clean_ocr_result(self, text: str, char_set: str | None) -> str:
         """
         Clean up OCR result by fixing common misrecognitions.
 
@@ -547,7 +547,7 @@ class CaptchaSolver:
             expr = expr.replace(old, new)
         return expr
 
-    def _apply_math_operation(self, a: int, op: str, b: int) -> Optional[int]:
+    def _apply_math_operation(self, a: int, op: str, b: int) -> int | None:
         """Apply a math operation to two operands (Issue #315: extracted).
 
         Args:
@@ -561,7 +561,7 @@ class CaptchaSolver:
         operation = self._MATH_OPS.get(op)
         return operation(a, b) if operation else None
 
-    def _evaluate_math_expression(self, expression: str) -> Optional[int]:
+    def _evaluate_math_expression(self, expression: str) -> int | None:
         """Safely evaluate a simple math expression.
 
         Issue #315: Refactored to use helpers for reduced nesting.

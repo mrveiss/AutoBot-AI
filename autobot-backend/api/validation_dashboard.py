@@ -11,8 +11,6 @@ import os
 # Import the dashboard generator
 import sys
 from datetime import datetime, timezone
-from typing import Optional
-
 import aiofiles
 from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -79,8 +77,8 @@ _validation_judges_lock = threading.Lock()
 
 
 def _try_create_dashboard_generator() -> (
-    Optional[ValidationDashboardGenerator]
-):  # #6794: _MissingDep handles Optional[stub] safely
+    ValidationDashboardGenerator | None
+):  # #6794: _MissingDep handles stub | None safely
     """Try to create dashboard generator, return None on failure. (Issue #315 - extracted)"""
     try:
         generator = ValidationDashboardGenerator()
@@ -96,8 +94,8 @@ def _try_create_dashboard_generator() -> (
 
 
 def get_dashboard_generator() -> (
-    Optional[ValidationDashboardGenerator]
-):  # #6794: _MissingDep handles Optional[stub] safely
+    ValidationDashboardGenerator | None
+):  # #6794: _MissingDep handles stub | None safely
     """Get or create dashboard generator instance (thread-safe)"""
     global _dashboard_generator
 
@@ -114,7 +112,7 @@ def get_dashboard_generator() -> (
     return _dashboard_generator
 
 
-def _try_create_validation_judges() -> Optional[Metadata]:
+def _try_create_validation_judges() -> Metadata | None:
     """Try to create validation judges, return None on failure. (Issue #315 - extracted)"""
     try:
         judges = {
@@ -130,7 +128,7 @@ def _try_create_validation_judges() -> Optional[Metadata]:
     return None
 
 
-def get_validation_judges() -> Optional[Metadata]:
+def get_validation_judges() -> Metadata | None:
     """Get or create validation judges instance (thread-safe)"""
     global _validation_judges
 

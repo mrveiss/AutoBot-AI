@@ -4,7 +4,7 @@
 """Centralized context window management for LLM interactions."""
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import yaml
 
@@ -117,7 +117,7 @@ class ContextWindowManager:
 
         logger.info("Active model: %s", self.current_model)
 
-    def get_message_limit(self, model_name: Optional[str] = None) -> int:
+    def get_message_limit(self, model_name: str | None = None) -> int:
         """Get recommended message limit for model.
 
         Args:
@@ -133,7 +133,7 @@ class ContextWindowManager:
 
         return self.config["models"][model]["message_budget"]["recent_messages"]
 
-    def get_max_history_tokens(self, model_name: Optional[str] = None) -> int:
+    def get_max_history_tokens(self, model_name: str | None = None) -> int:
         """Get max tokens to allocate for conversation history.
 
         Args:
@@ -161,7 +161,7 @@ class ContextWindowManager:
         chars_per_token = self.config["token_estimation"]["chars_per_token"]
         return len(text) // chars_per_token
 
-    def calculate_retrieval_limit(self, model_name: Optional[str] = None) -> int:
+    def calculate_retrieval_limit(self, model_name: str | None = None) -> int:
         """Calculate how many messages to retrieve from Redis.
 
         More efficient than fetching 500 when we only use 200.
@@ -177,7 +177,7 @@ class ContextWindowManager:
         # Fetch 2x what we plan to use (buffer for filtering)
         return message_limit * 2
 
-    def should_truncate_history(self, messages: List[Dict], model_name: Optional[str] = None) -> bool:
+    def should_truncate_history(self, messages: List[Dict], model_name: str | None = None) -> bool:
         """Check if message history needs truncation.
 
         Args:
@@ -195,7 +195,7 @@ class ContextWindowManager:
         max_tokens = self.get_max_history_tokens(model_name)
         return estimated_tokens > max_tokens
 
-    def get_compression_threshold(self, model_name: Optional[str] = None) -> int:
+    def get_compression_threshold(self, model_name: str | None = None) -> int:
         """Get the compression_threshold for a model (defaults to 8192).
 
         Issue #3770: Models whose context_window_tokens <= 8192 trigger
@@ -212,7 +212,7 @@ class ContextWindowManager:
             model = self.config["models"]["default"]["name"]
         return self.config["models"][model].get("compression_threshold", 8192)
 
-    async def async_should_compress(self, content_tokens: int, model_name: Optional[str] = None) -> bool:
+    async def async_should_compress(self, content_tokens: int, model_name: str | None = None) -> bool:
         """Return True when content_tokens exceed the model compression threshold.
 
         Issue #3770: Delegates to ContextCompressionService which applies the
@@ -229,7 +229,7 @@ class ContextWindowManager:
         svc = _get_compression_service()
         return await svc.should_compress(model, content_tokens)
 
-    def get_model_info(self, model_name: Optional[str] = None) -> Dict:
+    def get_model_info(self, model_name: str | None = None) -> Dict:
         """Get full model configuration.
 
         Args:

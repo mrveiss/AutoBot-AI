@@ -92,7 +92,7 @@ class TestRetrieveAgenticLoop:
     """retrieve_agentic() drives the ReAct loop correctly."""
 
     @pytest.mark.asyncio
-    async def test_retrieve_agentic_calls_select_next_action(self):
+    async def test_retrieve_agentic_calls_select_next_action(self) -> None:
         """LLM is called at each step until DONE is returned."""
         responses = [
             '{"tool": "semantic_search", "params": {}}',
@@ -106,7 +106,7 @@ class TestRetrieveAgenticLoop:
         assert retriever.llm.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_retrieve_agentic_stops_on_done(self):
+    async def test_retrieve_agentic_stops_on_done(self) -> None:
         """When the first LLM response is DONE the loop exits after one call."""
         retriever = _make_retriever_agentic(llm_responses=['{"tool": "DONE"}'])
 
@@ -117,7 +117,7 @@ class TestRetrieveAgenticLoop:
         assert isinstance(result, MeshRetrievalResult)
 
     @pytest.mark.asyncio
-    async def test_retrieve_agentic_max_steps_limit(self):
+    async def test_retrieve_agentic_max_steps_limit(self) -> None:
         """Loop iterates exactly max_steps times when DONE is never returned."""
         # Always return semantic_search — never DONE
         never_done = ['{"tool": "semantic_search", "params": {}}'] * 10
@@ -129,7 +129,7 @@ class TestRetrieveAgenticLoop:
         assert retriever.llm.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_retrieve_agentic_returns_mesh_retrieval_result(self):
+    async def test_retrieve_agentic_returns_mesh_retrieval_result(self) -> None:
         """retrieve_agentic always returns a MeshRetrievalResult. Issue #2136."""
         retriever = _make_retriever_agentic(llm_responses=['{"tool": "DONE"}'])
 
@@ -150,21 +150,21 @@ class TestExecuteTool:
     """_execute_tool dispatches each tool name to the correct method."""
 
     @pytest.mark.asyncio
-    async def test_execute_tool_semantic_search(self):
+    async def test_execute_tool_semantic_search(self) -> None:
         """semantic_search dispatches to chroma_search callable."""
         retriever = _make_retriever_agentic()
         await retriever._execute_tool("semantic_search", {}, "redis caching")
         retriever.chroma_search.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_execute_tool_keyword_search(self):
+    async def test_execute_tool_keyword_search(self) -> None:
         """keyword_search dispatches to hybrid_search callable."""
         retriever = _make_retriever_agentic()
         await retriever._execute_tool("keyword_search", {}, "redis caching")
         retriever.hybrid_search.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_execute_tool_mesh_expand(self):
+    async def test_execute_tool_mesh_expand(self) -> None:
         """mesh_expand calls hybrid_search then ppr.rank."""
         retriever = _make_retriever_agentic()
         await retriever._execute_tool("mesh_expand", {}, "redis caching")
@@ -172,14 +172,14 @@ class TestExecuteTool:
         retriever.ppr.rank.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_execute_tool_unknown_returns_empty(self):
+    async def test_execute_tool_unknown_returns_empty(self) -> None:
         """An unrecognised tool name returns an empty list without raising."""
         retriever = _make_retriever_agentic()
         result = await retriever._execute_tool("nonexistent_tool", {}, "query")
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_execute_tool_anchor_lookup(self):
+    async def test_execute_tool_anchor_lookup(self) -> None:
         """anchor_lookup calls hybrid_search and mesh_db.get_anchor_neighbors."""
         retriever = _make_retriever_agentic(anchor_results=["anchor-1"])
         await retriever._execute_tool("anchor_lookup", {}, "redis caching")
@@ -195,32 +195,32 @@ class TestExecuteTool:
 class TestParseAction:
     """_parse_action parses valid JSON and falls back to DONE on failure."""
 
-    def test_parse_action_valid_json(self):
+    def test_parse_action_valid_json(self) -> None:
         """Valid JSON with a tool key is returned as-is."""
         retriever = _make_retriever_agentic()
         action = retriever._parse_action('{"tool": "semantic_search", "params": {"top_k": 5}}')
         assert action["tool"] == "semantic_search"
         assert action["params"]["top_k"] == 5
 
-    def test_parse_action_done_json(self):
+    def test_parse_action_done_json(self) -> None:
         """JSON with tool=DONE is returned directly."""
         retriever = _make_retriever_agentic()
         action = retriever._parse_action('{"tool": "DONE"}')
         assert action["tool"] == "DONE"
 
-    def test_parse_action_invalid_json_returns_done(self):
+    def test_parse_action_invalid_json_returns_done(self) -> None:
         """Non-JSON output returns {"tool": "DONE"} without raising."""
         retriever = _make_retriever_agentic()
         action = retriever._parse_action("not valid json at all")
         assert action == {"tool": "DONE"}
 
-    def test_parse_action_json_missing_tool_key_returns_done(self):
+    def test_parse_action_json_missing_tool_key_returns_done(self) -> None:
         """Valid JSON that lacks a 'tool' key falls back to DONE."""
         retriever = _make_retriever_agentic()
         action = retriever._parse_action('{"action": "search"}')
         assert action == {"tool": "DONE"}
 
-    def test_parse_action_empty_string_returns_done(self):
+    def test_parse_action_empty_string_returns_done(self) -> None:
         """Empty string falls back to DONE without raising."""
         retriever = _make_retriever_agentic()
         action = retriever._parse_action("")
@@ -236,7 +236,7 @@ class TestRetrieveAgenticRouting:
     """retrieve() directs COMPLEX/MULTI_HOP to retrieve_agentic when llm is set."""
 
     @pytest.mark.asyncio
-    async def test_retrieve_routes_complex_to_agentic(self):
+    async def test_retrieve_routes_complex_to_agentic(self) -> None:
         """complexity=COMPLEX with llm set calls retrieve_agentic. Issue #2136."""
         retriever = _make_retriever_agentic(
             complexity_value="complex",
@@ -250,7 +250,7 @@ class TestRetrieveAgenticRouting:
         spy.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_retrieve_routes_multi_hop_to_agentic(self):
+    async def test_retrieve_routes_multi_hop_to_agentic(self) -> None:
         """complexity=MULTI_HOP with llm set calls retrieve_agentic. Issue #2136."""
         retriever = _make_retriever_agentic(
             complexity_value="multi_hop",
@@ -264,7 +264,7 @@ class TestRetrieveAgenticRouting:
         spy.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_retrieve_complex_without_llm_uses_full_retrieve(self):
+    async def test_retrieve_complex_without_llm_uses_full_retrieve(self) -> None:
         """COMPLEX query with no llm falls through to _full_retrieve. Issue #2136."""
         # Build retriever without llm by passing None explicitly
         retriever = _make_retriever_agentic(complexity_value="complex")

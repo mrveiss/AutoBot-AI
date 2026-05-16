@@ -10,7 +10,7 @@ and displaying performance metrics.
 
 import logging
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
@@ -121,8 +121,8 @@ class BenchmarkWidget(QWidget):
     def __init__(self, api_url: str = "http://localhost:8082", parent=None):
         super().__init__(parent)
         self.api_url = api_url
-        self._benchmark_worker: Optional[BenchmarkWorker] = None
-        self._last_results: Optional[Dict] = None
+        self._benchmark_worker: BenchmarkWorker | None = None
+        self._last_results: Dict | None = None
         self.init_ui()
 
     def init_ui(self):

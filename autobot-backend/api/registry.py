@@ -8,7 +8,7 @@ Single source of truth for all API endpoints and routing configuration
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Request
 
@@ -48,10 +48,10 @@ class RouterConfig:
     tags: List[str]
     status: RouterStatus = RouterStatus.ENABLED
     dependencies: List[str] = field(default_factory=list)
-    description: Optional[str] = None
+    description: str | None = None
     version: str = "v1"
     requires_auth: bool = False
-    rate_limit: Optional[Dict] = None
+    rate_limit: Dict | None = None
 
 
 def _get_core_system_routers() -> Dict[str, RouterConfig]:
@@ -417,7 +417,7 @@ class APIRegistry:
         """Get all enabled routers"""
         return {name: config for name, config in self.routers.items() if config.status in ENABLED_ROUTER_STATUSES}
 
-    def get_router_by_name(self, name: str) -> Optional[RouterConfig]:
+    def get_router_by_name(self, name: str) -> RouterConfig | None:
         """Get router configuration by name"""
         return self.routers.get(name)
 
@@ -581,7 +581,7 @@ async def validate_dependencies():
 
 @register_health_probe("registry")
 async def probe_registry(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for the API endpoint registry."""
     try:

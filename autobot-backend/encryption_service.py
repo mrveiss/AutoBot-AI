@@ -18,7 +18,7 @@ Security Features:
 import base64
 import hashlib
 import secrets
-from typing import Optional, Union
+from typing import Union
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -38,7 +38,7 @@ class EncryptionService:
     Uses AES-GCM authenticated encryption with PBKDF2 key derivation.
     """
 
-    def __init__(self, master_key: Optional[str] = None):
+    def __init__(self, master_key: str | None = None):
         """
         Initialize the encryption service.
 
@@ -57,7 +57,7 @@ class EncryptionService:
                 "Consider using a stronger key for better security."
             )
 
-    def _load_master_key(self) -> Optional[str]:
+    def _load_master_key(self) -> str | None:
         """Load master key from environment variables."""
         key = config.encryption_key
         if not key:
@@ -88,7 +88,7 @@ class EncryptionService:
         )
         return kdf.derive(self.master_key.encode("utf-8"))
 
-    def encrypt(self, plaintext: Union[str, bytes]) -> str:
+    def encrypt(self, plaintext: str | bytes) -> str:
         """
         Encrypt data using AES-GCM authenticated encryption.
 
@@ -261,7 +261,7 @@ def is_encryption_enabled() -> bool:
 
 
 # Convenience functions
-def encrypt_data(data: Union[str, bytes, dict]) -> str:
+def encrypt_data(data: str | bytes | dict) -> str:
     """Encrypt data using the global encryption service."""
     service = get_encryption_service()
     if isinstance(data, dict):
@@ -270,7 +270,7 @@ def encrypt_data(data: Union[str, bytes, dict]) -> str:
         return service.encrypt(data)
 
 
-def decrypt_data(encrypted_data: str, as_json: bool = False) -> Union[str, dict]:
+def decrypt_data(encrypted_data: str, as_json: bool = False) -> str | dict:
     """Decrypt data using the global encryption service."""
     service = get_encryption_service()
     if as_json:

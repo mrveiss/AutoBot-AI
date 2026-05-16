@@ -42,7 +42,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
@@ -84,9 +84,9 @@ class CaptchaResolutionResult:
     captcha_id: str
     url: str
     duration_seconds: float
-    error_message: Optional[str] = None
-    auto_solution: Optional[str] = None  # Solution from automatic solver
-    auto_confidence: Optional[str] = None  # Confidence level (high/medium/low)
+    error_message: str | None = None
+    auto_solution: str | None = None  # Solution from automatic solver
+    auto_confidence: str | None = None  # Confidence level (high/medium/low)
 
 
 class CaptchaHumanLoop:
@@ -105,9 +105,9 @@ class CaptchaHumanLoop:
         self,
         timeout_seconds: float = 120.0,
         auto_skip_on_timeout: bool = True,
-        vnc_url: Optional[str] = None,
+        vnc_url: str | None = None,
         enable_auto_solve: bool = True,
-    ):
+    ) -> None:
         """
         Initialize the CAPTCHA handling service.
 
@@ -203,11 +203,11 @@ class CaptchaHumanLoop:
         page: Page,
         screenshot: bytes,
         captcha_type: str,
-        captcha_input_selector: Optional[str],
+        captcha_input_selector: str | None,
         captcha_id: str,
         url: str,
         start_time: float,
-    ) -> Optional[CaptchaResolutionResult]:
+    ) -> CaptchaResolutionResult | None:
         """
         Attempt automatic CAPTCHA solving.
 
@@ -367,11 +367,11 @@ class CaptchaHumanLoop:
         self,
         page: Page,
         captcha_type: str,
-        captcha_input_selector: Optional[str],
+        captcha_input_selector: str | None,
         captcha_id: str,
         url: str,
         start_time: float,
-    ) -> tuple[Optional[CaptchaResolutionResult], str]:
+    ) -> tuple[CaptchaResolutionResult | None, str]:
         """Attempt auto-solve and return result with screenshot base64.
 
         Args:
@@ -426,7 +426,7 @@ class CaptchaHumanLoop:
         page: Page,
         url: str,
         captcha_type: str = "unknown",
-        captcha_input_selector: Optional[str] = None,
+        captcha_input_selector: str | None = None,
     ) -> CaptchaResolutionResult:
         """Handle CAPTCHA with automatic solving attempt, then human fallback.
 
@@ -544,7 +544,7 @@ class CaptchaHumanLoop:
             for captcha_id in self._pending_resolutions.keys()
         }
 
-    async def _attempt_auto_solve(self, screenshot: bytes, captcha_type: str) -> Optional[Dict[str, Any]]:
+    async def _attempt_auto_solve(self, screenshot: bytes, captcha_type: str) -> Dict[str, Any] | None:
         """
         Attempt to automatically solve the CAPTCHA using OCR.
 
@@ -598,7 +598,7 @@ class CaptchaHumanLoop:
 
 
 # Global singleton instance (thread-safe)
-_captcha_human_loop: Optional[CaptchaHumanLoop] = None
+_captcha_human_loop: CaptchaHumanLoop | None = None
 _captcha_human_loop_lock = threading.Lock()
 
 

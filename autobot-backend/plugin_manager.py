@@ -11,7 +11,7 @@ Issue #730 - Plugin SDK for extensible tool architecture.
 
 import json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 # Global plugin loader instance
-_plugin_loader: Optional[PluginLoader] = None
+_plugin_loader: PluginLoader | None = None
 
 
 def get_plugin_loader() -> PluginLoader:
@@ -67,7 +67,7 @@ class PluginInstallGitRequest(BaseModel):
     """Install a plugin from a Git URL."""
 
     url: str = Field(..., description="HTTP(S) Git repository URL")
-    ref: Optional[str] = Field(default=None, description="Branch or tag to clone (default: HEAD)")
+    ref: str | None = Field(default=None, description="Branch or tag to clone (default: HEAD)")
 
 
 class PluginInstallResponse(BaseModel):
@@ -87,7 +87,7 @@ class PluginEnvStatusEntry(BaseModel):
     secret: bool
     required: bool
     description: str
-    docs_url: Optional[str] = None
+    docs_url: str | None = None
     obtain_steps: List[str] = []
 
 
@@ -183,7 +183,7 @@ async def discover_plugins(
 @with_error_handling(error_code_prefix="PLUGIN_LOAD")
 async def load_plugin(
     plugin_name: str,
-    config: Optional[PluginConfigUpdate] = None,
+    config: PluginConfigUpdate | None = None,
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, str]:
     """
@@ -480,7 +480,7 @@ async def _save_plugin_config(plugin_name: str, config: Dict) -> None:
     await redis.set(key, json.dumps(config))
 
 
-async def _load_plugin_config(plugin_name: str) -> Optional[Dict]:
+async def _load_plugin_config(plugin_name: str) -> Dict | None:
     """Load plugin configuration from Redis."""
     redis = await get_async_redis_client(database="main")
     key = f"plugin:config:{plugin_name}"

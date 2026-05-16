@@ -13,7 +13,7 @@ Created: 2025-12-21
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 
 import yaml
 
@@ -217,7 +217,7 @@ def get_data_path(data_path: str) -> Path:
     return DATA_DIR / data_path
 
 
-def load_yaml_data(data_path: str, substitutions: Optional[Dict[str, Any]] = None) -> Union[Dict[str, Any], List[Any]]:
+def load_yaml_data(data_path: str, substitutions: Dict[str, Any] | None = None) -> Dict[str, Any] | List[Any]:
     """
     Load and parse a YAML data file with optional placeholder substitution.
 
@@ -251,7 +251,7 @@ def load_yaml_data(data_path: str, substitutions: Optional[Dict[str, Any]] = Non
         raise
 
 
-def load_mcp_tools(tool_file: str, config: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+def load_mcp_tools(tool_file: str, config: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
     """
     Load MCP tool definitions from a YAML file.
 
@@ -308,7 +308,7 @@ def mcp_tools_exist(tool_file: str) -> bool:
     return data_file_exists(f"mcp_tools/{tool_file}")
 
 
-def load_knowledge_data(data_file: str, key: Optional[str] = None) -> Union[Dict[str, Any], List[Any]]:
+def load_knowledge_data(data_file: str, key: str | None = None) -> Dict[str, Any] | List[Any]:
     """
     Load knowledge data from a YAML file in data/knowledge/.
 

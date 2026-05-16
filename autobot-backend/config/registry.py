@@ -30,7 +30,7 @@ import logging
 import os
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 # stdlib logging avoids circular import: network_constants → config.registry → get_logger
 # → logging_manager → from config import config_manager (partially initialized) GH#7765
@@ -120,7 +120,7 @@ class ConfigRegistry:
             cls._cache_timestamps[key] = time.time()
 
     @classmethod
-    def _fetch_from_redis(cls, key: str) -> Optional[str]:
+    def _fetch_from_redis(cls, key: str) -> str | None:
         """Fetch value from Redis. Returns None if not found or error."""
         try:
             redis_client = cls._get_redis()

@@ -14,8 +14,6 @@ Issue #1968: Only-last-logit optimization for autoregressive generation.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
-
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -112,7 +110,7 @@ class LastLogitOptimizer:
     Issue #1968.
     """
 
-    def __init__(self, config: Optional[InferenceConfig] = None):
+    def __init__(self, config: InferenceConfig | None = None):
         """Initialize with optional configuration.
 
         Args:
@@ -134,7 +132,7 @@ class LastLogitOptimizer:
     def slice_for_lm_head(
         self,
         hidden_states: "torch.Tensor",
-        only_last_logit: Optional[bool] = None,
+        only_last_logit: bool | None = None,
     ) -> LogitSliceResult:
         """Slice hidden states to last position for efficient lm_head projection.
 

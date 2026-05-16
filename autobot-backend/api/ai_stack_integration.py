@@ -8,7 +8,7 @@ This module provides comprehensive API endpoints that integrate all AI Stack age
 from VM4 (uses NetworkConstants.AI_STACK_VM_IP) with the main AutoBot backend.
 """
 
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -173,7 +173,7 @@ async def rag_query(
 )
 async def reformulate_query(
     query: str,
-    context: Optional[str] = None,
+    context: str | None = None,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -335,7 +335,7 @@ async def enhanced_knowledge_search(
     error_code_prefix="AI_STACK_INTEGRATION",
 )
 async def get_system_knowledge(
-    knowledge_category: Optional[str] = None,
+    knowledge_category: str | None = None,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -660,7 +660,7 @@ async def legacy_rag_search(
 )
 async def legacy_enhanced_chat(
     message: str,
-    context: Optional[str] = None,
+    context: str | None = None,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """

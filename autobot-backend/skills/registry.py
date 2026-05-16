@@ -11,7 +11,7 @@ Handles skill lifecycle (load, enable, disable) and dependency validation.
 import importlib
 import pkgutil
 import threading
-from typing import Any, Dict, List, Optional, Set, Type
+from typing import Any, Dict, List, Set, Type
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -32,7 +32,7 @@ class SkillRegistry:
         self._skills: Dict[str, BaseSkill] = {}
         self._skill_classes: Dict[str, Type[BaseSkill]] = {}
         self._lock = threading.Lock()
-        self._routing_index: Optional[SkillRoutingIndex] = None
+        self._routing_index: SkillRoutingIndex | None = None
 
     def register(self, skill_class: Type[BaseSkill]) -> None:
         """Register a skill class and create its instance.
@@ -73,7 +73,7 @@ class SkillRegistry:
             logger.warning("Failed to rebuild routing index: %s", exc)
             self._routing_index = None
 
-    def get_routing_index(self) -> Optional[SkillRoutingIndex]:
+    def get_routing_index(self) -> SkillRoutingIndex | None:
         """Return the current pre-built skill routing index, or None if not built."""
         return self._routing_index
 
@@ -126,7 +126,7 @@ class SkillRegistry:
         self._rebuild_routing_index()
         return True
 
-    def get(self, name: str) -> Optional[BaseSkill]:
+    def get(self, name: str) -> BaseSkill | None:
         """Get a skill instance by name."""
         return self._skills.get(name)
 
@@ -152,7 +152,7 @@ class SkillRegistry:
             )
         return results
 
-    def get_skill_detail(self, name: str) -> Optional[Dict[str, Any]]:
+    def get_skill_detail(self, name: str) -> Dict[str, Any] | None:
         """Get full detail for a single skill including config schema."""
         skill = self._skills.get(name)
         if not skill:
@@ -230,7 +230,7 @@ class SkillRegistry:
         skill.apply_config(config)
         return {"success": True, "config": skill.config}
 
-    def get_health(self, name: str) -> Optional[SkillHealth]:
+    def get_health(self, name: str) -> SkillHealth | None:
         """Get health status for a specific skill."""
         skill = self._skills.get(name)
         if not skill:

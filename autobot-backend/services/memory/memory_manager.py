@@ -3,7 +3,7 @@
 # Author: mrveiss
 """Memory Manager - Unified Access Layer (Issue #4344)"""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -18,9 +18,9 @@ class MemoryManager:
     Unified memory access layer that routes operations to appropriate providers.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.built_in: PostgresMemoryProvider = PostgresMemoryProvider()
-        self.external: Optional[Any] = None
+        self.external: Any | None = None
         self.external_enabled: bool = False
 
     async def initialize(self) -> None:
@@ -79,7 +79,7 @@ class MemoryManager:
                 logger.warning(f"External provider sync failed, continuing: {e}")
 
     async def search(
-        self, query: str, limit: int = 10, filters: Optional[Dict[str, Any]] = None
+        self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None
     ) -> List[Dict[str, Any]]:
         if self.external_enabled and self.external:
             try:
@@ -94,7 +94,7 @@ class MemoryManager:
             logger.error(f"Built-in provider search failed: {e}")
             return []
 
-    async def get_entity(self, entity_id: str) -> Optional[Dict[str, Any]]:
+    async def get_entity(self, entity_id: str) -> Dict[str, Any] | None:
         try:
             return await self.built_in.get_entity(entity_id)
         except Exception as e:

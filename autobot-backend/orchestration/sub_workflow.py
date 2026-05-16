@@ -30,7 +30,7 @@ extract_sub_workflow_step(step)
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List
 
 from constants.status_enums import TaskStatus
 
@@ -83,7 +83,7 @@ class SubWorkflowStep:
 #: Callable that retrieves a workflow definition by ID.
 #: Returns a dict with at minimum ``{"steps": [...]}``; may include ``"edges"``.
 #: Returns None when the workflow is not found.
-WorkflowFetcher = Callable[[str], Optional[Dict[str, Any]]]
+WorkflowFetcher = Callable[[str], Dict[str, Any] | None]
 
 
 # ---------------------------------------------------------------------------

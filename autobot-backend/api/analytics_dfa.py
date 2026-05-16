@@ -19,7 +19,7 @@ Features:
 import ast
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -72,9 +72,9 @@ class VariableDefinition:
     line: int
     column: int
     scope: str  # Function or module scope
-    value_node: Optional[ast.AST] = None
+    value_node: ast.AST | None = None
     taint_level: TaintLevel = TaintLevel.UNTAINTED
-    source_type: Optional[SourceType] = None
+    source_type: SourceType | None = None
 
 
 @dataclass
@@ -131,7 +131,7 @@ class SecurityVulnerability:
     tainted_variable: str
     sink_function: str
     recommendation: str
-    tainted_path: Optional[TaintedPath] = None
+    tainted_path: TaintedPath | None = None
 
 
 @dataclass
@@ -300,7 +300,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
 
         # Current scope tracking
         self.current_scope: str = "<module>"
-        self.current_graph: Optional[DataFlowGraph] = None
+        self.current_graph: DataFlowGraph | None = None
 
         # Variable tracking
         self.definitions: Dict[str, List[VariableDefinition]] = {}
@@ -352,9 +352,9 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         name: str,
         line: int,
         column: int,
-        value_node: Optional[ast.AST] = None,
+        value_node: ast.AST | None = None,
         taint_level: TaintLevel = TaintLevel.UNTAINTED,
-        source_type: Optional[SourceType] = None,
+        source_type: SourceType | None = None,
     ):
         """Add a variable definition."""
         definition = VariableDefinition(
@@ -454,7 +454,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
             return ".".join(reversed(parts))
         return ""
 
-    def _check_taint_source(self, node: ast.Call) -> Optional[Tuple[SourceType, TaintLevel]]:
+    def _check_taint_source(self, node: ast.Call) -> Tuple[SourceType, TaintLevel] | None:
         """Check if a call is a taint source."""
         call_name = self._get_call_name(node)
 
@@ -469,7 +469,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
 
         return None
 
-    def _check_taint_sink(self, node: ast.Call) -> Optional[Tuple[SinkType, VulnerabilityType, DFASeverity]]:
+    def _check_taint_sink(self, node: ast.Call) -> Tuple[SinkType, VulnerabilityType, DFASeverity] | None:
         """Check if a call is a taint sink."""
         call_name = self._get_call_name(node)
 
@@ -676,7 +676,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         target: ast.AST,
         node: ast.Assign,
         value_taint: TaintLevel,
-        source_type: Optional[SourceType],
+        source_type: SourceType | None,
     ) -> None:
         """Process a single assignment target. (Issue #315 - extracted)"""
         if isinstance(target, ast.Name):

@@ -36,7 +36,7 @@ import ipaddress
 import re
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from urllib.parse import urljoin
 
 from autobot_shared.logging_manager import get_logger
@@ -84,8 +84,8 @@ _jina_failures_in_window: List[float] = []
 # Pooled aiohttp session for Jina Reader (reused across calls for connection
 # pooling). Lazy-created under _jina_session_lock to serialize the first-
 # creation race. Close via close_jina_session() during app shutdown.
-_jina_session: Optional["aiohttp.ClientSession"] = None
-_jina_session_lock: Optional[asyncio.Lock] = None
+_jina_session: "aiohttp.ClientSession" | None = None
+_jina_session_lock: asyncio.Lock | None = None
 
 
 class LinkPipeline(BasePipeline):
@@ -406,7 +406,7 @@ class LinkResult:
     markdown: str = ""
     title: str = ""
     source: str = ""
-    error_code: Optional[str] = None
+    error_code: str | None = None
     retryable: bool = False
 
 

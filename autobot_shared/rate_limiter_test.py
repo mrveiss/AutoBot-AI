@@ -122,29 +122,29 @@ def _limiter(rpm: int = 5, rph: int = 20) -> RateLimiter:
 
 
 class TestRateLimiterConstructor:
-    def test_valid_tier_accepted(self):
+    def test_valid_tier_accepted(self) -> None:
         lim = RateLimiter(scope_prefix="x", default_tier="authenticated")
         assert lim._rpm > 0
         assert lim._rph > 0
 
-    def test_all_tiers_accepted(self):
+    def test_all_tiers_accepted(self) -> None:
         for tier in ("anonymous", "authenticated", "privileged"):
             lim = RateLimiter(scope_prefix="x", default_tier=tier)
             assert lim._rpm > 0
 
-    def test_invalid_tier_raises(self):
+    def test_invalid_tier_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown tier"):
             RateLimiter(scope_prefix="x", default_tier="superuser")
 
-    def test_rpm_override_applied(self):
+    def test_rpm_override_applied(self) -> None:
         lim = RateLimiter(scope_prefix="x", requests_per_minute=7)
         assert lim._rpm == 7
 
-    def test_rph_override_applied(self):
+    def test_rph_override_applied(self) -> None:
         lim = RateLimiter(scope_prefix="x", requests_per_hour=100)
         assert lim._rph == 100
 
-    def test_redis_key_format(self):
+    def test_redis_key_format(self) -> None:
         lim = RateLimiter(scope_prefix="user")
         assert lim._redis_key("abc", "hour") == "autobot:rl:user:abc:hour"
         assert lim._redis_key("abc", "minute") == "autobot:rl:user:abc:minute"
@@ -156,7 +156,7 @@ class TestRateLimiterConstructor:
 
 
 class TestIsAllowed:
-    def test_first_request_allowed(self):
+    def test_first_request_allowed(self) -> None:
         """Fresh key with zero counts → request must be allowed."""
         lim = _limiter(rpm=5, rph=20)
         redis = _make_redis(minute_count=0, hour_count=0)
@@ -164,7 +164,7 @@ class TestIsAllowed:
             result = asyncio.run(lim.is_allowed("user1"))
         assert result is True
 
-    def test_allowed_when_at_limit_minus_one(self):
+    def test_allowed_when_at_limit_minus_one(self) -> None:
         """count == limit - 1 → still allowed."""
         lim = _limiter(rpm=5, rph=20)
         redis = _make_redis(minute_count=4, hour_count=0)
@@ -172,7 +172,7 @@ class TestIsAllowed:
             result = asyncio.run(lim.is_allowed("user1"))
         assert result is True
 
-    def test_denied_when_per_minute_limit_reached(self):
+    def test_denied_when_per_minute_limit_reached(self) -> None:
         """minute_count >= rpm → denied."""
         lim = _limiter(rpm=5, rph=20)
         redis = _make_redis(minute_count=5, hour_count=0)
@@ -180,7 +180,7 @@ class TestIsAllowed:
             result = asyncio.run(lim.is_allowed("user1"))
         assert result is False
 
-    def test_denied_when_per_minute_limit_exceeded(self):
+    def test_denied_when_per_minute_limit_exceeded(self) -> None:
         """minute_count > rpm → denied."""
         lim = _limiter(rpm=5, rph=20)
         redis = _make_redis(minute_count=10, hour_count=0)
@@ -188,7 +188,7 @@ class TestIsAllowed:
             result = asyncio.run(lim.is_allowed("user1"))
         assert result is False
 
-    def test_denied_when_per_hour_limit_reached(self):
+    def test_denied_when_per_hour_limit_reached(self) -> None:
         """hour_count >= rph → denied even if minute window has capacity."""
         lim = _limiter(rpm=5, rph=20)
         redis = _make_redis(minute_count=0, hour_count=20)
@@ -196,7 +196,7 @@ class TestIsAllowed:
             result = asyncio.run(lim.is_allowed("user1"))
         assert result is False
 
-    def test_per_call_override_rpm_respected(self):
+    def test_per_call_override_rpm_respected(self) -> None:
         """Explicit rpm override tightens the minute limit."""
         lim = _limiter(rpm=100, rph=1000)
         redis = _make_redis(minute_count=3, hour_count=0)
@@ -205,7 +205,7 @@ class TestIsAllowed:
             result = asyncio.run(lim.is_allowed("user1", requests_per_minute=3))
         assert result is False
 
-    def test_per_call_override_rph_respected(self):
+    def test_per_call_override_rph_respected(self) -> None:
         """Explicit rph override tightens the hour limit."""
         lim = _limiter(rpm=100, rph=1000)
         redis = _make_redis(minute_count=0, hour_count=10)
@@ -213,17 +213,17 @@ class TestIsAllowed:
             result = asyncio.run(lim.is_allowed("user1", requests_per_hour=10))
         assert result is False
 
-    def test_redis_unavailable_allows_request(self):
+    def test_redis_unavailable_allows_request(self) -> None:
         """When Redis is None, is_allowed must return True (fail-open)."""
         lim = _limiter()
         with patch(_PATCH_TARGET, AsyncMock(return_value=None)):
             result = asyncio.run(lim.is_allowed("user1"))
         assert result is True
 
-    def test_redis_exception_allows_request(self):
+    def test_redis_exception_allows_request(self) -> None:
         """When Redis raises, is_allowed must still return True (fail-open)."""
 
-        async def _raise(*a, **kw):
+        async def _raise(*a, **kw) -> None:
             raise ConnectionError("Redis unreachable")
 
         lim = _limiter()
@@ -238,7 +238,7 @@ class TestIsAllowed:
 
 
 class TestRecord:
-    def test_record_calls_pipeline_execute(self):
+    def test_record_calls_pipeline_execute(self) -> None:
         """record() must use a pipeline and execute it."""
         lim = _limiter()
         redis = _make_redis()
@@ -246,13 +246,13 @@ class TestRecord:
             asyncio.run(lim.record("user1"))
         redis.pipeline.return_value.execute.assert_called_once()
 
-    def test_record_no_op_when_redis_none(self):
+    def test_record_no_op_when_redis_none(self) -> None:
         """record() must not raise when Redis is unavailable."""
         lim = _limiter()
         with patch(_PATCH_TARGET, AsyncMock(return_value=None)):
             asyncio.run(lim.record("user1"))  # must not raise
 
-    def test_record_no_op_on_redis_exception(self):
+    def test_record_no_op_on_redis_exception(self) -> None:
         """record() must swallow Redis errors gracefully."""
         redis = _make_redis()
         redis.pipeline.return_value.execute = AsyncMock(side_effect=ConnectionError("down"))
@@ -267,7 +267,7 @@ class TestRecord:
 
 
 class TestAcquire:
-    def test_acquire_returns_true_and_records_when_allowed(self):
+    def test_acquire_returns_true_and_records_when_allowed(self) -> None:
         """acquire() returns True and calls pipeline.execute() when under limit."""
         lim = _limiter(rpm=5, rph=20)
         redis = _make_redis(minute_count=0, hour_count=0)
@@ -276,7 +276,7 @@ class TestAcquire:
         assert result is True
         redis.pipeline.return_value.execute.assert_called_once()
 
-    def test_acquire_returns_false_and_does_not_record_when_denied(self):
+    def test_acquire_returns_false_and_does_not_record_when_denied(self) -> None:
         """acquire() returns False and does NOT record when over limit."""
         lim = _limiter(rpm=5, rph=20)
         redis = _make_redis(minute_count=5, hour_count=0)
@@ -285,7 +285,7 @@ class TestAcquire:
         assert result is False
         redis.pipeline.return_value.execute.assert_not_called()
 
-    def test_acquire_redis_unavailable_returns_true(self):
+    def test_acquire_redis_unavailable_returns_true(self) -> None:
         """acquire() returns True (fail-open) when Redis is None."""
         lim = _limiter()
         with patch(_PATCH_TARGET, AsyncMock(return_value=None)):
@@ -332,7 +332,7 @@ class TestGetRetryAfterSeconds:
         redis.zrangebyscore = _zrangebyscore  # type: ignore[assignment]
         return redis
 
-    def test_returns_small_value_when_under_both_limits(self):
+    def test_returns_small_value_when_under_both_limits(self) -> None:
         """No active limit → wait is 0.0; implementation returns max(0, int(0)+1)=1.
 
         The +1 safe-rounding means the function always returns at least 1
@@ -346,7 +346,7 @@ class TestGetRetryAfterSeconds:
         # wait=0.0 → max(0, 0+1)=1; no limit is active so result is small
         assert result <= 1
 
-    def test_returns_positive_when_minute_limit_active(self):
+    def test_returns_positive_when_minute_limit_active(self) -> None:
         """Over minute limit → retry-after must be > 0."""
         lim = _limiter(rpm=5, rph=20)
         # oldest entry was 10 s ago; minute window = 60 s → ~50 s remaining
@@ -355,7 +355,7 @@ class TestGetRetryAfterSeconds:
             result = asyncio.run(lim.get_retry_after_seconds("user1"))
         assert result > 0
 
-    def test_returns_positive_when_hour_limit_active(self):
+    def test_returns_positive_when_hour_limit_active(self) -> None:
         """Over hour limit → retry-after must be > 0."""
         lim = _limiter(rpm=5, rph=20)
         # oldest entry was 100 s ago; hour window = 3600 s → ~3500 s remaining
@@ -364,17 +364,17 @@ class TestGetRetryAfterSeconds:
             result = asyncio.run(lim.get_retry_after_seconds("user1"))
         assert result > 0
 
-    def test_returns_zero_when_redis_unavailable(self):
+    def test_returns_zero_when_redis_unavailable(self) -> None:
         """Redis None → retry-after returns 0 (safest default)."""
         lim = _limiter()
         with patch(_PATCH_TARGET, AsyncMock(return_value=None)):
             result = asyncio.run(lim.get_retry_after_seconds("user1"))
         assert result == 0
 
-    def test_returns_zero_on_redis_exception(self):
+    def test_returns_zero_on_redis_exception(self) -> None:
         """Redis error → retry-after returns 0 (fail-safe)."""
 
-        async def _raise(*a, **kw):
+        async def _raise(*a, **kw) -> None:
             raise ConnectionError("Redis unreachable")
 
         lim = _limiter()
@@ -382,7 +382,7 @@ class TestGetRetryAfterSeconds:
             result = asyncio.run(lim.get_retry_after_seconds("user1"))
         assert result == 0
 
-    def test_return_type_is_int(self):
+    def test_return_type_is_int(self) -> None:
         """get_retry_after_seconds must always return an int."""
         lim = _limiter(rpm=5, rph=20)
         redis = self._make_redis_for_retry(minute_count=5, hour_count=0)
@@ -397,7 +397,7 @@ class TestGetRetryAfterSeconds:
 
 
 class TestWindowCount:
-    def test_window_count_uses_zcount(self):
+    def test_window_count_uses_zcount(self) -> None:
         """_window_count must query Redis with the correct cutoff."""
         import time
 
@@ -409,7 +409,7 @@ class TestWindowCount:
         assert result == 3
         redis.zcount.assert_called_once()
 
-    def test_window_count_returns_int(self):
+    def test_window_count_returns_int(self) -> None:
         """_window_count must return an int regardless of Redis response type."""
         import time
 
@@ -430,22 +430,22 @@ class TestWindowCount:
 class TestGracefulDegradation:
     """All public methods must allow/return-safe when Redis is unavailable."""
 
-    def test_is_allowed_none_redis(self):
+    def test_is_allowed_none_redis(self) -> None:
         lim = _limiter()
         with patch(_PATCH_TARGET, AsyncMock(return_value=None)):
             assert asyncio.run(lim.is_allowed("x")) is True
 
-    def test_record_none_redis_no_raise(self):
+    def test_record_none_redis_no_raise(self) -> None:
         lim = _limiter()
         with patch(_PATCH_TARGET, AsyncMock(return_value=None)):
             asyncio.run(lim.record("x"))  # must not raise
 
-    def test_acquire_none_redis(self):
+    def test_acquire_none_redis(self) -> None:
         lim = _limiter()
         with patch(_PATCH_TARGET, AsyncMock(return_value=None)):
             assert asyncio.run(lim.acquire("x")) is True
 
-    def test_get_retry_after_none_redis(self):
+    def test_get_retry_after_none_redis(self) -> None:
         lim = _limiter()
         with patch(_PATCH_TARGET, AsyncMock(return_value=None)):
             assert asyncio.run(lim.get_retry_after_seconds("x")) == 0

@@ -31,7 +31,7 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -123,7 +123,7 @@ def resolve_model_name(model: str) -> str:
 
 def get_model_kwargs(
     model: str,
-    provider: Optional[str] = None,
+    provider: str | None = None,
 ) -> Dict[str, Any]:
     """
     Return the merged api_kwargs for *model* from the YAML registry.
@@ -189,8 +189,8 @@ def get_provider_model_id(
 
 def apply_model_defaults(
     model: str,
-    provider: Optional[str],
-    caller_kwargs: Optional[Dict[str, Any]] = None,
+    provider: str | None,
+    caller_kwargs: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Build the final api_kwargs for a request by merging YAML defaults with
@@ -216,7 +216,7 @@ def apply_model_defaults(
     return base
 
 
-def get_prompt_prefix(model: str) -> Optional[str]:
+def get_prompt_prefix(model: str) -> str | None:
     """
     Return the ``prompt_prefix`` configured for *model* in the YAML registry,
     or ``None`` when the field is absent or empty.

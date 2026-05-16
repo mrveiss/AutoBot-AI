@@ -32,7 +32,7 @@ Usage:
 """
 
 import threading
-from typing import Any, Optional
+from typing import Any
 
 # Base class
 from .base import BaseModalProcessor
@@ -82,7 +82,7 @@ class _LazyUnifiedProcessor:
     Thread-safe via double-checked locking.
     """
 
-    _instance: Optional["UnifiedMultiModalProcessor"] = None  # noqa: F821
+    _instance: "UnifiedMultiModalProcessor" | None = None  # noqa: F821
     _lock = threading.Lock()
 
     def _get_instance(self) -> "UnifiedMultiModalProcessor":  # noqa: F821

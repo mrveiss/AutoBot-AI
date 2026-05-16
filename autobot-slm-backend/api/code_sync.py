@@ -14,7 +14,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -79,9 +79,9 @@ class NodeSyncState:
     ssh_user: str
     ssh_port: int
     status: str = "pending"  # pending, syncing, success, failed
-    message: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    message: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 @dataclass
@@ -95,7 +95,7 @@ class FleetSyncJob:
     nodes: Dict[str, NodeSyncState] = field(default_factory=dict)
     status: str = "pending"  # pending, running, completed, failed
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
 
 # In-memory tracking for running asyncio tasks only (not job state)
@@ -174,9 +174,9 @@ async def _persist_fleet_sync_job(
 async def _update_job_status_db(
     job_id: str,
     *,
-    status: Optional[str] = None,
-    completed_at: Optional[datetime] = None,
-    failure_reason: Optional[str] = None,
+    status: str | None = None,
+    completed_at: datetime | None = None,
+    failure_reason: str | None = None,
 ) -> None:
     """Update fleet sync job status in DB (#1707, #1980)."""
     from services.database import db_service
@@ -207,10 +207,10 @@ async def _update_node_state_db(
     job_id: str,
     node_id: str,
     *,
-    status: Optional[str] = None,
-    message: Optional[str] = None,
-    started_at: Optional[datetime] = None,
-    completed_at: Optional[datetime] = None,
+    status: str | None = None,
+    message: str | None = None,
+    started_at: datetime | None = None,
+    completed_at: datetime | None = None,
 ) -> None:
     """Update a single node's sync state in DB (#1707)."""
     from services.database import db_service
@@ -240,7 +240,7 @@ async def _update_node_state_db(
 
 async def _load_job_status_from_db(
     job_id: str,
-) -> Optional[FleetSyncJobStatus]:
+) -> FleetSyncJobStatus | None:
     """Load fleet sync job status from DB (#1707)."""
     from services.database import db_service
 
@@ -808,7 +808,7 @@ async def _install_slm_pip_dependencies() -> None:
 
 async def _fetch_code_source_connection_info(
     db_service,
-) -> Optional[Tuple[str, str, str]]:
+) -> Tuple[str, str, str] | None:
     """Helper for _sync_slm_from_code_source. Ref: #1088, #1209.
 
     Read code source connection details from DB.
@@ -1156,7 +1156,7 @@ async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
     # Separate SLM self-node from regular nodes (#1209)
     slm_own_ip = urlparse(settings.external_url).hostname or ""
     regular_nodes: list[NodeSyncState] = []
-    slm_self_node: Optional[NodeSyncState] = None
+    slm_self_node: NodeSyncState | None = None
 
     for ns in job.nodes.values():
         if slm_own_ip and ns.ip_address == slm_own_ip:
@@ -1171,7 +1171,7 @@ async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
             slm_self_node.node_id,
         )
 
-    failure_reason: Optional[str] = None
+    failure_reason: str | None = None
     try:
         await _sync_regular_nodes(executor, job, regular_nodes)
 
@@ -1206,7 +1206,7 @@ async def _sync_single_node(
     executor,
     node_state: NodeSyncState,
     restart: bool,
-    job_id: Optional[str] = None,
+    job_id: str | None = None,
 ) -> None:
     """Sync a single node using Ansible playbook and update its state.
 
@@ -1292,7 +1292,7 @@ async def _update_fleet_node_version(node_id: str) -> None:
 class MarkSyncedRequest(BaseModel):
     """Request to mark a node as synced without running rsync."""
 
-    version: Optional[str] = None  # commit hash; defaults to slm_agent_latest_commit
+    version: str | None = None  # commit hash; defaults to slm_agent_latest_commit
 
 
 class MarkSyncedResponse(BaseModel):
@@ -1959,7 +1959,7 @@ async def _get_active_commit(db: AsyncSession) -> str:
     return source.last_known_commit
 
 
-async def _get_role_nodes(db: AsyncSession, role_name: str, node_ids: Optional[List[str]] = None) -> List[NodeRole]:
+async def _get_role_nodes(db: AsyncSession, role_name: str, node_ids: List[str] | None = None) -> List[NodeRole]:
     """Get NodeRole records, optionally filtered by node_ids.
 
     Helper for sync_role (Issue #665).
@@ -2024,7 +2024,7 @@ async def sync_role(
     role_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    node_ids: Optional[List[str]] = None,
+    node_ids: List[str] | None = None,
     restart: bool = True,
 ) -> dict:
     """

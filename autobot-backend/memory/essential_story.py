@@ -10,7 +10,7 @@ has persistent top-memories without requiring a RAG retrieval round-trip.
 
 import asyncio
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import yaml
 
@@ -30,7 +30,7 @@ _CACHE_KEY = "autobot:essential_story:{model_name}"
 class EssentialStoryGenerator:
     """Generate a compact always-loaded memory summary for LLM system prompts."""
 
-    async def generate(self, model_name: Optional[str] = None) -> str:
+    async def generate(self, model_name: str | None = None) -> str:
         """Generate compact memory summary fitting the model's token budget.
 
         Never raises; returns empty string on any error so callers are
@@ -125,7 +125,7 @@ class EssentialStoryGenerator:
             return ""
         return "\n".join(lines)
 
-    async def _get_cached(self, model_name: str) -> Optional[str]:
+    async def _get_cached(self, model_name: str) -> str | None:
         """Return cached story string from Redis, or None on miss/error."""
         try:
             from autobot_shared.redis_client import get_redis_client

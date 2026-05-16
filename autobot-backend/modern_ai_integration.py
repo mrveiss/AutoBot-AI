@@ -15,7 +15,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -69,7 +69,7 @@ class AIModelConfig:
     model_name: str
     capabilities: List[ModelCapability]
     api_endpoint: str
-    api_key: Optional[str]
+    api_key: str | None
     max_tokens: int
     temperature: float
     supports_streaming: bool
@@ -87,10 +87,10 @@ class AIRequest:
     model_name: str
     prompt: str
     images: List[str] = None  # Base64 encoded images
-    system_message: Optional[str] = None
-    max_tokens: Optional[int] = None
-    temperature: Optional[float] = None
-    tools: Optional[List[Dict[str, Any]]] = None
+    system_message: str | None = None
+    max_tokens: int | None = None
+    temperature: float | None = None
+    tools: List[Dict[str, Any]] | None = None
     stream: bool = False
     metadata: Dict[str, Any] = None
 
@@ -105,7 +105,7 @@ class AIResponse:
     content: str
     usage: Dict[str, int]
     finish_reason: str
-    tool_calls: Optional[List[Dict[str, Any]]]
+    tool_calls: List[Dict[str, Any]] | None
     confidence: float
     processing_time: float
     metadata: Dict[str, Any]
@@ -670,7 +670,7 @@ class LocalModelProvider(BaseAIProvider):
 class ModernAIIntegration:
     """Main integration system for modern AI models"""
 
-    def __init__(self, memory_manager: Optional[EnhancedMemoryManager] = None):
+    def __init__(self, memory_manager: EnhancedMemoryManager | None = None):
         """Initialize modern AI integration with memory and providers."""
         self.memory_manager = memory_manager or EnhancedMemoryManager()
         self.providers: Dict[AIProvider, BaseAIProvider] = {}
@@ -819,8 +819,8 @@ class ModernAIIntegration:
         self,
         provider: AIProvider,
         prompt: str,
-        images: Optional[List[str]],
-        system_message: Optional[str],
+        images: List[str] | None,
+        system_message: str | None,
         task_type: str,
         **kwargs,
     ) -> AIRequest:
@@ -849,7 +849,7 @@ class ModernAIIntegration:
         self,
         provider: AIProvider,
         task_type: str,
-        images: Optional[List[str]],
+        images: List[str] | None,
         prompt: str,
     ) -> Dict[str, Any]:
         """Build inputs dict for task tracking context. Issue #620."""
@@ -864,8 +864,8 @@ class ModernAIIntegration:
         self,
         provider: AIProvider,
         prompt: str,
-        images: Optional[List[str]] = None,
-        system_message: Optional[str] = None,
+        images: List[str] | None = None,
+        system_message: str | None = None,
         task_type: str = "general",
         **kwargs,
     ) -> AIResponse:
@@ -911,7 +911,7 @@ class ModernAIIntegration:
                 logger.error("AI processing failed: %s", e)
                 raise
 
-    def _select_vision_provider(self, preferred_provider: Optional[AIProvider]) -> AIProvider:
+    def _select_vision_provider(self, preferred_provider: AIProvider | None) -> AIProvider:
         """Select an available vision-capable AI provider (Issue #665: extracted helper)."""
         vision_providers = [
             AIProvider.OPENAI_GPT4V,
@@ -999,7 +999,7 @@ class ModernAIIntegration:
         self,
         screenshot_base64: str,
         analysis_goal: str,
-        preferred_provider: Optional[AIProvider] = None,
+        preferred_provider: AIProvider | None = None,
     ) -> Dict[str, Any]:
         """Analyze screenshot using AI vision models (Issue #620: uses extracted helpers)."""
         provider = self._select_vision_provider(preferred_provider)
@@ -1024,8 +1024,8 @@ class ModernAIIntegration:
     async def generate_automation_code(
         self,
         task_description: str,
-        screen_context: Optional[Dict[str, Any]] = None,
-        preferred_provider: Optional[AIProvider] = None,
+        screen_context: Dict[str, Any] | None = None,
+        preferred_provider: AIProvider | None = None,
     ) -> str:
         """Generate automation code using AI"""
 
@@ -1063,7 +1063,7 @@ class ModernAIIntegration:
         return response.content
 
     async def natural_language_to_actions(
-        self, user_command: str, context: Optional[Dict[str, Any]] = None
+        self, user_command: str, context: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
         """Convert natural language command to structured actions"""
 

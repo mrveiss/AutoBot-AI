@@ -4,7 +4,7 @@
 import asyncio
 import os
 import time
-from typing import Dict, Optional
+from typing import Dict
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException
@@ -34,7 +34,7 @@ def _validate_prompt_id(prompt_id: str) -> str:
 logger = get_logger(__name__)
 
 # Cache for prompts to avoid re-reading files on every request
-_prompts_cache: Optional[Dict] = None
+_prompts_cache: Dict | None = None
 _cache_timestamp: float = 0
 _cache_ttl: int = TTL_5_MINUTES
 

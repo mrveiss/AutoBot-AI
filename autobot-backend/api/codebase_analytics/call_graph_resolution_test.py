@@ -141,7 +141,7 @@ class TestExtractImportContext:
 
     def test_extract_multiple_imports(self):
         """Test extracting multiple imports from one statement."""
-        code = "from typing import Dict, List, Optional"
+        code = "from typing import Dict, List"
         tree = ast.parse(code)
         ctx = _extract_import_context(tree)
 

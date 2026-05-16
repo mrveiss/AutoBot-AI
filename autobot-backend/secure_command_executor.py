@@ -13,7 +13,7 @@ import re
 import shlex
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
@@ -131,7 +131,7 @@ _RISK_ORDER: Dict[str, int] = {
 }
 
 
-def _check_argument_aware_risk(command: str) -> Optional[Tuple["CommandRisk", List[str]]]:
+def _check_argument_aware_risk(command: str) -> Tuple["CommandRisk", List[str]] | None:
     """#7384: detect attack vectors that base-command lookup misses.
 
     Returns ``(risk, reasons)`` for argument-shape-elevated commands,
@@ -210,7 +210,7 @@ def _check_argument_aware_risk(command: str) -> Optional[Tuple["CommandRisk", Li
         if len(sub_commands) > 1:
             from typing import cast
 
-            highest_risk: Optional["CommandRisk"] = None
+            highest_risk: "CommandRisk" | None = None
             all_reasons: List[str] = []
             for sub in sub_commands:
                 sub_result = _check_argument_aware_risk(sub)
@@ -230,7 +230,7 @@ def _check_argument_aware_risk(command: str) -> Optional[Tuple["CommandRisk", Li
     return None
 
 
-def _check_dangerous_env_var_prefix(command: str) -> Optional[List[str]]:
+def _check_dangerous_env_var_prefix(command: str) -> List[str] | None:
     """#7375: detect env-var prefix injection BEFORE base-command lookup.
 
     Returns a list of dangerous env-var names found prefixed in the
@@ -353,12 +353,12 @@ class SecureCommandExecutor:
 
     def __init__(
         self,
-        policy: Optional[SecurityPolicy] = None,
+        policy: SecurityPolicy | None = None,
         require_approval_callback=None,
         use_docker_sandbox: bool = False,
         is_admin: bool = False,
-        project_path: Optional[str] = None,
-        user_id: Optional[str] = None,
+        project_path: str | None = None,
+        user_id: str | None = None,
     ):
         """
         Initialize secure command executor
@@ -382,8 +382,8 @@ class SecureCommandExecutor:
         self.user_id = user_id
 
         # Lazy-loaded permission matcher and approval memory
-        self._permission_matcher: Optional["PermissionMatcher"] = None
-        self._approval_memory: Optional["ApprovalMemoryManager"] = None
+        self._permission_matcher: "PermissionMatcher" | None = None
+        self._approval_memory: "ApprovalMemoryManager" | None = None
 
         # Command history for audit
         self.command_history: List[Dict[str, Any]] = []
@@ -411,7 +411,7 @@ class SecureCommandExecutor:
         # Return descriptions of matched patterns for backward compatibility
         return [match[0] for match in matches]
 
-    def _get_permission_matcher(self) -> Optional["PermissionMatcher"]:
+    def _get_permission_matcher(self) -> "PermissionMatcher" | None:
         """
         Get or create the permission matcher (lazy initialization).
 
@@ -434,7 +434,7 @@ class SecureCommandExecutor:
 
         return self._permission_matcher
 
-    def _get_approval_memory(self) -> Optional["ApprovalMemoryManager"]:
+    def _get_approval_memory(self) -> "ApprovalMemoryManager" | None:
         """
         Get or create the approval memory manager (lazy initialization).
 
@@ -489,7 +489,7 @@ class SecureCommandExecutor:
 
     async def _process_permission_match(
         self, result: Any, rule: Any, command: str, tool: str
-    ) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+    ) -> Tuple[str | None, Dict[str, Any] | None]:
         """
         Process a permission match result and return action/rule_info.
 
@@ -524,7 +524,7 @@ class SecureCommandExecutor:
 
     async def check_permission_rules(
         self, command: str, tool: str = "Bash"
-    ) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+    ) -> Tuple[str | None, Dict[str, Any] | None]:
         """
         Check command against Claude Code-style permission rules.
 
@@ -588,7 +588,7 @@ class SecureCommandExecutor:
         command: str,
         risk_level: str,
         tool: str = "Bash",
-        comment: Optional[str] = None,
+        comment: str | None = None,
     ) -> bool:
         """
         Store a command approval in memory for future auto-approval.
@@ -648,7 +648,7 @@ class SecureCommandExecutor:
 
         return CommandRisk.SAFE, ["Safe command"]
 
-    def _check_command_category(self, base_command: str, command: str) -> Optional[tuple[CommandRisk, List[str]]]:
+    def _check_command_category(self, base_command: str, command: str) -> tuple[CommandRisk, List[str]] | None:
         """
         Check command against policy categories and return risk if matched.
 
@@ -865,7 +865,7 @@ class SecureCommandExecutor:
         command: str,
         risk: CommandRisk,
         reasons: List[str],
-        rule_info: Optional[Dict[str, Any]] = None,
+        rule_info: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Issue #665: Extracted from run_shell_command to reduce function length.
@@ -951,8 +951,8 @@ class SecureCommandExecutor:
         reasons: List[str],
         log_entry: Dict[str, Any],
         force_approval: bool,
-        permission_action: Optional[str],
-    ) -> Optional[Dict[str, Any]]:
+        permission_action: str | None,
+    ) -> Dict[str, Any] | None:
         """
         Issue #665: Extracted from run_shell_command to reduce function length.
 
@@ -990,7 +990,7 @@ class SecureCommandExecutor:
         risk: CommandRisk,
         reasons: List[str],
         log_entry: Dict[str, Any],
-        rule_info: Optional[Dict[str, Any]] = None,
+        rule_info: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Build security info dictionary for successful command execution.
@@ -1080,7 +1080,7 @@ class SecureCommandExecutor:
         risk: CommandRisk,
         reasons: List[str],
         log_entry: Dict[str, Any],
-        rule_info: Optional[Dict[str, Any]] = None,
+        rule_info: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Execute a command after permission/risk checks.

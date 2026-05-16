@@ -11,7 +11,7 @@ Issue #3140: Updated to use LayerInferencePipeline for end-to-end generation.
 
 import asyncio
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -31,7 +31,7 @@ logger = get_logger(__name__)
 class LayerInferenceAdapter(AdapterBase):
     """Adapter that uses LayerInferencePipeline for end-to-end generation (#3140)."""
 
-    def __init__(self, config: Optional[AdapterConfig] = None):
+    def __init__(self, config: AdapterConfig | None = None):
         super().__init__("layer_inference", config)
         self._pipeline = None
         self._prepared = None

@@ -6,7 +6,7 @@
 import os
 import threading
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
@@ -22,8 +22,8 @@ class _SkillsEngineManager:
 
     def __init__(self) -> None:
         self._lock: threading.Lock = threading.Lock()
-        self._engine: Optional[AsyncEngine] = None
-        self._session_factory: Optional[async_sessionmaker[AsyncSession]] = None
+        self._engine: AsyncEngine | None = None
+        self._session_factory: async_sessionmaker[AsyncSession] | None = None
 
     def get(self) -> AsyncEngine:
         """Return the singleton engine, constructing it on first call."""

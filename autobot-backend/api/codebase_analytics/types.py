@@ -11,7 +11,7 @@ results instead of mutating shared state.
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 @dataclass
@@ -77,8 +77,8 @@ class FileAnalysisResult:
     documentation_lines: int = 0
 
     # Analyzer metadata (for stats tracking)
-    analyzer_type: Optional[str] = None  # "python", "js", "doc", None
-    stat_key: Optional[str] = None  # "python_files", "javascript_files", etc.
+    analyzer_type: str | None = None  # "python", "js", "doc", None
+    stat_key: str | None = None  # "python_files", "javascript_files", etc.
 
     def to_dict(self) -> Dict[str, Any]:
         """

@@ -11,7 +11,7 @@ Part of Issue #716 - Refactored from monolithic autobot_memory_graph.py
 """
 
 import asyncio
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
@@ -107,7 +107,7 @@ class AutoBotMemoryGraphCore:
     AutoBotMemoryGraph class which combines this core with all mixins.
     """
 
-    def __init__(self, chat_history_manager: Optional[Any] = None) -> None:
+    def __init__(self, chat_history_manager: Any | None = None) -> None:
         """Initialize the memory graph core.
 
         Args:
@@ -116,8 +116,8 @@ class AutoBotMemoryGraphCore:
                 #6613 — the kwarg was lost in a refactor but
                 ``chat_history/base.py`` still passes it.
         """
-        self.redis_client: Optional[Any] = None
-        self.chat_history_manager: Optional[Any] = chat_history_manager
+        self.redis_client: Any | None = None
+        self.chat_history_manager: Any | None = chat_history_manager
         self.embedding_cache: Dict[str, List[float]] = {}
         self.embedding_model_name: str = config.embedding_model
         self.embedding_dimensions: int = config.embedding_dimensions

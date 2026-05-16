@@ -10,7 +10,7 @@ as discrete retrievable units alongside full chunks.
 """
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from uuid import UUID
 
 from autobot_shared.logging_manager import get_logger
@@ -127,7 +127,7 @@ class FactExtractor(BaseCognifier):
             return self.mode
         return "nlp" if len(chunks) > self.nlp_threshold else "llm"
 
-    def _nlp_extract(self, chunks: List[ProcessedChunk], document_id: Optional[UUID]) -> List[AtomicFact]:
+    def _nlp_extract(self, chunks: List[ProcessedChunk], document_id: UUID | None) -> List[AtomicFact]:
         """
         Extract facts from chunks using NLP patterns (Issue #3395).
 

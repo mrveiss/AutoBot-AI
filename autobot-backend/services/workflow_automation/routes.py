@@ -566,7 +566,7 @@ async def get_workflow_state(
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
 @router.websocket("/workflow_ws/{session_id}")
-async def workflow_websocket(websocket: WebSocket, session_id: str):
+async def workflow_websocket(websocket: WebSocket, session_id: str) -> None:
     """WebSocket endpoint for real-time workflow communication"""
     await websocket.accept()
 

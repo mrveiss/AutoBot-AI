@@ -9,7 +9,7 @@ terminal streaming
 
 import asyncio
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from agents.interactive_terminal_agent import InteractiveTerminalAgent
 from autobot_shared.logging_manager import get_logger
@@ -261,7 +261,7 @@ class SystemCommandAgent(StandardizedAgent):
 
         return {"installed": False, "message": f"{tool_name} is not installed"}
 
-    async def detect_package_manager(self) -> Optional[str]:
+    async def detect_package_manager(self) -> str | None:
         """Detect which package manager is available on the system"""
         for pm_name, pm_info in self.PACKAGE_MANAGERS.items():
             check_cmd = pm_info["check"]
@@ -402,7 +402,7 @@ class SystemCommandAgent(StandardizedAgent):
         require_confirmation: bool = True,
         env: Dict[str, str] = None,
         cwd: str = None,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> Dict[str, Any]:
         """Execute command with terminal interaction (Issue #398: refactored)."""
         if require_confirmation and self._is_dangerous_command(command):

@@ -11,7 +11,7 @@ Part of god class refactoring initiative.
 """
 
 import re
-from typing import Dict, List, Optional, Pattern
+from typing import Dict, List, Pattern
 
 from code_intelligence.doc_generation.models import FunctionDoc
 from code_intelligence.doc_generation.types import ExampleDoc, ExceptionDoc, ReturnDoc
@@ -57,7 +57,7 @@ class DocstringParser:
             return
 
         lines = func_doc.docstring.split("\n")
-        current_section: Optional[str] = None
+        current_section: str | None = None
         current_content: List[str] = []
 
         for line in lines:
@@ -78,7 +78,7 @@ class DocstringParser:
         # Process final section
         self._process_section(func_doc, current_section, current_content)
 
-    def _process_section(self, func_doc: FunctionDoc, section: Optional[str], content: List[str]) -> None:
+    def _process_section(self, func_doc: FunctionDoc, section: str | None, content: List[str]) -> None:
         """
         Process a docstring section and update function documentation.
 
@@ -107,7 +107,7 @@ class DocstringParser:
             func_doc: Function documentation to update
             lines: Lines in the Args section
         """
-        current_param: Optional[str] = None
+        current_param: str | None = None
         current_desc: List[str] = []
 
         for line in lines:
@@ -164,7 +164,7 @@ class DocstringParser:
             func_doc: Function documentation to update
             lines: Lines in the Raises section
         """
-        current_exc: Optional[str] = None
+        current_exc: str | None = None
         current_desc: List[str] = []
 
         for line in lines:

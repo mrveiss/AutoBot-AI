@@ -10,7 +10,7 @@ Manages all async services with proper lifecycle and dependency resolution
 import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator, Callable, Dict, Optional, Type, TypeVar
+from typing import Any, AsyncGenerator, Callable, Dict, Type, TypeVar
 
 import redis.asyncio as async_redis
 
@@ -33,7 +33,7 @@ class ServiceDescriptor:
     """Describes a service registration"""
 
     service_type: Type[T]
-    factory: Optional[Callable] = None
+    factory: Callable | None = None
     singleton: bool = True
     initialized: bool = False
     instance: Any = None
@@ -98,9 +98,9 @@ class AsyncServiceContainer:
         self,
         name: str,
         service_type: Type[T],
-        factory: Optional[Callable] = None,
+        factory: Callable | None = None,
         singleton: bool = True,
-        dependencies: Optional[list] = None,
+        dependencies: list | None = None,
     ) -> None:
         """Register a service with the container"""
         self._services[name] = ServiceDescriptor(

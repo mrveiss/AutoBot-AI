@@ -16,7 +16,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 _PROVISION_LOG = Path("/var/log/autobot/provision-wizard.log")
 
@@ -72,7 +72,7 @@ class StepCompleteRequest(BaseModel):
 class ProvisionRequest(BaseModel):
     """Request to provision fleet nodes."""
 
-    node_ids: Optional[list[str]] = None
+    node_ids: list[str] | None = None
 
 
 # -- Settings Helpers ─────────────────────────────────────────────────────────
@@ -371,20 +371,18 @@ def _build_inventory_dict(
 
 
 async def _fetch_inventory_data(
-    node_ids: Optional[list[str]],
-) -> Optional[
-    tuple[
-        list,
-        dict[str, dict],
-        dict[str, str],
-        dict[str, str],
-        list,
-        list,
-        dict[str, str],
-        set,
-        list[str],
-    ]
-]:
+    node_ids: list[str] | None,
+) -> tuple[
+    list,
+    dict[str, dict],
+    dict[str, str],
+    dict[str, str],
+    list,
+    list,
+    dict[str, str],
+    set,
+    list[str],
+] | None:
     """Load all DB data needed to build the Ansible inventory (#2823).
 
     Returns (db_nodes, hosts, node_id_to_hostname, node_id_to_ip,
@@ -450,8 +448,8 @@ async def _fetch_inventory_data(
 
 
 async def _generate_dynamic_inventory(
-    node_ids: Optional[list[str]] = None,
-) -> Optional[Path]:
+    node_ids: list[str] | None = None,
+) -> Path | None:
     """Build Ansible inventory with role-based groups (#1346, #2823).
 
     Orchestrates focused helpers: _fetch_inventory_data, _build_inventory_children,
@@ -591,7 +589,7 @@ async def _check_node_reachability(inventory_path: Path) -> dict[str, bool]:
 
 
 async def _activate_provisioned_roles(
-    node_ids: Optional[list[str]],
+    node_ids: list[str] | None,
 ) -> None:
     """Mark all roles on provisioned nodes as 'active' (#2836, #2900).
 
@@ -666,7 +664,7 @@ def _handle_provision_result(result: dict) -> None:
 
 
 async def _create_wizard_deployments(
-    node_ids: Optional[list[str]],
+    node_ids: list[str] | None,
 ) -> dict[str, str]:
     """Create one Deployment record per provisioned node before playbook runs (#3032).
 
@@ -726,8 +724,8 @@ async def _complete_wizard_deployments(
     node_to_deployment: dict[str, str],
     success: bool,
     output: str,
-    error: Optional[str],
-    reachable_nodes: Optional[list[str]],
+    error: str | None,
+    reachable_nodes: list[str] | None,
 ) -> None:
     """Update Deployment records after wizard provisioning finishes (#3032).
 
@@ -763,7 +761,7 @@ async def _complete_wizard_deployments(
 
 
 async def _run_provisioning_task(
-    node_ids: Optional[list[str]],
+    node_ids: list[str] | None,
 ) -> None:
     """Run Ansible provisioning in background (#1384)."""
     _write_provision_log(
@@ -833,7 +831,7 @@ async def _run_provisioning_task(
             return
 
         # Build --limit to include only reachable nodes (#2897)
-        reachability_limit: Optional[list[str]] = None
+        reachability_limit: list[str] | None = None
         if unreachable:
             reachability_limit = reachable
             logger.info(

@@ -227,7 +227,7 @@ See Also:
 - docs/architecture/TERMINAL_ARCHITECTURE_DIAGRAM.md - System architecture
 """
 
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -276,7 +276,7 @@ router = APIRouter(prefix="/agent-terminal", tags=["agent-terminal"])
 # Dependency for AgentTerminalService
 # CRITICAL: Use singleton pattern to maintain sessions across requests
 
-_agent_terminal_service_instance: Optional[AgentTerminalService] = None
+_agent_terminal_service_instance: AgentTerminalService | None = None
 
 
 # Thread-safe lock for singleton
@@ -370,8 +370,8 @@ async def create_agent_terminal_session(
 )
 async def list_agent_terminal_sessions(
     current_user: dict = Depends(get_current_user),
-    agent_id: Optional[str] = None,
-    conversation_id: Optional[str] = None,
+    agent_id: str | None = None,
+    conversation_id: str | None = None,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """

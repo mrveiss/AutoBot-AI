@@ -12,8 +12,6 @@ Roles:
 """
 
 from enum import Enum
-from typing import Optional
-
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -75,7 +73,7 @@ def get_tool_access(tool_name: str, is_admin: bool) -> ToolAccess:
     return admin_access if is_admin else user_access
 
 
-def check_tool_permission(tool_name: str, is_admin: bool) -> tuple[bool, Optional[str]]:
+def check_tool_permission(tool_name: str, is_admin: bool) -> tuple[bool, str | None]:
     """Check if a tool call is permitted.
 
     Returns:
@@ -87,7 +85,7 @@ def check_tool_permission(tool_name: str, is_admin: bool) -> tuple[bool, Optiona
     return True, None
 
 
-def validate_key_namespace(key: str, is_admin: bool, access: ToolAccess) -> tuple[bool, Optional[str]]:
+def validate_key_namespace(key: str, is_admin: bool, access: ToolAccess) -> tuple[bool, str | None]:
     """Validate that a key write is within the allowed namespace.
 
     Scoped-write users can only write to keys prefixed with autobot:agent:*.

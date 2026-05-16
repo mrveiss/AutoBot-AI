@@ -42,7 +42,7 @@ import os
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -593,7 +593,7 @@ class RedisConfig(BaseSettings):
     )
 
     # Security
-    password: Optional[str] = Field(default=None, alias="AUTOBOT_REDIS_PASSWORD")
+    password: str | None = Field(default=None, alias="AUTOBOT_REDIS_PASSWORD")
 
 
 class CacheCoordinatorConfig(BaseSettings):
@@ -1656,7 +1656,7 @@ class AutoBotConfig(BaseSettings):
         base = self.redis_url_with_auth
         return f"{base}/{db_number}"
 
-    def get_service_url(self, service_name: str) -> Optional[str]:
+    def get_service_url(self, service_name: str) -> str | None:
         """
         Get service URL by name.
 
@@ -1682,7 +1682,7 @@ class AutoBotConfig(BaseSettings):
         }
         return url_map.get(service_name.lower())
 
-    def get_vm_ip(self, vm_name: str) -> Optional[str]:
+    def get_vm_ip(self, vm_name: str) -> str | None:
         """
         Get VM IP address by name.
 

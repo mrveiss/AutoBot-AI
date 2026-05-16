@@ -26,7 +26,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -80,7 +80,7 @@ class PendingSkillsRegistry:
         )
         return binding
 
-    def get(self, pending_skill_id: str) -> Optional[PendingSkillBinding]:
+    def get(self, pending_skill_id: str) -> PendingSkillBinding | None:
         """Look up a pending binding by id. Returns None if unknown or cleared."""
         with self._lock:
             return self._bindings.get(pending_skill_id)
@@ -111,7 +111,7 @@ class PendingSkillsRegistry:
             return list(self._bindings.values())
 
 
-_singleton: Optional[PendingSkillsRegistry] = None
+_singleton: PendingSkillsRegistry | None = None
 _singleton_lock = threading.Lock()
 
 
@@ -137,7 +137,7 @@ async def trigger_gap_fill(
     plan_id: str,
     task_id: str,
     *,
-    router_call: Optional[Callable[[str], Awaitable[Dict[str, Any]]]] = None,
+    router_call: Callable[[str], Awaitable[Dict[str, Any]]] | None = None,
 ) -> PendingSkillBinding:
     """Fire-and-forget Phase 3 trigger.
 

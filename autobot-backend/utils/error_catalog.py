@@ -10,7 +10,7 @@ with caching, validation, and integration with error_boundaries.py
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 import yaml
 
@@ -366,7 +366,7 @@ def _parse_error_category(category_str: str, error_code: str) -> ErrorCategory:
         return ErrorCategory.SERVER_ERROR
 
 
-def _parse_single_error(error_code: str, error_data: dict) -> Optional["ErrorDefinition"]:
+def _parse_single_error(error_code: str, error_data: dict) -> "ErrorDefinition" | None:
     """Parse single error definition from catalog data. (Issue #315 - extracted)"""
     required_keys = ("category", "message", "status_code", "retry")
     if not all(key in error_data for key in required_keys):
@@ -398,8 +398,8 @@ class ErrorDefinition:
     message: str
     status_code: int
     retry: bool
-    retry_after: Optional[int] = None
-    details: Optional[str] = None
+    retry_after: int | None = None
+    details: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for API responses"""
@@ -425,14 +425,14 @@ class ErrorCatalog:
             logger.info("%s - Retry: %s", error.message, error.retry)
     """
 
-    _instance: Optional["ErrorCatalog"] = None
+    _instance: "ErrorCatalog" | None = None
     _initialized: bool = False
 
     def __init__(self):
         """Initialize error catalog (use get_instance() instead)"""
         self._catalog: Dict[str, ErrorDefinition] = {}
-        self._raw_data: Optional[dict] = None
-        self._catalog_path: Optional[Path] = None
+        self._raw_data: dict | None = None
+        self._catalog_path: Path | None = None
 
     @classmethod
     def get_instance(cls) -> "ErrorCatalog":
@@ -441,7 +441,7 @@ class ErrorCatalog:
             cls._instance = cls()
         return cls._instance
 
-    def _resolve_catalog_path(self) -> Optional[Path]:
+    def _resolve_catalog_path(self) -> Path | None:
         """Find error_messages.yaml searching backend static dir then infrastructure.
 
         Helper for load_catalog (Issue #912).
@@ -481,7 +481,7 @@ class ErrorCatalog:
             len(self._catalog),
         )
 
-    def load_catalog(self, catalog_path: Optional[Path] = None) -> bool:
+    def load_catalog(self, catalog_path: Path | None = None) -> bool:
         """
         Load error catalog from YAML file
 
@@ -545,7 +545,7 @@ class ErrorCatalog:
                 if error_def:
                     self._catalog[error_code] = error_def
 
-    def get_error(self, error_code: str) -> Optional[ErrorDefinition]:
+    def get_error(self, error_code: str) -> ErrorDefinition | None:
         """
         Retrieve error definition by code
 
@@ -648,7 +648,7 @@ class ErrorCatalog:
 
 
 # Convenience functions for direct access
-def get_error(error_code: str) -> Optional[ErrorDefinition]:
+def get_error(error_code: str) -> ErrorDefinition | None:
     """
     Get error definition by code (convenience function)
 

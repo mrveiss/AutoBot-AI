@@ -32,7 +32,7 @@ Endpoints:
 - POST   /api/npu/pool/reload - Hot-reload pool configuration (Issue #168)
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -316,7 +316,7 @@ async def test_worker(
         raise_internal_error("Failed to test worker")
 
 
-@router.get("/npu/workers/{worker_id}/metrics", response_model=Optional[NPUWorkerMetrics])
+@router.get("/npu/workers/{worker_id}/metrics", response_model=NPUWorkerMetrics | None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_worker_metrics",
@@ -847,7 +847,7 @@ class WorkerHealthInfo:
     """Health information from a worker."""
 
     platform: str
-    existing_worker_id: Optional[str]
+    existing_worker_id: str | None
     already_paired: bool
 
 

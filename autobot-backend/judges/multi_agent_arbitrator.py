@@ -9,7 +9,7 @@ resolving conflicts, and selecting optimal agent responses in multi-agent scenar
 """
 
 import json
-from typing import Any, Dict, FrozenSet, List, Optional
+from typing import Any, Dict, FrozenSet, List
 
 from autobot_shared.logging_manager import get_logger
 from constants import AgentThresholds
@@ -373,7 +373,7 @@ Focus on selecting the response that provides the most value to the user while m
         subject: Any,
         criteria: List[JudgmentDimension],
         context: Dict[str, Any],
-        alternatives: Optional[List[Any]] = None,
+        alternatives: List[Any] | None = None,
         **kwargs,
     ) -> str:
         """Prepare the prompt for multi-agent arbitration. Issue #620: Refactored with helpers."""

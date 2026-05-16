@@ -43,7 +43,7 @@ Usage
 import ipaddress
 import logging
 import os
-from typing import Iterable, Optional
+from typing import Iterable
 
 from starlette.requests import Request
 
@@ -110,8 +110,8 @@ def _normalize_ip(ip_str: str) -> str:
 
 def get_client_ip(
     request: Request,
-    trusted_proxies: Optional[Iterable[str]] = None,
-) -> Optional[str]:
+    trusted_proxies: Iterable[str] | None = None,
+) -> str | None:
     """Extract the real client IP from a Starlette/FastAPI request.
 
     X-Forwarded-For is only honoured when the direct TCP connection

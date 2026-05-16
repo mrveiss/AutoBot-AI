@@ -26,7 +26,7 @@ import warnings
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from config.manager import get_config_manager as _get_config_manager
@@ -326,7 +326,7 @@ class Orchestrator:
 
     def find_best_agent_for_task(
         self, task_type: str, required_capabilities: Set[AgentCapability] = None
-    ) -> Optional[str]:
+    ) -> str | None:
         """Find the best agent for a task. Uses shared utility (Issue #292)."""
         return _find_best_agent(
             agent_registry=self.agent_registry,
@@ -446,10 +446,10 @@ class Orchestrator:
     async def process_user_request(
         self,
         user_message: str,
-        conversation_id: Optional[str] = None,
+        conversation_id: str | None = None,
         mode: OrchestrationMode = OrchestrationMode.ENHANCED,
         priority: TaskPriority = TaskPriority.NORMAL,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Process user request. Issue #281, #620, #5058.
 
@@ -504,7 +504,7 @@ class Orchestrator:
                 "mode": mode.value,
             }
 
-    async def _classify_task(self, user_message: str) -> Optional[Any]:
+    async def _classify_task(self, user_message: str) -> Any | None:
         if not self.classification_agent:
             return None
         try:
@@ -515,7 +515,7 @@ class Orchestrator:
             logger.warning("Classification failed: %s", e)
             return None
 
-    def _select_model_for_task(self, classification_result: Optional[Any]) -> str:
+    def _select_model_for_task(self, classification_result: Any | None) -> str:
         if classification_result and classification_result.complexity == TaskComplexity.SIMPLE:
             model = config_manager.get_default_llm_model()
             logger.info("Using fast model for simple task: %s", model)
@@ -523,7 +523,7 @@ class Orchestrator:
         return self.config.orchestrator_llm_model
 
     async def _process_simple_request(
-        self, user_message: str, task_id: str, model: str, context: Optional[Dict]
+        self, user_message: str, task_id: str, model: str, context: Dict | None
     ) -> Dict[str, Any]:
         # #6983: migrated to LLMService.chat() — context is forwarded as additional kwargs
         # since LLMService.chat() has no positional `context` parameter (was specific to LLMInterface)
@@ -548,7 +548,7 @@ class Orchestrator:
     async def execute_enhanced_workflow(
         self,
         user_request: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
         auto_document: bool = True,
         require_plan_approval: bool = False,
         plan_approval_callback=None,
@@ -753,7 +753,7 @@ class Orchestrator:
             return parse_result.data
         return self._strategy_planner.create_fallback_plan(goal)
 
-    async def create_workflow_plan(self, goal: str, context: Optional[Dict[str, Any]] = None) -> WorkflowPlan:
+    async def create_workflow_plan(self, goal: str, context: Dict[str, Any] | None = None) -> WorkflowPlan:
         """Create an intelligent workflow plan for a goal via LLM planning.
 
         Issue #5040: merged from EnhancedMultiAgentOrchestrator.
@@ -851,7 +851,7 @@ class Orchestrator:
 # ============================================================================
 
 
-async def create_and_execute_workflow(goal: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+async def create_and_execute_workflow(goal: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """Create and execute a multi-agent workflow plan.
 
     Issue #5040: Replaces enhanced_orchestration.create_and_execute_workflow.

@@ -19,7 +19,7 @@ Issue #1946: Layer-by-layer inference mode for batch/offline processing.
 
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -78,7 +78,7 @@ class LayerInferenceConfig:
     max_seq_len: int = 2048
     batch_size: int = 1
     device: str = "cpu"
-    cache_dir: Optional[str] = None
+    cache_dir: str | None = None
 
     def __post_init__(self) -> None:
         """Validate all configuration fields."""
@@ -317,7 +317,7 @@ class LayerInferenceEngine:
         self,
         input_ids: "torch.Tensor",
         layers: List[Any],
-        kv_cache: Optional[Any] = None,
+        kv_cache: Any | None = None,
     ) -> "torch.Tensor":
         """Run a sequential forward pass through an ordered list of layers.
 

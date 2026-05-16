@@ -12,7 +12,7 @@ and optionally session_codec for persistent conversations.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from typing import Any, Dict, List, Protocol, runtime_checkable
 
 from autobot_shared.logging_manager import get_logger
 
@@ -35,7 +35,7 @@ class DiagnosticMessage:
 
     level: DiagnosticLevel
     message: str
-    details: Optional[Dict[str, Any]] = None
+    details: Dict[str, Any] | None = None
 
 
 @dataclass
@@ -100,10 +100,10 @@ class AdapterBase(ABC):
     and optional session management.
     """
 
-    def __init__(self, adapter_type: str, config: Optional[AdapterConfig] = None):
+    def __init__(self, adapter_type: str, config: AdapterConfig | None = None):
         self.adapter_type = adapter_type
         self.config = config or AdapterConfig(adapter_type=adapter_type)
-        self._session_codec: Optional[SessionCodec] = None
+        self._session_codec: SessionCodec | None = None
 
     @abstractmethod
     async def execute(self, request: LLMRequest) -> LLMResponse:
@@ -118,12 +118,12 @@ class AdapterBase(ABC):
         """Discover available models dynamically."""
 
     @property
-    def session_codec(self) -> Optional[SessionCodec]:
+    def session_codec(self) -> SessionCodec | None:
         """Optional session state codec for persistent conversations."""
         return self._session_codec
 
     @session_codec.setter
-    def session_codec(self, codec: Optional[SessionCodec]) -> None:
+    def session_codec(self, codec: SessionCodec | None) -> None:
         self._session_codec = codec
 
     @property

@@ -8,7 +8,7 @@ Issue #381: Extracted from enhanced_orchestrator.py god class refactoring.
 Contains agent registration, lookup, and management functionality.
 """
 
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 
@@ -152,7 +152,7 @@ class AgentRegistry:
             logger.error("Failed to register agent %s: %s", agent_profile.agent_id, e)
             return False
 
-    def get(self, agent_id: str) -> Optional[AgentProfile]:
+    def get(self, agent_id: str) -> AgentProfile | None:
         """Get an agent by ID."""
         return self._agents.get(agent_id)
 
@@ -175,8 +175,8 @@ class AgentRegistry:
     def find_best_for_task(
         self,
         task_type: str,
-        required_capabilities: Optional[Set[AgentCapability]] = None,
-    ) -> Optional[str]:
+        required_capabilities: Set[AgentCapability] | None = None,
+    ) -> str | None:
         """
         Find the best agent for a specific task.
 

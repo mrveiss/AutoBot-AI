@@ -21,7 +21,7 @@ Provides mock implementations of core components for tests and the
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class MockLLMInterface:
@@ -34,7 +34,7 @@ class MockLLMInterface:
     still exercise ``UnifiedLLMInterface`` directly.
     """
 
-    def __init__(self, responses: Optional[Dict[str, str]] = None):
+    def __init__(self, responses: Dict[str, str] | None = None):
         self._custom_responses = responses or {}
         self._call_count = 0
         self._call_history: list = []
@@ -94,20 +94,20 @@ class _MockLLMResponseShim:
     content: str
     model: str = "mock"
     provider: str = "mock"
-    tokens_used: Optional[int] = None
+    tokens_used: int | None = None
     processing_time: float = 0.0
     cached: bool = False
     metadata: Dict[str, Any] = field(default_factory=dict)
     usage: Dict[str, int] = field(default_factory=dict)
     finish_reason: str = "stop"
     request_id: str = ""
-    error: Optional[str] = None
+    error: str | None = None
 
 
 def make_llm_response(
     *,
     content: str = "",
-    error: Optional[str] = None,
+    error: str | None = None,
     model: str = "mock",
     provider: str = "mock",
 ):
@@ -196,38 +196,38 @@ def make_async_redis(
     exists_returns: int = 0,
     incr_returns: int = 1,
     decr_returns: int = 0,
-    keys_returns: Optional[List[bytes]] = None,
+    keys_returns: List[bytes] | None = None,
     ttl_returns: int = -1,
     # Hash ops
     hget_returns: Any = None,
     hset_returns: int = 1,
-    hgetall_returns: Optional[Dict[bytes, bytes]] = None,
-    hkeys_returns: Optional[List[bytes]] = None,
-    hvals_returns: Optional[List[bytes]] = None,
+    hgetall_returns: Dict[bytes, bytes] | None = None,
+    hkeys_returns: List[bytes] | None = None,
+    hvals_returns: List[bytes] | None = None,
     hdel_returns: int = 1,
     hexists_returns: int = 0,
     # Set ops
     sadd_returns: int = 1,
     srem_returns: int = 1,
-    smembers_returns: Optional[set] = None,
+    smembers_returns: set | None = None,
     sismember_returns: bool = False,
     # List ops
-    lrange_returns: Optional[List[bytes]] = None,
+    lrange_returns: List[bytes] | None = None,
     lpush_returns: int = 1,
     rpush_returns: int = 1,
     llen_returns: int = 0,
     # Sorted-set ops
     zadd_returns: int = 1,
     zcard_returns: int = 0,
-    zrange_returns: Optional[List[bytes]] = None,
-    zrangebyscore_returns: Optional[List[bytes]] = None,
-    zrevrange_returns: Optional[List[bytes]] = None,
+    zrange_returns: List[bytes] | None = None,
+    zrangebyscore_returns: List[bytes] | None = None,
+    zrevrange_returns: List[bytes] | None = None,
     zremrangebyrank_returns: int = 0,
     # Pub/sub
     publish_returns: int = 0,
     # Pipeline + scan-iter (#7339)
-    pipeline: Optional["AsyncMock"] = None,
-    scan_iter_keys: Optional[List[bytes]] = None,
+    pipeline: "AsyncMock" | None = None,
+    scan_iter_keys: List[bytes] | None = None,
     **extra_methods: Any,
 ) -> "AsyncMock":
     """Build an async-redis-shaped ``AsyncMock`` for tests (canonical, #7264).
@@ -342,7 +342,7 @@ def make_async_redis(
 
 
 @contextmanager
-def patch_async_redis(target: str, redis: Optional["AsyncMock"] = None):
+def patch_async_redis(target: str, redis: "AsyncMock" | None = None):
     """Context manager: patch ``get_async_redis_client`` at ``target`` with
     correct ``AsyncMock`` wrapping (canonical, #7264).
 
@@ -391,7 +391,7 @@ class MockLLMService:
     `generate_response()` method) does not. This class fills the gap.
     """
 
-    def __init__(self, responses: Optional[Dict[str, str]] = None):
+    def __init__(self, responses: Dict[str, str] | None = None):
         self._custom_responses = responses or {}
         self._call_count = 0
         self._call_history: List[Dict[str, Any]] = []
@@ -456,7 +456,7 @@ class MockCommandValidator:
     def __init__(
         self,
         default_safe: bool = True,
-        dangerous_patterns: Optional[list] = None,
+        dangerous_patterns: list | None = None,
     ):
         self._default_safe = default_safe
         self._dangerous_patterns = dangerous_patterns or [
@@ -494,7 +494,7 @@ class MockKnowledgeBase:
     async def store_fact(
         self,
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         fact = {
             "id": len(self._facts) + 1,
@@ -529,7 +529,7 @@ class MockWorkerNode:
     def __init__(
         self,
         node_id: str = "mock-worker-1",
-        capabilities: Optional[list] = None,
+        capabilities: list | None = None,
     ):
         self.node_id = node_id
         self.capabilities = capabilities or ["text", "vision", "audio"]

@@ -16,7 +16,7 @@ import threading
 from collections import defaultdict, deque
 from datetime import timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import numpy as np
 import yaml
@@ -130,7 +130,7 @@ class ThreatDetectionEngine:
     def _initialize_learner(self) -> None:
         """Initialize adaptive learning layer. Issue #2110."""
         try:
-            self.learner: Optional[ThreatDetectionLearner] = ThreatDetectionLearner()
+            self.learner: ThreatDetectionLearner | None = ThreatDetectionLearner()
         except Exception as exc:
             logger.error(
                 "Failed to initialise ThreatDetectionLearner (Redis unavailable?): %s",
@@ -429,7 +429,7 @@ class ThreatDetectionEngine:
 
         return primary_threat
 
-    async def analyze_event(self, event: Dict) -> Optional[ThreatEvent]:
+    async def analyze_event(self, event: Dict) -> ThreatEvent | None:
         """
         Analyze a security event for potential threats.
 

@@ -18,7 +18,7 @@ New code should import directly from ``llm_interface_pkg.providers``:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 
 from autobot_shared.logging_manager import get_logger
 
@@ -59,8 +59,8 @@ class ProviderConfig:
 
     provider_type: ProviderType
     enabled: bool = True
-    base_url: Optional[str] = None
-    api_key: Optional[str] = None
+    base_url: str | None = None
+    api_key: str | None = None
     default_model: str = ""
     available_models: List[str] = field(default_factory=list)
     max_concurrent_requests: int = 10
@@ -172,9 +172,9 @@ class MockProvider(LLMProvider):
 
 
 async def get_provider(
-    provider_name: Optional[str] = None,
-    conversation_id: Optional[str] = None,
-) -> Optional[BaseProvider]:
+    provider_name: str | None = None,
+    conversation_id: str | None = None,
+) -> BaseProvider | None:
     """
     Return a provider instance from the registry.
 
@@ -210,7 +210,7 @@ class UnifiedLLMInterface:
     """
 
     def __init__(self) -> None:
-        self._registry: Optional[ProviderRegistry] = None
+        self._registry: ProviderRegistry | None = None
 
     async def initialize(self) -> None:
         """Initialise the underlying provider registry (idempotent)."""
@@ -224,13 +224,13 @@ class UnifiedLLMInterface:
     async def chat_completion(
         self,
         messages: List[Dict[str, str]],
-        llm_type: Union[str, LLMType] = LLMType.GENERAL,
-        provider: Optional[Union[str, ProviderType]] = None,
-        model_name: Optional[str] = None,
+        llm_type: str | LLMType = LLMType.GENERAL,
+        provider: str | ProviderType | None = None,
+        model_name: str | None = None,
         **kwargs: Any,
     ) -> LLMResponse:
         """Execute a chat completion using the best available provider."""
-        provider_name: Optional[str] = None
+        provider_name: str | None = None
         if isinstance(provider, ProviderType):
             provider_name = provider.value
         elif isinstance(provider, str):
@@ -276,7 +276,7 @@ class UnifiedLLMInterface:
         """Return registry stats."""
         return self._get_registry().get_stats()
 
-    async def get_available_models(self, provider: Optional[ProviderType] = None) -> Dict[str, List[str]]:
+    async def get_available_models(self, provider: ProviderType | None = None) -> Dict[str, List[str]]:
         """Return available models per provider."""
         registry = self._get_registry()
         name_filter = provider.value if provider else None

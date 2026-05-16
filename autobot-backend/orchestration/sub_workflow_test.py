@@ -3,7 +3,7 @@
 # Author: mrveiss
 """Unit tests for sub-workflow composition.  Issue #2143."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -108,7 +108,7 @@ class TestExtractSubWorkflowStep:
 
 
 class TestSubWorkflowExecutorBasic:
-    def _make_executor(self, workflow_def: Optional[Dict[str, Any]]) -> SubWorkflowExecutor:
+    def _make_executor(self, workflow_def: Dict[str, Any] | None) -> SubWorkflowExecutor:
         wf_executor = _make_workflow_executor()
         fetcher = MagicMock(return_value=workflow_def)
         return SubWorkflowExecutor(workflow_executor=wf_executor, workflow_fetcher=fetcher)

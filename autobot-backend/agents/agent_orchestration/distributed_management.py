@@ -10,7 +10,7 @@ Contains distributed agent registration, health monitoring, and lifecycle manage
 
 import asyncio
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple
 
 from constants.threshold_constants import TimingConstants, WorkStealingConfig
 
@@ -58,7 +58,7 @@ class DistributedAgentManager:
         self.distributed_agents: Dict[str, DistributedAgentInfo] = {}
         self.builtin_distributed_agents = builtin_agents
         self.health_check_interval = health_check_interval
-        self.health_monitor_task: Optional[asyncio.Task] = None
+        self.health_monitor_task: asyncio.Task | None = None
         self.is_running = False
 
         # Work-stealing configuration (Issue #2109)
@@ -78,7 +78,7 @@ class DistributedAgentManager:
         # task_id -> reassignment_count
         self._task_reassignment_count: Dict[str, int] = {}
 
-    async def start(self, event_emitter: Optional[Any] = None) -> bool:
+    async def start(self, event_emitter: Any | None = None) -> bool:
         """Start distributed agent management.
 
         Args:
@@ -182,7 +182,7 @@ class DistributedAgentManager:
 
     async def _check_single_agent_health(
         self, agent_id: str, agent_info: DistributedAgentInfo
-    ) -> Tuple[str, Optional["AgentHealth"], Optional[Exception]]:
+    ) -> Tuple[str, "AgentHealth" | None, Exception | None]:
         """Check health of single agent (Issue #334 - extracted helper)."""
         try:
             health = await agent_info.agent.health_check()
@@ -193,8 +193,8 @@ class DistributedAgentManager:
     def _process_health_result(
         self,
         agent_id: str,
-        health: Optional["AgentHealth"],
-        error: Optional[Exception],
+        health: "AgentHealth" | None,
+        error: Exception | None,
     ) -> None:
         """Process a single health check result and update circuit breaker state.
 
@@ -289,7 +289,7 @@ class DistributedAgentManager:
             agent_id, health, error = result
             self._process_health_result(agent_id, health, error)
 
-    async def _health_monitor_loop(self, event_emitter: Optional[Any] = None) -> None:
+    async def _health_monitor_loop(self, event_emitter: Any | None = None) -> None:
         """Background health monitoring for distributed agents.
 
         Each cycle:
@@ -355,7 +355,7 @@ class DistributedAgentManager:
 
         return available
 
-    def get_agent_info(self, agent_id: str) -> Optional[DistributedAgentInfo]:
+    def get_agent_info(self, agent_id: str) -> DistributedAgentInfo | None:
         """Get info for a specific agent."""
         return self.distributed_agents.get(agent_id)
 
@@ -438,7 +438,7 @@ class DistributedAgentManager:
         self,
         source_agent_id: str,
         task_id: str,
-        event_emitter: Optional[Any] = None,
+        event_emitter: Any | None = None,
     ) -> bool:
         """Remove task from stale agent, mark agent degraded, emit event.
 
@@ -497,7 +497,7 @@ class DistributedAgentManager:
 
         return True
 
-    async def _detect_and_steal_stale_tasks(self, event_emitter: Optional[Any] = None) -> int:
+    async def _detect_and_steal_stale_tasks(self, event_emitter: Any | None = None) -> int:
         """Scan all active tasks and steal those that are stale.
 
         Returns the number of tasks reassigned in this cycle.

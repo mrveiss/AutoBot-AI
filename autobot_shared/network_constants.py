@@ -29,8 +29,6 @@ Usage:
 import os
 import warnings
 from functools import cached_property
-from typing import Optional
-
 from config.registry import ConfigRegistry
 
 # Deprecation flag - set to True to enable deprecation warnings
@@ -299,7 +297,7 @@ class NetworkConfig:
             mode = ConfigRegistry.get("deployment.mode", "distributed")
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize network config using ConfigRegistry values."""
         self._deployment_mode = ConfigRegistry.get(
             "deployment.mode", os.getenv("AUTOBOT_DEPLOYMENT_MODE", "distributed")
@@ -352,7 +350,7 @@ class NetworkConfig:
             "vnc": ServiceURLs.VNC_DESKTOP,
         }
 
-    def get_service_url(self, service_name: str) -> Optional[str]:
+    def get_service_url(self, service_name: str) -> str | None:
         """
         Get service URL by name.
 
@@ -381,7 +379,7 @@ class NetworkConfig:
             "browser": NetworkConstants.BROWSER_VM_IP,
         }
 
-    def get_vm_ip(self, vm_name: str) -> Optional[str]:
+    def get_vm_ip(self, vm_name: str) -> str | None:
         """
         Get VM IP address by name.
 

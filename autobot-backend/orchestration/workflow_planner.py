@@ -8,7 +8,7 @@ Issue #381: Extracted from enhanced_orchestrator.py god class refactoring.
 Contains workflow planning, step estimation, and capability determination.
 """
 
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 
@@ -158,7 +158,7 @@ class WorkflowPlanner:
         # Default capability if none determined
         return required_capabilities or {AgentCapability.ANALYSIS}
 
-    def estimate_step_duration(self, action: str, agent_id: Optional[str]) -> float:
+    def estimate_step_duration(self, action: str, agent_id: str | None) -> float:
         """
         Estimate duration for a workflow step.
 
@@ -191,7 +191,7 @@ class WorkflowPlanner:
     def get_plan_summary(
         self,
         user_request: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Get workflow plan summary without executing.

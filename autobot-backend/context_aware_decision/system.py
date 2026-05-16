@@ -11,7 +11,7 @@ Part of Issue #381 - God Class Refactoring
 """
 
 from dataclasses import asdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 class ContextAwareDecisionSystem:
     """Main context-aware decision making system."""
 
-    def __init__(self, memory_manager: Optional[EnhancedMemoryManager] = None):
+    def __init__(self, memory_manager: EnhancedMemoryManager | None = None):
         """Initialize decision system with memory manager, collector, and engine."""
         self.memory_manager = memory_manager or EnhancedMemoryManager()
         self.context_collector = ContextCollector()
@@ -135,7 +135,7 @@ class ContextAwareDecisionSystem:
         except Exception as e:
             logger.error("Failed to store decision in memory: %s", e)
 
-    def get_decision_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_decision_history(self, limit: int | None = None) -> List[Dict[str, Any]]:
         """Get recent decision history."""
         history = self.decision_history
         if limit:

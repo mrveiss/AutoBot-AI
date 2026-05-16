@@ -16,7 +16,7 @@ import asyncio
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
@@ -135,7 +135,7 @@ class IntegrationRateLimiter:
         # Lock is created lazily in acquire() so it always belongs to the
         # running event loop (avoids "lock created in different loop" hangs
         # in tests that create a new loop per test).
-        self._lock: Optional[asyncio.Lock] = None
+        self._lock: asyncio.Lock | None = None
 
     def _get_state(self, key: str) -> RateLimitState:
         if key not in self._states:

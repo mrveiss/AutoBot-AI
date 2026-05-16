@@ -9,7 +9,7 @@ Provides NPU-accelerated semantic search endpoints for AutoBot
 
 import asyncio
 import time
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, HTTPException
 
@@ -39,7 +39,7 @@ logger = get_llm_logger("enhanced_search_api")
 router = APIRouter(tags=["Enhanced Search"])
 
 
-def _parse_force_device(force_device_str: Optional[str]) -> Optional[HardwareDevice]:
+def _parse_force_device(force_device_str: str | None) -> HardwareDevice | None:
     """
     Parse and validate force_device parameter (Issue #665: extracted helper).
 
@@ -334,7 +334,7 @@ async def test_npu_connectivity():
 
 
 def _evaluate_device_timing(
-    stats: Optional[Metadata],
+    stats: Metadata | None,
     device_name: str,
     low_threshold: float,
     high_threshold: float,

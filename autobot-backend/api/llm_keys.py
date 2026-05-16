@@ -13,7 +13,7 @@ Routes (all require admin permission):
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -35,7 +35,7 @@ class IssueKeyRequest(BaseModel):
     label: str = ""
     monthly_budget_usd: float = 0.0
     allowed_models: List[str] = []
-    expires_at: Optional[float] = None
+    expires_at: float | None = None
 
 
 class IssueKeyResponse(BaseModel):
@@ -45,7 +45,7 @@ class IssueKeyResponse(BaseModel):
     label: str
     monthly_budget_usd: float
     allowed_models: List[str]
-    expires_at: Optional[float]
+    expires_at: float | None
 
 
 class RevokeKeyRequest(BaseModel):
@@ -140,7 +140,7 @@ async def rotate_key(
     error_code_prefix="LLM_KEYS",
 )
 async def list_keys(
-    team_id: Optional[str] = Query(None),
+    team_id: str | None = Query(None),
     _user: Any = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """List virtual LLM API keys with current-month spend."""

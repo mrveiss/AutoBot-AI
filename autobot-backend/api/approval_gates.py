@@ -8,7 +8,7 @@ CRUD and lifecycle endpoints for human-in-the-loop approval gates.
 """
 
 import uuid
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -134,10 +134,10 @@ async def create_approval(
     error_code_prefix="APPROVAL_GATES",
 )
 async def list_approvals(
-    status_filter: Optional[ApprovalStatus] = None,
-    approval_type: Optional[ApprovalType] = None,
-    workflow_id: Optional[str] = None,
-    agent_id: Optional[str] = None,
+    status_filter: ApprovalStatus | None = None,
+    approval_type: ApprovalType | None = None,
+    workflow_id: str | None = None,
+    agent_id: str | None = None,
     pagination: PaginationParams = Depends(),
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),

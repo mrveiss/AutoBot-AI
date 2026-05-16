@@ -8,7 +8,7 @@ Issue #381: Extracted from computer_vision_system.py god class refactoring.
 Contains collection classes for UI element analysis.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -141,7 +141,7 @@ class ProcessingResultExtractor:
 
     @staticmethod
     def extract_text_regions(
-        result_data: Optional[Dict[str, Any]],
+        result_data: Dict[str, Any] | None,
     ) -> List[Dict[str, Any]]:
         """Extract text regions from processing results"""
         if not result_data:
@@ -150,7 +150,7 @@ class ProcessingResultExtractor:
 
     @staticmethod
     def extract_dominant_colors(
-        result_data: Optional[Dict[str, Any]],
+        result_data: Dict[str, Any] | None,
     ) -> List[Dict[str, Any]]:
         """Extract dominant colors from processing results"""
         if not result_data:
@@ -159,7 +159,7 @@ class ProcessingResultExtractor:
 
     @staticmethod
     def extract_layout_structure(
-        result_data: Optional[Dict[str, Any]],
+        result_data: Dict[str, Any] | None,
     ) -> Dict[str, Any]:
         """Extract layout analysis from processing results"""
         if not result_data:
@@ -168,7 +168,7 @@ class ProcessingResultExtractor:
 
     @staticmethod
     def extract_ui_elements(
-        result_data: Optional[Dict[str, Any]],
+        result_data: Dict[str, Any] | None,
     ) -> List[Dict[str, Any]]:
         """Extract detected UI elements from processing results"""
         if not result_data:

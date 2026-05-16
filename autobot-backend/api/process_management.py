@@ -9,8 +9,6 @@ streaming logs, sending signals, and listing processes per agent.
 """
 
 import os
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import JSONResponse, PlainTextResponse
 
@@ -31,7 +29,7 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 # Module-level singleton; initialised by application lifespan or DI.
-_process_svc: Optional[ProcessAdapterService] = None
+_process_svc: ProcessAdapterService | None = None
 
 
 def set_process_adapter_service(svc: ProcessAdapterService) -> None:
@@ -152,7 +150,7 @@ async def signal_process(
 )
 async def list_agent_processes(
     agent_id: str,
-    status: Optional[str] = Query(default=None, description="Filter by status"),
+    status: str | None = Query(default=None, description="Filter by status"),
     limit: int = Query(default=20, ge=1, le=200),
     current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:

@@ -11,7 +11,7 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from enhanced_memory_manager_async import TaskPriority
@@ -346,7 +346,7 @@ class ContextCollector:
 
         return available_actions
 
-    def _assess_low_confidence_risk(self, context_elements: List[ContextElement]) -> Optional[Dict[str, Any]]:
+    def _assess_low_confidence_risk(self, context_elements: List[ContextElement]) -> Dict[str, Any] | None:
         """Assess risk from low confidence context elements. Issue #620."""
         low_confidence_elements = [ce for ce in context_elements if ce.confidence < 0.6]
         if len(low_confidence_elements) > len(context_elements) * 0.3:
@@ -377,7 +377,7 @@ class ContextCollector:
                 )
         return risks
 
-    def _assess_information_overload_risk(self, context_elements: List[ContextElement]) -> Optional[Dict[str, Any]]:
+    def _assess_information_overload_risk(self, context_elements: List[ContextElement]) -> Dict[str, Any] | None:
         """Assess risk from too much conflicting context. Issue #620."""
         if len(context_elements) > 50:
             return {

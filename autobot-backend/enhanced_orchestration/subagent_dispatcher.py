@@ -6,7 +6,7 @@
 import asyncio
 import json
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from orchestration.primitives import bounded_gather
@@ -225,7 +225,7 @@ class SubagentDispatcher:
             return result_text
 
 
-_orchestrator_instance: Optional[SubagentDispatcher] = None
+_orchestrator_instance: SubagentDispatcher | None = None
 
 
 def get_subagent_dispatcher(max_parallel: int = 10) -> SubagentDispatcher:

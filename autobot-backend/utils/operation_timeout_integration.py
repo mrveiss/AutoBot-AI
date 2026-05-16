@@ -16,7 +16,7 @@ framework and existing AutoBot components, including:
 """
 
 import asyncio
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 import redis.asyncio as redis
 from fastapi import APIRouter, BackgroundTasks, WebSocket, WebSocketDisconnect
@@ -72,14 +72,14 @@ class OperationResponse(BaseModel):
     status: str
     priority: str
     created_at: str
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    started_at: str | None = None
+    completed_at: str | None = None
     progress_percentage: float
     processed_items: int
     total_items: int
     current_step: str
-    estimated_completion: Optional[str] = None
-    error_info: Optional[str] = None
+    estimated_completion: str | None = None
+    error_info: str | None = None
 
 
 class OperationListResponse(BaseModel):
@@ -94,8 +94,8 @@ class ProgressUpdateRequest(BaseModel):
     operation_id: str
     current_step: str
     processed_items: int
-    total_items: Optional[int] = None
-    performance_metrics: Optional[Dict[str, Any]] = None
+    total_items: int | None = None
+    performance_metrics: Dict[str, Any] | None = None
     status_message: str = ""
 
 
@@ -215,8 +215,8 @@ class OperationIntegrationManager:
         operation: LongRunningOperation,
         current_step: str,
         processed_items: int,
-        total_items: Optional[int] = None,
-        performance_metrics: Optional[Dict[str, Any]] = None,
+        total_items: int | None = None,
+        performance_metrics: Dict[str, Any] | None = None,
         status_message: str = "",
     ) -> None:
         """Update operation progress, reducing progress_tracker.update_progress chain."""
@@ -289,7 +289,7 @@ class OperationIntegrationManager:
         return {"status": "updated"}
 
     async def _handle_start_indexing(
-        self, codebase_path: str, file_patterns: Optional[List[str]] = None
+        self, codebase_path: str, file_patterns: List[str] | None = None
     ) -> Dict[str, str]:
         """Handle start codebase indexing request."""
         try:
@@ -300,7 +300,7 @@ class OperationIntegrationManager:
             raise_server_error("API_0003", "Failed to start codebase indexing")
 
     async def _handle_start_testing(
-        self, test_suite_path: str, test_patterns: Optional[List[str]] = None
+        self, test_suite_path: str, test_patterns: List[str] | None = None
     ) -> Dict[str, str]:
         """Handle start comprehensive testing request."""
         try:
@@ -336,8 +336,8 @@ class OperationIntegrationManager:
 
         @self.router.get("/", response_model=OperationListResponse)
         async def list_operations(
-            status: Optional[str] = None,
-            operation_type: Optional[str] = None,
+            status: str | None = None,
+            operation_type: str | None = None,
             limit: int = 50,
         ):
             """List operations with optional status and type filters."""
@@ -385,7 +385,7 @@ class OperationIntegrationManager:
         @self.router.post("/codebase/index")
         async def start_codebase_indexing(
             codebase_path: str,
-            file_patterns: Optional[List[str]] = None,
+            file_patterns: List[str] | None = None,
             background_tasks: BackgroundTasks = None,
         ):
             """Start a codebase indexing operation."""
@@ -394,7 +394,7 @@ class OperationIntegrationManager:
         @self.router.post("/testing/comprehensive")
         async def start_comprehensive_testing(
             test_suite_path: str,
-            test_patterns: Optional[List[str]] = None,
+            test_patterns: List[str] | None = None,
             background_tasks: BackgroundTasks = None,
         ):
             """Start a comprehensive testing operation."""
@@ -641,7 +641,7 @@ class OperationMigrator:
 # Decorator for easy migration of existing functions
 def long_running_operation(
     operation_type: OperationType,
-    name: Optional[str] = None,
+    name: str | None = None,
     estimated_items: int = 1,
     priority: OperationPriority = OperationPriority.NORMAL,
 ):

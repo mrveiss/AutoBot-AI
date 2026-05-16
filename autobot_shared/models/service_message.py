@@ -24,7 +24,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Literal
 
 from pydantic import BaseModel, Field
 
@@ -96,7 +96,7 @@ def serialize_message(msg: ServiceMessage) -> str:
     return msg.model_dump_json()
 
 
-def deserialize_message(raw: str | bytes) -> Optional[ServiceMessage]:
+def deserialize_message(raw: str | bytes) -> ServiceMessage | None:
     """Deserialize JSON *raw* into a *ServiceMessage*.
 
     Returns ``None`` (and logs a warning) if parsing fails instead
@@ -115,7 +115,7 @@ def create_reply(
     *,
     msg_type: str = "result",
     content: str = "",
-    meta: Optional[Dict[str, Any]] = None,
+    meta: Dict[str, Any] | None = None,
 ) -> ServiceMessage:
     """Create a reply that swaps sender/receiver and shares *correlation_id*.
 

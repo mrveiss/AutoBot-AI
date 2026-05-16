@@ -11,7 +11,7 @@ Route ordering: Static paths (/templates/search, /templates/categories,
 segments as path parameters.
 """
 
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -90,9 +90,9 @@ async def get_templates_root():
     error_code_prefix="TEMPLATES",
 )
 async def list_workflow_templates(
-    category: Optional[str] = Query(None, description="Filter by template category"),
-    tags: Optional[str] = Query(None, description="Filter by tags (comma-separated)"),
-    complexity: Optional[str] = Query(None, description="Filter by complexity level"),
+    category: str | None = Query(None, description="Filter by template category"),
+    tags: str | None = Query(None, description="Filter by tags (comma-separated)"),
+    complexity: str | None = Query(None, description="Filter by complexity level"),
 ):
     """List all available workflow templates with optional filtering"""
     try:
@@ -309,7 +309,7 @@ async def get_template_details(template_id: str):
 )
 async def preview_template_workflow(
     template_id: str,
-    variables: Optional[str] = Query(None, description="Variables as JSON string"),
+    variables: str | None = Query(None, description="Variables as JSON string"),
 ):
     """Preview what a template workflow would look like with given variables"""
     try:

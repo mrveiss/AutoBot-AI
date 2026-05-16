@@ -14,7 +14,7 @@ Issue #1954: HfQuantizer integration for pre-quantized GPTQ/AWQ models.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
@@ -170,7 +170,7 @@ class QuantizerConfig:
     quantization_type: QuantizationType = QuantizationType.NONE
     device_map: str = "auto"
     trust_remote_code: bool = False
-    torch_dtype: Optional[str] = "float16"
+    torch_dtype: str | None = "float16"
     extra_kwargs: Dict[str, Any] = field(default_factory=dict)
 
 

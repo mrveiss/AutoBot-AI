@@ -11,7 +11,7 @@ Creates approval records and notifies SLM admin via Redis pub/sub.
 import json
 import uuid
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from autobot_shared.logging_manager import get_logger
 from skills.models import GovernanceMode, SkillPackage, TrustLevel
@@ -29,7 +29,7 @@ class ActivationResult:
 
     approved: bool
     requires_human_review: bool
-    approval_id: Optional[str] = None
+    approval_id: str | None = None
     reason: str = ""
     trust_level: TrustLevel = TrustLevel.MONITORED
 
@@ -51,7 +51,7 @@ class GovernanceEngine:
         skill_name: str,
         requested_by: str,
         reason: str,
-        skill_id: Optional[str] = None,
+        skill_id: str | None = None,
     ) -> ActivationResult:
         """Process a skill activation request under the current governance mode."""
         if self.mode == GovernanceMode.LOCKED:
@@ -87,7 +87,7 @@ class GovernanceEngine:
         skill_name: str,
         requested_by: str,
         reason: str,
-        skill_id: Optional[str] = None,
+        skill_id: str | None = None,
     ) -> ActivationResult:
         """Create approval record in DB and notify admin (SEMI_AUTO mode).
 

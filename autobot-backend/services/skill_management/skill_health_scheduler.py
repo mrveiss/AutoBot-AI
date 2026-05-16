@@ -9,7 +9,7 @@ skills with unhealthy scores. Runs every 5 minutes.
 """
 
 import asyncio
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
@@ -209,7 +209,7 @@ class SkillHealthScheduler:
 
 
 # Singleton instance
-_scheduler_instance: Optional[SkillHealthScheduler] = None
+_scheduler_instance: SkillHealthScheduler | None = None
 
 
 def get_skill_health_scheduler() -> SkillHealthScheduler:

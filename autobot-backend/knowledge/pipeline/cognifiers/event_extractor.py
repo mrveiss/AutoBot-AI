@@ -9,7 +9,7 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
@@ -171,7 +171,7 @@ class EventExtractor(BaseCognifier):
                 logger.warning("Failed to create event: %s", e)
         return events
 
-    def _parse_temporal(self, expression: str) -> Optional[datetime]:
+    def _parse_temporal(self, expression: str) -> datetime | None:
         """Parse temporal expression to datetime."""
         if not expression:
             return None

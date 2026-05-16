@@ -24,7 +24,7 @@ Each document is serialised as a JSON blob under the ``main`` Redis database:
 """
 
 import json
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -69,7 +69,7 @@ def _owner_id(current_user: dict) -> str:
     return current_user.get("user_id") or current_user.get("id") or current_user.get("sub") or "anonymous"
 
 
-async def _load_document(redis, doc_id: str) -> Optional[AIDocument]:
+async def _load_document(redis, doc_id: str) -> AIDocument | None:
     """Return the document or None if the key is missing."""
     raw = await redis.get(f"autobot:ai_document:{doc_id}")
     if raw is None:

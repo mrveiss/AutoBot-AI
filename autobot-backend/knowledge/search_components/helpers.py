@@ -9,7 +9,7 @@ Contains utility functions for Redis hash operations and result building.
 """
 
 import json
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Set
 
 
 def decode_redis_hash(fact_data: Dict) -> Dict[str, str]:
@@ -34,7 +34,7 @@ def _parse_metadata(raw_metadata: Any) -> Dict[str, Any]:
         return {}
 
 
-def matches_category(decoded: Dict[str, str], category: Optional[str]) -> bool:
+def matches_category(decoded: Dict[str, str], category: str | None) -> bool:
     """Check if fact matches category filter (Issue #315)."""
     if not category:
         return True

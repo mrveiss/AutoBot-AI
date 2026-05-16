@@ -32,7 +32,7 @@ Key Features:
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -90,17 +90,17 @@ class MCPToolCache:
     def __init__(self, ttl_seconds: int = 60):
         """Initialize MCP registry cache with configurable TTL."""
         self.ttl = timedelta(seconds=ttl_seconds)
-        self._tools_cache: Optional[Metadata] = None
-        self._tools_updated: Optional[datetime] = None
-        self._bridges_cache: Optional[Metadata] = None
-        self._bridges_updated: Optional[datetime] = None
+        self._tools_cache: Metadata | None = None
+        self._tools_updated: datetime | None = None
+        self._bridges_cache: Metadata | None = None
+        self._bridges_updated: datetime | None = None
         self._stats = {
             "cache_hits": 0,
             "cache_misses": 0,
             "invalidations": 0,
         }
 
-    def get_tools(self) -> Optional[Metadata]:
+    def get_tools(self) -> Metadata | None:
         """Get cached tools if still valid"""
         if not CACHE_ENABLED:
             return None
@@ -128,7 +128,7 @@ class MCPToolCache:
         self._tools_updated = datetime.now(tz=timezone.utc)
         logger.info("MCP tools cache updated (TTL: %ss)", self.ttl.seconds)
 
-    def get_bridges(self) -> Optional[Metadata]:
+    def get_bridges(self) -> Metadata | None:
         """Get cached bridges if still valid"""
         if not CACHE_ENABLED:
             return None
@@ -714,7 +714,7 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
 
 @register_health_probe("mcp_registry")
 async def probe_mcp_registry(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for the MCP bridge registry."""
     try:

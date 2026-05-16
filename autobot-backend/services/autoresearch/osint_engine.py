@@ -25,7 +25,7 @@ import json
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import httpx
 
@@ -47,7 +47,7 @@ class SourceResult:
     data: Any
     timestamp: float = field(default_factory=time.time)
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
     latency_seconds: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
@@ -101,7 +101,7 @@ class CorrelationRule:
     threshold: int  # min domain count that must match
     description: str
 
-    def evaluate(self, results: List[SourceResult]) -> Optional[CorrelatedSignal]:
+    def evaluate(self, results: List[SourceResult]) -> CorrelatedSignal | None:
         """Return a CorrelatedSignal if this rule fires, else None."""
         matching: List[str] = []
         excerpts: List[str] = []

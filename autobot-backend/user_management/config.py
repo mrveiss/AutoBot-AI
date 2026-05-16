@@ -13,8 +13,6 @@ Supports 4 deployment modes:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
-
 from autobot_shared.ssot_config import config
 
 
@@ -71,7 +69,7 @@ class DeploymentConfig:
     postgres_db: str = "autobot"
     postgres_user: str = "autobot"
     postgres_password: str = ""
-    encryption_key: Optional[str] = None
+    encryption_key: str | None = None
 
     @property
     def postgres_url(self) -> str:
@@ -144,7 +142,7 @@ MODE_FEATURES: dict[DeploymentMode, FeatureFlags] = {
 
 
 # Singleton config instance
-_deployment_config: Optional[DeploymentConfig] = None
+_deployment_config: DeploymentConfig | None = None
 
 
 def get_deployment_config() -> DeploymentConfig:

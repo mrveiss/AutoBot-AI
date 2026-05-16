@@ -62,7 +62,7 @@ def _make_orchestrator(
 
 
 @pytest.mark.asyncio
-async def test_learn_returns_string_on_analyzer_failure():
+async def test_learn_returns_string_on_analyzer_failure() -> None:
     """LEARN phase must return a non-empty fallback string when services unavailable."""
     orch = _make_orchestrator()
     with patch(
@@ -79,7 +79,7 @@ async def test_learn_returns_string_on_analyzer_failure():
 
 
 @pytest.mark.asyncio
-async def test_learn_includes_analyzer_lessons():
+async def test_learn_includes_analyzer_lessons() -> None:
     """LEARN phase appends AnalyzerService lessons when available."""
     orch = _make_orchestrator()
     mock_svc = MagicMock()
@@ -114,7 +114,7 @@ _VALID_VARIANTS_JSON = json.dumps(
 
 
 @pytest.mark.asyncio
-async def test_hypothesize_parses_valid_llm_json():
+async def test_hypothesize_parses_valid_llm_json() -> None:
     """HYPOTHESIZE phase parses a well-formed JSON array from the LLM."""
     orch = _make_orchestrator(llm_response=_VALID_VARIANTS_JSON)
     with patch("services.knowledge.autonomous_loop.get_rag_config") as mock_cfg:
@@ -132,7 +132,7 @@ async def test_hypothesize_parses_valid_llm_json():
 
 
 @pytest.mark.asyncio
-async def test_hypothesize_fallback_on_invalid_llm_response():
+async def test_hypothesize_fallback_on_invalid_llm_response() -> None:
     """HYPOTHESIZE phase uses random fallback variants when LLM returns invalid JSON."""
     orch = _make_orchestrator(llm_response="Not JSON at all")
     with patch("services.knowledge.autonomous_loop.get_rag_config") as mock_cfg:
@@ -149,7 +149,7 @@ async def test_hypothesize_fallback_on_invalid_llm_response():
 
 
 @pytest.mark.asyncio
-async def test_hypothesize_strips_markdown_fences():
+async def test_hypothesize_strips_markdown_fences() -> None:
     """HYPOTHESIZE phase strips ```json ... ``` markdown fences before parsing."""
     fenced = "```json\n" + _VALID_VARIANTS_JSON + "\n```"
     orch = _make_orchestrator(llm_response=fenced)
@@ -171,7 +171,7 @@ async def test_hypothesize_strips_markdown_fences():
 
 
 @pytest.mark.asyncio
-async def test_experiment_returns_one_result_per_variant():
+async def test_experiment_returns_one_result_per_variant() -> None:
     """EXPERIMENT phase returns exactly one VariantResult per input variant."""
     orch = _make_orchestrator()
     variants = [
@@ -198,7 +198,7 @@ async def test_experiment_returns_one_result_per_variant():
 
 
 @pytest.mark.asyncio
-async def test_experiment_handles_scoring_exception():
+async def test_experiment_handles_scoring_exception() -> None:
     """EXPERIMENT phase wraps exceptions and returns zero-score result."""
     orch = _make_orchestrator()
     variants = [{"hybrid_weight_semantic": 0.7, "diversity_threshold": 0.3}]
@@ -216,7 +216,7 @@ async def test_experiment_handles_scoring_exception():
 
 
 @pytest.mark.asyncio
-async def test_analyze_stores_lessons_on_improvement():
+async def test_analyze_stores_lessons_on_improvement() -> None:
     """ANALYZE phase stores lessons when the best variant beats baseline."""
     from services.knowledge.autonomous_loop import VariantResult
 
@@ -241,7 +241,7 @@ async def test_analyze_stores_lessons_on_improvement():
 
 
 @pytest.mark.asyncio
-async def test_analyze_graceful_on_failure():
+async def test_analyze_graceful_on_failure() -> None:
     """ANALYZE phase returns 0 and doesn't raise on AnalyzerService failure."""
     from services.knowledge.autonomous_loop import VariantResult
 
@@ -258,7 +258,7 @@ async def test_analyze_graceful_on_failure():
 
 
 @pytest.mark.asyncio
-async def test_analyze_generates_lessons_when_all_variants_regress():
+async def test_analyze_generates_lessons_when_all_variants_regress() -> None:
     """ANALYZE must produce lessons even when every variant scores below baseline.
 
     Regression path: score_delta < 0 → floored at _MIN_SCORE_DELTA so the
@@ -304,7 +304,7 @@ async def test_analyze_generates_lessons_when_all_variants_regress():
 
 
 @pytest.mark.asyncio
-async def test_promote_dry_run_does_not_apply():
+async def test_promote_dry_run_does_not_apply() -> None:
     """PROMOTE must NOT mutate RAGConfig when dry_run=True."""
     from services.knowledge.autonomous_loop import VariantResult
 
@@ -319,7 +319,7 @@ async def test_promote_dry_run_does_not_apply():
 
 
 @pytest.mark.asyncio
-async def test_promote_applies_when_above_threshold():
+async def test_promote_applies_when_above_threshold() -> None:
     """PROMOTE applies params when improvement exceeds threshold and dry_run=False."""
     from services.knowledge.autonomous_loop import VariantResult
 
@@ -339,7 +339,7 @@ async def test_promote_applies_when_above_threshold():
 
 
 @pytest.mark.asyncio
-async def test_promote_stores_pending_when_below_threshold():
+async def test_promote_stores_pending_when_below_threshold() -> None:
     """PROMOTE stores pending approval variant when below auto-promote threshold."""
     from services.knowledge.autonomous_loop import VariantResult
 
@@ -356,7 +356,7 @@ async def test_promote_stores_pending_when_below_threshold():
 
 
 @pytest.mark.asyncio
-async def test_promote_never_promotes_degradation():
+async def test_promote_never_promotes_degradation() -> None:
     """PROMOTE must return False when best score is <= baseline (guardrail)."""
     from services.knowledge.autonomous_loop import VariantResult
 
@@ -376,7 +376,7 @@ async def test_promote_never_promotes_degradation():
 
 
 @pytest.mark.asyncio
-async def test_approve_pending_applies_and_clears():
+async def test_approve_pending_applies_and_clears() -> None:
     """approve_pending() applies the staged variant, clears in-memory, and removes Redis key."""
     orch = _make_orchestrator(dry_run=False)
     orch._pending_approval = {"hybrid_weight_semantic": 0.8}
@@ -400,7 +400,7 @@ async def test_approve_pending_applies_and_clears():
 
 
 @pytest.mark.asyncio
-async def test_approve_pending_returns_false_when_none():
+async def test_approve_pending_returns_false_when_none() -> None:
     """approve_pending() returns False when there is no pending variant."""
     orch = _make_orchestrator()
     result = await orch.approve_pending()
@@ -412,12 +412,12 @@ async def test_approve_pending_returns_false_when_none():
 # ---------------------------------------------------------------------------
 
 
-def test_should_stop_false_initially():
+def test_should_stop_false_initially() -> None:
     orch = _make_orchestrator()
     assert orch.should_stop() is False
 
 
-def test_should_stop_true_after_max_rounds():
+def test_should_stop_true_after_max_rounds() -> None:
     orch = _make_orchestrator()
     orch._no_improvement_count = orch.max_no_improvement_rounds
     assert orch.should_stop() is True
@@ -428,7 +428,7 @@ def test_should_stop_true_after_max_rounds():
 # ---------------------------------------------------------------------------
 
 
-def test_get_status_returns_loop_status_object():
+def test_get_status_returns_loop_status_object() -> None:
     orch = _make_orchestrator()
     with patch("services.knowledge.autonomous_loop.get_rag_config") as mock_cfg:
         cfg = MagicMock()
@@ -450,7 +450,7 @@ def test_get_status_returns_loop_status_object():
 
 
 @pytest.mark.asyncio
-async def test_run_once_dry_run_produces_record():
+async def test_run_once_dry_run_produces_record() -> None:
     """Full run_once() in dry-run returns a LoopRunRecord without mutating config."""
     orch = _make_orchestrator(
         dry_run=True,
@@ -487,7 +487,7 @@ async def test_run_once_dry_run_produces_record():
 
 
 @pytest.mark.asyncio
-async def test_run_once_appends_to_history():
+async def test_run_once_appends_to_history() -> None:
     """run_once() appends the record to the internal history list."""
     orch = _make_orchestrator(dry_run=True, llm_response=_VALID_VARIANTS_JSON)
     orch._evaluator.score_variant = AsyncMock(return_value=0.6)
@@ -516,7 +516,7 @@ async def test_run_once_appends_to_history():
 
 
 @pytest.mark.asyncio
-async def test_promote_stores_pending_in_redis():
+async def test_promote_stores_pending_in_redis() -> None:
     """_phase_promote persists pending_approval to Redis when below auto-promote threshold."""
     from services.knowledge.autonomous_loop import VariantResult
 
@@ -546,7 +546,7 @@ async def test_promote_stores_pending_in_redis():
 
 
 @pytest.mark.asyncio
-async def test_reject_pending_clears_in_memory_and_redis():
+async def test_reject_pending_clears_in_memory_and_redis() -> None:
     """reject_pending() clears _pending_approval in-memory and deletes the Redis key."""
     orch = _make_orchestrator()
     orch._pending_approval = {"hybrid_weight_semantic": 0.75}
@@ -564,7 +564,7 @@ async def test_reject_pending_clears_in_memory_and_redis():
 
 
 @pytest.mark.asyncio
-async def test_reject_pending_returns_false_when_none():
+async def test_reject_pending_returns_false_when_none() -> None:
     """reject_pending() returns False when there is no pending variant."""
     orch = _make_orchestrator()
     result = await orch.reject_pending()
@@ -572,7 +572,7 @@ async def test_reject_pending_returns_false_when_none():
 
 
 @pytest.mark.asyncio
-async def test_restore_state_loads_from_redis():
+async def test_restore_state_loads_from_redis() -> None:
     """restore_state() reads persisted pending_approval from Redis and restores in-memory."""
     orch = _make_orchestrator()
     stored_params = {"hybrid_weight_semantic": 0.8, "diversity_threshold": 0.4}
@@ -589,7 +589,7 @@ async def test_restore_state_loads_from_redis():
 
 
 @pytest.mark.asyncio
-async def test_restore_state_no_op_when_redis_empty():
+async def test_restore_state_no_op_when_redis_empty() -> None:
     """restore_state() leaves _pending_approval as None when Redis key is absent."""
     orch = _make_orchestrator()
 
@@ -605,7 +605,7 @@ async def test_restore_state_no_op_when_redis_empty():
 
 
 @pytest.mark.asyncio
-async def test_restore_state_graceful_on_redis_failure():
+async def test_restore_state_graceful_on_redis_failure() -> None:
     """restore_state() silently skips when Redis is unavailable."""
     orch = _make_orchestrator()
 
@@ -623,19 +623,19 @@ async def test_restore_state_graceful_on_redis_failure():
 # ---------------------------------------------------------------------------
 
 
-def test_running_starts_false():
+def test_running_starts_false() -> None:
     """_running is False immediately after construction."""
     orch = _make_orchestrator()
     assert orch._running is False
 
 
 @pytest.mark.asyncio
-async def test_running_true_during_run_once(monkeypatch):
+async def test_running_true_during_run_once(monkeypatch) -> None:
     """_running is True while run_once() is executing."""
     orch = _make_orchestrator()
     running_during = []
 
-    async def fake_phase_learn(_run_id):
+    async def fake_phase_learn(_run_id) -> None:
         running_during.append(orch._running)
         raise RuntimeError("stop early")
 
@@ -650,7 +650,7 @@ async def test_running_true_during_run_once(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_running_false_after_run_once():
+async def test_running_false_after_run_once() -> None:
     """_running is reset to False after run_once() completes."""
     orch = _make_orchestrator()
 
@@ -665,7 +665,7 @@ async def test_running_false_after_run_once():
 
 
 @pytest.mark.asyncio
-async def test_get_loop_orchestrator_returns_singleton_when_running():
+async def test_get_loop_orchestrator_returns_singleton_when_running() -> None:
     """get_loop_runner() returns existing instance when _running=True."""
     import services.knowledge.autonomous_loop as mod
 
@@ -682,7 +682,7 @@ async def test_get_loop_orchestrator_returns_singleton_when_running():
 
 
 @pytest.mark.asyncio
-async def test_get_loop_orchestrator_replaces_when_not_running():
+async def test_get_loop_orchestrator_replaces_when_not_running() -> None:
     """get_loop_runner() replaces the singleton when _running=False."""
     import services.knowledge.autonomous_loop as mod
 

@@ -11,7 +11,7 @@ and failed tool calls.
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 
@@ -56,7 +56,7 @@ class SkillGapDetector:
         """Initialize with the set of currently available tool names."""
         self.available_tools: Set[str] = set(available_tools)
 
-    def analyze_agent_output(self, text: str) -> Optional[GapResult]:
+    def analyze_agent_output(self, text: str) -> GapResult | None:
         """Scan agent output text for explicit gap signals."""
         lower = text.lower()
         for pattern in _EXPLICIT_PATTERNS:
@@ -70,7 +70,7 @@ class SkillGapDetector:
                 )
         return None
 
-    def analyze_failed_tool_call(self, tool_name: str, args: Dict[str, Any]) -> Optional[GapResult]:
+    def analyze_failed_tool_call(self, tool_name: str, args: Dict[str, Any]) -> GapResult | None:
         """Detect gap when a requested tool doesn't exist in available_tools."""
         if tool_name in self.available_tools:
             return None
@@ -80,7 +80,7 @@ class SkillGapDetector:
             context={"tool_name": tool_name, "args": args},
         )
 
-    def analyze_user_message(self, message: str) -> Optional[GapResult]:
+    def analyze_user_message(self, message: str) -> GapResult | None:
         """Detect when user requests something no existing skill covers."""
         lower = message.lower()
         for pattern in _USER_HINT_PATTERNS:

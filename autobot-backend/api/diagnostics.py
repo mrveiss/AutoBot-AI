@@ -17,8 +17,6 @@ Used for:
 - Debugging (why did this specific task fail?)
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, HTTPException, Query
 
 from api.schemas_system import (
@@ -37,7 +35,7 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/diagnostics", tags=["diagnostics"])
 
 # Singleton engine instance
-_engine: Optional[CausalInferenceEngine] = None
+_engine: CausalInferenceEngine | None = None
 
 
 def get_engine() -> CausalInferenceEngine:
@@ -135,7 +133,7 @@ async def health_check():
 )
 async def analyze_failure_get(
     task_id: str = Query(..., description="Task ID to analyze"),
-    error_description: Optional[str] = Query(None, description="Optional error description"),
+    error_description: str | None = Query(None, description="Optional error description"),
 ):
     """
     Alternative GET endpoint for failure analysis (useful for integration testing).

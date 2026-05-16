@@ -12,7 +12,7 @@ an in-memory AsyncMock that delegates to a simple dict/set store.
 
 import sys
 import types
-from typing import Dict, List, Optional
+from typing import Dict, List
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -81,7 +81,7 @@ class FakeRedis:
 
     # ---- hash ----
 
-    async def hset(self, key: str, mapping: Optional[Dict] = None, **kwargs) -> int:
+    async def hset(self, key: str, mapping: Dict | None = None, **kwargs) -> int:
         if key not in self._hashes:
             self._hashes[key] = {}
         if mapping:

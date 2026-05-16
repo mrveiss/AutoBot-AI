@@ -14,7 +14,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
@@ -138,7 +138,7 @@ class TLSCredentialService:
         )
         return credential
 
-    async def get_credential(self, db: AsyncSession, credential_id: str) -> Optional[NodeCredential]:
+    async def get_credential(self, db: AsyncSession, credential_id: str) -> NodeCredential | None:
         """Get a TLS credential by ID."""
         result = await db.execute(
             select(NodeCredential).where(
@@ -163,7 +163,7 @@ class TLSCredentialService:
         db: AsyncSession,
         credential_id: str,
         data: TLSCredentialUpdate,
-    ) -> Optional[NodeCredential]:
+    ) -> NodeCredential | None:
         """Update a TLS credential."""
         credential = await self.get_credential(db, credential_id)
         if not credential:
@@ -217,7 +217,7 @@ class TLSCredentialService:
         logger.info("Deleted TLS credential %s", credential_id)
         return True
 
-    async def get_certificates(self, db: AsyncSession, credential_id: str) -> Optional[Dict[str, str]]:
+    async def get_certificates(self, db: AsyncSession, credential_id: str) -> Dict[str, str] | None:
         """Get decrypted certificates for deployment.
 
         Returns dict with ca_cert, server_cert, server_key.
@@ -391,7 +391,7 @@ class TLSCredentialService:
 
         return new_credential
 
-    async def renew_certificate(self, db: AsyncSession, credential_id: str) -> Optional[NodeCredential]:
+    async def renew_certificate(self, db: AsyncSession, credential_id: str) -> NodeCredential | None:
         """
         Renew a TLS certificate.
 
@@ -427,7 +427,7 @@ class TLSCredentialService:
         )
         return new_credential
 
-    async def rotate_certificate(self, db: AsyncSession, credential_id: str) -> Optional[NodeCredential]:
+    async def rotate_certificate(self, db: AsyncSession, credential_id: str) -> NodeCredential | None:
         """
         Rotate a TLS certificate with full key rotation.
 
@@ -452,7 +452,7 @@ class TLSCredentialService:
 
 
 # Singleton instance
-_tls_credential_service: Optional[TLSCredentialService] = None
+_tls_credential_service: TLSCredentialService | None = None
 
 
 def get_tls_credential_service() -> TLSCredentialService:

@@ -70,7 +70,7 @@ return error_response(
 )
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse
@@ -91,8 +91,8 @@ class StandardResponse(BaseModel):
     """
 
     success: bool = Field(True, description="Whether the operation succeeded")
-    message: Optional[str] = Field(None, description="Human-readable message")
-    data: Optional[Any] = Field(None, description="Response data payload")
+    message: str | None = Field(None, description="Human-readable message")
+    data: Any | None = Field(None, description="Response data payload")
     timestamp: str = Field(
         default_factory=utc_timestamp,
         description="Response timestamp (ISO 8601)",
@@ -119,8 +119,8 @@ class ErrorResponse(BaseModel):
 
     success: bool = Field(False, description="Always false for errors")
     error: str = Field(..., description="Error message")
-    error_code: Optional[str] = Field(None, description="Machine-readable error code")
-    details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")
+    error_code: str | None = Field(None, description="Machine-readable error code")
+    details: Dict[str, Any] | None = Field(None, description="Additional error details")
     timestamp: str = Field(
         default_factory=utc_timestamp,
         description="Error timestamp (ISO 8601)",
@@ -145,7 +145,7 @@ class PaginatedResponse(BaseModel):
     """
 
     success: bool = Field(True, description="Whether the operation succeeded")
-    message: Optional[str] = Field(None, description="Human-readable message")
+    message: str | None = Field(None, description="Human-readable message")
     data: List[Any] = Field(..., description="List of items for current page")
     pagination: Dict[str, Any] = Field(
         ...,
@@ -174,7 +174,7 @@ class PaginatedResponse(BaseModel):
 
 def success_response(
     data: Any = None,
-    message: Optional[str] = None,
+    message: str | None = None,
     status_code: int = status.HTTP_200_OK,
     **kwargs,
 ) -> JSONResponse:
@@ -257,7 +257,7 @@ def paginated_response(
     total: int,
     page: int = 1,
     page_size: int = 20,
-    message: Optional[str] = None,
+    message: str | None = None,
     **kwargs,
 ) -> JSONResponse:
     """
@@ -301,8 +301,8 @@ def paginated_response(
 def error_response(
     message: str,
     status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR,
-    error_code: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
+    error_code: str | None = None,
+    details: Dict[str, Any] | None = None,
     **kwargs,
 ) -> JSONResponse:
     """
@@ -360,7 +360,7 @@ def error_response(
 
 def not_found(
     message: str = "Resource not found",
-    error_code: Optional[str] = None,
+    error_code: str | None = None,
     **kwargs,
 ) -> JSONResponse:
     """
@@ -387,8 +387,8 @@ def not_found(
 
 def bad_request(
     message: str = "Invalid request",
-    error_code: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
+    error_code: str | None = None,
+    details: Dict[str, Any] | None = None,
     **kwargs,
 ) -> JSONResponse:
     """
@@ -420,7 +420,7 @@ def bad_request(
 
 def unauthorized(
     message: str = "Unauthorized",
-    error_code: Optional[str] = None,
+    error_code: str | None = None,
     **kwargs,
 ) -> JSONResponse:
     """
@@ -447,7 +447,7 @@ def unauthorized(
 
 def forbidden(
     message: str = "Forbidden",
-    error_code: Optional[str] = None,
+    error_code: str | None = None,
     **kwargs,
 ) -> JSONResponse:
     """
@@ -477,8 +477,8 @@ def forbidden(
 
 def internal_error(
     message: str = "Internal server error",
-    error_code: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
+    error_code: str | None = None,
+    details: Dict[str, Any] | None = None,
     **kwargs,
 ) -> JSONResponse:
     """
@@ -510,8 +510,8 @@ def internal_error(
 
 def conflict(
     message: str = "Resource conflict",
-    error_code: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
+    error_code: str | None = None,
+    details: Dict[str, Any] | None = None,
     **kwargs,
 ) -> JSONResponse:
     """
@@ -544,8 +544,8 @@ def conflict(
 
 def service_unavailable(
     message: str = "Service temporarily unavailable",
-    error_code: Optional[str] = None,
-    retry_after: Optional[int] = None,
+    error_code: str | None = None,
+    retry_after: int | None = None,
     **kwargs,
 ) -> JSONResponse:
     """

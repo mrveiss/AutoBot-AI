@@ -28,7 +28,7 @@ Usage:
     await manager.add_message("user", "Hello!")
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from chat_history.analysis import AnalysisMixin
 from chat_history.base import ChatHistoryBase
@@ -103,10 +103,10 @@ class ChatHistoryManager(
 
     def __init__(
         self,
-        history_file: Optional[str] = None,
-        use_redis: Optional[bool] = None,
-        redis_host: Optional[str] = None,
-        redis_port: Optional[int] = None,
+        history_file: str | None = None,
+        use_redis: bool | None = None,
+        redis_host: str | None = None,
+        redis_port: int | None = None,
     ):
         """
         Initialize the ChatHistoryManager with all mixins.

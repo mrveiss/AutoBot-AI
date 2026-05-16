@@ -9,8 +9,6 @@ Detects insider threat indicators such as off-hours access and sensitive resourc
 Part of Issue #381 - God Class Refactoring
 """
 
-from typing import Optional
-
 from ..models import AnalysisContext, SecurityEvent, ThreatEvent
 from ..types import SENSITIVE_RESOURCE_KEYWORDS, ThreatCategory, ThreatLevel
 from .base import ThreatAnalyzer
@@ -89,7 +87,7 @@ class InsiderThreatAnalyzer(ThreatAnalyzer):
             ],
         )
 
-    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> Optional[ThreatEvent]:
+    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> ThreatEvent | None:
         """
         Detect insider threat indicators.
 

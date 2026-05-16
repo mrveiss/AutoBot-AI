@@ -13,8 +13,6 @@ enabling a unified knowledge system that combines:
 This eliminates the need for a separate AutoBotMemoryGraph system.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_knowledge import (
@@ -140,7 +138,7 @@ async def get_fact_relations(
     req: Request,
     fact_id: str,
     direction: str = Query("both", description="Direction: 'outgoing', 'incoming', or 'both'"),
-    relation_type: Optional[str] = Query(None, description="Filter by relation type"),
+    relation_type: str | None = Query(None, description="Filter by relation type"),
     include_details: bool = Query(False, description="Include full fact content for related facts"),
 ):
     """

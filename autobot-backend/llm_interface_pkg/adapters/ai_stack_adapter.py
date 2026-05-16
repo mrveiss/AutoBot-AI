@@ -8,7 +8,7 @@ Issue #1403: Routes LLM requests through AI Stack VM (.24).
 """
 
 import time
-from typing import List, Optional
+from typing import List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 class AIStackAdapter(AdapterBase):
     """Adapter wrapping the existing AIStackClient (#1403)."""
 
-    def __init__(self, config: Optional[AdapterConfig] = None):
+    def __init__(self, config: AdapterConfig | None = None):
         super().__init__("ai_stack", config)
         self._client = None
 

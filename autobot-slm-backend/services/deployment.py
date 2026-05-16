@@ -14,7 +14,7 @@ import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -347,7 +347,7 @@ class DeploymentService:
 
         return DeploymentResponse.model_validate(deployment)
 
-    async def get_deployment(self, db: AsyncSession, deployment_id: str) -> Optional[DeploymentResponse]:
+    async def get_deployment(self, db: AsyncSession, deployment_id: str) -> DeploymentResponse | None:
         """Get a deployment by ID."""
         result = await db.execute(select(Deployment).where(Deployment.deployment_id == deployment_id))
         deployment = result.scalar_one_or_none()
@@ -358,8 +358,8 @@ class DeploymentService:
     async def list_deployments(
         self,
         db: AsyncSession,
-        node_id: Optional[str] = None,
-        status: Optional[str] = None,
+        node_id: str | None = None,
+        status: str | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> Tuple[List[DeploymentResponse], int]:
@@ -385,7 +385,7 @@ class DeploymentService:
             total,
         )
 
-    async def cancel_deployment(self, db: AsyncSession, deployment_id: str) -> Optional[DeploymentResponse]:
+    async def cancel_deployment(self, db: AsyncSession, deployment_id: str) -> DeploymentResponse | None:
         """Cancel a pending or running deployment."""
         result = await db.execute(select(Deployment).where(Deployment.deployment_id == deployment_id))
         deployment = result.scalar_one_or_none()
@@ -410,7 +410,7 @@ class DeploymentService:
 
         return DeploymentResponse.model_validate(deployment)
 
-    async def rollback_deployment(self, db: AsyncSession, deployment_id: str) -> Optional[DeploymentResponse]:
+    async def rollback_deployment(self, db: AsyncSession, deployment_id: str) -> DeploymentResponse | None:
         """Rollback a completed deployment."""
         result = await db.execute(select(Deployment).where(Deployment.deployment_id == deployment_id))
         deployment = result.scalar_one_or_none()
@@ -444,7 +444,7 @@ class DeploymentService:
 
     async def retry_deployment(
         self, db: AsyncSession, deployment_id: str, triggered_by: str
-    ) -> Optional[DeploymentResponse]:
+    ) -> DeploymentResponse | None:
         """Retry a failed deployment by creating a new deployment with same config."""
         result = await db.execute(select(Deployment).where(Deployment.deployment_id == deployment_id))
         original = result.scalar_one_or_none()
@@ -482,7 +482,7 @@ class DeploymentService:
 
     async def _get_deployment_and_node(
         self, db: AsyncSession, deployment_id: str
-    ) -> Tuple[Optional[Deployment], Optional[Node]]:
+    ) -> Tuple[Deployment | None, Node | None]:
         """Get deployment and node records.
 
         Helper for _run_deployment (Issue #665).
@@ -498,7 +498,7 @@ class DeploymentService:
 
         return deployment, node
 
-    def _get_ssh_credentials(self, node: Node) -> Tuple[str, int, Optional[str]]:
+    def _get_ssh_credentials(self, node: Node) -> Tuple[str, int, str | None]:
         """Extract and decrypt SSH credentials from node.
 
         Helper for _run_deployment (Issue #665).
@@ -633,9 +633,9 @@ class DeploymentService:
     def _add_ssh_options_to_command(
         self,
         cmd: List[str],
-        ssh_user: Optional[str],
-        ssh_port: Optional[int],
-        ssh_password: Optional[str],
+        ssh_user: str | None,
+        ssh_port: int | None,
+        ssh_password: str | None,
     ) -> None:
         """Add SSH-related options to ansible command.
 
@@ -676,10 +676,10 @@ class DeploymentService:
         self,
         host: str,
         roles: List[str],
-        ssh_user: Optional[str] = None,
-        ssh_port: Optional[int] = None,
-        ssh_password: Optional[str] = None,
-        playbook: Optional[str] = None,
+        ssh_user: str | None = None,
+        ssh_port: int | None = None,
+        ssh_password: str | None = None,
+        playbook: str | None = None,
     ) -> str:
         """
         Execute an Ansible playbook for the given roles.
@@ -723,7 +723,7 @@ class DeploymentService:
 
         return output
 
-    def _get_effective_password(self, node: Node, ssh_password: Optional[str]) -> Optional[str]:
+    def _get_effective_password(self, node: Node, ssh_password: str | None) -> str | None:
         """Get SSH password from parameter or decrypt from node storage.
 
         Helper for enroll_node (Issue #665).
@@ -782,7 +782,7 @@ class DeploymentService:
 
         logger.info("Enrollment completed for node %s - auth_method set to key", node.node_id)
 
-    async def enroll_node(self, db: AsyncSession, node_id: str, ssh_password: Optional[str] = None) -> Tuple[bool, str]:
+    async def enroll_node(self, db: AsyncSession, node_id: str, ssh_password: str | None = None) -> Tuple[bool, str]:
         """
         Enroll a node by deploying the SLM agent.
 
@@ -902,7 +902,7 @@ class DeploymentService:
         node_id: str,
         ssh_user: str,
         ssh_port: int,
-        ssh_password: Optional[str] = None,
+        ssh_password: str | None = None,
     ) -> str:
         """Execute the SLM agent enrollment playbook."""
         playbook_path = self.ansible_dir / "enroll.yml"

@@ -21,7 +21,7 @@ Centralized as part of Issue #2670.
 import logging
 import os
 from enum import Enum
-from typing import Dict, Optional
+from typing import Dict
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _resolve_yaml_path() -> Optional[str]:
+def _resolve_yaml_path() -> str | None:
     """Find redis-databases.yaml in known locations."""
     possible_paths = [
         # Relative to this file: autobot_shared/redis_management/ → ../../
@@ -58,7 +58,7 @@ def _resolve_yaml_path() -> Optional[str]:
     return None
 
 
-def load_database_mapping_from_yaml() -> Optional[Dict[str, int]]:
+def load_database_mapping_from_yaml() -> Dict[str, int] | None:
     """Load database name→number mapping from redis-databases.yaml.
 
     Returns:

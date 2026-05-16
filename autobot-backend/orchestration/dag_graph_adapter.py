@@ -35,7 +35,7 @@ state and converts it back to the legacy execution_context dict shape.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Set
 
 from autobot_shared.logging_manager import get_logger
 
@@ -164,7 +164,7 @@ def _mark_descendants_skipped(
 def build_dag_graph(
     dag: WorkflowDAG,
     step_executor: StepExecutorCallback,
-    retry_config: Optional[NodeRetryConfig] = None,
+    retry_config: NodeRetryConfig | None = None,
 ) -> CompiledGraph:
     """Convert *dag* into a ``CompiledGraph`` executable by ``GraphRunner``.
 
@@ -303,8 +303,8 @@ class DAGGraphExecutor:
     def __init__(
         self,
         step_executor_callback: StepExecutorCallback,
-        emitter: Optional[StepEventEmitter] = None,
-        retry_config: Optional[NodeRetryConfig] = None,
+        emitter: StepEventEmitter | None = None,
+        retry_config: NodeRetryConfig | None = None,
         enable_checkpoints: bool = True,
     ) -> None:
         self._step_executor = step_executor_callback
@@ -316,7 +316,7 @@ class DAGGraphExecutor:
         self,
         dag: WorkflowDAG,
         workflow_id: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ) -> DAGExecutionContext:
         """Execute *dag* using ``GraphRunner``.
 

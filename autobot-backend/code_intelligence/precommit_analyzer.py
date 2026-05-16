@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -352,8 +352,8 @@ class PrecommitAnalyzer:
 
     def __init__(
         self,
-        project_root: Optional[str] = None,
-        checks: Optional[Dict[str, CheckDefinition]] = None,
+        project_root: str | None = None,
+        checks: Dict[str, CheckDefinition] | None = None,
         fast_mode: bool = False,
         parallel: bool = True,
         max_workers: int = 4,
@@ -386,7 +386,7 @@ class PrecommitAnalyzer:
             logger.warning("Failed to get staged files: %s", e)
             return []
 
-    def get_file_content(self, filepath: str) -> Optional[str]:
+    def get_file_content(self, filepath: str) -> str | None:
         """Get content of a staged file."""
         try:
             # Try to get staged content first (what will be committed)
@@ -479,7 +479,7 @@ class PrecommitAnalyzer:
         filepath: str,
         line_num: int,
         snippet: str,
-        column: Optional[int] = None,
+        column: int | None = None,
     ) -> CheckResult:
         """Create a CheckResult instance for a pattern match. Issue #620."""
         return CheckResult(
@@ -668,13 +668,13 @@ class PrecommitAnalyzer:
         """Get all registered checks."""
         return list(self.checks.values())
 
-    def get_check(self, check_id: str) -> Optional[CheckDefinition]:
+    def get_check(self, check_id: str) -> CheckDefinition | None:
         """Get a specific check by ID."""
         return self.checks.get(check_id)
 
 
 def analyze_precommit(
-    directory: Optional[str] = None,
+    directory: str | None = None,
     fast_mode: bool = True,
     parallel: bool = True,
 ) -> Dict[str, Any]:

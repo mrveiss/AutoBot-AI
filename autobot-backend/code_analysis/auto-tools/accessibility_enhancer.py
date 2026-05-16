@@ -15,7 +15,7 @@ import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 from autobot_shared.ssot_config import config
 
@@ -210,7 +210,7 @@ class AccessibilityFixAgent:
         shutil.copy2(file_path, backup_path)
         return backup_path
 
-    def analyze_button_content(self, button_html: str) -> Optional[str]:
+    def analyze_button_content(self, button_html: str) -> str | None:
         """Analyze button content to generate appropriate label"""
 
         # Check for existing aria-label or title

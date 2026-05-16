@@ -8,7 +8,7 @@ Pydantic schemas for Multi-Factor Authentication endpoints.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 
 from pydantic import BaseModel, Field
 
@@ -39,7 +39,7 @@ class MFAStatusResponse(BaseModel):
     enabled: bool
     method: str = "totp"
     backup_codes_remaining: int = 0
-    last_verified_at: Optional[datetime] = None
+    last_verified_at: datetime | None = None
 
 
 class BackupCodesResponse(BaseModel):

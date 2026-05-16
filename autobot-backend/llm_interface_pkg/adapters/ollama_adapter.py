@@ -11,7 +11,7 @@ diagnostic method used by ``api/adapters.py``.
 """
 
 import time
-from typing import List, Optional
+from typing import List
 
 import aiohttp
 
@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 class OllamaAdapter(AdapterBase):
     """Adapter wrapping the canonical OllamaProvider (#1403)."""
 
-    def __init__(self, config: Optional[AdapterConfig] = None):
+    def __init__(self, config: AdapterConfig | None = None):
         super().__init__("ollama", config)
         self._provider = None
 

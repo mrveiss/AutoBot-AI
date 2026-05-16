@@ -24,7 +24,7 @@ Architecture:
 
 import hashlib
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from langchain_core.runnables import RunnableConfig
 
@@ -106,8 +106,8 @@ class ChatState(TypedDict, total=False):
     agentic_search_queries: List[str]
 
     # Command approval (interrupt-based)
-    pending_approval: Optional[Dict[str, Any]]
-    approval_decision: Optional[Dict[str, Any]]
+    pending_approval: Dict[str, Any] | None
+    approval_decision: Dict[str, Any] | None
 
     # Output messages streamed to frontend
     workflow_messages: List[Dict[str, Any]]
@@ -124,7 +124,7 @@ class ChatState(TypedDict, total=False):
     tool_loop_warning: str
 
     # Error tracking
-    error: Optional[str]
+    error: str | None
 
 
 # ---------------------------------------------------------------------------

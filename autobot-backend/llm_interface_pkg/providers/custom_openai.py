@@ -20,7 +20,7 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 from __future__ import annotations
 
 import time
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -44,8 +44,8 @@ class CustomOpenAIProvider(BaseProvider):
 
     def __init__(
         self,
-        settings: Optional[Dict[str, Any]] = None,
-        instance_name: Optional[str] = None,
+        settings: Dict[str, Any] | None = None,
+        instance_name: str | None = None,
     ) -> None:
         super().__init__(settings)
         if instance_name:

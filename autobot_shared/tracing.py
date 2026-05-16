@@ -32,8 +32,6 @@ Configuration via environment variables:
 
 import logging
 import os
-from typing import Optional
-
 logger = logging.getLogger(__name__)
 
 # Lazy-loaded OpenTelemetry imports (graceful degradation if not installed)
@@ -58,7 +56,7 @@ def _get_sample_rate() -> float:
         return 0.1
 
 
-def _create_tracer_provider(service_name: str, service_version: Optional[str]):
+def _create_tracer_provider(service_name: str, service_version: str | None):
     """
     Create and configure the TracerProvider with resource, sampler, and exporter.
 
@@ -105,7 +103,7 @@ def _create_tracer_provider(service_name: str, service_version: Optional[str]):
 
 def init_tracing(
     service_name: str = "autobot-backend",
-    service_version: Optional[str] = None,
+    service_version: str | None = None,
 ) -> bool:
     """
     Initialize OpenTelemetry tracing for a service.
@@ -219,20 +217,20 @@ def _get_noop_tracer():
 class _NoopSpan:
     """No-op span for when tracing is unavailable."""
 
-    def set_attribute(self, key, value):
+    def set_attribute(self, key, value) -> None:
         """No-op."""
 
-    def set_status(self, status):
+    def set_status(self, status) -> None:
         """No-op."""
 
-    def record_exception(self, exception):
+    def record_exception(self, exception) -> None:
         """No-op."""
 
     def __enter__(self):
         """Context manager entry."""
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args) -> None:
         """Context manager exit."""
 
 

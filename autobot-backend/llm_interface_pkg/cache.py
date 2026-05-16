@@ -14,7 +14,7 @@ Provides significant performance improvements:
 import asyncio
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import xxhash
 
@@ -32,7 +32,7 @@ class CachedResponse:
 
     content: str
     model: str
-    tokens_used: Optional[int] = None
+    tokens_used: int | None = None
     processing_time: float = 0.0
     metadata: Dict[str, Any] = None
 
@@ -175,7 +175,7 @@ class LLMResponseCache:
             metadata=data.get("metadata", {}),
         )
 
-    async def _check_l2_cache(self, cache_key: str) -> Optional[CachedResponse]:
+    async def _check_l2_cache(self, cache_key: str) -> CachedResponse | None:
         """
         Check L2 Redis cache and promote to L1 on hit. Issue #620.
 
@@ -199,7 +199,7 @@ class LLMResponseCache:
         logger.debug(f"L2 Redis cache hit: {cache_key[:24]}...")
         return response
 
-    async def get(self, cache_key: str) -> Optional[CachedResponse]:
+    async def get(self, cache_key: str) -> CachedResponse | None:
         """
         Get cached response with L1/L2 lookup. Issue #620.
 

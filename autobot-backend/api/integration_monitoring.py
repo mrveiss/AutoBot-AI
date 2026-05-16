@@ -9,7 +9,7 @@ like Datadog and New Relic.
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -110,7 +110,7 @@ async def list_providers() -> Dict[str, List[Dict[str, str]]]:
 async def list_hosts(
     provider: str,
     api_key: str = Query(..., description="API key"),
-    app_key: Optional[str] = Query(None, description="Application key (Datadog)"),
+    app_key: str | None = Query(None, description="Application key (Datadog)"),
 ) -> Dict[str, Any]:
     """List monitored hosts or applications.
 
@@ -153,8 +153,8 @@ async def query_metrics(
     provider: str,
     request: MetricsQueryRequest,
     api_key: str = Query(..., description="API key"),
-    app_key: Optional[str] = Query(None, description="Application key (Datadog)"),
-    account_id: Optional[str] = Query(None, description="Account ID (New Relic)"),
+    app_key: str | None = Query(None, description="Application key (Datadog)"),
+    account_id: str | None = Query(None, description="Account ID (New Relic)"),
 ) -> Dict[str, Any]:
     """Query metrics from monitoring provider.
 
@@ -196,7 +196,7 @@ async def query_metrics(
 async def list_alerts(
     provider: str,
     api_key: str = Query(..., description="API key"),
-    app_key: Optional[str] = Query(None, description="Application key (Datadog)"),
+    app_key: str | None = Query(None, description="Application key (Datadog)"),
 ) -> Dict[str, Any]:
     """List active alerts and monitors.
 
@@ -239,7 +239,7 @@ async def get_events(
     provider: str,
     request: EventsQueryRequest,
     api_key: str = Query(..., description="API key"),
-    app_key: Optional[str] = Query(None, description="Application key (Datadog)"),
+    app_key: str | None = Query(None, description="Application key (Datadog)"),
 ) -> Dict[str, Any]:
     """Get recent events from monitoring provider.
 
@@ -319,8 +319,8 @@ def _build_config(provider: str, request: MonitoringConnectionTestRequest) -> In
 def _build_config_from_params(
     provider: str,
     api_key: str,
-    app_key: Optional[str],
-    account_id: Optional[str],
+    app_key: str | None,
+    account_id: str | None,
 ) -> IntegrationConfig:
     """Build IntegrationConfig from query parameters.
 

@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,13 +50,13 @@ class ServiceDefinition:
     default_port_env: str  # Environment variable name for default port
     default_host: str  # Fallback host if env not set
     default_port: int  # Fallback port if env not set
-    systemd_service: Optional[str] = None  # Systemd service name if applicable
-    start_command: Optional[str] = None  # Custom start command
-    stop_command: Optional[str] = None  # Custom stop command
-    health_check_path: Optional[str] = None  # HTTP health check path
+    systemd_service: str | None = None  # Systemd service name if applicable
+    start_command: str | None = None  # Custom start command
+    stop_command: str | None = None  # Custom stop command
+    health_check_path: str | None = None  # HTTP health check path
     health_check_type: str = "http"  # http, redis, ssh
     requires_sudo: bool = True
-    working_dir: Optional[str] = None
+    working_dir: str | None = None
     description: str = ""
     dependencies: List[str] = field(default_factory=list)
 
@@ -235,7 +235,7 @@ class ServiceRegistry:
         """
         return _SERVICE_DEFINITIONS.copy()
 
-    def get_service(self, name: str) -> Optional[ServiceDefinition]:
+    def get_service(self, name: str) -> ServiceDefinition | None:
         """Get service definition by name."""
         return self._services.get(name)
 
@@ -280,8 +280,8 @@ class ServiceOrchestrator:
         self._ssh_semaphore = asyncio.Semaphore(self._SSH_MAX_CONCURRENT)
 
     async def _resolve_target_node(
-        self, db: AsyncSession, service_name: str, node_id: Optional[str]
-    ) -> Tuple[Optional[str], Optional[Any], Optional[str]]:
+        self, db: AsyncSession, service_name: str, node_id: str | None
+    ) -> Tuple[str | None, Any | None, str | None]:
         """Resolve target host and node for a service action.
 
         Helper for start_service (#825).
@@ -305,7 +305,7 @@ class ServiceOrchestrator:
         self,
         db: AsyncSession,
         service_name: str,
-        node_id: Optional[str] = None,
+        node_id: str | None = None,
         force: bool = False,
     ) -> Tuple[bool, str]:
         """
@@ -367,7 +367,7 @@ class ServiceOrchestrator:
         self,
         db: AsyncSession,
         service_name: str,
-        node_id: Optional[str] = None,
+        node_id: str | None = None,
     ) -> Tuple[bool, str]:
         """
         Stop a service on a node.
@@ -422,7 +422,7 @@ class ServiceOrchestrator:
         self,
         db: AsyncSession,
         service_name: str,
-        node_id: Optional[str] = None,
+        node_id: str | None = None,
     ) -> Tuple[bool, str]:
         """
         Restart a service on a node.
@@ -577,7 +577,7 @@ class ServiceOrchestrator:
         return status
 
     async def start_all_services(
-        self, db: AsyncSession, exclude: Optional[List[str]] = None
+        self, db: AsyncSession, exclude: List[str] | None = None
     ) -> Dict[str, Tuple[bool, str]]:
         """
         Start all AutoBot services in dependency order.
@@ -617,7 +617,7 @@ class ServiceOrchestrator:
         return results
 
     async def stop_all_services(
-        self, db: AsyncSession, exclude: Optional[List[str]] = None
+        self, db: AsyncSession, exclude: List[str] | None = None
     ) -> Dict[str, Tuple[bool, str]]:
         """
         Stop all AutoBot services in reverse dependency order.
@@ -656,12 +656,12 @@ class ServiceOrchestrator:
     # Private helper methods
     # =========================================================================
 
-    async def _get_node(self, db: AsyncSession, node_id: str) -> Optional[Node]:
+    async def _get_node(self, db: AsyncSession, node_id: str) -> Node | None:
         """Get node by ID."""
         result = await db.execute(select(Node).where(Node.node_id == node_id))
         return result.scalar_one_or_none()
 
-    async def _find_node_by_ip(self, db: AsyncSession, ip_address: str) -> Optional[Node]:
+    async def _find_node_by_ip(self, db: AsyncSession, ip_address: str) -> Node | None:
         """Find node by IP address."""
         result = await db.execute(select(Node).where(Node.ip_address == ip_address))
         return result.scalar_one_or_none()
@@ -752,7 +752,7 @@ class ServiceOrchestrator:
         self,
         host: str,
         port: int,
-        path: Optional[str],
+        path: str | None,
         check_type: str,
     ) -> bool:
         """Check if a service is healthy."""

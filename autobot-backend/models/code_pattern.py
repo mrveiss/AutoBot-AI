@@ -8,7 +8,7 @@ Stores extracted code patterns for ML training and completion suggestions.
 """
 
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict
 
 from sqlalchemy import DateTime, Float, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -35,16 +35,16 @@ class CodePattern(Base):
         String(50), nullable=False, index=True
     )  # function, error_handling, api_usage, etc.
     language: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
-    category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    category: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
 
     # Pattern content
     signature: Mapped[str] = mapped_column(Text, nullable=False)
-    body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    context: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    context: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # Pattern metadata
-    file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    line_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    line_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     frequency: Mapped[int] = mapped_column(Integer, default=1, index=True)
 
     # Usage statistics (for learning loop - Issue #905)
@@ -57,7 +57,7 @@ class CodePattern(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
-    last_seen: Mapped[Optional[datetime]] = mapped_column(
+    last_seen: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=True
     )
 
@@ -90,7 +90,7 @@ class CodePattern(Base):
         }
 
     @classmethod
-    def get_redis_key(cls, pattern_type: str, language: str, category: Optional[str] = None) -> str:
+    def get_redis_key(cls, pattern_type: str, language: str, category: str | None = None) -> str:
         """Generate Redis key for caching hot patterns."""
         if category:
             return f"patterns:{language}:{pattern_type}:{category}"

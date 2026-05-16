@@ -10,7 +10,7 @@ removing, searching, and managing tags on facts.
 
 import asyncio
 import json
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
 if TYPE_CHECKING:
     import aioredis
@@ -46,7 +46,7 @@ class TagsMixin:
         """Normalize tags to lowercase and strip whitespace (Issue #398: extracted)."""
         return [t.lower().strip() for t in tags if t.strip()]
 
-    async def _get_fact_metadata(self, fact_id: str) -> tuple[bool, Optional[dict]]:
+    async def _get_fact_metadata(self, fact_id: str) -> tuple[bool, dict | None]:
         """Get fact metadata, returns (exists, metadata) (Issue #398: extracted)."""
         fact_key = f"fact:{fact_id}"
         exists = await asyncio.to_thread(self.redis_client.exists, fact_key)
@@ -474,7 +474,7 @@ class TagsMixin:
         for source_tag in source_tags:
             await asyncio.to_thread(self.redis_client.delete, f"tag:{source_tag}")
 
-    def _validate_merge_inputs(self, source_tags: List[str], target_tag: str) -> tuple[Optional[Dict], List[str], str]:
+    def _validate_merge_inputs(self, source_tags: List[str], target_tag: str) -> tuple[Dict | None, List[str], str]:
         """Validate merge inputs, returns (error_response, normalized_sources, target)."""
         source_tags = self._normalize_tags(source_tags)
         target_tag = target_tag.lower().strip()
@@ -663,7 +663,7 @@ class TagsMixin:
     ]
 
     def _build_style_data(
-        self, color: Optional[str], icon: Optional[str], description: Optional[str]
+        self, color: str | None, icon: str | None, description: str | None
     ) -> Dict[str, str]:
         """Build style data dict from optional params (Issue #398: extracted)."""
         style_data = {}
@@ -678,9 +678,9 @@ class TagsMixin:
     async def update_tag_style(
         self,
         tag: str,
-        color: Optional[str] = None,
-        icon: Optional[str] = None,
-        description: Optional[str] = None,
+        color: str | None = None,
+        icon: str | None = None,
+        description: str | None = None,
     ) -> Dict[str, Any]:
         """Update tag styling (Issue #398: refactored)."""
         try:

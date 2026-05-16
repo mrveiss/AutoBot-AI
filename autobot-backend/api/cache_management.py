@@ -9,7 +9,7 @@ Consolidates all cache-related endpoints (Issue #1286).
 
 import asyncio
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -331,7 +331,7 @@ async def warmup_caches():
     error_code_prefix="CACHE_MANAGEMENT",
 )
 async def get_advanced_cache_stats(
-    data_type: Optional[str] = Query(None),
+    data_type: str | None = Query(None),
     current_user: dict = Depends(get_current_user),
 ):
     """Get cache statistics - global or for specific data type.
@@ -418,7 +418,7 @@ async def warm_cache(
 async def invalidate_cache(
     data_type: str,
     key: str = Query("*", description="Key pattern to invalidate (* for all)"),
-    user_id: Optional[str] = Query(None, description="User ID for user-scoped data"),
+    user_id: str | None = Query(None, description="User ID for user-scoped data"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Invalidate cache entries.
@@ -589,7 +589,7 @@ async def _warm_data_type(data_type: str, force_refresh: bool = False) -> bool:
 
 @register_health_probe("cache")
 async def probe_cache(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for cache-manager health."""
     try:

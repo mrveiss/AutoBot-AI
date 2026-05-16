@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
@@ -95,7 +95,7 @@ class VectorSearchConfig:
     max_vectors_in_memory: int = 1_000_000
 
     # Persistence
-    index_path: Optional[str] = None
+    index_path: str | None = None
     auto_save: bool = True
     save_interval_seconds: int = 300
 
@@ -108,7 +108,7 @@ class SearchResult:
     score: float
     distance: float
     metadata: Dict[str, Any] = field(default_factory=dict)
-    content: Optional[str] = None
+    content: str | None = None
 
 
 @dataclass
@@ -134,8 +134,8 @@ class GPUVectorIndex:
     def __init__(self, config: VectorSearchConfig):
         """Initialize GPU vector index."""
         self.config = config
-        self.index: Optional[Any] = None
-        self.gpu_resources: Optional[Any] = None
+        self.index: Any | None = None
+        self.gpu_resources: Any | None = None
         self.id_map: Dict[int, str] = {}  # FAISS internal ID → document ID
         self.reverse_id_map: Dict[str, int] = {}  # document ID → FAISS internal ID
         self.next_id: int = 0
@@ -144,7 +144,7 @@ class GPUVectorIndex:
 
         # Backend tracking
         self.backend = SearchBackend.CHROMADB  # Default fallback
-        self.last_save_time: Optional[datetime] = None
+        self.last_save_time: datetime | None = None
 
     async def initialize(self) -> bool:
         """Initialize the FAISS index with GPU support if available."""
@@ -587,7 +587,7 @@ class GPUVectorIndex:
 
         return removed
 
-    async def save(self, path: Optional[str] = None) -> bool:
+    async def save(self, path: str | None = None) -> bool:
         """Save index to disk."""
         save_path = path or self.config.index_path
         if not save_path:
@@ -679,7 +679,7 @@ class GPUVectorIndex:
         self.reverse_id_map = {v: int(k) for k, v in raw_map.items()}
         self.next_id = max(self.id_map.keys()) + 1 if self.id_map else 0
 
-    async def load(self, path: Optional[str] = None) -> bool:
+    async def load(self, path: str | None = None) -> bool:
         """Load index from disk."""
         load_path = path or self.config.index_path
         if not load_path:
@@ -751,8 +751,8 @@ class HybridVectorSearch(AsyncInitializable):
 
     def __init__(
         self,
-        chromadb_client: Optional[BaseClient] = None,
-        config: Optional[VectorSearchConfig] = None,
+        chromadb_client: BaseClient | None = None,
+        config: VectorSearchConfig | None = None,
     ):
         """Initialize hybrid search; FAISS/GPU init is deferred to _initialize_impl."""
         super().__init__(component_name="hybrid_vector_search")
@@ -775,8 +775,8 @@ class HybridVectorSearch(AsyncInitializable):
         self,
         embeddings: np.ndarray,
         doc_ids: List[str],
-        documents: Optional[List[str]] = None,
-        metadatas: Optional[List[Dict[str, Any]]] = None,
+        documents: List[str] | None = None,
+        metadatas: List[Dict[str, Any]] | None = None,
         collection_name: str = "default",
     ) -> int:
         """
@@ -825,7 +825,7 @@ class HybridVectorSearch(AsyncInitializable):
         query_embedding: np.ndarray,
         top_k: int = 10,
         collection_name: str = "default",
-        metadata_filter: Optional[Dict[str, Any]] = None,
+        metadata_filter: Dict[str, Any] | None = None,
         include_documents: bool = True,
     ) -> Tuple[List[SearchResult], SearchMetrics]:
         """
@@ -887,7 +887,7 @@ class HybridVectorSearch(AsyncInitializable):
         self,
         results: List[SearchResult],
         collection_name: str,
-        metadata_filter: Optional[Dict[str, Any]] = None,
+        metadata_filter: Dict[str, Any] | None = None,
     ) -> List[SearchResult]:
         """Fetch document content and metadata from ChromaDB."""
         try:
@@ -968,7 +968,7 @@ class HybridVectorSearch(AsyncInitializable):
         query_embedding: np.ndarray,
         top_k: int,
         collection_name: str,
-        metadata_filter: Optional[Dict[str, Any]] = None,
+        metadata_filter: Dict[str, Any] | None = None,
     ) -> Tuple[List[SearchResult], SearchMetrics]:
         """Fallback search using ChromaDB."""
         start_time = time.perf_counter()
@@ -1066,13 +1066,13 @@ class HybridVectorSearch(AsyncInitializable):
 
 
 # Singleton instance
-_hybrid_search: Optional[HybridVectorSearch] = None
+_hybrid_search: HybridVectorSearch | None = None
 _hybrid_search_lock = asyncio.Lock()
 
 
 async def get_hybrid_vector_search(
-    chromadb_client: Optional[BaseClient] = None,
-    config: Optional[VectorSearchConfig] = None,
+    chromadb_client: BaseClient | None = None,
+    config: VectorSearchConfig | None = None,
 ) -> HybridVectorSearch:
     """
     Get or create the singleton hybrid vector search instance.

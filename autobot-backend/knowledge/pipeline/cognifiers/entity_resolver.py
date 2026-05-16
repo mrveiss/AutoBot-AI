@@ -10,7 +10,7 @@ Phase 3 — Entity Resolution: Deduplicate entities across documents (e.g., "Aut
 """
 
 from difflib import SequenceMatcher
-from typing import Dict, Iterable, List, Optional, Set
+from typing import Dict, Iterable, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
@@ -118,7 +118,7 @@ class EntityResolver(BaseCognifier):
 
         return list(entity_map.values())
 
-    def _find_equivalent_entity(self, canonical_name: str, existing_keys: Iterable[str]) -> Optional[str]:
+    def _find_equivalent_entity(self, canonical_name: str, existing_keys: Iterable[str]) -> str | None:
         """
         Find an equivalent entity in existing entities (Issue #3395).
 
@@ -154,7 +154,7 @@ class EntityResolver(BaseCognifier):
 
         return None
 
-    def _find_synonym_match(self, canonical_name: str, existing_names: List[str]) -> Optional[str]:
+    def _find_synonym_match(self, canonical_name: str, existing_names: List[str]) -> str | None:
         """
         Find entity match using predefined synonyms (Issue #3395).
 
@@ -174,7 +174,7 @@ class EntityResolver(BaseCognifier):
 
         return None
 
-    def _find_fuzzy_match(self, canonical_name: str, existing_names: List[str]) -> Optional[str]:
+    def _find_fuzzy_match(self, canonical_name: str, existing_names: List[str]) -> str | None:
         """
         Find entity match using string similarity (Issue #3395).
 

@@ -29,7 +29,7 @@ import asyncio
 import importlib
 import sys
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import config as ssot_config
@@ -344,7 +344,7 @@ async def validate_startup_dependencies() -> ValidationResult:
     return await validator.validate_all()
 
 
-def validate_import_quickly(module_name: str) -> Tuple[bool, Optional[str]]:
+def validate_import_quickly(module_name: str) -> Tuple[bool, str | None]:
     """Quick import validation for a single module"""
     try:
         importlib.import_module(module_name)
@@ -354,7 +354,7 @@ def validate_import_quickly(module_name: str) -> Tuple[bool, Optional[str]]:
         return False, "Module import failed"
 
 
-async def validate_service_health(service_name: str) -> Tuple[bool, Optional[str]]:
+async def validate_service_health(service_name: str) -> Tuple[bool, str | None]:
     """Quick service health check"""
     validator = StartupValidator()
 

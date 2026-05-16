@@ -10,7 +10,7 @@ Handles privilege escalation requests through GUI dialogs
 import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -313,7 +313,7 @@ async def revoke_elevation_session(session_token: str):
 
 @register_health_probe("elevation")
 async def probe_elevation(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for elevation module."""
     try:

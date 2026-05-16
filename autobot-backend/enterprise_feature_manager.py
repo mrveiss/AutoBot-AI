@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -52,15 +52,15 @@ class EnterpriseFeature:
     dependencies: List[str] = field(default_factory=list)
     configuration: Dict[str, Any] = field(default_factory=dict)
     status: FeatureStatus = FeatureStatus.DISABLED
-    enabled_at: Optional[datetime] = None
-    health_check_endpoint: Optional[str] = None
+    enabled_at: datetime | None = None
+    health_check_endpoint: str | None = None
     metrics: Dict[str, Any] = field(default_factory=dict)
 
 
 class EnterpriseFeatureManager:
     """Manages enterprise-grade features and capabilities"""
 
-    def __init__(self, config_path: Optional[Path] = None):
+    def __init__(self, config_path: Path | None = None):
         """Initialize enterprise feature manager with VM topology and resource pools."""
         base_dir = config.path.base_dir
         self.config_path = config_path or Path(base_dir) / "config" / "enterprise_features.json"
@@ -74,7 +74,7 @@ class EnterpriseFeatureManager:
 
         logger.info("Enterprise Feature Manager initialized")
 
-    def _get_vm_env_config(self) -> Dict[str, Optional[str]]:
+    def _get_vm_env_config(self) -> Dict[str, str | None]:
         """Get VM environment configuration variables."""
 
         return {
@@ -93,7 +93,7 @@ class EnterpriseFeatureManager:
             "browser_port": config.browser_service_port,
         }
 
-    def _validate_vm_env_config(self, cfg: Dict[str, Optional[str]]) -> None:
+    def _validate_vm_env_config(self, cfg: Dict[str, str | None]) -> None:
         """Validate that all required VM environment variables are set."""
         if not all(cfg.values()):
             raise ValueError(
@@ -101,7 +101,7 @@ class EnterpriseFeatureManager:
                 "AUTOBOT_*_PORT environment variables must be set"
             )
 
-    def _get_core_vm_configs(self, cfg: Dict[str, Optional[str]]) -> Dict[str, Dict[str, Any]]:
+    def _get_core_vm_configs(self, cfg: Dict[str, str | None]) -> Dict[str, Dict[str, Any]]:
         """
         Get main machine and frontend VM configurations.
 
@@ -124,7 +124,7 @@ class EnterpriseFeatureManager:
             },
         }
 
-    def _get_processing_vm_configs(self, cfg: Dict[str, Optional[str]]) -> Dict[str, Dict[str, Any]]:
+    def _get_processing_vm_configs(self, cfg: Dict[str, str | None]) -> Dict[str, Dict[str, Any]]:
         """
         Get NPU worker and AI stack VM configurations.
 
@@ -159,7 +159,7 @@ class EnterpriseFeatureManager:
             },
         }
 
-    def _get_service_vm_configs(self, cfg: Dict[str, Optional[str]]) -> Dict[str, Dict[str, Any]]:
+    def _get_service_vm_configs(self, cfg: Dict[str, str | None]) -> Dict[str, Dict[str, Any]]:
         """
         Get Redis and browser VM configurations.
 
@@ -182,7 +182,7 @@ class EnterpriseFeatureManager:
             },
         }
 
-    def _build_vm_topology(self, cfg: Dict[str, Optional[str]]) -> Dict[str, Dict[str, Any]]:
+    def _build_vm_topology(self, cfg: Dict[str, str | None]) -> Dict[str, Dict[str, Any]]:
         """
         Build VM topology dictionary from environment configuration.
 
@@ -946,7 +946,7 @@ class EnterpriseFeatureManager:
 
 # Singleton instance (thread-safe)
 
-_enterprise_manager: Optional[EnterpriseFeatureManager] = None
+_enterprise_manager: EnterpriseFeatureManager | None = None
 
 
 def get_enterprise_manager() -> EnterpriseFeatureManager:

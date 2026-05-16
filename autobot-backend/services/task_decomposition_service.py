@@ -12,7 +12,7 @@ remain in the DB.
 
 import asyncio
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -178,7 +178,7 @@ class TaskDecompositionService:
                 row.status = status
             await session.commit()
 
-    async def _update_context_in(self, td_id: uuid.UUID, ctx_in: Optional[Dict[str, Any]]) -> None:
+    async def _update_context_in(self, td_id: uuid.UUID, ctx_in: Dict[str, Any] | None) -> None:
         """Persist merged context_in before execution (#1406)."""
         async with self._session_factory() as session:
             row = await session.get(TaskDecomposition, td_id)
@@ -196,7 +196,7 @@ class TaskDecompositionService:
                 row.status = status
             await session.commit()
 
-    async def _get_run(self, process_id: str) -> Optional[ProcessRun]:
+    async def _get_run(self, process_id: str) -> ProcessRun | None:
         """Fetch a ProcessRun by UUID string (#1406)."""
         async with self._session_factory() as session:
             return await session.get(ProcessRun, uuid.UUID(process_id))
@@ -222,8 +222,8 @@ class TaskDecompositionService:
 
 
 def _merge_context(
-    own_ctx: Optional[Dict[str, Any]],
-    depends_on: Optional[List[int]],
+    own_ctx: Dict[str, Any] | None,
+    depends_on: List[int] | None,
     completed: Dict[int, Any],
 ) -> Dict[str, Any]:
     """

@@ -13,7 +13,7 @@ import queue
 import sys
 import threading
 from contextlib import contextmanager
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -292,8 +292,8 @@ class TerminalInputHandler:
 
     def configure_for_testing(
         self,
-        responses: Optional[List[str]] = None,
-        defaults: Optional[Dict[str, str]] = None,
+        responses: List[str] | None = None,
+        defaults: Dict[str, str] | None = None,
     ):
         """
         Configure handler for testing environment.

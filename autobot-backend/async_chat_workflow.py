@@ -12,7 +12,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -326,7 +326,7 @@ class WorkflowManager:
 
     def __init__(self):
         """Initialize workflow manager with async lock."""
-        self._instance: Optional[AsyncChatWorkflow] = None
+        self._instance: AsyncChatWorkflow | None = None
         self._lock = asyncio.Lock()
 
     async def get_workflow(self) -> AsyncChatWorkflow:

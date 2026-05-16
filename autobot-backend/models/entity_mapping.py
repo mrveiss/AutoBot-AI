@@ -10,7 +10,7 @@ Defines data structures for entity resolution and relationship management.
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from autobot_shared.time_utils import parse_utc_iso
 
@@ -60,7 +60,7 @@ class EntityMapping:
 
     # Relationships
     related_entities: Set[str] = field(default_factory=set)  # Related entity IDs
-    parent_entity: Optional[str] = None  # Hierarchical parent entity
+    parent_entity: str | None = None  # Hierarchical parent entity
     child_entities: Set[str] = field(default_factory=set)  # Child entities
 
     # Context and sources

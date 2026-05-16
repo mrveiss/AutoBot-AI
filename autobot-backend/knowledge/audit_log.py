@@ -11,7 +11,7 @@ import asyncio
 import json
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
@@ -83,10 +83,10 @@ class KnowledgeAuditLog:
         self,
         event_type: AuditEventType,
         user_id: str,
-        fact_id: Optional[str] = None,
-        organization_id: Optional[str] = None,
-        details: Optional[Dict] = None,
-        ip_address: Optional[str] = None,
+        fact_id: str | None = None,
+        organization_id: str | None = None,
+        details: Dict | None = None,
+        ip_address: str | None = None,
     ) -> str:
         """Log an audit event.
 
@@ -229,8 +229,8 @@ class KnowledgeAuditLog:
 
     async def get_permission_changes(
         self,
-        fact_id: Optional[str] = None,
-        user_id: Optional[str] = None,
+        fact_id: str | None = None,
+        user_id: str | None = None,
         limit: int = 100,
     ) -> List[Dict]:
         """Get permission change events.

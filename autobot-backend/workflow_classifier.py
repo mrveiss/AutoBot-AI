@@ -7,7 +7,7 @@ Manages classification rules and keywords in Redis for dynamic updates
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import redis
 
@@ -101,7 +101,7 @@ DEFAULT_CLASSIFICATION_RULES = {
 class WorkflowClassifier:
     """Manages workflow classification rules in Redis."""
 
-    def __init__(self, redis_client: Optional[redis.Redis] = None):
+    def __init__(self, redis_client: redis.Redis | None = None):
         """Initialize workflow classifier with Redis client and default rules."""
         self.redis_client = redis_client or get_redis_client()
         self.rules_key = "autobot:workflow:classification:rules"
@@ -183,7 +183,7 @@ class WorkflowClassifier:
 
     def _evaluate_rules_for_complexity(
         self, rules: Dict[str, Any], keyword_counts: Dict[str, Any]
-    ) -> Optional[TaskComplexity]:
+    ) -> TaskComplexity | None:
         """Evaluate classification rules to determine complexity. Issue #620.
 
         Args:

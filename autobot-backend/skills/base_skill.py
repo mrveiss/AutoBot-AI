@@ -12,7 +12,7 @@ configuration, dependency tracking, and lifecycle management.
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
@@ -40,7 +40,7 @@ class SkillConfigField(BaseModel):
     default: Any = Field(None, description="Default value")
     description: str = Field("", description="Human-readable description")
     required: bool = Field(False, description="Whether this field is required")
-    choices: Optional[List[str]] = Field(None, description="Allowed values")
+    choices: List[str] | None = Field(None, description="Allowed values")
 
 
 class SkillManifest(BaseModel):
@@ -68,7 +68,7 @@ class SkillHealth(BaseModel):
     name: str
     status: SkillStatus
     version: str = ""
-    message: Optional[str] = None
+    message: str | None = None
     last_checked: datetime = Field(default_factory=now_utc)
     config_valid: bool = True
     dependencies_met: bool = True

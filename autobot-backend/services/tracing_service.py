@@ -26,7 +26,7 @@ Features:
 
 import threading
 from contextlib import contextmanager
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -70,7 +70,7 @@ class TracingService:
     Designed for multi-VM distributed tracing with Jaeger as the backend.
     """
 
-    _instance: Optional["TracingService"] = None
+    _instance: "TracingService" | None = None
     _initialized: bool = False
     _lock: threading.Lock = threading.Lock()
 
@@ -83,13 +83,13 @@ class TracingService:
                     cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize tracing service (only runs once due to singleton)."""
         if TracingService._initialized:
             return
 
-        self._tracer: Optional[trace.Tracer] = None
-        self._provider: Optional[TracerProvider] = None
+        self._tracer: trace.Tracer | None = None
+        self._provider: TracerProvider | None = None
         self._enabled: bool = False
         self._service_name: str = "autobot-backend"
         self._service_version: str = "1.0.0"
@@ -106,7 +106,7 @@ class TracingService:
 
         TracingService._initialized = True
 
-    def _resolve_service_name(self, service_name: Optional[str]) -> str:
+    def _resolve_service_name(self, service_name: str | None) -> str:
         """
         Resolve service name from hostname if not provided (Issue #665: extracted helper).
 
@@ -208,9 +208,9 @@ class TracingService:
 
     def initialize(
         self,
-        service_name: Optional[str] = None,
+        service_name: str | None = None,
         service_version: str = "1.0.0",
-        jaeger_endpoint: Optional[str] = None,
+        jaeger_endpoint: str | None = None,
         enable_console_export: bool = False,
     ) -> bool:
         """
@@ -380,7 +380,7 @@ class TracingService:
         return results
 
     @property
-    def tracer(self) -> Optional[trace.Tracer]:
+    def tracer(self) -> trace.Tracer | None:
         """Get the OpenTelemetry tracer instance."""
         return self._tracer
 
@@ -394,7 +394,7 @@ class TracingService:
         self,
         name: str,
         kind: SpanKind = SpanKind.INTERNAL,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: Dict[str, Any] | None = None,
     ):
         """
         Create a traced span context manager.
@@ -433,7 +433,7 @@ class TracingService:
         self,
         name: str,
         kind: SpanKind = SpanKind.INTERNAL,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: Dict[str, Any] | None = None,
     ):
         """
         Create and start a new span (non-context manager version).
@@ -458,7 +458,7 @@ class TracingService:
     def add_event(
         self,
         name: str,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: Dict[str, Any] | None = None,
     ) -> None:
         """
         Add an event to the current span.

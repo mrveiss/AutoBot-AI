@@ -9,7 +9,7 @@ This module provides reusable components for creating consistent dashboards
 across the AutoBot platform. Supports both dark (GitHub-style) and light themes.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 def _get_dark_base_styles() -> str:
@@ -338,7 +338,7 @@ def get_light_theme_css() -> str:
     return f"{base_styles}\n{header_styles}\n{component_styles}\n    "
 
 
-def create_metric_card(title: str, value: str, change: Optional[str] = None, card_id: Optional[str] = None) -> str:
+def create_metric_card(title: str, value: str, change: str | None = None, card_id: str | None = None) -> str:
     """
     Generate a metric card HTML component.
 
@@ -366,7 +366,7 @@ def create_metric_card(title: str, value: str, change: Optional[str] = None, car
                 </div>"""
 
 
-def create_chart_container(chart_id: str, title: Optional[str] = None, description: Optional[str] = None) -> str:
+def create_chart_container(chart_id: str, title: str | None = None, description: str | None = None) -> str:
     """
     Generate a chart container HTML component.
 
@@ -453,8 +453,8 @@ def get_plotly_light_config() -> Dict[str, Any]:
 
 def create_dashboard_header(
     title: str,
-    subtitle: Optional[str] = None,
-    status: Optional[str] = "healthy",
+    subtitle: str | None = None,
+    status: str | None = "healthy",
     theme: str = "dark",
 ) -> str:
     """

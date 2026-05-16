@@ -18,7 +18,7 @@ import re
 import tempfile
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
@@ -222,17 +222,17 @@ class ExperimentRunner:
 
     def __init__(
         self,
-        config: Optional[AutoResearchConfig] = None,
-        store: Optional[ExperimentStore] = None,
-        parser: Optional[ExperimentOutputParser] = None,
-    ):
+        config: AutoResearchConfig | None = None,
+        store: ExperimentStore | None = None,
+        parser: ExperimentOutputParser | None = None,
+    ) -> None:
         self.config = config or AutoResearchConfig()
         self.store = store or ExperimentStore(self.config)
         self.parser = parser or ExperimentOutputParser()
         self._running: bool = False
         self._lock = asyncio.Lock()
-        self._current_process: Optional[asyncio.subprocess.Process] = None
-        self._current_container_name: Optional[str] = None
+        self._current_process: asyncio.subprocess.Process | None = None
+        self._current_container_name: str | None = None
 
     def build_task_inference_params(
         self, task: ExperimentTask, experiment: Experiment

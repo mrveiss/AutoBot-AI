@@ -19,7 +19,7 @@ import asyncio
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 # MAP-Elites minimum category coverage required to activate grid-based selection.
 _MAP_ELITES_MIN_CATEGORIES = 2
@@ -48,7 +48,7 @@ class SearchResult:
     relevance_rank: int
     source_path: str
     chunk_index: int = 0
-    rerank_score: Optional[float] = None
+    rerank_score: float | None = None
 
 
 @dataclass
@@ -100,7 +100,7 @@ class AdvancedRAGOptimizer:
 
     MAX_CACHE_ENTRIES = 500  # Hard ceiling to prevent unbounded growth. Issue #1732.
 
-    def __init__(self, rerank_weights: Optional[RerankWeights] = None):
+    def __init__(self, rerank_weights: RerankWeights | None = None):
         """Initialize RAG optimizer with search configuration. Issue #620.
 
         Args:
@@ -200,7 +200,7 @@ class AdvancedRAGOptimizer:
         """Build a deterministic cache key from search parameters. Issue #1548."""
         return f"{query}|{max_results}|{enable_reranking}"
 
-    def _get_cached_result(self, key: str) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
+    def _get_cached_result(self, key: str) -> Tuple[List[SearchResult], RAGMetrics] | None:
         """Return cached result if present and within TTL, else None. Issue #1548."""
         entry = self.query_cache.get(key)
         if entry is None:
@@ -707,7 +707,7 @@ class AdvancedRAGOptimizer:
         self,
         query: str,
         metrics: RAGMetrics,
-        context: Optional["QueryContext"] = None,
+        context: "QueryContext" | None = None,
     ) -> List[SearchResult]:
         """Perform hybrid retrieval (Issue #665: extracted helper).
 

@@ -9,8 +9,6 @@ import asyncio
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
-
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -23,11 +21,11 @@ from constants.path_constants import PATH
 class IndexCodebaseRequest(BaseModel):
     """Request model for indexing a codebase path."""
 
-    root_path: Optional[str] = Field(
+    root_path: str | None = Field(
         default=None,
         description="Path to index. Defaults to PROJECT_ROOT if not provided.",
     )
-    source_id: Optional[str] = Field(
+    source_id: str | None = Field(
         default=None,
         description="Code source registry ID (#1133). Resolves to the source's clone_path.",
     )
@@ -53,7 +51,7 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-async def _check_existing_task_and_queue(source_id: Optional[str], root_path_for_queue: str) -> Optional[JSONResponse]:
+async def _check_existing_task_and_queue(source_id: str | None, root_path_for_queue: str) -> JSONResponse | None:
     """If a job is running, enqueue the request and return a queued response.
 
     Returns None when no job is running (caller should start a new job).
@@ -98,7 +96,7 @@ class _SyncNeeded:
 
 
 async def _validate_and_get_path(
-    request: Optional[IndexCodebaseRequest],
+    request: IndexCodebaseRequest | None,
 ) -> "str | _SyncNeeded":
     """Validate request and return the resolved index path (Issue #398 + #1133).
 
@@ -193,7 +191,7 @@ def _create_cleanup_callback(task_id: str):
     operation="index_codebase",
     error_code_prefix="CODEBASE",
 )
-async def index_codebase(request: Optional[IndexCodebaseRequest] = None):
+async def index_codebase(request: IndexCodebaseRequest | None = None):
     """
     Start background indexing of a codebase path (Issue #398: refactored, #1133: queued).
 

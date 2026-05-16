@@ -24,8 +24,6 @@ Dependencies: stdlib + aiohttp only (no autobot-* imports).
 from __future__ import annotations
 
 import socket
-from typing import Optional
-
 import aiohttp
 import aiohttp.abc
 
@@ -102,7 +100,7 @@ async def fetch_safe_url(
     *,
     timeout: float = 15.0,
     max_bytes: int = 4 * 1024 * 1024,
-    headers: Optional[dict] = None,
+    headers: dict | None = None,
 ) -> tuple[int, bytes, str]:
     """Fetch *url* with full SSRF protection.
 

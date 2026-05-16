@@ -19,7 +19,7 @@ import shlex
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import httpx
 from sqlalchemy import select
@@ -214,7 +214,7 @@ class BlueGreenService:
 
         return BlueGreenResponse.model_validate(deployment)
 
-    async def get_deployment(self, db: AsyncSession, bg_deployment_id: str) -> Optional[BlueGreenResponse]:
+    async def get_deployment(self, db: AsyncSession, bg_deployment_id: str) -> BlueGreenResponse | None:
         """Get a blue-green deployment by ID."""
         deployment = await self._get_deployment(db, bg_deployment_id)
         if deployment:
@@ -224,7 +224,7 @@ class BlueGreenService:
     async def list_deployments(
         self,
         db: AsyncSession,
-        status: Optional[str] = None,
+        status: str | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> Tuple[List[BlueGreenResponse], int]:
@@ -547,12 +547,12 @@ class BlueGreenService:
     # Private Database Helpers
     # =========================================================================
 
-    async def _get_node(self, db: AsyncSession, node_id: str) -> Optional[Node]:
+    async def _get_node(self, db: AsyncSession, node_id: str) -> Node | None:
         """Get a node by ID."""
         result = await db.execute(select(Node).where(Node.node_id == node_id))
         return result.scalar_one_or_none()
 
-    async def _get_deployment(self, db: AsyncSession, bg_deployment_id: str) -> Optional[BlueGreenDeployment]:
+    async def _get_deployment(self, db: AsyncSession, bg_deployment_id: str) -> BlueGreenDeployment | None:
         """Get a deployment by ID."""
         result = await db.execute(
             select(BlueGreenDeployment).where(BlueGreenDeployment.bg_deployment_id == bg_deployment_id)
@@ -1252,7 +1252,7 @@ class BlueGreenService:
     async def _verify_health(
         self,
         node_id: str,
-        health_url: Optional[str],
+        health_url: str | None,
         interval: int,
         timeout: int,
     ) -> bool:

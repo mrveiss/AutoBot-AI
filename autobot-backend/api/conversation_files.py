@@ -12,7 +12,7 @@ import asyncio
 import secrets
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 import aiofiles
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -340,7 +340,7 @@ async def upload_conversation_file(
     request: Request,
     session_id: str,
     file: UploadFile = File(...),
-    description: Optional[str] = Form(None),
+    description: str | None = Form(None),
 ):
     """Upload a file to a conversation session (Issue #398: refactored)."""
     try:
@@ -543,7 +543,7 @@ async def download_conversation_file(request: Request, session_id: str, file_id:
 
 async def _generate_file_preview(
     file_info: ConversationFileInfo,
-) -> tuple[Optional[str], str, bool]:
+) -> tuple[str | None, str, bool]:
     """
     Generate preview content based on file type.
 

@@ -14,7 +14,7 @@ tolerates pass-through values.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict
 
@@ -41,12 +41,12 @@ class FindDuplicatesResponse(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    status: Optional[str] = None
-    total_facts_scanned: Optional[int] = None
-    exact_duplicates: Optional[int] = None
-    near_duplicates: Optional[int] = None
-    total_duplicates: Optional[int] = None
-    duplicates: Optional[List[Any]] = None
+    status: str | None = None
+    total_facts_scanned: int | None = None
+    exact_duplicates: int | None = None
+    near_duplicates: int | None = None
+    total_duplicates: int | None = None
+    duplicates: List[Any] | None = None
 
 
 # ===== DATA QUALITY =====
@@ -58,11 +58,11 @@ class DataQualityMetricsResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     status: str = "success"
-    overall_score: Optional[float] = None
-    dimensions: Optional[Dict[str, Any]] = None
-    summary: Optional[Dict[str, Any]] = None
-    issues: Optional[List[Any]] = None
-    recommendations: Optional[List[Any]] = None
+    overall_score: float | None = None
+    dimensions: Dict[str, Any] | None = None
+    summary: Dict[str, Any] | None = None
+    issues: List[Any] | None = None
+    recommendations: List[Any] | None = None
 
 
 class HealthDashboardResponse(BaseModel):
@@ -72,9 +72,9 @@ class HealthDashboardResponse(BaseModel):
 
     status: str = "healthy"
     last_updated: str = ""
-    stats: Optional[Dict[str, Any]] = None
-    quality: Optional[Dict[str, Any]] = None
-    top_recommendations: Optional[List[Any]] = None
+    stats: Dict[str, Any] | None = None
+    quality: Dict[str, Any] | None = None
+    top_recommendations: List[Any] | None = None
 
 
 # ===== HOST CHANGE SCANNING =====
@@ -85,9 +85,9 @@ class ScanHostChangesResponse(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    status: Optional[str] = None
-    changes: Optional[Dict[str, Any]] = None
-    vectorization: Optional[Dict[str, Any]] = None
+    status: str | None = None
+    changes: Dict[str, Any] | None = None
+    vectorization: Dict[str, Any] | None = None
 
 
 # ===== ORPHANED FACTS =====
@@ -110,11 +110,11 @@ class CleanupOrphanedFactsResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     status: str = "success"
-    dry_run: Optional[bool] = None
-    message: Optional[str] = None
-    orphaned_count: Optional[int] = None
+    dry_run: bool | None = None
+    message: str | None = None
+    orphaned_count: int | None = None
     deleted_count: int = 0
-    orphaned_facts: Optional[List[Any]] = None
+    orphaned_facts: List[Any] | None = None
 
 
 # ===== SESSION ORPHANS =====
@@ -130,7 +130,7 @@ class FindSessionOrphansResponse(BaseModel):
     facts_with_session_tracking: int = 0
     orphaned_count: int = 0
     orphaned_sessions: int = 0
-    session_breakdown: Optional[Dict[str, Any]] = None
+    session_breakdown: Dict[str, Any] | None = None
     orphaned_facts: List[Any] = []
 
 
@@ -140,13 +140,13 @@ class CleanupSessionOrphansResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     status: str = "success"
-    dry_run: Optional[bool] = None
-    message: Optional[str] = None
-    orphaned_count: Optional[int] = None
+    dry_run: bool | None = None
+    message: str | None = None
+    orphaned_count: int | None = None
     deleted_count: int = 0
     preserved_count: int = 0
-    preserved_facts: Optional[List[Any]] = None
-    session_breakdown: Optional[Dict[str, Any]] = None
+    preserved_facts: List[Any] | None = None
+    session_breakdown: Dict[str, Any] | None = None
 
 
 # ===== IMPORT / EXPORT =====
@@ -170,11 +170,11 @@ class ExportKnowledgeResponse(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    status: Optional[str] = None
-    format: Optional[str] = None
-    total_facts: Optional[int] = None
-    data: Optional[str] = None
-    exported_at: Optional[str] = None
+    status: str | None = None
+    format: str | None = None
+    total_facts: int | None = None
+    data: str | None = None
+    exported_at: str | None = None
 
 
 class ImportKnowledgeResponse(BaseModel):
@@ -182,13 +182,13 @@ class ImportKnowledgeResponse(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    status: Optional[str] = None
-    total_facts: Optional[int] = None
-    imported: Optional[int] = None
-    skipped: Optional[int] = None
-    overwritten: Optional[int] = None
-    errors: Optional[List[Any]] = None
-    validation_errors: Optional[List[Any]] = None
+    status: str | None = None
+    total_facts: int | None = None
+    imported: int | None = None
+    skipped: int | None = None
+    overwritten: int | None = None
+    errors: List[Any] | None = None
+    validation_errors: List[Any] | None = None
 
 
 # ===== FACT MANAGEMENT =====
@@ -225,10 +225,10 @@ class BulkDeleteResponse(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    status: Optional[str] = None
-    deleted: Optional[int] = None
-    not_found: Optional[int] = None
-    errors: Optional[List[Any]] = None
+    status: str | None = None
+    deleted: int | None = None
+    not_found: int | None = None
+    errors: List[Any] | None = None
 
 
 class BulkCategoryUpdateResponse(BaseModel):
@@ -236,10 +236,10 @@ class BulkCategoryUpdateResponse(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    status: Optional[str] = None
-    updated: Optional[int] = None
-    not_found: Optional[int] = None
-    errors: Optional[List[Any]] = None
+    status: str | None = None
+    updated: int | None = None
+    not_found: int | None = None
+    errors: List[Any] | None = None
 
 
 class CleanupKnowledgeBaseResponse(BaseModel):
@@ -247,11 +247,11 @@ class CleanupKnowledgeBaseResponse(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    status: Optional[str] = None
-    dry_run: Optional[bool] = None
-    issues_found: Optional[Dict[str, Any]] = None
-    issues_details: Optional[Dict[str, Any]] = None
-    fixes_applied: Optional[Dict[str, Any]] = None
+    status: str | None = None
+    dry_run: bool | None = None
+    issues_found: Dict[str, Any] | None = None
+    issues_details: Dict[str, Any] | None = None
+    fixes_applied: Dict[str, Any] | None = None
 
 
 # ===== BACKUP / RESTORE =====
@@ -263,11 +263,11 @@ class CreateBackupResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     status: str = "success"
-    backup_file: Optional[str] = None
-    backup_name: Optional[str] = None
-    facts_count: Optional[int] = None
-    file_size: Optional[int] = None
-    created_at: Optional[str] = None
+    backup_file: str | None = None
+    backup_name: str | None = None
+    facts_count: int | None = None
+    file_size: int | None = None
+    created_at: str | None = None
 
 
 class RestoreBackupResponse(BaseModel):
@@ -276,14 +276,14 @@ class RestoreBackupResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     status: str = "success"
-    mode: Optional[str] = None
-    backup_version: Optional[str] = None
-    backup_created_at: Optional[str] = None
-    total_facts_in_backup: Optional[int] = None
-    restored: Optional[int] = None
-    skipped: Optional[int] = None
-    updated: Optional[int] = None
-    errors: Optional[int] = None
+    mode: str | None = None
+    backup_version: str | None = None
+    backup_created_at: str | None = None
+    total_facts_in_backup: int | None = None
+    restored: int | None = None
+    skipped: int | None = None
+    updated: int | None = None
+    errors: int | None = None
 
 
 class ListBackupsResponse(BaseModel):
@@ -292,7 +292,7 @@ class ListBackupsResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     status: str = "success"
-    backup_dir: Optional[str] = None
+    backup_dir: str | None = None
     backups: List[Any] = []
     total_count: int = 0
 
@@ -303,7 +303,7 @@ class DeleteBackupResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     status: str = "success"
-    deleted_file: Optional[str] = None
+    deleted_file: str | None = None
 
 
 # ===== LINT =====
@@ -323,10 +323,10 @@ class GetLintReportResponse(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    job_id: Optional[str] = None
-    contradictions: Optional[List[Any]] = None
-    gaps: Optional[List[Any]] = None
-    scanned_at: Optional[str] = None
+    job_id: str | None = None
+    contradictions: List[Any] | None = None
+    gaps: List[Any] | None = None
+    scanned_at: str | None = None
 
 
 class SynthesisLogResponse(BaseModel):

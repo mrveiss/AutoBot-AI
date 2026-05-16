@@ -8,7 +8,7 @@ Issue #381: Extracted from workflow_templates.py god class refactoring.
 Lean coordinator that manages workflow templates using composition pattern.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_types import TaskComplexity
 
@@ -44,14 +44,14 @@ class WorkflowTemplateManager:
         for template in all_templates:
             self.templates[template.id] = template
 
-    def get_template(self, template_id: str) -> Optional[WorkflowTemplate]:
+    def get_template(self, template_id: str) -> WorkflowTemplate | None:
         """Get a workflow template by ID."""
         return self.templates.get(template_id)
 
     def list_templates(
         self,
-        category: Optional[TemplateCategory] = None,
-        tags: Optional[List[str]] = None,
+        category: TemplateCategory | None = None,
+        tags: List[str] | None = None,
     ) -> List[WorkflowTemplate]:
         """List workflow templates, optionally filtered by category or tags."""
         templates = list(self.templates.values())
@@ -84,8 +84,8 @@ class WorkflowTemplateManager:
         return sorted(matching_templates, key=lambda t: t.name)
 
     def create_workflow_from_template(
-        self, template_id: str, variables: Optional[Dict[str, str]] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, template_id: str, variables: Dict[str, str] | None = None
+    ) -> Dict[str, Any] | None:
         """Create a workflow instance from a template with variable substitution."""
         template = self.get_template(template_id)
         if not template:

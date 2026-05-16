@@ -8,8 +8,6 @@ Lightweight model updates based on feedback without full retraining.
 """
 
 from datetime import timedelta
-from typing import Optional
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -43,7 +41,7 @@ class IncrementalTrainer:
     without requiring full retraining.
     """
 
-    def __init__(self, model_version: str = "best"):
+    def __init__(self, model_version: str = "best") -> None:
         """
         Initialize incremental trainer.
 
@@ -208,7 +206,7 @@ class IncrementalTrainer:
                     "timestamp": utc_timestamp(),
                 }
 
-    def trigger_full_retrain(self, language: Optional[str] = None, num_epochs: int = 5) -> dict:
+    def trigger_full_retrain(self, language: str | None = None, num_epochs: int = 5) -> dict:
         """
         Trigger full model retraining.
 

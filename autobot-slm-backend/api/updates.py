@@ -14,7 +14,7 @@ import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, select
@@ -104,7 +104,7 @@ async def _broadcast_job_update(job_id: str, status: str, progress: int, message
         logger.debug("Failed to broadcast job update: %s", e)
 
 
-async def _get_update_job_data(db: AsyncSession, job_id: str, node_id: str, update_ids: List[str]) -> Optional[tuple]:
+async def _get_update_job_data(db: AsyncSession, job_id: str, node_id: str, update_ids: List[str]) -> tuple | None:
     """
     Helper for _run_update_job (Issue #665).
 
@@ -341,8 +341,8 @@ def _parse_unreachable_hosts(output: str) -> List[str]:
 async def _resolve_host_to_node(
     db: AsyncSession,
     hostname: str,
-    ip_address: Optional[str] = None,
-) -> Optional[str]:
+    ip_address: str | None = None,
+) -> str | None:
     """Map an Ansible host back to a node_id (#1789).
 
     Tries hostname match first, then falls back to ip_address.
@@ -473,8 +473,8 @@ def _resolve_ips_to_inventory_names(ips: List[str]) -> List[str]:
 
 async def _resolve_target_nodes(
     db: AsyncSession,
-    node_ids: Optional[List[str]],
-    role: Optional[str],
+    node_ids: List[str] | None,
+    role: str | None,
 ) -> tuple:
     """Resolve target nodes for discovery. Returns (limit, extra_vars, count).
 
@@ -539,8 +539,8 @@ async def _store_host_packages(
 
 async def _run_discover_job(
     job_id: str,
-    node_ids: Optional[List[str]],
-    role: Optional[str],
+    node_ids: List[str] | None,
+    role: str | None,
 ) -> None:
     """Background task: run check-system-updates.yml."""
     from services.database import db_service
@@ -698,8 +698,8 @@ async def get_update_summary(
 async def list_packages(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    node_id: Optional[str] = Query(None),
-    severity: Optional[str] = Query(None),
+    node_id: str | None = Query(None),
+    severity: str | None = Query(None),
     limit: int = Query(500, ge=1, le=1000),
 ) -> UpdatePackagesResponse:
     """List discovered upgradable packages."""
@@ -734,7 +734,7 @@ async def list_packages(
 async def check_updates(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    node_id: Optional[str] = Query(None),
+    node_id: str | None = Query(None),
 ) -> UpdateCheckResponse:
     """Check for available updates."""
     query = select(UpdateInfo).where(UpdateInfo.is_applied.is_(False))
@@ -1045,8 +1045,8 @@ async def get_job_status(
 async def list_jobs(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    node_id: Optional[str] = Query(None),
-    status_filter: Optional[str] = Query(None, alias="status"),
+    node_id: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
     limit: int = Query(20, ge=1, le=100),
 ) -> UpdateJobListResponse:
     """List update jobs with optional filters."""

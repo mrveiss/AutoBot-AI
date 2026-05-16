@@ -10,7 +10,7 @@ Implements LRU eviction and adaptive cleanup to prevent memory growth
 import asyncio
 import gc
 from collections import OrderedDict
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import psutil
 
@@ -43,7 +43,7 @@ class AdaptiveMemoryManager:
             }
         return self.lru_caches[name]["cache"]
 
-    def get_from_cache(self, cache_name: str, key: str) -> Optional[Any]:
+    def get_from_cache(self, cache_name: str, key: str) -> Any | None:
         """Get item from LRU cache"""
         if cache_name not in self.lru_caches:
             return None
@@ -251,7 +251,7 @@ def create_managed_cache(name: str, max_size: int = 1000) -> OrderedDict:
     return manager.create_lru_cache(name, max_size)
 
 
-def cache_get(cache_name: str, key: str) -> Optional[Any]:
+def cache_get(cache_name: str, key: str) -> Any | None:
     """Get item from managed cache"""
     manager = get_adaptive_memory_manager()
     return manager.get_from_cache(cache_name, key)

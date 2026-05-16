@@ -11,7 +11,7 @@
 import asyncio
 import base64
 import io
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from media.core.pipeline import BasePipeline
@@ -30,11 +30,11 @@ logger = get_logger(__name__)
 # Lazy singleton for VisionProcessor (loads GPU models on first use).
 # Import is deferred into _get_vision_processor() to avoid a circular import
 # at module load time (media.manager imports this module at import time).
-_vision_processor: Optional[Any] = None
+_vision_processor: Any | None = None
 _vision_processor_checked: bool = False
 
 
-def _get_vision_processor() -> Optional[Any]:
+def _get_vision_processor() -> Any | None:
     """Lazy-load VisionProcessor on first call; returns None if unavailable."""
     global _vision_processor, _vision_processor_checked
     if _vision_processor_checked:

@@ -9,8 +9,6 @@ Single registry for all manifest types: plugins, skills, and extensions.
 
 import logging
 import threading
-from typing import Optional
-
 from plugin_sdk.manifest_contract import ManifestContract
 
 logger = logging.getLogger(__name__)
@@ -19,7 +17,7 @@ logger = logging.getLogger(__name__)
 class UnifiedRegistry:
     """Singleton registry that accepts any ManifestContract-conforming manifest."""
 
-    _instance: Optional["UnifiedRegistry"] = None
+    _instance: "UnifiedRegistry" | None = None
     _lock: threading.Lock = threading.Lock()
 
     def __new__(cls) -> "UnifiedRegistry":
@@ -46,7 +44,7 @@ class UnifiedRegistry:
             return True
         return False
 
-    def get(self, name: str) -> Optional[ManifestContract]:
+    def get(self, name: str) -> ManifestContract | None:
         """Return manifest by name, or None if not registered."""
         return self._manifests.get(name)
 

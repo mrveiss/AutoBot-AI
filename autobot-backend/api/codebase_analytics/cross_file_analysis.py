@@ -20,7 +20,7 @@ finding to ChromaDB with ``type="problem"`` so they surface in
 
 import asyncio
 from pathlib import Path
-from typing import Any, Dict, List, Optional  # noqa: F401  (List used in pub API)
+from typing import Any, Dict, List  # noqa: F401  (List used in pub API)
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
@@ -53,7 +53,7 @@ def _antipattern_to_problem(ap: Any, file_category: str = "code") -> Dict[str, A
 
 async def _persist_to_chromadb(
     problems: List[Dict[str, Any]],
-    source_id: Optional[str],
+    source_id: str | None,
 ) -> int:
     """Append cross-file findings to the existing problems collection.
 
@@ -88,8 +88,8 @@ async def _persist_to_chromadb(
 
 async def run_cross_file_analysis(
     root_path: str,
-    source_id: Optional[str] = None,
-    exclude_patterns: Optional[List[str]] = None,
+    source_id: str | None = None,
+    exclude_patterns: List[str] | None = None,
 ) -> int:
     """Run the four cross-file rules over ``root_path`` and persist findings.
 
@@ -141,7 +141,7 @@ async def run_cross_file_analysis(
 
 def schedule_cross_file_analysis(
     root_path: str,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> None:
     """Fire-and-forget launcher for the cross-file pass.
 

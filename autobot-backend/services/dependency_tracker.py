@@ -23,7 +23,7 @@ class DependencyTracker:
     frequently co-imported modules.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.imports: List[str] = []
         self.import_aliases: Dict[str, str] = {}
         self.used_names: Set[str] = set()

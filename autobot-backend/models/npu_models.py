@@ -9,7 +9,7 @@ Data validation models for NPU worker management and load balancing.
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -104,8 +104,8 @@ class NPUWorkerStatus(BaseModel):
     total_tasks_completed: int = Field(default=0, ge=0, description="Total tasks completed")
     total_tasks_failed: int = Field(default=0, ge=0, description="Total tasks failed")
     uptime_seconds: float = Field(default=0.0, ge=0.0, description="Worker uptime in seconds")
-    last_heartbeat: Optional[datetime] = Field(default=None, description="Last successful heartbeat timestamp")
-    error_message: Optional[str] = Field(default=None, description="Latest error message if status is ERROR")
+    last_heartbeat: datetime | None = Field(default=None, description="Last successful heartbeat timestamp")
+    error_message: str | None = Field(default=None, description="Latest error message if status is ERROR")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -131,7 +131,7 @@ class NPUWorkerMetrics(BaseModel):
     success_rate: float = Field(default=100.0, ge=0.0, le=100.0, description="Success rate percentage")
     requests_per_minute: float = Field(default=0.0, ge=0.0, description="Average requests per minute")
     peak_load: int = Field(default=0, ge=0, description="Peak concurrent load observed")
-    last_error_time: Optional[datetime] = Field(default=None, description="Timestamp of last error")
+    last_error_time: datetime | None = Field(default=None, description="Timestamp of last error")
     metrics_timestamp: datetime = Field(default_factory=now_utc, description="Metrics collection timestamp")
 
     model_config = ConfigDict(
@@ -192,7 +192,7 @@ class NPUWorkerDetails(BaseModel):
 
     config: NPUWorkerConfig = Field(..., description="Worker configuration")
     status: NPUWorkerStatus = Field(..., description="Worker runtime status")
-    metrics: Optional[NPUWorkerMetrics] = Field(default=None, description="Worker performance metrics")
+    metrics: NPUWorkerMetrics | None = Field(default=None, description="Worker performance metrics")
 
     def to_event_dict(self) -> Dict[str, Any]:
         """Convert to event dictionary format (Issue #372 - reduces feature envy)."""
@@ -280,7 +280,7 @@ class WorkerHeartbeat(BaseModel):
     uptime_seconds: float = Field(default=0.0, ge=0.0, description="Worker uptime in seconds")
     npu_available: bool = Field(default=False, description="Whether NPU hardware is available")
     loaded_models: list = Field(default_factory=list, description="List of loaded model names")
-    metrics: Optional[Dict[str, Any]] = Field(default=None, description="Performance metrics")
+    metrics: Dict[str, Any] | None = Field(default=None, description="Performance metrics")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -306,10 +306,10 @@ class WorkerTestResult(BaseModel):
 
     worker_id: str = Field(..., description="Worker identifier")
     success: bool = Field(..., description="Whether test succeeded")
-    response_time_ms: Optional[float] = Field(default=None, description="Response time in milliseconds")
-    status_code: Optional[int] = Field(default=None, description="HTTP status code")
-    error_message: Optional[str] = Field(default=None, description="Error message if test failed")
-    health_data: Optional[Dict] = Field(default=None, description="Health check response data")
+    response_time_ms: float | None = Field(default=None, description="Response time in milliseconds")
+    status_code: int | None = Field(default=None, description="HTTP status code")
+    error_message: str | None = Field(default=None, description="Error message if test failed")
+    health_data: Dict | None = Field(default=None, description="Health check response data")
 
     model_config = ConfigDict(
         json_schema_extra={

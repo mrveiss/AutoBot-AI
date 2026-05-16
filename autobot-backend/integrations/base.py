@@ -12,7 +12,7 @@ implements connection testing, health checks, and tool-specific methods.
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
@@ -40,22 +40,22 @@ class IntegrationConfig(BaseModel):
     name: str = Field(..., description="Integration name")
     provider: str = Field(..., description="Provider identifier")
     enabled: bool = Field(True, description="Whether integration is active")
-    base_url: Optional[str] = Field(None, description="Base URL for the service")
-    api_key: Optional[str] = Field(None, description="API key (stored encrypted)")
-    api_secret: Optional[str] = Field(None, description="API secret (stored encrypted)")
-    token: Optional[str] = Field(None, description="Auth token (stored encrypted)")
-    username: Optional[str] = Field(None, description="Username for basic auth")
-    password: Optional[str] = Field(None, description="Password (stored encrypted)")
+    base_url: str | None = Field(None, description="Base URL for the service")
+    api_key: str | None = Field(None, description="API key (stored encrypted)")
+    api_secret: str | None = Field(None, description="API secret (stored encrypted)")
+    token: str | None = Field(None, description="Auth token (stored encrypted)")
+    username: str | None = Field(None, description="Username for basic auth")
+    password: str | None = Field(None, description="Password (stored encrypted)")
     extra: Dict[str, Any] = Field(default_factory=dict, description="Provider-specific config")
 
 
 class IntegrationHealth(BaseModel):
     """Health status response for an integration."""
 
-    provider: Optional[str] = None
+    provider: str | None = None
     status: IntegrationStatus
-    latency_ms: Optional[float] = None
-    message: Optional[str] = None
+    latency_ms: float | None = None
+    message: str | None = None
     last_checked: datetime = Field(default_factory=now_utc)
     details: Dict[str, Any] = Field(default_factory=dict)
 
@@ -112,8 +112,8 @@ class BaseIntegration(ABC):
         self,
         method: str,
         url: str,
-        headers: Optional[Dict[str, str]] = None,
-        json_data: Optional[Dict[str, Any]] = None,
+        headers: Dict[str, str] | None = None,
+        json_data: Dict[str, Any] | None = None,
         timeout: float = 30.0,
     ) -> Dict[str, Any]:
         """Make an HTTP request to the external service.

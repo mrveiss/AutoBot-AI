@@ -12,7 +12,7 @@ Issue #697: Added OpenTelemetry tracing spans for LLM inference.
 import asyncio
 import time
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator
 
 import aiohttp
 from opentelemetry import trace
@@ -57,7 +57,7 @@ class OllamaProvider:
         self.settings = settings
         self.streaming_manager = streaming_manager
         self._http_client = get_http_client()
-        self.ollama_host: Optional[str] = None
+        self.ollama_host: str | None = None
 
     @asynccontextmanager
     async def _get_session(self) -> AsyncGenerator[aiohttp.ClientSession, None]:

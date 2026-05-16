@@ -15,7 +15,7 @@ Extracted from redis_client.py as part of Issue #381 refactoring.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict
 
 
 @dataclass
@@ -35,9 +35,9 @@ class RedisStats:
     failed_operations: int = 0
     total_retry_attempts: int = 0
     circuit_breaker_trips: int = 0
-    last_error: Optional[str] = None
-    last_error_time: Optional[datetime] = None
-    last_success_time: Optional[datetime] = None
+    last_error: str | None = None
+    last_error_time: datetime | None = None
+    last_success_time: datetime | None = None
     uptime_seconds: float = 0.0
 
     @property
@@ -64,7 +64,7 @@ class PoolStatistics:
     in_use_connections: int
     max_connections: int
     idle_connections: int
-    last_cleanup: Optional[datetime] = None
+    last_cleanup: datetime | None = None
 
 
 @dataclass
@@ -113,9 +113,9 @@ class ConnectionMetrics:
     total_requests: int = 0
     failed_requests: int = 0
     avg_response_time_ms: float = 0.0
-    last_error: Optional[str] = None
-    last_error_time: Optional[float] = None
-    last_success_time: Optional[float] = None
+    last_error: str | None = None
+    last_error_time: float | None = None
+    last_success_time: float | None = None
     circuit_breaker_state: str = "closed"
 
     @property

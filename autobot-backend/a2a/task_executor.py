@@ -9,7 +9,7 @@ Runs as a FastAPI BackgroundTask so the POST /tasks endpoint returns immediately
 with the task ID while execution continues asynchronously.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 
@@ -33,7 +33,7 @@ def _extract_response_text(result: Dict[str, Any]) -> str:
     return str(result)
 
 
-def _extract_routing_metadata(result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _extract_routing_metadata(result: Dict[str, Any]) -> Dict[str, Any] | None:
     """Extract non-response metadata (agent used, timing, etc.) from result."""
     skip = {"response", "response_text", "message", "text", "output"}
     meta = {k: v for k, v in result.items() if k not in skip}
@@ -43,7 +43,7 @@ def _extract_routing_metadata(result: Dict[str, Any]) -> Optional[Dict[str, Any]
 async def execute_a2a_task(
     task_id: str,
     input_text: str,
-    context: Optional[Dict[str, Any]] = None,
+    context: Dict[str, Any] | None = None,
     eval_threshold: float = DEFAULT_EVAL_THRESHOLD,
 ) -> None:
     """

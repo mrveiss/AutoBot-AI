@@ -9,7 +9,7 @@ moved to CollaborationCoordinator and AgentRouter collaborators respectively.
 
 import asyncio
 import time
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from enhanced_orchestration.agent_router import AgentRouter
@@ -41,7 +41,7 @@ class WorkflowRunner:
         collaboration: CollaborationCoordinator,
         agent_router: AgentRouter,
         max_parallel_tasks: int = 5,
-        criteria_evaluator: Optional[SuccessCriteriaEvaluator] = None,
+        criteria_evaluator: SuccessCriteriaEvaluator | None = None,
     ) -> None:
         self._strategy_planner = strategy_planner
         self._perf = performance_tracker
@@ -51,14 +51,14 @@ class WorkflowRunner:
         self.max_parallel_tasks = max_parallel_tasks
         self.resource_semaphore: asyncio.Semaphore = asyncio.Semaphore(max_parallel_tasks)
         self._criteria_evaluator = criteria_evaluator or SuccessCriteriaEvaluator()
-        self._strategy_handler: Optional[ExecutionStrategyHandler] = None
+        self._strategy_handler: ExecutionStrategyHandler | None = None
         # #7431 ADR-006 §Q1: subscriber that wakes blocked plans when
         # skill_promoted events arrive on Redis pub-sub. Lazy-constructed
         # via get_blocked_plan_resumer(); not started automatically — the
         # orchestrator (or whichever caller owns the lifecycle) must call
         # start() / stop() to enable auto-resume. Tests that don't need
         # auto-resume never construct the resumer (zero overhead).
-        self._resumer: Optional[Any] = None
+        self._resumer: Any | None = None
 
     # ------------------------------------------------------------------ helpers
 

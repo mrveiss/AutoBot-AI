@@ -19,7 +19,7 @@ import secrets
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -44,9 +44,9 @@ class LLMApiKeyRecord:
     monthly_budget_usd: float  # 0.0 = unlimited
     allowed_models: List[str]  # empty list = all models allowed
     created_at: float  # Unix timestamp
-    expires_at: Optional[float]  # None = no expiry
-    rotated_at: Optional[float]  # set when a rotation is pending
-    prev_key_hash: Optional[str]  # old hash kept valid during grace period
+    expires_at: float | None  # None = no expiry
+    rotated_at: float | None  # set when a rotation is pending
+    prev_key_hash: str | None  # old hash kept valid during grace period
     revoked: bool
 
     def to_redis_hash(self) -> Dict[str, str]:
@@ -90,7 +90,7 @@ def _hash_raw_key(raw_key: str) -> str:
     return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
 
-def _parse_key_id_from_bearer(bearer: str) -> Optional[str]:
+def _parse_key_id_from_bearer(bearer: str) -> str | None:
     """Extract the 8-char key_id prefix from sk-XXXXXXXX-... format."""
     if not bearer.startswith("sk-"):
         return None
@@ -124,8 +124,8 @@ class LLMApiKeyService:
         team_id: str,
         label: str,
         monthly_budget_usd: float = 0.0,
-        allowed_models: Optional[List[str]] = None,
-        expires_at: Optional[float] = None,
+        allowed_models: List[str] | None = None,
+        expires_at: float | None = None,
     ) -> tuple[LLMApiKeyRecord, str]:
         """Create a new key. Returns (record, raw_key). raw_key shown once."""
         key_id = secrets.token_hex(4)  # 8 hex chars
@@ -165,7 +165,7 @@ class LLMApiKeyService:
         logger.info("Revoked LLM API key %s", key_id)
         return True
 
-    async def rotate_key(self, key_id: str) -> Optional[tuple[LLMApiKeyRecord, str]]:
+    async def rotate_key(self, key_id: str) -> tuple[LLMApiKeyRecord, str] | None:
         """Issue a new raw key for key_id, keeping old hash valid for grace period."""
         redis = await self._r()
         redis_key = f"llm:apikey:{key_id}"
@@ -185,7 +185,7 @@ class LLMApiKeyService:
         logger.info("Rotated LLM API key %s", key_id)
         return record, new_raw
 
-    async def list_keys(self, team_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def list_keys(self, team_id: str | None = None) -> List[Dict[str, Any]]:
         """List keys with current month spend."""
         redis = await self._r()
         if team_id:
@@ -235,7 +235,7 @@ class LLMApiKeyService:
     # Authentication & enforcement
     # ------------------------------------------------------------------
 
-    async def authenticate_key(self, raw_key: str) -> Optional[LLMApiKeyRecord]:
+    async def authenticate_key(self, raw_key: str) -> LLMApiKeyRecord | None:
         """Validate a raw bearer token. Returns record if valid, else None."""
         key_id = _parse_key_id_from_bearer(raw_key)
         if not key_id:

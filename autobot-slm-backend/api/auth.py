@@ -62,14 +62,14 @@ def _create_mfa_challenge(user: User) -> MfaChallengeResponse:
 
 @router.post(
     "/login",
-    response_model=Union[TokenResponse, MfaChallengeResponse],
+    response_model=TokenResponse | MfaChallengeResponse,
 )
 async def login(
     http_request: Request,
     body: TokenRequest,
     db: Annotated[AsyncSession, Depends(get_slm_db)],
     audit_db: Annotated[AsyncSession, Depends(get_db)],
-) -> Union[TokenResponse, MfaChallengeResponse]:
+) -> TokenResponse | MfaChallengeResponse:
     """Authenticate and get access token.
 
     Accepts username or email. Returns JWT token or MFA challenge.

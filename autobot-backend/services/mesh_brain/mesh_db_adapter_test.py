@@ -47,7 +47,7 @@ class TestGetEdge:
     """MeshDBAdapter.get_edge delegates to inner MeshDB and forwards the result."""
 
     @pytest.mark.asyncio
-    async def test_returns_dict_when_found(self):
+    async def test_returns_dict_when_found(self) -> None:
         edge_row = {
             "id": _EDGE_ID,
             "from_node": _NODE_A,
@@ -63,7 +63,7 @@ class TestGetEdge:
         mock_db.get_edge.assert_awaited_once_with(_NODE_A, _NODE_B)
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_absent(self):
+    async def test_returns_none_when_absent(self) -> None:
         adapter, mock_db = _make_adapter(get_edge=None)
 
         result = await adapter.get_edge(_NODE_A, _NODE_B)
@@ -76,7 +76,7 @@ class TestUpdateEdge:
     """MeshDBAdapter.update_edge forwards all keyword arguments to MeshDB."""
 
     @pytest.mark.asyncio
-    async def test_forwards_kwargs(self):
+    async def test_forwards_kwargs(self) -> None:
         adapter, mock_db = _make_adapter(update_edge=None)
 
         await adapter.update_edge(_EDGE_ID, weight=0.75, co_access_count=5)
@@ -88,7 +88,7 @@ class TestCreateEdge:
     """MeshDBAdapter.create_edge forwards positional and keyword arguments to MeshDB."""
 
     @pytest.mark.asyncio
-    async def test_forwards_all_args(self):
+    async def test_forwards_all_args(self) -> None:
         adapter, mock_db = _make_adapter(create_edge=_EDGE_ID)
 
         await adapter.create_edge(
@@ -112,7 +112,7 @@ class TestGetCoAccessCount:
     """MeshDBAdapter.get_co_access_count delegates to MeshDB and returns int."""
 
     @pytest.mark.asyncio
-    async def test_returns_count(self):
+    async def test_returns_count(self) -> None:
         adapter, mock_db = _make_adapter(get_co_access_count=7)
 
         result = await adapter.get_co_access_count(_NODE_A, _NODE_B)
@@ -121,7 +121,7 @@ class TestGetCoAccessCount:
         mock_db.get_co_access_count.assert_awaited_once_with(_NODE_A, _NODE_B)
 
     @pytest.mark.asyncio
-    async def test_returns_zero_when_no_edge(self):
+    async def test_returns_zero_when_no_edge(self) -> None:
         adapter, mock_db = _make_adapter(get_co_access_count=0)
 
         result = await adapter.get_co_access_count(_NODE_A, _NODE_B)
@@ -133,7 +133,7 @@ class TestUpdateAccessCount:
     """MeshDBAdapter.update_access_count delegates the node_ids list to MeshDB."""
 
     @pytest.mark.asyncio
-    async def test_forwards_node_ids(self):
+    async def test_forwards_node_ids(self) -> None:
         adapter, mock_db = _make_adapter(update_access_count=None)
 
         await adapter.update_access_count([_NODE_A, _NODE_B])
@@ -141,7 +141,7 @@ class TestUpdateAccessCount:
         mock_db.update_access_count.assert_awaited_once_with([_NODE_A, _NODE_B])
 
     @pytest.mark.asyncio
-    async def test_empty_list_is_forwarded(self):
+    async def test_empty_list_is_forwarded(self) -> None:
         adapter, mock_db = _make_adapter(update_access_count=None)
 
         await adapter.update_access_count([])
@@ -158,7 +158,7 @@ class TestFetchEdges:
     """MeshDBAdapter.fetch_edges delegates to inner MeshDB and returns list[dict]."""
 
     @pytest.mark.asyncio
-    async def test_forwards_min_weight_and_returns_rows(self):
+    async def test_forwards_min_weight_and_returns_rows(self) -> None:
         edge_rows = [
             {"id": _EDGE_ID, "from_node": _NODE_A, "to_node": _NODE_B, "weight": 0.8},
         ]
@@ -170,7 +170,7 @@ class TestFetchEdges:
         mock_db.fetch_edges.assert_awaited_once_with(min_weight=0.7)
 
     @pytest.mark.asyncio
-    async def test_default_min_weight_is_forwarded(self):
+    async def test_default_min_weight_is_forwarded(self) -> None:
         adapter, mock_db = _make_adapter(fetch_edges=[])
 
         await adapter.fetch_edges()
@@ -182,7 +182,7 @@ class TestPromoteToAnchor:
     """MeshDBAdapter.promote_to_anchor delegates to inner MeshDB."""
 
     @pytest.mark.asyncio
-    async def test_forwards_node_id(self):
+    async def test_forwards_node_id(self) -> None:
         adapter, mock_db = _make_adapter(promote_to_anchor=None)
 
         await adapter.promote_to_anchor(_NODE_A)
@@ -204,7 +204,7 @@ class TestGetNeighborsMeshGraph:
     """
 
     @pytest.mark.asyncio
-    async def test_projects_dicts_to_tuples(self):
+    async def test_projects_dicts_to_tuples(self) -> None:
         db_rows = [
             {"neighbor_id": _NODE_B, "weight": 0.85, "edge_type": "semantic"},
             {"neighbor_id": _EDGE_ID, "weight": 0.60, "edge_type": "coref"},
@@ -218,7 +218,7 @@ class TestGetNeighborsMeshGraph:
         mock_db.get_neighbors.assert_awaited_once_with(_NODE_A, min_weight=0.0)
 
     @pytest.mark.asyncio
-    async def test_empty_neighbors_returns_empty_list(self):
+    async def test_empty_neighbors_returns_empty_list(self) -> None:
         adapter, mock_db = _make_adapter(get_neighbors=[])
 
         result = await adapter.get_neighbors(_NODE_A)
@@ -226,7 +226,7 @@ class TestGetNeighborsMeshGraph:
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_weight_is_cast_to_float(self):
+    async def test_weight_is_cast_to_float(self) -> None:
         """Weights stored as strings in the DB (e.g. from Redis) are coerced to float."""
         db_rows = [{"neighbor_id": _NODE_B, "weight": "0.75", "edge_type": "semantic"}]
         adapter, mock_db = _make_adapter(get_neighbors=db_rows)
@@ -237,7 +237,7 @@ class TestGetNeighborsMeshGraph:
         assert isinstance(result[0][1], float)
 
     @pytest.mark.asyncio
-    async def test_single_neighbor(self):
+    async def test_single_neighbor(self) -> None:
         db_rows = [{"neighbor_id": _NODE_B, "weight": 1.0, "edge_type": "strong"}]
         adapter, mock_db = _make_adapter(get_neighbors=db_rows)
 
@@ -257,7 +257,7 @@ class TestGetNeighborsMeshGraph:
 class TestProtocolConformance:
     """Verify MeshDBAdapter exposes the full method surface of both protocols."""
 
-    def test_has_all_mesh_db_protocol_methods(self):
+    def test_has_all_mesh_db_protocol_methods(self) -> None:
         """All methods required by EdgeLearner's MeshDB Protocol are present."""
         adapter = MeshDBAdapter(MagicMock())
         for method in (
@@ -269,7 +269,7 @@ class TestProtocolConformance:
         ):
             assert callable(getattr(adapter, method, None)), f"Missing method: {method}"
 
-    def test_has_all_mesh_graph_protocol_methods(self):
+    def test_has_all_mesh_graph_protocol_methods(self) -> None:
         """All methods required by StalenessPropagor's MeshGraph Protocol are present."""
         adapter = MeshDBAdapter(MagicMock())
         assert callable(getattr(adapter, "get_neighbors", None))
@@ -283,13 +283,13 @@ class TestProtocolConformance:
 class TestCreateMeshDbAdapter:
     """create_mesh_db_adapter returns a ready MeshDBAdapter."""
 
-    def test_returns_mesh_db_adapter_instance(self):
+    def test_returns_mesh_db_adapter_instance(self) -> None:
         mock_engine = MagicMock()
         adapter = create_mesh_db_adapter(mock_engine)
 
         assert isinstance(adapter, MeshDBAdapter)
 
-    def test_inner_db_receives_engine(self):
+    def test_inner_db_receives_engine(self) -> None:
         """The wrapped MeshDB instance is constructed with the supplied engine."""
         mock_engine = MagicMock()
         adapter = create_mesh_db_adapter(mock_engine)
@@ -334,7 +334,7 @@ class TestCommunityClustererWithAdapter:
     """
 
     @pytest.mark.asyncio
-    async def test_run_completes_without_attribute_error(self):
+    async def test_run_completes_without_attribute_error(self) -> None:
         """run() on a MeshDBAdapter-backed clusterer promotes centroids without error."""
         _ensure_graspologic_stub()
         edge_rows = [
@@ -353,7 +353,7 @@ class TestCommunityClustererWithAdapter:
         assert promoted[0] in (_NODE_A, _NODE_B)
 
     @pytest.mark.asyncio
-    async def test_run_empty_edges_promotes_nothing(self):
+    async def test_run_empty_edges_promotes_nothing(self) -> None:
         """run() with no edges above min_weight returns [] and never calls promote_to_anchor."""
         _ensure_graspologic_stub()
         adapter, mock_db = _make_adapter(
@@ -368,7 +368,7 @@ class TestCommunityClustererWithAdapter:
         mock_db.promote_to_anchor.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_fetch_edges_called_with_min_weight(self):
+    async def test_fetch_edges_called_with_min_weight(self) -> None:
         """run() forwards min_weight to adapter.fetch_edges."""
         _ensure_graspologic_stub()
         adapter, mock_db = _make_adapter(

@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import time
-from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Dict, List, Tuple
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
@@ -103,7 +103,7 @@ async def _get_user(request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
-def _extract_bearer(request: Request) -> Optional[str]:
+def _extract_bearer(request: Request) -> str | None:
     """Return the raw Bearer token string, or None if absent/malformed."""
     header = request.headers.get("authorization", "")
     if header.lower().startswith("bearer "):
@@ -111,7 +111,7 @@ def _extract_bearer(request: Request) -> Optional[str]:
     return None
 
 
-async def _resolve_auth(request: Request) -> Tuple[Optional[Dict[str, Any]], Optional[LLMApiKeyRecord]]:
+async def _resolve_auth(request: Request) -> Tuple[Dict[str, Any] | None, LLMApiKeyRecord | None]:
     """Dual-auth: accept either a platform JWT or a virtual sk-... API key.
 
     Returns (user_dict, api_key_record). Exactly one of them will be non-None.
@@ -146,7 +146,7 @@ async def _resolve_auto_model(model: str, messages: list) -> str:
     return selected
 
 
-def _build_llm_request(body: ChatCompletionRequest, resolved_model: Optional[str] = None) -> LLMRequest:
+def _build_llm_request(body: ChatCompletionRequest, resolved_model: str | None = None) -> LLMRequest:
     """Convert OpenAI-format request to AutoBot LLMRequest."""
     messages = [{"role": m.role, "content": m.content} for m in body.messages]
     effective_model = resolved_model or (body.model if body.model != "autobot-default" else None)
@@ -188,7 +188,7 @@ async def _stream_generator(
     *,
     include_usage: bool = False,
     prompt_text: str = "",
-    api_key_record: Optional[LLMApiKeyRecord] = None,
+    api_key_record: LLMApiKeyRecord | None = None,
 ) -> AsyncIterator[str]:
     """Yield SSE lines for a streaming completion."""
     created = int(time.time())

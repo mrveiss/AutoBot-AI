@@ -36,7 +36,7 @@ class TestLazySingleton:
         get(1, 2, x=3)
         assert received == [((1, 2), {"x": 3})]
 
-    def test_arg_guard_raises_on_mismatch(self):
+    def test_arg_guard_raises_on_mismatch(self) -> None:
         get = lazy_singleton(lambda x: x)
         get(1)
         with pytest.raises(RuntimeError, match="different args"):
@@ -51,19 +51,19 @@ class TestLazySingleton:
         with pytest.raises(RuntimeError, match="different args"):
             get(x=2)
 
-    def test_arg_guard_allows_same_args(self):
+    def test_arg_guard_allows_same_args(self) -> None:
         get = lazy_singleton(lambda x: x)
         a = get(42)
         b = get(42)
         assert a is b
 
-    def test_arg_guard_not_triggered_with_no_args(self):
+    def test_arg_guard_not_triggered_with_no_args(self) -> None:
         get = lazy_singleton(object)
         a = get()
         b = get()
         assert a is b  # no RuntimeError
 
-    def test_multiple_independent_singletons(self):
+    def test_multiple_independent_singletons(self) -> None:
         """Each lazy_singleton call creates an independent closure."""
         get_a = lazy_singleton(object)
         get_b = lazy_singleton(object)
@@ -142,7 +142,7 @@ def test_lazy_optional_singleton_caches_none():
     assert call_count == 1
 
 
-def test_lazy_optional_singleton_independent_closures():
+def test_lazy_optional_singleton_independent_closures() -> None:
     """Two separate lazy_optional_singleton(...) calls produce independent singletons."""
     get_a = lazy_optional_singleton(object)
     get_b = lazy_optional_singleton(object)
@@ -224,7 +224,7 @@ class TestAsyncLazySingleton:
         assert len(calls) == 1
 
     @pytest.mark.asyncio
-    async def test_independent_closures(self):
+    async def test_independent_closures(self) -> None:
         """Two async_lazy_singleton calls produce independent singletons."""
         get_a = async_lazy_singleton(object)
         get_b = async_lazy_singleton(object)

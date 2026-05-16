@@ -25,7 +25,7 @@ import logging
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -95,7 +95,7 @@ class _VRAMTracker:
     def __init__(self) -> None:
         self.peak_allocated_bytes: int = 0
         self.total_bytes: int = 0
-        self._cuda_available: Optional[bool] = None
+        self._cuda_available: bool | None = None
 
     def _check_cuda(self) -> bool:
         """Lazy-check for CUDA availability."""
@@ -157,7 +157,7 @@ class LayeredProfiler:
     Issue #1956.
     """
 
-    def __init__(self, model_name: str, *, enabled: Optional[bool] = None):
+    def __init__(self, model_name: str, *, enabled: bool | None = None):
         """
         Initialize the profiler for a model.
 
@@ -319,7 +319,7 @@ class LayeredProfiler:
     # History Persistence
     # =========================================================================
 
-    def save_history(self) -> Optional[Path]:
+    def save_history(self) -> Path | None:
         """
         Save the profiling summary to a JSON file for later comparison.
 

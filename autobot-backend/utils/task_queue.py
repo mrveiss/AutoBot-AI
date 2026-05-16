@@ -15,7 +15,7 @@ import traceback
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.singleton_factory import lazy_singleton
@@ -56,11 +56,11 @@ class TaskResult:
     task_id: str
     status: TaskStatus
     result: Any = None
-    error: Optional[str] = None
-    error_traceback: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    execution_time: Optional[float] = None
+    error: str | None = None
+    error_traceback: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    execution_time: float | None = None
     retry_count: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
@@ -92,15 +92,15 @@ class Task:
     id: str
     function_name: str
     args: tuple = ()
-    kwargs: Optional[Dict[str, Any]] = None
+    kwargs: Dict[str, Any] | None = None
     priority: TaskPriority = TaskPriority.NORMAL
     max_retries: int = RetryConfig.DEFAULT_RETRIES
     retry_delay: float = 1.0  # seconds
-    timeout: Optional[float] = None
-    created_at: Optional[datetime] = None
-    scheduled_at: Optional[datetime] = None
-    expires_at: Optional[datetime] = None
-    metadata: Optional[Dict[str, Any]] = None
+    timeout: float | None = None
+    created_at: datetime | None = None
+    scheduled_at: datetime | None = None
+    expires_at: datetime | None = None
+    metadata: Dict[str, Any] | None = None
 
     def __post_init__(self):
         """Initialize default values for kwargs, created_at, and metadata."""
@@ -221,7 +221,7 @@ class TaskQueue:
 
         return decorator
 
-    def _calculate_task_timing(self, delay: Optional[float], expires_in: Optional[float]) -> tuple:
+    def _calculate_task_timing(self, delay: float | None, expires_in: float | None) -> tuple:
         """
         Calculate scheduled_at and expires_at timestamps for a task.
 
@@ -244,7 +244,7 @@ class TaskQueue:
 
         return scheduled_at, expires_at
 
-    async def _add_task_to_queue(self, task_id: str, scheduled_at: Optional[datetime], priority: TaskPriority) -> None:
+    async def _add_task_to_queue(self, task_id: str, scheduled_at: datetime | None, priority: TaskPriority) -> None:
         """
         Add task to appropriate queue (scheduled or pending).
 
@@ -274,11 +274,11 @@ class TaskQueue:
         function_name: str,
         *args,
         priority: TaskPriority = TaskPriority.NORMAL,
-        delay: Optional[float] = None,
-        timeout: Optional[float] = None,
+        delay: float | None = None,
+        timeout: float | None = None,
         max_retries: int = RetryConfig.DEFAULT_RETRIES,
-        expires_in: Optional[float] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        expires_in: float | None = None,
+        metadata: Dict[str, Any] | None = None,
         **kwargs,
     ) -> str:
         """
@@ -334,7 +334,7 @@ class TaskQueue:
             self.logger.error("Failed to store task %s: %s", task.id, e)
             raise RuntimeError(f"Failed to store task: {e}")
 
-    async def _get_task(self, task_id: str) -> Optional[Task]:
+    async def _get_task(self, task_id: str) -> Task | None:
         """Retrieve task data from Redis."""
         if not self.redis:
             return None
@@ -468,7 +468,7 @@ class TaskQueue:
 
         self.logger.info("Scheduler stopped")
 
-    async def _get_next_task(self) -> Optional[str]:
+    async def _get_next_task(self) -> str | None:
         """Get next task from pending queue."""
         if not self.redis:
             return None
@@ -516,7 +516,7 @@ class TaskQueue:
         result: TaskResult,
         error: str,
         start_time: float,
-        error_traceback: Optional[str] = None,
+        error_traceback: str | None = None,
     ) -> None:
         """
         Record task failure.
@@ -680,7 +680,7 @@ class TaskQueue:
                 retry_count=result.retry_count,
             )
 
-    async def get_task_result(self, task_id: str) -> Optional[TaskResult]:
+    async def get_task_result(self, task_id: str) -> TaskResult | None:
         """Get task execution result."""
         if not self.redis:
             return None
@@ -697,7 +697,7 @@ class TaskQueue:
         except RedisError:
             return False
 
-    async def get_task_status(self, task_id: str) -> Optional[TaskStatus]:
+    async def get_task_status(self, task_id: str) -> TaskStatus | None:
         """Get current task status (Issue #315 - uses dispatch table pattern)."""
         if not self.redis:
             return None
@@ -831,7 +831,7 @@ def initialize_task_queue(**kwargs) -> TaskQueue:
 
 
 # Convenience decorators
-def task(name: Optional[str] = None, **task_kwargs):
+def task(name: str | None = None, **task_kwargs):
     """
     Decorator to register and configure task functions.
 

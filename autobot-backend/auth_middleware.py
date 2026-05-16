@@ -10,7 +10,7 @@ import datetime
 import json
 import secrets
 from datetime import timezone
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 from fastapi import HTTPException, Request, status
 
@@ -229,7 +229,7 @@ class AuthenticationMiddleware:
             "last_login": user_config["last_login"],
         }
 
-    def authenticate_user(self, username: str, password: str, ip_address: str = "unknown") -> Optional[Dict]:
+    def authenticate_user(self, username: str, password: str, ip_address: str = "unknown") -> Dict | None:
         """Authenticate user with enhanced security measures.
 
         Returns:
@@ -270,7 +270,7 @@ class AuthenticationMiddleware:
 
         return encode_jwt(payload, secret=self.jwt_secret, expiry_hours=self.jwt_expiry_hours)
 
-    def verify_jwt_token(self, token: str) -> Optional[Dict]:
+    def verify_jwt_token(self, token: str) -> Dict | None:
         """Verify and decode JWT token."""
         payload = decode_jwt_or_none(token, self.jwt_secret)
         if payload is None:
@@ -315,7 +315,7 @@ class AuthenticationMiddleware:
 
         return session_id
 
-    def get_session(self, session_id: str) -> Optional[Dict]:
+    def get_session(self, session_id: str) -> Dict | None:
         """Get active session data from Redis or in-memory store"""
         # Try Redis first
         if self.redis_client:
@@ -388,7 +388,7 @@ class AuthenticationMiddleware:
             details={"session_id": session_id[:16] + "..."},  # Partial ID for audit
         )
 
-    def _extract_user_from_jwt(self, request: Request) -> Optional[Dict]:
+    def _extract_user_from_jwt(self, request: Request) -> Dict | None:
         """
         Extract user from JWT token in Authorization header.
 
@@ -419,7 +419,7 @@ class AuthenticationMiddleware:
 
         return user
 
-    def _extract_user_from_session(self, request: Request) -> Optional[Dict]:
+    def _extract_user_from_session(self, request: Request) -> Dict | None:
         """
         Extract user from session ID in header.
 
@@ -438,7 +438,7 @@ class AuthenticationMiddleware:
         user_data["auth_method"] = "session"
         return user_data
 
-    def _extract_user_from_dev_header(self, request: Request) -> Optional[Dict]:
+    def _extract_user_from_dev_header(self, request: Request) -> Dict | None:
         """
         Extract user from development mode X-User-Role header.
 
@@ -460,7 +460,7 @@ class AuthenticationMiddleware:
             "auth_method": "development",
         }
 
-    async def _extract_user_from_run_jwt(self, request: Request) -> Optional[Dict]:
+    async def _extract_user_from_run_jwt(self, request: Request) -> Dict | None:
         """Try to authenticate the request with a run-scoped JWT (SEC-2 #6473).
 
         Called as a fallback when user-JWT and session auth both fail.
@@ -497,7 +497,7 @@ class AuthenticationMiddleware:
             "auth_method": "run_jwt",
         }
 
-    def get_user_from_request(self, request: Request) -> Optional[Dict]:
+    def get_user_from_request(self, request: Request) -> Dict | None:
         """
         Extract and validate user from request using multiple authentication methods.
 
@@ -604,7 +604,7 @@ class AuthenticationMiddleware:
             },
         )
 
-    def check_file_permissions(self, request: Request, operation: str) -> Tuple[bool, Optional[Dict]]:
+    def check_file_permissions(self, request: Request, operation: str) -> Tuple[bool, Dict | None]:
         """
         Enhanced permission checking with comprehensive security measures.
 
@@ -732,7 +732,7 @@ def check_admin_permission(request: Request) -> bool:
     return True
 
 
-async def authenticate_websocket(websocket) -> Optional[dict]:
+async def authenticate_websocket(websocket) -> dict | None:
     """Authenticate a WebSocket connection.
 
     Checks for JWT token in query params. Falls back to synthetic admin

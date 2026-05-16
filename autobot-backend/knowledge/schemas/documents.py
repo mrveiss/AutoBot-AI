@@ -16,7 +16,7 @@ fields from API output.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -40,10 +40,10 @@ class DocsFiltersApplied(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    category: Optional[str] = None
-    doc_type: Optional[str] = None
-    file_path_pattern: Optional[str] = None
-    search_query: Optional[str] = None
+    category: str | None = None
+    doc_type: str | None = None
+    file_path_pattern: str | None = None
+    search_query: str | None = None
 
 
 class DocsBrowseResponse(BaseModel):
@@ -95,7 +95,7 @@ class DocsStatsEnvelope(BaseModel):
     total_documents: int = 0
     total_indexed_entries: int = 0
     total_chunks: int = 0
-    latest_indexed: Optional[str] = None
+    latest_indexed: str | None = None
     categories_count: int = 0
 
 
@@ -136,5 +136,5 @@ class DocsWatcherControlResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     success: bool = False
-    message: Optional[str] = None
-    watcher: Optional[Dict[str, Any]] = None
+    message: str | None = None
+    watcher: Dict[str, Any] | None = None

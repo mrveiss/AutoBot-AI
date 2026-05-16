@@ -20,7 +20,7 @@ from autobot_shared.logging_manager import get_logger
 import asyncio
 import threading
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
@@ -107,12 +107,12 @@ class NPUClient:
     when NPU worker is unavailable.
     """
 
-    def __init__(self, base_url: str = NPU_WORKER_URL):
+    def __init__(self, base_url: str = NPU_WORKER_URL) -> None:
         self.base_url = base_url
-        self._session: Optional[aiohttp.ClientSession] = None
-        self._is_available: Optional[bool] = None
+        self._session: aiohttp.ClientSession | None = None
+        self._is_available: bool | None = None
         self._last_health_check: float = 0
-        self._device_info: Optional[NPUDeviceInfo] = None
+        self._device_info: NPUDeviceInfo | None = None
         self._lock = asyncio.Lock()
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -121,7 +121,7 @@ class NPUClient:
             self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=EMBEDDING_TIMEOUT))
         return self._session
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the client session"""
         if self._session and not self._session.closed:
             await self._session.close()
@@ -163,7 +163,7 @@ class NPUClient:
             self._last_health_check = current_time
             return False
 
-    async def get_device_info(self) -> Optional[NPUDeviceInfo]:
+    async def get_device_info(self) -> NPUDeviceInfo | None:
         """Get information about the NPU worker's device"""
         try:
             session = await self._get_session()
@@ -194,7 +194,7 @@ class NPUClient:
         texts: List[str],
         model_name: str = "nomic-embed-text",
         use_cache: bool = True,
-    ) -> Optional[EmbeddingResult]:
+    ) -> EmbeddingResult | None:
         """
         Generate embeddings using NPU worker.
 
@@ -235,7 +235,7 @@ class NPUClient:
 
         return None
 
-    async def generate_embedding(self, text: str, model_name: str = "nomic-embed-text") -> Optional[List[float]]:
+    async def generate_embedding(self, text: str, model_name: str = "nomic-embed-text") -> List[float] | None:
         """
         Generate single embedding using NPU worker.
 
@@ -255,9 +255,9 @@ class NPUClient:
         self,
         audio_path: str,
         model: str = "base",
-        language: Optional[str] = None,
+        language: str | None = None,
         timeout: float = 120.0,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Transcribe an audio file via the NPU worker's Whisper endpoint.
 
         Issue #3243: Exposes Whisper transcription through the NPU worker so the
@@ -301,7 +301,7 @@ class NPUClient:
             logger.warning("NPU transcribe_audio failed for %s: %s", audio_path, exc)
         return None
 
-    async def get_stats(self) -> Optional[Dict[str, Any]]:
+    async def get_stats(self) -> Dict[str, Any] | None:
         """Get NPU worker statistics"""
         try:
             session = await self._get_session()
@@ -317,7 +317,7 @@ class NPUClient:
 
 
 # Global client instance with thread-safe initialization (Issue #662)
-_npu_client: Optional[NPUClient] = None
+_npu_client: NPUClient | None = None
 _npu_client_lock = threading.Lock()
 
 
@@ -332,7 +332,7 @@ def get_npu_client() -> NPUClient:
     return _npu_client
 
 
-async def cleanup_npu_client():
+async def cleanup_npu_client() -> None:
     """Cleanup NPU client on shutdown"""
     global _npu_client
     if _npu_client:
@@ -346,7 +346,7 @@ async def generate_embedding_with_fallback(
     model_name: str = "nomic-embed-text",
     ollama_host: str = None,
     ollama_port: str = None,
-) -> Optional[List[float]]:
+) -> List[float] | None:
     """
     Generate embedding with automatic fallback.
 
@@ -399,7 +399,7 @@ async def generate_embedding_with_fallback(
 
 async def generate_embeddings_batch_with_fallback(
     texts: List[str], model_name: str = "nomic-embed-text", max_concurrent: int = 5
-) -> List[Optional[List[float]]]:
+) -> List[List[float] | None]:
     """
     Generate embeddings for multiple texts with fallback.
 
@@ -423,7 +423,7 @@ async def generate_embeddings_batch_with_fallback(
     # counter inside generate_embedding_with_fallback — no double-counting here)
     semaphore = asyncio.Semaphore(max_concurrent)
 
-    async def generate_one(text: str) -> Optional[List[float]]:
+    async def generate_one(text: str) -> List[float] | None:
         async with semaphore:
             return await generate_embedding_with_fallback(text, model_name)
 

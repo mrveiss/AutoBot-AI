@@ -31,7 +31,7 @@ class MeshDB(Protocol):
 class Subgraph:
     """Lightweight in-memory directed graph for PPR computation."""
 
-    def __init__(self, nodes: set, edges: list[tuple[str, str, float]]):
+    def __init__(self, nodes: set, edges: list[tuple[str, str, float]]) -> None:
         self.nodes = nodes
         self._in_edges: dict[str, list[tuple[str, float]]] = {}
         self._out_degree: dict[str, int] = {}
@@ -61,7 +61,7 @@ class PersonalizedPageRank:
     EdgeLearner) propagate more relevance.
     """
 
-    def __init__(self, db: MeshDB):
+    def __init__(self, db: MeshDB) -> None:
         """
         Args:
             db: MeshDB instance for subgraph loading (get_neighbors).

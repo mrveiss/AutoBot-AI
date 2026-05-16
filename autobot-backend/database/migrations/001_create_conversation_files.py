@@ -9,8 +9,6 @@ import logging
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
-
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
@@ -35,9 +33,9 @@ class ConversationFilesMigration:
 
     def __init__(
         self,
-        data_dir: Optional[Path] = None,
-        schema_dir: Optional[Path] = None,
-        db_path: Optional[Path] = None,
+        data_dir: Path | None = None,
+        schema_dir: Path | None = None,
+        db_path: Path | None = None,
     ):
         """
         Initialize migration with configurable paths.
@@ -58,7 +56,7 @@ class ConversationFilesMigration:
 
         self.schema_path = self.schema_dir / "conversation_files_schema.sql"
 
-        self.connection: Optional[sqlite3.Connection] = None
+        self.connection: sqlite3.Connection | None = None
 
     def _ensure_directories(self) -> None:
         """Ensure required directories exist."""

@@ -12,8 +12,6 @@ Tests verify:
 5. Built-in extensions (logging, secret masking)
 """
 
-from typing import Optional
-
 import pytest
 
 from extensions.base import Extension, HookContext
@@ -386,7 +384,7 @@ class TestExtensionManager:
                 self.enabled = True
                 self.should_handle = should_handle
 
-            async def on_approval_required(self, ctx: HookContext) -> Optional[bool]:
+            async def on_approval_required(self, ctx: HookContext) -> bool | None:
                 if self.should_handle:
                     return True
                 return None
@@ -414,7 +412,7 @@ class TestExtensionManager:
             def __init__(self, should_cancel: bool):
                 self.should_cancel = should_cancel
 
-            async def on_before_tool_execute(self, ctx: HookContext) -> Optional[bool]:
+            async def on_before_tool_execute(self, ctx: HookContext) -> bool | None:
                 if self.should_cancel:
                     return False
                 return None
@@ -438,7 +436,7 @@ class TestExtensionManager:
             def __init__(self, suffix: str):
                 self.suffix = suffix
 
-            async def on_after_prompt_build(self, ctx: HookContext) -> Optional[str]:
+            async def on_after_prompt_build(self, ctx: HookContext) -> str | None:
                 prompt = ctx.get("prompt", "")
                 return prompt + self.suffix
 

@@ -12,7 +12,7 @@ Issue #1967 — Web Pipeline Engine Phase 1.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -35,16 +35,16 @@ class AccessibilityNode:
 
     role: str
     name: str = ""
-    value: Optional[str] = None
-    description: Optional[str] = None
-    checked: Optional[bool] = None
-    disabled: Optional[bool] = None
-    expanded: Optional[bool] = None
-    focused: Optional[bool] = None
-    level: Optional[int] = None
-    multiselectable: Optional[bool] = None
-    required: Optional[bool] = None
-    selected: Optional[bool] = None
+    value: str | None = None
+    description: str | None = None
+    checked: bool | None = None
+    disabled: bool | None = None
+    expanded: bool | None = None
+    focused: bool | None = None
+    level: int | None = None
+    multiselectable: bool | None = None
+    required: bool | None = None
+    selected: bool | None = None
     children: List["AccessibilityNode"] = field(default_factory=list)
     # Raw properties that do not map to first-class fields
     properties: Dict[str, Any] = field(default_factory=dict)
@@ -78,7 +78,7 @@ class AccessibilityNode:
 # Type alias
 # ---------------------------------------------------------------------------
 
-AccessibilityTree = Optional[AccessibilityNode]
+AccessibilityTree = AccessibilityNode | None
 
 # ---------------------------------------------------------------------------
 # Snapshot class

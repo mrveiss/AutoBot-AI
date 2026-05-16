@@ -109,16 +109,16 @@ def _make_chromadb_client(collection: AsyncMock) -> AsyncMock:
 # ---------------------------------------------------------------------------
 
 
-def test_cluster_id_stable():
+def test_cluster_id_stable() -> None:
     paths = ["/a/b.md", "/a/c.md"]
     assert _cluster_id(paths) == _cluster_id(paths)
 
 
-def test_cluster_id_order_independent():
+def test_cluster_id_order_independent() -> None:
     assert _cluster_id(["/a.md", "/b.md"]) == _cluster_id(["/b.md", "/a.md"])
 
 
-def test_cluster_id_prefix():
+def test_cluster_id_prefix() -> None:
     cid = _cluster_id(["/a.md"])
     assert cid.startswith("kb_syn_")
 
@@ -128,12 +128,12 @@ def test_cluster_id_prefix():
 # ---------------------------------------------------------------------------
 
 
-def test_read_docs_missing_file(tmp_path):
+def test_read_docs_missing_file(tmp_path) -> None:
     result = _read_docs([str(tmp_path / "missing.md")])
     assert result == ""
 
 
-def test_read_docs_reads_content(tmp_path):
+def test_read_docs_reads_content(tmp_path) -> None:
     f = tmp_path / "doc.md"
     f.write_text("Hello world", encoding="utf-8")
     result = _read_docs([str(f)])
@@ -146,7 +146,7 @@ def test_read_docs_reads_content(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_get_collection_creates_once():
+async def test_get_collection_creates_once() -> None:
     col = _make_collection()
     client = _make_chromadb_client(col)
 
@@ -167,7 +167,7 @@ async def test_get_collection_creates_once():
 
 
 @pytest.mark.asyncio
-async def test_index_documents_upsert_called():
+async def test_index_documents_upsert_called() -> None:
     col = _make_collection()
     synth = KBSynthesizer(llm_service=_make_llm())
     synth._collection = col  # inject directly
@@ -182,7 +182,7 @@ async def test_index_documents_upsert_called():
 
 
 @pytest.mark.asyncio
-async def test_index_documents_empty_noop():
+async def test_index_documents_empty_noop() -> None:
     col = _make_collection()
     synth = KBSynthesizer(llm_service=_make_llm())
     synth._collection = col
@@ -196,7 +196,7 @@ async def test_index_documents_empty_noop():
 
 
 @pytest.mark.asyncio
-async def test_synthesize_docs_happy_path(tmp_path):
+async def test_synthesize_docs_happy_path(tmp_path) -> None:
     f = tmp_path / "doc.md"
     f.write_text("# Topic\nSome content.", encoding="utf-8")
 
@@ -215,7 +215,7 @@ async def test_synthesize_docs_happy_path(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_synthesize_docs_empty_paths():
+async def test_synthesize_docs_empty_paths() -> None:
     llm = _make_llm()
     synth = KBSynthesizer(llm_service=llm)
     await synth.synthesize_docs([])  # must not raise
@@ -223,7 +223,7 @@ async def test_synthesize_docs_empty_paths():
 
 
 @pytest.mark.asyncio
-async def test_synthesize_docs_llm_error_is_swallowed(tmp_path):
+async def test_synthesize_docs_llm_error_is_swallowed(tmp_path) -> None:
     f = tmp_path / "doc.md"
     f.write_text("content", encoding="utf-8")
 
@@ -239,7 +239,7 @@ async def test_synthesize_docs_llm_error_is_swallowed(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_synthesize_docs_calls_provenance_log_run(tmp_path):
+async def test_synthesize_docs_calls_provenance_log_run(tmp_path) -> None:
     """After a successful synthesis, log_run must be called on the provenance log (#4656)."""
     f = tmp_path / "doc.md"
     f.write_text("# Topic\nContent here.", encoding="utf-8")
@@ -264,7 +264,7 @@ async def test_synthesize_docs_calls_provenance_log_run(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_synthesize_docs_provenance_log_not_called_on_llm_error(tmp_path):
+async def test_synthesize_docs_provenance_log_not_called_on_llm_error(tmp_path) -> None:
     """When LLM fails, log_run must NOT be called (#4656)."""
     f = tmp_path / "doc.md"
     f.write_text("content", encoding="utf-8")
@@ -289,7 +289,7 @@ async def test_synthesize_docs_provenance_log_not_called_on_llm_error(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_get_relevant_context_with_results():
+async def test_get_relevant_context_with_results() -> None:
     query_results = {
         "ids": [["id1"]],
         "documents": [["A summary about Redis."]],
@@ -306,7 +306,7 @@ async def test_get_relevant_context_with_results():
 
 
 @pytest.mark.asyncio
-async def test_get_relevant_context_empty_collection():
+async def test_get_relevant_context_empty_collection() -> None:
     col = _make_collection()  # returns empty ids
     synth = KBSynthesizer(llm_service=_make_llm())
     synth._collection = col
@@ -321,7 +321,7 @@ async def test_get_relevant_context_empty_collection():
 # ---------------------------------------------------------------------------
 
 
-def test_get_kb_synthesizer_singleton():
+def test_get_kb_synthesizer_singleton() -> None:
     # Reset module-level singleton first
     _kb_synth_mod._kb_synthesizer = None  # type: ignore[attr-defined]
 
@@ -333,7 +333,7 @@ def test_get_kb_synthesizer_singleton():
     assert s1._llm is llm  # bound to first llm
 
 
-def test_get_kb_synthesizer_returns_instance():
+def test_get_kb_synthesizer_returns_instance() -> None:
     _kb_synth_mod._kb_synthesizer = None  # type: ignore[attr-defined]
     synth = get_kb_synthesizer(_make_llm())
     assert isinstance(synth, KBSynthesizer)
@@ -363,20 +363,20 @@ def _make_collection_config(
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_prompt_no_config_returns_default():
+def test_resolve_prompt_no_config_returns_default() -> None:
     synth = KBSynthesizer(llm_service=_make_llm())
     prompt = synth._resolve_prompt(None)
     assert prompt == _kb_synth_mod._SYNTHESIS_PROMPT
 
 
-def test_resolve_prompt_with_config_returns_template():
+def test_resolve_prompt_with_config_returns_template() -> None:
     synth = KBSynthesizer(llm_service=_make_llm())
     cfg = _make_collection_config(prompt_template="Custom: {documents}")
     prompt = synth._resolve_prompt(cfg)
     assert prompt == "Custom: {documents}"
 
 
-def test_resolve_prompt_empty_template_falls_back_to_default():
+def test_resolve_prompt_empty_template_falls_back_to_default() -> None:
     synth = KBSynthesizer(llm_service=_make_llm())
     cfg = _make_collection_config(prompt_template="   ")
     prompt = synth._resolve_prompt(cfg)
@@ -389,7 +389,7 @@ def test_resolve_prompt_empty_template_falls_back_to_default():
 
 
 @pytest.mark.asyncio
-async def test_synthesize_docs_uses_collection_config_prompt(tmp_path):
+async def test_synthesize_docs_uses_collection_config_prompt(tmp_path) -> None:
     """Template with {documents} sends a single user message with docs substituted (Option A)."""
     f = tmp_path / "arch.md"
     f.write_text("# Architecture\nSome details.", encoding="utf-8")
@@ -417,7 +417,7 @@ async def test_synthesize_docs_uses_collection_config_prompt(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_synthesize_docs_no_config_uses_default_prompt(tmp_path):
+async def test_synthesize_docs_no_config_uses_default_prompt(tmp_path) -> None:
     f = tmp_path / "doc.md"
     f.write_text("# Topic\nSome content.", encoding="utf-8")
 
@@ -441,7 +441,7 @@ async def test_synthesize_docs_no_config_uses_default_prompt(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_synthesize_cluster_with_documents_placeholder_single_user_message(tmp_path):
+async def test_synthesize_cluster_with_documents_placeholder_single_user_message(tmp_path) -> None:
     """When template has {documents}, LLM receives a single user message with docs substituted."""
     f = tmp_path / "doc.md"
     f.write_text("Important content here.", encoding="utf-8")
@@ -468,7 +468,7 @@ async def test_synthesize_cluster_with_documents_placeholder_single_user_message
 
 
 @pytest.mark.asyncio
-async def test_synthesize_cluster_without_documents_placeholder_two_message_format(tmp_path):
+async def test_synthesize_cluster_without_documents_placeholder_two_message_format(tmp_path) -> None:
     """When template has no {documents}, LLM receives system + user two-message format."""
     f = tmp_path / "doc.md"
     f.write_text("Some content.", encoding="utf-8")
@@ -496,7 +496,7 @@ async def test_synthesize_cluster_without_documents_placeholder_two_message_form
 
 
 @pytest.mark.asyncio
-async def test_synthesize_cluster_documents_placeholder_substitutes_actual_content(tmp_path):
+async def test_synthesize_cluster_documents_placeholder_substitutes_actual_content(tmp_path) -> None:
     """The substituted {documents} value contains the actual file content, not a literal."""
     f = tmp_path / "readme.md"
     f.write_text("Redis caching layer docs.", encoding="utf-8")
@@ -520,7 +520,7 @@ async def test_synthesize_cluster_documents_placeholder_substitutes_actual_conte
 
 
 @pytest.mark.asyncio
-async def test_synthesize_cluster_default_prompt_no_documents_placeholder(tmp_path):
+async def test_synthesize_cluster_default_prompt_no_documents_placeholder(tmp_path) -> None:
     """Default (no collection_config) prompt has no {documents} — uses two-message format."""
     f = tmp_path / "doc.md"
     f.write_text("Content.", encoding="utf-8")
@@ -544,7 +544,7 @@ async def test_synthesize_cluster_default_prompt_no_documents_placeholder(tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_synthesize_cluster_writes_to_synthesis_target(tmp_path):
+async def test_synthesize_cluster_writes_to_synthesis_target(tmp_path) -> None:
     """When synthesis_target is set, _index_documents is called with that name."""
     f = tmp_path / "arch.md"
     f.write_text("# Architecture", encoding="utf-8")
@@ -573,7 +573,7 @@ async def test_synthesize_cluster_writes_to_synthesis_target(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_synthesize_cluster_falls_back_to_default_when_no_target(tmp_path):
+async def test_synthesize_cluster_falls_back_to_default_when_no_target(tmp_path) -> None:
     """When synthesis_target is empty, output goes to the default collection."""
     f = tmp_path / "doc.md"
     f.write_text("# Topic\nContent.", encoding="utf-8")
@@ -591,7 +591,7 @@ async def test_synthesize_cluster_falls_back_to_default_when_no_target(tmp_path)
 
 
 @pytest.mark.asyncio
-async def test_synthesize_cluster_falls_back_when_config_is_none(tmp_path):
+async def test_synthesize_cluster_falls_back_when_config_is_none(tmp_path) -> None:
     """When collection_config is None, output goes to the default collection."""
     f = tmp_path / "doc.md"
     f.write_text("# Topic\nContent.", encoding="utf-8")
@@ -607,7 +607,7 @@ async def test_synthesize_cluster_falls_back_when_config_is_none(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_get_relevant_context_queries_extra_collections():
+async def test_get_relevant_context_queries_extra_collections() -> None:
     """get_relevant_context queries extra collection names in addition to default."""
     default_results = {
         "ids": [["id1"]],
@@ -633,7 +633,7 @@ async def test_get_relevant_context_queries_extra_collections():
 
 
 @pytest.mark.asyncio
-async def test_get_relevant_context_deduplicates_default_collection():
+async def test_get_relevant_context_deduplicates_default_collection() -> None:
     """Passing the default collection name twice must not query it twice."""
     default_results = {
         "ids": [["id1"]],
@@ -673,7 +673,7 @@ def _make_collection_config_with_model(
 
 
 @pytest.mark.asyncio
-async def test_synthesize_docs_passes_model_override_to_llm(tmp_path):
+async def test_synthesize_docs_passes_model_override_to_llm(tmp_path) -> None:
     """When synthesis_model is set, llm.chat() receives model= kwarg."""
     f = tmp_path / "doc.md"
     f.write_text("Architecture notes.", encoding="utf-8")
@@ -696,7 +696,7 @@ async def test_synthesize_docs_passes_model_override_to_llm(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_synthesize_docs_no_model_override_omits_model_kwarg(tmp_path):
+async def test_synthesize_docs_no_model_override_omits_model_kwarg(tmp_path) -> None:
     """When synthesis_model is None, llm.chat() is NOT passed a model= kwarg."""
     f = tmp_path / "doc.md"
     f.write_text("Some content.", encoding="utf-8")
@@ -716,7 +716,7 @@ async def test_synthesize_docs_no_model_override_omits_model_kwarg(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_synthesize_docs_no_collection_config_omits_model_kwarg(tmp_path):
+async def test_synthesize_docs_no_collection_config_omits_model_kwarg(tmp_path) -> None:
     """When collection_config is None, llm.chat() is NOT passed a model= kwarg."""
     f = tmp_path / "doc.md"
     f.write_text("Content.", encoding="utf-8")

@@ -115,7 +115,7 @@ import signal
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
@@ -190,7 +190,7 @@ class SSHTerminalWebSocket:
         websocket: WebSocket,
         session_id: str,
         host_id: str,
-        conversation_id: Optional[str] = None,
+        conversation_id: str | None = None,
         redis_client=None,
     ):
         """Initialize SSH terminal handler stub."""
@@ -271,14 +271,14 @@ class _SSHTerminalManager:
         async with self._lock:
             self.active_sessions.pop(session_id, None)
 
-    async def get_session(self, session_id: str) -> Optional[SSHTerminalWebSocket]:
+    async def get_session(self, session_id: str) -> SSHTerminalWebSocket | None:
         """Get an SSH terminal session."""
         async with self._lock:
             return self.active_sessions.get(session_id)
 
     async def close_session(self, session_id: str) -> None:
         """Close and clean up an SSH terminal session."""
-        terminal: Optional[SSHTerminalWebSocket] = None
+        terminal: SSHTerminalWebSocket | None = None
         async with self._lock:
             terminal = self.active_sessions.get(session_id)
         if terminal:
@@ -1104,7 +1104,7 @@ async def terminal_info(
 
 @register_health_probe("terminal")
 async def probe_terminal(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for terminal module."""
     try:

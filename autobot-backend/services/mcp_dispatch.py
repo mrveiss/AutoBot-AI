@@ -23,8 +23,6 @@ Cache TTL and RBAC filtering added in #2598.
 """
 
 import time
-from typing import Optional
-
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
@@ -115,7 +113,7 @@ class MCPDispatcher:
     # Tool lookup
     # ------------------------------------------------------------------
 
-    def find_tool(self, tool_name: str) -> Optional[dict]:
+    def find_tool(self, tool_name: str) -> dict | None:
         """Return the cached tool entry for tool_name, or None if not found."""
         return self._tool_cache.get(tool_name)
 
@@ -132,7 +130,7 @@ class MCPDispatcher:
         tool_name: str,
         arguments: dict,
         role: str = "user",
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> dict:
         """Dispatch a tool call to its registered MCP bridge.
 
@@ -292,7 +290,7 @@ class MCPDispatcher:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_dispatcher: Optional[MCPDispatcher] = None
+_dispatcher: MCPDispatcher | None = None
 
 
 def get_mcp_dispatcher() -> MCPDispatcher:

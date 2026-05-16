@@ -8,7 +8,7 @@ Handles session creation, initialization, cleanup, and session information retri
 """
 
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from async_chat_workflow import AsyncChatWorkflow
 from autobot_shared.error_boundaries import error_boundary
@@ -86,7 +86,7 @@ class SessionHandlerMixin:
         logger.info("Violated rules: %s", ", ".join(safety_check.violated_rules))
         return False
 
-    async def _get_or_create_terminal_session(self, session_id: str) -> Optional[str]:
+    async def _get_or_create_terminal_session(self, session_id: str) -> str | None:
         """Get or create terminal session for conversation (Issue #332 - extracted helper).
 
         Returns:
@@ -165,7 +165,7 @@ class SessionHandlerMixin:
 
         return session, terminal_session_id, user_wants_exit
 
-    async def get_session_info(self, session_id: str) -> Optional[Dict[str, Any]]:
+    async def get_session_info(self, session_id: str) -> Dict[str, Any] | None:
         """Get information about a session."""
         async with self._lock:
             if session_id not in self.sessions:

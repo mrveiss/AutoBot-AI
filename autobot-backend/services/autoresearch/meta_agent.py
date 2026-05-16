@@ -31,7 +31,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -50,7 +50,7 @@ class MetaPatch:
     modified_content: str = ""
     rationale: str = ""  # LLM summary of what was changed and why
     generation: int = 0
-    parent_id: Optional[str] = None
+    parent_id: str | None = None
     created_at: float = field(default_factory=time.time)
 
     @property
@@ -111,7 +111,7 @@ class MetaAgent:
 
     def __init__(
         self,
-        config: Optional[AutoResearchConfig] = None,
+        config: AutoResearchConfig | None = None,
         llm_service: Any = None,
     ) -> None:
         self.config = config or AutoResearchConfig()
@@ -122,7 +122,7 @@ class MetaAgent:
         target_module_path: Path,
         eval_context: List[Dict[str, Any]],
         generation: int,
-        parent_id: Optional[str] = None,
+        parent_id: str | None = None,
     ) -> MetaPatch:
         """Generate a code improvement patch for *target_module_path*.
 

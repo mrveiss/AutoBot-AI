@@ -13,7 +13,7 @@ Issue #717: Efficient Inference Design implementation.
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 
@@ -100,7 +100,7 @@ class ConnectionPoolManager:
         base_url: str,
         headers: Dict[str, str] = None,
         config: PoolConfig = None,
-    ) -> Optional["httpx.AsyncClient"]:
+    ) -> "httpx.AsyncClient" | None:
         """
         Get or create an HTTP client for a provider.
 
@@ -170,7 +170,7 @@ class ConnectionPoolManager:
         method: str,
         url: str,
         **kwargs: Any,
-    ) -> Optional["httpx.Response"]:
+    ) -> "httpx.Response" | None:
         """
         Make an HTTP request using the provider's connection pool.
 

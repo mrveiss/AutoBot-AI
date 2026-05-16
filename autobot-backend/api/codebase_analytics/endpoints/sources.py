@@ -14,8 +14,6 @@ import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
-
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
@@ -49,7 +47,7 @@ def _make_clone_path(source_id: str) -> str:
     return str(_CODE_SOURCES_BASE / source_id)
 
 
-async def _resolve_token(credential_id: str) -> Optional[str]:
+async def _resolve_token(credential_id: str) -> str | None:
     """Return the decrypted token value for a credential ID, or None."""
     try:
         from api.secrets import secrets_manager
@@ -61,7 +59,7 @@ async def _resolve_token(credential_id: str) -> Optional[str]:
         return None
 
 
-def _build_clone_url(repo: str, token: Optional[str]) -> str:
+def _build_clone_url(repo: str, token: str | None) -> str:
     """Build a GitHub clone URL, injecting token if available."""
     if token:
         return f"https://{token}@github.com/{repo}"
@@ -424,7 +422,7 @@ async def share_code_source(source_id: str, request: SourceShareRequest):
     return JSONResponse(source.model_dump())
 
 
-async def _get_last_indexed(source_id: str) -> Optional[str]:
+async def _get_last_indexed(source_id: str) -> str | None:
     """Read last_indexed timestamp from ChromaDB stats metadata.
 
     Helper for get_source_summary (#1458).
@@ -457,7 +455,7 @@ async def _get_last_indexed(source_id: str) -> Optional[str]:
     return None
 
 
-async def _get_last_commit(clone_path: str, repo: Optional[str], is_local: bool = False) -> Optional[dict]:
+async def _get_last_commit(clone_path: str, repo: str | None, is_local: bool = False) -> dict | None:
     """Read latest git commit info from a clone directory.
 
     Helper for get_source_summary (#1458).

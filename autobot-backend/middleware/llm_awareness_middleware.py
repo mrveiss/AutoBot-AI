@@ -9,7 +9,7 @@ Automatically injects system awareness context into LLM requests
 
 import json
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 MESSAGE_FIELDS = ["message", "prompt", "user_message", "query", "input"]
 
 
-def _parse_request_body(body: bytes) -> Optional[Dict[str, Any]]:
+def _parse_request_body(body: bytes) -> Dict[str, Any] | None:
     """Parse request body as JSON (Issue #337 - extracted helper)."""
     if not body:
         return None
@@ -35,7 +35,7 @@ def _parse_request_body(body: bytes) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _find_message_field(request_data: Dict[str, Any]) -> Optional[str]:
+def _find_message_field(request_data: Dict[str, Any]) -> str | None:
     """Find first message field in request data (Issue #337 - extracted helper)."""
     for field in MESSAGE_FIELDS:
         if field in request_data and isinstance(request_data[field], str):
@@ -54,7 +54,7 @@ def _update_request_headers(request: Request, modified_body: bytes) -> None:
 class LLMAwarenessMiddleware(BaseHTTPMiddleware):
     """Middleware to inject system awareness context into LLM requests"""
 
-    def __init__(self, app, enable_for_paths: Optional[list] = None):
+    def __init__(self, app, enable_for_paths: list | None = None):
         """Initialize LLM awareness middleware with configurable path filtering."""
         super().__init__(app)
         self.awareness = None
@@ -146,7 +146,7 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
 
         return response
 
-    async def _get_cached_context(self) -> Optional[Dict[str, Any]]:
+    async def _get_cached_context(self) -> Dict[str, Any] | None:
         """Get cached system context"""
         try:
             # Check cache validity

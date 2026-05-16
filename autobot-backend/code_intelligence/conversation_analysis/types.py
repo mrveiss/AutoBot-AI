@@ -11,7 +11,7 @@ Contains enums and data classes for conversation flow analysis.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 # Issue #380: Module-level frozensets for satisfaction signal detection
 SATISFACTION_SIGNALS = frozenset({"thanks", "great", "perfect", "excellent", "helpful"})
@@ -108,12 +108,12 @@ class ConversationMessage:
 
     role: str  # "user" or "assistant"
     content: str
-    timestamp: Optional[datetime] = None
-    message_id: Optional[str] = None
-    intent: Optional[IntentCategory] = None
-    response_type: Optional[ResponseType] = None
-    latency_ms: Optional[float] = None
-    token_count: Optional[int] = None
+    timestamp: datetime | None = None
+    message_id: str | None = None
+    intent: IntentCategory | None = None
+    response_type: ResponseType | None = None
+    latency_ms: float | None = None
+    token_count: int | None = None
     has_tool_call: bool = False
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -124,10 +124,10 @@ class ConversationFlow:
 
     session_id: str
     messages: List[ConversationMessage]
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
     final_state: FlowState = FlowState.INITIATED
-    primary_intent: Optional[IntentCategory] = None
+    primary_intent: IntentCategory | None = None
     intent_sequence: List[IntentCategory] = field(default_factory=list)
     turn_count: int = 0
     total_latency_ms: float = 0.0

@@ -11,7 +11,7 @@ Issue #1967 — Web Pipeline Engine Phase 1.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -32,11 +32,11 @@ class InterceptedRequest:
     url: str
     method: str
     request_headers: Dict[str, str] = field(default_factory=dict)
-    request_body: Optional[str] = None
-    response_status: Optional[int] = None
+    request_body: str | None = None
+    response_status: int | None = None
     response_headers: Dict[str, str] = field(default_factory=dict)
-    response_body: Optional[str] = None
-    error: Optional[str] = None
+    response_body: str | None = None
+    error: str | None = None
 
     # Convenience helpers ------------------------------------------------
 

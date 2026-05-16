@@ -35,7 +35,7 @@ Usage::
     )
 
     @router.post("/v1/chat/completions")
-    async def chat_completions(...):
+    async def chat_completions(...) -> None:
         await _oai_limiter.check_or_429(remote_addr)
         ...
 """

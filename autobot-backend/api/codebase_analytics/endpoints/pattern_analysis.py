@@ -10,7 +10,7 @@ Issue #1304: Migrated to shared BackgroundTaskManager.
 
 import asyncio
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -42,7 +42,7 @@ class PatternAnalysisRequest(BaseModel):
         default=str(PATH.PROJECT_ROOT),
         description="Path to analyze (defaults to project root)",
     )
-    source_id: Optional[str] = Field(
+    source_id: str | None = Field(
         default=None,
         description="#1772: source_id for API consistency",
     )
@@ -59,13 +59,13 @@ class PatternAnalysisStatus(BaseModel):
     task_id: str
     status: str  # pending, running, completed, failed
     progress: float = 0.0
-    current_step: Optional[str] = None
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-    error: Optional[str] = None
-    reason: Optional[str] = None  # orphaned, timeout, manual (#1250)
-    result: Optional[Dict[str, Any]] = None
-    partial_results: Optional[Dict[str, Any]] = None
+    current_step: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    error: str | None = None
+    reason: str | None = None  # orphaned, timeout, manual (#1250)
+    result: Dict[str, Any] | None = None
+    partial_results: Dict[str, Any] | None = None
 
 
 class PatternSummary(BaseModel):
@@ -110,7 +110,7 @@ async def _save_checkpoint(task_id: str, phase: str, batch_idx: int, partial_res
         logger.debug("Checkpoint save failed (non-fatal): %s", exc)
 
 
-async def _load_checkpoint(task_id: str) -> Optional[Dict[str, Any]]:
+async def _load_checkpoint(task_id: str) -> Dict[str, Any] | None:
     """Load analysis checkpoint from Redis."""
     redis = await _get_checkpoint_redis()
     if not redis:
@@ -720,9 +720,9 @@ def _build_empty_patterns_response() -> Dict[str, Any]:
 
 
 def _build_chromadb_where_filter(
-    pattern_type: Optional[str],
-    severity: Optional[str],
-) -> Optional[Dict[str, Any]]:
+    pattern_type: str | None,
+    severity: str | None,
+) -> Dict[str, Any] | None:
     """
     Build ChromaDB where filter from optional parameters.
 
@@ -781,8 +781,8 @@ def _format_pattern_results(
 
 @router.get("/patterns/cached-patterns")
 async def get_cached_patterns(
-    pattern_type: Optional[str] = Query(None, description="Filter by pattern type"),
-    severity: Optional[str] = Query(None, description="Filter by severity"),
+    pattern_type: str | None = Query(None, description="Filter by pattern type"),
+    severity: str | None = Query(None, description="Filter by severity"),
     limit: int = Query(
         default=QueryDefaults.DEFAULT_PAGE_SIZE,
         ge=1,
@@ -862,7 +862,7 @@ async def clear_pattern_storage() -> Dict[str, str]:
 @router.get("/patterns/similar")
 async def search_similar_patterns_endpoint(
     code: str = Query(..., description="Code snippet to find similar patterns for"),
-    pattern_type: Optional[str] = Query(None, description="Filter by pattern type"),
+    pattern_type: str | None = Query(None, description="Filter by pattern type"),
     limit: int = Query(
         default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
         ge=1,

@@ -15,7 +15,7 @@ and CRUD operations for tasks/issues/cards.
 
 import base64
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
@@ -45,7 +45,7 @@ class JiraIntegration(BaseIntegration):
 
     def __init__(self, config: IntegrationConfig):
         super().__init__(config)
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
 
     async def test_connection(self) -> IntegrationHealth:
         """Test Jira connection by fetching server info."""
@@ -247,7 +247,7 @@ class JiraIntegration(BaseIntegration):
         self,
         method: str,
         endpoint: str,
-        json_data: Optional[Dict[str, Any]] = None,
+        json_data: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Make authenticated request to Jira API."""
         url = f"{self.config.base_url}{endpoint}"
@@ -462,7 +462,7 @@ class TrelloIntegration(BaseIntegration):
         self,
         method: str,
         endpoint: str,
-        data: Optional[Dict[str, Any]] = None,
+        data: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Make authenticated request to Trello API."""
         base_url = self.config.base_url or "https://api.trello.com/1"
@@ -703,7 +703,7 @@ class AsanaIntegration(BaseIntegration):
         self,
         method: str,
         endpoint: str,
-        json_data: Optional[Dict[str, Any]] = None,
+        json_data: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Make authenticated request to Asana API."""
         base_url = self.config.base_url or "https://app.asana.com/api/1.0"

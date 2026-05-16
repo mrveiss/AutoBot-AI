@@ -23,7 +23,7 @@ import os
 import re
 import sqlite3
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from uuid import uuid4
 
 from autobot_shared.logging_manager import get_logger
@@ -225,7 +225,7 @@ async def _run_external_query(db_url: str, sql: str) -> List[Dict[str, Any]]:
 def _error_response(
     error: str,
     question: str,
-    sql: Optional[str],
+    sql: str | None,
 ) -> Dict[str, Any]:
     """
     Build a standardised error response dict for NL database queries.
@@ -276,12 +276,12 @@ class NLDatabaseService:
     databases. Enforces read-only access and logs all queries for audit.
     """
 
-    _instance: Optional["NLDatabaseService"] = None
+    _instance: "NLDatabaseService" | None = None
 
     def __init__(self) -> None:
         """Initialize the NLDatabaseService."""
-        self._vanna: Optional[Any] = None
-        self._llm: Optional[Any] = None
+        self._vanna: Any | None = None
+        self._llm: Any | None = None
         self._trained_schemas: Dict[str, str] = {}  # db_id -> DDL
         self._local_schema: str = ""
         self._vanna_available = False
@@ -350,9 +350,9 @@ class NLDatabaseService:
     async def query(
         self,
         question: str,
-        db_url: Optional[str] = None,
+        db_url: str | None = None,
         db_id: str = "local",
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
     ) -> Dict[str, Any]:
         """
         Execute a natural language query against a database.
@@ -393,7 +393,7 @@ class NLDatabaseService:
     async def _safe_execute_query(
         self,
         sql: str,
-        db_url: Optional[str],
+        db_url: str | None,
         db_id: str,
     ) -> tuple:
         """
@@ -414,7 +414,7 @@ class NLDatabaseService:
         sql: str,
         db_id: str,
         results: List[Dict[str, Any]],
-        user_id: Optional[str],
+        user_id: str | None,
         elapsed_ms: int,
     ) -> None:
         """
@@ -540,7 +540,7 @@ class NLDatabaseService:
     async def _execute_query(
         self,
         sql: str,
-        db_url: Optional[str],
+        db_url: str | None,
         db_id: str,
     ) -> List[Dict[str, Any]]:
         """
@@ -727,7 +727,7 @@ class NLDatabaseService:
 
     async def get_query_history(
         self,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
         limit: int = 50,
     ) -> List[Dict[str, Any]]:
         """
@@ -749,7 +749,7 @@ class NLDatabaseService:
             logger.warning("Failed to retrieve query history: %s", exc)
             return []
 
-    async def _save_history(self, entry: Dict[str, Any], user_id: Optional[str]) -> None:
+    async def _save_history(self, entry: Dict[str, Any], user_id: str | None) -> None:
         """
         Save a query entry to Redis history.
 

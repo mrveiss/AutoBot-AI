@@ -18,7 +18,7 @@ Usage::
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
 from autobot_shared.redis_client import get_redis_client
 
@@ -63,7 +63,7 @@ class WorkflowMemory:
                 key,
             )
 
-    async def read(self, key: str) -> Optional[str]:
+    async def read(self, key: str) -> str | None:
         """Read a specific key from shared workflow memory.
 
         Args:

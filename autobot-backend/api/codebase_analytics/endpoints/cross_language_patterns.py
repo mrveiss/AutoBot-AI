@@ -13,8 +13,6 @@ Provides endpoints to:
 """
 
 import asyncio
-from typing import Optional
-
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
@@ -50,7 +48,7 @@ def _get_detector() -> CrossLanguagePatternDetector:
 async def run_cross_language_analysis(
     use_llm: bool = True,
     use_cache: bool = True,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> JSONResponse:
     """
     Run full cross-language pattern analysis.
@@ -321,8 +319,8 @@ async def get_semantic_matches(
     error_code_prefix="CODEBASE",
 )
 async def get_patterns_by_category(
-    category: Optional[str] = None,
-    severity: Optional[str] = None,
+    category: str | None = None,
+    severity: str | None = None,
     limit: int = 100,
 ) -> JSONResponse:
     """

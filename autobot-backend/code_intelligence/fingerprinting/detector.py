@@ -17,7 +17,7 @@ import ast
 import hashlib
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.fingerprinting.ast_hasher import ASTHasher
@@ -69,7 +69,7 @@ class CloneDetector:
     def __init__(
         self,
         min_fragment_lines: int = 5,
-        exclude_dirs: Optional[List[str]] = None,
+        exclude_dirs: List[str] | None = None,
         use_shared_cache: bool = True,
     ):
         """
@@ -252,7 +252,7 @@ class CloneDetector:
 
     def _create_fragment_from_node(
         self, node: ast.AST, file_path: str, lines: List[str], fragment_type: str
-    ) -> Optional[CodeFragment]:
+    ) -> CodeFragment | None:
         """
         Create a CodeFragment from an AST node.
 
@@ -333,7 +333,7 @@ class CloneDetector:
                 fragments.append(fragment)
         return fragments
 
-    def _maybe_create_fragment(self, node: ast.AST, file_path: str, lines: List[str]) -> Optional[CodeFragment]:
+    def _maybe_create_fragment(self, node: ast.AST, file_path: str, lines: List[str]) -> CodeFragment | None:
         """
         Create a fragment from node if it's a function or class.
 
@@ -708,7 +708,7 @@ class CloneDetector:
         hash_value: str,
         fingerprints: List,
         existing_fragments: Set[Tuple[str, int, int]],
-    ) -> Optional[CloneGroup]:
+    ) -> CloneGroup | None:
         """
         Create a Type 4 clone group if valid.
 

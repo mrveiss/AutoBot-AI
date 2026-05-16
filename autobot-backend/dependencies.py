@@ -110,7 +110,7 @@ def get_security_layer(config: ConfigManager = Depends(get_config)):
         config: Configuration manager instance
 
     Returns:
-        Optional[SecurityLayer]: Security layer instance if enabled, None otherwise
+        SecurityLayer | None: Security layer instance if enabled, None otherwise
     """
     try:
         from security_layer import SecurityLayer

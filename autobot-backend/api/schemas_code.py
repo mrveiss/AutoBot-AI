@@ -7,7 +7,7 @@ Code review, git, skills, database, template, log, voice, access-control, MCP, a
 
 import re
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -81,7 +81,7 @@ class TemplatePreviewResponse(BaseModel):
     template_id: str
     template_name: str
     description: str
-    estimated_duration_minutes: Optional[int] = None
+    estimated_duration_minutes: int | None = None
     agents_involved: List[str]
     workflow_preview: List[str]
     variables_used: Dict[str, Any]
@@ -146,7 +146,7 @@ class CodeReviewFileResponse(BaseModel):
     """Response for POST /review-file."""
 
     status: str
-    file_path: Optional[str] = None
+    file_path: str | None = None
     timestamp: str
     total_comments: int
     score: float
@@ -223,7 +223,7 @@ class LogRecentResponse(BaseModel):
     count: int
     limit: int
     source: str
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class LogReadResponse(BaseModel):
@@ -281,7 +281,7 @@ class GitMCPOperationResponse(BaseModel):
     repository: str
     output: str
     timestamp: str
-    errors: Optional[str] = None
+    errors: str | None = None
 
 
 class GitMCPInfoResponse(BaseModel):
@@ -347,11 +347,11 @@ class SkillsGapResponse(BaseModel):
     """
 
     success: bool
-    errors: Optional[List[str]] = None
-    draft: Optional[Any] = None
-    draft_id: Optional[str] = None
-    name: Optional[str] = None
-    tools_found: Optional[List[str]] = None
+    errors: List[str] | None = None
+    draft: Any | None = None
+    draft_id: str | None = None
+    name: str | None = None
+    tools_found: List[str] | None = None
 
 
 class SkillsDraftListItem(BaseModel):
@@ -359,10 +359,10 @@ class SkillsDraftListItem(BaseModel):
 
     id: str
     name: str
-    version: Optional[Any] = None
-    gap_reason: Optional[str] = None
-    created_at: Optional[Any] = None
-    trust_level: Optional[Any] = None
+    version: Any | None = None
+    gap_reason: str | None = None
+    created_at: Any | None = None
+    trust_level: Any | None = None
 
 
 class SkillsDraftTestResponse(BaseModel):
@@ -386,9 +386,9 @@ class SkillsApprovalItem(BaseModel):
 
     id: str
     skill_id: str
-    requested_by: Optional[str] = None
-    requested_at: Optional[Any] = None
-    reason: Optional[str] = None
+    requested_by: str | None = None
+    requested_at: Any | None = None
+    reason: str | None = None
     status: str
 
 
@@ -512,21 +512,21 @@ class AccessControlMetricsResponse(BaseModel):
     """Response for GET /access-control/metrics."""
 
     success: bool
-    data: Optional[Dict[str, Any]] = None
+    data: Dict[str, Any] | None = None
 
 
 class AccessControlEndpointMetricsResponse(BaseModel):
     """Response for GET /access-control/endpoint/{endpoint:path}."""
 
     success: bool
-    data: Optional[Any] = None
+    data: Any | None = None
 
 
 class AccessControlUserMetricsResponse(BaseModel):
     """Response for GET /access-control/user/{username}."""
 
     success: bool
-    data: Optional[Any] = None
+    data: Any | None = None
 
 
 class AccessControlCleanupResponse(SuccessMessageResponse):
@@ -675,7 +675,7 @@ class FileSandboxViewResponse(BaseModel):
     """
 
     file_info: Any
-    content: Optional[str] = None
+    content: str | None = None
     is_text: bool
 
 
@@ -697,8 +697,8 @@ class FileSandboxPreviewResponse(BaseModel):
 
     type: str
     url: str
-    content: Optional[str] = None
-    mime_type: Optional[str] = None
+    content: str | None = None
+    mime_type: str | None = None
     size: int
     name: str
 
@@ -797,7 +797,7 @@ class PlaywrightWorkerStatusResponse(BaseModel):
 
     status: str
     browser_connected: bool
-    page_open: Optional[bool] = None
+    page_open: bool | None = None
 
 
 class PlaywrightCapabilitiesResponse(BaseModel):
@@ -846,8 +846,8 @@ class ResearchBrowserHealthResponse(BaseModel):
 
     status: str
     service: str
-    browser_service_url: Optional[str] = None
-    detail: Optional[str] = None
+    browser_service_url: str | None = None
+    detail: str | None = None
     timestamp: str
 
 
@@ -861,7 +861,7 @@ class CICDConnectionTestResponse(BaseModel):
 
     status: str
     message: str
-    details: Optional[Dict[str, Any]] = None
+    details: Dict[str, Any] | None = None
 
 
 class CICDProvidersListResponse(BaseModel):
@@ -951,7 +951,7 @@ class MonitoringConnectionTestResponse(BaseModel):
     provider: str
     status: str
     message: str
-    details: Optional[Dict[str, Any]] = None
+    details: Dict[str, Any] | None = None
 
 
 class MonitoringProviderItem(BaseModel):
@@ -1037,9 +1037,9 @@ class CloudConnectionTestResponse(BaseModel):
 
     provider: str
     status: str
-    latency_ms: Optional[float] = None
+    latency_ms: float | None = None
     message: str
-    details: Optional[Dict[str, Any]] = None
+    details: Dict[str, Any] | None = None
     last_checked: str
 
 
@@ -1243,9 +1243,9 @@ class SkillRepoItem(BaseModel):
     repo_type: Any
     auto_sync: bool
     sync_interval: int
-    last_synced: Optional[Any] = None
-    skill_count: Optional[int] = None
-    status: Optional[str] = None
+    last_synced: Any | None = None
+    skill_count: int | None = None
+    status: str | None = None
 
 
 class SkillRepoSyncResponse(BaseModel):
@@ -1271,9 +1271,9 @@ class SkillCatalogEntry(BaseModel):
     """Single skill entry returned by GET /skills/catalog."""
 
     name: str
-    version: Optional[str] = None
-    description: Optional[str] = None
-    install_action: Optional[str] = None
+    version: str | None = None
+    description: str | None = None
+    install_action: str | None = None
 
 
 class SkillCatalogResponse(BaseModel):
@@ -1340,7 +1340,7 @@ class FilesystemReadMultipleResponse(BaseModel):
     files_read: int
     files_failed: int
     results: List[Dict]
-    errors: Optional[List[Dict]] = None
+    errors: List[Dict] | None = None
 
 
 class FilesystemWriteFileResponse(BaseModel):
@@ -1387,7 +1387,7 @@ class FilesystemListDirectoryWithSizesResponse(BaseModel):
     success: bool
     path: str
     entry_count: int
-    sorted_by: Optional[str] = None
+    sorted_by: str | None = None
     entries: List[Dict]
 
 
@@ -1430,7 +1430,7 @@ class FilesystemFileInfoResponse(BaseModel):
     modified: str
     accessed: str
     permissions: str
-    mime_type: Optional[str] = None
+    mime_type: str | None = None
 
 
 class FilesystemSecurityInfo(BaseModel):
@@ -1460,8 +1460,8 @@ class ReadTextFileRequest(BaseModel):
     """Request model for reading text files."""
 
     path: str = Field(..., description="Absolute path to file")
-    head: Optional[int] = Field(None, description="Read only first N lines")
-    tail: Optional[int] = Field(None, description="Read only last N lines")
+    head: int | None = Field(None, description="Read only first N lines")
+    tail: int | None = Field(None, description="Read only last N lines")
 
 
 class ReadMediaFileRequest(BaseModel):
@@ -1488,7 +1488,7 @@ class EditFileRequest(BaseModel):
 
     path: str = Field(..., description="Absolute path to file")
     edits: List[Dict[str, str]] = Field(..., description="List of {old_text, new_text} edits")
-    dry_run: Optional[bool] = Field(False, description="Preview changes without applying")
+    dry_run: bool | None = Field(False, description="Preview changes without applying")
 
 
 class CreateDirectoryRequest(BaseModel):
@@ -1507,7 +1507,7 @@ class ListDirectoryWithSizesRequest(BaseModel):
     """Request model for listing directory with sizes."""
 
     path: str = Field(..., description="Absolute path to directory")
-    sort_by: Optional[str] = Field("name", description="Sort by 'name' or 'size'")
+    sort_by: str | None = Field("name", description="Sort by 'name' or 'size'")
 
 
 class MoveFileRequest(BaseModel):
@@ -1522,7 +1522,7 @@ class SearchFilesRequest(BaseModel):
 
     path: str = Field(..., description="Directory to search")
     pattern: str = Field(..., description="Search pattern (e.g., '*.py')")
-    exclude_patterns: Optional[List[str]] = Field(None, description="Patterns to exclude")
+    exclude_patterns: List[str] | None = Field(None, description="Patterns to exclude")
 
 
 class DirectoryTreeRequest(BaseModel):
@@ -1557,7 +1557,7 @@ class SuggestionsResponse(BaseModel):
 
 class FindingsPlaceholderResponse(BaseModel):
     findings: List[Any]
-    score: Optional[float]
+    score: float | None
     message: str
 
 
@@ -1565,11 +1565,11 @@ class CodeIntelligenceTaskStatusResponse(BaseModel):
     """Generic task status returned by BackgroundTaskManager (code_intelligence)."""
 
     status: str
-    task_id: Optional[str] = None
-    progress: Optional[float] = None
-    message: Optional[str] = None
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    task_id: str | None = None
+    progress: float | None = None
+    message: str | None = None
+    result: Dict[str, Any] | None = None
+    error: str | None = None
 
 
 class StartTaskResponse(BaseModel):
@@ -1584,19 +1584,19 @@ class ClearStuckResponse(BaseModel):
 
 class CachedSecurityScoreResponse(BaseModel):
     status: str
-    from_cache: Optional[bool] = None
-    completed_at: Optional[str] = None
-    security_score: Optional[float] = None
-    grade: Optional[str] = None
-    risk_level: Optional[str] = None
-    status_message: Optional[str] = None
-    total_findings: Optional[int] = None
-    critical_issues: Optional[int] = None
-    high_issues: Optional[int] = None
-    files_analyzed: Optional[int] = None
-    severity_breakdown: Optional[Dict[str, Any]] = None
-    owasp_breakdown: Optional[Dict[str, Any]] = None
-    message: Optional[str] = None
+    from_cache: bool | None = None
+    completed_at: str | None = None
+    security_score: float | None = None
+    grade: str | None = None
+    risk_level: str | None = None
+    status_message: str | None = None
+    total_findings: int | None = None
+    critical_issues: int | None = None
+    high_issues: int | None = None
+    files_analyzed: int | None = None
+    severity_breakdown: Dict[str, Any] | None = None
+    owasp_breakdown: Dict[str, Any] | None = None
+    message: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1628,11 +1628,11 @@ class PlaywrightReloadRequest(BaseModel):
 
 class PlaywrightInteractRequest(BaseModel):
     action: str
-    x: Optional[float] = None
-    y: Optional[float] = None
+    x: float | None = None
+    y: float | None = None
     deltaX: float = 0
     deltaY: float = 0
-    text: Optional[str] = None
+    text: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1708,7 +1708,7 @@ class IDEHealthResponse(BaseModel):
 class OAIMessage(BaseModel):
     role: str
     content: str
-    name: Optional[str] = None
+    name: str | None = None
 
 
 class OAIStreamOptions(BaseModel):
@@ -1719,15 +1719,15 @@ class ChatCompletionRequest(BaseModel):
     model: str = "autobot-default"
     messages: List[OAIMessage]
     temperature: float = 0.7
-    max_tokens: Optional[int] = None
+    max_tokens: int | None = None
     top_p: float = 1.0
     frequency_penalty: float = 0.0
     presence_penalty: float = 0.0
-    stop: Optional[List[str]] = None
+    stop: List[str] | None = None
     stream: bool = False
-    stream_options: Optional[OAIStreamOptions] = None
+    stream_options: OAIStreamOptions | None = None
     n: int = Field(default=1, ge=1)
-    user: Optional[str] = None
+    user: str | None = None
 
 
 class OAIChoiceMessage(BaseModel):
@@ -1745,7 +1745,7 @@ class OAIUsage(BaseModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
-    cost_usd: Optional[float] = None
+    cost_usd: float | None = None
 
 
 class ChatCompletionResponse(BaseModel):
@@ -1758,14 +1758,14 @@ class ChatCompletionResponse(BaseModel):
 
 
 class OAIDeltaMessage(BaseModel):
-    role: Optional[str] = None
-    content: Optional[str] = None
+    role: str | None = None
+    content: str | None = None
 
 
 class OAIStreamChoice(BaseModel):
     index: int
     delta: OAIDeltaMessage
-    finish_reason: Optional[str] = None
+    finish_reason: str | None = None
 
 
 class ChatCompletionChunk(BaseModel):
@@ -1774,7 +1774,7 @@ class ChatCompletionChunk(BaseModel):
     created: int
     model: str
     choices: List[OAIStreamChoice]
-    usage: Optional[OAIUsage] = None
+    usage: OAIUsage | None = None
 
 
 class OAIModelCard(BaseModel):
@@ -1805,21 +1805,21 @@ class GitStatusRequest(BaseModel):
     """Git status request model"""
 
     repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path (must be whitelisted)")
-    short: Optional[bool] = Field(default=False, description="Use short format output")
+    short: bool | None = Field(default=False, description="Use short format output")
 
 
 class GitLogRequest(BaseModel):
     """Git log request model"""
 
     repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
-    max_count: Optional[int] = Field(
+    max_count: int | None = Field(
         default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
         ge=1,
         le=_GIT_MAX_LOG_ENTRIES,
         description=f"Maximum number of commits (1-{_GIT_MAX_LOG_ENTRIES})",
     )
-    oneline: Optional[bool] = Field(default=False, description="Use one-line format")
-    file_path: Optional[str] = Field(default=None, description="Filter log to specific file")
+    oneline: bool | None = Field(default=False, description="Use one-line format")
+    file_path: str | None = Field(default=None, description="Filter log to specific file")
 
     @field_validator("file_path")
     @classmethod
@@ -1847,9 +1847,9 @@ class GitDiffRequest(BaseModel):
     """Git diff request model"""
 
     repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
-    staged: Optional[bool] = Field(default=False, description="Show staged changes only")
-    file_path: Optional[str] = Field(default=None, description="Diff specific file")
-    commit: Optional[str] = Field(default=None, description="Compare with specific commit")
+    staged: bool | None = Field(default=False, description="Show staged changes only")
+    file_path: str | None = Field(default=None, description="Diff specific file")
+    commit: str | None = Field(default=None, description="Compare with specific commit")
 
     @field_validator("file_path")
     @classmethod
@@ -1884,7 +1884,7 @@ class GitBranchRequest(BaseModel):
     """Git branch request model"""
 
     repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
-    all_branches: Optional[bool] = Field(default=False, description="Show remote branches too")
+    all_branches: bool | None = Field(default=False, description="Show remote branches too")
 
 
 class GitBlameRequest(BaseModel):
@@ -1892,8 +1892,8 @@ class GitBlameRequest(BaseModel):
 
     repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
     file_path: str = Field(..., description="File to blame")
-    line_start: Optional[int] = Field(default=None, ge=1, description="Starting line number")
-    line_end: Optional[int] = Field(default=None, ge=1, description="Ending line number")
+    line_start: int | None = Field(default=None, ge=1, description="Starting line number")
+    line_end: int | None = Field(default=None, ge=1, description="Ending line number")
 
     @field_validator("file_path")
     @classmethod
@@ -1943,7 +1943,7 @@ class CodeSearchIndexRequest(BaseModel):
 class CodeSearchRequest(BaseModel):
     query: str
     search_type: str = "semantic"
-    language: Optional[str] = None
+    language: str | None = None
     max_results: int = 20
 
 
@@ -1956,9 +1956,9 @@ class CodeSearchResponse(BaseModel):
 
 class CodeAnalyticsRequest(BaseModel):
     root_path: str
-    include_patterns: Optional[List[str]] = None
-    exclude_patterns: Optional[List[str]] = ["*.pyc", "*.git*", "*__pycache__*"]
-    languages: Optional[List[str]] = None
+    include_patterns: List[str] | None = None
+    exclude_patterns: List[str] | None = ["*.pyc", "*.git*", "*__pycache__*"]
+    languages: List[str] | None = None
 
 
 class CodeDeclaration(BaseModel):
@@ -1969,7 +1969,7 @@ class CodeDeclaration(BaseModel):
     usage_count: int
     definition: str
     context: str
-    complexity_score: Optional[float] = None
+    complexity_score: float | None = None
 
 
 class ReusabilityReport(BaseModel):
@@ -1983,13 +1983,13 @@ class ReusabilityReport(BaseModel):
 class CodeIntelAnalysisRequest(BaseModel):
     """Request model for code analysis (directory or inline code)."""
 
-    path: Optional[str] = Field(default=None, description="Directory path to analyze")
-    code: Optional[str] = Field(default=None, description="Inline code to analyze")
-    language: Optional[str] = Field(default=None, description="Language of the inline code")
-    filename: Optional[str] = Field(default=None, description="Virtual filename for inline code")
-    include_suggestions: Optional[bool] = Field(default=None, description="Whether to include improvement suggestions")
-    exclude_dirs: Optional[list] = Field(default=None, description="Directories to exclude from analysis")
-    min_severity: Optional[str] = Field(default=None, description="Minimum severity level to include")
+    path: str | None = Field(default=None, description="Directory path to analyze")
+    code: str | None = Field(default=None, description="Inline code to analyze")
+    language: str | None = Field(default=None, description="Language of the inline code")
+    filename: str | None = Field(default=None, description="Virtual filename for inline code")
+    include_suggestions: bool | None = Field(default=None, description="Whether to include improvement suggestions")
+    exclude_dirs: list | None = Field(default=None, description="Directories to exclude from analysis")
+    min_severity: str | None = Field(default=None, description="Minimum severity level to include")
 
 
 class CodeIntelQuickScanRequest(BaseModel):
@@ -2002,15 +2002,15 @@ class CodeIntelSuggestionsRequest(BaseModel):
     """Request model for code suggestions."""
 
     code: str = Field(..., description="Code to get suggestions for")
-    language: Optional[str] = Field(default="python", description="Programming language")
+    language: str | None = Field(default="python", description="Programming language")
 
 
 class RedisAnalysisRequest(BaseModel):
     """Request model for Redis optimization analysis."""
 
     path: str = Field(..., description="Directory or file path to analyze for Redis optimizations")
-    exclude_patterns: Optional[list] = Field(default=None, description="Glob patterns to exclude from analysis")
-    min_severity: Optional[str] = Field(
+    exclude_patterns: list | None = Field(default=None, description="Glob patterns to exclude from analysis")
+    min_severity: str | None = Field(
         default=None, description="Minimum severity level to include (info, low, medium, high, critical)"
     )
 
@@ -2025,10 +2025,10 @@ class SecurityAnalysisRequest(BaseModel):
     """Request model for security analysis."""
 
     path: str = Field(..., description="Directory path to analyze for security vulnerabilities")
-    exclude_patterns: Optional[list] = Field(
+    exclude_patterns: list | None = Field(
         default=None, description="Patterns to exclude from analysis (e.g., ['test_*', 'venv'])"
     )
-    min_severity: Optional[str] = Field(
+    min_severity: str | None = Field(
         default=None, description="Minimum severity level to include (info, low, medium, high, critical)"
     )
 
@@ -2043,8 +2043,8 @@ class PerformanceAnalysisRequest(BaseModel):
     """Request model for performance analysis."""
 
     path: str = Field(..., description="Directory path to analyze for performance issues")
-    exclude_patterns: Optional[list] = Field(default=None, description="Patterns to exclude from analysis")
-    min_severity: Optional[str] = Field(default=None, description="Minimum severity level to include")
+    exclude_patterns: list | None = Field(default=None, description="Patterns to exclude from analysis")
+    min_severity: str | None = Field(default=None, description="Minimum severity level to include")
 
 
 class PerformanceFileScanRequest(BaseModel):
@@ -2074,8 +2074,8 @@ class SQLQueryRequest(BaseModel):
 
     database: str = Field(..., description="Database name from whitelist")
     query: str = Field(..., description="SQL SELECT query (parameterized)")
-    params: Optional[List[Any]] = Field(default=None, description="Query parameters for ? placeholders")
-    limit: Optional[int] = Field(
+    params: List[Any] | None = Field(default=None, description="Query parameters for ? placeholders")
+    limit: int | None = Field(
         default=100,
         ge=1,
         le=_DB_MCP_MAX_RESULT_ROWS,
@@ -2096,7 +2096,7 @@ class SQLExecuteRequest(BaseModel):
 
     database: str = Field(..., description="Database name from whitelist")
     statement: str = Field(..., description="SQL statement (INSERT/UPDATE/DELETE)")
-    params: Optional[List[Any]] = Field(default=None, description="Statement parameters for ? placeholders")
+    params: List[Any] | None = Field(default=None, description="Statement parameters for ? placeholders")
 
     @field_validator("statement")
     @classmethod
@@ -2111,7 +2111,7 @@ class SchemaRequest(BaseModel):
     """Database schema request model."""
 
     database: str = Field(..., description="Database name from whitelist")
-    table: Optional[str] = Field(default=None, description="Specific table to describe (optional)")
+    table: str | None = Field(default=None, description="Specific table to describe (optional)")
 
 
 class TableListRequest(BaseModel):
@@ -2135,7 +2135,7 @@ class ConflictResolutionRequest(BaseModel):
     """Request model for conflict resolution."""
 
     file_path: str = Field(..., description="Path to file with merge conflicts")
-    strategy: Optional[str] = Field(
+    strategy: str | None = Field(
         default=None,
         description=(
             "Resolution strategy: semantic_merge, accept_both, pattern_based, "
@@ -2275,7 +2275,7 @@ class ManPageRequest(BaseModel):
     """Request model for man page lookup."""
 
     command: str = Field(..., description="Command name to look up (e.g. 'ls')")
-    section: Optional[str] = Field(None, description="Manual section (1-8). Defaults to section 1.")
+    section: str | None = Field(None, description="Manual section (1-8). Defaults to section 1.")
 
 
 class ManPageSearchRequest(BaseModel):
@@ -2382,7 +2382,7 @@ class Diagnostic(BaseModel):
     source: str = "autobot"
     message: str
     category: IDEPatternCategory
-    data: Optional[Dict[str, Any]] = None
+    data: Dict[str, Any] | None = None
 
 
 class TextEdit(BaseModel):
@@ -2399,7 +2399,7 @@ class CodeAction(BaseModel):
     kind: CodeActionKind
     diagnostics: List[Diagnostic] = []
     is_preferred: bool = False
-    edit: Optional[Dict[str, Any]] = None
+    edit: Dict[str, Any] | None = None
 
 
 class IDEAnalysisRequest(BaseModel):
@@ -2409,7 +2409,7 @@ class IDEAnalysisRequest(BaseModel):
     content: str = Field(..., description="File content to analyze")
     language: str = Field(default="python", description="Programming language")
     include_hints: bool = Field(default=True, description="Include hint-level diagnostics")
-    categories: Optional[List[IDEPatternCategory]] = Field(None, description="Filter by categories")
+    categories: List[IDEPatternCategory] | None = Field(None, description="Filter by categories")
 
 
 class IDEAnalysisResponse(BaseModel):
@@ -2450,16 +2450,16 @@ class HoverResponse(BaseModel):
     """Response with hover information."""
 
     contents: str
-    range: Optional[LSPRange] = None
+    range: LSPRange | None = None
 
 
 class IDEConfigurationUpdate(BaseModel):
     """Configuration update for IDE plugin."""
 
-    enabled_rules: Optional[List[str]] = None
-    disabled_rules: Optional[List[str]] = None
-    severity_overrides: Optional[Dict[str, DiagnosticSeverity]] = None
-    categories: Optional[List[IDEPatternCategory]] = None
+    enabled_rules: List[str] | None = None
+    disabled_rules: List[str] | None = None
+    severity_overrides: Dict[str, DiagnosticSeverity] | None = None
+    categories: List[IDEPatternCategory] | None = None
 
 
 class CompletionItem(BaseModel):
@@ -2467,11 +2467,11 @@ class CompletionItem(BaseModel):
 
     label: str = Field(..., description="Display text")
     kind: CompletionItemKind = Field(default=CompletionItemKind.TEXT, description="Item kind")
-    detail: Optional[str] = Field(None, description="Additional details")
-    documentation: Optional[str] = Field(None, description="Documentation")
-    insert_text: Optional[str] = Field(None, description="Text to insert")
-    sort_text: Optional[str] = Field(None, description="Sort order")
-    filter_text: Optional[str] = Field(None, description="Filter text")
+    detail: str | None = Field(None, description="Additional details")
+    documentation: str | None = Field(None, description="Documentation")
+    insert_text: str | None = Field(None, description="Text to insert")
+    sort_text: str | None = Field(None, description="Sort order")
+    filter_text: str | None = Field(None, description="Filter text")
     score: float = Field(default=0.0, description="Relevance score")
 
 
@@ -2533,7 +2533,7 @@ class TemplateExecutionRequest(BaseModel):
     """Request body for executing a workflow template."""
 
     template_id: str
-    variables: Optional[Dict[str, str]] = None
+    variables: Dict[str, str] | None = None
     auto_approve: bool = False
 
 

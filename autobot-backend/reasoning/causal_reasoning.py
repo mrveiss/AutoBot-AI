@@ -21,7 +21,7 @@ Key concepts:
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import List, Optional
+from typing import List
 
 
 class CausalReasoningContext(Enum):
@@ -230,7 +230,7 @@ Causal investigation:
 def build_causal_reasoning_prompt(
     context: CausalReasoningContext,
     situation: str,
-    additional_guidance: Optional[str] = None,
+    additional_guidance: str | None = None,
 ) -> str:
     """
     Build a complete prompt incorporating causal reasoning.

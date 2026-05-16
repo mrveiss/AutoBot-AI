@@ -8,7 +8,7 @@ Workflow, registry, RUM, elevation, advanced-control, state-tracking, and valida
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
@@ -30,9 +30,9 @@ class ValidationDashboardStatusResponse(BaseModel):
 
     status: str
     service: str
-    output_directory: Optional[str] = None
-    refresh_interval: Optional[int] = None
-    data_retention_days: Optional[int] = None
+    output_directory: str | None = None
+    refresh_interval: int | None = None
+    data_retention_days: int | None = None
     timestamp: str
 
 
@@ -40,7 +40,7 @@ class ValidationDashboardReportResponse(BaseModel):
     """Response for GET /report."""
 
     status: str
-    report: Optional[Any] = None
+    report: Any | None = None
     timestamp: str
 
 
@@ -65,7 +65,7 @@ class ValidationDashboardTrendsResponse(BaseModel):
     """Response for GET /trends."""
 
     status: str
-    trends: Optional[Any] = None
+    trends: Any | None = None
     timestamp: str
 
 
@@ -117,9 +117,9 @@ class StateTrackingStatusResponse(BaseModel):
     service: str
     timestamp: str
     tracking_active: bool
-    snapshot_count: Optional[Any] = None
-    change_count: Optional[Any] = None
-    latest_snapshot: Optional[Any] = None
+    snapshot_count: Any | None = None
+    change_count: Any | None = None
+    latest_snapshot: Any | None = None
 
 
 class StateTrackingSummaryResponse(BaseModel):
@@ -301,7 +301,7 @@ class RUMEventResponse(BaseModel):
 
     status: str
     message: str
-    session_event_count: Optional[int] = None
+    session_event_count: int | None = None
 
 
 class RUMDisableResponse(BaseModel):
@@ -336,7 +336,7 @@ class RUMMetricsResponse(BaseModel):
     status: str
     message: str
     session_id: str
-    metrics_recorded: Optional[int] = None
+    metrics_recorded: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -637,17 +637,17 @@ class MCPSpanResponse(BaseModel):
     skill_name: str
     tool_name: str
     started_at: float
-    ended_at: Optional[float]
+    ended_at: float | None
     input_params: Dict[str, Any]
-    output: Optional[Dict[str, Any]]
-    error: Optional[str]
+    output: Dict[str, Any] | None
+    error: str | None
     pid: int
 
 
 class SkillTracesResponse(BaseModel):
     """Response for GET /skills/traces (Issue #4413)."""
 
-    skill: Optional[str]
+    skill: str | None
     traces: List[MCPSpanResponse]
     total: int
 
@@ -664,8 +664,8 @@ class StructuredThinkingSessionDetailResponse(BaseModel):
     thought_count: int
     thoughts: List[Any]
     stage_analysis: Dict[str, Any]
-    started_at: Optional[str] = None
-    last_thought_at: Optional[str] = None
+    started_at: str | None = None
+    last_thought_at: str | None = None
     complete: bool
 
 
@@ -897,7 +897,7 @@ class SystemValidationHealthResponse(BaseModel):
     status: str
     message: str
     validator_initialized: bool
-    timestamp: Optional[str] = None
+    timestamp: str | None = None
 
 
 class SystemValidationQuickResponse(BaseModel):
@@ -932,7 +932,7 @@ class SystemValidationStatusResponse(BaseModel):
 
     validation_system: str
     available_validations: List[str]
-    last_validation: Optional[Any] = None
+    last_validation: Any | None = None
     system_health: str
     timestamp: str
 
@@ -968,9 +968,9 @@ class SequentialThinkingResponse(BaseModel):
     thinking_complete: bool
     session_thought_count: int
     message: str
-    revision_info: Optional[Any] = None
-    branch_info: Optional[Any] = None
-    summary: Optional[Any] = None
+    revision_info: Any | None = None
+    branch_info: Any | None = None
+    summary: Any | None = None
 
 
 class SequentialThinkingSessionResponse(BaseModel):
@@ -981,8 +981,8 @@ class SequentialThinkingSessionResponse(BaseModel):
     thoughts: List[Any]
     revisions: List[Any]
     branches: List[Any]
-    started_at: Optional[str] = None
-    last_thought_at: Optional[str] = None
+    started_at: str | None = None
+    last_thought_at: str | None = None
 
 
 class SequentialThinkingSessionListResponse(BaseModel):
@@ -1010,8 +1010,8 @@ class StructuredThinkingProcessThoughtResponse(BaseModel):
     stage_distribution: Any
     session_thought_count: int
     message: str
-    related_thoughts: Optional[List[Any]] = None
-    completion_summary: Optional[Any] = None
+    related_thoughts: List[Any] | None = None
+    completion_summary: Any | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1203,7 +1203,7 @@ class WorkflowApprovalResponse(BaseModel):
     workflow_id: str
     step_id: str
     approved: bool
-    user_input: Optional[Metadata] = None
+    user_input: Metadata | None = None
     timestamp: float
 
 
@@ -1218,7 +1218,7 @@ class WorkflowStatusUpdate(BaseModel):
 
 class WorkflowExecutionRequest(BaseModel):
     user_message: str
-    workflow_id: Optional[str] = None
+    workflow_id: str | None = None
     auto_approve: bool = False
 
 
@@ -1231,8 +1231,8 @@ class WorkflowSummary(BaseModel):
     status: str
     total_steps: int
     current_step: int
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    started_at: str | None = None
+    completed_at: str | None = None
 
 
 class WorkflowListResponse(BaseModel):
@@ -1259,8 +1259,8 @@ class WorkflowStatusResponse(BaseModel):
     current_step: int
     total_steps: int
     progress: float
-    current_step_info: Optional[Metadata] = None
-    estimated_remaining: Optional[str] = None
+    current_step_info: Metadata | None = None
+    estimated_remaining: str | None = None
 
 
 class WorkflowApproveResponse(BaseModel):
@@ -1301,11 +1301,11 @@ class WorkflowExecutionResponse(BaseModel):
 
     success: bool
     type: str
-    result: Optional[str] = None
-    routing_method: Optional[str] = None
-    workflow_id: Optional[str] = None
-    execution_started: Optional[bool] = None
-    status_endpoint: Optional[str] = None
+    result: str | None = None
+    routing_method: str | None = None
+    workflow_id: str | None = None
+    execution_started: bool | None = None
+    status_endpoint: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1317,7 +1317,7 @@ class ShareWorkflowRequest(BaseModel):
     """Request body for creating a workflow share (#2165)."""
 
     workflow_id: str = Field(..., description="ID of the workflow to share.")
-    target_user_id: Optional[str] = Field(
+    target_user_id: str | None = Field(
         default=None,
         description="Share with a specific user.  Mutually optional with public.",
     )
@@ -1331,13 +1331,13 @@ class ImportWorkflowRequest(BaseModel):
         ...,
         description="WorkflowExportFormat.to_dict() payload produced by the export endpoint.",
     )
-    session_id: Optional[str] = Field(default=None, description="Session to associate with the imported workflow.")
+    session_id: str | None = Field(default=None, description="Session to associate with the imported workflow.")
 
 
 class CloneWorkflowRequest(BaseModel):
     """Request body for cloning a shared workflow (#2165)."""
 
-    session_id: Optional[str] = Field(default=None, description="Session to associate with the cloned workflow.")
+    session_id: str | None = Field(default=None, description="Session to associate with the cloned workflow.")
 
 
 # ---------------------------------------------------------------------------
@@ -1358,7 +1358,7 @@ class WorkflowPermissionResponse(BaseModel):
     workflow_id: str
     user_id: str
     role: str
-    granted_by: Optional[str]
+    granted_by: str | None
     created_at: str
     updated_at: str
 
@@ -1371,7 +1371,7 @@ class WorkflowAuditLogEntry(BaseModel):
     user_id: str
     workflow_id: str
     action: str
-    details: Optional[dict]
+    details: dict | None
 
 
 # ---------------------------------------------------------------------------
@@ -1394,8 +1394,8 @@ class WorkflowSecretCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=256)
     value: str = Field(..., min_length=1, max_length=65536)
     secret_type: str = Field(default="api_key", max_length=50)
-    workflow_id: Optional[str] = Field(default=None, max_length=128)
-    description: Optional[str] = Field(default=None, max_length=1024)
+    workflow_id: str | None = Field(default=None, max_length=128)
+    description: str | None = Field(default=None, max_length=1024)
 
     @field_validator("name")
     @classmethod
@@ -1417,9 +1417,9 @@ class WorkflowSecretMetadata(BaseModel):
     name: str
     secret_type: str
     scope: str
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-    description: Optional[str] = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    description: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1462,25 +1462,25 @@ class CreateApprovalRequest(BaseModel):
 
     title: str
     approval_type: ApprovalType
-    description: Optional[str] = None
-    requested_by_agent: Optional[str] = None
-    workflow_id: Optional[str] = None
-    workflow_step: Optional[str] = None
-    context: Optional[Dict[str, Any]] = None
-    task_ids: Optional[List[str]] = None
+    description: str | None = None
+    requested_by_agent: str | None = None
+    workflow_id: str | None = None
+    workflow_step: str | None = None
+    context: Dict[str, Any] | None = None
+    task_ids: List[str] | None = None
 
 
 class ApprovalTransitionRequest(BaseModel):
     """Request body for approve / reject / request-revision."""
 
-    comment: Optional[str] = None
+    comment: str | None = None
 
 
 class ApprovalResubmitRequest(BaseModel):
     """Request body for resubmitting after revision."""
 
-    description: Optional[str] = None
-    context: Optional[Dict[str, Any]] = None
+    description: str | None = None
+    context: Dict[str, Any] | None = None
 
 
 class ApprovalAddCommentRequest(BaseModel):
@@ -1514,7 +1514,7 @@ class ApprovalCommentResponse(BaseModel):
     author: str
     author_type: str
     body: str
-    created_at: Optional[str] = None
+    created_at: str | None = None
 
 
 class ApprovalGateResponse(BaseModel):
@@ -1522,17 +1522,17 @@ class ApprovalGateResponse(BaseModel):
 
     id: str
     title: str
-    description: Optional[str] = None
+    description: str | None = None
     approval_type: str
     status: str
-    requested_by_agent: Optional[str] = None
-    decided_by_user: Optional[str] = None
-    workflow_id: Optional[str] = None
-    workflow_step: Optional[str] = None
-    context: Optional[Dict[str, Any]] = None
-    decided_at: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    requested_by_agent: str | None = None
+    decided_by_user: str | None = None
+    workflow_id: str | None = None
+    workflow_step: str | None = None
+    context: Dict[str, Any] | None = None
+    decided_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
     comments: List[ApprovalCommentResponse] = Field(default_factory=list)
     task_links: List[TaskApprovalLinkResponse] = Field(default_factory=list)
 
@@ -1546,12 +1546,12 @@ class ConnectionTestRequest(BaseModel):
     """Request to test project management connection."""
 
     provider: str = Field(..., description="Provider: jira, trello, or asana")
-    base_url: Optional[str] = Field(None, description="Base URL for the service")
-    api_key: Optional[str] = Field(None, description="API key")
-    api_secret: Optional[str] = Field(None, description="API secret")
-    token: Optional[str] = Field(None, description="Auth token")
-    username: Optional[str] = Field(None, description="Username")
-    password: Optional[str] = Field(None, description="Password")
+    base_url: str | None = Field(None, description="Base URL for the service")
+    api_key: str | None = Field(None, description="API key")
+    api_secret: str | None = Field(None, description="API secret")
+    token: str | None = Field(None, description="Auth token")
+    username: str | None = Field(None, description="Username")
+    password: str | None = Field(None, description="Password")
 
 
 class ProviderInfo(BaseModel):
@@ -1569,29 +1569,29 @@ class IssueCreateRequest(BaseModel):
     """Request to create a new issue/card/task."""
 
     title: str = Field(..., description="Issue title/name")
-    description: Optional[str] = Field(None, description="Description")
-    project_key: Optional[str] = Field(None, description="Project key (Jira) or ID (Trello/Asana)")
-    issue_type: Optional[str] = Field("Task", description="Issue type (Jira)")
-    list_id: Optional[str] = Field(None, description="List ID (Trello)")
-    workspace_gid: Optional[str] = Field(None, description="Workspace GID (Asana)")
+    description: str | None = Field(None, description="Description")
+    project_key: str | None = Field(None, description="Project key (Jira) or ID (Trello/Asana)")
+    issue_type: str | None = Field("Task", description="Issue type (Jira)")
+    list_id: str | None = Field(None, description="List ID (Trello)")
+    workspace_gid: str | None = Field(None, description="Workspace GID (Asana)")
 
 
 class IssueUpdateRequest(BaseModel):
     """Request to update an issue/card/task."""
 
-    title: Optional[str] = Field(None, description="New title")
-    description: Optional[str] = Field(None, description="New description")
-    status: Optional[str] = Field(None, description="New status")
-    transition_id: Optional[str] = Field(None, description="Transition ID (Jira)")
-    list_id: Optional[str] = Field(None, description="Target list ID (Trello)")
-    completed: Optional[bool] = Field(None, description="Completion status (Asana)")
+    title: str | None = Field(None, description="New title")
+    description: str | None = Field(None, description="New description")
+    status: str | None = Field(None, description="New status")
+    transition_id: str | None = Field(None, description="Transition ID (Jira)")
+    list_id: str | None = Field(None, description="Target list ID (Trello)")
+    completed: bool | None = Field(None, description="Completion status (Asana)")
 
 
 class ProjectMgmtSearchRequest(BaseModel):
     """Request to search issues."""
 
     query: str = Field(..., description="Search query or JQL")
-    max_results: Optional[int] = Field(50, description="Maximum results")
+    max_results: int | None = Field(50, description="Maximum results")
 
 
 # ---------------------------------------------------------------------------
@@ -1620,7 +1620,7 @@ class TriggerCreateResponse(BaseModel):
     """Response body for POST /api/triggers."""
 
     trigger_id: str
-    webhook_url: Optional[str] = None
+    webhook_url: str | None = None
 
 
 class TriggerListResponse(BaseModel):
@@ -1650,7 +1650,7 @@ class BrowserResearchRequest(BaseModel):
 class SessionAction(BaseModel):
     session_id: str
     action: str
-    timeout_seconds: Optional[int] = 300
+    timeout_seconds: int | None = 300
 
 
 class NavigationRequest(BaseModel):
@@ -1662,7 +1662,7 @@ class CreateChatBrowserRequest(BaseModel):
 
     conversation_id: str
     headless: bool = False
-    initial_url: Optional[str] = None
+    initial_url: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1732,9 +1732,9 @@ class DatabaseConnectionRequest(BaseModel):
 
     provider: str = Field(..., description="Database provider (postgresql/mysql/mongodb)")
     host: str = Field("localhost", description="Database host")
-    port: Optional[int] = Field(None, description="Database port (default: provider-specific)")
-    username: Optional[str] = Field(None, description="Database username")
-    password: Optional[str] = Field(None, description="Database password")
+    port: int | None = Field(None, description="Database port (default: provider-specific)")
+    username: str | None = Field(None, description="Database username")
+    password: str | None = Field(None, description="Database password")
     database: str = Field("", description="Database name")
 
 
@@ -1744,9 +1744,9 @@ class DBIntegrationQueryRequest(BaseModel):
     query: str = Field(..., description="SQL query to execute (read-only)")
     database: str = Field("", description="Target database name")
     host: str = Field("localhost", description="Database host")
-    port: Optional[int] = Field(None, description="Database port")
-    username: Optional[str] = Field(None, description="Database username")
-    password: Optional[str] = Field(None, description="Database password")
+    port: int | None = Field(None, description="Database port")
+    username: str | None = Field(None, description="Database username")
+    password: str | None = Field(None, description="Database password")
 
 
 class MongoQueryRequest(BaseModel):
@@ -1758,18 +1758,18 @@ class MongoQueryRequest(BaseModel):
     limit: int = Field(100, description="Maximum results to return")
     host: str = Field("localhost", description="MongoDB host")
     port: int = Field(27017, description="MongoDB port")
-    username: Optional[str] = Field(None, description="MongoDB username")
-    password: Optional[str] = Field(None, description="MongoDB password")
+    username: str | None = Field(None, description="MongoDB username")
+    password: str | None = Field(None, description="MongoDB password")
 
 
 class DatabaseListRequest(BaseModel):
     """Request model for listing databases/tables."""
 
     host: str = Field("localhost", description="Database host")
-    port: Optional[int] = Field(None, description="Database port")
-    username: Optional[str] = Field(None, description="Database username")
-    password: Optional[str] = Field(None, description="Database password")
-    database: Optional[str] = Field(None, description="Database name (for table listing)")
+    port: int | None = Field(None, description="Database port")
+    username: str | None = Field(None, description="Database username")
+    password: str | None = Field(None, description="Database password")
+    database: str | None = Field(None, description="Database name (for table listing)")
 
 
 # ---------------------------------------------------------------------------
@@ -1781,19 +1781,19 @@ class TestConnectionRequest(BaseModel):
     """Request model for testing communication provider connections."""
 
     provider: str = Field(..., description="Provider name: slack, teams, or discord")
-    token: Optional[str] = Field(None, description="Bot token or API token")
-    webhook_url: Optional[str] = Field(None, description="Webhook URL (for Teams)")
-    base_url: Optional[str] = Field(None, description="Custom base URL (optional)")
+    token: str | None = Field(None, description="Bot token or API token")
+    webhook_url: str | None = Field(None, description="Webhook URL (for Teams)")
+    base_url: str | None = Field(None, description="Custom base URL (optional)")
 
 
 class SendMessageRequest(BaseModel):
     """Request model for sending messages."""
 
-    channel: Optional[str] = Field(None, description="Channel ID or name (Slack)")
-    channel_id: Optional[str] = Field(None, description="Channel ID (Discord)")
-    text: Optional[str] = Field(None, description="Message text")
-    content: Optional[str] = Field(None, description="Message content (Discord)")
-    title: Optional[str] = Field(None, description="Message title (Teams)")
+    channel: str | None = Field(None, description="Channel ID or name (Slack)")
+    channel_id: str | None = Field(None, description="Channel ID (Discord)")
+    text: str | None = Field(None, description="Message text")
+    content: str | None = Field(None, description="Message content (Discord)")
+    title: str | None = Field(None, description="Message title (Teams)")
 
 
 class CommProviderInfo(BaseModel):
@@ -1810,7 +1810,7 @@ class WebhookMessageRequest(BaseModel):
 
     webhook_url: str = Field(..., description="Teams webhook URL")
     text: str = Field(..., description="Message text")
-    title: Optional[str] = Field(None, description="Message title")
+    title: str | None = Field(None, description="Message title")
 
 
 # ---------------------------------------------------------------------------
@@ -1824,7 +1824,7 @@ class SandboxExecuteRequest(BaseModel):
     timeout: int = 300
     execution_mode: str = "command"
     enable_network: bool = False
-    environment: Optional[dict] = None
+    environment: dict | None = None
 
 
 class SandboxScriptRequest(BaseModel):
@@ -1833,7 +1833,7 @@ class SandboxScriptRequest(BaseModel):
     security_level: str = "high"
     timeout: int = 300
     enable_network: bool = False
-    environment: Optional[dict] = None
+    environment: dict | None = None
 
 
 class SandboxBatchRequest(BaseModel):
@@ -1898,7 +1898,7 @@ class GitHubConnectionTestRequest(BaseModel):
     """Request body for testing a GitHub token."""
 
     token: str = Field(..., description="GitHub Personal Access Token")
-    base_url: Optional[str] = Field(None, description="Custom GitHub API base URL (e.g. GitHub Enterprise)")
+    base_url: str | None = Field(None, description="Custom GitHub API base URL (e.g. GitHub Enterprise)")
 
 
 class GitHubReviewRequest(BaseModel):
@@ -1961,17 +1961,17 @@ class CICDProviderInfo(BaseModel):
 
 class FeatureEnableRequest(BaseModel):
     feature_name: str
-    force: Optional[bool] = False
+    force: bool | None = False
 
 
 class BulkFeatureRequest(BaseModel):
     features: List[str]
-    enable_dependencies: Optional[bool] = True
+    enable_dependencies: bool | None = True
 
 
 class PerformanceOptimizationRequest(BaseModel):
     target_metrics: dict
-    optimization_level: Optional[str] = "balanced"
+    optimization_level: str | None = "balanced"
 
 
 # ---------------------------------------------------------------------------
@@ -1992,9 +1992,9 @@ class CloudConnectionTestRequest(BaseModel):
     """Request model for testing cloud provider connection."""
 
     provider: str = Field(..., description="Cloud provider (aws, azure, gcp)")
-    api_key: Optional[str] = Field(None, description="API key or access key")
-    api_secret: Optional[str] = Field(None, description="API secret key")
-    token: Optional[str] = Field(None, description="Access token")
+    api_key: str | None = Field(None, description="API key or access key")
+    api_secret: str | None = Field(None, description="API secret key")
+    token: str | None = Field(None, description="Access token")
     extra: Dict[str, Any] = Field(default_factory=dict, description="Provider-specific config")
 
 
@@ -2002,9 +2002,9 @@ class ResourceListRequest(BaseModel):
     """Request model for listing cloud resources."""
 
     provider: str
-    api_key: Optional[str] = None
-    api_secret: Optional[str] = None
-    token: Optional[str] = None
+    api_key: str | None = None
+    api_secret: str | None = None
+    token: str | None = None
     extra: Dict[str, Any] = Field(default_factory=dict)
     resource_type: str = Field(..., description="Type of resource (instances, vms, storage)")
 
@@ -2019,8 +2019,8 @@ class MonitoringConnectionTestRequest(BaseModel):
 
     provider: str = Field(..., description="Monitoring provider")
     api_key: str = Field(..., description="API key")
-    app_key: Optional[str] = Field(None, description="Application key (Datadog only)")
-    account_id: Optional[str] = Field(None, description="Account ID (New Relic only)")
+    app_key: str | None = Field(None, description="Application key (Datadog only)")
+    account_id: str | None = Field(None, description="Account ID (New Relic only)")
 
     @field_validator("provider")
     @classmethod
@@ -2034,13 +2034,13 @@ class MetricsQueryRequest(BaseModel):
     """Request model for querying metrics."""
 
     query: str = Field(..., description="Metric query")
-    from_time: Optional[int] = Field(None, description="Start time (unix timestamp)")
-    to_time: Optional[int] = Field(None, description="End time (unix timestamp)")
-    since: Optional[str] = Field(None, description="Relative time (e.g., '1 hour ago')")
+    from_time: int | None = Field(None, description="Start time (unix timestamp)")
+    to_time: int | None = Field(None, description="End time (unix timestamp)")
+    since: str | None = Field(None, description="Relative time (e.g., '1 hour ago')")
 
     @field_validator("from_time")
     @classmethod
-    def validate_from_time(cls, v: Optional[int]) -> Optional[int]:
+    def validate_from_time(cls, v: int | None) -> int | None:
         from datetime import datetime, timezone
 
         if v and v > int(datetime.now(tz=timezone.utc).timestamp()):
@@ -2049,7 +2049,7 @@ class MetricsQueryRequest(BaseModel):
 
     @field_validator("to_time")
     @classmethod
-    def validate_to_time(cls, v: Optional[int], info) -> Optional[int]:
+    def validate_to_time(cls, v: int | None, info) -> int | None:
         from_time = info.data.get("from_time")
         if v and from_time:
             if v < from_time:
@@ -2062,12 +2062,12 @@ class MetricsQueryRequest(BaseModel):
 class EventsQueryRequest(BaseModel):
     """Request model for querying events."""
 
-    start: Optional[int] = Field(None, description="Start time (unix timestamp)")
-    end: Optional[int] = Field(None, description="End time (unix timestamp)")
+    start: int | None = Field(None, description="Start time (unix timestamp)")
+    end: int | None = Field(None, description="End time (unix timestamp)")
 
     @field_validator("end")
     @classmethod
-    def validate_time_range(cls, v: Optional[int], info) -> Optional[int]:
+    def validate_time_range(cls, v: int | None, info) -> int | None:
         start = info.data.get("start")
         if v and start and v - start > 86400:
             raise ValueError("Time range cannot exceed 24 hours")
@@ -2091,16 +2091,16 @@ class MonitorCreateRequest(BaseModel):
 class MarketplaceSource(BaseModel):
     id: str = Field(..., description="Unique source ID; 'builtin' for the default")
     name: str = Field(..., description="Display name shown in the UI")
-    url: Optional[str] = Field(default=None, description="Catalog URL; null for the built-in source")
-    description: Optional[str] = Field(default=None)
+    url: str | None = Field(default=None, description="Catalog URL; null for the built-in source")
+    description: str | None = Field(default=None)
     is_builtin: bool = Field(default=False)
-    created_at: Optional[str] = Field(default=None)
+    created_at: str | None = Field(default=None)
 
 
 class MarketplaceSourceCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
     url: HttpUrl
-    description: Optional[str] = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=200)
 
 
 class MarketplaceSourcesResponse(BaseModel):
@@ -2115,7 +2115,7 @@ class CatalogPlugin(BaseModel):
     description: str = ""
     author: str = ""
     git_url: str
-    ref: Optional[str] = None
+    ref: str | None = None
     category: str = "other"
     tags: List[str] = Field(default_factory=list)
 
@@ -2159,8 +2159,8 @@ class BatchJobCreate(BaseModel):
     name: str = Field(..., description="Human-readable name for the job")
     job_type: BatchJobType = Field(..., description="Type of batch job")
     parameters: Dict = Field(default_factory=dict, description="Job-specific parameters")
-    schedule: Optional[str] = Field(None, description="Optional cron expression for scheduling")
-    template_id: Optional[str] = Field(None, description="Optional template ID to use")
+    schedule: str | None = Field(None, description="Optional cron expression for scheduling")
+    template_id: str | None = Field(None, description="Optional template ID to use")
 
 
 class BatchJob(BaseModel):
@@ -2173,10 +2173,10 @@ class BatchJob(BaseModel):
     progress: int = Field(0, ge=0, le=100, description="Progress percentage")
     parameters: Dict
     created_at: datetime
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-    result: Optional[Dict] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
+    result: Dict | None = None
 
 
 class BatchTemplate(BaseModel):
@@ -2237,7 +2237,7 @@ class APIBatchResponse(BaseModel):
 class CaptchaResolutionRequest(BaseModel):
     """Request model for CAPTCHA resolution."""
 
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class CaptchaResolutionResponse(BaseModel):
@@ -2247,7 +2247,7 @@ class CaptchaResolutionResponse(BaseModel):
     captcha_id: str
     status: str
     message: str
-    timestamp: Optional[str] = None
+    timestamp: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -2327,9 +2327,9 @@ class WorkflowRequest(BaseModel):
     """Request body for orchestration workflow execution."""
 
     goal: str
-    strategy: Optional[str] = None
-    context: Optional[dict] = None
-    max_parallel_tasks: Optional[int] = 5
+    strategy: str | None = None
+    context: dict | None = None
+    max_parallel_tasks: int | None = 5
 
 
 class AgentRecommendationRequest(BaseModel):
@@ -2360,15 +2360,15 @@ class SequentialThinkingRequest(BaseModel):
     total_thoughts: int = Field(..., ge=1, description="Estimated total thoughts needed")
     next_thought_needed: bool = Field(..., description="Whether another thought step is needed")
 
-    is_revision: Optional[bool] = Field(False, description="Whether this revises previous thinking")
-    revises_thought: Optional[int] = Field(None, ge=1, description="Which thought is being reconsidered")
-    branch_from_thought: Optional[int] = Field(None, ge=1, description="Branching point thought number")
-    branch_id: Optional[str] = Field(None, description="Branch identifier")
-    needs_more_thoughts: Optional[bool] = Field(
+    is_revision: bool | None = Field(False, description="Whether this revises previous thinking")
+    revises_thought: int | None = Field(None, ge=1, description="Which thought is being reconsidered")
+    branch_from_thought: int | None = Field(None, ge=1, description="Branching point thought number")
+    branch_id: str | None = Field(None, description="Branch identifier")
+    needs_more_thoughts: bool | None = Field(
         False, description="If more thoughts are needed beyond initial estimate"
     )
 
-    session_id: Optional[str] = Field("default", description="Thinking session identifier")
+    session_id: str | None = Field("default", description="Thinking session identifier")
 
     def to_thought_record(self) -> Metadata:
         """Convert to thought record for storage."""
@@ -2403,7 +2403,7 @@ class SequentialThinkingRequest(BaseModel):
         """Check if this is a revision."""
         return bool(self.is_revision)
 
-    def get_revision_info(self) -> Optional[Metadata]:
+    def get_revision_info(self) -> Metadata | None:
         """Get revision info dict if this is a revision."""
         if not self.is_revision:
             return None
@@ -2416,7 +2416,7 @@ class SequentialThinkingRequest(BaseModel):
         """Check if this is a branch."""
         return bool(self.branch_from_thought)
 
-    def get_branch_info(self) -> Optional[Metadata]:
+    def get_branch_info(self) -> Metadata | None:
         """Get branch info dict if this is a branch."""
         if not self.branch_from_thought:
             return None
@@ -2442,9 +2442,9 @@ class StateChangeRequest(BaseModel):
     change_type: str
     description: str
     after_state: Metadata
-    before_state: Optional[Metadata] = None
-    user_id: Optional[str] = "system"
-    metadata: Optional[Metadata] = None
+    before_state: Metadata | None = None
+    user_id: str | None = "system"
+    metadata: Metadata | None = None
 
 
 class StateTrackingExportRequest(BaseModel):
@@ -2452,7 +2452,7 @@ class StateTrackingExportRequest(BaseModel):
 
     format: str = "json"  # json or markdown
     include_history: bool = True
-    time_range_days: Optional[int] = None
+    time_range_days: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -2537,8 +2537,8 @@ class HTTPRequestBase(BaseModel):
     """Base model for HTTP requests."""
 
     url: str = Field(..., description="Target URL for the request")
-    headers: Optional[Dict[str, str]] = Field(default=None, description="Optional HTTP headers")
-    timeout: Optional[int] = Field(
+    headers: Dict[str, str] | None = Field(default=None, description="Optional HTTP headers")
+    timeout: int | None = Field(
         default=_HTTP_CLIENT_DEFAULT_TIMEOUT,
         ge=1,
         le=_HTTP_CLIENT_MAX_TIMEOUT,
@@ -2557,14 +2557,14 @@ class HTTPRequestBase(BaseModel):
 class HTTPGetRequest(HTTPRequestBase):
     """GET request model."""
 
-    params: Optional[Dict[str, str]] = Field(default=None, description="Query parameters")
+    params: Dict[str, str] | None = Field(default=None, description="Query parameters")
 
 
 class HTTPPostRequest(HTTPRequestBase):
     """POST request model."""
 
-    json_body: Optional[_HTTPClientJSONObject] = Field(default=None, description="JSON request body")
-    form_data: Optional[Dict[str, str]] = Field(
+    json_body: _HTTPClientJSONObject | None = Field(default=None, description="JSON request body")
+    form_data: Dict[str, str] | None = Field(
         default=None, description="Form data (mutually exclusive with json_body)"
     )
 
@@ -2572,13 +2572,13 @@ class HTTPPostRequest(HTTPRequestBase):
 class HTTPPutRequest(HTTPRequestBase):
     """PUT request model."""
 
-    json_body: Optional[_HTTPClientJSONObject] = Field(default=None, description="JSON request body")
+    json_body: _HTTPClientJSONObject | None = Field(default=None, description="JSON request body")
 
 
 class HTTPPatchRequest(HTTPRequestBase):
     """PATCH request model."""
 
-    json_body: Optional[_HTTPClientJSONObject] = Field(default=None, description="JSON request body for partial update")
+    json_body: _HTTPClientJSONObject | None = Field(default=None, description="JSON request body for partial update")
 
 
 class HTTPDeleteRequest(HTTPRequestBase):

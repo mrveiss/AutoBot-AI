@@ -15,7 +15,7 @@ import hashlib
 import mimetypes
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from autobot_shared.logging_manager import get_logger
 from knowledge.connectors.base import AbstractConnector
@@ -111,11 +111,11 @@ class FileServerConnector(AbstractConnector):
         """Scan base_path recursively and return a SourceInfo per matching file."""
         return await asyncio.to_thread(self._scan_files_sync)
 
-    async def fetch_content(self, source_id: str) -> Optional[ContentResult]:
+    async def fetch_content(self, source_id: str) -> ContentResult | None:
         """Read and return file content for *source_id* (which is the file path)."""
         return await asyncio.to_thread(self._read_file_sync, source_id)
 
-    async def detect_changes(self, since: Optional[datetime] = None) -> List[ChangeInfo]:
+    async def detect_changes(self, since: datetime | None = None) -> List[ChangeInfo]:
         """Compare current file mtimes against *since* and report changes."""
         sources = await self.discover_sources()
         changes: List[ChangeInfo] = []
@@ -215,7 +215,7 @@ class FileServerConnector(AbstractConnector):
         logger.debug("Scanned %d sources from %s", len(sources), self._base_path)
         return sources
 
-    def _read_file_sync(self, source_id: str) -> Optional[ContentResult]:
+    def _read_file_sync(self, source_id: str) -> ContentResult | None:
         """Blocking file read — run via asyncio.to_thread (Issue #1254)."""
         # source_id is a hash; we must scan to find the matching path
         sources = self._scan_files_sync()

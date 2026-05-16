@@ -10,7 +10,7 @@ All reranking parameters are configurable without code changes.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
@@ -79,7 +79,7 @@ class RAGConfig:
     # Issue #556: Category-based filtering for chat RAG
     # Default categories to search when no specific categories are specified
     # Available categories: system_knowledge, user_knowledge, autobot_knowledge
-    default_chat_categories: Optional[list] = None
+    default_chat_categories: list | None = None
     enable_smart_category_selection: bool = True
 
     # Issue #1718: Agentic RAG — search exposed as LLM tool
@@ -112,7 +112,7 @@ class RAGConfig:
     autonomous_loop_dry_run: bool = True  # dry-run until explicitly disabled
     autonomous_loop_promotion_threshold: float = 0.05  # 5 % improvement required
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate configuration values and propagate mmr_lambda to rerank_weights.
 
         Issue #2090: top-level mmr_lambda is the canonical knob for the MMR pass.
@@ -123,7 +123,7 @@ class RAGConfig:
             self.rerank_weights.mmr_lambda = self.mmr_lambda
         self._validate()
 
-    def _validate(self):
+    def _validate(self) -> None:
         """Validate configuration parameters."""
         # Validate weights sum to 1.0 (or close to it)
         weight_sum = self.hybrid_weight_semantic + self.hybrid_weight_keyword
@@ -299,11 +299,11 @@ def load_rag_config_from_yaml(config_manager: Any) -> RAGConfig:
 # Singleton instance with thread-safe access
 import threading as _threading_rag_config
 
-_rag_config_instance: Optional[RAGConfig] = None
+_rag_config_instance: RAGConfig | None = None
 _rag_config_lock = _threading_rag_config.Lock()
 
 
-def get_rag_config(config_manager: Optional[Any] = None) -> RAGConfig:
+def get_rag_config(config_manager: Any | None = None) -> RAGConfig:
     """
     Get the global RAG configuration instance (thread-safe).
 

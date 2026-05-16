@@ -11,7 +11,7 @@ membership management, and role assignment within teams.
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,7 +55,7 @@ class TeamService(BaseService):
 
     VALID_ROLES = {ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER}
 
-    def __init__(self, session: AsyncSession, context: Optional[TenantContext] = None):
+    def __init__(self, session: AsyncSession, context: TenantContext | None = None):
         """Initialize team service."""
         super().__init__(session, context)
 
@@ -72,8 +72,8 @@ class TeamService(BaseService):
     def _build_team_object(
         self,
         name: str,
-        description: Optional[str],
-        settings: Optional[dict],
+        description: str | None,
+        settings: dict | None,
         is_default: bool,
     ) -> Team:
         """Build Team model instance with provided attributes. Issue #620."""
@@ -91,7 +91,7 @@ class TeamService(BaseService):
         team: Team,
         name: str,
         is_default: bool,
-        effective_owner: Optional[uuid.UUID],
+        effective_owner: uuid.UUID | None,
     ) -> None:
         """Log audit entry for team creation. Issue #620."""
         await self._audit_log(
@@ -108,10 +108,10 @@ class TeamService(BaseService):
     async def create_team(
         self,
         name: str,
-        description: Optional[str] = None,
-        settings: Optional[dict] = None,
+        description: str | None = None,
+        settings: dict | None = None,
         is_default: bool = False,
-        owner_id: Optional[uuid.UUID] = None,
+        owner_id: uuid.UUID | None = None,
     ) -> Team:
         """
         Create a new team.
@@ -144,7 +144,7 @@ class TeamService(BaseService):
         logger.info("Created team: %s (id=%s)", name, team.id)
         return team
 
-    async def get_team(self, team_id: uuid.UUID) -> Optional[Team]:
+    async def get_team(self, team_id: uuid.UUID) -> Team | None:
         """
         Get team by ID.
 
@@ -165,7 +165,7 @@ class TeamService(BaseService):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    def _build_list_teams_base_query(self, include_deleted: bool, search: Optional[str]):
+    def _build_list_teams_base_query(self, include_deleted: bool, search: str | None):
         """
         Build base query for listing teams with filters applied.
 
@@ -199,7 +199,7 @@ class TeamService(BaseService):
         limit: int = 50,
         offset: int = 0,
         include_deleted: bool = False,
-        search: Optional[str] = None,
+        search: str | None = None,
     ) -> tuple[List[Team], int]:
         """
         List teams with pagination.
@@ -256,9 +256,9 @@ class TeamService(BaseService):
     async def update_team(
         self,
         team_id: uuid.UUID,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        settings: Optional[dict] = None,
+        name: str | None = None,
+        description: str | None = None,
+        settings: dict | None = None,
     ) -> Team:
         """
         Update team.
@@ -564,7 +564,7 @@ class TeamService(BaseService):
     async def get_team_members(
         self,
         team_id: uuid.UUID,
-        role: Optional[str] = None,
+        role: str | None = None,
     ) -> List[TeamMembership]:
         """
         Get all members of a team.
@@ -615,7 +615,7 @@ class TeamService(BaseService):
         self,
         team_id: uuid.UUID,
         user_id: uuid.UUID,
-        required_role: Optional[str] = None,
+        required_role: str | None = None,
     ) -> bool:
         """
         Check if a user is a member of a team.
@@ -648,7 +648,7 @@ class TeamService(BaseService):
     # Private Helpers
     # -------------------------------------------------------------------------
 
-    async def _find_team_by_name(self, name: str) -> Optional[Team]:
+    async def _find_team_by_name(self, name: str) -> Team | None:
         """Find team by name within current organization."""
         query = select(Team).where(func.lower(Team.name) == name.lower()).where(Team.deleted_at.is_(None))
         query = self.apply_tenant_filter(query, Team)
@@ -656,7 +656,7 @@ class TeamService(BaseService):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def _get_membership(self, team_id: uuid.UUID, user_id: uuid.UUID) -> Optional[TeamMembership]:
+    async def _get_membership(self, team_id: uuid.UUID, user_id: uuid.UUID) -> TeamMembership | None:
         """Get membership record."""
         result = await self.session.execute(
             select(TeamMembership).where(
@@ -682,7 +682,7 @@ class TeamService(BaseService):
         self,
         action: str,
         resource_type: str,
-        resource_id: Optional[uuid.UUID],
+        resource_id: uuid.UUID | None,
         details: dict,
         outcome: str = "success",
     ) -> None:

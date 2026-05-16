@@ -77,7 +77,7 @@ class TestEvaluatePromotesHotNodes:
     """evaluate() calls promote_to_anchor for every returned candidate."""
 
     @pytest.mark.asyncio
-    async def test_evaluate_promotes_hot_nodes(self):
+    async def test_evaluate_promotes_hot_nodes(self) -> None:
         """When a candidate is returned, promote_to_anchor is called with its ID."""
         db = _make_db()
         db.get_promotion_candidates = AsyncMock(return_value=[_candidate()])
@@ -91,7 +91,7 @@ class TestEvaluatePromotesHotNodes:
         assert _NODE_ID in report.nodes_promoted
 
     @pytest.mark.asyncio
-    async def test_promote_passes_correct_thresholds(self):
+    async def test_promote_passes_correct_thresholds(self) -> None:
         """get_promotion_candidates is called with the configured thresholds."""
         db = _make_db()
         chroma = _make_chroma()
@@ -119,7 +119,7 @@ class TestEvaluateDemotesStaleAnchors:
     """evaluate() calls demote_anchor for every stale anchor returned."""
 
     @pytest.mark.asyncio
-    async def test_evaluate_demotes_stale_anchors(self):
+    async def test_evaluate_demotes_stale_anchors(self) -> None:
         """When a stale anchor is returned, demote_anchor is called with its ID."""
         db = _make_db()
         db.get_stale_anchors = AsyncMock(return_value=[_stale_anchor()])
@@ -132,7 +132,7 @@ class TestEvaluateDemotesStaleAnchors:
         assert _ANCHOR_ID in report.nodes_demoted
 
     @pytest.mark.asyncio
-    async def test_demote_passes_correct_thresholds(self):
+    async def test_demote_passes_correct_thresholds(self) -> None:
         """get_stale_anchors is called with the configured thresholds."""
         db = _make_db()
         chroma = _make_chroma()
@@ -160,7 +160,7 @@ class TestPromoteStoresAnchorInChroma:
     """_promote_node upserts the neighborhood summary into mesh_anchors."""
 
     @pytest.mark.asyncio
-    async def test_promote_stores_anchor_in_chroma(self):
+    async def test_promote_stores_anchor_in_chroma(self) -> None:
         """chroma.upsert is called with collection='mesh_anchors' and correct id."""
         db = _make_db()
         db.get_promotion_candidates = AsyncMock(return_value=[_candidate()])
@@ -177,7 +177,7 @@ class TestPromoteStoresAnchorInChroma:
         assert kwargs["documents"] == [_SUMMARY]
 
     @pytest.mark.asyncio
-    async def test_promote_metadata_contains_node_id_and_size(self):
+    async def test_promote_metadata_contains_node_id_and_size(self) -> None:
         """Metadata passed to chroma.upsert includes node_id and neighborhood_size."""
         db = _make_db()
         neighborhood = _neighborhood(size=4)
@@ -198,7 +198,7 @@ class TestDemoteRemovesFromChroma:
     """_demote_node calls chroma.delete with the anchor ID."""
 
     @pytest.mark.asyncio
-    async def test_demote_removes_from_chroma(self):
+    async def test_demote_removes_from_chroma(self) -> None:
         """chroma.delete is called with collection='mesh_anchors' and correct id."""
         db = _make_db()
         db.get_stale_anchors = AsyncMock(return_value=[_stale_anchor()])
@@ -289,7 +289,7 @@ class TestReportContents:
     """evaluate() returns a PromotionReport with the correct node ID lists."""
 
     @pytest.mark.asyncio
-    async def test_report_contains_promoted_ids(self):
+    async def test_report_contains_promoted_ids(self) -> None:
         """nodes_promoted contains all promoted node IDs."""
         db = _make_db()
         db.get_promotion_candidates = AsyncMock(return_value=[_candidate(_NODE_ID), _candidate(_NODE_ID_2)])
@@ -304,7 +304,7 @@ class TestReportContents:
         assert len(report.nodes_promoted) == 2
 
     @pytest.mark.asyncio
-    async def test_report_contains_demoted_ids(self):
+    async def test_report_contains_demoted_ids(self) -> None:
         """nodes_demoted contains all demoted node IDs."""
         db = _make_db()
         db.get_stale_anchors = AsyncMock(return_value=[_stale_anchor()])
@@ -317,7 +317,7 @@ class TestReportContents:
         assert len(report.nodes_demoted) == 1
 
     @pytest.mark.asyncio
-    async def test_no_candidates_returns_empty_report(self):
+    async def test_no_candidates_returns_empty_report(self) -> None:
         """When there are no candidates and no stale anchors, both lists are empty."""
         db = _make_db()
         chroma = _make_chroma()

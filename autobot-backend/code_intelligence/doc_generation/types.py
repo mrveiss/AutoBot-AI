@@ -11,7 +11,7 @@ Extracted from doc_generator.py as part of Issue #381 refactoring.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 # =============================================================================
 # Enums
@@ -89,9 +89,9 @@ class ParameterDoc:
     """Documentation for a function/method parameter."""
 
     name: str
-    type_hint: Optional[str] = None
-    description: Optional[str] = None
-    default_value: Optional[str] = None
+    type_hint: str | None = None
+    description: str | None = None
+    default_value: str | None = None
     is_optional: bool = False
     is_keyword_only: bool = False
     is_positional_only: bool = False
@@ -113,8 +113,8 @@ class ParameterDoc:
 class ReturnDoc:
     """Documentation for a function/method return value."""
 
-    type_hint: Optional[str] = None
-    description: Optional[str] = None
+    type_hint: str | None = None
+    description: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -129,8 +129,8 @@ class ExceptionDoc:
     """Documentation for an exception that can be raised."""
 
     exception_type: str
-    description: Optional[str] = None
-    conditions: Optional[str] = None
+    description: str | None = None
+    conditions: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -146,9 +146,9 @@ class ExampleDoc:
     """Documentation for a code example."""
 
     code: str
-    description: Optional[str] = None
+    description: str | None = None
     language: str = "python"
-    output: Optional[str] = None
+    output: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""

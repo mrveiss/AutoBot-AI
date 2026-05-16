@@ -8,8 +8,6 @@ Metrics for GitHub API operations.
 Extracted from PrometheusMetricsManager as part of Issue #394.
 """
 
-from typing import Optional
-
 from prometheus_client import Counter, Gauge, Histogram
 
 from .base import BaseMetricsRecorder
@@ -63,7 +61,7 @@ class GitHubMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-    def record_operation(self, operation: str, status: str, duration: Optional[float] = None) -> None:
+    def record_operation(self, operation: str, status: str, duration: float | None = None) -> None:
         """Record a GitHub API operation."""
         self.github_operations_total.labels(operation=operation, status=status).inc()
         if duration is not None:

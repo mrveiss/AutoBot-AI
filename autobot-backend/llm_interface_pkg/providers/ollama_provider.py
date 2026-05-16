@@ -20,7 +20,7 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List
 
 import aiohttp
 
@@ -48,9 +48,9 @@ class OllamaProvider(BaseProvider):
 
     provider_name = ProviderType.OLLAMA.value
 
-    def __init__(self, settings: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, settings: Dict[str, Any] | None = None) -> None:
         super().__init__(settings)
-        self._base_url: Optional[str] = None
+        self._base_url: str | None = None
         self._delegate = None
 
     def _resolve_base_url(self) -> str:

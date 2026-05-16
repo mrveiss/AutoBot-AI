@@ -8,7 +8,7 @@ Endpoints for agent organizational hierarchy: org tree, chain of command,
 direct reports, and org metadata updates with cycle detection.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -342,7 +342,7 @@ async def list_agent_delegations(
         default="delegator",
         description="Filter by 'delegator' or 'assignee'",
     ),
-    delegation_status: Optional[str] = Query(default=None, alias="status", description="Filter by status"),
+    delegation_status: str | None = Query(default=None, alias="status", description="Filter by status"),
     limit: int = Query(default=50, ge=1, le=200),
     session: AsyncSession = Depends(get_db_session),
 ) -> List[DelegationResponse]:

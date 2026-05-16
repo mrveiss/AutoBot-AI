@@ -10,8 +10,6 @@ Each agent can have its own LLM model configuration and status monitoring.
 """
 
 from datetime import datetime, timezone
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,7 +53,7 @@ QUALITY_TIER_MODEL = config.misc.default_llm_model or config.default_agent_model
 router = APIRouter()
 
 
-async def _get_agent_config_from_slm(agent_id: str) -> Optional[dict]:
+async def _get_agent_config_from_slm(agent_id: str) -> dict | None:
     """
     Fetch agent config from SLM.
 
@@ -785,9 +783,9 @@ async def get_specialized_agent(
     error_code_prefix="AGENT_CONFIG",
 )
 async def get_agents_usage(
-    agent_id: Optional[str] = Query(None, description="Filter to a specific agent (all agents if omitted)"),
+    agent_id: str | None = Query(None, description="Filter to a specific agent (all agents if omitted)"),
     days: int = Query(default=7, ge=1, le=90, description="Lookback window in days for trend data"),
-    outcome: Optional[str] = Query(None, description="Filter by outcome: completed, failed, timeout, cancelled"),
+    outcome: str | None = Query(None, description="Filter by outcome: completed, failed, timeout, cancelled"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """

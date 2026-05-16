@@ -26,7 +26,7 @@ import json
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from autobot_shared.ssot_config import AutoBotConfig, LLMConfig, PortConfig, VMConfig
 
@@ -218,7 +218,7 @@ LLM_MODEL_MAPPINGS: List[SSOTMapping] = [
 ALL_MAPPINGS: List[SSOTMapping] = VM_IP_MAPPINGS + PORT_MAPPINGS + URL_MAPPINGS + LLM_MODEL_MAPPINGS
 
 
-def get_mapping_for_value(value: str) -> Optional[SSOTMapping]:
+def get_mapping_for_value(value: str) -> SSOTMapping | None:
     """
     Find SSOT mapping for a detected hardcoded value.
 
@@ -269,7 +269,7 @@ def export_mappings_as_json() -> str:
     return json.dumps(data, indent=2)
 
 
-def get_ssot_suggestion(value: str, file_type: str = "python") -> Optional[str]:
+def get_ssot_suggestion(value: str, file_type: str = "python") -> str | None:
     """
     Get SSOT config suggestion for a hardcoded value.
 

@@ -9,8 +9,6 @@ Issue #52 - Enhanced Computer Vision for GUI Automation
 Author: mrveiss
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.system_health import register_singleton_probe
@@ -41,7 +39,7 @@ from api.schemas_system import (
     VisionStatusResponse,
 )
 
-_screen_analyzer: Optional[ScreenAnalyzer] = None
+_screen_analyzer: ScreenAnalyzer | None = None
 _screen_analyzer_lock = threading.Lock()
 
 
@@ -276,7 +274,7 @@ async def extract_text_ocr(
     error_code_prefix="VISION",
 )
 async def get_automation_opportunities(
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -362,7 +360,7 @@ async def get_interaction_types(
     error_code_prefix="VISION",
 )
 async def get_layout_analysis(
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
     current_user: dict = Depends(get_current_user),
 ):
     """

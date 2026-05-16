@@ -38,7 +38,7 @@ import threading
 from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 import uvicorn
@@ -169,7 +169,7 @@ def load_config() -> Dict[str, Any]:
     return {}
 
 
-def get_persistent_worker_id(prefix: str = "windows_npu_worker") -> Optional[str]:
+def get_persistent_worker_id(prefix: str = "windows_npu_worker") -> str | None:
     """
     Get persistent worker ID assigned by main host.
 
@@ -320,7 +320,7 @@ class LRUCache:
         self._ttl = ttl
         self._lock = asyncio.Lock()
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """Get item from cache, returns None if not found or expired."""
         async with self._lock:
             if key not in self._cache:
@@ -452,7 +452,7 @@ class ONNXModelManager:
         self._sessions: Dict[str, Any] = {}  # ONNX Runtime InferenceSessions
         self._model_configs: Dict[str, Dict] = {}
         self._lock = asyncio.Lock()
-        self._selected_device: Optional[str] = None
+        self._selected_device: str | None = None
         self._available_providers: List[str] = []
         self._initialized = False
         self._openvino_device: str = "CPU"  # NPU, GPU, or CPU
@@ -985,7 +985,7 @@ OpenVINOModelManager = ONNXModelManager
 
 
 # Global model manager instance with thread-safe initialization (Issue #662)
-_model_manager: Optional[OpenVINOModelManager] = None
+_model_manager: OpenVINOModelManager | None = None
 _model_manager_lock = threading.Lock()
 
 
@@ -1017,11 +1017,11 @@ class NPUTaskResponse(BaseModel):
 
     task_id: str
     status: str
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-    processing_time_ms: Optional[float] = None
-    npu_utilization_percent: Optional[float] = None
-    optimization_metrics: Optional[Dict[str, Any]] = None
+    result: Dict[str, Any] | None = None
+    error: str | None = None
+    processing_time_ms: float | None = None
+    npu_utilization_percent: float | None = None
+    optimization_metrics: Dict[str, Any] | None = None
 
 
 class PairRequest(BaseModel):
@@ -1033,7 +1033,7 @@ class PairRequest(BaseModel):
 
     worker_id: str  # ID assigned by main host
     main_host: str  # IP/hostname of the main host
-    config: Optional[Dict[str, Any]] = None  # Optional config from main host
+    config: Dict[str, Any] | None = None  # Optional config from main host
 
 
 class PairResponse(BaseModel):
@@ -1044,7 +1044,7 @@ class PairResponse(BaseModel):
     success: bool
     worker_id: str
     message: str
-    device_info: Optional[Dict[str, Any]] = None
+    device_info: Dict[str, Any] | None = None
 
 
 class WindowsNPUWorker:
@@ -1079,7 +1079,7 @@ class WindowsNPUWorker:
         self._models_lock = asyncio.Lock()  # Thread-safe model loading (TOCTOU fix)
 
         # Real OpenVINO model manager (Issue #640 - replaces mock inference)
-        self._model_manager: Optional[OpenVINOModelManager] = None
+        self._model_manager: OpenVINOModelManager | None = None
         self._use_real_inference = (
             True  # Set to False to use mock inference for testing
         )
@@ -1104,7 +1104,7 @@ class WindowsNPUWorker:
         )
 
         # Bootstrap config storage
-        self._bootstrap_config: Optional[Dict[str, Any]] = None
+        self._bootstrap_config: Dict[str, Any] | None = None
 
         self.setup_routes()
 

@@ -77,7 +77,7 @@ class MessageQueue:
     platform-specific rate limits.
     """
 
-    def __init__(self, max_queue_size: int = 10000):
+    def __init__(self, max_queue_size: int = 10000) -> None:
         """Initialize message queue."""
         self.queue: Queue = Queue(maxsize=max_queue_size)
         self.limiters: Dict[str, RateLimiter] = {}

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 import numpy as np
 
@@ -73,8 +73,8 @@ class UIElement:
     text_content: str
     attributes: Dict[str, Any]
     possible_interactions: List[InteractionType]
-    screenshot_region: Optional[np.ndarray] = None
-    ocr_data: Optional[Dict[str, Any]] = None
+    screenshot_region: np.ndarray | None = None
+    ocr_data: Dict[str, Any] | None = None
 
     def matches_automation_pattern(self, keywords: set) -> bool:
         """Check if element matches automation keywords"""
@@ -116,7 +116,7 @@ class UIElement:
         height = self.bbox.get("height", 0)
         return 2 * (width + height)
 
-    def get_automation_opportunity(self) -> Optional[Dict[str, Any]]:
+    def get_automation_opportunity(self) -> Dict[str, Any] | None:
         """Generate automation opportunity if this element is automatable
 
         Returns None if no automation opportunity exists.
@@ -177,7 +177,7 @@ class ScreenState:
     automation_opportunities: List[Dict[str, Any]]
     context_analysis: Dict[str, Any]
     confidence_score: float
-    multimodal_analysis: Optional[List[Dict[str, Any]]] = None  # New field for multi-modal processing results
+    multimodal_analysis: List[Dict[str, Any]] | None = None  # New field for multi-modal processing results
 
     def get_element_collection(self) -> "UIElementCollection":
         """Get UI elements as a collection with analysis methods"""

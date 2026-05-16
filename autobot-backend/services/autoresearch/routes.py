@@ -10,7 +10,7 @@ Issue #2597: Endpoints for managing experiments, viewing results, and stats.
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -38,7 +38,7 @@ class CreateExperimentRequest(BaseModel):
     description: str = Field(default="", max_length=5000)
     code_diff: str = Field(default="", max_length=50000)
     tags: List[str] = Field(default_factory=list, max_length=20)
-    hyperparams: Optional[Dict] = None
+    hyperparams: Dict | None = None
 
 
 class SetBaselineRequest(BaseModel):
@@ -81,10 +81,10 @@ class RegisterTargetRequest(BaseModel):
 
 
 # Lazy-initialized singletons
-_runner: Optional[ExperimentRunner] = None
-_store: Optional[ExperimentStore] = None
-_optimizer: Optional[PromptOptimizer] = None
-_synthesizer: Optional[KnowledgeSynthesizer] = None
+_runner: ExperimentRunner | None = None
+_store: ExperimentStore | None = None
+_optimizer: PromptOptimizer | None = None
+_synthesizer: KnowledgeSynthesizer | None = None
 
 
 def _get_store(request: Request) -> ExperimentStore:
@@ -117,7 +117,7 @@ async def list_experiments(
     request: Request,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    state: Optional[str] = Query(default=None),
+    state: str | None = Query(default=None),
     _admin: bool = Depends(check_admin_permission),
 ):
     """List experiments, most recent first."""
@@ -314,7 +314,7 @@ def _get_hypothesis_system_prompt() -> str:
 
 
 def _build_hypothesis_result(
-    statement: str, rationale: str, hyperparams: dict, latency_ms: float, error: Optional[str]
+    statement: str, rationale: str, hyperparams: dict, latency_ms: float, error: str | None
 ) -> str:
     """Build a JSON result string for hypothesis generation."""
     import json as _json

@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 class DiscordAdapter(BaseAdapter):
     """Discord platform adapter for unified message gateway."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("discord")
 
     async def normalize_message(self, raw_message: Dict[str, Any]) -> UnifiedMessage:

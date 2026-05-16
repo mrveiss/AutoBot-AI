@@ -12,7 +12,7 @@ import hashlib
 import hmac
 import secrets
 import time
-from typing import Dict, Optional
+from typing import Dict
 
 import structlog
 from fastapi import HTTPException, Request
@@ -56,7 +56,7 @@ class ServiceAuthManager:
         logger.info("Generated service key for %s", service_id, extra={"service_id": service_id})
         return key_hex
 
-    async def get_service_key(self, service_id: str) -> Optional[str]:
+    async def get_service_key(self, service_id: str) -> str | None:
         """
         Retrieve service key from Redis.
 

@@ -13,8 +13,6 @@ Split from ``facts.py`` per Issue #5486.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -30,12 +28,12 @@ class AddTextResponse(BaseModel):
 
     status: str = Field(..., description="'success' on insert")
     message: str = ""
-    fact_id: Optional[str] = None
+    fact_id: str | None = None
     text_length: int = 0
     title: str = ""
     source: str = ""
-    access_level: Optional[str] = None
-    visibility: Optional[str] = None
+    access_level: str | None = None
+    visibility: str | None = None
 
 
 class AddFactResponse(BaseModel):
@@ -48,7 +46,7 @@ class AddFactResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     success: bool = True
-    document_id: Optional[str] = None
+    document_id: str | None = None
     title: str = ""
     content: str = Field("", description="Truncated to first 100 chars + ellipsis")
     message: str = ""
@@ -64,7 +62,7 @@ class AddUrlResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     success: bool = True
-    document_id: Optional[str] = None
+    document_id: str | None = None
     title: str = ""
     content: str = ""
     message: str = ""
@@ -79,7 +77,7 @@ class UploadFileResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     success: bool = True
-    document_id: Optional[str] = None
+    document_id: str | None = None
     title: str = ""
     content: str = ""
     word_count: int = 0
@@ -96,7 +94,7 @@ class AudioIngestResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     success: bool = True
-    document_id: Optional[str] = None
+    document_id: str | None = None
     title: str = ""
     word_count: int = 0
     message: str = ""

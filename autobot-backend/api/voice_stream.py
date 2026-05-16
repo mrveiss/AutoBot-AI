@@ -30,8 +30,6 @@ Protocol (JSON messages):
 import asyncio
 import base64
 from collections import deque
-from typing import Optional
-
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
@@ -266,7 +264,7 @@ async def _tts_queue_worker(
 
 async def _cancel_active_tts(
     cancel_event: asyncio.Event,
-    tts_task: Optional[asyncio.Task],
+    tts_task: asyncio.Task | None,
 ) -> None:
     """Cancel any active TTS task for barge-in interruption (#1031)."""
     cancel_event.set()
@@ -287,7 +285,7 @@ async def _start_tts_stream(
     get_state_fn,
     voice_id: str = "",
     language: str = "",
-) -> Optional[asyncio.Task]:
+) -> asyncio.Task | None:
     """Start TTS synthesis and stream audio to client (#1031)."""
     if not text:
         return None
@@ -346,7 +344,7 @@ async def _handle_ws_message(
     msg: dict,
     ws: WebSocket,
     ctx: dict,
-) -> Optional[asyncio.Task]:
+) -> asyncio.Task | None:
     """Dispatch a single WebSocket message. Returns updated tts_task.
 
     ctx keys: cancel_tts, tts_task, sentence_queue, current_state,
@@ -401,9 +399,9 @@ async def _handle_ws_message(
 
 
 async def _cleanup_ws_tasks(
-    queue_worker_task: Optional[asyncio.Task],
+    queue_worker_task: asyncio.Task | None,
     cancel_tts: asyncio.Event,
-    tts_task: Optional[asyncio.Task],
+    tts_task: asyncio.Task | None,
 ) -> None:
     """Cancel background tasks on WebSocket close (#1319)."""
     if queue_worker_task and not queue_worker_task.done():
@@ -429,9 +427,9 @@ async def voice_stream_ws(websocket: WebSocket) -> None:
     logger.info("Voice stream WebSocket connected")
 
     cancel_tts = asyncio.Event()
-    tts_task: Optional[asyncio.Task] = None
+    tts_task: asyncio.Task | None = None
     sentence_queue: asyncio.Queue = asyncio.Queue()
-    queue_worker_task: Optional[asyncio.Task] = None
+    queue_worker_task: asyncio.Task | None = None
     current_state = "idle"
 
     async def _set_state(new_state: str) -> None:

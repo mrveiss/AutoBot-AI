@@ -14,7 +14,7 @@ import re
 import socket
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Set
 from urllib.parse import urlparse
 
 import aiohttp
@@ -39,7 +39,7 @@ _MIXED_DIGIT_LETTER_RE = re.compile(r"[0-9]{1,}[a-z]{1,}[0-9]{1,}")
 class DomainSecurityConfig:
     """Configuration for domain security settings"""
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: str | None = None):
         """Initialize domain security config with optional custom path."""
         self.config_path = config_path or "config/security/domain_security.yaml"
         self.config = self._load_config()
@@ -157,7 +157,7 @@ class DomainSecurityConfig:
 class DomainSecurityManager:
     """Manages domain security validation and threat intelligence"""
 
-    def __init__(self, config: Optional[DomainSecurityConfig] = None):
+    def __init__(self, config: DomainSecurityConfig | None = None):
         """Initialize domain security manager with config and compiled patterns."""
         self.config = config or DomainSecurityConfig()
         self.domain_cache = {}
@@ -166,7 +166,7 @@ class DomainSecurityManager:
         self._http_client = get_http_client()  # Use singleton HTTP client
 
         # Threat intelligence service (lazy initialized)
-        self._threat_intel_service: Optional[ThreatIntelligenceService] = None
+        self._threat_intel_service: ThreatIntelligenceService | None = None
 
         # Precompile regex patterns for performance
         self._compile_patterns()
@@ -702,7 +702,7 @@ class DomainSecurityManager:
 
 
 # Convenience function for easy access
-async def validate_url_safety(url: str, config: Optional[DomainSecurityConfig] = None) -> Dict[str, Any]:
+async def validate_url_safety(url: str, config: DomainSecurityConfig | None = None) -> Dict[str, Any]:
     """Standalone function to validate URL safety"""
     async with DomainSecurityManager(config) as manager:
         return await manager.validate_url_safety(url)

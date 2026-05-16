@@ -14,7 +14,7 @@ Roles and their capabilities:
   viewer — read-only access
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -94,7 +94,7 @@ class WorkflowPermissionService:
             return False
         return _role_satisfies(row.role, required_role)
 
-    async def _fetch_permission(self, user_id: str, workflow_id: str) -> Optional[WorkflowPermission]:
+    async def _fetch_permission(self, user_id: str, workflow_id: str) -> WorkflowPermission | None:
         """Retrieve the permission row for (user_id, workflow_id), or None."""
         stmt = select(WorkflowPermission).where(
             WorkflowPermission.user_id == user_id,
@@ -231,7 +231,7 @@ class WorkflowPermissionService:
         user_id: str,
         workflow_id: str,
         action: str,
-        details: Optional[Dict[str, Any]] = None,
+        details: Dict[str, Any] | None = None,
     ) -> None:
         """
         Append an audit log entry for a workflow lifecycle event (#2152).

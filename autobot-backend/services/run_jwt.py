@@ -56,7 +56,7 @@ import os
 import time
 import uuid
 from datetime import timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from autobot_shared.auth.jwt_core import (
     JWTDecodeError,
@@ -110,7 +110,7 @@ _AGENT_TYPE_SCOPES: dict[str, list[str]] = {
 _FALLBACK_SCOPES: list[str] = ["task:read"]
 
 
-def get_run_jwt_scopes(agent_type: str, task_type: Optional[str] = None) -> list[str]:
+def get_run_jwt_scopes(agent_type: str, task_type: str | None = None) -> list[str]:
     """Resolve the minimum required JWT scopes for an agent type.
 
     Args:
@@ -287,7 +287,7 @@ async def validate_run_jwt(token: str) -> Dict[str, object]:
     return claims
 
 
-def _extract_revoke_claims(token: str) -> Optional[Dict[str, object]]:
+def _extract_revoke_claims(token: str) -> Dict[str, object] | None:
     """Decode token for revocation; returns None when already expired/invalid."""
     try:
         return decode_jwt(token, _secret())
@@ -299,7 +299,7 @@ def _extract_revoke_claims(token: str) -> Optional[Dict[str, object]]:
         return None
 
 
-def _emit_revoke_audit(claims: Dict[str, object], agent_id: Optional[str], remaining: int) -> None:
+def _emit_revoke_audit(claims: Dict[str, object], agent_id: str | None, remaining: int) -> None:
     """Fire audit record for a revocation event."""
     effective_agent = agent_id or str(claims.get("agent_id", "unknown"))
     jti = str(claims.get("jti", ""))
@@ -323,7 +323,7 @@ def _emit_revoke_audit(claims: Dict[str, object], agent_id: Optional[str], remai
     )
 
 
-async def revoke_run_jwt_async(token: str, agent_id: Optional[str] = None) -> None:
+async def revoke_run_jwt_async(token: str, agent_id: str | None = None) -> None:
     """Revoke a run-scoped JWT — async variant with guaranteed Redis write.
 
     Prefer this over ``revoke_run_jwt`` in async contexts (e.g. breach-response
@@ -347,7 +347,7 @@ async def revoke_run_jwt_async(token: str, agent_id: Optional[str] = None) -> No
     _emit_revoke_audit(claims, agent_id, remaining)
 
 
-def revoke_run_jwt(token: str, agent_id: Optional[str] = None) -> None:
+def revoke_run_jwt(token: str, agent_id: str | None = None) -> None:
     """Revoke a run-scoped JWT by adding its JTI to the Redis denylist.
 
     Uses fire-and-forget for the Redis write — safe for end-of-run cleanup

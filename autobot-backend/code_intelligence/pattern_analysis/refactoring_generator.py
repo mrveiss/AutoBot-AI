@@ -9,7 +9,7 @@ detected patterns, duplicates, and complexity hotspots.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -181,7 +181,7 @@ class {name}:
                 suggestions.append(suggestion)
         return self._prioritize_suggestions(suggestions)
 
-    def _handle_duplicate(self, pattern: DuplicatePattern) -> Optional[RefactoringSuggestion]:
+    def _handle_duplicate(self, pattern: DuplicatePattern) -> RefactoringSuggestion | None:
         """Generate suggestion for duplicate code.
 
         Args:
@@ -233,7 +233,7 @@ class {name}:
             requires_changes_in=[loc.file_path for loc in pattern.locations],
         )
 
-    def _handle_regex(self, pattern: RegexOpportunity) -> Optional[RefactoringSuggestion]:
+    def _handle_regex(self, pattern: RegexOpportunity) -> RefactoringSuggestion | None:
         """Generate suggestion for regex optimization.
 
         Args:
@@ -308,7 +308,7 @@ def optimized_transform(text: str) -> str:
                 self._generate_extraction_template_for_complexity(pattern),
             )
 
-    def _handle_complexity(self, pattern: ComplexityHotspot) -> Optional[RefactoringSuggestion]:
+    def _handle_complexity(self, pattern: ComplexityHotspot) -> RefactoringSuggestion | None:
         """Generate suggestion for complexity hotspot.
 
         Args:
@@ -353,7 +353,7 @@ def optimized_transform(text: str) -> str:
             requires_changes_in=[location.file_path],
         )
 
-    def _handle_modularization(self, pattern: ModularizationSuggestion) -> Optional[RefactoringSuggestion]:
+    def _handle_modularization(self, pattern: ModularizationSuggestion) -> RefactoringSuggestion | None:
         """Generate suggestion for modularization.
 
         Args:
@@ -395,7 +395,7 @@ class {pattern.pattern_name.replace(' ', '')}Handler:
             requires_changes_in=pattern.repeated_in_files,
         )
 
-    def _handle_error_handling(self, pattern: CodePattern) -> Optional[RefactoringSuggestion]:
+    def _handle_error_handling(self, pattern: CodePattern) -> RefactoringSuggestion | None:
         """Generate suggestion for error handling patterns.
 
         Args:
@@ -446,7 +446,7 @@ class ErrorHandler:
             requires_changes_in=[loc.file_path for loc in pattern.locations],
         )
 
-    def _handle_validation(self, pattern: CodePattern) -> Optional[RefactoringSuggestion]:
+    def _handle_validation(self, pattern: CodePattern) -> RefactoringSuggestion | None:
         """Generate suggestion for validation logic.
 
         Args:

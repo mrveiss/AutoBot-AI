@@ -9,8 +9,8 @@ Periodically fetches /.well-known/agent.json from:
   - External registered agents — stored in ExternalAgent.card_data
 
 Public API:
-  fetch_card_for_node(node_id)           → Optional[dict]
-  fetch_card_for_external(agent_id)      → Optional[dict]
+  fetch_card_for_node(node_id)           → dict | None
+  fetch_card_for_external(agent_id)      → dict | None
   start_card_refresh_task(interval)      → asyncio.Task
 """
 
@@ -18,7 +18,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ _FETCH_TIMEOUT = 10  # seconds
 _REFRESH_INTERVAL = 300  # 5 minutes
 
 
-async def _fetch_one(ip_address: str) -> Optional[Dict[str, Any]]:
+async def _fetch_one(ip_address: str) -> Dict[str, Any] | None:
     """
     Fetch the A2A agent card from a single node.
 
@@ -62,7 +62,7 @@ async def _fetch_one(ip_address: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-async def _store_card(db, node, card: Optional[Dict[str, Any]]) -> None:
+async def _store_card(db, node, card: Dict[str, Any] | None) -> None:
     """Persist the fetched card into Node.extra_data."""
     from sqlalchemy import update
 
@@ -75,7 +75,7 @@ async def _store_card(db, node, card: Optional[Dict[str, Any]]) -> None:
     await db.commit()
 
 
-async def fetch_card_for_node(node_id: str) -> Optional[Dict[str, Any]]:
+async def fetch_card_for_node(node_id: str) -> Dict[str, Any] | None:
     """
     Fetch and store the A2A card for a single node by node_id.
 
@@ -134,7 +134,7 @@ def _build_external_agent_ssl_ctx(ssl_verify: bool):
     return ssl_ctx
 
 
-def _build_external_agent_headers(api_key: Optional[str], agent_id: int) -> Dict[str, str]:
+def _build_external_agent_headers(api_key: str | None, agent_id: int) -> Dict[str, str]:
     """Helper for fetch_card_for_external. Ref: #1088."""
     headers: Dict[str, str] = {}
     if api_key:
@@ -167,7 +167,7 @@ async def _fetch_external_agent_card(url: str, ssl_ctx, headers: Dict[str, str],
     return card, error_msg
 
 
-async def fetch_card_for_external(agent_id: int) -> Optional[Dict[str, Any]]:
+async def fetch_card_for_external(agent_id: int) -> Dict[str, Any] | None:
     """
     Fetch and store the A2A card for an ExternalAgent by its DB id.
 

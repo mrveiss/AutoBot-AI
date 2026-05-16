@@ -9,7 +9,7 @@ Provides REST and WebSocket endpoints for the intelligent agent system.
 
 import asyncio
 import time
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
@@ -203,7 +203,7 @@ async def get_system_info(
 
 @register_health_probe("intelligent_agent")
 async def probe_intelligent_agent(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for intelligent_agent module.
 

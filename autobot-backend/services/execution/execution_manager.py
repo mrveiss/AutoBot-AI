@@ -8,7 +8,7 @@ Routes tasks to appropriate backends based on characteristics.
 Handles health checks, resource management, and routing decisions.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from services.execution.base_backend import (
@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 class ExecutionManager:
     """Manages multiple execution backends with intelligent routing (Issue #4343)."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize execution manager with available backends."""
         self.backends: Dict[BackendType, ExecutionBackend] = {}
         self._enabled_backends: set = set()
@@ -64,7 +64,7 @@ class ExecutionManager:
     async def execute(
         self,
         task: ExecutionTask,
-        preferred_backend: Optional[BackendType] = None,
+        preferred_backend: BackendType | None = None,
     ) -> ExecutionResult:
         """Execute task on most suitable backend.
 
@@ -175,7 +175,7 @@ class ExecutionManager:
     def _get_backend_order(
         self,
         task: ExecutionTask,
-        preferred_backend: Optional[BackendType] = None,
+        preferred_backend: BackendType | None = None,
     ) -> List[BackendType]:
         """Determine order of backends to try.
 
@@ -247,7 +247,7 @@ class ExecutionManager:
 
 
 # Global singleton instance
-_execution_manager: Optional[ExecutionManager] = None
+_execution_manager: ExecutionManager | None = None
 
 
 def get_execution_manager() -> ExecutionManager:

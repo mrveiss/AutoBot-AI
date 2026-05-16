@@ -10,7 +10,7 @@ Persists learned patterns to Redis for orchestrator routing decisions.
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
@@ -73,7 +73,7 @@ class TaskPatternLearner(AsyncRedisClientMixin):
         """
         return task_type.strip().lower().replace("-", "_").replace(" ", "_")
 
-    async def learn_from_outcomes(self, task_type: str, outcomes: List[Dict]) -> Optional[LearnedStrategy]:
+    async def learn_from_outcomes(self, task_type: str, outcomes: List[Dict]) -> LearnedStrategy | None:
         """Analyze recent outcomes and extract the best strategy.
 
         Args:
@@ -99,7 +99,7 @@ class TaskPatternLearner(AsyncRedisClientMixin):
         task_type: str,
         outcomes: List[Dict],
         best_outcome: Dict,
-    ) -> Optional[LearnedStrategy]:
+    ) -> LearnedStrategy | None:
         """Use LLM to synthesize a strategy from outcome history."""
         try:
             llm = await self._get_llm()
@@ -151,7 +151,7 @@ class TaskPatternLearner(AsyncRedisClientMixin):
 
     def _parse_strategy_response(
         self, response: Any, task_type: str, outcomes: List[Dict]
-    ) -> Optional[LearnedStrategy]:
+    ) -> LearnedStrategy | None:
         """Parse LLM response into a LearnedStrategy."""
         try:
             content = response if isinstance(response, (str, dict)) else getattr(response, "content", "{}")
@@ -191,7 +191,7 @@ class TaskPatternLearner(AsyncRedisClientMixin):
         except Exception as exc:
             logger.warning("Failed to persist learned strategy: %s", exc)
 
-    async def get_learned_strategy(self, task_type: str) -> Optional[LearnedStrategy]:
+    async def get_learned_strategy(self, task_type: str) -> LearnedStrategy | None:
         """Retrieve persisted learned strategy for a task type (#2208)."""
         task_type = self.normalize_task_type(task_type)
         try:

@@ -8,8 +8,6 @@ Metrics for workflow execution tracking.
 Extracted from PrometheusMetricsManager as part of Issue #394.
 """
 
-from typing import Optional
-
 from prometheus_client import Counter, Gauge, Histogram
 
 from .base import BaseMetricsRecorder
@@ -56,7 +54,7 @@ class WorkflowMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-    def record_execution(self, workflow_type: str, status: str, duration: Optional[float] = None) -> None:
+    def record_execution(self, workflow_type: str, status: str, duration: float | None = None) -> None:
         """Record a workflow execution."""
         self.workflow_executions_total.labels(workflow_type=workflow_type, status=status).inc()
         if duration is not None:

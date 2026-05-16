@@ -89,7 +89,7 @@ def _sample_experiment(**overrides) -> Experiment:
 class TestCreateExperiment:
     """Tests for POST /autoresearch/experiments."""
 
-    def test_create_experiment_success(self):
+    def test_create_experiment_success(self) -> None:
         store = _make_store()
         runner = _make_runner(is_running=False)
         app = _build_app(store=store, runner=runner)
@@ -110,7 +110,7 @@ class TestCreateExperiment:
         assert data["state"] == "pending"
         store.save_experiment.assert_called_once()
 
-    def test_create_experiment_with_hyperparams(self):
+    def test_create_experiment_with_hyperparams(self) -> None:
         store = _make_store()
         runner = _make_runner(is_running=False)
         app = _build_app(store=store, runner=runner)
@@ -126,7 +126,7 @@ class TestCreateExperiment:
 
         assert response.status_code == 200
 
-    def test_create_experiment_minimal_payload(self):
+    def test_create_experiment_minimal_payload(self) -> None:
         store = _make_store()
         runner = _make_runner(is_running=False)
         app = _build_app(store=store, runner=runner)
@@ -141,7 +141,7 @@ class TestCreateExperiment:
         data = response.json()
         assert data["state"] == "pending"
 
-    def test_create_experiment_conflict_when_running(self):
+    def test_create_experiment_conflict_when_running(self) -> None:
         store = _make_store()
         runner = _make_runner(is_running=True)
         app = _build_app(store=store, runner=runner)
@@ -155,7 +155,7 @@ class TestCreateExperiment:
         assert response.status_code == 409
         assert "already running" in response.json()["detail"].lower()
 
-    def test_create_experiment_hypothesis_too_long(self):
+    def test_create_experiment_hypothesis_too_long(self) -> None:
         store = _make_store()
         runner = _make_runner(is_running=False)
         app = _build_app(store=store, runner=runner)
@@ -168,7 +168,7 @@ class TestCreateExperiment:
 
         assert response.status_code == 422
 
-    def test_create_experiment_description_too_long(self):
+    def test_create_experiment_description_too_long(self) -> None:
         store = _make_store()
         runner = _make_runner(is_running=False)
         app = _build_app(store=store, runner=runner)
@@ -190,7 +190,7 @@ class TestCreateExperiment:
 class TestListExperiments:
     """Tests for GET /autoresearch/experiments."""
 
-    def test_list_empty(self):
+    def test_list_empty(self) -> None:
         store = _make_store()
         app = _build_app(store=store, runner=_make_runner())
         client = TestClient(app)
@@ -203,7 +203,7 @@ class TestListExperiments:
         assert data["count"] == 0
         assert data["offset"] == 0
 
-    def test_list_returns_experiments(self):
+    def test_list_returns_experiments(self) -> None:
         store = _make_store()
         exp1 = _sample_experiment(id="exp-1")
         exp2 = _sample_experiment(id="exp-2")
@@ -218,7 +218,7 @@ class TestListExperiments:
         assert data["count"] == 2
         assert data["experiments"][0]["id"] == "exp-1"
 
-    def test_list_with_state_filter(self):
+    def test_list_with_state_filter(self) -> None:
         store = _make_store()
         app = _build_app(store=store, runner=_make_runner())
         client = TestClient(app)
@@ -228,7 +228,7 @@ class TestListExperiments:
         call_kwargs = store.list_experiments.call_args[1]
         assert call_kwargs["state"] == ExperimentState.KEPT
 
-    def test_list_with_invalid_state(self):
+    def test_list_with_invalid_state(self) -> None:
         store = _make_store()
         app = _build_app(store=store, runner=_make_runner())
         client = TestClient(app)
@@ -238,7 +238,7 @@ class TestListExperiments:
         assert response.status_code == 400
         assert "Invalid state" in response.json()["detail"]
 
-    def test_list_with_pagination(self):
+    def test_list_with_pagination(self) -> None:
         store = _make_store()
         app = _build_app(store=store, runner=_make_runner())
         client = TestClient(app)
@@ -249,7 +249,7 @@ class TestListExperiments:
         assert call_kwargs["limit"] == 10
         assert call_kwargs["offset"] == 5
 
-    def test_list_limit_out_of_range(self):
+    def test_list_limit_out_of_range(self) -> None:
         store = _make_store()
         app = _build_app(store=store, runner=_make_runner())
         client = TestClient(app)
@@ -257,7 +257,7 @@ class TestListExperiments:
         response = client.get("/autoresearch/experiments?limit=999")
         assert response.status_code == 422
 
-    def test_list_negative_offset(self):
+    def test_list_negative_offset(self) -> None:
         store = _make_store()
         app = _build_app(store=store, runner=_make_runner())
         client = TestClient(app)
@@ -274,7 +274,7 @@ class TestListExperiments:
 class TestGetExperiment:
     """Tests for GET /autoresearch/experiments/{experiment_id}."""
 
-    def test_get_existing_experiment(self):
+    def test_get_existing_experiment(self) -> None:
         store = _make_store()
         exp = _sample_experiment(id="exp-001", hypothesis="found it")
         store.get_experiment.return_value = exp
@@ -288,7 +288,7 @@ class TestGetExperiment:
         assert data["id"] == "exp-001"
         assert data["hypothesis"] == "found it"
 
-    def test_get_nonexistent_experiment(self):
+    def test_get_nonexistent_experiment(self) -> None:
         store = _make_store()
         store.get_experiment.return_value = None
         app = _build_app(store=store, runner=_make_runner())
@@ -308,7 +308,7 @@ class TestGetExperiment:
 class TestGetStats:
     """Tests for GET /autoresearch/experiments/stats."""
 
-    def test_get_stats_empty(self):
+    def test_get_stats_empty(self) -> None:
         store = _make_store()
         app = _build_app(store=store, runner=_make_runner())
         client = TestClient(app)
@@ -319,7 +319,7 @@ class TestGetStats:
         data = response.json()
         assert data["total_experiments"] == 0
 
-    def test_get_stats_with_data(self):
+    def test_get_stats_with_data(self) -> None:
         store = _make_store()
         store.get_stats.return_value = ExperimentStats(
             total_experiments=10,
@@ -348,7 +348,7 @@ class TestGetStats:
 class TestSetBaseline:
     """Tests for POST /autoresearch/experiments/baseline."""
 
-    def test_set_baseline_success(self):
+    def test_set_baseline_success(self) -> None:
         store = _make_store()
         app = _build_app(store=store, runner=_make_runner())
         client = TestClient(app)
@@ -363,7 +363,7 @@ class TestSetBaseline:
         assert data["baseline_val_bpb"] == 6.0
         store.set_baseline.assert_called_once_with(6.0)
 
-    def test_set_baseline_missing_field(self):
+    def test_set_baseline_missing_field(self) -> None:
         store = _make_store()
         app = _build_app(store=store, runner=_make_runner())
         client = TestClient(app)
@@ -375,7 +375,7 @@ class TestSetBaseline:
 
         assert response.status_code == 422
 
-    def test_set_baseline_invalid_type(self):
+    def test_set_baseline_invalid_type(self) -> None:
         store = _make_store()
         app = _build_app(store=store, runner=_make_runner())
         client = TestClient(app)
@@ -396,7 +396,7 @@ class TestSetBaseline:
 class TestGetStatus:
     """Tests for GET /autoresearch/status."""
 
-    def test_status_idle(self):
+    def test_status_idle(self) -> None:
         store = _make_store()
         runner = _make_runner(is_running=False)
         store.get_baseline.return_value = None
@@ -410,7 +410,7 @@ class TestGetStatus:
         assert data["running"] is False
         assert data["baseline_val_bpb"] is None
 
-    def test_status_running_with_baseline(self):
+    def test_status_running_with_baseline(self) -> None:
         store = _make_store()
         runner = _make_runner(is_running=True)
         store.get_baseline.return_value = 6.0
@@ -433,7 +433,7 @@ class TestGetStatus:
 class TestCancelExperiment:
     """Tests for POST /autoresearch/cancel."""
 
-    def test_cancel_running_experiment(self):
+    def test_cancel_running_experiment(self) -> None:
         runner = _make_runner(is_running=True)
         app = _build_app(store=_make_store(), runner=runner)
         client = TestClient(app)
@@ -444,7 +444,7 @@ class TestCancelExperiment:
         assert response.json()["status"] == "cancelled"
         runner.cancel.assert_called_once()
 
-    def test_cancel_when_not_running(self):
+    def test_cancel_when_not_running(self) -> None:
         runner = _make_runner(is_running=False)
         app = _build_app(store=_make_store(), runner=runner)
         client = TestClient(app)

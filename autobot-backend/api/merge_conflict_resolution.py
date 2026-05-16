@@ -17,8 +17,6 @@ Parent Epic: #217 - Advanced Code Intelligence
 import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
@@ -116,8 +114,8 @@ def _build_resolution_response(results: list, file_path: str, safe_mode: bool) -
 
 
 def _parse_resolution_strategy(
-    strategy_str: Optional[str],
-) -> Optional[ResolutionStrategy]:
+    strategy_str: str | None,
+) -> ResolutionStrategy | None:
     """Parse a strategy string into a ResolutionStrategy enum value.
 
     Helper for resolve_conflicts. Ref: #1088.

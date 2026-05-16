@@ -11,7 +11,7 @@ tasks can be delegated to child agents for better task decomposition.
 import asyncio
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from chat_workflow.models import AgentContext
@@ -29,7 +29,7 @@ class DelegationResult:
     result: str
     success: bool
     execution_time: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -65,7 +65,7 @@ class HierarchicalAgent:
     def __init__(
         self,
         context: AgentContext,
-        task_callback: Optional[Callable] = None,
+        task_callback: Callable | None = None,
     ):
         """
         Initialize hierarchical agent.
@@ -420,7 +420,7 @@ class HierarchicalAgent:
                 processed.append(r)
         return processed
 
-    def get_subordinate(self, agent_id: str) -> Optional["HierarchicalAgent"]:
+    def get_subordinate(self, agent_id: str) -> "HierarchicalAgent" | None:
         """Get a subordinate agent by ID."""
         return self.subordinates.get(agent_id)
 

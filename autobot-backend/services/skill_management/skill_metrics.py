@@ -11,7 +11,7 @@ auto-deprecation of underperforming skills.
 
 import json
 from datetime import timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
@@ -38,8 +38,8 @@ class SkillMetrics(AsyncRedisClientMixin):
         action: str,
         success: bool,
         duration_ms: float,
-        error_type: Optional[str] = None,
-        user_feedback: Optional[str] = None,
+        error_type: str | None = None,
+        user_feedback: str | None = None,
     ) -> None:
         """Log a skill invocation with outcome.
 

@@ -37,7 +37,7 @@ Usage (slm-backend)::
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import bcrypt
 import jwt
@@ -59,8 +59,8 @@ class JWTExpiredError(JWTDecodeError):
 def encode_jwt(
     payload: Dict[str, Any],
     secret: str,
-    expires_delta: Optional[timedelta] = None,
-    expiry_hours: Optional[float] = None,
+    expires_delta: timedelta | None = None,
+    expiry_hours: float | None = None,
 ) -> str:
     """Encode *payload* as a signed HS256 JWT.
 
@@ -90,7 +90,7 @@ def encode_jwt(
     return jwt.encode(to_encode, secret, algorithm=_ALGORITHM)
 
 
-def decode_jwt(token: str, secret: str, audience: Optional[str] = None) -> Dict[str, Any]:
+def decode_jwt(token: str, secret: str, audience: str | None = None) -> Dict[str, Any]:
     """Decode and verify a signed HS256 JWT.
 
     Args:
@@ -149,7 +149,7 @@ def decode_jwt_no_verify_exp(token: str, secret: str) -> Dict[str, Any]:
         raise JWTDecodeError(f"JWT token is invalid: {exc}") from exc
 
 
-def decode_jwt_or_none(token: str, secret: str) -> Optional[Dict[str, Any]]:
+def decode_jwt_or_none(token: str, secret: str) -> Dict[str, Any] | None:
     """Decode a JWT, returning ``None`` on any failure instead of raising.
 
     Convenience wrapper for call sites that prefer ``None``-on-failure

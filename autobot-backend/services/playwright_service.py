@@ -8,8 +8,6 @@ Integrates Docker-based Playwright into the main AutoBot application
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Optional
-
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
@@ -33,7 +31,7 @@ class PlaywrightService:
         container_host: str = "localhost",
         container_port: int = NetworkConstants.BROWSER_SERVICE_PORT,
         timeout: int = 30,
-    ):
+    ) -> None:
         """Initialize Playwright service with container connection settings."""
         self.base_url = f"http://{container_host}:{container_port}"
         self.timeout = timeout
@@ -45,17 +43,17 @@ class PlaywrightService:
         await self.initialize()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit"""
         await self.cleanup()
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         """Initialize the Playwright service connection"""
         # Check if container is healthy
         await self._health_check()
         logger.info("Playwright service initialized at %s", self.base_url)
 
-    async def cleanup(self):
+    async def cleanup(self) -> None:
         """Cleanup resources"""
         # HTTPClient singleton doesn't need cleanup per instance
         logger.info("Playwright service cleaned up")
@@ -412,7 +410,7 @@ class PlaywrightService:
 # Global service instance (thread-safe)
 import asyncio as _asyncio_lock
 
-_playwright_service: Optional[PlaywrightService] = None
+_playwright_service: PlaywrightService | None = None
 _playwright_service_lock = _asyncio_lock.Lock()
 
 

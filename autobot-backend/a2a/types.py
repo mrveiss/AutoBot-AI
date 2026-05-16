@@ -11,7 +11,7 @@ Ref: https://a2a-protocol.org/latest/
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.time_utils import now_utc
 
@@ -83,8 +83,8 @@ class AgentCard:
     version: str
     skills: List[AgentSkill]
     capabilities: AgentCapabilities = field(default_factory=AgentCapabilities)
-    provider: Optional[str] = None
-    documentation_url: Optional[str] = None
+    provider: str | None = None
+    documentation_url: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {
@@ -128,7 +128,7 @@ class A2ATaskStatus:
     """
 
     state: TaskState
-    message: Optional[str] = None
+    message: str | None = None
     timestamp: str = field(default_factory=_utcnow)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -153,12 +153,12 @@ class Task:
     id: str
     status: A2ATaskStatus
     input: str
-    context: Optional[Dict[str, Any]] = None
+    context: Dict[str, Any] | None = None
     artifacts: List[TaskArtifact] = field(default_factory=list)
     created_at: str = field(default_factory=_utcnow)
     updated_at: str = field(default_factory=_utcnow)
     # Issue #968: distributed tracing — set on task creation
-    trace_context: Optional["TraceContext"] = field(default=None, repr=False)
+    trace_context: "TraceContext" | None = field(default=None, repr=False)
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {

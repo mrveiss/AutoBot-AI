@@ -13,7 +13,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 
@@ -371,7 +371,7 @@ class AnalysisContext:
     file_signatures: List[Dict]
     api_patterns: List[Dict]
 
-    def get_user_profile(self, user_id: str) -> Optional[UserProfile]:
+    def get_user_profile(self, user_id: str) -> UserProfile | None:
         """Get user profile if exists"""
         return self.user_profiles.get(user_id)
 

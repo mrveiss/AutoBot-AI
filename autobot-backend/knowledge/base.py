@@ -11,7 +11,7 @@ and connection management functionality.
 import asyncio
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List
 
 import redis
 from llama_index.core import Settings, VectorStoreIndex
@@ -93,14 +93,14 @@ class KnowledgeBaseCore:
 
     def _init_connection_vars(self) -> None:
         """Initialize connection and state variables (Issue #398: extracted)."""
-        self.redis_client: Optional[redis.Redis] = None
-        self._aioredis_client: Optional[aioredis.Redis] = None
-        self.vector_store: Optional[ChromaVectorStore] = None
-        self.vector_index: Optional[VectorStoreIndex] = None
-        self._async_chroma_collection: Optional["BaseCollection"] = None
+        self.redis_client: redis.Redis | None = None
+        self._aioredis_client: aioredis.Redis | None = None
+        self.vector_store: ChromaVectorStore | None = None
+        self.vector_index: VectorStoreIndex | None = None
+        self._async_chroma_collection: "BaseCollection" | None = None
         self.llama_index_configured = False
-        self.embedding_model_name: Optional[str] = None
-        self.embedding_dimensions: Optional[int] = None
+        self.embedding_model_name: str | None = None
+        self.embedding_dimensions: int | None = None
         self._redis_initialized = False
         self._stats_key = "kb:stats"
         # Issue #688: Initialize ownership manager (lazy loaded)
@@ -474,11 +474,11 @@ class KnowledgeBaseCore:
         if not self._redis_initialized:
             await self.initialize()
 
-    def _get_redis_client(self) -> Optional[redis.Redis]:
+    def _get_redis_client(self) -> redis.Redis | None:
         """Get Redis client for sync operations (V1 compatibility)"""
         return self.redis_client
 
-    async def _get_async_redis_client(self) -> Optional[aioredis.Redis]:
+    async def _get_async_redis_client(self) -> aioredis.Redis | None:
         """Get async Redis client for async operations (V1 compatibility)"""
         return self._aioredis_client
 
@@ -581,7 +581,7 @@ class KnowledgeBaseCore:
             logger.error("Error counting facts: %s", e)
             return 0
 
-    async def _detect_stored_embedding_model(self) -> Optional[str]:
+    async def _detect_stored_embedding_model(self) -> str | None:
         """Detect which embedding model was used for existing data.
         Issue #315: Refactored to use helper for reduced nesting.
         """

@@ -39,7 +39,7 @@ import time
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, Tuple, Union
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -127,7 +127,7 @@ class ASTCache:
         Safe to use from multiple async tasks and threads.
     """
 
-    _instance: Optional["ASTCache"] = None
+    _instance: "ASTCache" | None = None
     _lock = threading.Lock()
 
     # CacheProtocol properties - Issue #743
@@ -241,7 +241,7 @@ class ASTCache:
 
         return content
 
-    def _check_cache_hit(self, path_str: str, mtime: float) -> Optional[ast.AST]:
+    def _check_cache_hit(self, path_str: str, mtime: float) -> ast.AST | None:
         """
         Check for cache hit and return cached AST if valid.
 
@@ -311,7 +311,7 @@ class ASTCache:
 
         logger.debug("ASTCache: Parsed %s in %.1fms", path_str, parse_time_ms)
 
-    def get(self, file_path: Union[str, Path]) -> ast.AST:
+    def get(self, file_path: str | Path) -> ast.AST:
         """
         Get AST for file, using cache if available.
 
@@ -354,7 +354,7 @@ class ASTCache:
             logger.warning("ASTCache: File not found: %s", path_str)
             raise
 
-    def get_safe(self, file_path: Union[str, Path]) -> Optional[ast.AST]:
+    def get_safe(self, file_path: str | Path) -> ast.AST | None:
         """
         Get AST for file, returning None on any error.
 
@@ -370,7 +370,7 @@ class ASTCache:
             logger.debug("ASTCache: get_safe failed for %s: %s", file_path, e)
             return None
 
-    def get_with_content(self, file_path: Union[str, Path]) -> Tuple[Optional[ast.AST], str]:
+    def get_with_content(self, file_path: str | Path) -> Tuple[ast.AST | None, str]:
         """
         Get AST and file content together.
 
@@ -391,7 +391,7 @@ class ASTCache:
             except (FileNotFoundError, OSError):
                 return None, ""
 
-    def invalidate(self, file_path: Optional[Union[str, Path]] = None) -> None:
+    def invalidate(self, file_path: str | Path | None = None) -> None:
         """
         Invalidate cache entries.
 
@@ -475,7 +475,7 @@ class ASTCache:
 _get_cache = lazy_singleton(ASTCache)
 
 
-def get_ast(file_path: Union[str, Path]) -> ast.AST:
+def get_ast(file_path: str | Path) -> ast.AST:
     """
     Get AST for Python file, using cache if available.
 
@@ -498,7 +498,7 @@ def get_ast(file_path: Union[str, Path]) -> ast.AST:
     return _get_cache().get(file_path)
 
 
-def get_ast_safe(file_path: Union[str, Path]) -> Optional[ast.AST]:
+def get_ast_safe(file_path: str | Path) -> ast.AST | None:
     """
     Get AST for Python file, returning None on any error.
 
@@ -517,7 +517,7 @@ def get_ast_safe(file_path: Union[str, Path]) -> Optional[ast.AST]:
     return _get_cache().get_safe(file_path)
 
 
-def get_ast_with_content(file_path: Union[str, Path]) -> Tuple[Optional[ast.AST], str]:
+def get_ast_with_content(file_path: str | Path) -> Tuple[ast.AST | None, str]:
     """
     Get AST and file content together.
 
@@ -527,7 +527,7 @@ def get_ast_with_content(file_path: Union[str, Path]) -> Tuple[Optional[ast.AST]
     return _get_cache().get_with_content(file_path)
 
 
-def invalidate_ast_cache(file_path: Optional[Union[str, Path]] = None) -> None:
+def invalidate_ast_cache(file_path: str | Path | None = None) -> None:
     """
     Invalidate AST cache entries.
 

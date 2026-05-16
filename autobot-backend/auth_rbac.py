@@ -81,7 +81,7 @@ def _get_user_permissions(user_role: str) -> List[str]:
     return list(set(permissions))  # Remove duplicates
 
 
-def has_permission(user_data: dict, permission: Union[Permission, str]) -> bool:
+def has_permission(user_data: dict, permission: Permission | str) -> bool:
     """
     Check if a user has a specific permission.
 
@@ -106,7 +106,7 @@ def has_permission(user_data: dict, permission: Union[Permission, str]) -> bool:
     return _get_security_layer().check_permission(user_role, perm_str)
 
 
-def _check_single_user_bypass(permission: Union[Permission, str]) -> bool:
+def _check_single_user_bypass(permission: Permission | str) -> bool:
     """
     Check if single-user mode bypass should apply. Issue #620.
 
@@ -157,7 +157,7 @@ def _deny_permission_access(user_data: dict, perm_str: str, request: Request) ->
 
 
 def require_permission(
-    permission: Union[Permission, str],
+    permission: Permission | str,
     allow_single_user_bypass: bool = True,
 ) -> Callable:
     """
@@ -256,7 +256,7 @@ def _deny_any_permission_access(user_data: dict, perm_strs: List[str], request: 
     )
 
 
-def require_role(*roles: Union[Role, str], allow_single_user_bypass: bool = True) -> Callable:
+def require_role(*roles: Role | str, allow_single_user_bypass: bool = True) -> Callable:
     """
     FastAPI dependency that requires one of the specified roles.
 
@@ -299,7 +299,7 @@ def require_role(*roles: Union[Role, str], allow_single_user_bypass: bool = True
 
 
 def require_any_permission(
-    *permissions: Union[Permission, str],
+    *permissions: Permission | str,
     allow_single_user_bypass: bool = True,
 ) -> Callable:
     """

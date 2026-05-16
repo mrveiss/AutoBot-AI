@@ -128,7 +128,7 @@ class NodeRunner(Protocol[StateT]):
 #: Type alias for a sync or async conditional-edge router.
 #: Receives the current state and returns the name of the next node
 #: (or END to terminate).
-EdgeRouter = Callable[[StateT], Union[str, Coroutine[Any, Any, str]]]
+EdgeRouter = Callable[[StateT], str | Coroutine[Any, Any, str]]
 
 
 # ---------------------------------------------------------------------------
@@ -158,8 +158,8 @@ class GraphStepEvent:
     node_name: str
     graph_id: str
     attempt: int = 1
-    elapsed_ms: Optional[float] = None
-    error: Optional[str] = None
+    elapsed_ms: float | None = None
+    error: str | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -266,9 +266,9 @@ class _EdgeEntry:
 
     source: str
     #: For unconditional edges: target node name (or END).
-    target: Optional[str] = None
+    target: str | None = None
     #: For conditional edges: router function (returns node name or END).
-    router: Optional[EdgeRouter] = None
+    router: EdgeRouter | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -290,7 +290,7 @@ class _CheckpointAdapter:
 
     def __init__(self, graph_id: str) -> None:
         self._graph_id = graph_id
-        self._manager: Optional[Any] = None
+        self._manager: Any | None = None
         try:
             from orchestration.error_handler import WorkflowCheckpointManager
 
@@ -405,11 +405,11 @@ class AutoBotGraph(Generic[StateT]):
     schema argument; it accepts any dict subtype as state.
     """
 
-    def __init__(self, state_type: Optional[Type[StateT]] = None) -> None:
+    def __init__(self, state_type: Type[StateT] | None = None) -> None:
         self._state_type = state_type
         self._nodes: Dict[str, _NodeEntry] = {}
         self._edges: List[_EdgeEntry] = []
-        self._entry_point: Optional[str] = None
+        self._entry_point: str | None = None
 
     # ------------------------------------------------------------------
     # Builder methods
@@ -419,7 +419,7 @@ class AutoBotGraph(Generic[StateT]):
         self,
         name: str,
         fn: NodeRunner,
-        retry: Optional[NodeRetryConfig] = None,
+        retry: NodeRetryConfig | None = None,
     ) -> "AutoBotGraph[StateT]":
         """Register a node.
 
@@ -547,9 +547,9 @@ class GraphRunner(Generic[StateT]):
         self,
         graph: CompiledGraph[StateT],
         graph_id: str = "",
-        emitter: Optional[StepEventEmitter] = None,
+        emitter: StepEventEmitter | None = None,
         enable_checkpoints: bool = True,
-        configurable: Optional[Dict[str, Any]] = None,
+        configurable: Dict[str, Any] | None = None,
     ) -> None:
         self._graph = graph
         self._graph_id = graph_id
@@ -719,7 +719,7 @@ class GraphRunner(Generic[StateT]):
         current: str,
         state: Dict[str, Any],
         structure: _CompiledStructure,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Resolve the next node name from the outgoing edges of *current*."""
         edges = structure.successors(current)
         if not edges:

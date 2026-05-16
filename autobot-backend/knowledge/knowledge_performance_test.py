@@ -28,7 +28,7 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
@@ -58,7 +58,7 @@ class PerformanceMetrics:
     min_latency_ms: float
     max_latency_ms: float
     std_dev_latency_ms: float
-    cache_hit_ratio: Optional[float]
+    cache_hit_ratio: float | None
     timestamp: str
     passed: bool
     target_ms: float
@@ -85,7 +85,7 @@ class KnowledgePerformanceTest:
         fail_count: int,
         duration: float,
         target_ms: float,
-        cache_hit_ratio: Optional[float] = None,
+        cache_hit_ratio: float | None = None,
         metadata: Dict[str, Any] = None,
     ) -> PerformanceMetrics:
         """Calculate performance metrics from latency measurements"""
@@ -202,7 +202,7 @@ class KnowledgePerformanceTest:
         cache_hits = 0
         cache_misses = 0
 
-        async def filter_by_category(session, category: Optional[str], iteration: int):
+        async def filter_by_category(session, category: str | None, iteration: int):
             """Single category filter request"""
             try:
                 url = f"{self.backend_url}/api/knowledge_base/facts/by_category"

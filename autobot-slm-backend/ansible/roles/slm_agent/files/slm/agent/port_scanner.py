@@ -10,7 +10,7 @@ Detects listening TCP ports on the local system.
 import logging
 import subprocess  # nosec B404 - subprocess used with fixed commands for system inspection
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +20,11 @@ class PortInfo:
     """Information about a listening port."""
 
     port: int
-    process: Optional[str] = None
-    pid: Optional[int] = None
+    process: str | None = None
+    pid: int | None = None
 
 
-def _parse_port_from_address(local_addr: str) -> Optional[int]:
+def _parse_port_from_address(local_addr: str) -> int | None:
     """
     Parse port number from local address string.
 

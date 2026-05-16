@@ -14,7 +14,7 @@ import tarfile
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
@@ -42,12 +42,12 @@ class CodeSourceResponse(BaseModel):
     """Code source configuration response."""
 
     node_id: str
-    hostname: Optional[str] = None
-    ip_address: Optional[str] = None
+    hostname: str | None = None
+    ip_address: str | None = None
     repo_path: str
     branch: str
-    last_known_commit: Optional[str] = None
-    last_notified_at: Optional[datetime] = None
+    last_known_commit: str | None = None
+    last_notified_at: datetime | None = None
     is_active: bool
 
     class Config:
@@ -68,7 +68,7 @@ class CodeNotification(BaseModel):
     node_id: str
     commit: str
     branch: str = "main"
-    message: Optional[str] = None
+    message: str | None = None
     is_code_source: bool = True
     # Phase 5 (#926): list of role dirs that changed (empty = all roles)
     changed_roles: List[str] = []
@@ -83,11 +83,11 @@ class CodeNotificationResponse(BaseModel):
     outdated_nodes: int = 0
 
 
-@router.get("", response_model=Optional[CodeSourceResponse])
+@router.get("", response_model=CodeSourceResponse | None)
 async def get_active_code_source(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> Optional[CodeSourceResponse]:
+) -> CodeSourceResponse | None:
     """Get the active code source configuration."""
     result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
     source = result.scalar_one_or_none()
@@ -175,7 +175,7 @@ def _is_local_node(node: Node) -> bool:
     return is_local_ip(node.ip_address)
 
 
-async def _find_similar_paths(node: Node, target_path: str) -> Optional[str]:
+async def _find_similar_paths(node: Node, target_path: str) -> str | None:
     """Find paths similar to target (case-insensitive match).
 
     Helper for _validate_repo_path (#865).
@@ -433,7 +433,7 @@ async def _upsert_node_code_version(
     role_name: str,
     commit: str,
     status: CodeStatus,
-    cache_path: Optional[str] = None,
+    cache_path: str | None = None,
 ) -> None:
     """Insert or update a NodeCodeVersion row.
 
@@ -565,10 +565,10 @@ class NodeCodeVersionResponse(BaseModel):
 
     node_id: str
     role_name: str
-    commit_hash: Optional[str] = None
+    commit_hash: str | None = None
     status: str
-    deployed_at: Optional[datetime] = None
-    cache_path: Optional[str] = None
+    deployed_at: datetime | None = None
+    cache_path: str | None = None
 
 
 class PackageUploadResponse(BaseModel):
@@ -585,8 +585,8 @@ class PackageUploadResponse(BaseModel):
 async def list_node_code_versions(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    node_id: Optional[str] = None,
-    role_name: Optional[str] = None,
+    node_id: str | None = None,
+    role_name: str | None = None,
 ) -> List[NodeCodeVersionResponse]:
     """List per-role code version status across the fleet."""
     query = select(NodeCodeVersion)

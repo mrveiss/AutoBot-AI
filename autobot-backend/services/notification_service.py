@@ -38,7 +38,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from enum import Enum
 from string import Template
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
@@ -99,10 +99,10 @@ class NotificationConfig:
 
     # Channel-specific addresses / URLs
     email_recipients: List[str] = field(default_factory=list)
-    slack_webhook_url: Optional[str] = None
-    webhook_url: Optional[str] = None
+    slack_webhook_url: str | None = None
+    webhook_url: str | None = None
     # user_id for IN_APP delivery
-    user_id: Optional[str] = None
+    user_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +161,7 @@ class NotificationStore:
         event: str,
         workflow_id: str,
         message: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Persist a notification for *user_id* and return the notification ID.
 
@@ -267,7 +267,7 @@ class NotificationService:
     channel cannot block others.
     """
 
-    def __init__(self, store: Optional[NotificationStore] = None) -> None:
+    def __init__(self, store: NotificationStore | None = None) -> None:
         self._store = store or NotificationStore()
 
     # ------------------------------------------------------------------

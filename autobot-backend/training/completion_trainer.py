@@ -10,7 +10,7 @@ Training orchestration for code completion model.
 import json
 import os
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 import torch
 import torch.nn as nn
@@ -37,9 +37,9 @@ class CompletionTrainer:
     def __init__(
         self,
         model_dir: str = os.path.join(config.base_dir, "models"),
-        language: Optional[str] = None,
-        pattern_type: Optional[str] = None,
-        device: Optional[str] = None,
+        language: str | None = None,
+        pattern_type: str | None = None,
+        device: str | None = None,
     ):
         """
         Initialize trainer.
@@ -76,8 +76,8 @@ class CompletionTrainer:
             self.device = device
 
         # Initialize components
-        self.model: Optional[CompletionModel] = None
-        self.optimizer: Optional[optim.Optimizer] = None
+        self.model: CompletionModel | None = None
+        self.optimizer: optim.Optimizer | None = None
         self.criterion = nn.CrossEntropyLoss(ignore_index=0)
         self.evaluator = CompletionEvaluator(device=self.device)
 

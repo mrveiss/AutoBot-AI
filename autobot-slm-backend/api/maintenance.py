@@ -10,8 +10,6 @@ Provides endpoints for scheduling and managing maintenance windows.
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,8 +41,8 @@ router = APIRouter(prefix="/maintenance", tags=["maintenance"])
 async def list_maintenance_windows(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    node_id: Optional[str] = Query(None),
-    status_filter: Optional[str] = Query(None, alias="status"),
+    node_id: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
     include_completed: bool = Query(False),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -85,8 +83,8 @@ async def list_maintenance_windows(
 
 async def _count_maintenance_windows(
     db: AsyncSession,
-    node_id: Optional[str],
-    status_filter: Optional[str],
+    node_id: str | None,
+    status_filter: str | None,
     include_completed: bool,
 ) -> int:
     """Count maintenance windows matching filters.
@@ -113,7 +111,7 @@ async def _count_maintenance_windows(
 async def get_active_windows(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    node_id: Optional[str] = Query(None),
+    node_id: str | None = Query(None),
 ) -> MaintenanceWindowListResponse:
     """Get currently active maintenance windows."""
     now = datetime.now(timezone.utc)

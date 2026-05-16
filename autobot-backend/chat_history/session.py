@@ -16,7 +16,7 @@ import json
 import os
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiofiles
 
@@ -75,7 +75,7 @@ class SessionMixin:
                 "session_id must not contain path traversal characters " f"('..', '/', '\\'): {session_id!r}"
             )
 
-    def _try_get_from_cache(self, session_id: str) -> Optional[List[Dict[str, Any]]]:
+    def _try_get_from_cache(self, session_id: str) -> List[Dict[str, Any]] | None:
         """Try to get session from Redis cache. (Issue #315 - extracted)"""
         if not self.redis_client:
             return None
@@ -93,7 +93,7 @@ class SessionMixin:
             logger.error("Failed to read from Redis cache: %s", e)
             return None
 
-    async def _resolve_session_file_path(self, session_id: str, chats_directory: str) -> Optional[str]:
+    async def _resolve_session_file_path(self, session_id: str, chats_directory: str) -> str | None:
         """Resolve session file path with backward compatibility.
 
         Issue #315 - extracted.  Issue #1721 - uses shared path validator.
@@ -144,7 +144,7 @@ class SessionMixin:
         session_id: str,
         session_title: str,
         current_time: str,
-        metadata: Optional[Dict[str, Any]],
+        metadata: Dict[str, Any] | None,
     ) -> Dict[str, Any]:
         """
         Build the session data dictionary.
@@ -170,7 +170,7 @@ class SessionMixin:
         session_id: str,
         session_title: str,
         current_time: str,
-        metadata: Optional[Dict[str, Any]],
+        metadata: Dict[str, Any] | None,
     ) -> None:
         """
         Create conversation entity in Memory Graph.
@@ -201,10 +201,10 @@ class SessionMixin:
 
     async def create_session(
         self,
-        session_id: Optional[str] = None,
-        title: Optional[str] = None,
-        session_name: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        session_id: str | None = None,
+        title: str | None = None,
+        session_name: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Create a new chat session.
@@ -238,7 +238,7 @@ class SessionMixin:
         logger.info("Created new chat session: %s", session_id)
         return session_data
 
-    async def _load_session_from_file(self, session_id: str) -> Optional[Dict[str, Any]]:
+    async def _load_session_from_file(self, session_id: str) -> Dict[str, Any] | None:
         """Load and decrypt session data from file. Issue #620."""
         chats_directory = self._get_chats_directory()
         chat_file = await self._resolve_session_file_path(session_id, chats_directory)
@@ -359,7 +359,7 @@ class SessionMixin:
     def _prepare_session_messages(
         self,
         session_id: str,
-        messages: Optional[List[Dict[str, Any]]],
+        messages: List[Dict[str, Any]] | None,
     ) -> List[Dict[str, Any]]:
         """
         Prepare and validate session messages for saving.
@@ -478,7 +478,7 @@ class SessionMixin:
     async def save_session(
         self,
         session_id: str,
-        messages: Optional[List[Dict[str, Any]]] = None,
+        messages: List[Dict[str, Any]] | None = None,
         name: str = "",
     ):
         """
@@ -854,7 +854,7 @@ class SessionMixin:
 
         logger.info("Chat session '%s' name updated to '%s'", session_id, name)
 
-    async def load_full_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+    async def load_full_session(self, session_id: str) -> Dict[str, Any] | None:
         """
         Load the complete session data dictionary for a given session.
 
@@ -873,7 +873,7 @@ class SessionMixin:
         self._sanitize_session_id(session_id)
         return await self._load_session_from_file(session_id)
 
-    async def get_session_owner(self, session_id: str) -> Optional[str]:
+    async def get_session_owner(self, session_id: str) -> str | None:
         """
         Get the owner/creator of a specific session.
 

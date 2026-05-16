@@ -4,7 +4,7 @@
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -124,7 +124,7 @@ class AppFactory:
         title: str = "AutoBot - Distributed Autonomous Agent",
         description: str = "AI-powered autonomous Linux administration with distributed VMs",
         version: str = "1.5.0",
-        allow_origins: Optional[List[str]] = None,
+        allow_origins: List[str] | None = None,
     ) -> FastAPI:
         """
         Create and configure FastAPI application with optimal performance settings.

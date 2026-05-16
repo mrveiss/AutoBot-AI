@@ -8,8 +8,6 @@ Provides endpoints for zero-downtime deployments with role borrowing.
 """
 
 import logging
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
@@ -48,7 +46,7 @@ DeploymentIdPath = Annotated[
 async def list_deployments(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    status_filter: Optional[str] = Query(None, alias="status"),
+    status_filter: str | None = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
 ) -> BlueGreenListResponse:

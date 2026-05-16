@@ -41,7 +41,7 @@ ensuring they do not race on a single key when ordering matters.
 """
 
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
@@ -156,7 +156,7 @@ class WorkflowMemory:
             )
             raise
 
-    def get(self, key: str, default: Optional[Any] = None) -> Any:
+    def get(self, key: str, default: Any | None = None) -> Any:
         """
         Retrieve the value stored under *key*, or *default* if absent.
 

@@ -17,8 +17,6 @@ Public functions
 import asyncio
 import sys
 from pathlib import Path
-from typing import Optional
-
 from autobot_shared.logging_manager import get_logger
 
 from .indexing_executor import (
@@ -118,7 +116,7 @@ async def _run_indexing_subprocess(
     create_initial_state_fn,
     save_task_fn,
     mark_task_failed_fn,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> None:
     """Launch isolated indexing subprocess to prevent ChromaDB SIGSEGV (#1180).
 

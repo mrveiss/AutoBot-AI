@@ -11,7 +11,7 @@ Ensures core functions work even when peripherals fail.
 
 from dataclasses import dataclass
 from threading import Lock
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -30,18 +30,18 @@ class Fallback:
 class FallbackChain:
     """Chain of fallbacks to try in sequence."""
 
-    def __init__(self, name: str, fallbacks: Optional[List[Fallback]] = None):
+    def __init__(self, name: str, fallbacks: List[Fallback] | None = None) -> None:
         """Initialize fallback chain."""
         self.name = name
         self.fallbacks = fallbacks or []
         self.attempted = 0
         self.succeeded = False
 
-    def add(self, name: str, handler: Callable, is_async: bool = False):
+    def add(self, name: str, handler: Callable, is_async: bool = False) -> None:
         """Add fallback to chain."""
         self.fallbacks.append(Fallback(name, handler, is_async))
 
-    def clear_stats(self):
+    def clear_stats(self) -> None:
         """Reset statistics."""
         self.attempted = 0
         self.succeeded = False
@@ -141,7 +141,7 @@ class FallbackChain:
 class FallbackManager:
     """Manages fallback chains for different critical paths."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize fallback manager."""
         self.chains: Dict[str, FallbackChain] = {}
         self._lock = Lock()
@@ -155,7 +155,7 @@ class FallbackManager:
             self.chains[name] = chain
             return chain
 
-    def get_chain(self, name: str) -> Optional[FallbackChain]:
+    def get_chain(self, name: str) -> FallbackChain | None:
         """Get existing fallback chain."""
         with self._lock:
             return self.chains.get(name)

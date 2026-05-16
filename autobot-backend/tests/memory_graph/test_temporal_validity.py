@@ -11,7 +11,7 @@ Issue #3790.
 import sys
 import types
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -69,7 +69,7 @@ def _now() -> datetime:
 
 
 def _entity(
-    valid_from: Optional[str] = None, valid_to: Optional[str] = None, entity_type: str = "TASK"
+    valid_from: str | None = None, valid_to: str | None = None, entity_type: str = "TASK"
 ) -> Dict[str, Any]:
     """Build a minimal entity dict for testing."""
     return {

@@ -13,8 +13,6 @@ Provides the foundation for the ChatHistoryManager composed class with:
 
 import os
 import threading
-from typing import Optional
-
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
@@ -41,10 +39,10 @@ class ChatHistoryBase:
 
     def _load_config_values(
         self,
-        history_file: Optional[str],
-        use_redis: Optional[bool],
-        redis_host: Optional[str],
-        redis_port: Optional[int],
+        history_file: str | None,
+        use_redis: bool | None,
+        redis_host: str | None,
+        redis_port: int | None,
     ) -> None:
         """
         Load configuration values from config manager with overrides.
@@ -88,7 +86,7 @@ class ChatHistoryBase:
         self._session_save_counter = 0
 
         # Memory Graph integration
-        self.memory_graph: Optional[AutoBotMemoryGraph] = None
+        self.memory_graph: AutoBotMemoryGraph | None = None
         self.memory_graph_enabled = False
 
         # Context window management
@@ -99,10 +97,10 @@ class ChatHistoryBase:
 
     def __init__(
         self,
-        history_file: Optional[str] = None,
-        use_redis: Optional[bool] = None,
-        redis_host: Optional[str] = None,
-        redis_port: Optional[int] = None,
+        history_file: str | None = None,
+        use_redis: bool | None = None,
+        redis_host: str | None = None,
+        redis_port: int | None = None,
     ):
         """
         Initialize the ChatHistoryManager base with performance optimizations.

@@ -3,7 +3,7 @@
 # Author: mrveiss
 """Milvus Memory Provider (Issue #4344)"""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 class MilvusMemoryProvider:
     """Milvus-backed memory provider for semantic vector search."""
 
-    def __init__(self, host: str = "localhost", port: int = 19530):
+    def __init__(self, host: str = "localhost", port: int = 19530) -> None:
         self.host = host
         self.port = port
         self.client = None
@@ -73,7 +73,7 @@ class MilvusMemoryProvider:
             logger.error(f"Error syncing to Milvus: {e}")
 
     async def search(
-        self, query: str, limit: int = 10, filters: Optional[Dict[str, Any]] = None
+        self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None
     ) -> List[Dict[str, Any]]:
         if not self.client:
             logger.warning("Milvus not initialized for search")
@@ -84,7 +84,7 @@ class MilvusMemoryProvider:
             logger.error(f"Error searching Milvus: {e}")
             return []
 
-    async def get_entity(self, entity_id: str) -> Optional[Dict[str, Any]]:
+    async def get_entity(self, entity_id: str) -> Dict[str, Any] | None:
         if not self.client:
             return None
         try:

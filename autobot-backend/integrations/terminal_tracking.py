@@ -10,8 +10,6 @@ Integration hooks for tracking terminal command execution activities.
 """
 
 import uuid
-from typing import Optional
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
@@ -29,10 +27,10 @@ async def _call_track_terminal_activity(
     db: AsyncSession,
     user_id: uuid.UUID,
     command: str,
-    session_id: Optional[str],
-    working_directory: Optional[str],
-    exit_code: Optional[int],
-    output: Optional[str],
+    session_id: str | None,
+    working_directory: str | None,
+    exit_code: int | None,
+    output: str | None,
     metadata: dict,
 ) -> uuid.UUID:
     """Helper for track_command_execution. Ref: #1088."""
@@ -61,10 +59,10 @@ async def track_command_execution(
     db: AsyncSession,
     user_id: uuid.UUID,
     command: str,
-    session_id: Optional[str] = None,
-    working_directory: Optional[str] = None,
-    exit_code: Optional[int] = None,
-    output: Optional[str] = None,
+    session_id: str | None = None,
+    working_directory: str | None = None,
+    exit_code: int | None = None,
+    output: str | None = None,
     shell_type: str = "bash",
 ) -> uuid.UUID:
     """
@@ -112,8 +110,8 @@ async def track_command_execution(
 async def track_pty_session_creation(
     db: AsyncSession,
     user_id: uuid.UUID,
-    session_id: Optional[str] = None,
-    pty_id: Optional[str] = None,
+    session_id: str | None = None,
+    pty_id: str | None = None,
     shell_type: str = "bash",
 ) -> uuid.UUID:
     """

@@ -10,7 +10,7 @@ Pool sizes are coordinated via SSOT config (#2860).
 """
 
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -25,8 +25,8 @@ from user_management.config import get_deployment_config
 logger = get_logger(__name__)
 
 # Singleton engine instance
-_async_engine: Optional[AsyncEngine] = None
-_async_session_factory: Optional[async_sessionmaker[AsyncSession]] = None
+_async_engine: AsyncEngine | None = None
+_async_session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 def _get_pool_config() -> dict:

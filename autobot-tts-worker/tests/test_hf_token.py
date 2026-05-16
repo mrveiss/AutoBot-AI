@@ -10,7 +10,6 @@ exactly — changes to the template must be reflected here.
 """
 
 import logging
-from typing import Optional
 from unittest.mock import MagicMock, patch
 
 # ---------------------------------------------------------------------------
@@ -50,7 +49,7 @@ def _warn_missing_token(model_id: str) -> None:
         )
 
 
-def _configure_hf_token(hf_token: Optional[str], model_id: str) -> None:
+def _configure_hf_token(hf_token: str | None, model_id: str) -> None:
     """Authenticate with HuggingFace Hub using hf_token when present."""
     if hf_token:
         import huggingface_hub

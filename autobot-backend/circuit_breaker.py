@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
 from threading import Lock
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
@@ -86,13 +86,13 @@ class CallRecord:
     timestamp: float
     duration: float
     success: bool
-    exception_type: Optional[str] = None
+    exception_type: str | None = None
 
 
 class CircuitBreaker:
     """Circuit breaker implementation with performance monitoring"""
 
-    def __init__(self, name: str, config: Optional[CircuitBreakerConfig] = None):
+    def __init__(self, name: str, config: CircuitBreakerConfig | None = None):
         """Initialize circuit breaker with name and optional configuration."""
         self.name = name
         self.config = config or CircuitBreakerConfig()
@@ -421,7 +421,7 @@ class CircuitBreakerManager:
         self.circuit_breakers: Dict[str, CircuitBreaker] = {}
         self._lock = Lock()
 
-    def get_circuit_breaker(self, service_name: str, config: Optional[CircuitBreakerConfig] = None) -> CircuitBreaker:
+    def get_circuit_breaker(self, service_name: str, config: CircuitBreakerConfig | None = None) -> CircuitBreaker:
         """Get or create a circuit breaker for a service"""
         if service_name not in self.circuit_breakers:
             with self._lock:

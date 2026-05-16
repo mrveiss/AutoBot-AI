@@ -13,7 +13,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import aiohttp
 import numpy as np
@@ -92,8 +92,8 @@ class MultiModalSearchResult:
     metadata: Dict[str, Any]
     score: float
     doc_id: str
-    source_modality: Optional[str] = None  # Original modality for fused embeddings
-    fusion_confidence: Optional[float] = None
+    source_modality: str | None = None  # Original modality for fused embeddings
+    fusion_confidence: float | None = None
 
 
 def _convert_chroma_results(
@@ -189,7 +189,7 @@ class NPUSemanticSearch:
         }
 
         # Issue #387: GPU-accelerated hybrid vector search
-        self.hybrid_search: Optional[HybridVectorSearch] = None
+        self.hybrid_search: HybridVectorSearch | None = None
         self.use_gpu_search = cfg.get("vector_search.use_gpu", True)
 
     async def initialize(self):
@@ -295,7 +295,7 @@ class NPUSemanticSearch:
         query: str,
         query_embedding: np.ndarray,
         similarity_top_k: int,
-        filters: Optional[Dict[str, Any]],
+        filters: Dict[str, Any] | None,
         embedding_device: str,
     ) -> List[SearchResult]:
         """Perform vector similarity search with fallback."""
@@ -329,7 +329,7 @@ class NPUSemanticSearch:
         error: Exception,
         query: str,
         similarity_top_k: int,
-        filters: Optional[Dict[str, Any]],
+        filters: Dict[str, Any] | None,
         start_time: float,
     ) -> Tuple[List[SearchResult], SearchMetrics]:
         """Handle search error with fallback."""
@@ -375,9 +375,9 @@ class NPUSemanticSearch:
         self,
         query: str,
         similarity_top_k: int,
-        filters: Optional[Dict[str, Any]],
+        filters: Dict[str, Any] | None,
         enable_npu_acceleration: bool,
-        force_device: Optional[HardwareDevice],
+        force_device: HardwareDevice | None,
         start_time: float,
         cache_key: str,
     ) -> Tuple[List[SearchResult], SearchMetrics]:
@@ -415,9 +415,9 @@ class NPUSemanticSearch:
         self,
         query: str,
         similarity_top_k: int = 10,
-        filters: Optional[Dict[str, Any]] = None,
+        filters: Dict[str, Any] | None = None,
         enable_npu_acceleration: bool = True,
-        force_device: Optional[HardwareDevice] = None,
+        force_device: HardwareDevice | None = None,
     ) -> Tuple[List[SearchResult], SearchMetrics]:
         """Perform NPU-enhanced semantic search. Issue #281, #620."""
         start_time = time.time()
@@ -447,7 +447,7 @@ class NPUSemanticSearch:
             return await self._handle_search_error(e, query, similarity_top_k, filters, start_time)
 
     async def _generate_embedding_with_device(
-        self, text: str, enable_npu: bool, force_device: Optional[HardwareDevice]
+        self, text: str, enable_npu: bool, force_device: HardwareDevice | None
     ) -> Tuple[np.ndarray, str]:
         """Generate embedding using specified device configuration. Issue #620.
 
@@ -490,7 +490,7 @@ class NPUSemanticSearch:
         return embeddings[0], "cpu_final_fallback"
 
     async def _generate_optimized_embedding(
-        self, text: str, enable_npu: bool, force_device: Optional[HardwareDevice]
+        self, text: str, enable_npu: bool, force_device: HardwareDevice | None
     ) -> Tuple[np.ndarray, str]:
         """Generate embedding using optimal hardware with caching. Issue #65 P0."""
         cached_embedding = await self.embedding_cache.get(text)
@@ -574,7 +574,7 @@ class NPUSemanticSearch:
         self,
         query_embedding: np.ndarray,
         top_k: int,
-        filters: Optional[Dict[str, Any]],
+        filters: Dict[str, Any] | None,
         device_used: str,
     ) -> List[SearchResult]:
         """Perform vector similarity search using GPU-accelerated hybrid or knowledge base."""
@@ -615,7 +615,7 @@ class NPUSemanticSearch:
 
         return {}
 
-    def _generate_cache_key(self, query: str, top_k: int, filters: Optional[Dict[str, Any]]) -> str:
+    def _generate_cache_key(self, query: str, top_k: int, filters: Dict[str, Any] | None) -> str:
         """Generate cache key for search results."""
         import hashlib
 
@@ -628,7 +628,7 @@ class NPUSemanticSearch:
         cache_string = json.dumps(cache_data, sort_keys=True)
         return hashlib.md5(cache_string.encode(), usedforsecurity=False).hexdigest()
 
-    def _get_cached_result(self, cache_key: str) -> Optional[Tuple[List[SearchResult], SearchMetrics]]:
+    def _get_cached_result(self, cache_key: str) -> Tuple[List[SearchResult], SearchMetrics] | None:
         """Get cached search result if available and not expired."""
         if cache_key in self.search_results_cache:
             cached_data, timestamp = self.search_results_cache[cache_key]
@@ -696,7 +696,7 @@ class NPUSemanticSearch:
         self,
         queries: List[str],
         similarity_top_k: int = 10,
-        filters: Optional[Dict[str, Any]] = None,
+        filters: Dict[str, Any] | None = None,
         enable_npu_acceleration: bool = True,
     ) -> List[Tuple[List[SearchResult], SearchMetrics]]:
         """
@@ -901,7 +901,7 @@ class NPUSemanticSearch:
             self.chroma_client = None
 
     def _prepare_document_metadata(
-        self, content: Any, modality: str, metadata: Optional[Dict[str, Any]]
+        self, content: Any, modality: str, metadata: Dict[str, Any] | None
     ) -> Dict[str, Any]:
         """Prepare metadata dictionary for document storage.
 
@@ -922,7 +922,7 @@ class NPUSemanticSearch:
             **(metadata or {}),
         }
 
-    def _generate_document_id(self, modality: str, doc_id: Optional[str]) -> str:
+    def _generate_document_id(self, modality: str, doc_id: str | None) -> str:
         """Generate or validate document ID for storage.
 
         Issue #665: Extracted from store_multimodal_embedding
@@ -1010,8 +1010,8 @@ class NPUSemanticSearch:
         self,
         content: Any,
         modality: str,
-        metadata: Optional[Dict[str, Any]] = None,
-        doc_id: Optional[str] = None,
+        metadata: Dict[str, Any] | None = None,
+        doc_id: str | None = None,
     ) -> bool:
         """Store multi-modal content with embeddings in ChromaDB collection."""
         if not self.chroma_client or modality not in self.collections:
@@ -1057,7 +1057,7 @@ class NPUSemanticSearch:
         element_name: str,
         language: str,
         content_hash: str,
-        metadata: Optional[Dict[str, Any]],
+        metadata: Dict[str, Any] | None,
     ) -> Dict[str, Any]:
         """Prepare metadata dictionary for code embedding storage. Issue #620.
 
@@ -1094,8 +1094,8 @@ class NPUSemanticSearch:
         element_name: str,
         language: str,
         content_hash: str,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Optional[str]:
+        metadata: Dict[str, Any] | None = None,
+    ) -> str | None:
         """Store code element embedding in ChromaDB collection. Issue #207, #620."""
         if not self.chroma_client or "code" not in self.collections:
             logger.warning("ChromaDB code collection not available")
@@ -1134,8 +1134,8 @@ class NPUSemanticSearch:
             return None
 
     def _build_code_search_filter(
-        self, language: Optional[str], element_type: Optional[str]
-    ) -> Optional[Dict[str, Any]]:
+        self, language: str | None, element_type: str | None
+    ) -> Dict[str, Any] | None:
         """Build ChromaDB where filter for code search. Issue #620.
 
         Args:
@@ -1197,8 +1197,8 @@ class NPUSemanticSearch:
     async def search_code_embeddings(
         self,
         query_embedding: np.ndarray,
-        language: Optional[str] = None,
-        element_type: Optional[str] = None,
+        language: str | None = None,
+        element_type: str | None = None,
         max_results: int = 20,
         similarity_threshold: float = 0.5,
     ) -> List[Dict[str, Any]]:
@@ -1297,9 +1297,9 @@ class NPUSemanticSearch:
         self,
         query: Any,
         query_modality: str,
-        target_modalities: Optional[List[str]] = None,
+        target_modalities: List[str] | None = None,
         limit: int = 10,
-        similarity_threshold: Optional[float] = None,
+        similarity_threshold: float | None = None,
     ) -> Dict[str, List[MultiModalSearchResult]]:
         """
         Perform cross-modal similarity search.

@@ -18,8 +18,6 @@ Related Issue: #159 - Prevent Premature Conversation Endings
 """
 
 from dataclasses import dataclass
-from typing import Optional
-
 from autobot_shared.logging_manager import get_logger
 from conversation_context import ConversationContext
 from intent_classifier import ConversationIntent, IntentClassification
@@ -32,7 +30,7 @@ class SafetyCheckResult:
     """Result of safety guard check"""
 
     is_safe_to_end: bool
-    override_intent: Optional[ConversationIntent]  # If safety guard overrides intent
+    override_intent: ConversationIntent | None  # If safety guard overrides intent
     reason: str  # Reason for the decision
     violated_rules: list[str]  # Which safety rules were violated
 

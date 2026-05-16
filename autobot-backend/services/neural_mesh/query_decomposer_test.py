@@ -61,7 +61,7 @@ class TestDecompose:
     """QueryDecomposer.decompose() builds a DecompositionPlan from LLM output."""
 
     @pytest.mark.asyncio
-    async def test_decompose_calls_llm_with_query(self):
+    async def test_decompose_calls_llm_with_query(self) -> None:
         """LLM callable must receive a prompt that contains the original query."""
         decomposer = _make_decomposer()
         query = "How does Redis clustering affect write latency?"
@@ -73,7 +73,7 @@ class TestDecompose:
         assert query in prompt_arg
 
     @pytest.mark.asyncio
-    async def test_decompose_parses_valid_json(self):
+    async def test_decompose_parses_valid_json(self) -> None:
         """Valid JSON from LLM produces a DecompositionPlan with the expected steps."""
         steps_json = json.dumps(
             [
@@ -94,7 +94,7 @@ class TestDecompose:
         assert plan.steps[2].depends_on == [1, 2]
 
     @pytest.mark.asyncio
-    async def test_decompose_handles_malformed_json(self):
+    async def test_decompose_handles_malformed_json(self) -> None:
         """Malformed LLM output falls back to a single step with the original query."""
         decomposer = _make_decomposer(llm_response="Sorry, I cannot break that down.")
 
@@ -106,7 +106,7 @@ class TestDecompose:
         assert plan.steps[0].step == 1
 
     @pytest.mark.asyncio
-    async def test_decompose_tolerates_prose_around_json(self):
+    async def test_decompose_tolerates_prose_around_json(self) -> None:
         """JSON array embedded in prose is extracted and parsed correctly."""
         prose_with_json = (
             "Sure! Here are the steps: "
@@ -130,7 +130,7 @@ class TestExecute:
     """QueryDecomposer.execute() calls the retriever once per plan step."""
 
     @pytest.mark.asyncio
-    async def test_execute_calls_retriever_per_step(self):
+    async def test_execute_calls_retriever_per_step(self) -> None:
         """Three plan steps produce exactly three retrieve() calls."""
         decomposer = _make_decomposer()
         plan = DecompositionPlan(
@@ -147,7 +147,7 @@ class TestExecute:
         assert decomposer.mesh_retriever.retrieve.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_execute_passes_prior_context(self):
+    async def test_execute_passes_prior_context(self) -> None:
         """Step 2's retrieve query includes evidence content from step 1."""
         evidence_chunk = {
             "chunk_id": "e1",
@@ -172,7 +172,7 @@ class TestExecute:
         assert "step one evidence" in second_query
 
     @pytest.mark.asyncio
-    async def test_step_result_contains_evidence(self):
+    async def test_step_result_contains_evidence(self) -> None:
         """Each StepResult has a non-empty evidence list from the retrieval."""
         chunks = [
             {"chunk_id": "a", "content": "alpha", "score": 0.9},
@@ -193,7 +193,7 @@ class TestExecute:
         assert results[0].evidence[0]["chunk_id"] == "a"
 
     @pytest.mark.asyncio
-    async def test_execute_returns_one_result_per_step(self):
+    async def test_execute_returns_one_result_per_step(self) -> None:
         """execute() returns a StepResult list of the same length as plan.steps."""
         decomposer = _make_decomposer()
         steps = [DecompositionStep(step=i, query=f"q{i}", depends_on=[]) for i in range(1, 5)]
@@ -206,7 +206,7 @@ class TestExecute:
             assert r.step is steps[i]
 
     @pytest.mark.asyncio
-    async def test_execute_step_without_deps_sends_query_only(self):
+    async def test_execute_step_without_deps_sends_query_only(self) -> None:
         """A step with no depends_on sends just its own query to the retriever."""
         decomposer = _make_decomposer()
         plan = DecompositionPlan(

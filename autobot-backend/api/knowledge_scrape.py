@@ -43,7 +43,7 @@ API contract::
 """
 
 from datetime import datetime, timezone
-from typing import Literal, Optional
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -76,8 +76,8 @@ class ScrapeResponse(BaseModel):
     """Success response for POST /knowledge/scrape."""
 
     url: str
-    markdown: Optional[str] = None
-    html: Optional[str] = None
+    markdown: str | None = None
+    html: str | None = None
     metadata: ScrapeMetadata
     indexed: bool
 

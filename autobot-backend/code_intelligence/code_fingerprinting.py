@@ -26,7 +26,7 @@ All classes are now in the fingerprinting/ package. This module provides
 backward compatibility by re-exporting all classes.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from code_intelligence.fingerprinting.ast_hasher import ASTHasher
 from code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
@@ -77,7 +77,7 @@ __all__ = [
 def detect_clones(
     directory: str,
     min_fragment_lines: int = 5,
-    exclude_dirs: Optional[List[str]] = None,
+    exclude_dirs: List[str] | None = None,
 ) -> CloneDetectionReport:
     """
     Detect code clones in a directory.

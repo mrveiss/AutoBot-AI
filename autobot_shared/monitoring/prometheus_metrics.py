@@ -15,8 +15,6 @@ Refactoring History:
 """
 
 import threading
-from typing import Optional
-
 from prometheus_client import (
     CollectorRegistry,
     Counter,
@@ -84,7 +82,7 @@ class PrometheusMetricsManager:
     - MCPWorkerMetricsRecorder: MCP worker restart budget metrics (Issue #4109)
     """
 
-    def __init__(self, registry: Optional[CollectorRegistry] = None):
+    def __init__(self, registry: CollectorRegistry | None = None) -> None:
         """Initialize Prometheus metrics manager with optional registry."""
         self.registry = registry or CollectorRegistry()
 
@@ -273,7 +271,7 @@ class PrometheusMetricsManager:
     # Workflow Metrics (Issue #394: Delegates to WorkflowMetricsRecorder)
     # =========================================================================
 
-    def record_workflow_execution(self, workflow_type: str, status: str, duration: Optional[float] = None) -> None:
+    def record_workflow_execution(self, workflow_type: str, status: str, duration: float | None = None) -> None:
         """Record a workflow execution."""
         self._workflow.record_execution(workflow_type, status, duration)
 
@@ -293,7 +291,7 @@ class PrometheusMetricsManager:
     # GitHub Metrics (Issue #394: Delegates to GitHubMetricsRecorder)
     # =========================================================================
 
-    def record_github_operation(self, operation: str, status: str, duration: Optional[float] = None) -> None:
+    def record_github_operation(self, operation: str, status: str, duration: float | None = None) -> None:
         """Record a GitHub API operation."""
         self._github.record_operation(operation, status, duration)
 
@@ -322,7 +320,7 @@ class PrometheusMetricsManager:
         task_type: str,
         agent_type: str,
         status: str,
-        duration: Optional[float] = None,
+        duration: float | None = None,
     ) -> None:
         """Record a task execution."""
         self._task.record_execution(task_type, agent_type, status, duration)
@@ -813,7 +811,7 @@ class PrometheusMetricsManager:
 # Global Metrics Instance (Thread-safe Singleton)
 # =============================================================================
 
-_metrics_instance: Optional[PrometheusMetricsManager] = None
+_metrics_instance: PrometheusMetricsManager | None = None
 _metrics_instance_lock = threading.Lock()
 
 

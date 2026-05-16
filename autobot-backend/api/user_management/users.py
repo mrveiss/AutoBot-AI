@@ -8,8 +8,6 @@ REST API for user management operations.
 """
 
 import uuid
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from api.schemas_agent import (
@@ -66,7 +64,7 @@ logger = get_logger(__name__)
 )
 async def list_users(
     pagination: PaginationParams = Depends(),
-    search: Optional[str] = Query(None, description="Search by email, username, or name"),
+    search: str | None = Query(None, description="Search by email, username, or name"),
     include_inactive: bool = Query(False, description="Include inactive users"),
     user_service: UserService = Depends(get_user_service),
 ):

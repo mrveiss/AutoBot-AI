@@ -23,7 +23,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -497,7 +497,7 @@ class CodeGenerationEngine:
 
         return changes
 
-    async def _call_llm(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, int]:
+    async def _call_llm(self, prompt: str, system_prompt: str | None = None) -> Tuple[str, int]:
         """
         Call LLM for code generation/refactoring.
         Returns (response, tokens_used)
@@ -708,7 +708,7 @@ class CodeGenerationEngine:
             logger.error("Failed to get versions: %s", e)
             return []
 
-    async def rollback(self, file_path: str, version_id: Optional[str] = None) -> Optional[str]:
+    async def rollback(self, file_path: str, version_id: str | None = None) -> str | None:
         """Rollback to a specific version or the last saved version"""
         try:
             versions = await self.get_versions(file_path)
@@ -751,7 +751,7 @@ class CodeGenerationEngine:
         except Exception as e:
             logger.error("Failed to track stats: %s", e)
 
-    async def get_stats(self, source_id: Optional[str] = None) -> Dict[str, Any]:
+    async def get_stats(self, source_id: str | None = None) -> Dict[str, Any]:
         """Get code generation statistics.
 
         Issue #3441: When source_id is supplied, the Redis stats key is
@@ -979,7 +979,7 @@ async def rollback_code(admin_check: bool = Depends(check_admin_permission), req
 )
 async def get_stats(
     admin_check: bool = Depends(check_admin_permission),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ):
     """
     Get code generation statistics.

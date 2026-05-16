@@ -15,7 +15,7 @@ Functions:
     release_agent: Release an agent after task completion
 """
 
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
@@ -91,7 +91,7 @@ def _is_agent_eligible(
 def _select_best_agent_from_candidates(
     suitable_agents: List[Tuple[str, float]],
     task_type: str,
-) -> Optional[str]:
+) -> str | None:
     """
     Select the best agent from a list of scored candidates.
 
@@ -161,7 +161,7 @@ def _build_scored_candidates(
 def find_best_agent_for_task(
     agent_registry: Dict[str, Any],
     task_type: str,
-    required_capabilities: Optional[Set[Any]] = None,
+    required_capabilities: Set[Any] | None = None,
     availability_status_attr: str = "availability_status",
     current_workload_attr: str = "current_workload",
     max_concurrent_tasks_attr: str = "max_concurrent_tasks",
@@ -169,7 +169,7 @@ def find_best_agent_for_task(
     preferred_task_types_attr: str = "preferred_task_types",
     specializations_attr: str = "specializations",
     success_rate_attr: str = "success_rate",
-) -> Optional[str]:
+) -> str | None:
     """
     Find the best agent for a specific task based on capabilities and current workload.
 

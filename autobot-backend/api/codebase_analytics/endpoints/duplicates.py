@@ -16,8 +16,6 @@ Issue #554: Enhanced with semantic analysis support:
 
 import asyncio
 from pathlib import Path
-from typing import Optional
-
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 
@@ -146,7 +144,7 @@ def _convert_analysis_to_result(analysis, project_root: str) -> dict:
     }
 
 
-def _get_chromadb_fallback(error_msg: str, source_id: Optional[str] = None) -> Optional[dict]:
+def _get_chromadb_fallback(error_msg: str, source_id: str | None = None) -> dict | None:
     """
     Get cached duplicates from ChromaDB as fallback.
 
@@ -236,7 +234,7 @@ def _build_detection_error_response() -> dict:
     }
 
 
-def _process_and_cache_analysis(analysis, project_root: str, source_id: Optional[str] = None) -> dict:
+def _process_and_cache_analysis(analysis, project_root: str, source_id: str | None = None) -> dict:
     """
     Convert analysis to result dict and log completion.
 
@@ -290,7 +288,7 @@ async def _run_duplicate_analysis(project_root: str, min_similarity: float, use_
     return analysis
 
 
-def _check_duplicate_cache(refresh: bool, source_id: Optional[str] = None) -> Optional[JSONResponse]:
+def _check_duplicate_cache(refresh: bool, source_id: str | None = None) -> JSONResponse | None:
     """
     Check if cached results are available and return them.
 
@@ -314,7 +312,7 @@ def _check_duplicate_cache(refresh: bool, source_id: Optional[str] = None) -> Op
     return None
 
 
-async def _handle_detection_failure(error: Exception, source_id: Optional[str] = None) -> JSONResponse:
+async def _handle_detection_failure(error: Exception, source_id: str | None = None) -> JSONResponse:
     """
     Handle duplicate detection failure with fallback.
 
@@ -348,7 +346,7 @@ async def get_duplicate_code(
     refresh: bool = Query(False, description="Force fresh analysis instead of cache"),
     min_similarity: float = Query(0.5, description="Minimum similarity threshold (0.0-1.0)"),
     use_semantic: bool = Query(False, description="Enable LLM-based semantic analysis (Issue #554)"),
-    source_id: Optional[str] = Query(None, description="#1772: source_id for per-project scoping"),
+    source_id: str | None = Query(None, description="#1772: source_id for per-project scoping"),
 ):
     """
     Get duplicate code detected in the codebase (Issue #528).
@@ -409,7 +407,7 @@ def _make_relative_path(path: str, project_root: str) -> str:
         return path
 
 
-async def _run_semantic_config_detection(project_root: Path) -> Optional[dict]:
+async def _run_semantic_config_detection(project_root: Path) -> dict | None:
     """
     Run semantic config duplicate detection.
 
@@ -492,7 +490,7 @@ def _convert_config_duplicates_to_array(duplicates_dict: dict) -> list:
 )
 async def detect_config_duplicates_endpoint(
     use_semantic: bool = Query(False, description="Enable LLM-based semantic analysis (Issue #554)"),
-    source_id: Optional[str] = Query(None, description="#3685: source_id for per-project scoping"),
+    source_id: str | None = Query(None, description="#3685: source_id for per-project scoping"),
 ):
     """
     Detect configuration value duplicates across codebase (Issue #341).

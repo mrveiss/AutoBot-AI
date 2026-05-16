@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from threading import Lock
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict
 
 from autobot_shared.logging_manager import get_logger
 
@@ -49,8 +49,8 @@ class CircuitBreakerStats:
     blocked_calls: int = 0
     state_changes: int = 0
     last_state_change: float = field(default_factory=time.time)
-    last_failure_time: Optional[float] = None
-    last_failure_error: Optional[str] = None
+    last_failure_time: float | None = None
+    last_failure_error: str | None = None
 
 
 class CircuitBreakerOpenError(Exception):
@@ -71,7 +71,7 @@ class CircuitBreaker:
         HALF_OPEN: Testing if service has recovered, limited calls allowed
     """
 
-    def __init__(self, name: str, config: Optional[CircuitBreakerConfig] = None):
+    def __init__(self, name: str, config: CircuitBreakerConfig | None = None) -> None:
         """Initialize circuit breaker."""
         self.name = name
         self.config = config or CircuitBreakerConfig()
@@ -81,7 +81,7 @@ class CircuitBreaker:
         self.stats = CircuitBreakerStats()
         self._lock = Lock()
 
-    def _record_success(self):
+    def _record_success(self) -> None:
         """Record successful call."""
         with self._lock:
             self.stats.total_calls += 1
@@ -95,7 +95,7 @@ class CircuitBreaker:
                 self.failure_count = 0
                 self.success_count = 0
 
-    def _record_failure(self, error: Exception):
+    def _record_failure(self, error: Exception) -> None:
         """Record failed call."""
         with self._lock:
             self.stats.total_calls += 1
@@ -111,13 +111,13 @@ class CircuitBreaker:
             elif self.state == CircuitBreakerState.HALF_OPEN:
                 self._transition_to_open()
 
-    def _record_blocked(self):
+    def _record_blocked(self) -> None:
         """Record blocked call (circuit open)."""
         with self._lock:
             self.stats.total_calls += 1
             self.stats.blocked_calls += 1
 
-    def _transition_to_open(self):
+    def _transition_to_open(self) -> None:
         """Transition to OPEN state."""
         if self.state != CircuitBreakerState.OPEN:
             self.state = CircuitBreakerState.OPEN
@@ -128,7 +128,7 @@ class CircuitBreaker:
                 self.failure_count,
             )
 
-    def _transition_to_half_open(self):
+    def _transition_to_half_open(self) -> None:
         """Transition to HALF_OPEN state."""
         if self.state != CircuitBreakerState.HALF_OPEN:
             self.state = CircuitBreakerState.HALF_OPEN
@@ -136,7 +136,7 @@ class CircuitBreaker:
             self.stats.state_changes += 1
             logger.info("Circuit breaker %s testing recovery (half-open)", self.name)
 
-    def _transition_to_closed(self):
+    def _transition_to_closed(self) -> None:
         """Transition to CLOSED state."""
         if self.state != CircuitBreakerState.CLOSED:
             self.state = CircuitBreakerState.CLOSED
@@ -220,7 +220,7 @@ class CircuitBreaker:
 class CircuitBreakerManager:
     """Manages multiple circuit breakers for different services."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize circuit breaker manager."""
         self.breakers: Dict[str, CircuitBreaker] = {}
         self._lock = Lock()
@@ -228,7 +228,7 @@ class CircuitBreakerManager:
     def get_breaker(
         self,
         service_name: str,
-        config: Optional[CircuitBreakerConfig] = None,
+        config: CircuitBreakerConfig | None = None,
     ) -> CircuitBreaker:
         """
         Get or create circuit breaker for service.
@@ -261,7 +261,7 @@ class CircuitBreakerManager:
                 for name, breaker in self.breakers.items()
             }
 
-    def reset_breaker(self, service_name: str):
+    def reset_breaker(self, service_name: str) -> None:
         """Reset circuit breaker (move to CLOSED)."""
         with self._lock:
             if service_name in self.breakers:

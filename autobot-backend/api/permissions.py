@@ -24,8 +24,6 @@ Usage:
     GET  /api/permissions/status        - Get system status
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.schemas_system import (
@@ -407,7 +405,7 @@ async def get_project_approvals(
 async def clear_project_approvals(
     project_path: str,
     admin_check: bool = Depends(check_admin_permission),
-    user_id: Optional[str] = Query(default=None, description="User ID (optional)"),
+    user_id: str | None = Query(default=None, description="User ID (optional)"),
 ):
     """
     Clear stored approvals for a project.
@@ -452,7 +450,7 @@ async def store_approval(
     command: str = Query(..., description="Approved command"),
     risk_level: str = Query(..., description="Risk level"),
     tool: str = Query(default="Bash", description="Tool name"),
-    comment: Optional[str] = Query(default=None, description="Approval comment"),
+    comment: str | None = Query(default=None, description="Approval comment"),
 ):
     """
     Store a command approval in memory.

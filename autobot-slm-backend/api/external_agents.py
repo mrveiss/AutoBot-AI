@@ -21,7 +21,7 @@ NOTE: /cards MUST be registered before /{id} to avoid path-parameter collision.
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -46,20 +46,20 @@ router = APIRouter(prefix="/external-agents", tags=["external-agents"])
 class ExternalAgentCreate(BaseModel):
     name: str = Field(..., max_length=100)
     base_url: str = Field(..., description="Base URL of the external A2A agent")
-    description: Optional[str] = None
+    description: str | None = None
     tags: List[str] = []
     enabled: bool = True
     ssl_verify: bool = True
-    api_key: Optional[str] = Field(None, description="Bearer token (stored encrypted)")
+    api_key: str | None = Field(None, description="Bearer token (stored encrypted)")
 
 
 class ExternalAgentUpdate(BaseModel):
-    name: Optional[str] = Field(None, max_length=100)
-    description: Optional[str] = None
-    tags: Optional[List[str]] = None
-    enabled: Optional[bool] = None
-    ssl_verify: Optional[bool] = None
-    api_key: Optional[str] = Field(None, description="Set to '' to clear api_key")
+    name: str | None = Field(None, max_length=100)
+    description: str | None = None
+    tags: List[str] | None = None
+    enabled: bool | None = None
+    ssl_verify: bool | None = None
+    api_key: str | None = Field(None, description="Set to '' to clear api_key")
 
 
 def _serialize(agent: ExternalAgent, include_card: bool = True) -> Dict[str, Any]:
@@ -138,7 +138,7 @@ async def register_agent(
             detail=f"Agent with base_url '{body.base_url}' already registered",
         )
 
-    encrypted_key: Optional[str] = None
+    encrypted_key: str | None = None
     if body.api_key:
         from services.encryption import encrypt_data
 

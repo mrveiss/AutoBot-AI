@@ -9,7 +9,7 @@ Supports key-based and password authentication.
 """
 
 import asyncio
-from typing import Optional, Tuple
+from typing import Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
@@ -40,10 +40,10 @@ class SSHBackend(ExecutionBackend):
         hostname: str,
         port: int = 22,
         username: str = "autobot",
-        password: Optional[str] = None,
-        private_key_path: Optional[str] = None,
+        password: str | None = None,
+        private_key_path: str | None = None,
         timeout: int = 30,
-    ):
+    ) -> None:
         """Initialize SSH backend.
 
         Args:
@@ -68,7 +68,7 @@ class SSHBackend(ExecutionBackend):
         self.password = password
         self.private_key_path = private_key_path
         self.timeout = timeout
-        self._client: Optional[SSHClient] = None
+        self._client: SSHClient | None = None
 
     async def execute(self, task: ExecutionTask) -> ExecutionResult:
         """Execute task on remote machine via SSH.

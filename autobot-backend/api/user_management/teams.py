@@ -8,7 +8,7 @@ REST API for team management operations.
 """
 
 import uuid
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -59,7 +59,7 @@ logger = get_logger(__name__)
 )
 async def list_teams(
     pagination: PaginationParams = Depends(),
-    search: Optional[str] = Query(None, description="Search by name or description"),
+    search: str | None = Query(None, description="Search by name or description"),
     team_service: TeamService = Depends(get_team_service),
 ):
     """List teams with pagination."""
@@ -210,7 +210,7 @@ async def delete_team(
 )
 async def list_team_members(
     team_id: uuid.UUID,
-    role: Optional[str] = Query(None, description="Filter by role"),
+    role: str | None = Query(None, description="Filter by role"),
     team_service: TeamService = Depends(get_team_service),
 ):
     """List team members."""

@@ -8,7 +8,7 @@ Main coordinator for workflow automation using composition.
 """
 
 import uuid
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from orchestrator import Orchestrator
@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 class WorkflowAutomationManager:
     """Manages automated workflow execution with user intervention points"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize manager with workflow state and specialized components."""
         # Core state
         self.active_workflows: Dict[str, ActiveWorkflow] = {}
@@ -62,7 +62,7 @@ class WorkflowAutomationManager:
         """Expose terminal sessions from messenger for WebSocket management"""
         return self.messenger.terminal_sessions
 
-    async def create_workflow_from_chat_request(self, user_request: str, session_id: str) -> Optional[str]:
+    async def create_workflow_from_chat_request(self, user_request: str, session_id: str) -> str | None:
         """Create automated workflow from natural language chat request"""
         try:
             # Use orchestrator to analyze request and create workflow steps
@@ -123,7 +123,7 @@ class WorkflowAutomationManager:
         steps: List[WorkflowStep],
         session_id: str,
         automation_mode: AutomationMode = AutomationMode.SEMI_AUTOMATIC,
-        owner_id: Optional[str] = None,
+        owner_id: str | None = None,
     ) -> str:
         """Create new automated workflow.
 
@@ -159,7 +159,7 @@ class WorkflowAutomationManager:
         logger.info("Created automated workflow %s: %s", workflow_id, name)
         return workflow_id
 
-    async def start_workflow_execution(self, workflow_id: str, trigger_payload: Optional[dict] = None) -> bool:
+    async def start_workflow_execution(self, workflow_id: str, trigger_payload: dict | None = None) -> bool:
         """Start executing automated workflow.
 
         Args:
@@ -181,7 +181,7 @@ class WorkflowAutomationManager:
         """Handle workflow control actions from user"""
         return await self.controller.handle_control(control_request, self.active_workflows)
 
-    def get_workflow_status(self, workflow_id: str) -> Optional[Metadata]:
+    def get_workflow_status(self, workflow_id: str) -> Metadata | None:
         """Get workflow status from active or completed (#372, #1367)."""
         workflow = self.active_workflows.get(workflow_id)
         if not workflow:
@@ -228,7 +228,7 @@ class WorkflowAutomationManager:
         workflow_id: str,
         approval_mode: PlanApprovalMode = PlanApprovalMode.FULL_PLAN_APPROVAL,
         timeout_seconds: int = 300,
-    ) -> Optional[PlanApprovalRequest]:
+    ) -> PlanApprovalRequest | None:
         """
         Present workflow plan to user for approval before execution.
 
@@ -253,7 +253,7 @@ class WorkflowAutomationManager:
         self,
         workflow_id: str,
         timeout_seconds: int = 300,
-    ) -> Optional[PlanApprovalRequest]:
+    ) -> PlanApprovalRequest | None:
         """
         Wait for user to approve or reject the presented plan.
 
@@ -295,7 +295,7 @@ class WorkflowAutomationManager:
         """
         return self.executor.handle_plan_approval_response(workflow_id, approved, modifications, reason)
 
-    def get_pending_approval(self, workflow_id: str) -> Optional[PlanApprovalRequest]:
+    def get_pending_approval(self, workflow_id: str) -> PlanApprovalRequest | None:
         """
         Get pending plan approval request for a workflow.
 

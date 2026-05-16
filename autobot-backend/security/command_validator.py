@@ -8,7 +8,7 @@ This module replaces LLM-based command extraction with a safelist approach.
 
 import json
 import os
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -65,7 +65,7 @@ class CommandValidator:
 
         return False, ""
 
-    def get_allowed_command(self, query_type: str, message: str) -> Optional[Dict]:
+    def get_allowed_command(self, query_type: str, message: str) -> Dict | None:
         """
         Get an allowed command for a specific query type.
         This replaces the vulnerable LLM-based extraction.
@@ -92,7 +92,7 @@ class CommandValidator:
             "alternatives": (config["commands"][1:] if len(config["commands"]) > 1 else []),
         }
 
-    def detect_query_type(self, message: str) -> Optional[str]:
+    def detect_query_type(self, message: str) -> str | None:
         """
         Detect what type of system query the user is asking for.
         Uses keyword matching instead of LLM extraction.
@@ -131,7 +131,7 @@ class CommandValidator:
 
         return None
 
-    def validate_command_request(self, message: str) -> Optional[Dict]:
+    def validate_command_request(self, message: str) -> Dict | None:
         """
         Main validation method that replaces the vulnerable LLM extraction.
         Returns command info if valid, None otherwise.

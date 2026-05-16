@@ -11,7 +11,7 @@ Extracted from voice_processing_system.py as part of Issue #381 god class refact
 import asyncio
 import re
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from enhanced_memory_manager_async import TaskPriority
@@ -205,7 +205,7 @@ class NaturalLanguageProcessor:
     async def _run_analysis_pipeline(
         self,
         transcription: str,
-        context: Optional[Dict[str, Any]],
+        context: Dict[str, Any] | None,
         task_context: Any,
     ) -> VoiceCommandAnalysis:
         """Helper for analyze_voice_command. Ref: #1088.
@@ -254,7 +254,7 @@ class NaturalLanguageProcessor:
         return analysis
 
     async def analyze_voice_command(
-        self, transcription: str, context: Optional[Dict[str, Any]] = None
+        self, transcription: str, context: Dict[str, Any] | None = None
     ) -> VoiceCommandAnalysis:
         """Analyze voice command for intent and parameters"""
 
@@ -394,7 +394,7 @@ class NaturalLanguageProcessor:
         command_type: VoiceCommand,
         intent: str,
         parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]],
+        context: Dict[str, Any] | None,
     ) -> bool:
         """Determine if command needs additional context"""
 

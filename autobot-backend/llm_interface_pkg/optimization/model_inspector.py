@@ -25,7 +25,7 @@ Issue #3186: Actually call init_empty_weights() for accurate param counts.
 
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from constants.ttl_constants import TTL_1_HOUR
 
@@ -108,7 +108,7 @@ def _import_accelerate() -> Any:
 # ---------------------------------------------------------------------------
 
 
-def _cache_get(model_name: str) -> Optional[ModelInfo]:
+def _cache_get(model_name: str) -> ModelInfo | None:
     """Return cached ModelInfo if present and unexpired, else None."""
     entry = _cache.get(model_name)
     if entry is None:
@@ -130,7 +130,7 @@ def _cache_put(model_name: str, info: ModelInfo) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _extract_from_config(cfg: Any, param_count_override: Optional[int] = None) -> ModelInfo:
+def _extract_from_config(cfg: Any, param_count_override: int | None = None) -> ModelInfo:
     """
     Build a ModelInfo from a transformers PretrainedConfig object.
 
@@ -186,7 +186,7 @@ def _estimate_param_count(num_layers: int, hidden_size: int, vocab_size: int) ->
     return embedding_params + num_layers * per_layer_params
 
 
-def _count_params_via_skeleton(cfg: Any, transformers: Any, accelerate: Any) -> Optional[int]:
+def _count_params_via_skeleton(cfg: Any, transformers: Any, accelerate: Any) -> int | None:
     """
     Instantiate an empty-weight model skeleton and return its exact param count.
 
@@ -216,7 +216,7 @@ def _count_params_via_skeleton(cfg: Any, transformers: Any, accelerate: Any) -> 
 # ---------------------------------------------------------------------------
 
 
-def inspect_model(model_name: str) -> Optional[ModelInfo]:
+def inspect_model(model_name: str) -> ModelInfo | None:
     """
     Inspect a model's architecture at zero memory cost.
 
@@ -244,7 +244,7 @@ def inspect_model(model_name: str) -> Optional[ModelInfo]:
     return info
 
 
-def _inspect_via_config(model_name: str) -> Optional[ModelInfo]:
+def _inspect_via_config(model_name: str) -> ModelInfo | None:
     """
     Fetch model config, build an empty-weight skeleton, and return ModelInfo.
 

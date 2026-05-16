@@ -12,7 +12,7 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
@@ -62,7 +62,7 @@ def _compute_file_hash(file_path: Path) -> str:
         return ""
 
 
-async def _get_stored_file_hash(redis_client, relative_path: str) -> Optional[str]:
+async def _get_stored_file_hash(redis_client, relative_path: str) -> str | None:
     """
     Get stored file hash from Redis.
 
@@ -153,7 +153,7 @@ async def _save_task_to_redis(task_id: str, indexing_tasks: Dict) -> None:
         logger.debug("[Task %s] Redis task state save failed (non-fatal): %s", task_id, e)
 
 
-async def _load_task_from_redis(task_id: str) -> Optional[Dict]:
+async def _load_task_from_redis(task_id: str) -> Dict | None:
     """Load task state from Redis (#1179: cross-worker visibility)."""
     try:
         redis = await get_async_redis_client(database="analytics")

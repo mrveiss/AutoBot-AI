@@ -29,7 +29,7 @@ from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import re
-from typing import Any, Optional
+from typing import Any
 
 logger = get_logger(__name__)
 
@@ -100,7 +100,7 @@ class Layer1EssentialStory:
         try:
             from memory.essential_story import EssentialStoryGenerator
 
-            model_name: Optional[str] = context.get("model_name")
+            model_name: str | None = context.get("model_name")
             return await EssentialStoryGenerator().generate(model_name)
         except Exception:
             logger.warning("Layer1EssentialStory.render failed", exc_info=True)
@@ -240,8 +240,8 @@ class TieredContextBuilder:
         user_message: str,
         model_name: str,
         session_id: str,  # noqa: ARG002  (reserved for future per-session state)
-        memory_graph: Optional[Any] = None,
-        knowledge_service: Optional[Any] = None,
+        memory_graph: Any | None = None,
+        knowledge_service: Any | None = None,
     ) -> str:
         """Build the tiered context string.
 

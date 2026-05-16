@@ -41,7 +41,7 @@ def singleton_detector():
 class TestWakeWordDetection:
     """Test wake word detection functionality"""
 
-    def test_basic_wake_word_detection(self, detector):
+    def test_basic_wake_word_detection(self, detector) -> None:
         """Test that basic wake words are detected"""
         # Test "hey autobot"
         event = detector.check_text_for_wake_word("hey autobot", confidence=0.9)
@@ -49,13 +49,13 @@ class TestWakeWordDetection:
         assert event.wake_word == "hey autobot"
         assert event.confidence >= 0.7
 
-    def test_case_insensitive_detection(self, detector):
+    def test_case_insensitive_detection(self, detector) -> None:
         """Test wake word detection is case insensitive"""
         event = detector.check_text_for_wake_word("HEY AUTOBOT", confidence=0.9)
         assert event is not None
         assert event.wake_word.lower() == "hey autobot"
 
-    def test_multiple_wake_words(self, detector):
+    def test_multiple_wake_words(self, detector) -> None:
         """Test multiple wake words are supported"""
         # Test "ok autobot"
         event = detector.check_text_for_wake_word("ok autobot", confidence=0.9)
@@ -68,29 +68,29 @@ class TestWakeWordDetection:
         assert event is not None
         assert event.wake_word == "autobot"
 
-    def test_wake_word_in_sentence(self, detector):
+    def test_wake_word_in_sentence(self, detector) -> None:
         """Test wake word detection within a sentence"""
         event = detector.check_text_for_wake_word("hey autobot what's the weather", confidence=0.85)
         assert event is not None
         assert event.wake_word == "hey autobot"
 
-    def test_no_wake_word(self, detector):
+    def test_no_wake_word(self, detector) -> None:
         """Test that non-wake word text is not detected"""
         event = detector.check_text_for_wake_word("hello world", confidence=0.9)
         assert event is None
 
-    def test_low_confidence_rejection(self, detector):
+    def test_low_confidence_rejection(self, detector) -> None:
         """Test that low confidence detections are rejected"""
         event = detector.check_text_for_wake_word("hey autobot", confidence=0.3)
         assert event is None
 
-    def test_disabled_detection(self, detector):
+    def test_disabled_detection(self, detector) -> None:
         """Test that detection is disabled when config.enabled is False"""
         detector.disable()
         event = detector.check_text_for_wake_word("hey autobot", confidence=0.9)
         assert event is None
 
-    def test_cooldown_period(self, detector):
+    def test_cooldown_period(self, detector) -> None:
         """Test that cooldown prevents rapid re-triggering"""
         # First detection should work
         event1 = detector.check_text_for_wake_word("hey autobot", confidence=0.9)
@@ -109,7 +109,7 @@ class TestWakeWordDetection:
 class TestWakeWordConfiguration:
     """Test wake word configuration management"""
 
-    def test_add_wake_word(self, detector):
+    def test_add_wake_word(self, detector) -> None:
         """Test adding a new wake word"""
         initial_count = len(detector.get_wake_words())
         success = detector.add_wake_word("hello bot")
@@ -117,12 +117,12 @@ class TestWakeWordConfiguration:
         assert len(detector.get_wake_words()) == initial_count + 1
         assert "hello bot" in detector.get_wake_words()
 
-    def test_add_duplicate_wake_word(self, detector):
+    def test_add_duplicate_wake_word(self, detector) -> None:
         """Test adding a duplicate wake word returns False"""
         success = detector.add_wake_word("hey autobot")
         assert success is False
 
-    def test_remove_wake_word(self, detector):
+    def test_remove_wake_word(self, detector) -> None:
         """Test removing a wake word"""
         initial_count = len(detector.get_wake_words())
         success = detector.remove_wake_word("autobot")
@@ -130,12 +130,12 @@ class TestWakeWordConfiguration:
         assert len(detector.get_wake_words()) == initial_count - 1
         assert "autobot" not in detector.get_wake_words()
 
-    def test_remove_nonexistent_wake_word(self, detector):
+    def test_remove_nonexistent_wake_word(self, detector) -> None:
         """Test removing a non-existent wake word returns False"""
         success = detector.remove_wake_word("nonexistent")
         assert success is False
 
-    def test_get_config(self, detector):
+    def test_get_config(self, detector) -> None:
         """Test getting configuration"""
         config = detector.get_config()
         assert "enabled" in config
@@ -144,13 +144,13 @@ class TestWakeWordConfiguration:
         assert "cooldown_seconds" in config
         assert "adaptive_threshold" in config
 
-    def test_update_config(self, detector):
+    def test_update_config(self, detector) -> None:
         """Test updating configuration"""
         detector.update_config({"confidence_threshold": 0.8})
         config = detector.get_config()
         assert config["confidence_threshold"] == 0.8
 
-    def test_enable_disable(self, detector):
+    def test_enable_disable(self, detector) -> None:
         """Test enable/disable functionality"""
         detector.disable()
         assert detector.config.enabled is False
@@ -164,7 +164,7 @@ class TestWakeWordConfiguration:
 class TestFalsePositiveReduction:
     """Test false positive reduction features"""
 
-    def test_noise_word_penalty(self, detector):
+    def test_noise_word_penalty(self, detector) -> None:
         """Test that noise words reduce confidence"""
         # Normal detection
         event1 = detector.check_text_for_wake_word("hey autobot", confidence=0.9)
@@ -179,7 +179,7 @@ class TestFalsePositiveReduction:
         if event2:
             assert event2.confidence < conf1 * 1.1  # Should be lower due to penalties
 
-    def test_long_text_penalty(self, detector):
+    def test_long_text_penalty(self, detector) -> None:
         """Test that long text reduces confidence"""
         # Short text (ideal)
         event1 = detector.check_text_for_wake_word("hey autobot", confidence=0.85)
@@ -194,7 +194,7 @@ class TestFalsePositiveReduction:
         if event2:
             assert event2.confidence <= event1.confidence
 
-    def test_adaptive_threshold_increase(self, detector):
+    def test_adaptive_threshold_increase(self, detector) -> None:
         """Test that false positive reports increase threshold"""
         wake_word = "hey autobot"
         initial_threshold = detector._adaptive_thresholds[wake_word]
@@ -206,7 +206,7 @@ class TestFalsePositiveReduction:
         new_threshold = detector._adaptive_thresholds[wake_word]
         assert new_threshold > initial_threshold
 
-    def test_adaptive_threshold_decrease(self, detector):
+    def test_adaptive_threshold_decrease(self, detector) -> None:
         """Test that true positive reports can decrease threshold"""
         wake_word = "hey autobot"
 
@@ -230,7 +230,7 @@ class TestFalsePositiveReduction:
 class TestStatistics:
     """Test wake word detection statistics"""
 
-    def test_stats_tracking(self, detector):
+    def test_stats_tracking(self, detector) -> None:
         """Test that statistics are tracked correctly"""
         # Initial stats
         stats = detector.get_stats()
@@ -244,7 +244,7 @@ class TestStatistics:
         assert stats["average_confidence"] > 0
         assert stats["last_detection_time"] is not None
 
-    def test_false_positive_tracking(self, detector):
+    def test_false_positive_tracking(self, detector) -> None:
         """Test false positive tracking"""
         detector.check_text_for_wake_word("hey autobot", confidence=0.9)
         detector.report_false_positive()
@@ -252,7 +252,7 @@ class TestStatistics:
         stats = detector.get_stats()
         assert stats["false_positives"] == 1
 
-    def test_true_positive_tracking(self, detector):
+    def test_true_positive_tracking(self, detector) -> None:
         """Test true positive tracking"""
         detector.check_text_for_wake_word("hey autobot", confidence=0.9)
         detector.report_true_positive()
@@ -260,7 +260,7 @@ class TestStatistics:
         stats = detector.get_stats()
         assert stats["true_positives"] == 1
 
-    def test_stats_reset(self, detector):
+    def test_stats_reset(self, detector) -> None:
         """Test statistics reset"""
         # Generate some stats
         detector.check_text_for_wake_word("hey autobot", confidence=0.9)
@@ -274,7 +274,7 @@ class TestStatistics:
         assert stats["true_positives"] == 0
         assert stats["false_positives"] == 0
 
-    def test_accuracy_calculation(self, detector):
+    def test_accuracy_calculation(self, detector) -> None:
         """Test accuracy calculation"""
         # Make some detections
         detector.check_text_for_wake_word("hey autobot", confidence=0.9)
@@ -293,12 +293,12 @@ class TestStatistics:
 class TestCallbacks:
     """Test callback functionality"""
 
-    def test_callback_invocation(self, detector):
+    def test_callback_invocation(self, detector) -> None:
         """Test that callbacks are invoked on detection"""
         callback_called = {"value": False}
         received_event = {"event": None}
 
-        def callback(event):
+        def callback(event) -> None:
             callback_called["value"] = True
             received_event["event"] = event
 
@@ -309,14 +309,14 @@ class TestCallbacks:
         assert received_event["event"] is not None
         assert isinstance(received_event["event"], WakeWordEvent)
 
-    def test_multiple_callbacks(self, detector):
+    def test_multiple_callbacks(self, detector) -> None:
         """Test multiple callbacks are all invoked"""
         count = {"value": 0}
 
-        def callback1(event):
+        def callback1(event) -> None:
             count["value"] += 1
 
-        def callback2(event):
+        def callback2(event) -> None:
             count["value"] += 10
 
         detector.add_callback(callback1)
@@ -325,11 +325,11 @@ class TestCallbacks:
 
         assert count["value"] == 11
 
-    def test_remove_callback(self, detector):
+    def test_remove_callback(self, detector) -> None:
         """Test removing a callback"""
         called = {"value": False}
 
-        def callback(event):
+        def callback(event) -> None:
             called["value"] = True
 
         detector.add_callback(callback)
@@ -342,7 +342,7 @@ class TestCallbacks:
 class TestMishearingHandling:
     """Test common mishearing variations"""
 
-    def test_autobot_variations(self, detector):
+    def test_autobot_variations(self, detector) -> None:
         """Test common mishearings of 'autobot'"""
         time.sleep(0.15)
 
@@ -350,12 +350,12 @@ class TestMishearingHandling:
         event = detector.check_text_for_wake_word("hey auto bot", confidence=0.85)
         assert event is not None
 
-    def test_hay_vs_hey(self, detector):
+    def test_hay_vs_hey(self, detector) -> None:
         """Test 'hay' instead of 'hey'"""
         event = detector.check_text_for_wake_word("hay autobot", confidence=0.85)
         assert event is not None
 
-    def test_okay_vs_ok(self, detector):
+    def test_okay_vs_ok(self, detector) -> None:
         """Test 'okay' instead of 'ok'"""
         time.sleep(0.15)
         event = detector.check_text_for_wake_word("okay autobot", confidence=0.85)
@@ -365,13 +365,13 @@ class TestMishearingHandling:
 class TestSingletonPattern:
     """Test singleton pattern for global detector"""
 
-    def test_get_singleton(self, singleton_detector):
+    def test_get_singleton(self, singleton_detector) -> None:
         """Test getting singleton instance"""
         detector1 = get_wake_word_detector()
         detector2 = get_wake_word_detector()
         assert detector1 is detector2
 
-    def test_reset_singleton(self):
+    def test_reset_singleton(self) -> None:
         """Test resetting singleton instance"""
         reset_wake_word_detector()
         detector1 = get_wake_word_detector()
@@ -385,37 +385,37 @@ class TestSingletonPattern:
 class TestCPUOptimization:
     """Test CPU optimization features (issue #927)"""
 
-    def test_initial_listening_status(self, detector):
+    def test_initial_listening_status(self, detector) -> None:
         """Background listening loop should be idle at init"""
         status = detector.get_listening_status()
         assert status["active"] is False
         assert status["chunks_processed"] == 0
         assert status["throttle_events"] == 0
 
-    def test_cpu_config_exposed(self, detector):
+    def test_cpu_config_exposed(self, detector) -> None:
         """max_cpu_percent must appear in get_config()"""
         config = detector.get_config()
         assert "max_cpu_percent" in config
         assert config["max_cpu_percent"] == detector.config.max_cpu_percent
 
-    def test_update_cpu_config(self, detector):
+    def test_update_cpu_config(self, detector) -> None:
         """max_cpu_percent should be updatable via update_config"""
         detector.update_config({"max_cpu_percent": 5.0})
         assert detector.config.max_cpu_percent == 5.0
 
-    def test_duty_sleep_zero_below_threshold(self, detector):
+    def test_duty_sleep_zero_below_threshold(self, detector) -> None:
         """No sleep when CPU is well below max_cpu_percent"""
         detector.stats.cpu_usage_percent = detector.config.max_cpu_percent * 0.4
         sleep_ms = detector._calculate_duty_sleep_ms()
         assert sleep_ms == 0.0
 
-    def test_duty_sleep_max_above_double_threshold(self, detector):
+    def test_duty_sleep_max_above_double_threshold(self, detector) -> None:
         """Maximum sleep (500 ms) when CPU is ≥ 2× max_cpu_percent"""
         detector.stats.cpu_usage_percent = detector.config.max_cpu_percent * 2.1
         sleep_ms = detector._calculate_duty_sleep_ms()
         assert sleep_ms == 500.0
 
-    def test_duty_sleep_linear_between(self, detector):
+    def test_duty_sleep_linear_between(self, detector) -> None:
         """Sleep scales linearly between low and high watermarks"""
         max_cpu = detector.config.max_cpu_percent
         # Set CPU to midpoint of range → expect ~250 ms sleep
@@ -423,14 +423,14 @@ class TestCPUOptimization:
         sleep_ms = detector._calculate_duty_sleep_ms()
         assert 200.0 < sleep_ms < 300.0
 
-    def test_cpu_sample_returns_float(self, detector):
+    def test_cpu_sample_returns_float(self, detector) -> None:
         """_sample_cpu_percent must return a non-negative float"""
         cpu = detector._sample_cpu_percent()
         assert isinstance(cpu, float)
         assert cpu >= 0.0
 
     @pytest.mark.asyncio
-    async def test_start_stop_listening(self, detector):
+    async def test_start_stop_listening(self, detector) -> None:
         """start_listening / stop_listening should toggle active flag"""
         assert detector.get_listening_status()["active"] is False
         await detector.start_listening()
@@ -439,7 +439,7 @@ class TestCPUOptimization:
         assert detector.get_listening_status()["active"] is False
 
     @pytest.mark.asyncio
-    async def test_start_listening_idempotent(self, detector):
+    async def test_start_listening_idempotent(self, detector) -> None:
         """Calling start_listening twice should not raise or create duplicate tasks"""
         await detector.start_listening()
         task1 = detector._listening_task
@@ -448,7 +448,7 @@ class TestCPUOptimization:
         await detector.stop_listening()
 
     @pytest.mark.asyncio
-    async def test_chunks_processed_increments(self, detector):
+    async def test_chunks_processed_increments(self, detector) -> None:
         """chunks_processed counter should increment during active listening"""
         await detector.start_listening(audio_callback=None)
         # Let a few cycles run
@@ -457,7 +457,7 @@ class TestCPUOptimization:
         assert detector.get_listening_status()["chunks_processed"] >= 0
 
     @pytest.mark.asyncio
-    async def test_throttle_triggered_when_cpu_high(self, detector):
+    async def test_throttle_triggered_when_cpu_high(self, detector) -> None:
         """Throttle events should be counted when duty sleep > 0"""
         # Force CPU reading to simulate high load
         detector.stats.cpu_usage_percent = detector.config.max_cpu_percent * 3.0
@@ -474,7 +474,7 @@ class TestCPUProfileBaseline:
 
     @pytest.mark.performance
     @pytest.mark.asyncio
-    async def test_idle_listening_cpu_baseline(self, detector):
+    async def test_idle_listening_cpu_baseline(self, detector) -> None:
         """
         Baseline: text-only standby should not peg CPU.
 

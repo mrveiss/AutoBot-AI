@@ -8,8 +8,6 @@ Issue #1403: Provides environment test, model listing, and adapter
 status endpoints for the formal adapter registry.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
@@ -100,7 +98,7 @@ async def list_adapter_models(
 
 @register_health_probe("adapters")
 async def probe_adapters(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for adapters module."""
     try:

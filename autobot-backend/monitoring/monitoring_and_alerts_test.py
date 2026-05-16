@@ -31,7 +31,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import requests
 
@@ -84,7 +84,7 @@ class DashboardValidation:
     data_accuracy: bool
     response_time: float
     widget_count: int
-    error_details: Optional[str] = None
+    error_details: str | None = None
 
 
 class MonitoringAndAlertingTester:

@@ -15,7 +15,7 @@ import json
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict
 
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
@@ -70,7 +70,7 @@ class PromptScorer(ABC):
         self,
         prompt_output: str,
         context: Dict[str, Any],
-        subset_fraction: Optional[float] = None,
+        subset_fraction: float | None = None,
     ) -> ScorerResult:
         """Score a prompt variant's output.
 
@@ -116,7 +116,7 @@ class ValBpbScorer(PromptScorer):
         self,
         prompt_output: str,
         context: Dict[str, Any],
-        subset_fraction: Optional[float] = None,
+        subset_fraction: float | None = None,
     ) -> ScorerResult:
         # subset_fraction is informational for this scorer; full experiment
         # is always required to get a valid val_bpb reading.
@@ -206,7 +206,7 @@ class LLMJudgeScorer(PromptScorer):
         self,
         prompt_output: str,
         context: Dict[str, Any],
-        subset_fraction: Optional[float] = None,
+        subset_fraction: float | None = None,
     ) -> ScorerResult:
         # subset_fraction: LLMJudgeScorer evaluates a single output text so
         # sub-sampling is not applicable; parameter accepted for interface compat.
@@ -302,7 +302,7 @@ class HumanReviewScorer(AsyncRedisClientMixin, PromptScorer):
         self,
         prompt_output: str,
         context: Dict[str, Any],
-        subset_fraction: Optional[float] = None,
+        subset_fraction: float | None = None,
     ) -> ScorerResult:
         # subset_fraction: HumanReviewScorer queues the variant for a human;
         # sub-sampling does not apply — parameter accepted for interface compat.

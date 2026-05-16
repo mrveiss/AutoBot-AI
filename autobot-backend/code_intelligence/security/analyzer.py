@@ -12,7 +12,7 @@ import ast
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -60,8 +60,8 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
     def __init__(
         self,
-        project_root: Optional[str] = None,
-        exclude_patterns: Optional[List[str]] = None,
+        project_root: str | None = None,
+        exclude_patterns: List[str] | None = None,
         use_semantic_analysis: bool = False,
         use_cache: bool = True,
         use_shared_cache: bool = True,
@@ -232,7 +232,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         findings.extend(self._check_path_traversal(file_path, content, lines))
         return findings
 
-    def analyze_directory(self, directory: Optional[str] = None) -> List[SecurityFinding]:
+    def analyze_directory(self, directory: str | None = None) -> List[SecurityFinding]:
         """Analyze all Python files in a directory."""
         target = Path(directory) if directory else self.project_root
         self.results = []
@@ -376,7 +376,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
     async def analyze_directory_async(
         self,
-        directory: Optional[str] = None,
+        directory: str | None = None,
         find_semantic_duplicates: bool = True,
     ) -> Dict[str, Any]:
         """Analyze a directory with optional semantic analysis."""
@@ -441,7 +441,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
             prefix="security_analysis",
         )
 
-    async def get_cached_analysis(self, directory: str) -> Optional[Dict[str, Any]]:
+    async def get_cached_analysis(self, directory: str) -> Dict[str, Any] | None:
         """Get cached analysis results from Redis."""
         if not self.use_semantic_analysis:
             return None

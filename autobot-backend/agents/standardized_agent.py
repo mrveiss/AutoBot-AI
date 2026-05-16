@@ -16,7 +16,7 @@ import asyncio
 import time
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from memory.manager import UnifiedMemoryManager
@@ -54,7 +54,7 @@ class StandardizedAgent(BaseAgent):
 
         # Lazy memory facade — created on first access so agents that never
         # use memory don't pay the UnifiedMemoryManager construction cost.
-        self._memory_manager: Optional[UnifiedMemoryManager] = None
+        self._memory_manager: UnifiedMemoryManager | None = None
 
         # Action handlers mapping - to be configured by subclasses
         self._action_handlers: Dict[str, ActionHandler] = {}
@@ -93,7 +93,7 @@ class StandardizedAgent(BaseAgent):
 
     def _validate_action_and_handler(
         self, request: AgentRequest
-    ) -> tuple[Optional[AgentResponse], Optional[ActionHandler], Optional[Callable]]:
+    ) -> tuple[AgentResponse | None, ActionHandler | None, Callable | None]:
         """Validate action and get handler method (Issue #398: extracted).
 
         Returns:
@@ -282,7 +282,7 @@ class StandardizedAgent(BaseAgent):
                 {"processing_time": processing_time, "error_type": type(e).__name__},
             )
 
-    def _validate_request_params(self, request: AgentRequest, handler_config: ActionHandler) -> Optional[str]:
+    def _validate_request_params(self, request: AgentRequest, handler_config: ActionHandler) -> str | None:
         """Validate request parameters against handler requirements"""
         if not handler_config.required_params:
             return None

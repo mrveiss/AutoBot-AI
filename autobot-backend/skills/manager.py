@@ -9,7 +9,7 @@ per-user skill preferences (via Redis), and skill execution routing.
 """
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_management.cache_wrapper import RedisCache
@@ -29,9 +29,9 @@ class SkillManager:
     Includes metrics tracking for skill performance monitoring (Issue #4339).
     """
 
-    def __init__(self, registry: Optional[SkillRegistry] = None) -> None:
+    def __init__(self, registry: SkillRegistry | None = None) -> None:
         self._registry = registry or get_skill_registry()
-        self._metrics: Optional[Any] = None
+        self._metrics: Any | None = None
 
     @property
     def registry(self) -> SkillRegistry:
@@ -261,7 +261,7 @@ class SkillManager:
                 results.append(skill_info)
         return results
 
-    async def _get_metrics(self) -> Optional[Any]:
+    async def _get_metrics(self) -> Any | None:
         """Get or create the SkillMetrics instance (lazy initialization)."""
         if self._metrics is None:
             try:

@@ -13,7 +13,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
@@ -39,15 +39,15 @@ class TraceSpanModel(BaseModel):
 
     span_id: str
     trace_id: str
-    parent_span_id: Optional[str] = None
+    parent_span_id: str | None = None
     name: str
     service_name: str
-    node_id: Optional[str] = None
+    node_id: str | None = None
     status: str
     duration_ms: float
     start_time: datetime
     end_time: datetime
-    attributes: Optional[Dict[str, Any]] = None
+    attributes: Dict[str, Any] | None = None
 
 
 class PerformanceTraceModel(BaseModel):
@@ -55,12 +55,12 @@ class PerformanceTraceModel(BaseModel):
 
     trace_id: str
     name: str
-    source_node_id: Optional[str] = None
+    source_node_id: str | None = None
     status: str
     duration_ms: float
     span_count: int
-    error_message: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    error_message: str | None = None
+    metadata: Dict[str, Any] | None = None
     created_at: datetime
 
 
@@ -85,15 +85,15 @@ class SLOModel(BaseModel):
 
     slo_id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     target_percent: float
     metric_type: str
     threshold_value: float
     threshold_unit: str
     window_days: int
-    node_id: Optional[str] = None
+    node_id: str | None = None
     enabled: bool
-    current_compliance: Optional[float] = None
+    current_compliance: float | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -102,13 +102,13 @@ class SLOCreateRequest(BaseModel):
     """SLO creation request."""
 
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     target_percent: float = Field(ge=0, le=100)
     metric_type: str
     threshold_value: float
     threshold_unit: str
     window_days: int = 30
-    node_id: Optional[str] = None
+    node_id: str | None = None
     enabled: bool = True
 
 
@@ -117,16 +117,16 @@ class AlertRuleModel(BaseModel):
 
     rule_id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     metric_type: str
     condition: str
     threshold: float
     duration_seconds: int
     severity: str
-    node_id: Optional[str] = None
-    notification_channels: Optional[List[str]] = None
+    node_id: str | None = None
+    notification_channels: List[str] | None = None
     enabled: bool
-    last_triggered: Optional[datetime] = None
+    last_triggered: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -135,30 +135,30 @@ class AlertRuleCreateRequest(BaseModel):
     """Alert rule creation request."""
 
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     metric_type: str
     condition: str = Field(pattern="^(gt|lt|gte|lte|eq)$")
     threshold: float
     duration_seconds: int = 300
     severity: str = "warning"
-    node_id: Optional[str] = None
-    notification_channels: Optional[List[str]] = None
+    node_id: str | None = None
+    notification_channels: List[str] | None = None
     enabled: bool = True
 
 
 class AlertRuleUpdateRequest(BaseModel):
     """Alert rule update request."""
 
-    name: Optional[str] = None
-    description: Optional[str] = None
-    metric_type: Optional[str] = None
-    condition: Optional[str] = Field(None, pattern="^(gt|lt|gte|lte|eq)$")
-    threshold: Optional[float] = None
-    duration_seconds: Optional[int] = None
-    severity: Optional[str] = None
-    node_id: Optional[str] = None
-    notification_channels: Optional[List[str]] = None
-    enabled: Optional[bool] = None
+    name: str | None = None
+    description: str | None = None
+    metric_type: str | None = None
+    condition: str | None = Field(None, pattern="^(gt|lt|gte|lte|eq)$")
+    threshold: float | None = None
+    duration_seconds: int | None = None
+    severity: str | None = None
+    node_id: str | None = None
+    notification_channels: List[str] | None = None
+    enabled: bool | None = None
 
 
 class NodeMetricsResponse(BaseModel):
@@ -194,7 +194,7 @@ class PerformanceOverviewResponse(BaseModel):
 # =============================================================================
 
 
-def _parse_json_field(value: Optional[str]) -> Optional[Dict[str, Any]]:
+def _parse_json_field(value: str | None) -> Dict[str, Any] | None:
     """Parse JSON string field to dict. Helper for performance.py (Issue #752)."""
     if not value:
         return None
@@ -204,7 +204,7 @@ def _parse_json_field(value: Optional[str]) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _serialize_json_field(value: Optional[Any]) -> Optional[str]:
+def _serialize_json_field(value: Any | None) -> str | None:
     """Serialize value to JSON string. Helper for performance.py (Issue #752)."""
     if not value:
         return None
@@ -262,7 +262,7 @@ def _span_to_model(span: TraceSpan) -> TraceSpanModel:
     )
 
 
-def _slo_to_model(slo: SLODefinition, compliance: Optional[float]) -> SLOModel:
+def _slo_to_model(slo: SLODefinition, compliance: float | None) -> SLOModel:
     """Convert SLODefinition to model. Helper for performance.py (Issue #752)."""
     return SLOModel(
         slo_id=slo.slo_id,
@@ -307,7 +307,7 @@ def _alert_rule_to_model(rule: AlertRule) -> AlertRuleModel:
     )
 
 
-async def _calculate_slo_compliance(db: AsyncSession, slo: SLODefinition) -> Optional[float]:
+async def _calculate_slo_compliance(db: AsyncSession, slo: SLODefinition) -> float | None:
     """Calculate SLO compliance percentage. Helper for performance.py (Issue #752)."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=slo.window_days)
     query = select(PerformanceTrace).where(PerformanceTrace.created_at >= cutoff)
@@ -433,8 +433,8 @@ async def get_traces(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
     hours: int = Query(24, ge=1, le=168),
-    status_filter: Optional[str] = Query(None, alias="status"),
-    node_id: Optional[str] = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
+    node_id: str | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
 ) -> TracesListResponse:

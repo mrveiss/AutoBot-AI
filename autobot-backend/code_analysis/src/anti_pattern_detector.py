@@ -23,7 +23,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
@@ -432,7 +432,7 @@ class AntiPatternDetector:
         path_str = str(file_path)
         return any(pattern in path_str for pattern in exclude_patterns)
 
-    async def _parse_file(self, file_path: str) -> Optional[ModuleInfo]:
+    async def _parse_file(self, file_path: str) -> ModuleInfo | None:
         """Parse a single Python file"""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -498,7 +498,7 @@ class AntiPatternDetector:
             method_calls[method.name] = calls
         return method_calls, external_references
 
-    def _analyze_class(self, node: ast.ClassDef, file_path: str, content: str) -> Optional[ClassInfo]:
+    def _analyze_class(self, node: ast.ClassDef, file_path: str, content: str) -> ClassInfo | None:
         """Analyze a class definition"""
         try:
             # Extract methods (#6661: include AsyncFunctionDef so the LSP
@@ -707,7 +707,7 @@ class AntiPatternDetector:
 
         return issues
 
-    def _analyze_feature_envy(self, method: ast.FunctionDef, cls_info: ClassInfo) -> Optional[Tuple[str, int, int]]:
+    def _analyze_feature_envy(self, method: ast.FunctionDef, cls_info: ClassInfo) -> Tuple[str, int, int] | None:
         """Analyze a method for feature envy"""
         self_refs = 0
         external_refs: Dict[str, int] = {}
@@ -1152,13 +1152,13 @@ class AntiPatternDetector:
         doc = ast.get_docstring(method) or ""
         return exc_name in doc
 
-    def _find_parent_method(self, parent: ClassInfo, name: str) -> Optional[ast.AST]:
+    def _find_parent_method(self, parent: ClassInfo, name: str) -> ast.AST | None:
         for m in parent.methods:
             if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)) and m.name == name:
                 return m
         return None
 
-    def _resolve_parent(self, child: ClassInfo) -> Optional[ClassInfo]:
+    def _resolve_parent(self, child: ClassInfo) -> ClassInfo | None:
         """Look up the FIRST in-codebase parent class. Returns None when
         the parent is external (stdlib/library) — those are out of scope."""
         for base_name in child.base_classes:
@@ -1367,8 +1367,8 @@ class AntiPatternDetector:
                 continue
             values: Set[str] = set()
             for stmt in node.body:
-                target_name: Optional[str] = None
-                value_node: Optional[ast.AST] = None
+                target_name: str | None = None
+                value_node: ast.AST | None = None
                 if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
                     tgt = stmt.targets[0]
                     if isinstance(tgt, ast.Name):
@@ -1704,7 +1704,7 @@ class AntiPatternDetector:
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
 
-    async def get_cached_report(self) -> Optional[AntiPatternReport]:
+    async def get_cached_report(self) -> AntiPatternReport | None:
         """Retrieve cached analysis report"""
         if self.redis_client:
             try:

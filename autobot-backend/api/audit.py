@@ -17,8 +17,6 @@ Endpoints:
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_common import DataResponse
@@ -70,13 +68,13 @@ def check_admin_permission(request: Request) -> bool:
 
 
 def _build_query_dict(
-    start_time: Optional[str],
-    end_time: Optional[str],
-    operation: Optional[str],
-    user_id: Optional[str],
-    session_id: Optional[str],
-    vm_name: Optional[str],
-    result: Optional[AuditResult],
+    start_time: str | None,
+    end_time: str | None,
+    operation: str | None,
+    user_id: str | None,
+    session_id: str | None,
+    vm_name: str | None,
+    result: AuditResult | None,
     limit: int,
     offset: int,
 ) -> dict:
@@ -105,13 +103,13 @@ def _build_query_dict(
 )
 async def query_audit_logs(
     request: Request,
-    start_time: Optional[str] = Query(None, description="Start time (ISO format)"),
-    end_time: Optional[str] = Query(None, description="End time (ISO format)"),
-    operation: Optional[str] = Query(None, description="Operation filter"),
-    user_id: Optional[str] = Query(None, description="User filter"),
-    session_id: Optional[str] = Query(None, description="Session filter"),
-    vm_name: Optional[str] = Query(None, description="VM filter"),
-    result: Optional[AuditResult] = Query(None, description="Result filter"),
+    start_time: str | None = Query(None, description="Start time (ISO format)"),
+    end_time: str | None = Query(None, description="End time (ISO format)"),
+    operation: str | None = Query(None, description="Operation filter"),
+    user_id: str | None = Query(None, description="User filter"),
+    session_id: str | None = Query(None, description="Session filter"),
+    vm_name: str | None = Query(None, description="VM filter"),
+    result: AuditResult | None = Query(None, description="Result filter"),
     pagination: PaginationParams = Depends(),
     admin_check: bool = Depends(check_admin_permission),
 ):

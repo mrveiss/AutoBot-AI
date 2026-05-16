@@ -11,7 +11,7 @@ Part of Issue #381 - God Class Refactoring
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .types import ConfidenceLevel, ContextType, DecisionType
 
@@ -114,8 +114,8 @@ class InterventionOutcome:
     reasoning: str
     prediction_source: str  # "empirical", "causal", or "heuristic"
     supporting_evidence: List[Dict[str, Any]]
-    fallback_risk: Optional[str] = None
-    estimated_latency_ms: Optional[int] = None
+    fallback_risk: str | None = None
+    estimated_latency_ms: int | None = None
     timestamp: float = field(default_factory=time.time)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -159,7 +159,7 @@ class Decision:
     risk_assessment: Dict[str, Any]
     expected_outcomes: List[Dict[str, Any]]
     monitoring_criteria: List[str]
-    fallback_plan: Optional[Dict[str, Any]]
+    fallback_plan: Dict[str, Any] | None
     requires_approval: bool
     timestamp: float
     metadata: Dict[str, Any] = field(default_factory=dict)

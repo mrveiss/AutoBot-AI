@@ -10,7 +10,7 @@ Issue #2013: Decomposed from scanner.py god module.
 import asyncio
 import json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -239,7 +239,7 @@ async def _generate_batch_embeddings_fallback(
     return all_embeddings
 
 
-def _prepare_problem_document(problem: Dict, problem_idx: int, source_id: Optional[str] = None) -> tuple:
+def _prepare_problem_document(problem: Dict, problem_idx: int, source_id: str | None = None) -> tuple:
     """
     Prepare a problem document for ChromaDB storage.
 
@@ -280,7 +280,7 @@ async def _store_problems_batch_to_chromadb(
     collection,
     problems: list,
     start_idx: int,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> None:
     """Store multiple problems to ChromaDB in batch (#398, #1710: source_id)."""
     if not collection or not problems:
@@ -319,7 +319,7 @@ async def _store_problems_batch_to_chromadb(
             logger.error("Failed to batch store problems to ChromaDB (#1712): %s", e)
 
 
-async def _clear_redis_codebase_cache(task_id: str, source_id: Optional[str] = None) -> None:
+async def _clear_redis_codebase_cache(task_id: str, source_id: str | None = None) -> None:
     """
     Clear Redis cache entries for codebase data.
 
@@ -428,7 +428,7 @@ async def _drop_and_create_collection(async_client, collection_name: str, collec
     return new_collection
 
 
-async def _recreate_chromadb_collection(task_id: str, source_id: Optional[str] = None):
+async def _recreate_chromadb_collection(task_id: str, source_id: str | None = None):
     """
     Prepare the ChromaDB collection for re-indexing.
 
@@ -475,7 +475,7 @@ async def _initialize_chromadb_collection(
     task_id: str,
     update_progress,
     update_phase,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ):
     """Initialize ChromaDB collection and Redis cache.
 
@@ -523,7 +523,7 @@ async def _initialize_chromadb_collection(
     return code_collection
 
 
-def _prepare_function_document(func: Dict, idx: int, source_id: Optional[str] = None) -> tuple:
+def _prepare_function_document(func: Dict, idx: int, source_id: str | None = None) -> tuple:
     """Prepare a function document for ChromaDB storage (Issue #281: extracted)."""
     doc_text = f"""
 Function: {func['name']}
@@ -548,7 +548,7 @@ Docstring: {func.get('docstring', 'No documentation')}
     return f"{prefix}function_{idx}_{func['name']}", doc_text, metadata
 
 
-def _prepare_class_document(cls: Dict, idx: int, source_id: Optional[str] = None) -> tuple:
+def _prepare_class_document(cls: Dict, idx: int, source_id: str | None = None) -> tuple:
     """Prepare a class document for ChromaDB storage (Issue #281: extracted)."""
     doc_text = f"""
 Class: {cls['name']}
@@ -573,7 +573,7 @@ Docstring: {cls.get('docstring', 'No documentation')}
     return f"{prefix}class_{idx}_{cls['name']}", doc_text, metadata
 
 
-def _prepare_stats_document(analysis_results: Dict, source_id: Optional[str] = None) -> tuple:
+def _prepare_stats_document(analysis_results: Dict, source_id: str | None = None) -> tuple:
     """Prepare stats document for ChromaDB storage (Issue #281: extracted)."""
     stats = analysis_results["stats"]
 
@@ -616,7 +616,7 @@ async def _prepare_functions_batch(
     batch_metadatas: list,
     update_progress,
     total_items: int,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> int:
     """
     Prepare function documents for batch storage.
@@ -652,7 +652,7 @@ async def _prepare_classes_batch(
     update_progress,
     total_items: int,
     items_offset: int,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> int:
     """
     Prepare class documents for batch storage.
@@ -685,7 +685,7 @@ async def _prepare_batch_data(
     task_id: str,
     update_progress,
     update_phase,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> tuple:
     """Prepare all batch data for ChromaDB storage (Issue #281, #398: refactored)."""
     update_phase("prepare", "running")
@@ -744,7 +744,7 @@ def _append_stats_document(
     batch_ids: list,
     batch_documents: list,
     batch_metadatas: list,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> None:
     """Append the codebase_stats document to the batch lists (Issue #2735)."""
     stats_id, stats_doc, stats_meta = _prepare_stats_document(analysis_results, source_id=source_id)
@@ -790,7 +790,7 @@ def _slice_batch(
     batch_ids: list,
     batch_documents: list,
     batch_metadatas: list,
-    batch_embeddings: Optional[List[List[float]]],
+    batch_embeddings: List[List[float]] | None,
     start_idx: int,
     batch_size: int,
 ) -> tuple:
@@ -869,7 +869,7 @@ async def _store_single_batch(
     update_stats,
     tasks_lock: asyncio.Lock,
     indexing_tasks: Dict,
-    batch_embeddings: Optional[List[List[float]]] = None,
+    batch_embeddings: List[List[float]] | None = None,
 ) -> int:
     """Store a single batch to ChromaDB (Issue #398, #660, #1249).
 
@@ -944,7 +944,7 @@ async def _generate_embeddings_with_progress(
 
 async def _precompute_embeddings(
     batch_documents: list, task_id: str, update_progress, update_phase
-) -> Optional[List[List[float]]]:
+) -> List[List[float]] | None:
     """Pre-compute embeddings for documents before storage.
 
     Issue #665: Extracted from _store_batches_to_chromadb.
@@ -1012,7 +1012,7 @@ async def _process_batches_parallel(
     task_id: str,
     update_progress,
     update_stats,
-    batch_embeddings: Optional[List[List[float]]],
+    batch_embeddings: List[List[float]] | None,
     tasks_lock: asyncio.Lock,
     indexing_tasks: Dict,
 ) -> int:
@@ -1075,7 +1075,7 @@ async def _process_batches_sequential(
     task_id: str,
     update_progress,
     update_stats,
-    batch_embeddings: Optional[List[List[float]]],
+    batch_embeddings: List[List[float]] | None,
     tasks_lock: asyncio.Lock,
     indexing_tasks: Dict,
 ) -> int:
@@ -1113,7 +1113,7 @@ async def _process_batches_sequential(
 def _log_chromadb_storage_config(
     task_id: str,
     total_batches: int,
-    batch_embeddings: Optional[List[List[float]]],
+    batch_embeddings: List[List[float]] | None,
 ) -> None:
     """
     Log ChromaDB storage configuration details.
@@ -1160,7 +1160,7 @@ async def _execute_batch_storage(
     task_id: str,
     update_progress,
     update_stats,
-    batch_embeddings: Optional[List[List[float]]],
+    batch_embeddings: List[List[float]] | None,
     tasks_lock: asyncio.Lock,
     indexing_tasks: Dict,
 ) -> int:
@@ -1266,7 +1266,7 @@ async def _store_batches_to_chromadb(
 async def _store_hardcodes_to_redis(
     hardcodes: List[Dict],
     task_id: str,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> int:
     """
     Store detected hardcoded values to Redis for retrieval by the /hardcodes endpoint.

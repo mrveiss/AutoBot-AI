@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from autobot_shared.alert_cooldown import AlertCooldownManager, AlertTier
 from autobot_shared.logging_manager import get_logger
@@ -85,9 +85,9 @@ class Alert:
     message: str
     created_at: datetime
     updated_at: datetime
-    acknowledged_at: Optional[datetime] = None
-    resolved_at: Optional[datetime] = None
-    acknowledged_by: Optional[str] = None
+    acknowledged_at: datetime | None = None
+    resolved_at: datetime | None = None
+    acknowledged_by: str | None = None
     tags: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -550,7 +550,7 @@ class MonitoringAlertsManager:
             logger.warning(f"Unknown operator: {operator}")
             return False
 
-    def _get_nested_value(self, data: Dict[str, Any], path: str) -> Optional[float]:
+    def _get_nested_value(self, data: Dict[str, Any], path: str) -> float | None:
         """Get nested value from dict using dot notation path"""
         try:
             keys = path.split(".")

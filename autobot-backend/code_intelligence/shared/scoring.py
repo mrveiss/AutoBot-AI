@@ -25,7 +25,7 @@ Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
 import math
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 # Default severity weights for score calculation
 DEFAULT_SEVERITY_WEIGHTS: Dict[str, float] = {
@@ -76,7 +76,7 @@ def calculate_exponential_score(
 
 def calculate_weighted_deduction(
     severity_counts: Dict[str, int],
-    weights: Optional[Dict[str, float]] = None,
+    weights: Dict[str, float] | None = None,
 ) -> float:
     """
     Calculate weighted deduction from severity counts.
@@ -102,7 +102,7 @@ def calculate_weighted_deduction(
 
 def calculate_score_from_severity_counts(
     severity_counts: Dict[str, int],
-    weights: Optional[Dict[str, float]] = None,
+    weights: Dict[str, float] | None = None,
     decay_constant: float = DEFAULT_DECAY_CONSTANT,
 ) -> float:
     """

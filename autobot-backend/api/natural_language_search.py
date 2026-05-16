@@ -18,7 +18,7 @@ Features:
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -366,7 +366,7 @@ INTENT_QUERY_TEMPLATES: Dict[QueryIntent, str] = {
 }
 
 
-def _generate_intent_query(intent: QueryIntent, entity: str) -> Optional[str]:
+def _generate_intent_query(intent: QueryIntent, entity: str) -> str | None:
     """Generate query for intent using dispatch table (Issue #336 - extracted helper)."""
     template = INTENT_QUERY_TEMPLATES.get(intent)
     if template:
@@ -1235,7 +1235,7 @@ async def list_supported_domains():
 
 @register_health_probe("natural_language_search")
 async def probe_natural_language_search(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for the NL search code explainer."""
     try:

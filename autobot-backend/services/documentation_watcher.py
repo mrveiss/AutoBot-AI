@@ -19,7 +19,7 @@ import asyncio
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Set
+from typing import Any, Callable, Dict, Set
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
@@ -40,7 +40,7 @@ BATCH_WINDOW_SECONDS = 5.0  # Batch multiple changes within this window
 class DocumentationChangeHandler(FileSystemEventHandler):
     """Handles file system events for documentation files."""
 
-    def __init__(self, watcher: "DocumentationWatcherService"):
+    def __init__(self, watcher: "DocumentationWatcherService") -> None:
         """Initialize handler with reference to watcher service."""
         self.watcher = watcher
         self._last_event_time: Dict[str, float] = {}
@@ -94,16 +94,16 @@ class DocumentationWatcherService:
     Issue #165: Provides real-time sync between docs/ changes and the knowledge base.
     """
 
-    _instance: Optional["DocumentationWatcherService"] = None
+    _instance: "DocumentationWatcherService" | None = None
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the documentation watcher service."""
-        self._observer: Optional[Observer] = None
-        self._handler: Optional[DocumentationChangeHandler] = None
+        self._observer: Observer | None = None
+        self._handler: DocumentationChangeHandler | None = None
         self._is_running = False
         self._pending_changes: Dict[Path, str] = {}  # path -> change_type
         self._change_lock = asyncio.Lock()
-        self._processing_task: Optional[asyncio.Task] = None
+        self._processing_task: asyncio.Task | None = None
         self._last_batch_time = 0.0
         self._event_callbacks: Set[Callable] = set()
         self._stats = {

@@ -26,7 +26,7 @@ Usage::
 import asyncio
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import HTTPException
 
@@ -89,7 +89,7 @@ class BackgroundTaskManager:
             cache = RedisCache(redis, default_ttl=self._ttl)
             await cache.set_json(f"{self._prefix}{task_id}", safe)
 
-    async def _load_from_redis(self, task_id: str) -> Optional[Dict[str, Any]]:
+    async def _load_from_redis(self, task_id: str) -> Dict[str, Any] | None:
         """Load task from Redis (read-only).
 
         Returns the task state as-is.  With multiple uvicorn workers
@@ -198,7 +198,7 @@ class BackgroundTaskManager:
     # Public API
     # ------------------------------------------------------------------
 
-    async def create_task(self, params: Optional[dict] = None) -> str:
+    async def create_task(self, params: dict | None = None) -> str:
         """Create a new task; return its id.
 
         Raises ``HTTPException(409)`` when *max_concurrent*
@@ -277,7 +277,7 @@ class BackgroundTaskManager:
             {"result": result, "completed_at": completed_at},
         )
 
-    async def get_latest_result(self, source_id: str = "") -> Optional[Dict[str, Any]]:
+    async def get_latest_result(self, source_id: str = "") -> Dict[str, Any] | None:
         """Return the most recent completed result, or *None* (#1540).
 
         Reads from the ``{prefix}latest_result`` Redis key written by
@@ -297,7 +297,7 @@ class BackgroundTaskManager:
         self,
         task_id: str,
         error: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> None:
         """Mark task as failed with *error* message."""
         task = self._tasks.get(task_id)
@@ -309,7 +309,7 @@ class BackgroundTaskManager:
         task["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
         await self._save_to_redis(task_id)
 
-    async def get_status(self, task_id: str) -> Optional[dict]:
+    async def get_status(self, task_id: str) -> dict | None:
         """Return status dict (memory-first, Redis fallback).
 
         When loading from Redis, auto-detects zombie tasks (running

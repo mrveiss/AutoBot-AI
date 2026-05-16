@@ -25,7 +25,7 @@ Endpoints:
 
 import asyncio
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -186,8 +186,8 @@ async def submit_task(
     body: TaskSendRequest,
     background_tasks: BackgroundTasks,
     request: Request,
-    x_a2a_agent_id: Optional[str] = Header(None, alias="X-A2A-Agent-Id"),
-    authorization: Optional[str] = Header(None),
+    x_a2a_agent_id: str | None = Header(None, alias="X-A2A-Agent-Id"),
+    authorization: str | None = Header(None),
 ) -> Dict[str, Any]:
     """
     Accept a task and begin execution asynchronously.
@@ -524,7 +524,7 @@ async def verify_remote_capabilities(body: RemoteVerifyRequest) -> Dict[str, Any
 # ---------------------------------------------------------------------------
 
 
-def _extract_jwt_sub(authorization: Optional[str]) -> Optional[str]:
+def _extract_jwt_sub(authorization: str | None) -> str | None:
     """Extract the JWT subject claim without full validation."""
     if not authorization or not authorization.startswith("Bearer "):
         return None
@@ -532,7 +532,7 @@ def _extract_jwt_sub(authorization: Optional[str]) -> Optional[str]:
     return _decode_jwt_sub(token)
 
 
-def _decode_jwt_sub(token: str) -> Optional[str]:
+def _decode_jwt_sub(token: str) -> str | None:
     """
     Decode the JWT sub claim without signature verification.
 

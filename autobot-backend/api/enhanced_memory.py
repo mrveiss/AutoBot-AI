@@ -10,7 +10,7 @@ Issue #357: Converted to use AsyncEnhancedMemoryManager to fix blocking I/O in a
 
 import asyncio
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -152,8 +152,8 @@ async def get_memory_statistics(days_back: int = Query(30, ge=1, le=365)):
     error_code_prefix="ENHANCED_MEMORY",
 )
 async def get_task_history(
-    agent_type: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
+    agent_type: str | None = Query(None),
+    status: str | None = Query(None),
     limit: int = Query(100, ge=1, le=1000),
     days_back: int = Query(30, ge=1, le=365),
 ):
@@ -366,8 +366,8 @@ async def scan_markdown_system():
 )
 async def search_markdown(
     query: str = Query(..., min_length=2),
-    document_type: Optional[str] = Query(None),
-    tags: Optional[List[str]] = Query(None),
+    document_type: str | None = Query(None),
+    tags: List[str] | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
 ):
     """Search markdown content and sections.

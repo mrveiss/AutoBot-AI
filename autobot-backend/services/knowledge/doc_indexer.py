@@ -21,7 +21,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
@@ -234,7 +234,7 @@ def _parse_frontmatter(content: str) -> Tuple[str, List[str], List[str]]:
     fm_aliases: List[str] = []
 
     # Parse simple YAML list values for 'tags' and 'aliases' keys.
-    current_key: Optional[str] = None
+    current_key: str | None = None
     for line in fm_block.splitlines():
         key_match = re.match(r"^(\w+)\s*:", line)
         if key_match:
@@ -258,7 +258,7 @@ def _estimate_tokens(text: str) -> int:
 def _create_chunk(
     content: str,
     section: str,
-    subsection: Optional[str],
+    subsection: str | None,
     file_path: str,
     doc_type: str,
     category: str,
@@ -279,7 +279,7 @@ def _create_chunk(
 def _chunk_large_content(
     full_content: str,
     section_name: str,
-    subsection_name: Optional[str],
+    subsection_name: str | None,
     file_path: str,
     doc_type: str,
     category: str,
@@ -473,7 +473,7 @@ def _should_exclude(file_path: str) -> bool:
     return False
 
 
-def _discover_files(root_dir: Path, tier: Optional[int] = None) -> List[Tuple[str, int]]:
+def _discover_files(root_dir: Path, tier: int | None = None) -> List[Tuple[str, int]]:
     """Discover markdown files to index by tier."""
     files: List[Tuple[str, int]] = []
 
@@ -631,9 +631,9 @@ class DocIndexerService:
 
     def __init__(
         self,
-        llm_service: Optional[Any] = None,
-        org_id: Optional[str] = None,
-    ):
+        llm_service: Any | None = None,
+        org_id: str | None = None,
+    ) -> None:
         self._client = None
         self._collection = None
         self._embed_model = None
@@ -643,7 +643,7 @@ class DocIndexerService:
         self._llm_service = llm_service
         # Issue #4451: per-org embedding model selection (None => __default__)
         self._org_id = org_id
-        self.embedding_model_name: Optional[str] = None
+        self.embedding_model_name: str | None = None
         self.synthesis_schema: SynthesisSchema = self._load_schema()
 
     def _load_schema(self) -> SynthesisSchema:
@@ -1270,11 +1270,11 @@ class DocIndexerService:
 # SINGLETON
 # ============================================================================
 
-_doc_indexer: Optional[DocIndexerService] = None
+_doc_indexer: DocIndexerService | None = None
 _doc_indexer_lock = threading.Lock()
 
 
-def get_doc_indexer_service(llm_service: Optional[Any] = None) -> DocIndexerService:
+def get_doc_indexer_service(llm_service: Any | None = None) -> DocIndexerService:
     """Get or create the global DocIndexerService instance (thread-safe).
 
     Args:

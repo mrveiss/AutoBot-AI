@@ -14,7 +14,7 @@ Issue #2154: Enhanced error handling with root-cause analysis and recovery plann
 import json
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
@@ -140,7 +140,7 @@ class CausalErrorRecovery:
     """
 
     def __init__(self):
-        self._redis: Optional[Any] = None
+        self._redis: Any | None = None
 
     def _get_redis(self) -> Any:
         """Lazy-init sync Redis client."""
@@ -152,7 +152,7 @@ class CausalErrorRecovery:
         self,
         error: Exception,
         causal_analysis: CausalErrorAnalysis,
-        execution_context: Optional[Dict[str, Any]] = None,
+        execution_context: Dict[str, Any] | None = None,
     ) -> RecoveryPlan:
         """
         Recommend recovery actions for an error.
@@ -397,7 +397,7 @@ class CausalErrorRecovery:
         recovery_plan: RecoveryPlan,
         action_taken: RecoveryAction,
         success: bool,
-        outcome: Optional[str] = None,
+        outcome: str | None = None,
     ) -> None:
         """
         Record that we attempted a recovery action.

@@ -12,7 +12,7 @@ are already defined in llm_interface_pkg.models.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -38,7 +38,7 @@ class BaseProvider(ABC):
     #: Override in each subclass with the provider's string identifier.
     provider_name: str = ""
 
-    def __init__(self, settings: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, settings: Dict[str, Any] | None = None) -> None:
         """
         Initialize the provider.
 
@@ -109,7 +109,7 @@ class BaseProvider(ABC):
         self,
         model_api_name: str,
         api_kwargs_applied: Dict[str, Any],
-        total_tokens: Optional[int] = None,
+        total_tokens: int | None = None,
     ) -> Dict[str, Any]:
         """
         Build the standard ``provider_metadata`` dict for an LLMResponse.

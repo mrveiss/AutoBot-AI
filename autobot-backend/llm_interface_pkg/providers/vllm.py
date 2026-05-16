@@ -10,7 +10,7 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 
 import asyncio
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -40,7 +40,7 @@ class VLLMProvider:
 
         self.config = config
         self.model_name = config["model"]
-        self.llm: Optional[LLM] = None
+        self.llm: LLM | None = None
         self.is_initialized = False
 
         self.tensor_parallel_size = config.get("tensor_parallel_size", 1)

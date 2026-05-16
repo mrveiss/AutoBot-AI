@@ -25,7 +25,7 @@ from services.workflow_automation.vision_step_handler import (
 class TestVisionStepTypes:
     """Tests for step type constants."""
 
-    def test_all_six_types_present(self):
+    def test_all_six_types_present(self) -> None:
         """All 6 vision node types are registered."""
         expected = {
             "vision-capture",
@@ -37,7 +37,7 @@ class TestVisionStepTypes:
         }
         assert VISION_STEP_TYPES == expected
 
-    def test_frozenset_is_immutable(self):
+    def test_frozenset_is_immutable(self) -> None:
         """VISION_STEP_TYPES is a frozenset."""
         assert isinstance(VISION_STEP_TYPES, frozenset)
 
@@ -45,23 +45,23 @@ class TestVisionStepTypes:
 class TestBuildVncPayload:
     """Tests for VNC payload construction."""
 
-    def test_capture_payload(self):
+    def test_capture_payload(self) -> None:
         """vision-capture includes include_multimodal."""
         result = _build_vnc_payload("vision-capture", {"include_multimodal": False})
         assert result == {"include_multimodal": False}
 
-    def test_find_element_payload(self):
+    def test_find_element_payload(self) -> None:
         """vision-find-element includes element_type and min_confidence."""
         result = _build_vnc_payload("vision-find-element", {"element_type": "button"})
         assert result["element_type"] == "button"
         assert result["min_confidence"] == 0.5
 
-    def test_ocr_payload(self):
+    def test_ocr_payload(self) -> None:
         """vision-ocr includes region."""
         result = _build_vnc_payload("vision-ocr", {"region": [0, 0, 100, 100]})
         assert result == {"region": [0, 0, 100, 100]}
 
-    def test_unknown_returns_empty(self):
+    def test_unknown_returns_empty(self) -> None:
         """Unknown step types return empty payload."""
         result = _build_vnc_payload("vision-click", {})
         assert result == {}
@@ -70,26 +70,26 @@ class TestBuildVncPayload:
 class TestElementMatches:
     """Tests for element search matching."""
 
-    def test_matches_by_text(self):
+    def test_matches_by_text(self) -> None:
         """Matches element by text content."""
         elements = [{"text": "Submit", "label": ""}]
         assert _element_matches(elements, "submit") is True
 
-    def test_matches_by_label(self):
+    def test_matches_by_label(self) -> None:
         """Matches element by label."""
         elements = [{"text": "", "label": "Username"}]
         assert _element_matches(elements, "user") is True
 
-    def test_no_match(self):
+    def test_no_match(self) -> None:
         """Returns False when no element matches."""
         elements = [{"text": "Cancel", "label": "Close"}]
         assert _element_matches(elements, "submit") is False
 
-    def test_empty_search_matches_any(self):
+    def test_empty_search_matches_any(self) -> None:
         """Empty search text matches any non-empty element list."""
         assert _element_matches([{"text": "any"}], "") is True
 
-    def test_empty_elements_no_match(self):
+    def test_empty_elements_no_match(self) -> None:
         """Empty element list never matches."""
         assert _element_matches([], "submit") is False
         assert _element_matches([], "") is False
@@ -98,12 +98,12 @@ class TestElementMatches:
 class TestBuildWebActionPayload:
     """Tests for web browser action payload construction."""
 
-    def test_click_payload(self):
+    def test_click_payload(self) -> None:
         """vision-click builds click action with selector."""
         result = _build_web_action_payload("vision-click", {"action": "click"}, {"selector": "#btn"})
         assert result == {"action": "click", "selector": "#btn"}
 
-    def test_type_text_payload(self):
+    def test_type_text_payload(self) -> None:
         """vision-type-text builds type action with selector and text."""
         result = _build_web_action_payload(
             "vision-type-text",
@@ -112,7 +112,7 @@ class TestBuildWebActionPayload:
         )
         assert result == {"action": "type", "selector": "#input", "text": "hello"}
 
-    def test_wait_payload(self):
+    def test_wait_payload(self) -> None:
         """vision-wait builds wait_for_selector with timeout."""
         result = _build_web_action_payload(
             "vision-wait",
@@ -128,7 +128,7 @@ class TestExecuteVisionStep:
     """Tests for the main execute_vision_step dispatcher."""
 
     @pytest.mark.asyncio
-    async def test_vnc_capture_success(self):
+    async def test_vnc_capture_success(self) -> None:
         """Successful VNC capture returns success=True with timing."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -153,7 +153,7 @@ class TestExecuteVisionStep:
         assert "execution_time" in result
 
     @pytest.mark.asyncio
-    async def test_web_requires_session_id(self):
+    async def test_web_requires_session_id(self) -> None:
         """Web target without browser_session_id returns success=False."""
         result = await execute_vision_step(
             "vision-click",
@@ -164,7 +164,7 @@ class TestExecuteVisionStep:
         assert "browser_session_id" in result["result"]
 
     @pytest.mark.asyncio
-    async def test_error_handling(self):
+    async def test_error_handling(self) -> None:
         """Exception during execution returns success=False with timing."""
         with patch("services.workflow_automation.vision_step_handler.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
@@ -183,7 +183,7 @@ class TestExecuteVisionStep:
         assert result["step_type"] == "vision-ocr"
 
     @pytest.mark.asyncio
-    async def test_default_target_is_vnc(self):
+    async def test_default_target_is_vnc(self) -> None:
         """When no target specified, defaults to vnc."""
         with patch("services.workflow_automation.vision_step_handler.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
@@ -203,7 +203,7 @@ class TestExecuteVisionStep:
 class TestGetBackendUrl:
     """Tests for SSOT-based backend URL resolution (#2601)."""
 
-    def test_get_backend_url_uses_ssot(self):
+    def test_get_backend_url_uses_ssot(self) -> None:
         """_get_backend_url delegates to ssot_config.backend_url."""
         with patch("services.workflow_automation.vision_step_handler.ssot_config") as mock_cfg:
             mock_cfg.backend_url = "https://192.0.2.1:8443"
@@ -211,7 +211,7 @@ class TestGetBackendUrl:
         assert url == "https://192.0.2.1:8443"
 
     @pytest.mark.asyncio
-    async def test_execute_vision_step_default_url_from_ssot(self):
+    async def test_execute_vision_step_default_url_from_ssot(self) -> None:
         """When backend_url is omitted, execute_vision_step uses SSOT config."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -238,7 +238,7 @@ class TestWebOcrPipeline:
     """Tests for the connected web OCR pipeline (#2601)."""
 
     @pytest.mark.asyncio
-    async def test_web_ocr_calls_vision_endpoint(self):
+    async def test_web_ocr_calls_vision_endpoint(self) -> None:
         """Web OCR captures screenshot then POSTs to /api/vision/ocr."""
         screenshot_resp = MagicMock()
         screenshot_resp.raise_for_status = MagicMock()
@@ -275,25 +275,25 @@ class TestWebOcrPipeline:
 class TestNavigatePath:
     """Tests for the path navigation helper (#2601)."""
 
-    def test_simple_key(self):
+    def test_simple_key(self) -> None:
         """Navigates a single-level key."""
         assert _navigate_path({"a": 1}, "a") == 1
 
-    def test_nested_key(self):
+    def test_nested_key(self) -> None:
         """Navigates dot-separated nested keys."""
         data = {"result": {"elements": [{"id": "btn"}]}}
         assert _navigate_path(data, "result.elements[0].id") == "btn"
 
-    def test_array_index(self):
+    def test_array_index(self) -> None:
         """Navigates array index in path."""
         data = {"items": ["x", "y", "z"]}
         assert _navigate_path(data, "items[1]") == "y"
 
-    def test_missing_key_returns_none(self):
+    def test_missing_key_returns_none(self) -> None:
         """Missing key returns None rather than raising."""
         assert _navigate_path({"a": 1}, "b") is None
 
-    def test_out_of_range_index_returns_none(self):
+    def test_out_of_range_index_returns_none(self) -> None:
         """Out-of-range array index returns None."""
         assert _navigate_path({"items": [1]}, "items[5]") is None
 
@@ -301,39 +301,39 @@ class TestNavigatePath:
 class TestResolveStepReferences:
     """Tests for step config reference resolution (#2601)."""
 
-    def test_simple_reference_resolved(self):
+    def test_simple_reference_resolved(self) -> None:
         """${steps.s1.result.elements[0].id} resolves from step_results."""
         step_results = {"s1": {"result": {"elements": [{"id": "btn-42"}]}}}
         config = {"target_element": "${steps.s1.result.elements[0].id}"}
         resolved = _resolve_step_references(config, step_results)
         assert resolved["target_element"] == "btn-42"
 
-    def test_no_reference_passes_through(self):
+    def test_no_reference_passes_through(self) -> None:
         """Non-reference strings pass through unchanged."""
         config = {"selector": "#my-button", "timeout": 5000}
         resolved = _resolve_step_references(config, {})
         assert resolved == {"selector": "#my-button", "timeout": 5000}
 
-    def test_unknown_step_id_resolves_to_none(self):
+    def test_unknown_step_id_resolves_to_none(self) -> None:
         """Single reference to an unknown step_id resolves to None (raw navigated value)."""
         config = {"coord": "${steps.missing.x}"}
         resolved = _resolve_step_references(config, {})
         assert resolved["coord"] is None
 
-    def test_multiple_references_in_single_value(self):
+    def test_multiple_references_in_single_value(self) -> None:
         """Multiple ${steps.*} tokens in one string value are all substituted. (#2632)"""
         step_results = {"s1": {"result": {"x": 10, "y": 20}}}
         config = {"label": "${steps.s1.result.x},${steps.s1.result.y}"}
         resolved = _resolve_step_references(config, step_results)
         assert resolved["label"] == "10,20"
 
-    def test_unresolved_reference_kept_as_is(self):
+    def test_unresolved_reference_kept_as_is(self) -> None:
         """Unknown step_id inside a multi-ref string keeps the original token. (#2632)"""
         config = {"label": "${steps.unknown.foo},suffix"}
         resolved = _resolve_step_references(config, {})
         assert resolved["label"] == "${steps.unknown.foo},suffix"
 
-    def test_non_string_values_unchanged(self):
+    def test_non_string_values_unchanged(self) -> None:
         """Non-string config values (int, list, dict) are not modified."""
         config = {"count": 3, "tags": ["a", "b"]}
         resolved = _resolve_step_references(config, {})

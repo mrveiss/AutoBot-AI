@@ -11,7 +11,7 @@ Endpoints:
     DELETE /verbatim-memory/session/{session_id}
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
@@ -42,7 +42,7 @@ def _require_user(request: Request) -> Dict[str, Any]:
 async def verbatim_search(
     request: Request,
     q: str = Query(..., description="Search query"),
-    session_id: Optional[str] = Query(None, description="Restrict results to this session"),
+    session_id: str | None = Query(None, description="Restrict results to this session"),
     limit: int = Query(10, ge=1, le=100, description="Maximum number of results"),
 ) -> Dict[str, Any]:
     """Search verbatim conversation chunks.

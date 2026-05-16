@@ -48,7 +48,7 @@ _IPV6_ULA = ipaddress.ip_network("fc00::/7")
 _DNS_TIMEOUT_SECONDS = 2.0
 
 
-def _ip_is_public(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
+def _ip_is_public(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     """Return True only if an IP address is routable on the public internet."""
     if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
         return False

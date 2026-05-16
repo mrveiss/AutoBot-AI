@@ -22,7 +22,7 @@ Usage::
 
 import json
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
@@ -62,9 +62,9 @@ class SlackApprovalManager:
         node_id: str,
         workflow_id: str,
         channel_id: str,
-        thread_ts: Optional[str] = None,
-        approval_context: Optional[Dict[str, Any]] = None,
-    ) -> Optional[str]:
+        thread_ts: str | None = None,
+        approval_context: Dict[str, Any] | None = None,
+    ) -> str | None:
         """
         Store approval thread metadata in Redis.
 
@@ -126,7 +126,7 @@ class SlackApprovalManager:
             )
             return None
 
-    async def load_approval_thread(self, thread_id: str) -> Optional[Dict[str, Any]]:
+    async def load_approval_thread(self, thread_id: str) -> Dict[str, Any] | None:
         """
         Load approval thread metadata from Redis.
 

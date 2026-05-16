@@ -12,7 +12,7 @@ Provides per-workflow permission enforcement via FastAPI Depends():
         session: AsyncSession = Depends(get_db_session),
         current_user: dict = Depends(get_current_user),
         _: bool = Depends(require_workflow_permission("view")),
-    ):
+    ) -> None:
         ...
 
 The dependency resolves *workflow_id* from the path parameter automatically.

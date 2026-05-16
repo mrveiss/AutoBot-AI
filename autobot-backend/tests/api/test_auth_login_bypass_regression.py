@@ -21,7 +21,7 @@ import os
 import sys
 import types
 from contextlib import asynccontextmanager
-from typing import Optional, TypeVar
+from typing import TypeVar
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -49,7 +49,7 @@ class LoginResponse(BaseModel):
 
 
 class LogoutRequest(BaseModel):
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 class AuthCheckResponse(BaseModel):

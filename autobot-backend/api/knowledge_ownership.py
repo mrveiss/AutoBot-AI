@@ -9,8 +9,6 @@ Handles user ownership, visibility, and sharing for knowledge base facts.
 Issue #688: User ownership model for chat-derived knowledge
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.schemas_knowledge import (
@@ -32,7 +30,7 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["knowledge_ownership"])
 
 
-def _get_user_from_request(request: Request) -> Optional[str]:
+def _get_user_from_request(request: Request) -> str | None:
     """Extract user_id from JWT token in request.
 
     Args:

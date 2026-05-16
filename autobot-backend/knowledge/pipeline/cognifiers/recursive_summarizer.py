@@ -11,7 +11,7 @@ re-generates with the critique as guidance, up to a configurable depth.
 Issue #1383: Follow-up from #1373.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 from uuid import UUID
 
 from autobot_shared.logging_manager import get_logger
@@ -58,7 +58,7 @@ class RecursiveSummarizer(BaseCognifier):
         document_max_words: int = 300,
         section_size: int = 5,
         max_refinement_depth: int = 2,
-        rlm_config: Optional[RLMConfig] = None,
+        rlm_config: RLMConfig | None = None,
     ) -> None:
         self.chunk_max_words = chunk_max_words
         self.section_max_words = section_max_words
@@ -161,7 +161,7 @@ class RecursiveSummarizer(BaseCognifier):
         section_summaries: List[Summary],
         entity_map: Dict[str, Entity],
         context: PipelineContext,
-    ) -> Optional[Summary]:
+    ) -> Summary | None:
         if not section_summaries:
             return None
 
@@ -196,11 +196,11 @@ class RecursiveSummarizer(BaseCognifier):
         level: SummaryLevel,
         max_words: int,
         entity_map: Dict[str, Entity],
-    ) -> Optional[Summary]:
+    ) -> Summary | None:
         """Generate a summary, evaluate quality, refine if needed."""
         prompt = SUMMARY_PROMPT.format(max_words=max_words, text=text)
         source_preview = text[:200]
-        best_summary: Optional[Summary] = None
+        best_summary: Summary | None = None
         best_score = 0.0
 
         for attempt in range(self.max_refinement_depth + 1):

@@ -17,7 +17,7 @@ Async
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 # ---------------------------------------------------------------------------
 # Sync
@@ -69,7 +69,7 @@ class AsyncSimpleFakeRedis:
     def __init__(self) -> None:
         self._store: Dict[str, str] = {}
 
-    async def get(self, key: str) -> Optional[str]:
+    async def get(self, key: str) -> str | None:
         """Return the value for *key*, or ``None``."""
         return self._store.get(key)
 
@@ -108,7 +108,7 @@ class AsyncHashFakeRedis:
         bucket[key] = value.encode("utf-8") if isinstance(value, str) else value
         return 0 if existed else 1
 
-    async def hget(self, name: str, key: str) -> Optional[bytes]:
+    async def hget(self, name: str, key: str) -> bytes | None:
         """Return the bytes value for *key* in hash *name*, or ``None``."""
         return self._store.get(name, {}).get(key)
 
@@ -181,7 +181,7 @@ class AsyncFullFakeRedis:
 
     # -- string ops --
 
-    async def get(self, key: str) -> Optional[str]:
+    async def get(self, key: str) -> str | None:
         """Return the string value for *key*, or ``None``."""
         return self._strings.get(key)
 
@@ -205,7 +205,7 @@ class AsyncFullFakeRedis:
     async def hset(
         self,
         key: str,
-        mapping: Optional[Dict[str, Any]] = None,
+        mapping: Dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> int:
         """Set one or more hash fields; accepts ``mapping=`` or keyword args."""

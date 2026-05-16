@@ -10,7 +10,7 @@ Issue #3395: RAG optimization — add atomic facts support to pipeline.
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from uuid import UUID
 
 
@@ -26,9 +26,9 @@ class PipelineContext:
         self.facts: List[Any] = []  # Issue #3395: Atomic facts extraction
         self.summaries: List[Any] = []
         self.metadata: Dict[str, Any] = {}
-        self.document_id: Optional[UUID] = None
-        self.embeddings: Optional[Any] = None  # numpy array of chunk embeddings (#2051)
-        self.raptor_tree: Optional[Dict] = None  # RAPTOR level hierarchy (#2051)
+        self.document_id: UUID | None = None
+        self.embeddings: Any | None = None  # numpy array of chunk embeddings (#2051)
+        self.raptor_tree: Dict | None = None  # RAPTOR level hierarchy (#2051)
 
 
 class PipelineResult:
@@ -36,13 +36,13 @@ class PipelineResult:
 
     def __init__(
         self,
-        document_id: Optional[UUID] = None,
-        started_at: Optional[datetime] = None,
+        document_id: UUID | None = None,
+        started_at: datetime | None = None,
     ) -> None:
         """Initialize pipeline result."""
         self.document_id = document_id
         self.started_at = started_at
-        self.completed_at: Optional[datetime] = None
+        self.completed_at: datetime | None = None
         self.duration_seconds: float = 0.0
         self.chunks_processed: int = 0
         self.entities_extracted: int = 0

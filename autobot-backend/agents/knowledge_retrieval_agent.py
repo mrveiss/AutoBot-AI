@@ -9,7 +9,7 @@ simple fact retrieval, and quick question answering without complex synthesis.
 """
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import (
@@ -215,7 +215,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
         query: str,
         limit: int = 5,
         similarity_threshold: float = 0.6,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Process a simple knowledge query and return quick results.
@@ -506,14 +506,14 @@ If the information is not in the provided text, respond with "Information not fo
             logger.error("Fact extraction error: %s", e)
             return "Could not extract fact from documents."
 
-    def _try_extract_message_content(self, response: Dict) -> Optional[str]:
+    def _try_extract_message_content(self, response: Dict) -> str | None:
         """Try to extract content from message dict (Issue #334 - extracted helper)."""
         if "message" not in response or not isinstance(response["message"], dict):
             return None
         content = response["message"].get("content")
         return content.strip() if content else None
 
-    def _try_extract_choices_content(self, response: Dict) -> Optional[str]:
+    def _try_extract_choices_content(self, response: Dict) -> str | None:
         """Try to extract content from choices list (Issue #334 - extracted helper)."""
         if "choices" not in response or not isinstance(response["choices"], list):
             return None

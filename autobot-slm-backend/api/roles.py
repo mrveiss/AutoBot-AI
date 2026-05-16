@@ -11,7 +11,7 @@ and post-sync action badges (build, restart, schema).
 import asyncio
 import logging
 import re
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -32,19 +32,19 @@ class RoleResponse(BaseModel):
     """Role response schema."""
 
     name: str
-    display_name: Optional[str] = None
-    sync_type: Optional[str] = None
+    display_name: str | None = None
+    sync_type: str | None = None
     source_paths: list
     target_path: str
-    systemd_service: Optional[str] = None
+    systemd_service: str | None = None
     auto_restart: bool
-    health_check_port: Optional[int] = None
-    health_check_path: Optional[str] = None
-    pre_sync_cmd: Optional[str] = None
-    post_sync_cmd: Optional[str] = None
+    health_check_port: int | None = None
+    health_check_path: str | None = None
+    pre_sync_cmd: str | None = None
+    post_sync_cmd: str | None = None
     required: bool = False
     degraded_without: list = Field(default_factory=list)
-    ansible_playbook: Optional[str] = None
+    ansible_playbook: str | None = None
 
     class Config:
         from_attributes = True
@@ -54,37 +54,37 @@ class RoleCreate(BaseModel):
     """Role creation schema."""
 
     name: str = Field(..., min_length=1, max_length=50)
-    display_name: Optional[str] = None
+    display_name: str | None = None
     sync_type: str = SyncType.COMPONENT.value
     source_paths: list = Field(default_factory=list)
     target_path: str = Field(..., min_length=1)
-    systemd_service: Optional[str] = None
+    systemd_service: str | None = None
     auto_restart: bool = False
-    health_check_port: Optional[int] = None
-    health_check_path: Optional[str] = None
-    pre_sync_cmd: Optional[str] = None
-    post_sync_cmd: Optional[str] = None
+    health_check_port: int | None = None
+    health_check_path: str | None = None
+    pre_sync_cmd: str | None = None
+    post_sync_cmd: str | None = None
     required: bool = False
     degraded_without: list = Field(default_factory=list)
-    ansible_playbook: Optional[str] = None
+    ansible_playbook: str | None = None
 
 
 class RoleUpdate(BaseModel):
     """Role update schema."""
 
-    display_name: Optional[str] = None
-    sync_type: Optional[str] = None
-    source_paths: Optional[list] = None
-    target_path: Optional[str] = None
-    systemd_service: Optional[str] = None
-    auto_restart: Optional[bool] = None
-    health_check_port: Optional[int] = None
-    health_check_path: Optional[str] = None
-    pre_sync_cmd: Optional[str] = None
-    post_sync_cmd: Optional[str] = None
-    required: Optional[bool] = None
-    degraded_without: Optional[list] = None
-    ansible_playbook: Optional[str] = None
+    display_name: str | None = None
+    sync_type: str | None = None
+    source_paths: list | None = None
+    target_path: str | None = None
+    systemd_service: str | None = None
+    auto_restart: bool | None = None
+    health_check_port: int | None = None
+    health_check_path: str | None = None
+    pre_sync_cmd: str | None = None
+    post_sync_cmd: str | None = None
+    required: bool | None = None
+    degraded_without: list | None = None
+    ansible_playbook: str | None = None
 
 
 class MigrateRequest(BaseModel):
@@ -112,8 +112,8 @@ class PostSyncAction(BaseModel):
     display_name: str
     category: str  # build | restart | schema | install
     label: str
-    command: Optional[str] = None
-    systemd_service: Optional[str] = None
+    command: str | None = None
+    systemd_service: str | None = None
 
 
 class NodeActionsResponse(BaseModel):

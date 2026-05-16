@@ -14,7 +14,7 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -61,10 +61,10 @@ class CertificateStatus:
 
     exists: bool
     valid: bool
-    expires_at: Optional[str] = None
-    days_until_expiry: Optional[int] = None
-    subject: Optional[str] = None
-    issuer: Optional[str] = None
+    expires_at: str | None = None
+    days_until_expiry: int | None = None
+    subject: str | None = None
+    issuer: str | None = None
     needs_renewal: bool = False
 
 

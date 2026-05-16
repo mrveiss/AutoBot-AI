@@ -20,7 +20,7 @@ performance requirements, and system resources.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
@@ -103,7 +103,7 @@ class ModelOptimizer:
         # Initialize new components (Tell Don't Ask pattern)
         self._resource_analyzer = SystemResourceAnalyzer(self.logger)
         self._model_selector = ModelSelector(self._min_samples)
-        self._performance_tracker: Optional[ModelPerformanceTracker] = None
+        self._performance_tracker: ModelPerformanceTracker | None = None
 
     def _build_default_complexity_keywords(self) -> Dict[ModelCapabilityTier, List[str]]:
         """Build default task complexity keyword mappings. Issue #620.
@@ -263,7 +263,7 @@ class ModelOptimizer:
         resources = self._resource_analyzer.get_current_resources()
         return resources.to_dict()
 
-    def _filter_suitable_models(self, complexity: ModelCapabilityTier) -> Optional[List[ModelInfo]]:
+    def _filter_suitable_models(self, complexity: ModelCapabilityTier) -> List[ModelInfo] | None:
         """Filter models by complexity and return suitable candidates. Issue #620.
 
         Args:
@@ -304,7 +304,7 @@ class ModelOptimizer:
         self,
         ranked_models: List[ModelInfo],
         complexity: ModelCapabilityTier,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Select best model from ranked list and log selection. Issue #620.
 
         Args:
@@ -326,7 +326,7 @@ class ModelOptimizer:
 
         return None
 
-    async def select_optimal_model(self, task_request: TaskRequest) -> Optional[str]:
+    async def select_optimal_model(self, task_request: TaskRequest) -> str | None:
         """Select the optimal model for a given task. Issue #620."""
         try:
             # Ensure we have fresh model data
