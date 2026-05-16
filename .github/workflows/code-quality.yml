@@ -189,6 +189,19 @@ jobs:
         # Non-blocking: 1281 SQLAlchemy Column[T] errors tracked in GH#7105.
         python3 -m mypy autobot-slm-backend/ 2>&1 | tail -5 || true
 
+    - name: Enforce extension/skill/plugin import boundaries (#7372)
+      run: |
+        # Scan all extension, skill, and plugin Python files for layer-boundary violations.
+        # Rules: no core-backend imports, no sibling cross-imports.
+        # See docs/developer/plugin-boundaries.md and
+        #     security/semgrep/extension-import-boundaries.yaml
+        # Scans only tracked source directories — no user-supplied input.
+        find autobot-backend/extensions/builtin \
+             autobot-backend/skills/builtin \
+             plugins/core-plugins \
+             -name "*.py" -print0 \
+          | xargs -0 python3 tools/lint/check_extension_import_boundaries.py
+
     - name: Code quality summary
       if: always()
       run: |
