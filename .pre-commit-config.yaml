@@ -131,6 +131,22 @@ repos:
         stages: [pre-commit]
         description: "Use TTL_* named constants from autobot_shared.ssot_constants instead of literal ints in setex/expire/pexpire/Cache.set(ttl=)"
 
+  # AutoBot custom: regression-prevention for #6976 AC3 i18n plural-form bug.
+  # vue-i18n requires a 3rd positional count arg for plural-form keys
+  # (keys whose en.json value contains the `|` separator). Omitting it causes
+  # the library to return the raw template string instead of the pluralised
+  # translation. The plural-key set is re-derived from en.json on each run.
+  - repo: local
+    hooks:
+      - id: i18n-plural-third-arg
+        name: Flag t(plural-key, {count}) without 3rd positional arg (#7155)
+        entry: pipeline-scripts/check_i18n_plural_third_arg.py
+        language: python
+        files: \.(ts|vue)$
+        exclude: ^autobot-frontend/src/i18n/
+        stages: [pre-commit]
+        description: "Flags t(key, {count}) calls on plural-form i18n keys that are missing the required 3rd count arg (#6976 AC3)"
+
   # AutoBot custom: regression-prevention for #7150 git safe.directory migration.
   # When code_source/ is owned by `autobot` (cloned by install.sh) and the
   # Ansible playbook runs as root via sudo, git 2.35+ aborts read-only
