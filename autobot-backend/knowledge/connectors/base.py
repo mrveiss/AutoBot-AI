@@ -14,6 +14,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import List, Optional
 
+from autobot_shared.datetime_utils import datetime_now
 from autobot_shared.logging_manager import get_logger
 from knowledge.connectors.models import (
     ChangeInfo,
@@ -110,9 +111,7 @@ class AbstractConnector(ABC):
         Returns:
             SyncResult with counts and any per-source errors.
         """
-        from datetime import datetime as _dt
-
-        started_at = _dt.utcnow()
+        started_at = datetime_now()
         result = SyncResult(
             connector_id=self.config.connector_id,
             started_at=started_at,
@@ -140,7 +139,7 @@ class AbstractConnector(ABC):
             result.errors.append(str(exc))
             result.status = "failed"
         finally:
-            result.completed_at = _dt.utcnow()
+            result.completed_at = datetime_now()
 
         return result
 
