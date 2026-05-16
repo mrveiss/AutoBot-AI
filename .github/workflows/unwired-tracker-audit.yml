@@ -55,7 +55,9 @@ jobs:
 
       - name: Run audit (dry-run, JSON output)
         id: scan
+        shell: bash
         run: |
+          set -euo pipefail
           python3 pipeline-scripts/audit-unwired-trackers.py --json > findings.json || true
           count=$(jq 'length' findings.json)
           echo "count=${count}" >> "$GITHUB_OUTPUT"
@@ -82,9 +84,11 @@ jobs:
 
       - name: Summary
         if: always()
+        shell: bash
         env:
           FINDING_COUNT: ${{ steps.scan.outputs.count }}
         run: |
+          set -euo pipefail
           {
             echo "### Unwired Tracker Audit"
             echo ""

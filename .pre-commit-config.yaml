@@ -375,6 +375,12 @@ repos:
         stages: [pre-commit]
         description: "Blocks new ad-hoc *Status(Enum) declarations outside autobot_shared/status_enums.py; lifecycle-shaped enums must use canonical TaskStatus/JobStatus/WorkflowStatus aliases"
 
+  # Lint GitHub Actions workflow files with actionlint (Issue #7083)
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+
   # No tag-pinned 3rd-party GitHub Actions (Issue #7120, preventive for #7091)
   - repo: local
     hooks:

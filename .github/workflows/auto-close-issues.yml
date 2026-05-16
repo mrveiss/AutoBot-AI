@@ -16,6 +16,10 @@ on:
     types: [closed]
     branches: [Dev_new_gui]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   notify-issues:
     if: github.event.pull_request.merged == true
