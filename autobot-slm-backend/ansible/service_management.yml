@@ -2,7 +2,7 @@
 # AutoBot Service Management Playbook
 - name: Manage AutoBot Services
   hosts: "{{ target | default('autobot_cluster') }}"
-  become: yes
+  become: true
   vars:
     action: "{{ service_action | default('status') }}"  # start, stop, restart, status
 
@@ -11,7 +11,7 @@
       systemd:
         name: "autobot-{{ item.name }}"
         state: "{{ action }}"
-        enabled: yes
+        enabled: true
       loop: "{{ services }}"
       when: services is defined
 
@@ -39,7 +39,7 @@
         timeout: 10
       loop: "{{ services }}"
       register: health_checks
-      ignore_errors: yes
+      ignore_errors: true
       when: item.port is defined
 
     - name: Report health status

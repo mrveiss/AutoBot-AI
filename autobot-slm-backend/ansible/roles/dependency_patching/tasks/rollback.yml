@@ -55,7 +55,7 @@
   ansible.builtin.unarchive:
     src: "{{ latest_backup }}"
     dest: "{{ temp_restore_dir.path }}"
-    remote_src: yes
+    remote_src: true
   when:
     - backup_exists.stat.exists | default(false)
     - temp_restore_dir.path is defined
@@ -105,7 +105,7 @@
   ansible.builtin.systemd:
     name: "{{ current_service.service_name }}"
     state: restarted
-    daemon_reload: yes
+    daemon_reload: true
   when:
     - current_service.service_name is defined
     - venv_restored.changed | default(false)

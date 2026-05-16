@@ -11,7 +11,7 @@
 
 - name: Deploy Loki on main server
   hosts: backend
-  become: yes
+  become: true
   tags:
     - loki
     - logging
@@ -20,7 +20,7 @@
 
 - name: Deploy Promtail on all nodes
   hosts: autobot
-  become: yes
+  become: true
   tags:
     - promtail
     - logging

@@ -25,7 +25,7 @@
 - name: Enable systemd-resolved
   systemd:
     name: systemd-resolved
-    enabled: yes
+    enabled: true
     state: started
   when: resolved_check.rc == 0
 
@@ -34,7 +34,7 @@
     src: /run/systemd/resolve/stub-resolv.conf
     dest: /etc/resolv.conf
     state: link
-    force: yes
+    force: true
   when: resolved_check.rc == 0
 
 - name: Verify systemd-resolved status

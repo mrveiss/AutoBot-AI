@@ -163,7 +163,7 @@
     cmd: "ollama pull {{ item }}"
   loop: "{{ _llm_models_to_pull }}"
   when: llm_pull_models | default(true)
-  become: yes
+  become: true
   register: _model_pull
   changed_when: "'pulling' in (_model_pull.stderr | default(''))"
   failed_when: _model_pull.rc != 0

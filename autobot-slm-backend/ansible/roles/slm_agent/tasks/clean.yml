@@ -35,12 +35,12 @@
     path: "{{ slm_agent_dir }}"
     state: absent
   when: slm_agent_dir_stat.stat.exists and slm_agent_dir_stat.stat.islnk
-  become: yes
+  become: true
   tags: ['clean']
 
 - name: "SLM Agent | Clean: pre-#1129 flat install at /opt/slm-agent"
   ansible.builtin.file:
     path: /opt/slm-agent
     state: absent
-  become: yes
+  become: true
   tags: ['clean']

@@ -34,7 +34,7 @@
       unarchive:
         src: "/tmp/redis-{{ redis_cli_version }}.tar.gz"
         dest: /tmp
-        remote_src: yes
+        remote_src: true
 
     - name: Compile redis-cli
       command: make redis-cli
@@ -52,7 +52,7 @@
         src: "/tmp/redis-{{ redis_cli_version }}/src/redis-cli"
         dest: "{{ ansible_facts['env'].HOME }}/.local/bin/redis-cli"
         mode: '0755'
-        remote_src: yes
+        remote_src: true
 
     - name: Add local bin to PATH in bashrc
       lineinfile:
@@ -61,7 +61,7 @@
         # with the dict-key quotes from ansible_facts['env'].
         line: 'export PATH="{{ ansible_facts.env.HOME }}/.local/bin:$PATH"'
         state: present
-        create: yes
+        create: true
 
   when: (redis_cli_check.rc != 0 and redis_cli_build_from_source) or (redis_tools_install is defined and redis_tools_install.failed)
 

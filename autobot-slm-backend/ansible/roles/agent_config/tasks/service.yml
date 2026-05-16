@@ -15,12 +15,12 @@
 
 - name: Reload systemd daemon
   systemd:
-    daemon_reload: yes
+    daemon_reload: true
 
 - name: Enable autobot-agent service
   systemd:
     name: autobot-agent
-    enabled: yes
+    enabled: true
 
 # (#2872) Removed failed_when: false — service start failures must
 # surface so deployment reports the real state.

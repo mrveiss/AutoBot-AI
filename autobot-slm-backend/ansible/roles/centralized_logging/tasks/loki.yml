@@ -26,7 +26,7 @@
   unarchive:
     src: "/tmp/loki-linux-amd64.zip"
     dest: "/tmp/"
-    remote_src: yes
+    remote_src: true
   when: not loki_binary.stat.exists
 
 - name: Install Loki binary
@@ -34,7 +34,7 @@
     src: "/tmp/loki-linux-amd64"
     dest: "{{ loki_binary_path }}"
     mode: '0755'
-    remote_src: yes
+    remote_src: true
   when: not loki_binary.stat.exists
   notify: restart loki
 
@@ -72,9 +72,9 @@
 - name: Enable and start Loki service
   systemd:
     name: loki
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
 
 - name: Wait for Loki to be ready
   uri:

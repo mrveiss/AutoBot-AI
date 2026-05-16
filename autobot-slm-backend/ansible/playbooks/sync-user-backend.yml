@@ -5,7 +5,7 @@
 
 - name: Sync User Backend Code
   hosts: autobot-host
-  gather_facts: no
+  gather_facts: false
   vars:
     local_autobot_root: "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
     backend_user: "autobot"
@@ -17,8 +17,8 @@
       ansible.builtin.systemd:
         name: autobot-backend
         state: stopped
-      become: yes
-      ignore_errors: yes  # Service might not be running
+      become: true
+      ignore_errors: true  # Service might not be running
 
     - name: Clean up problematic symlinks
       ansible.builtin.file:
@@ -27,8 +27,8 @@
       loop:
         - autobot_shared
         - backend
-      become: yes
-      ignore_errors: yes
+      become: true
+      ignore_errors: true
 
     - name: Sync code using direct sudo rsync
       ansible.builtin.shell: |
@@ -58,17 +58,17 @@
         path: "{{ item }}"
         owner: "{{ backend_user }}"
         group: "{{ backend_user }}"
-        recurse: yes
+        recurse: true
       loop:
         - "{{ backend_install_dir }}/autobot-backend"
         - "{{ backend_install_dir }}/autobot_shared"
-      become: yes
+      become: true
 
     - name: Start backend service
       ansible.builtin.systemd:
         name: autobot-backend
         state: started
-      become: yes
+      become: true
 
     - name: Wait for backend to initialize
       ansible.builtin.pause:
@@ -79,7 +79,7 @@
         url: "http://{{ backend_host }}:8001/api/health"
         timeout: 5
       register: health_check
-      ignore_errors: yes
+      ignore_errors: true
       retries: 5
       delay: 3
       until: health_check.status == 200

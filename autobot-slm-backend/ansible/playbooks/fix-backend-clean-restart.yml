@@ -7,8 +7,8 @@
 
 - name: Clean Restart Backend Service
   hosts: autobot-backend
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
 
   vars:
     backend_code_dir: /opt/autobot/autobot-user-backend
@@ -89,7 +89,7 @@
 
     - name: Reload systemd daemon
       systemd:
-        daemon_reload: yes
+        daemon_reload: true
 
     - name: Display current service configuration
       command: cat /etc/systemd/system/autobot-backend.service
@@ -107,7 +107,7 @@
       systemd:
         name: autobot-backend
         state: started
-        enabled: yes
+        enabled: true
 
     - name: Wait 10 seconds for initialization
       pause:

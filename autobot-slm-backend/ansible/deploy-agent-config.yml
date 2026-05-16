@@ -22,8 +22,8 @@
 
 - name: Deploy agent configuration
   hosts: slm_nodes
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
 
   roles:
     - role: agent_config

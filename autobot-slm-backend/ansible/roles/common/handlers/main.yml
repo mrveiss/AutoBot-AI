@@ -4,10 +4,10 @@
 - name: reload firewall
   ufw:
     state: reloaded
-  become: yes
+  become: true
 
 - name: restart ssh
   systemd:
     name: sshd
     state: restarted
-  become: yes
+  become: true

@@ -14,7 +14,7 @@
     system: true
     shell: /usr/sbin/nologin
     create_home: false
-  become: yes
+  become: true
   tags: ['redis', 'redis_exporter']
 
 - name: "Redis Exporter | Check if binary exists"
@@ -30,7 +30,7 @@
     owner: redis_exporter
     group: redis_exporter
     mode: "0755"
-  become: yes
+  become: true
   tags: ['redis', 'redis_exporter']
 
 - name: "Redis Exporter | Download archive"
@@ -39,7 +39,7 @@
     dest: "/tmp/redis_exporter-v{{ redis_exporter_version }}.tar.gz"
     mode: "0644"
   when: not _redis_exporter_binary.stat.exists
-  become: yes
+  become: true
   tags: ['redis', 'redis_exporter']
 
 - name: "Redis Exporter | Extract binary"
@@ -52,7 +52,7 @@
     owner: redis_exporter
     group: redis_exporter
   when: not _redis_exporter_binary.stat.exists
-  become: yes
+  become: true
   tags: ['redis', 'redis_exporter']
 
 - name: "Redis Exporter | Deploy systemd service"
@@ -62,7 +62,7 @@
     owner: root
     group: root
     mode: "0644"
-  become: yes
+  become: true
   notify:
     - Reload systemd
     - Restart redis_exporter
@@ -74,7 +74,7 @@
     state: started
     enabled: true
     daemon_reload: true
-  become: yes
+  become: true
   tags: ['redis', 'redis_exporter']
 
 - name: "Redis Exporter | Check if UFW is installed"
@@ -92,6 +92,6 @@
     port: "{{ redis_exporter_port | string }}"
     proto: tcp
     comment: "Redis Exporter (Prometheus scrape from SLM)"
-  become: yes
+  become: true
   when: _ufw_check.rc == 0
   tags: ['redis', 'redis_exporter', 'firewall']

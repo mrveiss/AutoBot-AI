@@ -27,7 +27,7 @@
   systemd:
     name: ollama
     state: started
-    enabled: yes
+    enabled: true
 
 - name: Pull Ollama models
   command: "ollama pull {{ item }}"

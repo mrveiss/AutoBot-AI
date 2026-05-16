@@ -8,5 +8,5 @@
   systemd:
     name: autobot-agent
     state: restarted
-    daemon_reload: yes
+    daemon_reload: true
   when: create_systemd_service

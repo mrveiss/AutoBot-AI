@@ -521,7 +521,7 @@
     path: /etc/nginx/snippets
     state: directory
     mode: "0755"
-  become: yes
+  become: true
   tags: ['slm', 'nginx']
 
 - name: "SLM | Deploy strict security-headers nginx snippet (#6842)"
@@ -529,7 +529,7 @@
     src: autobot-security-headers-strict.conf.j2
     dest: /etc/nginx/snippets/autobot-security-headers-strict.conf
     mode: "0644"
-  become: yes
+  become: true
   notify:
     - test nginx config
     - reload nginx
@@ -540,7 +540,7 @@
     src: autobot-security-headers-iframe-host.conf.j2
     dest: /etc/nginx/snippets/autobot-security-headers-iframe-host.conf
     mode: "0644"
-  become: yes
+  become: true
   notify:
     - test nginx config
     - reload nginx
@@ -561,14 +561,14 @@
   ansible.builtin.stat:
     path: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
   register: nginx_sites_enabled_stat
-  become: yes
+  become: true
   tags: ['slm', 'nginx']
 
 - name: "SLM | Remove standalone sites-enabled file if not a symlink (#1122)"
   ansible.builtin.file:
     path: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
     state: absent
-  become: yes
+  become: true
   when:
     - nginx_sites_enabled_stat.stat.exists
     - not nginx_sites_enabled_stat.stat.islnk
@@ -579,7 +579,7 @@
     src: /etc/nginx/sites-available/{{ slm_nginx_config }}
     dest: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
     state: link
-  become: yes
+  become: true
   notify: reload nginx
   tags: ['slm', 'nginx']
 

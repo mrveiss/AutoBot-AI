@@ -22,7 +22,7 @@
 
 - name: "Pre-Deployment Validation"
   hosts: all
-  gather_facts: yes
+  gather_facts: true
 
   vars:
     # Minimum disk space required (in GB)
@@ -213,7 +213,7 @@
               Install with: sudo apt-get install -y {{ item }}
             success_msg: "Package {{ item }} found"
           loop: "{{ required_packages.common }}"
-          ignore_errors: yes
+          ignore_errors: true
 
       tags: [packages, validation, always]
 
@@ -237,7 +237,7 @@
               Install with: sudo apt-get install -y {{ item }}
             success_msg: "Package {{ item }} found for role {{ host_role }}"
           loop: "{{ required_packages[host_role] | default([]) }}"
-          ignore_errors: yes
+          ignore_errors: true
 
       tags: [packages, validation]
 
@@ -273,7 +273,7 @@
                 success_msg: "Port {{ item.port }} ({{ item.name }}) available"
               loop: "{{ ports_to_check }}"
               when: inventory_hostname == item.host
-              ignore_errors: yes
+              ignore_errors: true
 
       tags: [ports, validation]
 
@@ -288,7 +288,7 @@
             nslookup github.com 2>&1 | grep -c "Name:"
           register: dns_test
           changed_when: false
-          ignore_errors: yes
+          ignore_errors: true
 
         - name: Validate DNS working
           assert:
@@ -299,19 +299,19 @@
               Cannot resolve github.com.
               Check /etc/resolv.conf and network settings.
             success_msg: "DNS resolution working"
-          ignore_errors: yes
+          ignore_errors: true
 
         - name: Test external network connectivity
           shell: |
             timeout 5 curl -s -o /dev/null -w "%{http_code}" https://github.com || echo "999"
           register: connectivity_test
           changed_when: false
-          ignore_errors: yes
+          ignore_errors: true
 
         - name: Display connectivity status
           debug:
             msg: "External connectivity test (HTTP {{ connectivity_test.stdout }})"
-          ignore_errors: yes
+          ignore_errors: true
 
       tags: [network, validation]
 
@@ -330,7 +330,7 @@
             path: "{{ item.path }}"
           register: config_stat_results
           loop: "{{ required_config_files[host_role_config] | default([]) }}"
-          ignore_errors: yes
+          ignore_errors: true
 
         - name: Validate config files permissions
           assert:
@@ -344,7 +344,7 @@
             success_msg: "Config file {{ item.item.path }} found"
           loop: "{{ config_stat_results.results }}"
           when: item is not skipped
-          ignore_errors: yes
+          ignore_errors: true
 
       tags: [config, validation]
 
@@ -367,7 +367,7 @@
             executable: /bin/bash
           register: pip_check
           changed_when: false
-          ignore_errors: yes
+          ignore_errors: true
           when: venv_stat.stat.exists
 
         - name: Alert if venv missing (will be created during deploy)
@@ -397,7 +397,7 @@
             npm audit --audit-level=moderate 2>&1
           register: npm_audit_result
           changed_when: false
-          ignore_errors: yes
+          ignore_errors: true
           when: package_json_stat.stat.exists
 
         - name: Display npm audit results
@@ -415,7 +415,7 @@
               Review and fix before deployment
             success_msg: "npm audit clean - no vulnerabilities found"
           when: package_json_stat.stat.exists
-          ignore_errors: yes
+          ignore_errors: true
 
         - name: Alert if package.json missing (will be deployed)
           debug:
@@ -437,13 +437,13 @@
           getent:
             database: passwd
             key: autobot
-          ignore_errors: yes
+          ignore_errors: true
 
         - name: Check /etc/autobot directory permissions
           stat:
             path: "/etc/autobot"
           register: autobot_dir_stat
-          ignore_errors: yes
+          ignore_errors: true
 
         - name: Validate /etc/autobot ownership
           assert:
@@ -457,7 +457,7 @@
               Fix with: sudo chown -R root:autobot /etc/autobot
             success_msg: "/etc/autobot ownership correct (root:autobot)"
           when: autobot_dir_stat.stat.exists
-          ignore_errors: yes
+          ignore_errors: true
 
       tags: [permissions, validation]
 
@@ -519,7 +519,7 @@
         dest: "/tmp/validation-{{ inventory_hostname }}-{{ ansible_facts['date_time'].date }}.checkpoint"
         mode: '0644'
       changed_when: false
-      ignore_errors: yes
+      ignore_errors: true
       tags: [validation, always]
 
     - name: Alert on validation failures
