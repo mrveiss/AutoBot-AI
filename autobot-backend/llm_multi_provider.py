@@ -201,9 +201,11 @@ class UnifiedLLMInterface:
     """
     Backward-compatible facade over the plugin-per-provider registry.
 
-    New code should call ``get_provider_registry()`` directly.  This class
-    exists solely to avoid breaking call sites that still instantiate
-    ``UnifiedLLMInterface()``.
+    **Deprecated** — new code should use ``LLMService`` from
+    ``services.llm_service`` (the canonical post-#3185 entry point).
+    This class exists solely to avoid breaking call sites that still
+    instantiate ``UnifiedLLMInterface()``; it is not the canonical
+    interface and should not be imported in new code.
     """
 
     def __init__(self) -> None:
