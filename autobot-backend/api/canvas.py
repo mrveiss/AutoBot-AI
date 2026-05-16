@@ -76,7 +76,10 @@ _EXPORT_CONTENT_TYPES: dict[str, str] = {
 
 def _user_id(current_user: dict) -> str:
     """Extract stable user identifier from JWT dict."""
-    return current_user.get("user_id") or current_user.get("id") or current_user.get("username", "")
+    uid = current_user.get("user_id") or current_user.get("id") or current_user.get("username")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Cannot identify user from token")
+    return uid
 
 
 def _log_metric(event: str, **kw) -> None:

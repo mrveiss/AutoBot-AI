@@ -365,6 +365,66 @@ class TestTransitionCell:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# _user_id() extraction and validation
+# ---------------------------------------------------------------------------
+
+
+class TestUserIdExtraction:
+    def test_user_id_from_user_id_field(self):
+        from api.canvas import _user_id
+
+        uid = _user_id({"user_id": "user-alice"})
+        assert uid == "user-alice"
+
+    def test_user_id_from_id_field(self):
+        from api.canvas import _user_id
+
+        uid = _user_id({"id": "user-bob"})
+        assert uid == "user-bob"
+
+    def test_user_id_from_username_field(self):
+        from api.canvas import _user_id
+
+        uid = _user_id({"username": "charlie"})
+        assert uid == "charlie"
+
+    def test_user_id_prefers_user_id_over_id(self):
+        from api.canvas import _user_id
+
+        uid = _user_id({"user_id": "alice-id", "id": "bob-id"})
+        assert uid == "alice-id"
+
+    def test_user_id_prefers_id_over_username(self):
+        from api.canvas import _user_id
+
+        uid = _user_id({"id": "bob-id", "username": "charlie"})
+        assert uid == "bob-id"
+
+    def test_user_id_raises_401_when_all_fields_missing(self):
+        from api.canvas import _user_id
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as exc_info:
+            _user_id({})
+        assert exc_info.value.status_code == 401
+        assert "Cannot identify user from token" in exc_info.value.detail
+
+    def test_user_id_raises_401_when_all_fields_empty(self):
+        from api.canvas import _user_id
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as exc_info:
+            _user_id({"user_id": "", "id": "", "username": ""})
+        assert exc_info.value.status_code == 401
+        assert "Cannot identify user from token" in exc_info.value.detail
+
+
+# ---------------------------------------------------------------------------
+# Export helpers (pure functions — no DB, no auth)
+# ---------------------------------------------------------------------------
+
+
 class TestExportHelpers:
     def test_md_export(self):
         from api.canvas import _export_md
