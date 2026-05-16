@@ -14,7 +14,6 @@ from fastapi import APIRouter, Request
 
 from api.schemas_workflows import (
     RegistryEndpointsResponse,
-    RegistryHealthResponse,
     RegistryRouterDetailResponse,
     RegistryRoutersResponse,
     RegistryTagRoutersResponse,
@@ -604,17 +603,3 @@ async def probe_registry(
         )
 
 
-@router.get("/health", response_model=RegistryHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="registry_health",
-    error_code_prefix="REGISTRY",
-)
-async def registry_health():
-    """Health check for registry system"""
-    return {
-        "status": "healthy",
-        "total_routers": len(registry.routers),
-        "enabled_routers": len(registry.get_enabled_routers()),
-        "disabled_routers": len([c for c in registry.routers.values() if c.status == RouterStatus.DISABLED]),
-    }

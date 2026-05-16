@@ -22,7 +22,6 @@ from fastapi import APIRouter, HTTPException, Query
 from api.schemas_system import (
     FailureAnalysisRequest,
     FailureAnalysisResponse,
-    HealthCheckResponse,
 )
 from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -101,28 +100,6 @@ async def analyze_failure(request: FailureAnalysisRequest):
 
 
 register_singleton_probe("diagnostics", get_engine)
-
-
-@router.get("/health", response_model=HealthCheckResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="DIAGNOSTICS",
-)
-async def health_check():
-    """
-    Check diagnostics service health.
-
-    Returns:
-        HealthCheckResponse with status and engine readiness
-    """
-    try:
-        get_engine()
-        # Engine is ready if it can be instantiated
-        return HealthCheckResponse(status="ok", engine_ready=True)
-    except Exception as e:
-        logger.error("Health check failed: %s", e)
-        return HealthCheckResponse(status="error", engine_ready=False)
 
 
 @router.get("/analyze-failure", response_model=FailureAnalysisResponse)

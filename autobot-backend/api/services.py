@@ -13,7 +13,6 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_system import (
     ServicesHealthAggregateResponse,
-    ServicesHealthDeprecatedResponse,
     ServicesResponse,
     ServiceStatus,
     ServicesVMsStatusResponse,
@@ -188,31 +187,6 @@ async def get_services(admin_check: bool = Depends(check_admin_permission)):
     except Exception as e:
         logger.error("Failed to get services: %s", e)
         raise HTTPException(status_code=500, detail="Failed to get services")
-
-
-@router.get("/health", response_model=ServicesHealthDeprecatedResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_health",
-    error_code_prefix="SERVICES",
-)
-async def get_health(admin_check: bool = Depends(check_admin_permission)):
-    """Simple health check endpoint.
-
-    Deprecated: Use /api/system/health for system-wide health checks.
-    This per-module endpoint will be removed in a future release. (#3333)
-
-    Issue #744: Requires admin authentication.
-    """
-    logger.warning(
-        "Deprecated health endpoint called: /api/services/health — " "use /api/system/health instead (#3333)"
-    )
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now(tz=timezone.utc),
-        "deprecated": True,
-        "use_instead": "/api/system/health",
-    }
 
 
 @router.get("/services/health", response_model=ServicesHealthAggregateResponse)

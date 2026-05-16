@@ -11,7 +11,6 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from api.schemas_workflows import (
     SystemValidationBenchmarkResponse,
     SystemValidationComponentResponse,
-    SystemValidationHealthResponse,
     SystemValidationQuickResponse,
     SystemValidationRecommendationsResponse,
     SystemValidationRequestModel,
@@ -31,27 +30,6 @@ router = APIRouter()
 
 
 register_singleton_probe("system_validation", get_system_validator)
-
-
-@router.get("/health", response_model=SystemValidationHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="validation_health",
-    error_code_prefix="SYSTEM_VALIDATION",
-)
-async def validation_health():
-    """Health check for validation system"""
-    try:
-        validator = get_system_validator()
-        return {
-            "status": "healthy",
-            "message": "System validation API is operational",
-            "validator_initialized": validator is not None,
-            "timestamp": validator._get_timestamp() if validator else None,
-        }
-    except Exception as e:
-        logger.error("Validation health check failed: %s", e)
-        raise_server_error("API_0003", "Health check failed")
 
 
 @router.post("/validate/comprehensive", response_model=SystemValidationResultModel)

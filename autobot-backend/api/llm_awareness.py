@@ -13,7 +13,6 @@ from fastapi.responses import JSONResponse
 
 from api.schemas_agent import (
     LLMAnalyzeQueryResponse,
-    LLMAwarenessHealthResponse,
     LLMAwarenessMetricsResponse,
     LLMAwarenessStatusResponse,
     LLMCapabilitiesSummaryResponse,
@@ -350,38 +349,3 @@ async def export_awareness_data(
 register_singleton_probe("llm_awareness", get_llm_self_awareness)
 
 
-@router.get("/health", response_model=LLMAwarenessHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="llm_awareness_health",
-    error_code_prefix="LLM_AWARENESS",
-)
-async def llm_awareness_health():
-    """Health check for LLM awareness system"""
-    try:
-        awareness = get_llm_self_awareness()
-
-        # Quick health checks
-        context = await awareness.get_system_context(include_detailed=False)
-
-        health_status = {
-            "awareness_module_loaded": awareness is not None,
-            "context_available": context is not None,
-            "capabilities_loaded": len(context["current_capabilities"]["active"]) > 0,
-            "phase_info_available": ("current_phase" in context.get("phase_information", {})),
-            "cache_functional": awareness._context_cache is not None,
-        }
-
-        overall_healthy = all(health_status.values())
-
-        return {
-            "status": "healthy" if overall_healthy else "degraded",
-            "service": "llm_awareness",
-            "components": health_status,
-            "system_maturity": context["system_identity"]["system_maturity"],
-            "capabilities_count": context["current_capabilities"]["count"],
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        }
-    except Exception as e:
-        logger.error("LLM awareness health check failed: %s", e)
-        raise HTTPException(status_code=500, detail="Health check failed")

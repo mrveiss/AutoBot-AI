@@ -32,7 +32,6 @@ from api.schemas_agent import (
     LLMPatternsCacheOpportunitiesResponse,
     LLMPatternsCategoryDistributionResponse,
     LLMPatternsCostBreakdownResponse,
-    LLMPatternsHealthResponse,
     LLMPatternsModelComparisonResponse,
     LLMPatternsRecommendationsResponse,
     LLMPatternsRecordResponse,
@@ -860,38 +859,6 @@ def get_pattern_analyzer() -> LLMPatternAnalyzer:
 # =============================================================================
 # API Endpoints
 # =============================================================================
-
-
-@router.get("/health", response_model=LLMPatternsHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_health",
-    error_code_prefix="ANALYTICS_LLM_PATTERNS",
-)
-async def get_health():
-    """Get LLM pattern analyzer health status.
-
-    Deprecated: Use /api/system/health for system-wide health checks.
-    This per-module endpoint will be removed in a future release. (#3333)
-    """
-    logger.warning(
-        "Deprecated health endpoint called: /api/llm-patterns/health — " "use /api/system/health instead (#3333)"
-    )
-    return {
-        "status": "healthy",
-        "service": "llm_pattern_analyzer",
-        "deprecated": True,
-        "use_instead": "/api/system/health",
-        "features": [
-            "prompt_analysis",
-            "usage_tracking",
-            "cache_detection",
-            "cost_optimization",
-            "model_comparison",
-        ],
-        "supported_categories": [c.value for c in PromptCategory],
-        "optimization_types": [o.value for o in OptimizationType],
-    }
 
 
 @router.post("/analyze", response_model=LLMPatternsAnalyzeResponse)

@@ -19,7 +19,6 @@ from api.schemas_workflows import (
     ElevationAuthorization,
     ElevationAuthorizeResponse,
     ElevationExecuteResponse,
-    ElevationHealthResponse,
     ElevationPendingResponse,
     ElevationRequest,
     ElevationRequestResponse,
@@ -333,18 +332,3 @@ async def probe_elevation(
         )
 
 
-@router.get("/health", response_model=ElevationHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="elevation_health_check",
-    error_code_prefix="ELEVATION",
-)
-async def elevation_health_check():
-    """Health check for elevation system"""
-    return {
-        "status": "healthy",
-        "service": "elevation",
-        "active_sessions": len(elevation_sessions),
-        "pending_requests": len([r for r in pending_requests.values() if r["status"] == "pending"]),
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-    }

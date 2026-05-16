@@ -137,7 +137,6 @@ from api.schemas_terminal import (
     TerminalCapabilitiesResponse,
     TerminalCommandHistoryResponse,
     TerminalFeaturesResponse,
-    TerminalHealthResponse,
     TerminalInfoResponse,
     TerminalInputRequest,
     TerminalInputResponse,
@@ -1124,52 +1123,6 @@ async def probe_terminal(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", response_model=TerminalHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="terminal_health_check",
-    error_code_prefix="TERMINAL",
-)
-async def terminal_health_check(
-    current_user: dict = Depends(get_current_user),
-):
-    """Health check for consolidated terminal system
-    Issue #744: Requires authenticated user.
-
-    Returns:
-        Health status of all terminal components including:
-        - Consolidated terminal manager
-        - WebSocket manager
-        - PTY system (SimplePTY)
-        - Session management
-    """
-    try:
-        # Check if manager is operational
-        active_sessions = len(simple_pty_manager.sessions)
-
-        return {
-            "status": "healthy",
-            "service": "consolidated_terminal_system",
-            "components": {
-                "terminal_manager": "operational",
-                "websocket_manager": "operational",
-                "pty_system": "operational",
-                "session_manager": "operational",
-            },
-            "metrics": {
-                "active_sessions": active_sessions,
-                "manager_initialized": simple_pty_manager is not None,
-            },
-        }
-    except Exception as e:
-        logger.exception("Unexpected error: %s", e)
-        return {
-            "status": "degraded",
-            "service": "consolidated_terminal_system",
-            "error": "Internal server error",
-        }
 
 
 @router.get("/status", response_model=TerminalSystemStatusResponse)

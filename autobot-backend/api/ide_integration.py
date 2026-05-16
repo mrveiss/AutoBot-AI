@@ -42,7 +42,6 @@ from api.schemas_code import (
     IDECategoriesResponse,
     IDEConfigUpdateResponse,
     IDEConfigurationUpdate,
-    IDEHealthResponse,
     IDEPatternCategory,
     IDERulesResponse,
     IDESeveritiesResponse,
@@ -1109,18 +1108,3 @@ async def probe_ide_integration(
         )
 
 
-@router.get("/health", summary="Health check", response_model=IDEHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="IDE_INTEGRATION",
-)
-async def health_check() -> Dict[str, Any]:
-    """Check health of the IDE integration service."""
-    engine = await get_engine()
-    return {
-        "status": "healthy",
-        "rules_loaded": len(engine.rules),
-        "disabled_rules": len(engine.disabled_rules),
-        "cache_size": len(engine.analysis_cache),
-    }

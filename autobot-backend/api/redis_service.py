@@ -301,31 +301,3 @@ async def probe_redis_service(
         )
 
 
-@router.get("/health", response_model=HealthStatusResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_redis_health",
-    error_code_prefix="REDIS_SERVICE",
-)
-async def get_redis_health(manager: RedisServiceManager = Depends(get_service_manager)):
-    """
-    Get detailed Redis service health status
-
-    No authentication required (public endpoint)
-    """
-    try:
-        health = await manager.get_health()
-
-        return HealthStatusResponse(
-            overall_status=health.overall_status,
-            service_running=health.service_running,
-            connectivity=health.connectivity,
-            response_time_ms=health.response_time_ms,
-            last_successful_command=health.last_successful_command,
-            error_count_last_hour=health.error_count_last_hour,
-            recommendations=health.recommendations or [],
-        )
-
-    except Exception as e:
-        logger.error("Get health error: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to get health status")

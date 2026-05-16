@@ -38,7 +38,6 @@ from api.schemas_workflows import (
     CodebaseIndexingRequest,
     KnowledgeBaseRequest,
     LongRunningOperationCancelResponse,
-    LongRunningOperationHealthResponse,
     LongRunningOperationListResponse,
     LongRunningOperationMigrateResponse,
     LongRunningOperationResumeResponse,
@@ -589,47 +588,6 @@ async def probe_long_running(
 
 
 # Health check endpoint
-@router.get("/health", response_model=LongRunningOperationHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="operations_health",
-    error_code_prefix="LONG_RUNNING_OPERATIONS",
-)
-async def operations_health():
-    """Health check for long-running operations service"""
-    if not _OPERATIONS_AVAILABLE:
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "unavailable",
-                "message": "Long-running operations service not initialized",
-            },
-        )
-
-    try:
-        # Issue #321: Use helper method to reduce message chains
-        all_operations = operation_integration_manager.get_all_operations()
-        active_operations = len([op for op in all_operations if op.status == OperationStatus.RUNNING])
-
-        return {
-            "status": "healthy",
-            "active_operations": active_operations,
-            "total_operations": len(all_operations),
-            "redis_connected": operation_integration_manager.redis_client is not None,
-            "background_processor_running": (operation_integration_manager.is_background_processor_running()),
-        }
-
-    except Exception:
-        logger.exception("Unexpected error")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": "Internal server error",
-            },
-        )
-
-
 # Initialize the operation integration manager when this module is imported
 async def initialize_operations_service():
     """Initialize the operations service"""

@@ -119,24 +119,6 @@ async def probe_adapters(
         )
 
 
-@router.get("/health", response_model=DataResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="test_all_adapters",
-    error_code_prefix="ADAPTERS",
-)
-async def test_all_adapters(
-    current_user: dict = Depends(get_current_user),
-):
-    """Test all registered adapters in parallel (#1403)."""
-    registry = get_adapter_registry()
-    results = await registry.test_all()
-    return JSONResponse(
-        status_code=200,
-        content={name: result.to_dict() for name, result in results.items()},
-    )
-
-
 @router.post("/agent/{agent_id}/override", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

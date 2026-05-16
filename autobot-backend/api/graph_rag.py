@@ -28,7 +28,6 @@ from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
-    GraphRAGHealthResponse,
     GraphRAGSearchRequest,
     GraphRAGSearchResponse,
 )
@@ -200,71 +199,6 @@ async def graph_rag_search(
 
 
 register_app_state_probe("graph_rag", "graph_rag_service")
-
-
-@router.get("/health", response_model=GraphRAGHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="graph_rag_health",
-    error_code_prefix="GRAPH_RAG",
-)
-async def graph_rag_health(
-    service: GraphRAGService = Depends(get_graph_rag_service),
-    current_user: dict = Depends(get_current_user),
-) -> JSONResponse:
-    """
-    Check Graph-RAG service health.
-
-    Returns health status of the service and its components (RAGService,
-    AutoBotMemoryGraph).
-
-    Issue #744: Requires authenticated user.
-
-    Returns:
-        JSONResponse with health status
-
-    Example Response:
-        ```json
-        {
-            "status": "healthy",
-            "components": {
-                "graph_rag_service": "healthy",
-                "rag_service": "healthy",
-                "memory_graph": "healthy",
-                "knowledge_base": "healthy"
-            },
-            "timestamp": "2025-01-15T10:30:00Z"
-        }
-        ```
-    """
-    try:
-        service_metrics = await service.get_metrics()
-        components = _check_component_health(service)
-        overall_status = _determine_overall_status(components)
-
-        return JSONResponse(
-            status_code=200 if overall_status == "healthy" else 503,
-            content={
-                "status": overall_status,
-                "components": components,
-                "metrics": service_metrics,
-                "timestamp": utc_timestamp(),
-            },
-            media_type="application/json; charset=utf-8",
-        )
-
-    except Exception as e:
-        logger.error("Health check failed: %s", e, exc_info=True)
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "unhealthy",
-                "components": {},
-                "timestamp": utc_timestamp(),
-                "error": "Internal server error",
-            },
-            media_type="application/json; charset=utf-8",
-        )
 
 
 @router.get("/metrics", response_model=DataResponse)

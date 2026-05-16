@@ -13,7 +13,6 @@ from api.schemas_common import DataResponse
 from api.schemas_system import (
     PhaseStatus,
     PhaseValidationModel,
-    ProjectStateHealthResponse,
     ProjectStatus,
     ValidationResultModel,
 )
@@ -259,29 +258,3 @@ async def auto_progress_phases():
 register_singleton_probe("project_state", get_project_state_manager)
 
 
-@router.get("/health", response_model=ProjectStateHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="PROJECT_STATE",
-)
-async def health_check():
-    """Health check for project state API"""
-    try:
-        manager = get_project_state_manager()
-        status = manager.get_project_status()
-
-        return {
-            "status": "healthy",
-            "current_phase": status["current_phase"],
-            "overall_completion": status["overall_completion"],
-            "timestamp": (
-                manager.phases[manager.current_phase].last_validated.isoformat()
-                if manager.phases[manager.current_phase].last_validated
-                else None
-            ),
-        }
-
-    except Exception as e:
-        logger.error("Health check failed: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")

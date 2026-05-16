@@ -32,7 +32,6 @@ from api.schemas_system import (
     VisionAutomationOpportunitiesResponse,
     VisionDetectElementsResponse,
     VisionElementTypesResponse,
-    VisionHealthResponse,
     VisionInteractionTypesResponse,
     VisionLayoutResponse,
     VisionOCRResponse,
@@ -57,49 +56,6 @@ def get_screen_analyzer() -> ScreenAnalyzer:
 
 # API Endpoints
 register_singleton_probe("vision", get_screen_analyzer)
-
-
-@router.get("/health", response_model=VisionHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="vision_health_check",
-    error_code_prefix="VISION",
-)
-async def vision_health_check(
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Health check for computer vision service.
-
-    Issue #744: Requires authenticated user.
-    """
-    try:
-        analyzer = get_screen_analyzer()
-        # Verify analyzer is properly initialized
-        analyzer_ready = analyzer is not None
-        return VisionHealthResponse(
-            status="healthy" if analyzer_ready else "degraded",
-            analyzer_ready=analyzer_ready,
-            capabilities=[
-                "screen_capture",
-                "element_detection",
-                "ocr_text_extraction",
-                "template_matching",
-                "context_analysis",
-                "multimodal_processing",
-            ],
-            element_types_supported=[e.value for e in ElementType],
-            interaction_types_supported=[i.value for i in InteractionType],
-        )
-    except Exception as e:
-        logger.error("Vision health check failed: %s", e)
-        return VisionHealthResponse(
-            status="unhealthy",
-            analyzer_ready=False,
-            capabilities=[],
-            element_types_supported=[],
-            interaction_types_supported=[],
-        )
 
 
 @router.post("/analyze", response_model=ScreenAnalysisResponse)

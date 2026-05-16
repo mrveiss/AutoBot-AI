@@ -9,7 +9,7 @@ Provides REST endpoints for hot reloading chat workflow modules during developme
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.schemas_common import DataResponse
-from api.schemas_system import HotReloadHealthResponse, ReloadRequest, ReloadResponse
+from api.schemas_system import ReloadRequest, ReloadResponse
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -207,35 +207,3 @@ async def probe_hot_reload(
         )
 
 
-@router.get("/health", response_model=HotReloadHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="hot_reload_health",
-    error_code_prefix="HOT_RELOAD",
-)
-async def hot_reload_health():
-    """
-    Health check for hot reload functionality
-    """
-    try:
-        from utils.hot_reload_manager import hot_reload_manager
-
-        status = await hot_reload_manager.get_status()
-
-        health_status = "healthy" if status["running"] else "stopped"
-
-        return {
-            "status": health_status,
-            "running": status["running"],
-            "watched_modules": len(status["watched_modules"]),
-            "watched_paths": len(status["watched_paths"]),
-            "service": "hot_reload",
-        }
-
-    except Exception as e:
-        logger.error("Hot reload health check failed: %s", e)
-        return {
-            "status": "unhealthy",
-            "error": "Internal server error",
-            "service": "hot_reload",
-        }

@@ -14,7 +14,6 @@ from api.schemas_code import (
     FrontendTestRequest,
     PlaywrightBrowserActionResponse,
     PlaywrightCapabilitiesResponse,
-    PlaywrightHealthResponse,
     PlaywrightInteractRequest,
     PlaywrightNavigateRequest,
     PlaywrightQuickTestResponse,
@@ -101,29 +100,6 @@ async def probe_playwright(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", response_model=PlaywrightHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="PLAYWRIGHT",
-)
-async def health_check():
-    """Health check endpoint for Playwright service"""
-    try:
-        service = await get_playwright_service()
-        is_ready = await service.is_ready()
-
-        return {
-            "status": "healthy" if is_ready else "unhealthy",
-            "ready": is_ready,
-            "service": "playwright_embedded",
-            "message": ("Playwright service is ready" if is_ready else "Playwright service unavailable"),
-        }
-    except Exception as e:
-        logger.error("Playwright health check failed: %s", e)
-        raise HTTPException(status_code=503, detail="Playwright service unavailable")
 
 
 @router.post("/search", response_model=PlaywrightEmbeddedResultResponse)

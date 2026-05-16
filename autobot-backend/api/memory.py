@@ -1354,58 +1354,6 @@ async def probe_memory(
         )
 
 
-@router.get("/health", response_model=DataResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="memory_health_check",
-    error_code_prefix="MEMORY",
-)
-async def memory_health_check(
-    admin_check: bool = Depends(check_admin_permission),
-    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
-) -> JSONResponse:
-    """
-    Health check for Memory Graph service
-
-    Issue #744: Requires admin authentication.
-
-    Args:
-        admin_check: Admin permission verification
-        memory_graph: Memory graph instance
-
-    Returns:
-        Health status and component information
-    """
-    try:
-        health_status = {
-            "status": "healthy",
-            "timestamp": utc_timestamp(),
-            "components": {
-                "memory_graph": ("healthy" if memory_graph.initialized else "unavailable"),
-                "redis_connection": ("healthy" if memory_graph.redis_client else "unavailable"),
-                "knowledge_base": ("healthy" if memory_graph.knowledge_base else "unavailable"),
-            },
-        }
-
-        overall_healthy = all(status == "healthy" for status in health_status["components"].values())
-
-        if not overall_healthy:
-            health_status["status"] = "degraded"
-
-        return JSONResponse(status_code=200 if overall_healthy else 503, content=health_status)
-
-    except Exception as e:
-        logger.error("Health check failed: %s", e)
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "unhealthy",
-                "error": "Internal server error",
-                "timestamp": utc_timestamp(),
-            },
-        )
-
-
 # ====================================================================
 # Temporal Invalidation Endpoints (Issue #3810)
 # ====================================================================

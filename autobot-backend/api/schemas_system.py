@@ -553,15 +553,6 @@ class RedisHealthResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ServicesHealthDeprecatedResponse(BaseModel):
-    """Response for GET /health (deprecated) in services.py."""
-
-    status: str
-    deprecated: bool
-    use_instead: str
-    timestamp: Any
-
-
 class ServicesHealthAggregateResponse(BaseModel):
     """Response for GET /services/health in services.py."""
 

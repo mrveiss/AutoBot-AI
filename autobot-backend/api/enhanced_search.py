@@ -19,7 +19,6 @@ from api.schemas_knowledge import (
     EnhancedSearchBenchmarkResponse,
     EnhancedSearchConnectivityResponse,
     EnhancedSearchHardwareStatusResponse,
-    EnhancedSearchHealthResponse,
     EnhancedSearchOptimizeResponse,
     EnhancedSearchPerformanceAnalyticsResponse,
     NPUOptimizationRequest,
@@ -469,32 +468,3 @@ register_singleton_probe("enhanced_search", get_npu_search_engine, async_getter=
 
 
 # Health check endpoint
-@router.get("/health", response_model=EnhancedSearchHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="ENHANCED_SEARCH",
-)
-async def health_check():
-    """Health check for enhanced search service."""
-    try:
-        search_engine = await get_npu_search_engine()
-        statistics = await search_engine.get_search_statistics()
-
-        return {
-            "status": "healthy",
-            "service": "enhanced_search",
-            "npu_search_engine_ready": True,
-            "knowledge_base_ready": statistics.get("knowledge_base_ready", False),
-            "cache_size": statistics.get("cache_stats", {}).get("cache_size", 0),
-            "timestamp": time.time(),
-        }
-
-    except Exception as e:
-        logger.error("Health check failed: %s", e)
-        return {
-            "status": "unhealthy",
-            "service": "enhanced_search",
-            "error": "Internal server error",
-            "timestamp": time.time(),
-        }
