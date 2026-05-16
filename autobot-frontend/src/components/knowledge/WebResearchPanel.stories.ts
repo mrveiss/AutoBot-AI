@@ -9,7 +9,6 @@ import WebResearchPanel from './WebResearchPanel.vue'
 const meta = {
   title: 'Components/Knowledge/WebResearchPanel',
   component: WebResearchPanel,
-  tags: ['autodocs'],
   parameters: {
     docs: {
       description: {

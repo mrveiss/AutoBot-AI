@@ -4,7 +4,6 @@ import OfflineBanner from './OfflineBanner.vue';
 const meta = {
   title: 'Components/UI/OfflineBanner',
   component: OfflineBanner,
-  tags: ['autodocs'],
   argTypes: {},
 } as Meta<typeof OfflineBanner>;
 

@@ -208,9 +208,11 @@ const ICONS = {
 
 export type IconName = keyof typeof ICONS
 
+import type { ComponentSize } from '@/types/component-props'
+
 interface IconProps {
   name: IconName
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+  size?: ComponentSize
   spin?: boolean
   strokeWidth?: number
   filled?: boolean

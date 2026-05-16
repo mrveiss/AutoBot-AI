@@ -19,10 +19,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { BadgeVariant } from '@/types/component-props'
 
 interface Props {
   label?: string
-  variant?: 'default' | 'primary' | 'success' | 'warning' | 'error' | 'info'
+  variant?: BadgeVariant
   size?: 'xs' | 'sm' | 'md' | 'lg'
   rounded?: boolean
   outline?: boolean

@@ -4,7 +4,6 @@ import SecretsManager from './SecretsManager.vue';
 const meta = {
   title: 'Components/Security/SecretsManager',
   component: SecretsManager,
-  tags: ['autodocs'],
   argTypes: {},
 } as Meta<typeof SecretsManager>;
 

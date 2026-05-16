@@ -4,7 +4,6 @@ import UnifiedLoadingView from './UnifiedLoadingView.vue';
 const meta = {
   title: 'Components/UI/UnifiedLoadingView',
   component: UnifiedLoadingView,
-  tags: ['autodocs'],
   argTypes: {
     isLoading: {
       control: 'boolean',

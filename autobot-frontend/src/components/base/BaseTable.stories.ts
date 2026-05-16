@@ -4,7 +4,6 @@ import BaseTable from './BaseTable.vue';
 const meta = {
   title: 'Components/Base/BaseTable',
   component: BaseTable,
-  tags: ['autodocs'],
   argTypes: {
     columns: {
       description: 'Table column definitions',

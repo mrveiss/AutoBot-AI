@@ -4,7 +4,6 @@ import BaseInput from './BaseInput.vue';
 const meta = {
   title: 'Components/Base/BaseInput',
   component: BaseInput,
-  tags: ['autodocs'],
   argTypes: {
     modelValue: {
       control: 'text',

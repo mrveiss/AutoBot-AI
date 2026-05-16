@@ -4,7 +4,6 @@ import ThreatIntelligenceSettings from './ThreatIntelligenceSettings.vue';
 const meta = {
   title: 'Components/Security/ThreatIntelligenceSettings',
   component: ThreatIntelligenceSettings,
-  tags: ['autodocs'],
   argTypes: {},
 } as Meta<typeof ThreatIntelligenceSettings>;
 

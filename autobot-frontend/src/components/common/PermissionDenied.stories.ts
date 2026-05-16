@@ -4,7 +4,6 @@ import PermissionDenied from './PermissionDenied.vue';
 const meta = {
   title: 'Components/Common/PermissionDenied',
   component: PermissionDenied,
-  tags: ['autodocs'],
 } as Meta<typeof PermissionDenied>;
 
 export default meta;

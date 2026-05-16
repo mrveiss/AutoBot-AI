@@ -4,7 +4,6 @@ import BaseAlert from './BaseAlert.vue';
 const meta = {
   title: 'Components/UI/BaseAlert',
   component: BaseAlert,
-  tags: ['autodocs'],
   argTypes: {
     type: {
       control: 'select',

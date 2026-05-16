@@ -4,7 +4,6 @@ import ErrorBoundary from './ErrorBoundary.vue';
 const meta = {
   title: 'Components/Common/ErrorBoundary',
   component: ErrorBoundary,
-  tags: ['autodocs'],
   argTypes: {
     title: {
       control: 'text',

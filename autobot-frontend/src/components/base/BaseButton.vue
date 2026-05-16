@@ -22,10 +22,11 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, useSlots, Comment } from 'vue'
+import type { ButtonVariant, ComponentSize } from '@/types/component-props'
 
 interface Props {
-  variant?: 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info' | 'light' | 'dark' | 'outline-solid' | 'ghost' | 'link'
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+  variant?: ButtonVariant
+  size?: ComponentSize
   disabled?: boolean
   loading?: boolean
   block?: boolean

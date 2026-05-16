@@ -4,7 +4,6 @@ import BaseButton from './BaseButton.vue';
 const meta = {
   title: 'Components/Base/BaseButton',
   component: BaseButton,
-  tags: ['autodocs'],
   argTypes: {
     variant: {
       control: 'select',

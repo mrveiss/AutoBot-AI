@@ -27,10 +27,11 @@
 <script setup lang="ts">
 import { computed, ref, nextTick } from 'vue'
 import LoadingSpinner from './LoadingSpinner.vue'
+import type { ComponentSize } from '@/types/component-props'
 
 interface Props {
   variant?: 'primary' | 'secondary' | 'outline-solid' | 'ghost' | 'danger'
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+  size?: ComponentSize
   loading?: boolean
   disabled?: boolean
   loadingVariant?: 'circle' | 'dots' | 'pulse'

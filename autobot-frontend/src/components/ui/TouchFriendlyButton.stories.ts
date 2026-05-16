@@ -4,7 +4,6 @@ import TouchFriendlyButton from './TouchFriendlyButton.vue';
 const meta = {
   title: 'Components/UI/TouchFriendlyButton',
   component: TouchFriendlyButton,
-  tags: ['autodocs'],
   argTypes: {
     variant: {
       control: 'select',

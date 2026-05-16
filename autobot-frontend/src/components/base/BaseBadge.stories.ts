@@ -4,7 +4,6 @@ import BaseBadge from './BaseBadge.vue';
 const meta = {
   title: 'Components/Base/BaseBadge',
   component: BaseBadge,
-  tags: ['autodocs'],
   argTypes: {
     variant: {
       control: 'select',
