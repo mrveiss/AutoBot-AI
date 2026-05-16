@@ -1518,7 +1518,7 @@ function getNodeHostname(nodeId: string): string {
                   {{ selectedDeployment.status.replaceAll('_', ' ') }}
                 </span>
               </div>
-              <button @click="closeDetails" class="text-gray-400 hover:text-gray-600">
+              <button @click="closeDetails" class="text-gray-400 hover:text-gray-600" aria-label="Close">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -1622,7 +1622,7 @@ function getNodeHostname(nodeId: string): string {
                   {{ selectedBgDeployment.status.replaceAll('_', ' ') }}
                 </span>
               </div>
-              <button @click="closeBgDetails" class="text-gray-400 hover:text-gray-600">
+              <button @click="closeBgDetails" class="text-gray-400 hover:text-gray-600" aria-label="Close">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>

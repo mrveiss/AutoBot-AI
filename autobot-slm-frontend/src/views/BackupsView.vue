@@ -14,7 +14,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { formatDateTime } from '@/composables/useTimezone'
+import { useToast } from '@/composables/useToast'
 import type { Backup, BackupRequest, Replication, ReplicationRequest } from '@/types/slm'
+
+const { showToast } = useToast()
 
 const api = useSlmApi()
 const fleetStore = useFleetStore()
@@ -107,7 +110,7 @@ async function handleRestore(backupId: string): Promise<void> {
     await api.restoreBackup(backupId)
     await fetchBackups()
   } catch (e) {
-    alert(`Restore failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    showToast(`Restore failed: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
   }
 }
 
@@ -127,7 +130,7 @@ async function fetchReplications(): Promise<void> {
 async function handleCreateReplication(): Promise<void> {
   if (!newReplication.value.source_node_id || !newReplication.value.target_node_id) return
   if (newReplication.value.source_node_id === newReplication.value.target_node_id) {
-    alert('Source and target nodes must be different')
+    showToast('Source and target nodes must be different', 'error')
     return
   }
 
@@ -155,7 +158,7 @@ async function handlePromoteReplica(replicationId: string): Promise<void> {
     await api.promoteReplica(replicationId)
     await fetchReplications()
   } catch (e) {
-    alert(`Promote failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    showToast(`Promote failed: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
   }
 }
 

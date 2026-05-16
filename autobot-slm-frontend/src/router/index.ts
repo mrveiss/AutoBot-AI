@@ -23,14 +23,14 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
-      meta: { title: 'Login', public: true }
+      meta: { title: 'Login', requiresAuth: false }
     },
     {
       // Issue #576: SSO callback handler for OAuth2/SAML redirects
       path: '/sso-callback',
       name: 'sso-callback',
       component: () => import('@/views/SSOCallbackView.vue'),
-      meta: { title: 'SSO Login', public: true },
+      meta: { title: 'SSO Login', requiresAuth: false },
     },
     {
       // Issue #1294: Setup wizard — guided first-run fleet configuration
@@ -470,8 +470,8 @@ const router = createRouter({
 router.beforeEach(async (to, _from) => {
   const authStore = useAuthStore()
 
-  // Public routes don't need auth
-  if (to.meta.public) {
+  // Public routes don't need auth (requiresAuth: false)
+  if (to.meta.requiresAuth === false) {
     // If already authenticated, redirect to home
     if (authStore.isAuthenticated && to.name === 'login') {
       return { name: 'fleet' }
