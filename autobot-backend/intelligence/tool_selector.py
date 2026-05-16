@@ -7,6 +7,7 @@ OS-Aware Tool Selection Module
 Selects appropriate tools based on OS capabilities and goal requirements.
 """
 
+from autobot_shared.ssot_config import config
 import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -309,7 +310,7 @@ class OSAwareToolSelector:
         # Get default network from environment; DEFAULT_SCAN_NETWORK="" until configured
         import os
 
-        default_network = os.getenv("AUTOBOT_DEFAULT_SCAN_NETWORK", NetworkConstants.DEFAULT_SCAN_NETWORK)
+        default_network = config.default_scan_network
         resolved_network = parameters.get("network", default_network)
         if "{network}" in command and not resolved_network:
             logger.warning(

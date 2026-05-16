@@ -10,6 +10,7 @@ terminal streaming
 import asyncio
 import logging
 import os
+from autobot_shared.ssot_config import config
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -488,7 +489,7 @@ class SystemCommandAgent(StandardizedAgent):
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "chat_id": chat_id,
             "command": command,
-            "user": os.getenv("USER", "unknown"),
+            "user": config.user,
         }
         self.command_history.append(log_entry)
 

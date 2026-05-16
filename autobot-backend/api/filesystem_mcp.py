@@ -22,6 +22,7 @@ Issue #718: Uses dedicated thread pool for file I/O to prevent blocking
 when the main asyncio thread pool is saturated by indexing operations.
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import base64
 import logging
@@ -101,7 +102,7 @@ router = APIRouter(tags=["filesystem_mcp", "mcp"])
 
 # Security Configuration: Allowed Directories
 # Only paths within these directories are accessible
-_BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+_BASE_DIR = config.base_dir
 ALLOWED_DIRECTORIES = [
     f"{_BASE_DIR}/",  # Project root
     "/tmp/autobot/",  # Temporary files  # nosec B108

@@ -1,6 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+from autobot_shared.ssot_config import config
 import asyncio
 import logging
 import os
@@ -50,7 +51,7 @@ class GUIController:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
-            os.environ["DISPLAY"] = ":99"
+            config.display = ":99"
             logger.info("Virtual display started on :99")
         except Exception as e:
             logger.error("Error starting virtual display: %s", e)
@@ -61,7 +62,7 @@ class GUIController:
             self.xvfb_process.terminate()
             self.xvfb_process = None
             if "DISPLAY" in os.environ:
-                del os.environ["DISPLAY"]
+                del config.display
             logger.info("Virtual display stopped")
 
     async def capture_screen(self):

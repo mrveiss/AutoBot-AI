@@ -77,12 +77,12 @@ class AuthenticationMiddleware:
         # Priority order: AUTOBOT_JWT_SECRET -> SECRET_KEY -> Config file -> Generated secret
 
         # 1. Check dedicated JWT secret env var first (most specific)
-        secret = os.getenv("AUTOBOT_JWT_SECRET")
+        secret = config.jwt_secret
         if secret:
             return secret
 
         # 2. Fall back to SECRET_KEY env var (stable across restarts)
-        secret = os.getenv("SECRET_KEY")
+        secret = config.secret_key
         if secret:
             return secret
 
@@ -659,7 +659,7 @@ async def get_current_user(request: Request) -> Dict:
     Raises HTTPException if authentication fails.
     """
     # Issue #1779: Allow trusted internal services via API key
-    _internal_key = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")
+    _internal_key = config.internal_api_key
     if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
         return {"username": "service:slm", "role": "admin", "service": True}
 
@@ -704,7 +704,7 @@ def check_admin_permission(request: Request) -> bool:
     """
     # Issue #1145: Allow trusted internal services (e.g. SLM backend) via API key.
     # The key is set via AUTOBOT_INTERNAL_API_KEY env var on both services.
-    _internal_key = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")
+    _internal_key = config.internal_api_key
     if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
         logger.debug("Internal API key auth: granting admin access")
         return True

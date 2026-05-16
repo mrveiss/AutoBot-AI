@@ -15,6 +15,7 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 - LLM for detecting semantically equivalent config values
 """
 
+from autobot_shared.ssot_config import config
 import ast
 import logging
 import os
@@ -515,7 +516,7 @@ if __name__ == "__main__":
     # Test the detector
     import sys
 
-    project_root = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+    project_root = sys.argv[1] if len(sys.argv) > 1 else config.base_dir
     result = detect_config_duplicates(project_root)
 
     logger.info(result["report"])

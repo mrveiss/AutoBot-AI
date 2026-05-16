@@ -20,11 +20,12 @@ Public API (preserved):
     - get_gpu_semantic_chunker()
 """
 
+from autobot_shared.ssot_config import config
 import os
 
 # GPU optimization environment variables (must be set before torch import)
-os.environ["CUDA_LAUNCH_BLOCKING"] = "0"  # Allow async CUDA operations
-os.environ["CUDA_CACHE_DISABLE"] = "0"  # Enable CUDA kernel caching
+config.cuda_launch_blocking = "0"  # Allow async CUDA operations
+config.cuda_cache_disable = "0"  # Enable CUDA kernel caching
 
 import asyncio
 import concurrent.futures

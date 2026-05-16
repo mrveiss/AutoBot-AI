@@ -13,6 +13,7 @@ import os
 
 import pytest
 
+from autobot_shared.ssot_config import config
 from config import UnifiedConfigManager
 from utils.knowledge_base_timeouts import KnowledgeBaseTimeouts
 
@@ -103,14 +104,14 @@ class TestKnowledgeBaseTimeouts:
     def setup_method(self):
         """Setup for each test"""
         # Save original environment
-        self.original_env = os.getenv("AUTOBOT_ENVIRONMENT")
+        self.original_env = config.environment
 
     def teardown_method(self):
         """Restore original environment"""
         if self.original_env:
-            os.environ["AUTOBOT_ENVIRONMENT"] = self.original_env
+            config.environment = self.original_env
         elif "AUTOBOT_ENVIRONMENT" in os.environ:
-            del os.environ["AUTOBOT_ENVIRONMENT"]
+            del config.environment
 
     def test_redis_connection_timeouts(self):
         """Test Redis connection timeout properties return defaults"""
@@ -151,7 +152,7 @@ class TestKnowledgeBaseTimeouts:
 
     def test_environment_awareness_production(self):
         """Test that accessor respects production environment"""
-        os.environ["AUTOBOT_ENVIRONMENT"] = "production"
+        config.environment = "production"
         kb_timeouts = KnowledgeBaseTimeouts()
         # Without config overrides, defaults are used
         assert kb_timeouts.redis_get == 1.0
@@ -159,7 +160,7 @@ class TestKnowledgeBaseTimeouts:
 
     def test_environment_awareness_development(self):
         """Test that accessor respects development environment"""
-        os.environ["AUTOBOT_ENVIRONMENT"] = "development"
+        config.environment = "development"
         kb_timeouts = KnowledgeBaseTimeouts()
         # Without config overrides, defaults are used
         assert kb_timeouts.redis_scan_iter == 10.0
@@ -209,17 +210,17 @@ class TestBackwardCompatibility:
 
     def test_environment_variable_override(self):
         """Test that AUTOBOT_LLM_TIMEOUT env var still works"""
-        original = os.getenv("AUTOBOT_LLM_TIMEOUT")
+        original = config.llm_timeout
         try:
-            os.environ["AUTOBOT_LLM_TIMEOUT"] = "999.0"
+            config.llm_timeout = "999.0"
             # Reload config would be needed here
             # For now, just test the mechanism exists
             assert "AUTOBOT_LLM_TIMEOUT" in os.environ
         finally:
             if original:
-                os.environ["AUTOBOT_LLM_TIMEOUT"] = original
+                config.llm_timeout = original
             elif "AUTOBOT_LLM_TIMEOUT" in os.environ:
-                del os.environ["AUTOBOT_LLM_TIMEOUT"]
+                del config.llm_timeout
 
 
 class TestIntegration:

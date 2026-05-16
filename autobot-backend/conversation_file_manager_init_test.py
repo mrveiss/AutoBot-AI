@@ -12,6 +12,7 @@ Tests comprehensive database initialization functionality including:
 Test Coverage Target: 100% for initialization code
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import logging
 import sqlite3
@@ -657,10 +658,10 @@ class TestErrorHandling:
         # Override schema directory via environment variable
         import os
 
-        original_env = os.environ.get("AUTOBOT_SCHEMA_DIR")
+        original_env = config.schema_dir
 
         try:
-            os.environ["AUTOBOT_SCHEMA_DIR"] = str(invalid_schema_dir)
+            config.schema_dir = str(invalid_schema_dir)
 
             # Initialization should fail
             with pytest.raises(RuntimeError) as exc_info:
@@ -693,9 +694,9 @@ class TestErrorHandling:
         finally:
             # Restore environment
             if original_env is not None:
-                os.environ["AUTOBOT_SCHEMA_DIR"] = original_env
+                config.schema_dir = original_env
             elif "AUTOBOT_SCHEMA_DIR" in os.environ:
-                del os.environ["AUTOBOT_SCHEMA_DIR"]
+                del config.schema_dir
 
         logger.info("=== Test 1.8: PASSED ===\n")
 

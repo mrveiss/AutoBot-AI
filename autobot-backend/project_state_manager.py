@@ -9,6 +9,7 @@ Tracks development phases, capabilities, and completion criteria for AutoBot
 Issue #357: Added async wrappers for database operations to prevent blocking in async contexts.
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import json
 import os
@@ -104,7 +105,7 @@ class ProjectStateManager:
     def __init__(self, db_path: str = None):
         """Initialize project state manager with database and phase definitions."""
         if db_path is None:
-            db_path = os.getenv("AUTOBOT_PROJECT_STATE_DB_PATH", "data/project_state.db")
+            db_path = config.project_state_db_path
         self.db_path = db_path
         # Use centralized PathConstants (Issue #380)
         self.project_root = PATH.PROJECT_ROOT

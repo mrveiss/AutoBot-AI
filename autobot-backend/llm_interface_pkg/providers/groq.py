@@ -18,6 +18,7 @@ API keys are never logged.
 Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
+from autobot_shared.ssot_config import config
 from __future__ import annotations
 
 import logging
@@ -72,7 +73,7 @@ class GroqProvider(BaseProvider):
         """Resolve API key from settings or environment."""
         if self._api_key:
             return self._api_key
-        self._api_key = self._get_setting("api_key") or os.getenv("GROQ_API_KEY")
+        self._api_key = self._get_setting("api_key") or config.groq_api_key
         return self._api_key
 
     def _ensure_client(self):

@@ -15,6 +15,7 @@ Key Features:
 - AutoBot-specific pattern detection
 """
 
+from autobot_shared.ssot_config import config
 import ast
 import asyncio
 import logging
@@ -362,7 +363,7 @@ class ArchitectureAnalyzer:
     def __init__(self, base_path: str = None):
         """Initialize architecture analyzer with base path."""
         if base_path is None:
-            base_path = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+            base_path = config.base_dir
         self.base_path = Path(base_path)
         self.file_analyses: Dict[str, FileAnalysis] = {}
         self.pattern_matches: List[PatternMatch] = []

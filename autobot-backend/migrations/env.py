@@ -7,6 +7,7 @@ Alembic Environment Configuration
 This module configures Alembic migrations for the User Management System.
 """
 
+from autobot_shared.ssot_config import config
 import os
 import sys
 from logging.config import fileConfig
@@ -42,7 +43,7 @@ target_metadata = Base.metadata
 def get_url() -> str:
     """Get database URL from deployment config or environment."""
     # Try environment variable first
-    url = os.getenv("AUTOBOT_DATABASE_URL")
+    url = config.database_url
     if url:
         return url
 
@@ -52,7 +53,7 @@ def get_url() -> str:
         return deployment_config.postgres_sync_url
     except Exception:
         # Default fallback for development
-        db_host = os.getenv("AUTOBOT_DB_HOST", "")
+        db_host = config.db_host
         return f"postgresql://autobot:autobot@{db_host}:5432/autobot"
 
 

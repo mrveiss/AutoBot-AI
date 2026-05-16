@@ -10,6 +10,7 @@ for knowledge_base.py operations.
 Part of KB-ASYNC-014: Timeout Configuration Centralization
 """
 
+from autobot_shared.ssot_config import config
 import os
 from typing import Dict
 
@@ -23,7 +24,7 @@ class KnowledgeBaseTimeouts:
 
     def __init__(self):
         """Initialize timeout accessor with current environment"""
-        self.environment = os.getenv("AUTOBOT_ENVIRONMENT", "production")
+        self.environment = config.environment
         self._config = config
 
     # Redis Connection Timeouts

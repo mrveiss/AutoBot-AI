@@ -701,7 +701,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             logger.error("Failed to load model from config: %s", e)
             import os
 
-            return os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL)
+            return config.default_llm_model
 
     async def _prepare_llm_request_params(
         self,

@@ -8,6 +8,7 @@ Timeout configuration management for unified config manager.
 
 import logging
 import os
+from autobot_shared.ssot_config import config
 from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
@@ -104,7 +105,7 @@ class TimeoutConfigMixin:
             Timeout value in seconds
         """
         if environment is None:
-            environment = os.getenv("AUTOBOT_ENVIRONMENT", "production")
+            environment = config.environment
 
         # Try environment-specific override first
         env_path = f"environments.{environment}.timeouts.{category}.{timeout_type}"

@@ -3,13 +3,14 @@
 Simple test to verify GPU optimization is working
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import os
 import sys
 import time
 
 # Add AutoBot to path
-sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.insert(0, config.project_root)
 
 
 async def test_direct_optimization():

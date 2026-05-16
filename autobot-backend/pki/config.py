@@ -8,6 +8,7 @@ PKI Configuration Models
 Pydantic models for TLS/PKI configuration, integrated with SSOT config system.
 """
 
+from autobot_shared.ssot_config import config
 from __future__ import annotations
 
 import os
@@ -28,7 +29,7 @@ def _find_project_root() -> Path:
     for parent in [current] + list(current.parents):
         if (parent / ".env").exists():
             return parent
-    return Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
+    return Path(config.base_dir)
 
 
 PROJECT_ROOT = _find_project_root()

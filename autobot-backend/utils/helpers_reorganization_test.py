@@ -13,6 +13,7 @@ Tests the extracted helper functions from the deep nesting reduction refactoring
 Issue: #402 - [Code Quality] Reduce Deep Nesting - 524 functions exceed 4 levels
 """
 
+from autobot_shared.ssot_config import config
 import json
 from typing import Any, Dict
 from unittest.mock import AsyncMock, patch
@@ -29,7 +30,7 @@ class TestReorganizeRedisHelpers:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from analysis.reorganize_redis_databases import _decode_key
 
         result = _decode_key(b"test_key")
@@ -40,7 +41,7 @@ class TestReorganizeRedisHelpers:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from analysis.reorganize_redis_databases import _decode_key
 
         result = _decode_key("already_string")
@@ -51,7 +52,7 @@ class TestReorganizeRedisHelpers:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from analysis.reorganize_redis_databases import _decode_key
 
         result = _decode_key("unicode_тест".encode("utf-8"))
@@ -62,7 +63,7 @@ class TestReorganizeRedisHelpers:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from analysis.reorganize_redis_databases import _determine_target_db
 
         assert _determine_target_db("fact:user_preferences") == 1
@@ -73,7 +74,7 @@ class TestReorganizeRedisHelpers:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from analysis.reorganize_redis_databases import _determine_target_db
 
         assert _determine_target_db("workflow_rules") == 2
@@ -84,7 +85,7 @@ class TestReorganizeRedisHelpers:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from analysis.reorganize_redis_databases import _determine_target_db
 
         assert _determine_target_db("random_key") == 3
@@ -95,7 +96,7 @@ class TestReorganizeRedisHelpers:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from analysis.reorganize_redis_databases import DB_INDEX_TO_NAME
 
         assert DB_INDEX_TO_NAME[0] == "main"
@@ -113,7 +114,7 @@ class TestMCPClientHelpers:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from examples.mcp_agent_workflows.base import MCPClient
 
         client = MCPClient(log_requests=False)
@@ -127,7 +128,7 @@ class TestMCPClientHelpers:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from examples.mcp_agent_workflows.base import MCPClient
 
         client = MCPClient(log_requests=False)
@@ -142,7 +143,7 @@ class TestMCPClientHelpers:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from examples.mcp_agent_workflows.base import MCPClient
 
         client = MCPClient(log_requests=False)
@@ -156,7 +157,7 @@ class TestMCPClientHelpers:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from examples.mcp_agent_workflows.base import NON_RETRYABLE_STATUS_CODES
 
         assert 400 in NON_RETRYABLE_STATUS_CODES
@@ -170,7 +171,7 @@ class TestMCPClientHelpers:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from examples.mcp_agent_workflows.base import _RetrySignal
 
         # Should be able to instantiate and raise
@@ -183,7 +184,7 @@ class TestMCPClientHelpers:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from examples.mcp_agent_workflows.base import MCPClient
 
         client = MCPClient(max_retries=3, log_requests=False)
@@ -199,7 +200,7 @@ class TestMCPClientHelpers:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from examples.mcp_agent_workflows.base import MCPClient
 
         client = MCPClient(max_retries=3, log_requests=False)
@@ -384,7 +385,7 @@ class TestWorkflowResult:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from examples.mcp_agent_workflows.base import WorkflowResult
 
         result = WorkflowResult("test_workflow")
@@ -399,7 +400,7 @@ class TestWorkflowResult:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from examples.mcp_agent_workflows.base import WorkflowResult
 
         result = WorkflowResult("test_workflow")
@@ -416,7 +417,7 @@ class TestWorkflowResult:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from examples.mcp_agent_workflows.base import WorkflowResult
 
         result = WorkflowResult("test_workflow")
@@ -431,7 +432,7 @@ class TestWorkflowResult:
         import os
         import sys
 
-        sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        sys.path.insert(0, config.project_root)
         from examples.mcp_agent_workflows.base import WorkflowResult
 
         result = WorkflowResult("test_workflow")

@@ -11,6 +11,7 @@ Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 Updated in Issue #453 to use real Ollama integration.
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import logging
 import os
@@ -31,11 +32,11 @@ class LocalLLM:
 
     def __init__(self):
         """Initialize local LLM with Ollama connection check."""
-        self._ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST")
-        self._ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT")
+        self._ollama_host = config.ollama_host
+        self._ollama_port = config.ollama_port
         self._ollama_available = bool(self._ollama_host and self._ollama_port)
         self._ollama_url: Optional[str] = None
-        self._default_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2")
+        self._default_model = config.default_llm_model
 
         if self._ollama_available:
             self._ollama_url = f"http://{self._ollama_host}:{self._ollama_port}"

@@ -12,6 +12,7 @@ import logging
 import os
 import threading
 import uuid
+from autobot_shared.ssot_config import config
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -546,7 +547,7 @@ class BaseAgent(ABC):
             else:
                 auth = token  # legacy bearer token
         """
-        return os.environ.get("AUTOBOT_RUN_JWT", "") or os.environ.get("AUTOBOT_MCP_TOKEN", "")
+        return config.run_jwt or config.mcp_token
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get performance statistics for this agent (thread-safe)"""

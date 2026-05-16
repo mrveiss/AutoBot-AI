@@ -41,6 +41,7 @@ import os
 import threading
 import time
 import uuid
+from autobot_shared.ssot_config import config
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional
@@ -121,8 +122,8 @@ class CaptchaHumanLoop:
         self.timeout_seconds = timeout_seconds
         self.auto_skip_on_timeout = auto_skip_on_timeout
         # Use environment variable or NetworkConstants for VNC URL
-        vnc_host = os.getenv("AUTOBOT_VNC_HOST", NetworkConstants.LOCALHOST_IP)
-        vnc_port = os.getenv("AUTOBOT_VNC_PORT", str(NetworkConstants.VNC_PORT))
+        vnc_host = config.vnc_host
+        vnc_port = config.vnc_port
         self.vnc_url = vnc_url or f"http://{vnc_host}:{vnc_port}/vnc.html"
         self.enable_auto_solve = enable_auto_solve
         self._auto_solver = None

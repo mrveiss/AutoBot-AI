@@ -3,11 +3,12 @@
 Test the new workflow templates system
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import os
 import sys
 
-sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.append(config.project_root)
 
 from autobot_types import TaskComplexity
 from tests.test_helpers import get_test_backend_url

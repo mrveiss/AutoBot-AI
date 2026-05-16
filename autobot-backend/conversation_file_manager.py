@@ -18,6 +18,8 @@ import hashlib
 import importlib
 import json
 import logging
+
+from autobot_shared.ssot_config import config
 import os
 import sqlite3
 import uuid
@@ -123,13 +125,8 @@ class ConversationFileManager:
     @staticmethod
     def _get_default_paths() -> tuple:
         """Get default storage directory and database path from environment or defaults."""
-        storage = Path(
-            os.getenv(
-                "AUTOBOT_STORAGE_DIR",
-                str(_PROJECT_ROOT / "data" / "conversation_files"),
-            )
-        )
-        db = Path(os.getenv("AUTOBOT_DB_PATH", str(_PROJECT_ROOT / "data" / "conversation_files.db")))
+        storage = Path(config.storage_dir or str(_PROJECT_ROOT / "data" / "conversation_files"))
+        db = Path(config.data_db or str(_PROJECT_ROOT / "data" / "conversation_files.db"))
         return storage, db
 
     def _init_redis_config(self, redis_host: Optional[str], redis_port: Optional[int]) -> None:
@@ -1180,7 +1177,7 @@ class ConversationFileManager:
 
             # Resolve schema directory relative to project root (no hardcoded absolute paths)
             default_schema_dir = _PROJECT_ROOT / "database" / "schemas"
-            schema_dir = Path(os.getenv("AUTOBOT_SCHEMA_DIR", str(default_schema_dir)))
+            schema_dir = Path(config.schema_dir or str(default_schema_dir))
 
             # Create migration instance with same paths (Bug Fix #6 - pass custom db_path for
             # testing)

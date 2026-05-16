@@ -20,6 +20,7 @@ Usage:
     python tests/test_monitoring_and_alerts.py [--alerts] [--metrics] [--dashboards]
 """
 
+from autobot_shared.ssot_config import config
 import argparse
 import asyncio
 import json
@@ -37,7 +38,7 @@ from typing import Dict, List, Optional
 import requests
 
 # Add AutoBot paths
-sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.append(config.project_root)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tests.test_helpers import get_test_backend_url

@@ -8,6 +8,7 @@ Integration with state-of-the-art AI models including
 GPT-4V, Claude-3, Gemini for enhanced capabilities.
 """
 
+from autobot_shared.ssot_config import config
 import asyncio
 import base64
 import json
@@ -699,7 +700,7 @@ class ModernAIIntegration:
                 ModelCapability.FUNCTION_CALLING,
                 ModelCapability.VISION,
             ],
-            api_endpoint=os.getenv("OPENAI_API_BASE_URL", "https://api.openai.com/v1") + "/chat/completions",
+            api_endpoint=config.openai_api_base_url + "/chat/completions",
             api_key=None,
             max_tokens=4000,
             temperature=0.7,
@@ -722,7 +723,7 @@ class ModernAIIntegration:
                 ModelCapability.MULTIMODAL,
                 ModelCapability.VISION,
             ],
-            api_endpoint=os.getenv("ANTHROPIC_API_BASE_URL", "https://api.anthropic.com/v1") + "/messages",
+            api_endpoint=config.anthropic_api_base_url + "/messages",
             api_key=None,
             max_tokens=4000,
             temperature=0.7,

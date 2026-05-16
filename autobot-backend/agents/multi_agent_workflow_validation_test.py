@@ -9,6 +9,7 @@ import json
 import os
 import sys
 import time
+from autobot_shared.ssot_config import config
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -17,7 +18,7 @@ from typing import Dict, List
 import requests
 
 # Add AutoBot paths
-sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.append(config.project_root)
 
 
 @dataclass

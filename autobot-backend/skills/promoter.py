@@ -12,6 +12,7 @@ import asyncio
 import logging
 import os
 import re
+from autobot_shared.ssot_config import config
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ class SkillPromoter:
 
     def __init__(self, skills_base_dir: Optional[str] = None) -> None:
         """Initialize with optional override for the builtin skills directory."""
-        base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+        base = config.base_dir
         self.skills_dir = skills_base_dir or os.path.join(base, "autobot-backend", "skills", "builtin")
 
     async def promote(

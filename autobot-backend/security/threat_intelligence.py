@@ -20,6 +20,7 @@ import hashlib
 import logging
 import os
 import time
+from autobot_shared.ssot_config import config
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
@@ -172,7 +173,7 @@ class VirusTotalClient:
             rate_limit: Requests per minute (default: 4 for free tier)
             timeout: Request timeout in seconds
         """
-        self._api_key = api_key or os.getenv("VIRUSTOTAL_API_KEY", "")
+        self._api_key = api_key or config.virustotal_api_key
         self._rate_limiter = RateLimiter(rate_limit)
         self._timeout = timeout
         self._http_client = get_http_client()
@@ -341,7 +342,7 @@ class URLVoidClient:
             rate_limit: Requests per minute
             timeout: Request timeout in seconds
         """
-        self._api_key = api_key or os.getenv("URLVOID_API_KEY", "")
+        self._api_key = api_key or config.urlvoid_api_key
         self._rate_limiter = RateLimiter(rate_limit)
         self._timeout = timeout
         self._http_client = get_http_client()
@@ -558,8 +559,8 @@ class ThreatIntelligenceService:
         self._cache = ThreatIntelligenceCache(default_ttl=cache_ttl)
 
         # Get rate limits from environment if not specified
-        vt_rate = int(os.getenv("VIRUSTOTAL_RATE_LIMIT", str(virustotal_rate_limit)))
-        uv_rate = int(os.getenv("URLVOID_RATE_LIMIT", str(urlvoid_rate_limit)))
+        vt_rate = int(config.virustotal_rate_limit)
+        uv_rate = int(config.urlvoid_rate_limit)
 
         self._virustotal = VirusTotalClient(
             api_key=virustotal_api_key,

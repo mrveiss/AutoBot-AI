@@ -26,6 +26,7 @@ import logging
 import os
 import ssl
 import time
+from autobot_shared.ssot_config import config
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional
 
@@ -42,7 +43,7 @@ logger = logging.getLogger(__name__)
 # share the same host) the env var is often not set, so default to localhost.
 # An explicit env var always wins.
 _COLOCATED_DEFAULT = "http://127.0.0.1:8000"
-DEFAULT_SLM_URL: str = os.getenv("SLM_URL") or _COLOCATED_DEFAULT
+DEFAULT_SLM_URL: str = config.slm_url or _COLOCATED_DEFAULT
 
 # Warn at most once per process — the module is imported by several packages
 # simultaneously, which previously caused the same warning to fire 3×.
@@ -55,7 +56,7 @@ def _warn_slm_url_once(url: str) -> None:
     if _slm_url_warned:
         return
     _slm_url_warned = True
-    if not os.getenv("SLM_URL"):
+    if not config.slm_url:
         logger.warning(
             "SLM_URL not set — defaulting to co-located address %s. "
             "Set SLM_URL explicitly for non-co-located deployments.",
@@ -65,11 +66,11 @@ def _warn_slm_url_once(url: str) -> None:
 
 # Ultimate fallback configuration (uses env vars where available)
 ULTIMATE_FALLBACK_CONFIG = {
-    "llm_provider": os.getenv("AUTOBOT_LLM_PROVIDER", "ollama"),
-    "llm_endpoint": os.getenv("OLLAMA_URL", os.getenv("OLLAMA_HOST", "http://localhost:11434")),
-    "llm_model": os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", DEFAULT_LLM_MODEL),
-    "llm_timeout": int(os.getenv("AUTOBOT_LLM_TIMEOUT", "30")),
-    "llm_temperature": float(os.getenv("AUTOBOT_LLM_TEMPERATURE", "0.7")),
+    "llm_provider": config.llm_provider,
+    "llm_endpoint": config.ollama_url,
+    "llm_model": config.default_llm_model,
+    "llm_timeout": int(config.llm_timeout),
+    "llm_temperature": float(config.llm_temperature),
     "llm_max_tokens": None,
     "llm_api_key": None,
 }
@@ -177,20 +178,20 @@ def _create_permissive_ssl_context(target_url: Optional[str] = None):
     ctx = ssl.create_default_context()
 
     # 1. Explicit CA path from env (production deployment)
-    ca_path = os.environ.get("AUTOBOT_TLS_CA_PATH")
+    ca_path = config.tls_ca_path
     if ca_path and os.path.isfile(ca_path):
         ctx.load_verify_locations(ca_path)
         return ctx
 
     # 2. Dev/test override — skip verification entirely
-    if os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() == "true":
+    if config.skip_tls_verify.lower() == "true":
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         return ctx
 
     # 3. AutoBot project CA fallback (covers single-host installs with self-signed certs)
     _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    _cert_dir = os.environ.get("AUTOBOT_TLS_CERT_DIR", "certs")
+    _cert_dir = config.tls_cert_dir
     _fallback_ca = os.path.join(_project_root, _cert_dir, "ca", "ca-cert.pem")
     if os.path.isfile(_fallback_ca):
         ctx.load_verify_locations(_fallback_ca)

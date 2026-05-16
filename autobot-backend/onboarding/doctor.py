@@ -13,6 +13,7 @@ Public API:
     _recommend_tier(ram_gb, cpu_cores) -> str  — pure tier recommender
 """
 
+from autobot_shared.ssot_config import config
 from __future__ import annotations
 
 import logging
@@ -96,9 +97,9 @@ async def run_doctor() -> dict[str, Any]:
     hardware = _hardware_scan()
 
     # Build service probe targets from env / defaults (no hardcoded IPs)
-    ollama_base = os.getenv("AUTOBOT_OLLAMA_URL", "http://localhost:11434")
-    chromadb_host = os.getenv("AUTOBOT_CHROMADB_HOST", "localhost")
-    chromadb_port = int(os.getenv("AUTOBOT_CHROMADB_PORT", "8100"))
+    ollama_base = config.ollama_url
+    chromadb_host = config.chromadb_host
+    chromadb_port = int(config.chromadb_port)
 
     ollama_reachable, ollama_detail = await _probe_http(f"{ollama_base}/api/tags")
     chromadb_reachable, chromadb_detail = await _probe_http(f"http://{chromadb_host}:{chromadb_port}/api/v1/heartbeat")

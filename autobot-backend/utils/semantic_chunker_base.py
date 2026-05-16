@@ -12,19 +12,20 @@ distance, boundary detection, chunk assembly with min/max-size
 constraints, fallback chunking, document-format conversion) lives here.
 """
 
+from autobot_shared.ssot_config import config
 import os
 
 # CRITICAL FIX: Force tf-keras usage before importing transformers/sentence-transformers.
 # The subclasses import torch/sentence_transformers lazily, but having these set at module
 # load time keeps behavior identical to the pre-refactor `semantic_chunker*.py` files.
-os.environ["TF_USE_LEGACY_KERAS"] = "1"
-os.environ["KERAS_BACKEND"] = "tensorflow"
+config.tf_use_legacy_keras = "1"
+config.keras_backend = "tensorflow"
 
 # Reduce Hugging Face rate limiting and improve caching
-os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
-os.environ["TRANSFORMERS_OFFLINE"] = "0"  # Allow downloads but cache aggressively
-os.environ["HF_HUB_CACHE"] = os.path.expanduser("~/.cache/huggingface")
-os.environ["HUGGINGFACE_HUB_CACHE"] = os.path.expanduser("~/.cache/huggingface")
+config.hf_hub_disable_progress_bars = "1"
+config.transformers_offline = "0"  # Allow downloads but cache aggressively
+config.hf_hub_cache = os.path.expanduser("~/.cache/huggingface")
+config.huggingface_hub_cache = os.path.expanduser("~/.cache/huggingface")
 
 import re
 from abc import ABC, abstractmethod

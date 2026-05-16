@@ -20,6 +20,7 @@ import asyncio
 import logging
 import os
 import threading
+from autobot_shared.ssot_config import config
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -61,8 +62,8 @@ except Exception:  # pragma: no cover - defensive fallback
 
 # Configuration from SSOT with environment override capability
 _ssot = get_config()
-NPU_WORKER_HOST = os.getenv("AUTOBOT_NPU_WORKER_HOST", _ssot.vm.npu)
-NPU_WORKER_PORT = os.getenv("AUTOBOT_NPU_WORKER_PORT", str(_ssot.port.npu))
+NPU_WORKER_HOST = config.npu_worker_host
+NPU_WORKER_PORT = config.npu_worker_port
 NPU_WORKER_URL = f"http://{NPU_WORKER_HOST}:{NPU_WORKER_PORT}"
 
 # Timeouts
@@ -373,8 +374,8 @@ async def generate_embedding_with_fallback(
             return embedding
 
     # Fallback to Ollama - use SSOT config for defaults
-    ollama_host = ollama_host or os.getenv("AUTOBOT_OLLAMA_HOST", _ssot.vm.ollama)
-    ollama_port = ollama_port or os.getenv("AUTOBOT_OLLAMA_PORT", str(_ssot.port.ollama))
+    ollama_host = ollama_host or config.ollama_host
+    ollama_port = ollama_port or config.ollama_port
     ollama_url = f"http://{ollama_host}:{ollama_port}/api/embeddings"
 
     try:

@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import os
+from autobot_shared.ssot_config import config
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
@@ -30,8 +31,8 @@ from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_SLM_URL = os.environ.get("SLM_URL", "")
-_DEFAULT_REDIS_NODE_ID = os.environ.get("REDIS_NODE_ID", "04-Databases")
+_DEFAULT_SLM_URL = config.slm_url
+_DEFAULT_REDIS_NODE_ID = config.redis_node_id
 
 
 # Custom exceptions for Redis Stack service operations

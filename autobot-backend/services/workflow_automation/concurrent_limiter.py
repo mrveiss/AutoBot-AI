@@ -12,12 +12,13 @@ import asyncio
 import logging
 import os
 import time
+from autobot_shared.ssot_config import config
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Awaitable, Callable, Deque, Dict, Optional
 
-_ACQUIRE_TIMEOUT_SECONDS = float(os.environ.get("AUTOBOT_CONCURRENT_LIMITER_TIMEOUT", "300"))
+_ACQUIRE_TIMEOUT_SECONDS = float(config.concurrent_limiter_timeout)
 _EVICTION_POLL_SECONDS = 5.0  # max time to wait for oldest entry to vacate before dropping it
 
 from constants.threshold_constants import TimingConstants

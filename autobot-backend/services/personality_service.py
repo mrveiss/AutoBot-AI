@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import uuid
+from autobot_shared.ssot_config import config
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -25,9 +26,7 @@ from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
-_PERSONALITIES_DIR = (
-    Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")) / "autobot-backend" / "resources" / "personalities"
-)
+_PERSONALITIES_DIR = Path(config.base_dir) / "autobot-backend" / "resources" / "personalities"
 
 # Fallback for local dev (relative to this file)
 _DEV_PERSONALITIES_DIR = Path(__file__).parent.parent / "resources" / "personalities"
