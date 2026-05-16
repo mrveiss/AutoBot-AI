@@ -926,6 +926,11 @@ async def _init_slm_client():
 
         slm_url = config.slm_url or get_config().slm_url
         slm_token = config.slm_auth_token
+        if not slm_token:
+            logger.warning(
+                "SLM_AUTH_TOKEN is unset — SLM WebSocket will connect without auth header. "
+                "Set SERVICE_AUTH_ENFORCEMENT_MODE=false or configure the token to avoid 403 errors."
+            )
 
         await init_slm_client(slm_url, slm_token)
         logger.info("✅ [ 89%] SLM Client: Connected to SLM server at %s", slm_url)
