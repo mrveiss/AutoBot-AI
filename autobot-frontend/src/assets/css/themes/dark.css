@@ -107,6 +107,11 @@
   --table-border: rgba(71, 85, 105, 0.5);
   --input-bg: #1e293b;
   --input-border: #475569;
+
+  /* Canvas agent-draft tokens — darker tint for dark mode */
+  --color-agent-draft-border: #60A5FA;
+  --color-agent-draft-bg: #1E3A5F;
+  --color-user-edit-cursor: #34D399;
 }
 
 /* ============================================

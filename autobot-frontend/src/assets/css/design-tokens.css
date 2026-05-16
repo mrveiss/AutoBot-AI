@@ -540,6 +540,11 @@
   --chart-light-green: #4ade80;
   --chart-light-green-bg: rgba(74, 222, 128, 0.2);
   --chart-purple-dark: #6d28d9;
+
+  /* Canvas — agent draft cell ownership tokens (MVA-360) */
+  --color-agent-draft-border: #3B82F6;
+  --color-agent-draft-bg: #EFF6FF;
+  --color-user-edit-cursor: #059669;
 }
 
 /* ============================================
