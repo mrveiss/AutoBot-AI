@@ -34,9 +34,12 @@ Note: Uses lazy imports via __getattr__ to avoid circular import with NetworkCon
 import logging
 from autobot_shared.ssot_config import config
 from typing import TYPE_CHECKING
-from autobot_shared.logging_manager import get_logger
 
-logger = get_logger(__name__)
+# Use stdlib logging here to avoid circular import:
+# constants → network_constants → autobot_shared/network_constants → config.registry →
+# config/__init__ → get_logger → logging_manager → from config import config_manager (incomplete)
+# GH#7765
+logger = logging.getLogger(__name__)
 
 # Type hints for IDE support without runtime import
 if TYPE_CHECKING:
