@@ -561,8 +561,14 @@ class SLMClient:
         """Connect to WebSocket and listen for events."""
         ws_url = self.slm_url.replace("http://", "ws://").replace("https://", "wss://")
         ws_url = f"{ws_url}/api/ws/events"
+        # SLM backend authenticates via ?token= query param, not Authorization header (#6839)
+        if self.auth_token:
+            ws_url = f"{ws_url}?token={self.auth_token}"
+        else:
+            logger.debug("No auth token configured; skipping WebSocket connection to SLM")
+            return
 
-        logger.info("Connecting to WebSocket at %s", ws_url)
+        logger.info("Connecting to WebSocket at %s", ws_url.split("?")[0])  # don't log token
 
         try:
             # Accept self-signed certs for wss:// connections (#1048, #6654)
@@ -570,7 +576,6 @@ class SLMClient:
             async with websockets.connect(
                 ws_url,
                 ssl=ws_ssl,
-                additional_headers=({"Authorization": f"Bearer {self.auth_token}"} if self.auth_token else {}),
             ) as websocket:
                 self._ws_connected = True
                 self._reconnect_delay = 1.0  # Reset backoff on successful connect
