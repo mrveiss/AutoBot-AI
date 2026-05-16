@@ -28,7 +28,7 @@
       debug:
         msg:
           - "AutoBot Health Check Starting"
-          - "VM: {{ inventory_hostname }} ({{ ansible_facts['default_ipv4'].address }})"
+          - "VM: {{ inventory_hostname }} ({{ ansible_facts['default_ipv4'].address | default(ansible_host) }})"
           - "Role: {{ group_names | join(', ') }}"
           - "OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
       tags: always
@@ -82,7 +82,7 @@
     # ==========================================
 
     - name: Test internal network connectivity
-      command: ping -c 3 {{ hostvars[item]['ansible_default_ipv4']['address'] }}
+      command: ping -c 3 {{ hostvars[item]['ansible_default_ipv4']['address'] | default(hostvars[item]['ansible_host']) }}
       loop: "{{ groups['all'] }}"
       when: item != inventory_hostname
       register: network_tests

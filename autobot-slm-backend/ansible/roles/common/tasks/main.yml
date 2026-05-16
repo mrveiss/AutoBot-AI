@@ -190,8 +190,8 @@
 - name: "Common | Update /etc/hosts"
   lineinfile:
     path: /etc/hosts
-    line: "{{ ansible_facts['default_ipv4'].address }} {{ inventory_hostname }} {{ inventory_hostname_short }}"
-    regexp: "^{{ ansible_facts['default_ipv4'].address }}"
+    line: "{{ ansible_facts['default_ipv4'].address | default(ansible_host) }} {{ inventory_hostname }} {{ inventory_hostname_short }}"
+    regexp: "^{{ ansible_facts['default_ipv4'].address | default(ansible_host) }}"
     state: present
   become: true
   when:

@@ -377,7 +377,7 @@
 
   tasks:
     - name: Check migrated data on database VM
-      command: redis-cli -h {{ ansible_facts['default_ipv4'].address }} -p 6379 info keyspace
+      command: redis-cli -h {{ ansible_facts['default_ipv4'].address | default(ansible_host) }} -p 6379 info keyspace
       register: redis_keyspace
       changed_when: false
       when: inventory_hostname in groups['database']
