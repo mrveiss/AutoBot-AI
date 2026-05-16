@@ -22,18 +22,6 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-def _get_llm_interface():
-    """Return the LLMService singleton (#3185).
-
-    Name retained for backwards compatibility — LLMService exposes
-    ``provider_routing`` and ``is_provider_healthy`` matching the
-    LLMInterface surface this module previously used.
-    """
-    from services.llm_service import get_llm_service
-
-    return get_llm_service()
-
-
 @router.post("/switch", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -93,7 +81,7 @@ async def test_llm_provider(
     current_user: dict = Depends(get_current_user),
 ):
     """Test a specific LLM provider connection."""
-    llm = _get_llm_interface()
+    llm = get_llm_service()
     if provider_name not in llm.provider_routing:
         raise HTTPException(
             status_code=404,
