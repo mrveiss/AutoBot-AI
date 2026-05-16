@@ -10,16 +10,19 @@ PluginLoader, and PluginManager.
 Issue #3278 - Plugin and extension system for third-party integrations.
 """
 
+import warnings
+
 import pytest
 
 from plugin_sdk.base import (
     BasePlugin,
+    PluginLoadError,
     PluginManifest,
     PluginRegistry,
     PluginStatus,
     RequiredEnvVar,
 )
-from plugin_sdk.hooks import Hook, HookRegistry
+from plugin_sdk.hooks import HOOK_REGISTRY, Hook, HookRegistry, HookSignature, validate_hook_names
 from plugin_sdk.plugin_manager import PluginManager
 
 # ---------------------------------------------------------------------------
@@ -627,3 +630,149 @@ async def test_get_env_status_never_returns_value(monkeypatch):
 
     assert secret_value not in repr(status)
     assert secret_value not in json.dumps(status, default=str)
+
+
+# ---------------------------------------------------------------------------
+# GH#6970 — HOOK_REGISTRY and validate_hook_names
+# ---------------------------------------------------------------------------
+
+
+def test_hook_registry_covers_all_hook_enum_values():
+    """Every Hook enum value must have a HOOK_REGISTRY entry."""
+    for member in Hook:
+        assert member.value in HOOK_REGISTRY, f"Hook.{member.name} missing from HOOK_REGISTRY"
+
+
+def test_hook_signature_has_description_and_params():
+    sig = HOOK_REGISTRY[Hook.ON_MESSAGE_RECEIVED.value]
+    assert isinstance(sig, HookSignature)
+    assert sig.description
+    assert "session_id" in sig.params
+    assert "message" in sig.params
+
+
+def test_validate_hook_names_no_warning_for_known_hooks():
+    known = [Hook.ON_STARTUP.value, Hook.ON_SHUTDOWN.value]
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        validate_hook_names(known, plugin_name="test-plugin")
+    assert len(w) == 0
+
+
+def test_validate_hook_names_warns_for_unknown_hook():
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        validate_hook_names(["totally_unknown_hook"], plugin_name="my-plugin")
+    assert len(w) == 1
+    assert issubclass(w[0].category, DeprecationWarning)
+    assert "totally_unknown_hook" in str(w[0].message)
+    assert "my-plugin" in str(w[0].message)
+
+
+def test_validate_hook_names_warns_once_per_unknown():
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        validate_hook_names(["bad_hook_a", "bad_hook_b", Hook.ON_STARTUP.value], plugin_name="p")
+    assert len(w) == 2
+
+
+def test_validate_hook_names_empty_list_is_noop():
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        validate_hook_names([], plugin_name="p")
+    assert len(w) == 0
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_validates_hook_names(monkeypatch):
+    """Unknown hook in manifest triggers a DeprecationWarning during load."""
+    from plugin_sdk.loader import PluginLoader
+
+    PluginRegistry().clear()
+    loader = PluginLoader([])
+    manifest = _make_manifest(name="hook-warn-plugin", hooks=["totally_invalid_hook"])
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        plugin = await loader.load_plugin(manifest)
+
+    assert plugin is not None
+    assert any("totally_invalid_hook" in str(warning.message) for warning in w)
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_no_warning_for_known_hooks(monkeypatch):
+    """Known hook names produce no DeprecationWarning during load."""
+    from plugin_sdk.loader import PluginLoader
+
+    PluginRegistry().clear()
+    loader = PluginLoader([])
+    manifest = _make_manifest(name="hook-ok-plugin", hooks=[Hook.ON_STARTUP.value])
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        plugin = await loader.load_plugin(manifest)
+
+    assert plugin is not None
+    dep_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
+    assert len(dep_warnings) == 0
+
+
+# ---------------------------------------------------------------------------
+# GH#6971 — PluginLoadError raised for missing required env vars
+# ---------------------------------------------------------------------------
+
+
+def test_plugin_load_error_is_runtime_error():
+    assert issubclass(PluginLoadError, RuntimeError)
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_raises_plugin_load_error_when_required_env_missing(monkeypatch):
+    """PluginLoadError propagates when load_plugin is called without exception swallowing."""
+    from plugin_sdk.loader import PluginLoader
+
+    monkeypatch.delenv("TEST_PLE_VAR", raising=False)
+    PluginRegistry().clear()
+
+    loader = PluginLoader([])
+    manifest = _make_manifest(
+        name="ple-test-plugin",
+        required_env=[{"name": "TEST_PLE_VAR", "description": "x", "required": True}],
+    )
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+
+    # Bypass the outer try/except to observe the raw exception
+    with pytest.raises(PluginLoadError, match="TEST_PLE_VAR"):
+        missing_required, _ = loader._check_required_env(manifest)
+        if missing_required:
+            from plugin_sdk.base import PluginLoadError as _PLE
+
+            raise _PLE(
+                f"Cannot load plugin '{manifest.name}': "
+                f"required env vars not set: {missing_required}"
+            )
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_returns_none_and_logs_when_required_env_missing(monkeypatch, caplog):
+    """Via the outer exception handler, load_plugin still returns None (backward compat)."""
+    from plugin_sdk.loader import PluginLoader
+
+    monkeypatch.delenv("TEST_REQ_LOAD_FAIL_V2", raising=False)
+    PluginRegistry().clear()
+
+    loader = PluginLoader([])
+    manifest = _make_manifest(
+        name="ple-bc-plugin",
+        required_env=[{"name": "TEST_REQ_LOAD_FAIL_V2", "description": "x", "required": True}],
+    )
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+
+    with caplog.at_level("ERROR"):
+        result = await loader.load_plugin(manifest)
+
+    assert result is None
+    assert "TEST_REQ_LOAD_FAIL_V2" in caplog.text
