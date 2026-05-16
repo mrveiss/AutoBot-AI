@@ -193,16 +193,27 @@ dashboards) should treat the `Sunset` header as a signal to migrate to
 
 Before the route-deletion PR can run:
 
-1. **Deployment configs** — grep Ansible playbooks, k8s manifests, and
+1. **Empirical traffic check** — query the Prometheus counter added by #6919
+   over a 14-day window and assert zero hits per path before deletion.
+   ```promql
+   # Must return 0 for every legacy path before deletion is safe
+   sum by (path, user_agent) (increase(autobot_legacy_health_hits_total[14d]))
+   ```
+   This converts the audit from a "static config grep" to an empirical
+   traffic check; any unknown scraper that survived the config search will
+   show up here. The counter is registered in
+   `autobot-backend/middleware/sunset_legacy_health.py` with labels
+   `{path, user_agent}` so operators can identify the caller by user-agent.
+2. **Deployment configs** — grep Ansible playbooks, k8s manifests, and
    Prometheus job specs for `/api/<module>/health` paths. Confirm zero
    live scrapers remain.
    ```bash
    grep -rn "/api/[a-z_-]\+/health" autobot-infrastructure/ \
      k8s/ prometheus/ monitoring/ 2>/dev/null
    ```
-2. **Server-side access logs** — sample 7 days of nginx/uvicorn logs and
+3. **Server-side access logs** — sample 7 days of nginx/uvicorn logs and
    confirm zero hits on per-module `/health` paths from external IPs.
-3. **Frontend callers** — these three callers still consume rich
+4. **Frontend callers** — these three callers still consume rich
    per-module response shapes (active_jobs, redis_connected, etc.) that
    the canonical aggregator's `ComponentHealth.data` does not expose.
    Either enrich the relevant probes' `data` payload, or accept that the
@@ -210,12 +221,12 @@ Before the route-deletion PR can run:
    - `useBatchProcessing.ts:263` → `/api/batch-jobs/health`
    - `useOperationsApi.ts:117` → `/api/long-running/health`
    - `usePrometheusMetrics.ts:368/583` → `/api/monitoring/services/health`
-4. **`Sunset:` header live for at least one release** — the middleware
+5. **`Sunset:` header live for at least one release** — the middleware
    shipped with PR #6912 (commit landed on `Dev_new_gui` at 2026-05-04).
-5. **Pre-commit hook becomes hard-line** — drop the `# noqa: health-route`
+6. **Pre-commit hook becomes hard-line** — drop the `# noqa: health-route`
    suppression escape hatch from the production code path.
 
-When all five gates clear, the route-deletion PR can:
+When all six gates clear, the route-deletion PR can:
 
 - Delete the 38 `@router.get("/health")` definitions across `autobot-backend/api/`
 - Delete the now-orphaned `*HealthResponse` Pydantic schemas
