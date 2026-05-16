@@ -23,7 +23,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, ClassVar, Dict, List, Set, Tuple
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
@@ -74,6 +74,59 @@ _ENTRY_POINT_SUFFIXES = (
     "API",
     "Router",
 )
+
+
+# Issue #6758: AST cache to avoid re-parsing files in cross-file finalize pass
+# Cache key: (file_path, mtime) -> AST. This prevents double-parsing when both
+# per-file and cross-file rules analyze the same file.
+_AST_CACHE: Dict[Tuple[str, float], ast.AST] = {}
+_AST_CACHE_MAX_SIZE = 10000  # Prevent unbounded memory growth
+
+
+def get_or_parse_ast(file_path: str, content: str) -> ast.AST:
+    """Get cached AST or parse and cache it (Issue #6758).
+
+    Avoids re-parsing the same file when both per-file and cross-file
+    rules need the AST. Uses file mtime as cache key component to detect
+    file changes.
+
+    Args:
+        file_path: Path to the Python file
+        content: File content (already read by caller)
+
+    Returns:
+        Parsed AST for the file
+    """
+    try:
+        mtime = Path(file_path).stat().st_mtime
+    except (OSError, FileNotFoundError):
+        # If we can't stat the file, just parse and don't cache
+        return ast.parse(content, filename=file_path)
+
+    key = (file_path, mtime)
+
+    # Return cached result if available
+    if key in _AST_CACHE:
+        return _AST_CACHE[key]
+
+    # Parse and cache (with size limit to prevent memory leaks)
+    if len(_AST_CACHE) >= _AST_CACHE_MAX_SIZE:
+        # Clear cache when it reaches max size (simple strategy: purge all)
+        # This ensures the cache doesn't grow unbounded on very large codebases
+        _AST_CACHE.clear()
+
+    tree = ast.parse(content, filename=file_path)
+    _AST_CACHE[key] = tree
+    return tree
+
+
+def clear_ast_cache() -> None:
+    """Clear the AST cache (Issue #6758).
+
+    Call this at the start of a new scan run to avoid stale cached ASTs
+    from previous analyses.
+    """
+    _AST_CACHE.clear()
 
 
 class AntiPatternType(Enum):
@@ -307,6 +360,9 @@ class AntiPatternDetector:
         """
         start_time = time.time()
 
+        # Issue #6758: Clear AST cache at start of new scan run
+        clear_ast_cache()
+
         # #6734: use `is None` sentinel instead of `or` idiom — explicit
         # `exclude_patterns=[]` should disable exclusion, not silently
         # apply the defaults (the `or` form treated empty list as falsy).
@@ -374,6 +430,9 @@ class AntiPatternDetector:
         Returns:
             List of AntiPatternInstance for ChromaDB persistence.
         """
+        # Issue #6758: Clear AST cache at start of new scan run
+        clear_ast_cache()
+
         # Default-arg handling: same `is None` discipline as analyze() (#6734)
         if patterns is None:
             patterns = ["**/*.py"]
@@ -438,7 +497,8 @@ class AntiPatternDetector:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
-            tree = ast.parse(content, filename=file_path)
+            # Issue #6758: Use cache to avoid re-parsing in cross-file pass
+            tree = get_or_parse_ast(file_path, content)
             module_name = Path(file_path).stem
 
             # Extract imports
@@ -1352,13 +1412,15 @@ class AntiPatternDetector:
     def _enum_value_set(self, cls_info: ClassInfo) -> Set[str]:
         """Extract the set of enum *value* string literals from a class body.
 
-        Re-parses the source file (cheap; cached at the file level by the
-        OS/page cache).  Falls back to attribute names when values are not
-        string literals — that still gives a useful overlap signal.
+        Uses cached AST from per-file pass (Issue #6758) to avoid re-parsing.
+        Falls back to attribute names when values are not string literals —
+        that still gives a useful overlap signal.
         """
         try:
             with open(cls_info.file_path, "r", encoding="utf-8") as f:
-                tree = ast.parse(f.read(), filename=cls_info.file_path)
+                content = f.read()
+            # Issue #6758: Use cache to avoid re-parsing in cross-file pass
+            tree = get_or_parse_ast(cls_info.file_path, content)
         except Exception:
             return set()
 
