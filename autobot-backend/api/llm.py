@@ -28,6 +28,7 @@ from services.config_service import ConfigService
 # Import caching utilities from unified cache manager (P4 Cache Consolidation)
 from utils.advanced_cache_manager import cache_response
 from utils.connection_utils import ConnectionTester, ModelManager
+from services.llm_service import get_llm_service
 
 config = get_config_manager()
 
@@ -38,18 +39,6 @@ logger = get_logger(__name__)
 # Performance optimization: O(1) lookup for embedding model detection (Issue #326)
 EMBEDDING_MODEL_PATTERNS = {"embed", "nomic", "all-minilm", "sentence"}
 TEXT_MODEL_SIZE_INDICATORS = {"small", "large", "medium"}
-
-
-def _get_llm_interface():
-    """Return the LLMService singleton (#3185).
-
-    Name retained for backwards compatibility — callers below access
-    ``_tier_router`` which LLMService exposes alongside the public
-    ``tier_router`` property.
-    """
-    from services.llm_service import get_llm_service
-
-    return get_llm_service()
 
 
 @router.get("/config", response_model=LLMConfigResponse)
@@ -823,7 +812,7 @@ async def get_tiered_routing_metrics(
         - fallback_count: Times simple tier failed and escalated
     """
     try:
-        llm_interface = _get_llm_interface()
+        llm_interface = get_llm_service()
 
         if not hasattr(llm_interface, "_tier_router") or not llm_interface._tier_router:
             return JSONResponse(
@@ -876,7 +865,7 @@ async def get_tiered_routing_config(
         - logging: Logging configuration
     """
     try:
-        llm_interface = _get_llm_interface()
+        llm_interface = get_llm_service()
 
         if not hasattr(llm_interface, "_tier_router") or not llm_interface._tier_router:
             return JSONResponse(
@@ -1004,7 +993,7 @@ async def update_tiered_routing_config(
         Updated configuration and confirmation message
     """
     try:
-        llm_interface = _get_llm_interface()
+        llm_interface = get_llm_service()
         tier_router = _get_tier_router(llm_interface)
         _apply_tiered_routing_updates(tier_router, config_data)
         logger.info("Tiered routing configuration updated: %s", config_data)
@@ -1042,7 +1031,7 @@ async def reset_tiered_routing_metrics(
         Confirmation of metrics reset
     """
     try:
-        llm_interface = _get_llm_interface()
+        llm_interface = get_llm_service()
 
         if not hasattr(llm_interface, "_tier_router") or not llm_interface._tier_router:
             raise HTTPException(
