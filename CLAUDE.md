@@ -328,21 +328,21 @@ done
    - Are all edge cases handled? (review code, check error handling)
    - Are tests passing? (run test suite for changed modules)
    - Is documentation updated if needed? (check docs/)
-   - **Integration check (#6836 gate):** for every NEW module added by this issue, at least one production caller must import it:
+   - **Integration check (#6836 gate):** for every NEW module added by this issue, at least one production caller must import it. Run the unified wiring check:
 
      ```bash
-     NEW_FILES=$(git diff --name-only --diff-filter=A origin/Dev_new_gui...HEAD \
-       | grep -E '\.(py|ts|vue)$' | grep -vE '(_test\.|\.test\.|/tests/|/__tests__/)')
-     for f in $NEW_FILES; do
-       stem=$(basename "$f" | sed 's/\.[^.]*$//')
-       grep -rn "from .*\b${stem}\b\|import .*\b${stem}\b" \
-         autobot-backend autobot-frontend --include="*.py" --include="*.ts" --include="*.vue" \
-         | grep -v __pycache__ | grep -vE '(_test\.|\.test\.|/tests/)' | grep -v "^${f}:" | wc -l
-     done
+     ./pipeline-scripts/check-new-module-callers.sh
      ```
 
-     Result must be ≥1 for each new module. **Zero callers ⇒ closure blocked**, even if tests pass — see #6836 for the orchestration audit that proved this gap (3,906 LOC of completed-but-unwired features whose trackers had been closed prematurely).
-   - **Deliberate-deferral override:** if a new module is genuinely infrastructure-only (Protocol, scaffold) and has no caller *by design*, file a follow-up wire-in issue *first* and reference it in the closure comment under `### Wire-in deferred to #NNNN`.
+     The script exits 0 if all new modules have callers, 1 if any have zero callers. **Zero callers ⇒ closure blocked**, even if tests pass — see #6836 for the orchestration audit that proved this gap (3,906 LOC of completed-but-unwired features whose trackers had been closed prematurely).
+   - **Deliberate-deferral override:** if a new module is genuinely infrastructure-only (Protocol, scaffold) and has no caller *by design*, file a follow-up wire-in issue *first*, then re-run with:
+
+     ```bash
+     echo "#NNNN" >> .wiring-deferral.txt
+     ./pipeline-scripts/check-new-module-callers.sh --allow-deferral .wiring-deferral.txt
+     ```
+
+     Then document in the closure comment: `### Wire-in deferred to #NNNN`.
 4. **Document the proof**
    - Commit hash(es): `<hash>: <commit message>`
    - Acceptance criteria met: `✅ Criterion 1`, `✅ Criterion 2`, etc.
