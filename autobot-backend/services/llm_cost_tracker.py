@@ -45,6 +45,7 @@ from constants.model_constants import (
     OPENAI_O4_MINI,
 )
 from constants.ttl_constants import TTL_30_DAYS, TTL_90_DAYS
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -1121,7 +1122,6 @@ class LLMCostTracker(AsyncRedisClientMixin):
 
 # Singleton instance (thread-safe)
 import threading
-from autobot_shared.logging_manager import get_logger
 
 _cost_tracker: Optional[LLMCostTracker] = None
 _cost_tracker_lock = threading.Lock()

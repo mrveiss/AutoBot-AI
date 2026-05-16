@@ -12,8 +12,9 @@ Stores key metadata in Redis MAIN database:
   llm:usage:stream            → Redis Stream (audit events)
 """
 
-from autobot_shared.ssot_config import config
 from __future__ import annotations
+
+from autobot_shared.ssot_config import config
 
 import hashlib
 import os

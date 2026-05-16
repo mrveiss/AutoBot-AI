@@ -21,6 +21,7 @@ from .types import (
     PatternType,
     RegexOpportunity,
 )
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -641,7 +642,6 @@ def flattened_function(*args, **kwargs):
         return f'''
 from abc import ABC, abstractmethod
 from typing import Dict, Type
-from autobot_shared.logging_manager import get_logger
 
 class Strategy(ABC):
     """Base strategy for {pattern.locations[0].function_name if pattern.locations else 'operation'}."""

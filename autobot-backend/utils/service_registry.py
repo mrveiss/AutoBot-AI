@@ -41,6 +41,7 @@ from config.manager import get_config_manager
 
 config = get_config_manager()
 from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH, PATH_OLLAMA_TAGS
+from autobot_shared.logging_manager import get_logger
 
 
 class ServiceStatus(Enum):
@@ -476,7 +477,6 @@ class ServiceRegistry:
 
 # Global service registry instance (thread-safe)
 import threading
-from autobot_shared.logging_manager import get_logger
 
 _registry: Optional[ServiceRegistry] = None
 _registry_lock = threading.Lock()

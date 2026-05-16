@@ -25,6 +25,7 @@ from typing import Any, Dict, Optional
 
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -265,7 +266,6 @@ class BackgroundLLMSync:
 
 # Global instance (thread-safe)
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.logging_manager import get_logger
 
 _background_sync = lazy_singleton(BackgroundLLMSync)
 

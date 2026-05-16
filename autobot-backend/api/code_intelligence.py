@@ -52,6 +52,7 @@ from code_intelligence.performance_analyzer import (
     PerformanceSeverity,
     get_performance_issue_types,
 )
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.redis_optimizer import OptimizationSeverity, RedisOptimizer
 from code_intelligence.security_analyzer import (
     SecurityAnalyzer,
@@ -1652,7 +1653,6 @@ async def get_performance_report(
 # Issue #243: Code Evolution Mining Endpoints
 
 from code_intelligence.code_evolution_miner import CodeEvolutionMiner
-from autobot_shared.logging_manager import get_logger
 
 
 @router.post("/evolution/analyze", response_model=DataResponse)

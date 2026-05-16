@@ -32,6 +32,7 @@ from opentelemetry.trace import SpanKind
 from autobot_shared.http_client import HTTPClientManager, get_http_client
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -215,21 +216,20 @@ async def traced_http_client(
     follow_redirects: bool = True,
 ):
     """
-        Convenience async context manager for traced HTTP client.
+    Convenience async context manager for traced HTTP client.
 
-        Usage:
-            from constants.network_constants import ServiceURLs
-    from autobot_shared.logging_manager import get_logger
+    Usage:
+        from constants.network_constants import ServiceURLs
 
-            async with traced_http_client() as client:
-                response = await client.get(f"{ServiceURLs.AI_STACK}/api/status")
+        async with traced_http_client() as client:
+            response = await client.get(f"{ServiceURLs.AI_STACK}/api/status")
 
-        Args:
-            timeout: Per-request timeout in seconds.
-            follow_redirects: Kept for API compatibility (see ``TracedHttpClient``).
+    Args:
+        timeout: Per-request timeout in seconds.
+        follow_redirects: Kept for API compatibility (see ``TracedHttpClient``).
 
-        Yields:
-            ``TracedHttpClient`` instance backed by the shared pool.
+    Yields:
+        ``TracedHttpClient`` instance backed by the shared pool.
     """
     client = TracedHttpClient(
         timeout=timeout,

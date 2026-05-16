@@ -10,6 +10,7 @@ Tests for framework detection and coding pattern analysis.
 import ast
 
 from services.semantic_analyzer import SemanticAnalyzer
+from autobot_shared.logging_manager import get_logger
 
 
 def test_semantic_analyzer_initialization():
@@ -258,7 +259,6 @@ def test_comprehensive_semantic_analysis():
 from fastapi import FastAPI
 from autobot_shared.ssot_config import config
 import logging
-from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 

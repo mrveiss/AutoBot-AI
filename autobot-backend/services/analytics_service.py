@@ -35,6 +35,7 @@ from services.user_behavior_analytics import (
     UserBehaviorAnalytics,
     get_behavior_analytics,
 )
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -831,7 +832,6 @@ class AnalyticsService(AsyncRedisClientMixin):
 
 # Singleton instance (thread-safe)
 import threading
-from autobot_shared.logging_manager import get_logger
 
 _analytics_service: Optional[AnalyticsService] = None
 _analytics_service_lock = threading.Lock()

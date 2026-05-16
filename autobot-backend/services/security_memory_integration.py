@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any, FrozenSet, Optional
 
 from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_shared.logging_manager import get_logger
 
 # Issue #380: Module-level frozenset for security-related tags
 _SECURITY_TAGS: FrozenSet[str] = frozenset({"security", "vulnerability", "host", "service"})
@@ -980,7 +981,6 @@ class SecurityMemoryIntegration:
 
 # Singleton instance (thread-safe)
 import asyncio as _asyncio_lock
-from autobot_shared.logging_manager import get_logger
 
 _security_memory: Optional[SecurityMemoryIntegration] = None
 _security_memory_lock = _asyncio_lock.Lock()

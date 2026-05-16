@@ -16,8 +16,9 @@ Environment variables (read lazily so tests can override):
     MCP_BRIDGE_RESTART_MAX          restarts before permanent failure
 """
 
-from autobot_shared.ssot_config import config
 from __future__ import annotations
+
+from autobot_shared.ssot_config import config
 
 import os
 from dataclasses import dataclass

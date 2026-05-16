@@ -28,6 +28,7 @@ from autobot_shared.http_client import HTTPClientManager, get_http_client
 from circuit_breaker import CircuitState
 from constants.threshold_constants import LLMDefaults, TimingConstants
 from utils.service_registry import get_service_url
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -841,7 +842,6 @@ class NPUTaskQueue:
 
 
 from autobot_shared.singleton_factory import async_lazy_singleton
-from autobot_shared.logging_manager import get_logger
 
 
 async def _init_npu_client() -> NPUWorkerClient:

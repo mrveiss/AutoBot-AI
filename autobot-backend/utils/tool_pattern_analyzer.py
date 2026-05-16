@@ -26,6 +26,7 @@ from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional
 
 from constants.ttl_constants import TTL_5_MINUTES
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -844,7 +845,6 @@ class ToolPatternAnalyzer:
 import threading
 
 from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.logging_manager import get_logger
 
 _global_analyzer: Optional[ToolPatternAnalyzer] = None
 _global_analyzer_lock = threading.Lock()

@@ -41,6 +41,7 @@ from llm_interface_pkg.providers import (
     VLLMProvider,
 )
 from llm_interface_pkg.types import LLMType, ProviderType
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -120,7 +121,6 @@ class LLMProvider(ABC):
 import asyncio
 
 from constants.threshold_constants import TimingConstants
-from autobot_shared.logging_manager import get_logger
 
 
 class MockProvider(LLMProvider):

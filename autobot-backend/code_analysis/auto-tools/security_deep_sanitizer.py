@@ -23,6 +23,7 @@ initialization of security agent with comprehensive report structure. Low priori
 """
 
 import logging
+from autobot_shared.logging_manager import get_logger
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -100,7 +101,6 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from autobot_shared.logging_manager import get_logger
 
 
 class EnhancedSecurityFixAgent:

@@ -7,6 +7,7 @@ to the HTML files and tests the protection mechanisms.
 """
 
 import logging
+from autobot_shared.logging_manager import get_logger
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -18,7 +19,6 @@ _HTML_EXTENSIONS = _HTML_EXTENSIONS
 import os
 import sys
 from pathlib import Path
-from autobot_shared.logging_manager import get_logger
 
 
 def test_security_headers(file_path: str) -> bool:

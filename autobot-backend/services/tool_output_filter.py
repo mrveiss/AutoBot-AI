@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 import yaml
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -505,6 +506,5 @@ class ToolOutputFilter:
 
 # Singleton accessor — use this instead of ToolOutputFilter() at call sites.
 from autobot_shared.singleton_factory import lazy_singleton  # noqa: E402
-from autobot_shared.logging_manager import get_logger
 
 get_tool_output_filter = lazy_singleton(ToolOutputFilter)

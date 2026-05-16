@@ -18,6 +18,7 @@ Version: 1.0.0
 """
 
 import logging
+from autobot_shared.logging_manager import get_logger
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -35,7 +36,6 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
-from autobot_shared.logging_manager import get_logger
 
 
 class SecurityFixAgent:

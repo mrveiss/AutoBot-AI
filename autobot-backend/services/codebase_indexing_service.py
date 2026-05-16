@@ -29,6 +29,7 @@ import aiofiles
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from knowledge_base_factory import get_knowledge_base
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -973,7 +974,6 @@ class CodebaseIndexingService:
 
 # Global service instance (thread-safe)
 import threading
-from autobot_shared.logging_manager import get_logger
 
 _indexing_service: Optional[CodebaseIndexingService] = None
 _indexing_service_lock = threading.Lock()

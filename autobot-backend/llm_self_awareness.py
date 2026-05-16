@@ -21,6 +21,7 @@ from constants.ttl_constants import TTL_5_MINUTES
 from enhanced_project_state_tracker import get_state_tracker
 from phase_progression_manager import get_progression_manager
 from project_state_manager import get_project_state_manager
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -636,7 +637,6 @@ from autobot_shared.async_compat import run_or_schedule
 
 # Global instance (thread-safe)
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.logging_manager import get_logger
 
 _llm_self_awareness = lazy_singleton(LLMSelfAwareness)
 

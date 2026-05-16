@@ -35,6 +35,7 @@ from api.schemas_analytics import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.network_constants import NetworkConstants
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -894,7 +895,6 @@ def get_demo_content(filepath: str) -> str:
         return """
 import os
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.logging_manager import get_logger
 
 # Configuration
 password = "admin123"  # noqa: S105 — intentional demo credential for analyzer testing

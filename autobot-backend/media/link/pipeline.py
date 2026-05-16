@@ -43,6 +43,8 @@ from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from media.core.pipeline import BasePipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
 
+from autobot_shared.logging_manager import get_logger
+
 # aiohttp for async HTTP
 try:
     import aiohttp
@@ -502,4 +504,3 @@ def _record_jina_success() -> None:
 # the original ``_parse_jina_output`` name to preserve the existing 4
 # test imports in ``pipeline_test.py``.
 from autobot_shared.jina_parser import parse_jina_output as _parse_jina_output
-from autobot_shared.logging_manager import get_logger

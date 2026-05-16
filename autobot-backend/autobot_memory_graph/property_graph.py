@@ -28,6 +28,7 @@ from collections import deque
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -102,30 +103,29 @@ def _deserialize_props(raw: Dict[bytes, bytes]) -> Dict[str, Any]:
 
 class PropertyGraph:
     """
-        Queryable property graph backed by Redis.
+    Queryable property graph backed by Redis.
 
-        Usage::
+    Usage::
 
-            graph = PropertyGraph(database="knowledge")
-            await graph.initialize()
+        graph = PropertyGraph(database="knowledge")
+        await graph.initialize()
 
-            await graph.add_node("file:main.py", {"type": "file", "lang": "python"})
-            await graph.add_node("bug:123",      {"type": "bug",  "severity": "high"})
-            await graph.add_edge("file:main.py", "bug:123", "CONTAINS",
-                                  {"confidence": "0.9"})
+        await graph.add_node("file:main.py", {"type": "file", "lang": "python"})
+        await graph.add_node("bug:123",      {"type": "bug",  "severity": "high"})
+        await graph.add_edge("file:main.py", "bug:123", "CONTAINS",
+                              {"confidence": "0.9"})
 
-            neighbours = await graph.get_neighbors("file:main.py", relation="CONTAINS")
-            bugs = await graph.query_nodes({"type": "bug", "severity": "high"})
-            subgraph = await graph.subgraph("file:main.py", max_depth=2)
-            path = await graph.shortest_path("file:main.py", "bug:123")
+        neighbours = await graph.get_neighbors("file:main.py", relation="CONTAINS")
+        bugs = await graph.query_nodes({"type": "bug", "severity": "high"})
+        subgraph = await graph.subgraph("file:main.py", max_depth=2)
+        path = await graph.shortest_path("file:main.py", "bug:123")
 
-        **Property serialisation:** All property values are stored as strings in
-        Redis.  Numeric and boolean values are coerced via ``str()``.  When
-        querying with ``query_nodes()``, pass string representations of the values
-        you stored — e.g. ``query_nodes({"confidence": "0.9"})`` not
-        ``{"confidence": 0.9}``.  dict/list values are JSON-encoded and excluded
-        from the property index (not queryable via ``query_nodes``).
-    from autobot_shared.logging_manager import get_logger
+    **Property serialisation:** All property values are stored as strings in
+    Redis.  Numeric and boolean values are coerced via ``str()``.  When
+    querying with ``query_nodes()``, pass string representations of the values
+    you stored — e.g. ``query_nodes({"confidence": "0.9"})`` not
+    ``{"confidence": 0.9}``.  dict/list values are JSON-encoded and excluded
+    from the property index (not queryable via ``query_nodes``).
     """
 
     def __init__(self, database: str = "knowledge") -> None:

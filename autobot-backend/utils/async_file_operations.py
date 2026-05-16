@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional, Union
 import aiofiles
 
 from constants.ttl_constants import TTL_5_MINUTES
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -293,7 +294,6 @@ class AsyncFileOperations:
 
 # Global instance for easy access (thread-safe)
 import asyncio as _asyncio_lock
-from autobot_shared.logging_manager import get_logger
 
 _async_file_ops = None
 _async_file_ops_lock = _asyncio_lock.Lock()

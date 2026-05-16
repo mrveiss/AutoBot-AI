@@ -32,6 +32,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 from constants.ttl_constants import TTL_30_DAYS, TTL_90_DAYS
+from autobot_shared.logging_manager import get_logger
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -433,7 +434,6 @@ import threading
 
 from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.logging_manager import get_logger
 
 _embedding_analyzer: Optional[EmbeddingPatternAnalyzer] = None
 _embedding_analyzer_lock = threading.Lock()

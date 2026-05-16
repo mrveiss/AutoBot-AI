@@ -8,8 +8,9 @@ Runs hourly (configurable via AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES)
 and auto-revokes keys whose expires_at has passed.
 """
 
-from autobot_shared.ssot_config import config
 from __future__ import annotations
+
+from autobot_shared.ssot_config import config
 
 import os
 

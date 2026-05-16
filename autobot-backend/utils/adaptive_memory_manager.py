@@ -13,6 +13,7 @@ from collections import OrderedDict
 from typing import Any, Dict, Optional
 
 import psutil
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -225,7 +226,6 @@ class AdaptiveMemoryManager:
 
 # Global adaptive memory manager instance (thread-safe)
 import threading
-from autobot_shared.logging_manager import get_logger
 
 _memory_manager = None
 _memory_manager_lock = threading.Lock()

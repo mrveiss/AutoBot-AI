@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from enum import Enum
 from typing import Dict, List
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -36,7 +37,6 @@ class GoalCategory(Enum):
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.status_enums import RiskLevel  # noqa: E402  # #6689 consolidation
-from autobot_shared.logging_manager import get_logger
 
 
 @dataclass

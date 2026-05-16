@@ -3,8 +3,9 @@
 # Author: mrveiss
 """Isolated MCP bridge runtime (#3229)."""
 
-from autobot_shared.ssot_config import config
 from __future__ import annotations
+
+from autobot_shared.ssot_config import config
 
 import asyncio
 import json

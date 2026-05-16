@@ -14,6 +14,7 @@ from typing import Tuple
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -115,7 +116,6 @@ class LLMStreamingInterface:
 
 # Global LLM streaming interface instance (thread-safe)
 import asyncio as _asyncio_lock
-from autobot_shared.logging_manager import get_logger
 
 _llm_streaming_interface = None
 _llm_streaming_interface_lock = _asyncio_lock.Lock()

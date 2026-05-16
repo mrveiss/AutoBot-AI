@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
@@ -17,7 +19,6 @@ The YAML also records ``api_name`` (provider→model-id mapping) and ``aliases``
 Usage::
 
     from llm_interface_pkg.model_param_registry import get_model_kwargs, resolve_model_name
-from autobot_shared.logging_manager import get_logger
 
     kwargs = get_model_kwargs("claude-sonnet", provider="anthropic")
     # {"temperature": 1, "max_tokens": 8192}
@@ -29,7 +30,7 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
 from autobot_shared.ssot_config import config
-from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import logging
 import os

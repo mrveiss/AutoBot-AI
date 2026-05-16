@@ -22,6 +22,7 @@ from services.llm_service import get_llm_service
 
 from .base_agent import DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -600,7 +601,6 @@ If the information is not in the provided text, respond with "Information not fo
 
 # Singleton instance (thread-safe)
 import threading
-from autobot_shared.logging_manager import get_logger
 
 _knowledge_retrieval_agent_instance = None
 _knowledge_retrieval_agent_lock = threading.Lock()

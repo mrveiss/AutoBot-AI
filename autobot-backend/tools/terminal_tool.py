@@ -17,6 +17,7 @@ Security Integration:
 from typing import Any, Dict, Optional
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -558,7 +559,6 @@ class TerminalTool:
 
 # Global instance (will be initialized with service)
 import threading as _threading_terminal
-from autobot_shared.logging_manager import get_logger
 
 _terminal_tool_instance: Optional[TerminalTool] = None
 _terminal_tool_lock = _threading_terminal.Lock()

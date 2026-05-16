@@ -52,6 +52,7 @@ from constants.model_constants import (
     MODEL_COSTS_PER_1M_TOKENS,
     OPENAI_GPT4O,
 )
+from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_30_DAYS
 
 # Prefix provided by analytics_routers.py registry (#1032)
@@ -840,7 +841,6 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
 import threading
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.logging_manager import get_logger
 
 _analyzer: Optional[LLMPatternAnalyzer] = None
 _analyzer_lock = threading.Lock()

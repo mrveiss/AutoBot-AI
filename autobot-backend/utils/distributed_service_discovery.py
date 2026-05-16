@@ -22,6 +22,7 @@ from autobot_shared.ssot_config import config as ssot_config
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import ServiceDiscoveryConfig, TimingConstants
 from utils.async_initializable import AsyncInitializable
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -450,7 +451,6 @@ class DistributedServiceDiscovery(AsyncInitializable):
 
 
 from autobot_shared.singleton_factory import async_lazy_singleton
-from autobot_shared.logging_manager import get_logger
 
 
 async def _init_service_discovery() -> DistributedServiceDiscovery:

@@ -21,6 +21,7 @@ from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -595,7 +596,6 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
 
 # Singleton instance (thread-safe)
 import threading
-from autobot_shared.logging_manager import get_logger
 
 _rag_agent_instance = None
 _rag_agent_lock = threading.Lock()

@@ -48,6 +48,7 @@ from reasoning.causal_reasoning import CAUSAL_REASONING_SNIPPET
 
 # Import existing AutoBot components
 from utils.command_validator import CommandValidator
+from autobot_shared.logging_manager import get_logger
 from worker_node import WorkerNode
 
 logger = get_logger(__name__)
@@ -806,7 +807,6 @@ OS-specific commands.
 
 # Global instance for reuse (thread-safe)
 import asyncio as _asyncio
-from autobot_shared.logging_manager import get_logger
 
 _agent_instance: Optional[IntelligentAgent] = None
 _agent_lock = _asyncio.Lock()

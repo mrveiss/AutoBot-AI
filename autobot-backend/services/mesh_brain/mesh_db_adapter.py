@@ -28,6 +28,7 @@ Use ``create_mesh_db_adapter()`` at application startup to get an engine-wired i
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from services.mesh_brain.mesh_db import MeshDB
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -111,21 +112,20 @@ class MeshDBAdapter:
 def create_mesh_db_adapter(engine: AsyncEngine) -> MeshDBAdapter:
     """Construct a ``MeshDBAdapter`` wired to ``engine`` (#2548).
 
-        Intended to be called once at application startup, for example::
+    Intended to be called once at application startup, for example::
 
-            from user_management.database import get_async_engine
-            from services.mesh_brain.mesh_db_adapter import create_mesh_db_adapter
-    from autobot_shared.logging_manager import get_logger
+        from user_management.database import get_async_engine
+        from services.mesh_brain.mesh_db_adapter import create_mesh_db_adapter
 
-            adapter = create_mesh_db_adapter(get_async_engine())
-            edge_learner = EdgeLearner(db=adapter, redis=redis_client)
+        adapter = create_mesh_db_adapter(get_async_engine())
+        edge_learner = EdgeLearner(db=adapter, redis=redis_client)
 
-        Args:
-            engine: An initialised ``AsyncEngine`` for the PostgreSQL mesh database.
+    Args:
+        engine: An initialised ``AsyncEngine`` for the PostgreSQL mesh database.
 
-        Returns:
-            A ``MeshDBAdapter`` instance that satisfies both ``MeshDB`` and ``MeshGraph``
-            protocols.
+    Returns:
+        A ``MeshDBAdapter`` instance that satisfies both ``MeshDB`` and ``MeshGraph``
+        protocols.
     """
     db = MeshDB(engine)
     adapter = MeshDBAdapter(db)

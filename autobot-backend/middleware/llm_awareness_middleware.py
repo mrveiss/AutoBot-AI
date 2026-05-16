@@ -16,6 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from constants.ttl_constants import TTL_5_MINUTES
 from llm_self_awareness import get_llm_self_awareness
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -219,7 +220,6 @@ Active capabilities ({context['current_capabilities']['count']}):"""
 
 # Global injector instance (thread-safe)
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.logging_manager import get_logger
 
 _awareness_injector = lazy_singleton(LLMAwarenessInjector)
 

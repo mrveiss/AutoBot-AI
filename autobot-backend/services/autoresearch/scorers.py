@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from services.llm_service import LLMService
 
 from constants.ttl_constants import TTL_24_HOURS
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -88,7 +89,6 @@ class PromptScorer(ABC):
 
 from .models import Experiment, ExperimentTask, HyperParams
 from .runner import ExperimentRunner, build_task_inference_params
-from autobot_shared.logging_manager import get_logger
 
 
 class ValBpbScorer(PromptScorer):

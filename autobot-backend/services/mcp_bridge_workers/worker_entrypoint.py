@@ -24,8 +24,9 @@ Bridge resolution strategy:
     keeps the existing in-process bridge code reusable without rewrites.
 """
 
-from autobot_shared.ssot_config import config
 from __future__ import annotations
+
+from autobot_shared.ssot_config import config
 from autobot_shared.logging_manager import get_logger
 
 import asyncio

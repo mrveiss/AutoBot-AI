@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["startup", "status"])
@@ -23,7 +24,6 @@ import threading
 
 from api.schemas_common import DataResponse
 from api.schemas_system import StartupMessage, StartupPhase, StartupStatusResponse
-from autobot_shared.logging_manager import get_logger
 
 _startup_lock = threading.Lock()
 

@@ -27,6 +27,7 @@ from enum import Enum
 from pathlib import Path
 from statistics import mean, stdev
 from typing import Any, Optional
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -818,13 +819,12 @@ class LogPatternMiner:
 
     def _detect_error_rate_anomalies(self) -> None:
         """
-                Detect hourly error rate anomalies using statistical deviation.
+        Detect hourly error rate anomalies using statistical deviation.
 
-                Identifies hours with error rates that deviate significantly
-                from the average hourly error rate.
-        from autobot_shared.logging_manager import get_logger
+        Identifies hours with error rates that deviate significantly
+        from the average hourly error rate.
 
-                Issue #620.
+        Issue #620.
         """
         hourly_errors, hourly_total = self._compute_hourly_error_counts()
 

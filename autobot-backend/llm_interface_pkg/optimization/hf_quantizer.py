@@ -15,6 +15,7 @@ Issue #1954: HfQuantizer integration for pre-quantized GPTQ/AWQ models.
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -85,18 +86,17 @@ class QuantizationType(str, Enum):
 def detect_quantization(model_config: Dict[str, Any]) -> QuantizationType:
     """Detect the quantization type from a HuggingFace model configuration dict.
 
-        The function inspects the ``quantization_config`` sub-dict (populated when
-        a model is saved with ``save_pretrained`` after quantization) as well as the
-        top-level ``model_type`` field as a secondary signal.
+    The function inspects the ``quantization_config`` sub-dict (populated when
+    a model is saved with ``save_pretrained`` after quantization) as well as the
+    top-level ``model_type`` field as a secondary signal.
 
-        Args:
-            model_config: The model's configuration dictionary.  Typically loaded
-                from ``config.json`` via ``AutoConfig.from_pretrained(...).to_dict()``.
-    from autobot_shared.logging_manager import get_logger
+    Args:
+        model_config: The model's configuration dictionary.  Typically loaded
+            from ``config.json`` via ``AutoConfig.from_pretrained(...).to_dict()``.
 
-        Returns:
-            The detected QuantizationType, or QuantizationType.NONE when no
-            recognisable quantization configuration is present.
+    Returns:
+        The detected QuantizationType, or QuantizationType.NONE when no
+        recognisable quantization configuration is present.
     """
     quant_cfg: Dict[str, Any] = model_config.get("quantization_config", {}) or {}
 

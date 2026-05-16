@@ -28,6 +28,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from constants.threshold_constants import TimingConstants
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -722,7 +723,6 @@ from autobot_shared.async_compat import run_or_schedule
 
 # Global optimizer instance for easy access (thread-safe)
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.logging_manager import get_logger
 
 _global_optimizer = lazy_singleton(TodoWriteOptimizer)
 

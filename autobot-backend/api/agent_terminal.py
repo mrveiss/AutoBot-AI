@@ -1,4 +1,6 @@
 # AutoBot - AI-Powered Automation Platform
+from autobot_shared.logging_manager import get_logger
+
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
@@ -760,7 +762,6 @@ async def agent_terminal_info(
 
 import uuid
 from datetime import datetime, timezone
-from autobot_shared.logging_manager import get_logger
 
 # In-memory store for pending host selection requests
 # In production, this would use Redis for persistence

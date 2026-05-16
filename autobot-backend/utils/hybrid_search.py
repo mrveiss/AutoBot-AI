@@ -12,6 +12,7 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
 from config.manager import get_config_manager
+from autobot_shared.logging_manager import get_logger
 
 config = get_config_manager()
 
@@ -486,7 +487,6 @@ class HybridSearchEngine:
 
 # Global instance (thread-safe)
 import threading
-from autobot_shared.logging_manager import get_logger
 
 _hybrid_search_engine = None
 _hybrid_search_engine_lock = threading.Lock()

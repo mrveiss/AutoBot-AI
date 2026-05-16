@@ -12,6 +12,7 @@ import json
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Pattern
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -513,7 +514,6 @@ class PayloadOptimizer:
 
 
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.logging_manager import get_logger
 
 get_payload_optimizer = lazy_singleton(PayloadOptimizer)
 

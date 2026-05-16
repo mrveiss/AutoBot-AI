@@ -17,6 +17,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from autobot_shared.async_compat import run_or_schedule
 from constants.ttl_constants import TTL_1_HOUR
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -419,7 +420,6 @@ class CodeAnalyzer:
 
 # In original files, replace with:
 from utils.{module_name}_utils import {func.name}
-from autobot_shared.logging_manager import get_logger
 """
 
         return example.strip()

@@ -28,6 +28,8 @@ except ImportError as _phase_validator_import_error:
 
     PhaseValidator = _MissingDep("PhaseValidator", _phase_validator_import_error)  # type: ignore[assignment, misc]
 
+from autobot_shared.logging_manager import get_logger
+
 # Setup logging
 logger = get_logger(__name__)
 
@@ -836,7 +838,6 @@ class PhaseProgressionManager:
 
 # Singleton instance for global access (thread-safe)
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.logging_manager import get_logger
 
 _progression_manager = lazy_singleton(PhaseProgressionManager)
 

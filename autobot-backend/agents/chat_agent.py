@@ -21,6 +21,7 @@ from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -362,7 +363,6 @@ For complex technical tasks, analysis, or system commands, you should "
 
 # Singleton instance (thread-safe)
 import threading
-from autobot_shared.logging_manager import get_logger
 
 _chat_agent_instance = None
 _chat_agent_lock = threading.Lock()

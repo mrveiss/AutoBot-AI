@@ -30,6 +30,7 @@ from models.npu_models import (
 )
 from npu_integration import NPUWorkerClient
 from utils.async_initializable import AsyncInitializable
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -877,7 +878,6 @@ class NPUWorkerManager(AsyncInitializable):
 
 # Global worker manager instance (thread-safe)
 import asyncio as _asyncio_lock
-from autobot_shared.logging_manager import get_logger
 
 _worker_manager: Optional[NPUWorkerManager] = None
 _worker_manager_lock = _asyncio_lock.Lock()

@@ -16,6 +16,7 @@ from pathlib import Path
 from code_analyzer import CodeAnalyzer
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -282,7 +283,6 @@ def execute_shell_command_sync(
     Returns same format as async version.
     """
     import time
-from autobot_shared.logging_manager import get_logger
     start_time = time.time()
 
     try:

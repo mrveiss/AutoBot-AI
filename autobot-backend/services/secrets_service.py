@@ -18,6 +18,7 @@ from cryptography.fernet import Fernet
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from config.manager import get_config_manager as _get_config_manager
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -658,7 +659,6 @@ class SecretsService:
 
 # Singleton instance getter (thread-safe)
 import threading
-from autobot_shared.logging_manager import get_logger
 
 _secrets_service = None
 _secrets_service_lock = threading.Lock()

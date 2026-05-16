@@ -19,6 +19,7 @@ from tools.code_interpreter import execute_code
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
     from worker_node import WorkerNode
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -774,6 +775,5 @@ class ToolRegistry:
 
 
 from autobot_shared.singleton_factory import lazy_singleton  # noqa: E402
-from autobot_shared.logging_manager import get_logger
 
 get_tool_registry = lazy_singleton(ToolRegistry)

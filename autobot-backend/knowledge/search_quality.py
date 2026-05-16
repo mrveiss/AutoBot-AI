@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from autobot_shared.time_utils import parse_utc_iso
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -859,7 +860,6 @@ class SearchAnalytics:
 # =============================================================================
 
 import threading
-from autobot_shared.logging_manager import get_logger
 
 _query_expander: Optional[QueryExpander] = None
 _relevance_scorer: Optional[RelevanceScorer] = None

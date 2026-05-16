@@ -48,6 +48,8 @@ except ImportError as e:
     ValidationDashboardGenerator = _MissingDep("ValidationDashboardGenerator", e)  # type: ignore[assignment]
     import_error = str(e)
 
+from autobot_shared.logging_manager import get_logger
+
 # Import LLM judges for validation enhancement
 try:
     from judges.agent_response_judge import AgentResponseJudge
@@ -62,7 +64,6 @@ logger = get_logger(__name__)
 
 # Thread-safe global singletons
 import threading
-from autobot_shared.logging_manager import get_logger
 
 # Global dashboard generator instance
 _dashboard_generator = None

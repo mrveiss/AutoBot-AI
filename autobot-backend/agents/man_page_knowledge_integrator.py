@@ -20,6 +20,7 @@ import yaml
 from autobot_shared.time_utils import utc_timestamp
 from intelligence.os_detector import get_os_detector
 from utils.command_utils import execute_command
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -627,7 +628,6 @@ class ManPageKnowledgeIntegrator:
 import asyncio as _asyncio_lock
 
 from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.logging_manager import get_logger
 
 _integrator_instance: Optional[ManPageKnowledgeIntegrator] = None
 _integrator_lock = _asyncio_lock.Lock()

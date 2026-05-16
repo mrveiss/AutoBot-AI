@@ -12,6 +12,7 @@ import os
 from typing import Dict, List, Optional
 
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 import yaml
@@ -20,7 +21,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from constants.model_constants import OPENAI_GPT35_TURBO, Models
 from constants.network_constants import NetworkConstants, ServiceURLs
-from autobot_shared.logging_manager import get_logger
 
 # Issue #380: Module-level tuples for validation constants
 _VALID_LOG_LEVELS = ("debug", "info", "warning", "error", "critical")

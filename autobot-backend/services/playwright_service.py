@@ -18,6 +18,7 @@ from autobot_shared.http_client import get_http_client
 from constants.network_constants import NetworkConstants, ServiceURLs
 from exceptions import ServiceUnavailableError
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -411,7 +412,6 @@ class PlaywrightService:
 
 # Global service instance (thread-safe)
 import asyncio as _asyncio_lock
-from autobot_shared.logging_manager import get_logger
 
 _playwright_service: Optional[PlaywrightService] = None
 _playwright_service_lock = _asyncio_lock.Lock()

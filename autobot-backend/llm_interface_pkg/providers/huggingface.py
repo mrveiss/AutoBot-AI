@@ -14,8 +14,9 @@ API tokens are never logged.
 Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
-from autobot_shared.ssot_config import config
 from __future__ import annotations
+
+from autobot_shared.ssot_config import config
 from autobot_shared.logging_manager import get_logger
 
 import logging

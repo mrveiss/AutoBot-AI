@@ -38,6 +38,7 @@ from typing import Any, Dict, List, Optional
 
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -88,7 +89,6 @@ def _calculate_threshold_score(value: int, thresholds: list[tuple[int, int]], de
 
 
 from autobot_shared.status_enums import RiskLevel  # noqa: E402  # #6689 consolidation
-from autobot_shared.logging_manager import get_logger
 
 
 class RiskFactor(Enum):

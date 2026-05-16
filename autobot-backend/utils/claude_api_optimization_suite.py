@@ -34,6 +34,7 @@ from .payload_optimizer import PayloadOptimizer
 from .request_batcher import BatchableRequest, IntelligentRequestBatcher
 from .todowrite_optimizer import get_todowrite_optimizer
 from .tool_pattern_analyzer import get_tool_pattern_analyzer
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -846,7 +847,6 @@ class ClaudeAPIOptimizationSuite:
 import threading
 
 from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.logging_manager import get_logger
 
 _global_optimization_suite: Optional[ClaudeAPIOptimizationSuite] = None
 _global_optimization_suite_lock = threading.Lock()
