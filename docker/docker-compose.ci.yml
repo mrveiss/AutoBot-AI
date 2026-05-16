@@ -1,0 +1,23 @@
+# CI port-override — avoids host-port collisions on MV-Stealth-VM (self-hosted runner)
+#
+# Ports 80, 443, 5432, 6379 are occupied by the production Paperclip stack.
+# The smoke-test workflow sets these env vars before running docker compose:
+#
+#   NGINX_CI_PORT=8888          (avoids occupied port 80)
+#   NGINX_CI_SSL_PORT=8443      (avoids occupied port 443)
+#   AUTOBOT_POSTGRES_PORT=5433  (avoids occupied port 5432)
+#   AUTOBOT_REDIS_PORT=6380     (avoids occupied port 6379)
+#
+# Usage (see .github/workflows/docker-smoke-test.yml):
+#   docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml \
+#     --env-file docker/.env.docker up -d
+#
+# Port values are injected as shell env vars — not overridden here — because
+# Docker Compose merges (concatenates) port lists from multiple -f files,
+# which would bind both old and new host ports simultaneously. Parameterising
+# the base file with ${VAR:-default} and setting VAR in CI is the correct
+# approach for host-port remapping.
+#
+# This file is the canonical anchor for CI port configuration and may carry
+# future CI-specific service overrides (resource limits, healthcheck tweaks).
+services: {}

@@ -73,7 +73,7 @@ services:
     container_name: autobot-postgres
     restart: unless-stopped
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${AUTOBOT_POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
@@ -327,8 +327,8 @@ services:
     container_name: autobot-frontend
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "${NGINX_CI_PORT:-80}:80"
+      - "${NGINX_CI_SSL_PORT:-443}:443"
     volumes:
       # nginx config: HTTP-only by default.
       # For TLS: set AUTOBOT_DOCKER_NGINX_CONF=./docker/nginx/nginx-ssl.conf
