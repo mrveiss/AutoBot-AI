@@ -19,9 +19,9 @@ from autobot_shared.ssot_config import config as _ssot_config
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConstants
 from dependencies import get_config
-from extensions.base import HookContext
-from extensions.hooks import HookPoint
-from extensions.manager import get_extension_manager
+from middleware.base import HookContext
+from middleware.hooks import HookPoint
+from middleware.manager import get_extension_manager
 from prompt_manager import get_language_instruction, get_prompt, resolve_language
 
 from .models import WorkflowSession
