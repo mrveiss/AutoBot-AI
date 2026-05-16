@@ -12,6 +12,10 @@ updates:
     labels:
       - "dependencies"
       - "backend"
+    groups:
+      opentelemetry:
+        patterns:
+          - "opentelemetry-*"
     ignore:
       - dependency-name: "numpy"
         update-types: ["version-update:semver-major"]
@@ -34,6 +38,10 @@ updates:
     labels:
       - "dependencies"
       - "backend"
+    groups:
+      opentelemetry:
+        patterns:
+          - "opentelemetry-*"
     ignore:
       - dependency-name: "pydantic"
         update-types: ["version-update:semver-major"]
@@ -74,6 +82,13 @@ updates:
     labels:
       - "dependencies"
       - "frontend"
+    groups:
+      frontend-core:
+        patterns:
+          - "vue"
+          - "vite"
+          - "@vitejs/*"
+          - "typescript"
     ignore:
       - dependency-name: "vue"
         update-types: ["version-update:semver-major"]
@@ -315,6 +330,10 @@ updates:
       - "dependencies"
       - "backend"
       - "devops"
+    groups:
+      opentelemetry:
+        patterns:
+          - "opentelemetry-*"
     ignore:
       - dependency-name: "fastapi"
         update-types: ["version-update:semver-major"]
