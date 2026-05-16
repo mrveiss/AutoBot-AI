@@ -2,22 +2,22 @@
   <div class="terminal-container">
     <!-- Terminal Header (matching browser/desktop style) -->
     <div class="terminal-header bg-autobot-bg-secondary border-b border-autobot-border p-2 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <div class="flex space-x-1">
+      <div class="flex items-center gap-3">
+        <div class="flex gap-1">
           <div class="w-3 h-3 bg-red-500 rounded-full"></div>
           <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
           <div class="w-3 h-3 bg-green-500 rounded-full"></div>
         </div>
-        <div class="flex items-center space-x-2 text-sm">
+        <div class="flex items-center gap-2 text-sm">
           <i class="fas fa-terminal text-green-600"></i>
           <span class="font-medium">{{ props.chatSessionId ? $t('terminal.terminal.chatTerminal') : $t('terminal.terminal.systemTerminal') }}</span>
           <span class="text-xs text-autobot-text-muted">{{ props.chatSessionId ? $t('terminal.terminal.chatSession') : $t('terminal.terminal.independentTool') }}</span>
         </div>
       </div>
 
-      <div class="flex items-center space-x-2">
+      <div class="flex items-center gap-2">
         <!-- Terminal Controls -->
-        <div class="flex items-center space-x-1">
+        <div class="flex items-center gap-1">
           <button @click="toggleConnection" :class="connectionButtonClass" :disabled="isConnecting" class="terminal-btn" :title="connectionButtonText" :aria-label="connectionButtonText">
             <i :class="connectionIconClass"></i>
           </button>

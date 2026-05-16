@@ -2,22 +2,22 @@
   <div class="chromium-browser-container">
     <!-- Browser Header -->
     <div class="browser-header bg-autobot-bg-tertiary border-b border-autobot-border p-2 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <div class="flex space-x-1">
+      <div class="flex items-center gap-3">
+        <div class="flex gap-1">
           <div class="w-3 h-3 bg-red-500 rounded-full"></div>
           <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
           <div class="w-3 h-3 bg-green-500 rounded-full"></div>
         </div>
-        <div class="flex items-center space-x-2 text-sm">
+        <div class="flex items-center gap-2 text-sm">
           <i class="fab fa-chrome" style="color: var(--color-primary)"></i>
           <span class="font-medium">{{ $t('desktop.popoutBrowser.title') }}</span>
           <span v-if="sessionId" class="text-xs text-autobot-text-muted">{{ $t('desktop.popoutBrowser.sessionLabel', { id: sessionId.slice(0, 8) }) }}</span>
         </div>
       </div>
 
-      <div class="flex items-center space-x-2">
+      <div class="flex items-center gap-2">
         <!-- Browser Controls -->
-        <div class="flex items-center space-x-1">
+        <div class="flex items-center gap-1">
           <button @click="refreshBrowser" class="browser-btn" :disabled="isRefreshing" :title="$t('desktop.popoutBrowser.refresh')" :aria-label="$t('desktop.popoutBrowser.refresh')">
             <i class="fas fa-sync-alt" :class="{ 'fa-spin': isRefreshing }"></i>
           </button>
@@ -36,7 +36,7 @@
         </div>
 
         <!-- Playwright Automation Controls -->
-        <div class="border-l border-autobot-border pl-2 flex items-center space-x-1">
+        <div class="border-l border-autobot-border pl-2 flex items-center gap-1">
           <button @click="showPlaywrightPanel = !showPlaywrightPanel" class="browser-btn" :title="$t('desktop.popoutBrowser.playwrightAutomation')" :aria-label="$t('desktop.popoutBrowser.playwrightAutomation')">
             <i class="fas fa-robot" :style="showPlaywrightPanel ? 'color: var(--color-primary)' : ''"></i>
           </button>
@@ -63,7 +63,7 @@
     </div>
 
     <!-- Address Bar -->
-    <div class="address-bar bg-autobot-bg-secondary border-b border-autobot-border p-3 flex items-center space-x-3">
+    <div class="address-bar bg-autobot-bg-secondary border-b border-autobot-border p-3 flex items-center gap-3">
       <button @click="goBack" :disabled="!canGoBack || isGoingBack" class="nav-btn" :title="$t('desktop.popoutBrowser.back')" :aria-label="$t('desktop.popoutBrowser.back')">
         <i class="fas fa-arrow-left" :class="{ 'fa-pulse': isGoingBack }"></i>
       </button>
@@ -90,7 +90,7 @@
     <!-- Playwright Automation Panel -->
     <div v-if="showPlaywrightPanel" class="automation-panel border-b p-4" style="background: var(--color-info-bg); border-color: rgba(59,130,246,0.2)">
       <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center space-x-2">
+        <div class="flex items-center gap-2">
           <i class="fas fa-robot" style="color: var(--color-info)"></i>
           <span class="font-medium text-autobot-text-primary">{{ $t('desktop.popoutBrowser.browserAutomation') }}</span>
           <span class="text-sm px-2 py-1 rounded" style="background: var(--color-info-bg); color: var(--color-info)">{{ playwrightStatus }}</span>
@@ -107,7 +107,7 @@
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <!-- Web Search -->
         <div class="automation-card">
-          <div class="flex items-center space-x-2 mb-2">
+          <div class="flex items-center gap-2 mb-2">
             <i class="fas fa-search text-green-500"></i>
             <span class="text-sm font-medium">{{ $t('desktop.popoutBrowser.webSearch') }}</span>
           </div>
@@ -127,7 +127,7 @@
 
         <!-- Frontend Testing -->
         <div class="automation-card">
-          <div class="flex items-center space-x-2 mb-2">
+          <div class="flex items-center gap-2 mb-2">
             <i class="fas fa-vials" style="color: var(--color-info)"></i>
             <span class="text-sm font-medium">{{ $t('desktop.popoutBrowser.frontendTest') }}</span>
           </div>
@@ -139,7 +139,7 @@
 
         <!-- Automation Results -->
         <div class="automation-card">
-          <div class="flex items-center space-x-2 mb-2">
+          <div class="flex items-center gap-2 mb-2">
             <i class="fas fa-chart-bar text-purple-500"></i>
             <span class="text-sm font-medium">{{ $t('desktop.popoutBrowser.results') }}</span>
           </div>
@@ -232,7 +232,7 @@
               <StatusBadge variant="success" size="small">{{ $t('desktop.popoutBrowser.connected') }}</StatusBadge>
             </div>
             <div class="text-xs text-autobot-text-secondary">
-              <div class="flex items-center space-x-2">
+              <div class="flex items-center gap-2">
                 <i class="fas fa-link" style="color: var(--color-info)"></i>
                 <span class="text-sm" style="color: var(--text-link)">{{ currentUrl }}</span>
               </div>
@@ -244,7 +244,7 @@
             <h4 class="text-sm font-medium text-autobot-text-primary mb-3">{{ $t('desktop.popoutBrowser.recentResults') }}</h4>
 
             <div v-if="automationResults.lastSearch" class="mb-3 p-3 rounded" style="background: var(--color-info-bg)">
-              <div class="flex items-center space-x-2 mb-1">
+              <div class="flex items-center gap-2 mb-1">
                 <i class="fas fa-search" style="color: var(--color-info)"></i>
                 <span class="text-sm font-medium">{{ $t('desktop.popoutBrowser.webSearch') }}</span>
               </div>
@@ -252,7 +252,7 @@
             </div>
 
             <div v-if="automationResults.lastTest" class="p-3 rounded" style="background: var(--color-success-bg)">
-              <div class="flex items-center space-x-2 mb-1">
+              <div class="flex items-center gap-2 mb-1">
                 <i class="fas fa-vials text-green-500"></i>
                 <span class="text-sm font-medium">{{ $t('desktop.popoutBrowser.frontendTest') }}</span>
               </div>
@@ -332,7 +332,7 @@
             <h3 class="text-lg font-semibold">{{ $t('desktop.popoutBrowser.interactionRequired') }}</h3>
           </div>
           <p class="text-autobot-text-primary mb-4">{{ interactionMessage }}</p>
-          <div class="flex space-x-3">
+          <div class="flex gap-3">
             <BaseButton variant="primary" @click="handleInteraction('wait')">
               <i class="fas fa-clock mr-1"></i>
               {{ $t('desktop.popoutBrowser.waitAndMonitor') }}

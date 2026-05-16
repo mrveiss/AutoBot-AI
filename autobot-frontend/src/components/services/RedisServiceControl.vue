@@ -2,7 +2,7 @@
   <div class="redis-service-control bg-autobot-bg-card rounded-lg shadow-md overflow-hidden" data-testid="redis-service-container">
     <!-- Service Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b bg-linear-to-r from-red-50 to-red-100" data-testid="redis-service-header">
-      <div class="flex items-center space-x-3">
+      <div class="flex items-center gap-3">
         <i class="fas fa-database text-2xl text-red-600"></i>
         <div>
           <h3 class="text-lg font-semibold text-autobot-text-primary" data-testid="redis-service-title">{{ $t('redis.title') }}</h3>
@@ -11,7 +11,7 @@
       </div>
 
       <!-- Status Badge -->
-      <div class="flex items-center space-x-3" data-testid="redis-service-status-area">
+      <div class="flex items-center gap-3" data-testid="redis-service-status-area">
         <span class="text-xs text-autobot-text-muted" data-testid="redis-service-last-check">
           {{ $t('redis.lastCheck') }} {{ formatLastCheck(serviceStatus.last_check) }}
         </span>
@@ -53,12 +53,12 @@
     <!-- Control Buttons -->
     <div class="px-6 py-4 border-b" data-testid="redis-service-controls">
       <div class="flex items-center justify-between">
-        <div class="flex space-x-3">
+        <div class="flex gap-3">
           <BaseButton
             variant="success"
             @click="handleStartService"
             :disabled="serviceStatus.status === 'running' || loading"
-            class="flex items-center space-x-2 px-4 py-2"
+            class="flex items-center gap-2 px-4 py-2"
             data-testid="redis-service-start-btn"
           >
             <i class="fas fa-play"></i>
@@ -69,7 +69,7 @@
             variant="warning"
             @click="handleRestartService"
             :disabled="serviceStatus.status !== 'running' || loading"
-            class="flex items-center space-x-2 px-4 py-2"
+            class="flex items-center gap-2 px-4 py-2"
             data-testid="redis-service-restart-btn"
           >
             <i class="fas fa-sync"></i>
@@ -80,7 +80,7 @@
             variant="danger"
             @click="handleStopService"
             :disabled="serviceStatus.status !== 'running' || loading"
-            class="flex items-center space-x-2 px-4 py-2"
+            class="flex items-center gap-2 px-4 py-2"
             data-testid="redis-service-stop-btn"
           >
             <i class="fas fa-stop"></i>
@@ -92,7 +92,7 @@
           variant="secondary"
           @click="refreshStatus"
           :loading="loading"
-          class="flex items-center space-x-2 px-4 py-2"
+          class="flex items-center gap-2 px-4 py-2"
           data-testid="redis-service-refresh-btn"
         >
           <i class="fas fa-sync-alt"></i>
