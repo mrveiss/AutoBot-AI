@@ -198,21 +198,15 @@ const fetchEntityName = async (id: string, type: 'user' | 'group'): Promise<stri
   }
 
   try {
-    let response
-    if (type === 'user') {
-      response = await apiService.getUserById(id)
-    } else {
-      response = await apiService.getGroupById(id)
-    }
-
-    // Extract name from response — apiService returns parsed JSON directly (no .data envelope)
     let displayName = id
-    if (response) {
-      if (type === 'user') {
-        const userData = response as unknown as { display_name?: string; email?: string; username?: string }
+    if (type === 'user') {
+      const userData = await apiService.getUserById(id)
+      if (userData) {
         displayName = userData.display_name || userData.email || userData.username || id
-      } else {
-        const groupData = response as unknown as { name?: string }
+      }
+    } else {
+      const groupData = await apiService.getGroupById(id)
+      if (groupData) {
         displayName = groupData.name || id
       }
     }
