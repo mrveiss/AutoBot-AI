@@ -1,0 +1,12 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Strict security headers — server default.
+# Deployed by slm_manager Ansible role (#6842).
+# CSP: no iframe embedding (frame-ancestors 'none'), no eval.
+add_header X-Frame-Options "SAMEORIGIN" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-XSS-Protection "1; mode=block" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' wss://$host; frame-ancestors 'none'; base-uri 'self'; form-action 'self';" always;
