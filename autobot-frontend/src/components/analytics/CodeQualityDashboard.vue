@@ -356,6 +356,15 @@
       </div>
     </div>
 
+    <!-- Issue #6871: Unwired Tracker Tile — modules with zero production callers -->
+    <div class="unwired-tracker-section">
+      <UnwiredTrackerTile
+        :count="unwiredTrackerCount"
+        :sparkline="unwiredTrackerSparkline"
+        :loading="unwiredTrackerLoading"
+      />
+    </div>
+
     <!-- Codebase Stats Footer -->
     <div class="codebase-stats">
       <div class="stat-item">
@@ -444,6 +453,8 @@ import { createLogger } from '@/utils/debugUtils';
 import { getCssVar } from '@/composables/useCssVars';
 import { useWebSocket } from '@/composables/useWebSocket';
 import { useCodeQualityData } from '@/composables/analytics/useCodeQualityData';
+import { useUnwiredTrackers } from '@/composables/analytics/useUnwiredTrackers';
+import UnwiredTrackerTile from '@/components/analytics/UnwiredTrackerTile.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 
 const logger = createLogger('CodeQualityDashboard');
@@ -471,6 +482,14 @@ const {
   fetchExport,
   noDataState,
 } = useCodeQualityData(withSourceId);
+
+// Issue #6871: Unwired Tracker metric — modules with zero production callers
+const {
+  count: unwiredTrackerCount,
+  sparkline: unwiredTrackerSparkline,
+  loading: unwiredTrackerLoading,
+  fetchUnwiredTrackers,
+} = useUnwiredTrackers(withSourceId);
 
 // Helper to get CSS variable value for JavaScript usage (SVG, charts, etc.)
 
@@ -744,6 +763,7 @@ async function refreshData(): Promise<void> {
       loadComplexity(),
       loadTrends(),
       loadSnapshot(),
+      fetchUnwiredTrackers(),  // Issue #6871: load unwired-tracker count
     ]);
     // Update timestamp only on successful data refresh
     lastUpdated.value = new Date().toLocaleTimeString();
@@ -1681,6 +1701,12 @@ watch(selectedPeriod, () => {
 
 .trend-stat .stat-value.positive { color: var(--color-success); }
 .trend-stat .stat-value.negative { color: var(--color-error); }
+
+/* Issue #6871: Unwired Tracker Tile section */
+.unwired-tracker-section {
+  margin-bottom: var(--spacing-6);
+  max-width: 280px;
+}
 
 /* Codebase Stats Footer */
 .codebase-stats {
