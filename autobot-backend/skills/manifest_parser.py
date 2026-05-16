@@ -14,6 +14,7 @@ Optional fields : category, capabilities, dependencies, trust_level_requested,
 """
 
 import re
+import warnings
 from typing import Any
 
 import yaml
@@ -31,6 +32,7 @@ _OPTIONAL_FIELDS = (
     "author",
     "license",
     "homepage",
+    "kind",
 )
 _VALID_TRUST_LEVELS = {"trusted", "monitored", "sandboxed", "restricted"}
 _LIST_FIELDS = ("capabilities", "dependencies", "tags")
@@ -66,6 +68,15 @@ def parse_manifest(text: str) -> dict[str, Any]:
     errors = validate_manifest(data)
     if errors:
         raise ValueError("Manifest validation failed:\n" + "\n".join(f"  - {e}" for e in errors))
+
+    if "kind" not in data:
+        warnings.warn(
+            f"Skill manifest '{data.get('name', '<unknown>')}' does not declare 'kind'; "
+            "defaulting to 'skill'. Add kind: skill to silence this warning.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        data["kind"] = "skill"
 
     return data
 

@@ -89,6 +89,7 @@ class PluginManifest(BaseModel):
     version: str = Field(..., description="Semantic version (e.g., 1.0.0)")
     display_name: str = Field(..., description="Human-readable plugin name")
     description: str = Field(..., description="Plugin description")
+    kind: str = Field("plugin", description="Manifest kind — always 'plugin' for PluginManifest")
     author: str = Field(..., description="Plugin author")
     entry_point: str = Field(..., description="Python module path (e.g., 'plugins.hello_plugin.main')")
     dependencies: List[str] = Field(default_factory=list, description="Required plugin names")
