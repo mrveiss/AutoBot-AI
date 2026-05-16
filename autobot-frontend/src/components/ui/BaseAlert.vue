@@ -8,13 +8,14 @@
     <!-- Icon -->
     <div v-if="showIcon" class="alert-icon">
       <slot name="icon">
-        <component :is="defaultIcon" class="h-5 w-5" />
+        <component :is="defaultIcon" :class="iconSizeClass" />
       </slot>
     </div>
 
     <!-- Content -->
     <div class="alert-content">
-      <div v-if="title" class="alert-title">{{ title }}</div>
+      <!-- title is suppressed in compact size -->
+      <div v-if="title && size !== 'compact'" class="alert-title">{{ title }}</div>
       <div class="alert-message">
         <slot>{{ message }}</slot>
       </div>
@@ -48,6 +49,7 @@ import {
 
 export interface BaseAlertProps {
   variant?: 'success' | 'info' | 'warning' | 'error' | 'critical'
+  size?: 'default' | 'compact'
   title?: string
   message?: string
   icon?: boolean
@@ -58,6 +60,7 @@ export interface BaseAlertProps {
 
 const props = withDefaults(defineProps<BaseAlertProps>(), {
   variant: 'info',
+  size: 'default',
   message: '',
   icon: true,
   dismissible: false,
@@ -75,6 +78,8 @@ const dismissed = ref(false)
 
 const showIcon = computed(() => props.icon !== false)
 
+// role="alert" is a static attribute on the root element.
+// Screen readers announce on DOM insertion (mount). No JS re-trigger needed.
 const defaultIcon = computed(() => {
   switch (props.variant) {
     case 'success':
@@ -90,10 +95,16 @@ const defaultIcon = computed(() => {
   }
 })
 
+// compact: 16px (h-4 w-4); default: 20px (h-5 w-5)
+const iconSizeClass = computed(() => (props.size === 'compact' ? 'h-4 w-4' : 'h-5 w-5'))
+
 const alertClasses = computed(() => {
   const classes = [`alert-${props.variant}`]
   if (props.bordered) {
     classes.push('alert-bordered')
+  }
+  if (props.size === 'compact') {
+    classes.push('alert-compact')
   }
   return classes
 })
@@ -126,9 +137,24 @@ onMounted(() => {
   transition: all var(--duration-200) var(--ease-out);
 }
 
+/* compact size: single-line layout, reduced padding (--spacing-2), smaller icon (16px) */
+.alert-compact {
+  align-items: center;
+  padding: var(--spacing-2);
+  gap: var(--spacing-2);
+}
+
+.alert-compact .alert-message {
+  line-height: 1.25rem;
+}
+
 .alert-icon {
   flex-shrink: 0;
   margin-top: var(--spacing-0-5);
+}
+
+.alert-compact .alert-icon {
+  margin-top: 0;
 }
 
 .alert-content {
