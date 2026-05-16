@@ -24,11 +24,11 @@ MIN_LEN = 2
 MAX_KEY_WORDS = 4
 
 SKIP_RE = re.compile(
-    r"^\s*$"                    # whitespace only
-    r"|^[\d\s:,./\-+%()]+$"    # numbers / punctuation only
-    r"|.*\{.*\}.*"              # already has template expressions
-    r"|^[a-z_\-]+$"             # single lowercase word (likely a selector/attr)
-    r"|^[A-Z_]{2,}$"            # ALL_CAPS constant
+    r"^\s*$"  # whitespace only
+    r"|^[\d\s:,./\-+%()]+$"  # numbers / punctuation only
+    r"|.*\{.*\}.*"  # already has template expressions
+    r"|^[a-z_\-]+$"  # single lowercase word (likely a selector/attr)
+    r"|^[A-Z_]{2,}$"  # ALL_CAPS constant
 )
 
 
@@ -42,9 +42,7 @@ def file_to_namespace(vue_path: Path) -> str:
         words = re.sub(r"[-_\s]+", " ", name).split()
         if not words:
             return name
-        return words[0][0].lower() + words[0][1:] + "".join(
-            w[0].upper() + w[1:] for w in words[1:]
-        )
+        return words[0][0].lower() + words[0][1:] + "".join(w[0].upper() + w[1:] for w in words[1:])
 
     skip_dirs = {"views", "components"}
     camel_parts = [to_camel(p) for p in parts if p not in skip_dirs]
@@ -77,7 +75,7 @@ def mask_attribute_values(html: str) -> tuple[str, list[str]]:
     def replacer(m: re.Match) -> str:
         idx = len(originals)
         originals.append(m.group(0))
-        return f'\x00ATTR{idx}\x00'
+        return f"\x00ATTR{idx}\x00"
 
     # Match = followed by a quoted string (attribute value).
     # Include dynamic Vue attributes like :foo="..." and @click="..." and v-if="..."
@@ -89,7 +87,7 @@ def mask_attribute_values(html: str) -> tuple[str, list[str]]:
 def unmask_attribute_values(html: str, originals: list[str]) -> str:
     """Restore previously masked attribute values."""
     for idx, original in enumerate(originals):
-        html = html.replace(f'\x00ATTR{idx}\x00', original)
+        html = html.replace(f"\x00ATTR{idx}\x00", original)
     return html
 
 
@@ -201,9 +199,7 @@ def main() -> None:
         print(f"\n[dry-run] Would write {len(all_strings)} strings to src/locales/en.json")
 
     print(
-        f"Processed {len(vue_files)} files, "
-        f"changed {changed_files}, "
-        f"{total_replacements} replacements total."
+        f"Processed {len(vue_files)} files, " f"changed {changed_files}, " f"{total_replacements} replacements total."
     )
 
 
