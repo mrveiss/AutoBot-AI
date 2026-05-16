@@ -5,14 +5,14 @@
 LRU Cache Manager - In-memory LRU caching with statistics
 """
 
-import logging
 import threading
 from collections import OrderedDict
 from typing import Any, Dict, Optional
 
 from autobot_shared.ssot_config import config
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LRUCacheManager:

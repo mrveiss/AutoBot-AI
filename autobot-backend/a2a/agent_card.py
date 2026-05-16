@@ -13,10 +13,11 @@ module can be imported without triggering the full backend stack.
 """
 
 import logging
+from autobot_shared.logging_manager import get_logger
 
 from .types import AgentCapabilities, AgentCard, AgentSkill
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 AUTOBOT_VERSION = "1.0.0"
 

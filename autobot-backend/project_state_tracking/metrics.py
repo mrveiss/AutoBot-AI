@@ -9,14 +9,14 @@ Metric calculations and Redis interactions for state tracking.
 Part of Issue #381 - God Class Refactoring
 """
 
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, List, Optional
 
 from .models import StateSnapshot
 from .types import REDIS_METRIC_KEYS, TrackingMetric
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def get_redis_metric(redis_client: Any, key: str, default: int = 0) -> int:

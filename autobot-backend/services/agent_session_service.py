@@ -9,7 +9,6 @@ Sessions have a configurable TTL; expired sessions are treated as
 absent and are cleaned up by cleanup_expired_sessions().
 """
 
-import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
@@ -19,8 +18,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from autobot_shared.time_utils import now_utc
 from models.process_run import AgentSession
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _DEFAULT_TTL = 3600
 

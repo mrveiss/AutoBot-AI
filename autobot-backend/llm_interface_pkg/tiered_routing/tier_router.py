@@ -15,8 +15,9 @@ from typing import Dict, List, Optional, Tuple
 from ..optimization.model_inspector import inspect_model
 from .complexity_scorer import TaskComplexityScorer
 from .tier_config import ComplexityResult, TierConfig, TierMetrics
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TieredModelRouter:

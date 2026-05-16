@@ -20,6 +20,7 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
+from autobot_shared.logging_manager import get_logger
 
 # Phase 4 (#7590): feature flag — default-off; enable in staging then flip to default-on.
 # Reads env at import time (process restart required to change).
@@ -313,7 +314,7 @@ def _process_streaming_groups(merged: List[Dict]) -> List[Dict]:
 # ====================================================================
 
 router = APIRouter(tags=["chat"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Phase 4 (#7590): log feature flag state at startup so operators know which mode is active
 logger.info(

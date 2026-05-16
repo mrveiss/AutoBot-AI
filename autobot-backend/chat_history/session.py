@@ -18,6 +18,7 @@ import os
 import time
 import uuid
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 
@@ -26,7 +27,7 @@ from chat_history.cache import _CHAT_RECENT_MAX_ENTRIES
 from chat_history.file_io import run_in_chat_io_executor
 from constants.redis_constants import REDIS_KEY
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SessionMixin:

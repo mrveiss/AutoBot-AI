@@ -11,14 +11,14 @@ data templates and embedded content.
 Created: 2025-12-21
 """
 
-import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import yaml
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Project root directory (parent of src/)
 _PROJECT_ROOT = Path(__file__).parent.parent.parent

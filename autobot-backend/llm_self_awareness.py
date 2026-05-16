@@ -10,7 +10,6 @@ Provides context injection for LLM agents to be aware of current system state, c
 from autobot_shared.ssot_config import config
 import asyncio
 import json
-import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,7 +22,7 @@ from enhanced_project_state_tracker import get_state_tracker
 from phase_progression_manager import get_progression_manager
 from project_state_manager import get_project_state_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # O(1) lookup optimization constants (Issue #326)
 CORE_KEYWORDS = {"api", "endpoint", "service"}
@@ -637,6 +636,7 @@ from autobot_shared.async_compat import run_or_schedule
 
 # Global instance (thread-safe)
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.logging_manager import get_logger
 
 _llm_self_awareness = lazy_singleton(LLMSelfAwareness)
 

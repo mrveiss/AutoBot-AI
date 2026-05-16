@@ -23,7 +23,6 @@ Usage:
     new_id = await serializer.import_workflow(doc, owner_id="user-xyz")
 """
 
-import logging
 import uuid
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
@@ -31,8 +30,9 @@ from typing import Any, Dict, List, Optional
 from autobot_shared.time_utils import utc_timestamp
 from services.workflow_automation.manager import WorkflowAutomationManager
 from services.workflow_automation.models import AutomationMode, WorkflowStep
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Canonical schema version for documents produced by this module.
 SCHEMA_VERSION = "1.0"

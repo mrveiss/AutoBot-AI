@@ -12,6 +12,7 @@ import logging
 from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.time_utils import parse_utc_iso
 
@@ -31,7 +32,7 @@ from .types import (
     ResponseType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ConversationFlowAnalyzer:

@@ -19,6 +19,7 @@ import logging
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from code_intelligence.fingerprinting.ast_hasher import ASTHasher
 from code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
@@ -42,7 +43,7 @@ try:
 except ImportError:
     HAS_SHARED_CACHE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for function definition types
 _FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)

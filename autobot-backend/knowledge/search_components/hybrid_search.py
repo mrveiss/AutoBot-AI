@@ -9,10 +9,10 @@ Contains hybrid search with Reciprocal Rank Fusion (RRF).
 """
 
 import asyncio
-import logging
 from typing import Any, Callable, Coroutine, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class HybridSearcher:

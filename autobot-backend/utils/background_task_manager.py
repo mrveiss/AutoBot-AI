@@ -28,6 +28,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import HTTPException
 
@@ -36,7 +37,7 @@ from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import parse_utc_iso
 from constants.ttl_constants import TTL_24_HOURS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Defaults
 _DEFAULT_TTL = TTL_24_HOURS

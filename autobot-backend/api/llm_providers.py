@@ -8,6 +8,7 @@ Provides runtime provider switching, provider listing, and per-provider testing.
 """
 
 import logging
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -18,7 +19,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.llm_service import get_llm_service
 from utils.advanced_cache_manager import cache_response
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

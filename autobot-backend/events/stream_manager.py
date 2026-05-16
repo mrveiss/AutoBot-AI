@@ -35,15 +35,15 @@ Usage:
 
 import asyncio
 import json
-import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
 from events.types import AgentEvent, EventType, ObservationContent, TaskArtifact
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================

@@ -5,7 +5,6 @@
 Provider-specific health check implementations
 """
 
-import logging
 import os
 import time
 
@@ -17,8 +16,9 @@ from autobot_shared.ssot_config import get_ollama_url
 from constants.model_constants import ANTHROPIC_CLAUDE3_HAIKU_DATED
 
 from .base import BaseProviderHealth, ProviderHealthResult, ProviderStatus
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Response code to status mapping for API providers (Issue #315 - extracted)

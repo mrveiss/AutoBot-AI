@@ -13,6 +13,7 @@ import re
 import threading
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 
@@ -20,7 +21,7 @@ from constants.network_constants import NetworkConstants
 from services.llm_service import get_llm_service
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Code intelligence analyzers (Issue #268)
 # Issue #662: Thread-safe locks for analyzer singletons

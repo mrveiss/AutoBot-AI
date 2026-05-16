@@ -30,6 +30,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
@@ -39,7 +40,7 @@ from constants.network_constants import NetworkConstants, ServiceURLs
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

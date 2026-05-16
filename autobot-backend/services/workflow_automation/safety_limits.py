@@ -13,8 +13,9 @@ import logging
 import time
 from dataclasses import dataclass, field
 from typing import Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants

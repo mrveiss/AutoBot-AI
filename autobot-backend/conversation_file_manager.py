@@ -17,10 +17,8 @@ import asyncio
 import hashlib
 import importlib
 import json
-import logging
-
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
-import os
 import sqlite3
 import uuid
 from dataclasses import dataclass
@@ -98,7 +96,7 @@ class FileInfo:
         )
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ConversationFileManager:

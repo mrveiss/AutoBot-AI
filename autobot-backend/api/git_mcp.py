@@ -25,7 +25,6 @@ Issue #49 - Additional MCP Bridges (Browser, HTTP, Database, Git)
 """
 
 import asyncio
-import logging
 import re
 import subprocess
 from pathlib import Path
@@ -52,8 +51,9 @@ from autobot_shared.ssot_config import PROJECT_ROOT
 from autobot_shared.time_utils import now_utc
 from services.tool_output_filter import get_tool_output_filter
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Default repository path from SSOT (Issue #610 - config consolidation)
 DEFAULT_REPO_PATH = str(PROJECT_ROOT)

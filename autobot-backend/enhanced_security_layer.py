@@ -14,6 +14,7 @@ import logging
 import os
 from datetime import timezone
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
 
@@ -21,7 +22,7 @@ from autobot_shared.async_compat import run_or_schedule
 from config import config as global_config_manager
 from secure_command_executor import CommandRisk, SecureCommandExecutor, SecurityPolicy
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for security checks (Issue #326)
 DEPRECATED_PRIVILEGED_ROLES = {"god", "superuser", "root"}

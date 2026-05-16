@@ -14,15 +14,15 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 import os
 from typing import Optional
 
 from autobot_shared.ssot_config import config
 
 from constants.ttl_constants import TTL_24_HOURS
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _resolve_web_fetch_cache_ttl() -> int:

@@ -21,14 +21,14 @@ Usage::
 """
 
 import json
-import logging
 import time
 from typing import Any, Dict, Optional
 
 from autobot_shared.redis_client import get_redis_client
 from circuit_breaker import CircuitState
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis database and key prefixes
 _APPROVAL_REDIS_DB = "main"

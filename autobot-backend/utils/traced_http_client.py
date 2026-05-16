@@ -23,7 +23,6 @@ Usage:
         )
 """
 
-import logging
 from contextlib import asynccontextmanager
 
 import aiohttp
@@ -34,7 +33,7 @@ from autobot_shared.http_client import HTTPClientManager, get_http_client
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TracedHttpClient:
@@ -220,6 +219,7 @@ async def traced_http_client(
 
     Usage:
         from constants.network_constants import ServiceURLs
+from autobot_shared.logging_manager import get_logger
 
         async with traced_http_client() as client:
             response = await client.get(f"{ServiceURLs.AI_STACK}/api/status")

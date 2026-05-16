@@ -10,6 +10,7 @@ acting like a helpful librarian that finds relevant information before answering
 import asyncio
 import logging
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
@@ -25,7 +26,7 @@ from services.llm_service import get_llm_service
 from .base_agent import DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class KBLibrarianAgent(StandardizedAgent):

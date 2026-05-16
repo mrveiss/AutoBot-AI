@@ -14,7 +14,6 @@ This module implements advanced search quality improvements including:
 Related Issues: #78 (Search Quality Improvements)
 """
 
-import logging
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -23,7 +22,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from autobot_shared.time_utils import parse_utc_iso
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #78: Pre-compiled patterns for performance
 _WORD_PATTERN = re.compile(r"\b\w+\b")
@@ -860,6 +859,7 @@ class SearchAnalytics:
 # =============================================================================
 
 import threading
+from autobot_shared.logging_manager import get_logger
 
 _query_expander: Optional[QueryExpander] = None
 _relevance_scorer: Optional[RelevanceScorer] = None

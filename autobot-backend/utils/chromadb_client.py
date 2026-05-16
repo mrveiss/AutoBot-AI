@@ -18,6 +18,7 @@ async variants to prevent event loop blocking. See Issue #369.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import json
 import logging
@@ -40,7 +41,7 @@ from utils.async_chromadb_client import (
 if TYPE_CHECKING:
     import chromadb  # noqa: F401
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #3094: Use SSOT config port so the default (8100) matches Ansible deployment.
 # Host remains os.getenv-based: empty string = use local PersistentClient (dev mode).

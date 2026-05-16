@@ -16,6 +16,7 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 import asyncio
 import logging
 from datetime import timedelta
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, Query
 
@@ -43,7 +44,7 @@ from services.analytics_service import (
     get_analytics_service,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 # Issue #3355: prefix moved to router registry (analytics_routers.py)
 router = APIRouter(tags=["analytics", "advanced"])
 

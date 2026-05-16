@@ -11,7 +11,6 @@ Issue #717: Efficient Inference Design implementation.
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
@@ -27,8 +26,9 @@ except ImportError as _e:
     httpx = _MissingDep("httpx", _e)  # type: ignore[assignment]
 
 from autobot_shared.ssot_config import config as _ssot_config
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

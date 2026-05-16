@@ -10,7 +10,6 @@ dramatically reducing nesting depth and improving maintainability.
 Issue #322: Updated to use TaskExecutionContext for cleaner handler interface.
 """
 
-import logging
 from typing import TYPE_CHECKING, Any, Dict
 
 from autobot_shared.models.task_result import task_error
@@ -47,8 +46,9 @@ from .system_handlers import (
 
 if TYPE_CHECKING:
     from worker_node import WorkerNode
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TaskExecutor:

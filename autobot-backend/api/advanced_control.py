@@ -8,6 +8,7 @@ Provides monitoring, desktop streaming, and takeover management endpoints
 
 import asyncio
 import logging
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
@@ -44,7 +45,7 @@ from takeover_manager import TakeoverTrigger, get_takeover_manager
 from task_execution_tracker import get_task_tracker
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["advanced_control"])
 
 

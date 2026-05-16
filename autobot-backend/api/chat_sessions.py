@@ -5,6 +5,7 @@
 import json
 import logging
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
@@ -63,7 +64,7 @@ from utils.chat_utils import (
 # ====================================================================
 
 router = APIRouter(tags=["chat-sessions"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for valid export formats (Issue #326)
 VALID_EXPORT_FORMATS = {"json", "txt", "csv"}

@@ -11,6 +11,7 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Dict
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 import psutil
@@ -47,7 +48,7 @@ class SystemMetricsCollector:
 
     def __init__(self):
         """Initialize system metrics collector with Prometheus integration."""
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self._collection_interval = config.get("monitoring.metrics.collection_interval", 5)
         self._is_collecting = False
         self._auth_error_logged = False  # Track if auth error was already logged

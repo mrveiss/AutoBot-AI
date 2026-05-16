@@ -9,12 +9,12 @@ Extracted from ArchitecturalPatternAnalyzer as part of Issue #394.
 """
 
 import ast
-import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PatternDetector:

@@ -9,13 +9,13 @@ Contains workflow documentation generation and knowledge extraction.
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from .types import AgentProfile, DocumentationType, WorkflowDocumentation
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WorkflowDocumenter:

@@ -34,8 +34,9 @@ import json
 import logging
 import time
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 CHANNEL_SKILL_PROMOTED = "skill_promoted"
 

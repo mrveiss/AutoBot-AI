@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -35,8 +34,9 @@ from .archive import Archive
 from .config import AutoResearchConfig
 from .models import VariantArchiveEntry
 from .scorers import PromptScorer
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OptimizationStatus(str, Enum):

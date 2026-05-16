@@ -14,6 +14,7 @@ import json
 import logging
 import sys
 from typing import Any, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 # Database operations
 from .database import (
@@ -76,7 +77,7 @@ from .types import (
     TrackingMetric,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ============================================================================

@@ -7,7 +7,6 @@ Advanced Workflow Orchestrator
 Main orchestrator that coordinates all workflow components.
 """
 
-import logging
 import uuid
 from typing import Dict, List
 
@@ -28,8 +27,9 @@ from .optimizer import WorkflowOptimizer
 from .risk_analyzer import RiskAnalyzer
 from .step_generator import StepGenerator
 from .templates import TemplateManager
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WorkflowCoordinator:

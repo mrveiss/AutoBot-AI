@@ -18,7 +18,6 @@ Key Features:
 
 from autobot_shared.ssot_config import config
 import asyncio
-import logging
 import os
 import time
 from dataclasses import dataclass, field
@@ -27,7 +26,7 @@ from typing import Any, Dict, Optional
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -266,6 +265,7 @@ class BackgroundLLMSync:
 
 # Global instance (thread-safe)
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.logging_manager import get_logger
 
 _background_sync = lazy_singleton(BackgroundLLMSync)
 

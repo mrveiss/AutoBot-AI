@@ -3,7 +3,6 @@
 # Author: mrveiss
 """Skills Governance API — gap detection, draft management, approvals, and governance config."""
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -39,8 +38,9 @@ from skills.models import (
 )
 from skills.promoter import SkillPromoter
 from skills.validator import SkillValidator
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 _GOVERNANCE_SINGLETON_ID = 1

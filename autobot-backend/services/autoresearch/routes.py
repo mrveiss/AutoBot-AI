@@ -8,6 +8,7 @@ Issue #2597: Endpoints for managing experiments, viewing results, and stats.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import logging
 import re
@@ -28,7 +29,7 @@ from .runner import ExperimentRunner
 from .scorers import HUMAN_REVIEW_NOTIFY_KEY
 from .store import ExperimentStore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["autoresearch"])
 

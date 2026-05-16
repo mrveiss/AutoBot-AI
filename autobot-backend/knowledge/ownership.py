@@ -12,11 +12,11 @@ Issue #688: User ownership model for chat-derived knowledge
 
 import asyncio
 import json
-import logging
 from enum import Enum
 from typing import Dict, List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AccessLevel(str, Enum):

@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 import numpy as np
 
@@ -55,7 +56,7 @@ except ImportError as _e:
     CHROMADB_AVAILABLE = False
     chromadb = _MissingDep("chromadb", _e)  # type: ignore[assignment]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class IndexType(Enum):

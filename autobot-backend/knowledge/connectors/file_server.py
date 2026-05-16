@@ -12,7 +12,6 @@ PDF and DOCX are logged as warnings and skipped (future extension point).
 import asyncio
 import fnmatch
 import hashlib
-import logging
 import mimetypes
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,8 +25,9 @@ from knowledge.connectors.models import (
     SourceInfo,
 )
 from knowledge.connectors.registry import ConnectorRegistry
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # File extensions this connector can read as plain text
 _SUPPORTED_EXTENSIONS = {

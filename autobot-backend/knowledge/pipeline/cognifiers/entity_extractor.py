@@ -11,6 +11,7 @@ Issue #2025: Dual-mode entity extraction — LLM + NLP (Neural Mesh RAG Phase 2)
 import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
+from autobot_shared.logging_manager import get_logger
 
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
@@ -19,7 +20,7 @@ from knowledge.pipeline.models.entity import Entity, EntityType
 from knowledge.pipeline.registry import TaskRegistry
 from services.llm_service import get_llm_service
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # spaCy NER label → EntityType mapping (Issue #2025)
 _SPACY_LABEL_MAP: Dict[str, str] = {

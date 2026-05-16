@@ -16,11 +16,12 @@ import asyncio
 import logging
 import os
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TIMEOUT_HTTP_LONG
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LocalLLM:

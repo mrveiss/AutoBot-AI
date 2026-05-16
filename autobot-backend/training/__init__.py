@@ -8,10 +8,11 @@ ML model training infrastructure for code completion.
 """
 
 import logging
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 __all__ = [
     "CompletionModel",

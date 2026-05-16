@@ -23,10 +23,11 @@ from playwright.async_api import async_playwright, expect
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from constants.network_constants import ServiceURLs
+from autobot_shared.logging_manager import get_logger
 
 # Configure logging for tests
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Fixtures

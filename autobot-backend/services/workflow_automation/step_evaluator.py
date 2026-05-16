@@ -9,12 +9,13 @@ LLM judge integration for evaluating workflow steps.
 
 import logging
 from typing import Set
+from autobot_shared.logging_manager import get_logger
 
 from type_defs.common import Metadata
 
 from .models import ActiveWorkflow, WorkflowStep, WorkflowStepStatus
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for approval recommendations (Issue #326)
 APPROVAL_RECOMMENDATIONS: Set[str] = {"APPROVE", "CONDITIONAL"}

@@ -10,14 +10,14 @@ removing, searching, and managing tags on facts.
 
 import asyncio
 import json
-import logging
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     import aioredis
     import redis
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TagsMixin:

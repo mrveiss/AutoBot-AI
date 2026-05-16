@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
@@ -26,7 +27,7 @@ from enhanced_memory_manager_async import (
     get_async_enhanced_memory_manager,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Phase 2 of #6495 — unified Redis pub/sub channels for in-flight task progress.
 # Wire format matches the legacy OperationProgressTracker so existing WebSocket

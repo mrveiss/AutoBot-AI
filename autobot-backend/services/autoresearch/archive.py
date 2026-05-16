@@ -11,13 +11,13 @@ and parent selection uses random-weighted sampling (weight = score).
 from __future__ import annotations
 
 import json
-import logging
 import random
 from typing import List, Optional
 
 from .models import VariantArchiveEntry
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Archive:

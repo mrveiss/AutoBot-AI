@@ -29,6 +29,7 @@ import time
 from autobot_shared.ssot_config import config
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 import websockets
@@ -37,7 +38,7 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 from constants.ttl_constants import TTL_5_MINUTES
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # SLM server URL from environment.  On co-located deployments (backend and SLM
 # share the same host) the env var is often not set, so default to localhost.

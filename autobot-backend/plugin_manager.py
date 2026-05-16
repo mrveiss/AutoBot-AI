@@ -10,7 +10,6 @@ Issue #730 - Plugin SDK for extensible tool architecture.
 """
 
 import json
-import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -24,8 +23,9 @@ from autobot_shared.ssot_config import config
 from plugin_install import install_from_git, install_from_zip
 from plugin_sdk.base import PluginRegistry
 from plugin_sdk.loader import PluginLoader
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

@@ -7,13 +7,13 @@ Transformers Provider - Handler for local Transformers LLM requests.
 Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 """
 
-import logging
 import time
 
 from ..mock_providers import local_llm
 from ..models import LLMRequest, LLMResponse
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TransformersProvider:

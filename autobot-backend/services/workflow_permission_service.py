@@ -14,7 +14,6 @@ Roles and their capabilities:
   viewer — read-only access
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import delete, select
@@ -23,8 +22,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.workflow_audit import WorkflowAuditLog
 from models.workflow_permission import WorkflowPermission
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Ordered from most to least privileged; used for hierarchy checks.
 ROLE_HIERARCHY = ["owner", "editor", "runner", "viewer"]

@@ -16,8 +16,9 @@ from models.task_context import TaskExecutionContext
 from utils.command_validator import command_validator
 
 from .base import TaskHandler
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ExecuteShellCommandHandler(TaskHandler):

@@ -15,15 +15,15 @@ Parent Epic: #217 - Advanced Code Intelligence
 """
 
 import ast
-import logging
 import os
 import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for non-descriptive test name detection
 _BAD_TEST_NAME_PATTERNS = [

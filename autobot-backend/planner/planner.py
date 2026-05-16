@@ -9,7 +9,6 @@ Integrates with Event Stream for visibility into planning process.
 """
 
 import json
-import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -24,8 +23,9 @@ from constants.threshold_constants import (
 )
 from events.types import create_plan_event
 from planner.types import ExecutionPlan, PlanStatus, PlanStep, StepStatus
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================

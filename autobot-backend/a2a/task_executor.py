@@ -11,13 +11,14 @@ with the task ID while execution continues asynchronously.
 
 import logging
 from typing import Any, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from .pii_pipeline import PIIBlocked, scrub_outbound
 from .self_evaluator import DEFAULT_EVAL_THRESHOLD, evaluate_task_output
 from .task_manager import get_task_manager
 from .types import TaskArtifact, TaskState
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _extract_response_text(result: Dict[str, Any]) -> str:

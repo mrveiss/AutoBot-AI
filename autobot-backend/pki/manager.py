@@ -16,13 +16,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from pki.config import VM_DEFINITIONS, TLSConfig, TLSMode
 from pki.configurator import ServiceConfigurator
 from pki.distributor import CertificateDistributor
 from pki.generator import CertificateGenerator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PKIStage(str, Enum):

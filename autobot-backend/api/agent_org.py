@@ -8,7 +8,6 @@ Endpoints for agent organizational hierarchy: org tree, chain of command,
 direct reports, and org metadata updates with cycle detection.
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -28,8 +27,9 @@ from api.user_management.dependencies import get_db_session
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.agent_org_service import AgentOrgService
 from services.delegation_service import DelegationService
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 

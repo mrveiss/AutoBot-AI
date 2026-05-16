@@ -16,7 +16,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import logging
 import os
 import re
 from pathlib import Path
@@ -24,7 +23,7 @@ from typing import Any, Protocol, runtime_checkable
 
 import yaml
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _DEFAULT_CONFIG = os.path.join(os.path.dirname(__file__), "..", "config", "tool_output_filters.yaml")
 _TEE_DIR = Path.home() / ".local" / "share" / "autobot" / "tee"
@@ -506,5 +505,6 @@ class ToolOutputFilter:
 
 # Singleton accessor — use this instead of ToolOutputFilter() at call sites.
 from autobot_shared.singleton_factory import lazy_singleton  # noqa: E402
+from autobot_shared.logging_manager import get_logger
 
 get_tool_output_filter = lazy_singleton(ToolOutputFilter)

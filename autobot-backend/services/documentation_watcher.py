@@ -21,11 +21,12 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Project paths
 PROJECT_ROOT = Path(__file__).parent.parent.parent

@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -37,7 +38,7 @@ from autobot_shared.redis_client import get_redis_client
 from type_defs.common import Metadata
 from utils.advanced_cache_manager import advanced_cache
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["cache_management"])
 
 # Issue #380: Module-level tuple for essential cache data types

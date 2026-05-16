@@ -7,7 +7,6 @@ Replaces timeout-based Redis connection with immediate success/failure patterns
 """
 
 import asyncio
-import logging
 import threading
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional, Tuple
@@ -16,8 +15,9 @@ import redis
 
 from autobot_shared.redis_client import get_redis_client
 from constants.network_constants import NetworkConstants
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RedisConnectionState:

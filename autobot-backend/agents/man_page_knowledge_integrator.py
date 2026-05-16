@@ -8,7 +8,6 @@ Scrapes, parses, and integrates Linux man pages into machine-aware knowledge sys
 
 import asyncio
 import json
-import logging
 import re
 import time
 from dataclasses import dataclass
@@ -22,7 +21,7 @@ from autobot_shared.time_utils import utc_timestamp
 from intelligence.os_detector import get_os_detector
 from utils.command_utils import execute_command
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for common command line starters
 _COMMON_COMMAND_STARTERS: FrozenSet[str] = frozenset({"ls", "cat", "grep", "find", "awk", "sed"})
@@ -628,6 +627,7 @@ class ManPageKnowledgeIntegrator:
 import asyncio as _asyncio_lock
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 
 _integrator_instance: Optional[ManPageKnowledgeIntegrator] = None
 _integrator_lock = _asyncio_lock.Lock()

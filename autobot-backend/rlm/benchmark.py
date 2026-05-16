@@ -16,6 +16,7 @@ Usage (CLI):
 
 Usage (programmatic):
     from rlm.benchmark import run_benchmark
+from autobot_shared.logging_manager import get_logger
     results = await run_benchmark()
 """
 
@@ -31,7 +32,7 @@ from autobot_shared.ssot_config import config as _ssot_config
 from rlm.evaluator import ResponseQualityEvaluator
 from rlm.types import RLMConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # -----------------------------------------------------------------------

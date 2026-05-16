@@ -41,13 +41,13 @@ ensuring they do not race on a single key when ordering matters.
 """
 
 import json
-import logging
 from typing import Any, Dict, Optional
 
 from autobot_shared.redis_client import get_redis_client
 from constants.ttl_constants import TTL_1_HOUR
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key prefix — mirrors the autobot:workflow:checkpoint: convention from
 # error_handler.py so all workflow keys share the same namespace.

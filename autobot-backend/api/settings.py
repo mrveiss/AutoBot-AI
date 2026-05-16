@@ -10,6 +10,7 @@ import os
 import tempfile
 from pathlib import Path
 from typing import Any
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 from celery.result import AsyncResult
@@ -45,7 +46,7 @@ from utils.catalog_http_exceptions import raise_server_error
 
 router = APIRouter()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Issue #687: RBAC marker path constant

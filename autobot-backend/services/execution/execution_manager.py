@@ -10,6 +10,7 @@ Handles health checks, resource management, and routing decisions.
 
 import logging
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from services.execution.base_backend import (
     BackendType,
@@ -19,7 +20,7 @@ from services.execution.base_backend import (
     ExecutionTask,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ExecutionManager:

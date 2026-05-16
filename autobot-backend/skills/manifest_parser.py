@@ -13,13 +13,13 @@ Optional fields : category, capabilities, dependencies, trust_level_requested,
                   tags, author, license, homepage
 """
 
-import logging
 import re
 from typing import Any
 
 import yaml
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _REQUIRED_FIELDS = ("name", "version", "description", "entrypoint")
 _OPTIONAL_FIELDS = (

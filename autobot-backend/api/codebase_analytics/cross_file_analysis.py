@@ -22,10 +22,11 @@ import asyncio
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional  # noqa: F401  (List used in pub API)
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _antipattern_to_problem(ap: Any, file_category: str = "code") -> Dict[str, Any]:

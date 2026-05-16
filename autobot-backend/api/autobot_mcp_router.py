@@ -11,14 +11,14 @@ The router delegates every request to AutoBotMCPServer.handle_request(),
 which handles auth, rate limiting, and tool dispatch internally.
 """
 
-import logging
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from mcp.autobot_server import AutoBotMCPServer
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["mcp", "autobot-mcp"])
 

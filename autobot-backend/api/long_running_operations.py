@@ -76,7 +76,7 @@ except ImportError as _e:
     operation_integration_manager = _MissingDep("operation_integration_manager", _e)  # type: ignore[assignment]
     _OPERATIONS_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["long-running-operations"])
 
 # Performance optimization: O(1) lookup for failed operation statuses (Issue #326)
@@ -550,6 +550,7 @@ async def probe_long_running(
     """Issue #3333 / #6902: probe with rich data so the frontend can read
     ``probes[name=long_running].data.{active_operations,total_operations,...}``
     from /api/system/health and migrate off the legacy
+from autobot_shared.logging_manager import get_logger
     /api/long-running/health route before sunset.
     """
     if not _OPERATIONS_AVAILABLE:

@@ -12,6 +12,7 @@ Includes:
 """
 
 import logging
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -32,7 +33,7 @@ from enhanced_security_layer import EnhancedSecurityLayer
 from security.domain_security import get_domain_security_manager
 from security.threat_intelligence import ThreatLevel, get_threat_intelligence_service
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 
 

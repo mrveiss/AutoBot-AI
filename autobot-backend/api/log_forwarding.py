@@ -21,6 +21,7 @@ import socket
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -65,7 +66,7 @@ from api.schemas_system import (
     LogFwdTestResponse,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["log-forwarding"])
 

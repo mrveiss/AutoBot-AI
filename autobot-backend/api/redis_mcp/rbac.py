@@ -11,11 +11,11 @@ Roles:
 - admin: Full access, destructive ops (delete) require approval
 """
 
-import logging
 from enum import Enum
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Namespace that non-admin users are allowed to write to
 AGENT_NAMESPACE_PREFIX = "autobot:agent:"

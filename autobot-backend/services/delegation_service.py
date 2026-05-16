@@ -10,6 +10,7 @@ up the chain of command, and provides activity summaries.
 
 import logging
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.task_delegation import DelegationStatus, TaskDelegation
 from services.agent_org_service import AgentOrgService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DelegationService:

@@ -8,7 +8,6 @@ Issue #1403: Provides environment test, model listing, and adapter
 status endpoints for the formal adapter registry.
 """
 
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -19,8 +18,9 @@ from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from llm_interface_pkg.adapters.registry import get_adapter_registry
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

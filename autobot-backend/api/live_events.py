@@ -22,6 +22,7 @@ Protocol:
 import asyncio
 import json
 import logging
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
@@ -29,7 +30,7 @@ from starlette.websockets import WebSocketState
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from live_event_manager import get_live_event_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 _PING_INTERVAL = 30  # seconds between server-side pings

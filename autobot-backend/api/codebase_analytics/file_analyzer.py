@@ -9,7 +9,6 @@ Issue #2013: Decomposed from scanner.py god module.
 
 from autobot_shared.ssot_config import config
 import asyncio
-import logging
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -34,8 +33,9 @@ from .analyzers import (
     analyze_python_file,
 )
 from .types import FileAnalysisResult
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # =============================================================================
 # Issue #711: Parallel file processing configuration

@@ -7,14 +7,14 @@ Workflow Optimizer
 AI-driven workflow optimization strategies.
 """
 
-import logging
 from typing import List
 
 from type_defs.common import Metadata
 
 from .models import SmartWorkflowStep, WorkflowIntent
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WorkflowOptimizer:

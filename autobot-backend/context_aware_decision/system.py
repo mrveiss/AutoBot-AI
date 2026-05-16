@@ -10,7 +10,6 @@ Coordinates context collection and decision making.
 Part of Issue #381 - God Class Refactoring
 """
 
-import logging
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional
 
@@ -25,8 +24,9 @@ from .decision_engine import DecisionEngine
 from .models import Decision, DecisionContext
 from .time_provider import TimeProvider
 from .types import DecisionType
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ContextAwareDecisionSystem:

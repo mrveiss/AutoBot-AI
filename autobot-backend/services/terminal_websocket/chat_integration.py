@@ -8,7 +8,6 @@ Handles integration between terminal output and chat history.
 """
 
 import asyncio
-import logging
 import time
 from pathlib import Path
 from typing import Optional
@@ -17,8 +16,9 @@ import aiofiles
 
 from chat_history import ChatHistoryManager
 from utils.encoding_utils import is_terminal_prompt, strip_ansi_codes
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TerminalChatIntegrator:

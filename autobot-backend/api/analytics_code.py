@@ -11,6 +11,7 @@ import asyncio
 import logging
 import threading
 from datetime import datetime, timezone
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -35,7 +36,7 @@ analytics_state = None
 # Thread-safe lock for global state modifications (Issue #481 - race condition fix)
 _analytics_deps_lock = threading.Lock()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["analytics", "code-analysis"])
 
 

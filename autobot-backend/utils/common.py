@@ -14,8 +14,9 @@ import re
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -158,7 +159,7 @@ class CommonUtils:
         Returns:
             Configured logger instance
         """
-        logger = logging.getLogger(name)
+        logger = get_logger(name)
 
         # Avoid duplicate handlers
         if logger.handlers:

@@ -9,7 +9,6 @@ and context ranking. Handles knowledge base integration and document analysis.
 """
 
 import json
-import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.ssot_config import (
@@ -23,7 +22,7 @@ from services.llm_service import get_llm_service
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RAGAgent(StandardizedAgent):
@@ -596,6 +595,7 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
 
 # Singleton instance (thread-safe)
 import threading
+from autobot_shared.logging_manager import get_logger
 
 _rag_agent_instance = None
 _rag_agent_lock = threading.Lock()

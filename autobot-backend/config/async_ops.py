@@ -12,13 +12,14 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 import yaml
 
 from retry_mechanism import RetryConfig, RetryStrategy, with_retry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Module-level constants for O(1) lookups (Issue #326)
 YAML_FILE_EXTENSIONS = {".yaml", ".yml"}

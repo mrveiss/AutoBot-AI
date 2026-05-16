@@ -9,7 +9,6 @@ natural language processing, and text-to-speech components.
 Extracted from voice_processing_system.py as part of Issue #381 god class refactoring.
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -24,8 +23,9 @@ from .nlp_processor import NaturalLanguageProcessor
 from .speech_recognition import SpeechRecognitionEngine
 from .tts_engine import TextToSpeechEngine
 from .types import VoiceCommand
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class VoiceProcessingSystem:

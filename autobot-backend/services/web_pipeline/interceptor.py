@@ -10,11 +10,11 @@ the page interaction is complete to retrieve every captured request/response pai
 Issue #1967 — Web Pipeline Engine Phase 1.
 """
 
-import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Data model

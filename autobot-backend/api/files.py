@@ -18,6 +18,7 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -53,7 +54,7 @@ from utils.path_validation import is_invalid_name
 from utils.paths_manager import ensure_data_directory, get_data_path
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 security = HTTPBearer(auto_error=False)
 
 # Issue #380: Module-level tuple for dangerous content patterns in uploads

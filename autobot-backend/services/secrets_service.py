@@ -7,7 +7,6 @@ Handles secure storage, retrieval, and management of secrets with dual-scope sup
 """
 
 import json
-import logging
 import sqlite3
 from autobot_shared.ssot_config import config
 from pathlib import Path
@@ -20,7 +19,7 @@ from autobot_shared.time_utils import now_utc, parse_utc_iso
 from config.manager import get_config_manager as _get_config_manager
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Canonical singleton; avoids routing through config/__init__ lazy alias (Issue #3829)
 config_manager = _get_config_manager()
@@ -659,6 +658,7 @@ class SecretsService:
 
 # Singleton instance getter (thread-safe)
 import threading
+from autobot_shared.logging_manager import get_logger
 
 _secrets_service = None
 _secrets_service_lock = threading.Lock()

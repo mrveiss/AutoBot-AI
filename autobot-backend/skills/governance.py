@@ -13,13 +13,14 @@ import logging
 import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
+from autobot_shared.logging_manager import get_logger
 
 from skills.models import GovernanceMode, SkillPackage, TrustLevel
 
 if TYPE_CHECKING:
     pass  # future typing-only imports
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 REDIS_APPROVAL_CHANNEL = "skills:approvals:pending"
 
 

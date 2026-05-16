@@ -9,14 +9,14 @@ Uses the analytics Redis database (DB 11) with keys:
   code_sources:index     — Set of all source IDs
 """
 
-import logging
 from typing import List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
 
 from .source_models import CodeSource, SourceAccess
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SOURCES_KEY_PREFIX = "code_source:"
 _SOURCES_INDEX_KEY = "code_sources:index"

@@ -13,15 +13,15 @@ This module provides:
 - Consistent error handling and logging across all hook points
 """
 
-import logging
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from extensions.base import HookContext
 from extensions.hooks import HookPoint
 from extensions.manager import ExtensionManager
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class InvocationMode(Enum):

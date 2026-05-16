@@ -117,6 +117,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
@@ -163,7 +164,7 @@ from services.simple_pty import simple_pty_manager
 # Import terminal secrets service for SSH key integration (Issue #211)
 from services.terminal_secrets_service import get_terminal_secrets_service
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Create router for consolidated terminal API
 router = APIRouter(

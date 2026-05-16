@@ -8,12 +8,12 @@ Issue #381: Extracted from enhanced_orchestrator.py god class refactoring.
 Contains agent registration, lookup, and management functionality.
 """
 
-import logging
 from typing import Dict, List, Optional, Set
 
 from .types import AgentCapability, AgentProfile
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _create_research_agent() -> AgentProfile:

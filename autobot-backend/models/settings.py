@@ -8,19 +8,19 @@ This module provides strongly-typed configuration management using Pydantic Sett
 replacing the manual config handling with validated, type-safe configuration models.
 """
 
-import logging
 import os
 from typing import Dict, List, Optional
 
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 import yaml
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from constants.model_constants import OPENAI_GPT35_TURBO, Models
 from constants.network_constants import NetworkConstants, ServiceURLs
+from autobot_shared.logging_manager import get_logger
 
 # Issue #380: Module-level tuples for validation constants
 _VALID_LOG_LEVELS = ("debug", "info", "warning", "error", "critical")

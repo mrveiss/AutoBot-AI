@@ -16,12 +16,13 @@ FEATURE FLAG SUPPORT:
 
 import logging
 from typing import Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import HTTPException, Request
 
 from auth_middleware import get_auth_middleware
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SessionOwnershipValidator:

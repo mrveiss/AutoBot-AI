@@ -9,7 +9,6 @@ Issue #54 - Advanced Wake Word Detection Optimization
 """
 
 import asyncio
-import logging
 import threading
 import time
 from dataclasses import dataclass, field
@@ -22,8 +21,9 @@ except ImportError:
     _psutil = None  # psutil optional – CPU monitoring disabled without it
 
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for noise indicators in false positive detection
 _NOISE_INDICATORS = ("said", "mentioned", "talking about", "the word", "called")

@@ -16,11 +16,12 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from constants.ttl_constants import TTL_1_HOUR, TTL_5_MINUTES
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for user data types
 _USER_DATA_TYPES = ("user_preferences", "user_history")

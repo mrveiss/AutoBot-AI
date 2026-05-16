@@ -19,6 +19,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Dict
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -42,7 +43,7 @@ from .schemas_system import (
     FeatureFlagStatusResponse,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["admin", "feature-flags"])
 

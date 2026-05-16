@@ -12,6 +12,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from typing import Awaitable, Callable, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
@@ -38,7 +39,7 @@ from monitoring.prometheus_metrics import get_metrics_manager
 from patterns.conversation_patterns import conversation_patterns
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

@@ -32,10 +32,11 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Allowlist pattern for git ref arguments passed to subprocess (Issue #1733).
 # Allows: HEAD, HEAD~N, commit hashes, branch names, --cached, --staged, .. and ... ranges.

@@ -23,6 +23,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
@@ -40,7 +41,7 @@ from .long_running_operations_framework import (
 )
 from .operation_timeout_integration import operation_integration_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for sequence type checks
 _SEQUENCE_TYPES = (list, tuple)

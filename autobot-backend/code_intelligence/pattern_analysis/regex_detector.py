@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
 from .types import CodeLocation, PatternSeverity, RegexOpportunity
 
@@ -25,7 +26,7 @@ try:
 except ImportError:
     HAS_SHARED_CACHE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled patterns for detection
 _STRING_METHOD_NAMES = frozenset({"replace", "strip", "lstrip", "rstrip", "split", "find", "startswith", "endswith"})

@@ -24,7 +24,6 @@ steps are skipped and execution continues from the first incomplete step.
 
 import asyncio
 import json
-import logging
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict, Optional
@@ -33,8 +32,9 @@ from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_30_DAYS
 from retry_mechanism import BackoffStrategy, RetryConfig, RetryMechanism
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants

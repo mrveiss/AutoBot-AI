@@ -16,10 +16,11 @@ import platform
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from .types import GPUCapabilities
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Stashed GPU name from initial nvidia-smi probe (#2222)
 _nvidia_gpu_name: Optional[str] = None

@@ -16,6 +16,7 @@ Core functionality:
 import asyncio
 import logging
 from typing import Any, Coroutine, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from constants.ttl_constants import TTL_1_HOUR
 
@@ -27,7 +28,7 @@ from .subagent_task import (
     TaskStatus,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Constants
 MAX_SUBAGENTS_PER_PARENT = 5

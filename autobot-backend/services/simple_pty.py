@@ -14,11 +14,12 @@ import signal
 import subprocess
 import threading
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for PTY event types
 _PTY_OUTPUT_EVENTS = frozenset({"output", "eof"})

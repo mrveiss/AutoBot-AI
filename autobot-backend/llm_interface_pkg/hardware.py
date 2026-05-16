@@ -9,10 +9,11 @@ Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 
 import logging
 from typing import List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
 from .optimization.model_inspector import ModelInfo, inspect_model
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Check for PyTorch availability
 try:

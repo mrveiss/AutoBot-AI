@@ -23,13 +23,14 @@ from autobot_shared.ssot_config import config
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
 from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _DEFAULT_SLM_URL = config.slm_url
 _DEFAULT_REDIS_NODE_ID = config.redis_node_id

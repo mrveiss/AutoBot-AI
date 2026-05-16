@@ -22,12 +22,12 @@ remain responsive even during heavy background processing.
 """
 
 import asyncio
-import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, TypeVar
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Type variable for generic return type
 T = TypeVar("T")

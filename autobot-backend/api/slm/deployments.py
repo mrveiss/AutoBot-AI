@@ -23,7 +23,6 @@ Related to Issue #3407.
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -44,8 +43,9 @@ from services.slm.deployment_bridge import (
     get_orchestrator,
 )
 from services.slm_client import get_slm_client
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     prefix="/slm/deployments",

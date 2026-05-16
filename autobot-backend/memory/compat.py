@@ -9,6 +9,7 @@ import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.singleton_factory import lazy_singleton
 
@@ -16,7 +17,7 @@ from .enums import MemoryCategory, TaskPriority, TaskStatus
 from .manager import UnifiedMemoryManager
 from .models import MemoryEntry, TaskExecutionRecord
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EnhancedMemoryManager(UnifiedMemoryManager):

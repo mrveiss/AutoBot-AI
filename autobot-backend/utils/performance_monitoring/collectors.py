@@ -14,7 +14,6 @@ Extracted from performance_monitor.py as part of Issue #381 refactoring.
 """
 
 import asyncio
-import logging
 import os
 import time
 from datetime import datetime
@@ -35,8 +34,9 @@ from utils.performance_monitoring.metrics import (
     SystemPerformanceMetrics,
 )
 from utils.performance_monitoring.types import AUTOBOT_PROCESS_KEYWORDS
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GPUCollector:

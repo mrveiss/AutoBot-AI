@@ -15,6 +15,7 @@ LLMService is the single entry-point for all inference in AutoBot.  It:
 Usage example::
 
     from services.llm_service import get_llm_service
+from autobot_shared.logging_manager import get_logger
 
     svc = get_llm_service()
     response = await svc.chat(
@@ -58,7 +59,7 @@ except Exception:  # pragma: no cover
 # OTel tracer shared with llm_interface_pkg — same span names so traces merge.
 _llm_tracer = get_tracer("autobot.llm")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Default parameters per task type.  These are applied when the caller does
 # not supply explicit temperature / max_tokens values.

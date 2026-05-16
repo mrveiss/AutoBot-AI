@@ -3,15 +3,15 @@
 Focused analysis for critical hardcoded environment variables
 """
 
-import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
 from constants.network_constants import NetworkConstants
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CriticalEnvAnalyzer:

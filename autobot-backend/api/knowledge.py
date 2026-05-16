@@ -34,6 +34,7 @@ import asyncio
 import json
 import logging
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import (
     APIRouter,
@@ -126,7 +127,7 @@ except ImportError:
 # NOTE: RAGService and ADVANCED_RAG_AVAILABLE moved to knowledge_search.py (Issue #209)
 
 # Set up logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Cache TTL constants (seconds)
 CATEGORY_CACHE_TTL = 3600  # 1 hour for category counts (expensive to compute with 5k+ facts)

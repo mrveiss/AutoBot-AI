@@ -16,7 +16,6 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
 import asyncio
-import logging
 import statistics
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -37,7 +36,7 @@ from services.user_behavior_analytics import (
     get_behavior_analytics,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MaintenancePriority(str, Enum):
@@ -832,6 +831,7 @@ class AnalyticsService(AsyncRedisClientMixin):
 
 # Singleton instance (thread-safe)
 import threading
+from autobot_shared.logging_manager import get_logger
 
 _analytics_service: Optional[AnalyticsService] = None
 _analytics_service_lock = threading.Lock()

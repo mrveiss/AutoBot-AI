@@ -13,6 +13,7 @@ import logging
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
+from autobot_shared.logging_manager import get_logger
 
 import pytest
 
@@ -33,7 +34,7 @@ except ImportError as _benchmark_import_error:
     BenchmarkRunner = _MissingDep("BenchmarkRunner", _benchmark_import_error)  # type: ignore[assignment, misc]
     assert_performance = _MissingDep("assert_performance", _benchmark_import_error)  # type: ignore[assignment, misc]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Build URLs from centralized configuration
 BASE_URL = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"

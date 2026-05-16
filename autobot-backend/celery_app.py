@@ -14,6 +14,7 @@ import os
 import ssl
 import urllib.parse
 from pathlib import Path
+from autobot_shared.logging_manager import get_logger
 
 from celery import Celery
 from celery.schedules import crontab
@@ -152,7 +153,7 @@ def _crontab_from_string(cron_expr: str) -> crontab:
     """
     import logging as _logging
 
-    _log = _logging.getLogger(__name__)
+    _log = _get_logger(__name__)
     parts = cron_expr.strip().split()
     if len(parts) != 5:
         _log.warning(

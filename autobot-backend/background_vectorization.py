@@ -15,6 +15,7 @@ import logging
 import time
 from datetime import datetime, timezone
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
@@ -31,10 +32,10 @@ try:
 except ImportError as _e:
     EMBEDDING_ANALYTICS_AVAILABLE = False
     EmbeddingUsageRequest = _MissingDep("EmbeddingUsageRequest", _e)  # type: ignore[assignment]
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
     logger.debug("Embedding analytics not available - usage tracking disabled")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BackgroundVectorizer:

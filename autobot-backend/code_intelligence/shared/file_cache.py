@@ -34,7 +34,6 @@ Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
 import asyncio
-import logging
 import os
 import threading
 import time
@@ -46,8 +45,9 @@ from typing import Dict, FrozenSet, List, Optional
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.path_constants import PATH
 from utils.file_categorization import SKIP_DIRS
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Configuration via environment variables
 DEFAULT_CACHE_TTL = int(config.file_cache_ttl_seconds)  # 5 minutes

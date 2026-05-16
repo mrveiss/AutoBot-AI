@@ -7,8 +7,9 @@ Provides workflow scheduling and queue management capabilities
 """
 
 import logging
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 from typing import List, Optional
 

@@ -8,7 +8,6 @@ Exposes branch health metrics including divergence, staleness,
 and file conflict density for branch management and alerts.
 """
 
-import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends
@@ -18,12 +17,13 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import config
 from utils.branch_metrics import BranchMetrics, BranchMetricsCollector
+from autobot_shared.logging_manager import get_logger
 
 router = APIRouter(
     tags=["branch_health", "monitoring"],
     dependencies=[Depends(check_admin_permission)],
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.get("/branch-health/all", response_model=List[BranchHealthResponse])

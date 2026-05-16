@@ -9,13 +9,13 @@ and optionally commits it to git.
 """
 
 import asyncio
-import logging
 import os
 import re
 from autobot_shared.ssot_config import config
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SkillPromoter:

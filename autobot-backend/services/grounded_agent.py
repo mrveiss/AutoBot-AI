@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_async_redis_client
@@ -41,7 +42,7 @@ from llm_interface_pkg.types import LLMType
 from services.ai_stack_client import get_ai_stack_client
 from services.causal_inference_engine import CausalInferenceEngine
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ClaimStatus(str, Enum):

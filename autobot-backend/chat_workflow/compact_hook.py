@@ -21,8 +21,9 @@ Design:
 
 import logging
 from typing import Any
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Fire snapshot when estimated context usage exceeds this fraction.
 CONTEXT_LIMIT_THRESHOLD: float = 0.85

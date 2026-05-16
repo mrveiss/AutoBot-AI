@@ -9,7 +9,6 @@ snapshots, computing diffs, redacting secrets, and rolling back to any
 prior revision.
 """
 
-import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -17,8 +16,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.config_revision import ConfigRevision
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Keys whose values must be redacted in stored snapshots.
 _SECRET_SUBSTRINGS = frozenset(["password", "secret", "key", "token", "api_key"])

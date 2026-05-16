@@ -9,7 +9,6 @@ Implements Cursor's "DEFAULT TO PARALLEL" pattern for 3-5x faster execution.
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional
@@ -26,8 +25,9 @@ from events.types import (
 )
 from tools.parallel.analyzer import DependencyAnalyzer
 from tools.parallel.types import ExecutionMetrics, ToolCall
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================

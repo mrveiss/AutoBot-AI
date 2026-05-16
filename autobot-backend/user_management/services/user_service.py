@@ -12,6 +12,7 @@ import logging
 import secrets
 import uuid
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import bcrypt
 from sqlalchemy import func, or_, select
@@ -24,7 +25,7 @@ from user_management.models.audit import AuditAction, AuditLog, AuditResourceTyp
 from user_management.services.base_service import BaseService, TenantContext
 from user_management.services.session_service import SessionService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class UserServiceError(Exception):

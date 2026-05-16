@@ -14,6 +14,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
@@ -58,7 +59,7 @@ from .shared import (
     resolve_source_root,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

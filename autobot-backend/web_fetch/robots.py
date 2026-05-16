@@ -11,6 +11,7 @@ TTL: 1 hour (hardcoded per robots.txt staleness expectations).
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import logging
@@ -18,7 +19,7 @@ import urllib.robotparser
 from typing import Optional
 from urllib.parse import urlparse
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _ROBOTS_CACHE_TTL = 3600  # 1 hour, per robots.txt staleness expectations
 _USER_AGENT = "AutoBot/1.0"

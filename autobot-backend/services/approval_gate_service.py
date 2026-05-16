@@ -12,6 +12,7 @@ notifications for pending approvals.
 import logging
 import uuid
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +21,7 @@ from sqlalchemy.orm import selectinload
 from autobot_shared.time_utils import now_utc
 from models.approval import Approval, ApprovalComment, ApprovalStatus, TaskApprovalLink
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Valid state transitions: source -> {allowed targets}
 _VALID_TRANSITIONS = {

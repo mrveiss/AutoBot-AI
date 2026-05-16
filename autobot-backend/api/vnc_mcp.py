@@ -11,6 +11,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import List
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException
@@ -40,7 +41,7 @@ from autobot_shared.time_utils import parse_utc_iso
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(
     tags=["vnc_mcp", "mcp", "vnc"],
     dependencies=[Depends(check_admin_permission)],

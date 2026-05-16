@@ -18,10 +18,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Pattern, Set
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.status_enums import Severity as IssueSeverity  # noqa: F401  # #6689 consolidation
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for string literal extraction
 _STRING_PATTERNS_PYTHON: List[Pattern] = [

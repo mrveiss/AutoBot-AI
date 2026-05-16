@@ -11,7 +11,6 @@ LLM-based vision capabilities. Accepts image descriptions or base64-encoded
 image data for analysis.
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.singleton_factory import lazy_singleton
@@ -25,8 +24,9 @@ from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ImageAnalysisAgent(StandardizedAgent):

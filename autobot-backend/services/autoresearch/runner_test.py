@@ -11,6 +11,7 @@ Issue #3261: Tests for append_result, reorg_results, filter_prompts.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import json
@@ -37,7 +38,7 @@ from services.autoresearch.runner import (
     reorg_results,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

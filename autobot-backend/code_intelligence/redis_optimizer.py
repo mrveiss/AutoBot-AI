@@ -22,8 +22,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, FrozenSet, List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozensets for Redis operation type checking
 _GET_OPERATIONS: FrozenSet[str] = frozenset({"get", "hget", "mget"})

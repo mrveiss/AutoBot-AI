@@ -16,6 +16,7 @@ ARCHITECTURE:
 
 USAGE:
     from config.registry import ConfigRegistry
+from autobot_shared.logging_manager import get_logger
 
     # Get single value with fallback
     redis_host = ConfigRegistry.get("redis.host")  # SSOT default via registry_defaults
@@ -33,7 +34,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key prefix for all config values
 REDIS_CONFIG_PREFIX = "autobot:config:"

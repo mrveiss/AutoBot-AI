@@ -13,6 +13,7 @@ import hashlib
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
+from autobot_shared.logging_manager import get_logger
 
 from .diff import DiffGenerator
 from .prompts import PromptTemplateManager
@@ -29,7 +30,7 @@ from .types import (
 )
 from .validator import CodeValidator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # LLM service (replaces LLMInterface singleton — Phase 2D #3185)
 try:

@@ -17,11 +17,12 @@ from agents.base_agent import create_agent_request
 from agents.chat_agent import ChatAgent
 from agents.classification_agent import ClassificationAgent
 from agents.enhanced_system_commands_agent import get_enhanced_system_commands_agent
+from autobot_shared.logging_manager import get_logger
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def test_local_agents():

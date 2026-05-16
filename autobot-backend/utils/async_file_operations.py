@@ -13,7 +13,6 @@ ROOT CAUSE FIX: Replaces sync file I/O with proper async operations using asynci
 import asyncio
 import functools
 import json
-import logging
 import os
 import tempfile
 from pathlib import Path
@@ -23,7 +22,7 @@ import aiofiles
 
 from constants.ttl_constants import TTL_5_MINUTES
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #4397: skip in-memory cache for files larger than 1 MiB to prevent
 # unbounded memory growth when processing 10 MB+ files.
@@ -294,6 +293,7 @@ class AsyncFileOperations:
 
 # Global instance for easy access (thread-safe)
 import asyncio as _asyncio_lock
+from autobot_shared.logging_manager import get_logger
 
 _async_file_ops = None
 _async_file_ops_lock = _asyncio_lock.Lock()

@@ -8,7 +8,6 @@ Handles full terminal emulation with PTY support, sudo handling, and user takeov
 
 import asyncio
 import fcntl
-import logging
 import os
 import pty
 import select
@@ -23,8 +22,9 @@ from event_manager import get_event_manager
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class InteractiveTerminalAgent(StandardizedAgent):

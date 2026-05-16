@@ -8,13 +8,13 @@ Identifies when AutoBot lacks a capability by monitoring agent outputs
 and failed tool calls.
 """
 
-import logging
 import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _EXPLICIT_PATTERNS = [
     r"i don't have a tool (to|for) (.+?)[\.\n]",

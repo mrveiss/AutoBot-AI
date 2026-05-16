@@ -9,7 +9,6 @@ RESTful API for managing security assessments, workflows, and findings.
 Issue: #260
 """
 
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -40,8 +39,9 @@ from services.security_workflow_manager import (
 
 # Issue #756: Consolidated from src/utils/request_utils.py
 from utils.request_utils import generate_request_id
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/security", tags=["security"])
 

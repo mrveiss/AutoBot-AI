@@ -14,6 +14,7 @@ import logging
 import os
 import tempfile
 from typing import Any, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from media.core.pipeline import BasePipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
@@ -27,7 +28,7 @@ except ImportError:
     _TRANSFORMERS_AVAILABLE = False
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Lazy singleton for the Whisper pipeline (expensive to load)
 _whisper_pipeline: Optional[Any] = None

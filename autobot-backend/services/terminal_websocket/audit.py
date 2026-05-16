@@ -8,13 +8,13 @@ Audit logging for terminal command activity.
 """
 
 import json
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from api.schemas_terminal import SecurityLevel
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TerminalAuditLogger:

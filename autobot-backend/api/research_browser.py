@@ -11,6 +11,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -31,7 +32,7 @@ from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #1009: Graceful fallback when playwright is not installed
 try:

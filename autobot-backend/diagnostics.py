@@ -15,6 +15,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import psutil
 
@@ -30,7 +31,7 @@ try:
 except ImportError as e:
     logging.warning(f"Import error in diagnostics: {e}")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PerformanceOptimizedDiagnostics:

@@ -3,10 +3,10 @@
 # Author: mrveiss
 """Personalized PageRank over the mesh graph for importance-weighted expansion (#1994, #2057)."""
 
-import logging
 from typing import Protocol
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================

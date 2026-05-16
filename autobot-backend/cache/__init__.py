@@ -19,13 +19,12 @@ Usage:
     stats = coordinator.get_unified_stats()
 """
 
-import logging
 from typing import Callable, List, Tuple
 
 from .coordinator import CacheCoordinator, get_cache_coordinator
 from .protocols import CacheProtocol
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 __all__ = [
     "CacheProtocol",
@@ -130,6 +129,7 @@ async def register_all_caches() -> int:
 
     Example:
         from cache import register_all_caches
+from autobot_shared.logging_manager import get_logger
         count = await register_all_caches()
         logger.info(f"Registered {count} caches with coordinator")
     """

@@ -9,13 +9,13 @@ Component must maintain >95% success rate to stay operational.
 When budget exhausted, component enters minimal-feature mode.
 """
 
-import logging
 import time
 from dataclasses import dataclass, field
 from threading import Lock
 from typing import Dict
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

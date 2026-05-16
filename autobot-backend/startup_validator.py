@@ -17,6 +17,7 @@ Key Features:
 
 Usage:
     from startup_validator import validate_startup_dependencies
+from autobot_shared.logging_manager import get_logger
 
     # In app startup
     validation_result = await validate_startup_dependencies()
@@ -36,7 +37,7 @@ from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.path_constants import PATH
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 config = get_config_manager()
 

@@ -10,6 +10,7 @@ listing, resource subscriptions, and prompt templates — over any transport
 Usage::
 
     from skills.sync.mcp_client import MCPClient
+from autobot_shared.logging_manager import get_logger
 
     async with MCPClient("stdio://npx -y @modelcontextprotocol/server-fs /tmp") as client:
         tools = await client.discover_tools()
@@ -27,7 +28,7 @@ from type_defs.mcp import (
     MCPToolDefinition,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Incrementing per-client request counter start
 _INIT_REQ_ID = 1

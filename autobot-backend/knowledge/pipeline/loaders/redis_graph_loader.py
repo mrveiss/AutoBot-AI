@@ -8,7 +8,6 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 Issue #3230: Also writes into PropertyGraph for queryable typed-edge traversal.
 """
 
-import logging
 from typing import List
 
 from autobot_memory_graph.property_graph import PropertyGraph
@@ -18,8 +17,9 @@ from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.models.event import TemporalEvent
 from knowledge.pipeline.models.relationship import Relationship
 from knowledge.pipeline.registry import TaskRegistry
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @TaskRegistry.register_loader("redis_graph")

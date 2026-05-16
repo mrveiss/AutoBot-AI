@@ -14,11 +14,11 @@ data-driven configuration pattern for improved maintainability.
 
 from autobot_shared.ssot_config import config
 import importlib
-import logging
 import os
 from typing import Any, Dict, List, Tuple
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # #6797: load-result registry — populated by load_feature_routers() so callers
 # (health endpoint, dashboards) can introspect what loaded vs failed without

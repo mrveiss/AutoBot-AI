@@ -62,8 +62,9 @@ get_voice_processing_system = lazy_singleton(VoiceProcessingSystem)
 
 # Logging
 import logging
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 __all__ = [
     # Types

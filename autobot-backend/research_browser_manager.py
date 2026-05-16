@@ -7,7 +7,6 @@ Handles Playwright browser automation for research tasks with user interaction s
 """
 
 import asyncio
-import logging
 import os
 import tempfile
 import uuid
@@ -31,8 +30,9 @@ from constants.security_constants import SecurityConstants
 from constants.threshold_constants import TimingConstants
 from source_attribution import SourceType, track_source
 from utils.display_utils import get_playwright_config
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 config = get_config_manager()
 

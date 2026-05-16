@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.http_client import get_http_client
@@ -26,7 +27,7 @@ from prompt_manager import get_language_instruction, get_prompt, resolve_languag
 
 from .models import WorkflowSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for URL scheme validation
 _VALID_URL_SCHEMES = ("http://", "https://")

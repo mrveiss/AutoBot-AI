@@ -17,7 +17,6 @@ import asyncio
 import fcntl
 import functools
 import json
-import logging
 import os
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
@@ -26,8 +25,9 @@ from typing import Optional
 import aiofiles
 
 from constants.ttl_constants import TTL_24_HOURS
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #718: Dedicated thread pool for chat file I/O operations
 # This prevents chat saves from being blocked when the main asyncio thread pool

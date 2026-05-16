@@ -9,8 +9,9 @@ These routers provide terminal access, command execution, and remote terminal fu
 """
 
 import logging
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def load_terminal_routers():

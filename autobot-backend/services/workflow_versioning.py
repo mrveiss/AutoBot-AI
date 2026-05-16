@@ -37,14 +37,14 @@ Usage:
 """
 
 import json
-import logging
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import utc_timestamp as _utc_now
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Redis key helpers

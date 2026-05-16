@@ -27,7 +27,6 @@ Safety constraints:
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -35,8 +34,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .config import AutoResearchConfig
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

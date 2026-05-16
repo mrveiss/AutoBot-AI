@@ -23,9 +23,10 @@ import os
 from autobot_shared.ssot_config import config
 import subprocess
 import sys
+from autobot_shared.logging_manager import get_logger
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _ENV_PREFIX = "AUTOBOT_EXP_"
 _EXTRA_PREFIX = "AUTOBOT_EXP_EXTRA_"

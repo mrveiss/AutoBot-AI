@@ -16,13 +16,14 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, FrozenSet, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 
 # Issue #765: Use centralized strip_ansi_codes from encoding_utils
 from utils.encoding_utils import strip_ansi_codes
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for command statuses requiring command display
 _COMMAND_DISPLAY_STATUSES: FrozenSet[str] = frozenset({"EXECUTING", "PENDING_APPROVAL", "SUCCESS", "ERROR"})

@@ -8,7 +8,6 @@ timestamp.  All writes are fire-and-forget — callers are never blocked.
 """
 
 import json
-import logging
 import time
 import uuid
 from enum import Enum
@@ -16,8 +15,9 @@ from typing import Any, Dict, List, Optional
 
 from autobot_shared.fire_and_forget import run_redis_write
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 EVENT_LOG_KEY = "autobot:event_log"
 EVENT_LOG_TTL_SECONDS = 90 * 24 * 3600  # 90-day default retention

@@ -10,7 +10,6 @@ and channel adapters.
 """
 
 import asyncio
-import logging
 from typing import Any, Dict, Optional
 
 from .channel_adapters.base import BaseChannelAdapter
@@ -18,8 +17,9 @@ from .config import GatewayConfig
 from .message_router import MessageRouter
 from .session_manager import SessionManager
 from .types import ChannelType, GatewaySession, MessageType, UnifiedMessage
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Gateway:

@@ -27,7 +27,6 @@ Redis key layout:
 """
 
 import json
-import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -37,8 +36,9 @@ from autobot_shared.time_utils import now_utc
 
 from .tracing import TraceContext, TraceEvent, new_trace_id
 from .types import A2ATaskStatus, Task, TaskArtifact, TaskState
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Terminal states — no further transitions allowed
 _TERMINAL_STATES = {TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED}

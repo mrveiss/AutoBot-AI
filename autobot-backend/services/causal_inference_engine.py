@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_client import get_async_redis_client
 from context_aware_decision.counterfactual_reasoner import CounterfactualReasoner
@@ -41,7 +42,7 @@ from services.root_cause_analyzer import (
     RootCauseReport,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CausalSeverity(str, Enum):

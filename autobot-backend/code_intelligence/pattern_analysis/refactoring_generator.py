@@ -8,7 +8,6 @@ Issue #208: Generates actionable refactoring proposals based on
 detected patterns, duplicates, and complexity hotspots.
 """
 
-import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -23,7 +22,7 @@ from .types import (
     RegexOpportunity,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -642,6 +641,7 @@ def flattened_function(*args, **kwargs):
         return f'''
 from abc import ABC, abstractmethod
 from typing import Dict, Type
+from autobot_shared.logging_manager import get_logger
 
 class Strategy(ABC):
     """Base strategy for {pattern.locations[0].function_name if pattern.locations else 'operation'}."""

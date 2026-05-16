@@ -16,10 +16,10 @@ Usage:
 """
 
 import asyncio
-import logging
 from typing import Any, Callable, Optional, TypeVar
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 

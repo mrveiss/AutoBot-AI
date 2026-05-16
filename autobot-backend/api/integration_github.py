@@ -8,7 +8,6 @@ Exposes GitHub API capabilities — PRs, issues, code reviews, repository
 context — as HTTP endpoints that agents can call via the integration layer.
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -38,8 +37,9 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.github_integration import GitHubIntegration
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     tags=["integrations-github"],

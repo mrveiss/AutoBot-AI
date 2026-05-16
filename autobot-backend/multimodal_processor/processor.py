@@ -14,6 +14,7 @@ import asyncio
 import logging
 import time
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from enhanced_memory_manager_async import (
     TaskPriority,
@@ -25,7 +26,7 @@ from .models import MultiModalInput, ProcessingResult
 from .processors import ContextProcessor, VisionProcessor, VoiceProcessor
 from .types import EMBEDDING_FIELDS, VISUAL_MODALITY_TYPES, ModalityType
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #3016: lazy module-level imports for torch to avoid startup cost
 _torch = None
@@ -70,7 +71,7 @@ class UnifiedMultiModalProcessor:
         self.voice_processor = VoiceProcessor()
         self.context_processor = ContextProcessor()
         self.memory_manager = get_async_enhanced_memory_manager()
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
 
         # Performance monitoring integration
         self.performance_monitor = performance_monitor

@@ -31,6 +31,7 @@ import os
 import shutil
 from datetime import datetime
 from typing import Dict, List
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 
@@ -96,7 +97,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["filesystem_mcp", "mcp"])
 
 

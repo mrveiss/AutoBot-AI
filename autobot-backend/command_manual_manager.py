@@ -9,14 +9,14 @@ from the system's man pages into the knowledge base for enhanced command assista
 """
 
 import json
-import logging
 import re
 import sqlite3
 import subprocess
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Pre-compiled regex for section header detection (Issue #380)
 _SECTION_HEADER_RE = re.compile(r"^[A-Z][A-Z\s]+$")

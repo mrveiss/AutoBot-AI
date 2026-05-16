@@ -10,7 +10,6 @@ Issue #2013: Decomposed from scanner.py god module.
 import asyncio
 import hashlib
 import json
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -18,8 +17,9 @@ from typing import Dict, List, Optional, Tuple
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_24_HOURS
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key prefix for file hashes (used for incremental indexing)
 FILE_HASH_REDIS_PREFIX = "codebase:file_hash:"

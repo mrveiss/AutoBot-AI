@@ -13,6 +13,7 @@ import base64
 import io
 import logging
 from typing import Any, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from media.core.pipeline import BasePipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
@@ -25,7 +26,7 @@ try:
 except ImportError:
     _PIL_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Lazy singleton for VisionProcessor (loads GPU models on first use).
 # Import is deferred into _get_vision_processor() to avoid a circular import

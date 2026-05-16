@@ -9,7 +9,6 @@ Manages session isolation, context persistence, and lifecycle.
 """
 
 import asyncio
-import logging
 from datetime import timedelta
 from typing import Dict, List, Optional
 
@@ -18,8 +17,9 @@ from constants.threshold_constants import TimingConstants
 
 from .config import GatewayConfig
 from .types import ChannelType, GatewaySession, SessionStatus
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SessionManager:

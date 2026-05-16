@@ -9,14 +9,14 @@ This judge evaluates workflow steps before execution to ensure quality, safety, 
 """
 
 import json
-import logging
 from typing import Any, Dict, FrozenSet, List, Optional
 
 from constants import WorkflowThresholds
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for approval recommendations
 _APPROVAL_RECOMMENDATIONS: FrozenSet[str] = frozenset({"APPROVE", "CONDITIONAL"})

@@ -19,6 +19,7 @@ import sqlite3
 import tempfile
 from pathlib import Path
 from typing import Any, List, Tuple
+from autobot_shared.logging_manager import get_logger
 
 import pytest
 
@@ -26,7 +27,7 @@ from conversation_file_manager import ConversationFileManager
 
 # Configure logging for tests
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Issue #618: Helper to run blocking sqlite3 queries in async context

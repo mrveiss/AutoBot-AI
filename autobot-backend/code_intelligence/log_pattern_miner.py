@@ -19,7 +19,6 @@ Features:
 - Session flow tracking
 """
 
-import logging
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -29,7 +28,7 @@ from pathlib import Path
 from statistics import mean, stdev
 from typing import Any, Optional
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ============================================================================
@@ -823,6 +822,7 @@ class LogPatternMiner:
 
         Identifies hours with error rates that deviate significantly
         from the average hourly error rate.
+from autobot_shared.logging_manager import get_logger
 
         Issue #620.
         """

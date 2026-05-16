@@ -13,6 +13,7 @@ Issue #925: Re-created after removal in Issue #729.
 import asyncio
 import logging
 from typing import Any, Dict, List, Tuple
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 from fastapi import APIRouter
@@ -24,7 +25,7 @@ from api.schemas_system import (
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import config as _ssot
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["Service Monitor"])
 

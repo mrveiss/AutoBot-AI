@@ -11,14 +11,14 @@ Part of Issue #716 - Refactored from monolithic autobot_memory_graph.py
 """
 
 import asyncio
-import logging
 from typing import Any, Dict, List, Optional, Set
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as _ssot_config
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ============================================================================

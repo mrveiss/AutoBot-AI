@@ -23,6 +23,7 @@ import json
 import logging
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Request
 
@@ -60,7 +61,7 @@ from models.completion_context import CompletionContext
 from services.context_analyzer import ContextAnalyzer
 from services.pattern_extractor import PatternExtractor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Optional ML dependencies (Issue #906)
 try:

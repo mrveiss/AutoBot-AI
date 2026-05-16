@@ -16,7 +16,6 @@ This middleware complements the FastAPIInstrumentor by adding
 AutoBot-specific attributes and custom trace handling.
 """
 
-import logging
 import re
 import time
 from typing import Callable, Optional
@@ -29,8 +28,9 @@ from starlette.responses import Response
 from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH
 from middleware.proxy_utils import get_client_ip
 from services.tracing_service import get_tracing_service
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex for path pattern normalization
 _NUMERIC_PATH_RE = re.compile(r"/\d+")

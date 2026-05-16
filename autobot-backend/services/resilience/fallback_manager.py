@@ -9,12 +9,12 @@ Primary service → secondary service → minimal-feature mode.
 Ensures core functions work even when peripherals fail.
 """
 
-import logging
 from dataclasses import dataclass
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

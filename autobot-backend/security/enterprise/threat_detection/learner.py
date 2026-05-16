@@ -26,14 +26,13 @@ Consolidation
     operators can review detection rules.
 """
 
-import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 _OUTCOME_KEY_PREFIX = "security:detection_outcomes:"
@@ -63,6 +62,7 @@ class ThreatDetectionLearner:
     All Redis operations are synchronous (async_client=False) to match the
     engine's synchronous initialisation path; individual methods are called
     from async context via normal awaited coroutines in the engine.
+from autobot_shared.logging_manager import get_logger
     """
 
     def __init__(self) -> None:

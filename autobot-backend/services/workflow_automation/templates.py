@@ -7,12 +7,12 @@ Workflow Templates Module
 Pre-defined workflow templates for common automation tasks.
 """
 
-import logging
 from typing import Callable, Dict, List
 
 from .models import WorkflowStep
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WorkflowTemplateManager:

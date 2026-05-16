@@ -13,15 +13,15 @@ core sliding-window logic (Issue #4460).
 """
 
 import asyncio
-import logging
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # GitHub: 5000 req/hr per authenticated token; 60 req/hr unauthenticated
 GITHUB_REQUESTS_PER_HOUR = 5000

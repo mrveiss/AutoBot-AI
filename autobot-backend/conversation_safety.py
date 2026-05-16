@@ -17,14 +17,14 @@ Safety Rules:
 Related Issue: #159 - Prevent Premature Conversation Endings
 """
 
-import logging
 from dataclasses import dataclass
 from typing import Optional
 
 from conversation_context import ConversationContext
 from intent_classifier import ConversationIntent, IntentClassification
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

@@ -14,6 +14,7 @@ Related to Issue #3407.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import enum
 import logging
@@ -29,7 +30,7 @@ from models.infrastructure import (
     DockerDeploymentStatus,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

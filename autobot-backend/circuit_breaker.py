@@ -16,12 +16,13 @@ from enum import Enum
 from functools import wraps
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.singleton_factory import lazy_singleton
 from constants import CircuitBreakerDefaults
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CircuitState(Enum):

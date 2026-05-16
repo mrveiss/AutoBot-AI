@@ -6,6 +6,7 @@ import importlib
 import logging
 import sys
 from datetime import datetime, timezone
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
@@ -38,7 +39,7 @@ config = get_config_manager()
 
 router = APIRouter()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for allowed dynamic import modules
 _ALLOWED_IMPORT_MODULES = (

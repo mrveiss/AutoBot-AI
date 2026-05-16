@@ -18,7 +18,6 @@ Key features:
 
 import asyncio
 import json
-import logging
 import statistics
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
@@ -28,7 +27,7 @@ from typing import Any, Dict, FrozenSet, List, Optional
 
 from constants.ttl_constants import TTL_5_MINUTES
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for tool classification (Issue #326)
 READ_KEYWORDS = {"read", "list", "glob", "get"}
@@ -845,6 +844,7 @@ class ToolPatternAnalyzer:
 import threading
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 
 _global_analyzer: Optional[ToolPatternAnalyzer] = None
 _global_analyzer_lock = threading.Lock()

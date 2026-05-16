@@ -9,7 +9,6 @@ discovery. Refactored from god class into focused package (Issue #381).
 """
 
 import asyncio
-import logging
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -22,8 +21,9 @@ from .formatters import ToolInfoFormatter
 from .parsers import InstructionParser
 from .processors import ResearchResultsProcessor, ResultProcessor, ToolInfoData
 from .text_extraction import TextExtractor
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _build_basic_info_section(tool_info: Dict[str, Any], tool_name: str) -> str:

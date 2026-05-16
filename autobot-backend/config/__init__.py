@@ -34,8 +34,9 @@ Note: Uses lazy imports via __getattr__ to avoid circular import with NetworkCon
 import logging
 from autobot_shared.ssot_config import config
 from typing import TYPE_CHECKING
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Type hints for IDE support without runtime import
 if TYPE_CHECKING:

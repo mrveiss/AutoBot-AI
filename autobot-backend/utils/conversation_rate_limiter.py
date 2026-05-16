@@ -12,7 +12,6 @@ core sliding-window logic (Issue #4460).
 """
 
 import json
-import logging
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -20,7 +19,7 @@ from typing import Any, Dict, Optional
 
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for JSON-serializable types
 _JSON_SERIALIZABLE_TYPES = (list, tuple)
@@ -322,6 +321,7 @@ class ConversationRateLimiter:
 # Global instance for easy access (thread-safe)
 
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.logging_manager import get_logger
 
 _global_rate_limiter = lazy_singleton(ConversationRateLimiter)
 

@@ -52,7 +52,6 @@ Configuration
 
 from __future__ import annotations
 
-import logging
 import os
 from autobot_shared.ssot_config import config
 import time
@@ -69,6 +68,7 @@ from autobot_shared.auth.jwt_core import (
 from autobot_shared.fire_and_forget import run_redis_write
 from autobot_shared.redis_client import get_async_redis_client
 from services.audit.audit_log import AuditAction, audit_record
+from autobot_shared.logging_manager import get_logger
 
 
 class JWTRefreshConflictError(Exception):
@@ -79,7 +79,7 @@ class JWTRefreshConflictError(Exception):
     """
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _ENV_SECRET = "RUN_JWT_SECRET"
 _ENV_TTL = "RUN_JWT_TTL_SECONDS"

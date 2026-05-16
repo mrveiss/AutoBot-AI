@@ -22,6 +22,7 @@ to the score at enqueue time.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import logging
 import time
@@ -33,7 +34,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants

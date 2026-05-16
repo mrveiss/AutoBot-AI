@@ -21,7 +21,6 @@ Endpoints:
 - GET /graph-rag/metrics - Performance metrics
 """
 
-import logging
 from typing import Dict, List
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
@@ -40,13 +39,14 @@ from autobot_shared.time_utils import utc_timestamp
 from services.graph_rag_service import GraphRAGService
 from type_defs.common import Metadata
 from utils.request_utils import generate_request_id
+from autobot_shared.logging_manager import get_logger
 
 # ====================================================================
 # Router Configuration
 # ====================================================================
 
 router = APIRouter(tags=["graph-rag"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ====================================================================
 # Request/Response Models

@@ -12,13 +12,13 @@ evolutionary lineage tracking.
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import now_utc
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _STREAM_KEY = "kb:synthesis:log"
 _RUN_KEY_PREFIX = "kb:synthesis:run:"

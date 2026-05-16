@@ -14,11 +14,11 @@ References:
     69% balanced accuracy vs. human reviewers using a similar confidence pass.
 """
 
-import logging
 from dataclasses import dataclass
 from typing import Any, Dict
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Default confidence threshold (0.0 – 1.0).  Tasks whose score falls below
 # this value are marked FAILED instead of COMPLETED.

@@ -14,6 +14,7 @@ Usage::
 
     from utils.chromadb_client import get_chromadb_client
     from knowledge.backends.chromadb_adapter import ChromaDBClient
+from autobot_shared.logging_manager import get_logger
 
     raw = get_chromadb_client()
     backend = ChromaDBClient(raw)
@@ -34,7 +35,7 @@ from knowledge.backends.base import (
     WhereDocument,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ChromaDBCollection(BaseCollection):

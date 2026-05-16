@@ -9,7 +9,6 @@ provide refinement recommendations.
 """
 
 import json
-import logging
 from collections import Counter
 from datetime import timedelta
 from typing import Any, Dict, List, Optional
@@ -18,8 +17,9 @@ from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc
 
 from .skill_metrics import SkillMetrics
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SkillFeedbackAnalyzer(AsyncRedisClientMixin):

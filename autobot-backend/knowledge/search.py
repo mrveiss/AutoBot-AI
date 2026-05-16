@@ -27,6 +27,7 @@ import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.error_boundaries import error_boundary
 
@@ -60,7 +61,7 @@ if TYPE_CHECKING:
     import redis
     from llama_index.vector_stores.chroma import ChromaVectorStore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Re-export helper functions for backward compatibility
 _decode_redis_hash = decode_redis_hash

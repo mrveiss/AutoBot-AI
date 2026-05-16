@@ -18,13 +18,14 @@ import logging
 import os
 import tempfile
 from typing import Any, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 import yaml
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Check speech recognition availability
 try:

@@ -10,13 +10,14 @@ import logging
 import os
 from typing import Any, Dict
 from urllib.parse import urlparse
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.ssot_config import config as ssot_config
 from config.registry import ConfigRegistry
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PATH
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Parse lmstudio host/port from ssot_config once at module load (#6000).
 _lmstudio_parsed = urlparse(ssot_config.llm.lmstudio_host)

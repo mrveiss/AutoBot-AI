@@ -8,7 +8,6 @@ Uses lightweight Llama 3.2 1B model for efficient knowledge base searches,
 simple fact retrieval, and quick question answering without complex synthesis.
 """
 
-import logging
 import time
 from typing import Any, Dict, List, Optional
 
@@ -24,7 +23,7 @@ from services.llm_service import get_llm_service
 from .base_agent import DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuples for knowledge retrieval patterns
 _KNOWLEDGE_PATTERNS = (
@@ -601,6 +600,7 @@ If the information is not in the provided text, respond with "Information not fo
 
 # Singleton instance (thread-safe)
 import threading
+from autobot_shared.logging_manager import get_logger
 
 _knowledge_retrieval_agent_instance = None
 _knowledge_retrieval_agent_lock = threading.Lock()

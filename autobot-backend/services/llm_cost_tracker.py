@@ -16,7 +16,6 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 
 import asyncio
 import json
-import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from enum import Enum
@@ -47,7 +46,7 @@ from constants.model_constants import (
 )
 from constants.ttl_constants import TTL_30_DAYS, TTL_90_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Pricing was last verified on this date. A WARNING is emitted at import time
 # if this is older than PRICING_STALENESS_DAYS days. (#1961)
@@ -1122,6 +1121,7 @@ class LLMCostTracker(AsyncRedisClientMixin):
 
 # Singleton instance (thread-safe)
 import threading
+from autobot_shared.logging_manager import get_logger
 
 _cost_tracker: Optional[LLMCostTracker] = None
 _cost_tracker_lock = threading.Lock()

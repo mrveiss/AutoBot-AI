@@ -8,6 +8,7 @@ This creates a completely new knowledge base instance for testing the fixes
 
 import asyncio
 import logging
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, Request
 
@@ -24,7 +25,7 @@ from constants.threshold_constants import TimingConstants
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.get("/fresh_stats", response_model=KnowledgeFreshStatsResponse)

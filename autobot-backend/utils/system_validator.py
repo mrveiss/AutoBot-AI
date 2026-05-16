@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 import psutil
@@ -73,7 +74,7 @@ class SystemValidator:
 
     def __init__(self):
         """Initialize system validator with validation thresholds."""
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self.results: List[ValidationResult] = []
 
         # Validation configuration

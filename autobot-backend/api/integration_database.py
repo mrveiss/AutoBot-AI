@@ -11,6 +11,7 @@ and executing read-only queries.
 
 import logging
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -37,7 +38,7 @@ from integrations.database_integration import (
     PostgreSQLIntegration,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     tags=["integrations-database"],

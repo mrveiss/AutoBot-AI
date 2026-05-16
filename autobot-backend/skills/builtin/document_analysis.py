@@ -8,12 +8,12 @@ Analyze documents (PDF, images, text) for content extraction,
 summarization, and structured data extraction.
 """
 
-import logging
 from typing import Any, Dict
 
 from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DocumentAnalysisSkill(BaseSkill):

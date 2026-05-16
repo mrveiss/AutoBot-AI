@@ -11,10 +11,10 @@ without affecting core functionality.
 
 import asyncio
 import functools
-import logging
 from typing import Any, Callable, TypeVar
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 

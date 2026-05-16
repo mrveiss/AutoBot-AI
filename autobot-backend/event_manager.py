@@ -3,7 +3,6 @@
 # Author: mrveiss
 # src/event_manager.py
 import asyncio  # Added back asyncio import
-import logging
 from typing import Any, Awaitable, Callable, Dict, Optional
 
 import yaml
@@ -11,8 +10,9 @@ import yaml
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.path_constants import PATH
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EventManager:

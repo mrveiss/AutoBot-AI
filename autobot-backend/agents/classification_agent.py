@@ -11,6 +11,7 @@ import json
 import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
 from agents.json_formatter_agent import CLASSIFICATION_SCHEMA, json_formatter
 from agents.llm_failsafe_agent import get_robust_llm_response
@@ -28,7 +29,7 @@ from workflow_classifier import WorkflowClassifier
 from .base_agent import AgentRequest
 from .standardized_agent import StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

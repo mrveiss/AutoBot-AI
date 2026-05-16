@@ -13,6 +13,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
 from .types import CodeLocation, ComplexityHotspot, PatternSeverity
 
@@ -24,7 +25,7 @@ try:
 except ImportError:
     HAS_SHARED_CACHE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Try to import radon - it's optional but recommended
 try:

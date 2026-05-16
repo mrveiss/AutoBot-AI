@@ -10,6 +10,7 @@ Part of Issue #381 - God Class Refactoring
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import io
@@ -63,10 +64,10 @@ try:
     VISION_MODELS_AVAILABLE = True
 except ImportError:
     VISION_MODELS_AVAILABLE = False
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
     logger.warning("Vision models not available. Install transformers with: pip install transformers")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class VisionProcessor(BaseModalProcessor):

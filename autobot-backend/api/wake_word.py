@@ -6,7 +6,6 @@ Wake Word Detection API Endpoints
 Issue #54 - Advanced Wake Word Detection Optimization
 """
 
-import logging
 
 from fastapi import APIRouter, HTTPException
 
@@ -30,8 +29,9 @@ from api.schemas_system import (
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.wake_word_service import WakeWordDetector, get_wake_word_detector
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["wake_word", "voice"])
 
 

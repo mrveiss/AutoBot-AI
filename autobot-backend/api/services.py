@@ -9,6 +9,7 @@ Provides service status, health checks, and system information endpoints.
 import logging
 import time
 from datetime import datetime, timezone
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -32,7 +33,7 @@ except ImportError as _e:
 
     monitoring_services_health = _MissingDep("monitoring_services_health", _e)  # type: ignore[assignment]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["Services"])
 
 

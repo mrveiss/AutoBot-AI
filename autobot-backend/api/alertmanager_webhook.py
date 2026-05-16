@@ -7,7 +7,6 @@ Receives alerts from Prometheus AlertManager and broadcasts to WebSocket clients
 Phase 3: Alert Migration (Issue #346)
 """
 
-import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -20,8 +19,9 @@ from api.schemas_system import (
     AlertManagerWebhookReceiveResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/webhook", tags=["webhooks"])
 

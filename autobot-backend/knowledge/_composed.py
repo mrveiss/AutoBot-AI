@@ -11,7 +11,6 @@ pulling in the full dependency tree.
 """
 
 import asyncio
-import logging
 import threading
 from typing import Optional
 
@@ -29,8 +28,9 @@ from knowledge.stats import StatsMixin
 from knowledge.suggestions import SuggestionsMixin
 from knowledge.tags import TagsMixin
 from knowledge.versioning import VersioningMixin
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class KnowledgeBase(

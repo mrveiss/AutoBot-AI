@@ -16,7 +16,6 @@ Endpoints:
 Related: Issue #206
 """
 
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Path
@@ -28,9 +27,10 @@ from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
 from services.captcha_human_loop import CaptchaResolutionStatus, get_captcha_human_loop
+from autobot_shared.logging_manager import get_logger
 
 router = APIRouter(prefix="/captcha", tags=["captcha"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.post("/{captcha_id}/resolve", response_model=CaptchaResolutionResponse)

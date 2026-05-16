@@ -6,7 +6,6 @@ Analyzes codebase for duplicate functions and refactoring opportunities
 import ast
 import hashlib
 import json
-import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,7 +18,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from autobot_shared.async_compat import run_or_schedule
 from constants.ttl_constants import TTL_1_HOUR
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuples for AST node type checks
 _FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
@@ -420,6 +419,7 @@ class CodeAnalyzer:
 
 # In original files, replace with:
 from utils.{module_name}_utils import {func.name}
+from autobot_shared.logging_manager import get_logger
 """
 
         return example.strip()

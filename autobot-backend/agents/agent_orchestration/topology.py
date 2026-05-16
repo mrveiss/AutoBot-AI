@@ -12,13 +12,13 @@ together weaken.  The topology is queried at routing time to bias agent
 selection toward historically effective collaborations.
 """
 
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from itertools import combinations
 from typing import Optional, Protocol, runtime_checkable
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Hebbian learning rate: how much each outcome shifts the weight.
 _LEARNING_RATE: float = 0.1

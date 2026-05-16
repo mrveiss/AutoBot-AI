@@ -19,6 +19,7 @@ Endpoints:
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -40,7 +41,7 @@ from utils.catalog_http_exceptions import (
 )
 
 router = APIRouter(prefix="/audit", tags=["audit"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def check_admin_permission(request: Request) -> bool:

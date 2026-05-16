@@ -14,6 +14,7 @@ import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import FastAPI
 
@@ -39,7 +40,7 @@ from utils.io_executor import shutdown_executors as shutdown_io_executors
 MAX_WORKER_THREADS = 16
 _executor: ThreadPoolExecutor | None = None
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for backend logger names
 _BACKEND_LOGGER_NAMES = ("api", "api.codebase_analytics")
@@ -79,7 +80,7 @@ def configure_logging():
 
     # Set level for all backend loggers
     for logger_name in _BACKEND_LOGGER_NAMES:
-        logging.getLogger(logger_name).setLevel(LOG_LEVEL_VALUE)
+        get_logger(logger_name).setLevel(LOG_LEVEL_VALUE)
 
     logger.info("📊 Logging level set to: %s (%s)", LOG_LEVEL, LOG_LEVEL_VALUE)
 

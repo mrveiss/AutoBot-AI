@@ -22,6 +22,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 
@@ -38,7 +39,7 @@ from .models import (
     ValidationDuplication,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Default directories to skip
 _SKIP_DIRS: frozenset = frozenset(

@@ -6,6 +6,7 @@ import os
 import sys
 from pathlib import Path
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
 # Add the project root to Python path for absolute imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -30,7 +31,7 @@ from initialization import (
 )
 
 # Store logger for app usage
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _register_exception_handlers(app: FastAPI) -> None:
@@ -116,7 +117,7 @@ class AppFactory:
 
     def __init__(self):
         """Initialize app factory with logger instance."""
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
 
     @staticmethod
     def create_fastapi_app(

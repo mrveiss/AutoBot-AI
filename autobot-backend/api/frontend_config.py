@@ -3,6 +3,7 @@
 # Author: mrveiss
 import logging
 from typing import Any, Dict
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter
 
@@ -12,7 +13,7 @@ from constants.path_constants import PathConstants
 from services.config_service import ConfigService
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _build_project_config() -> Dict[str, Any]:

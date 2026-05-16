@@ -14,7 +14,6 @@ provides the required endpoints backed by the project_state_manager which
 is already in use throughout the backend.
 """
 
-import logging
 from typing import List
 
 from fastapi import APIRouter, HTTPException
@@ -27,8 +26,9 @@ from api.schemas_system import (
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
 from project_state_manager import get_project_state_manager
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

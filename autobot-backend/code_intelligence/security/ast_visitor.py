@@ -8,7 +8,6 @@ Issue #712: Extracted from security_analyzer.py for modularity.
 """
 
 import ast
-import logging
 from typing import Dict, List, Optional, Set
 
 from .constants import (
@@ -26,8 +25,9 @@ from .constants import (
     VulnerabilityType,
 )
 from .finding import SecurityFinding
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SecurityASTVisitor(ast.NodeVisitor):

@@ -17,6 +17,7 @@ import logging
 from datetime import datetime, timezone
 from io import StringIO
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.time_utils import parse_utc_iso
 
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
     import aioredis
     import redis
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ===== Helper functions for date filtering (Issue #398: extracted) =====

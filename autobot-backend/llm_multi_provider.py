@@ -18,7 +18,6 @@ New code should import directly from ``llm_interface_pkg.providers``:
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Dict, List, Optional, Union
 
 # ---------------------------------------------------------------------------
@@ -43,7 +42,7 @@ from llm_interface_pkg.providers import (
 )
 from llm_interface_pkg.types import LLMType, ProviderType
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +120,7 @@ class LLMProvider(ABC):
 import asyncio
 
 from constants.threshold_constants import TimingConstants
+from autobot_shared.logging_manager import get_logger
 
 
 class MockProvider(LLMProvider):

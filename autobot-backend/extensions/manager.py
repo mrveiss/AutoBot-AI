@@ -8,14 +8,14 @@ Issue #658: Manages the lifecycle of extensions and coordinates
 hook invocations across all registered extensions.
 """
 
-import logging
 import threading
 from typing import Any, Dict, List, Optional, Type
 
 from extensions.base import Extension, HookContext
 from extensions.hooks import HookPoint
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ExtensionManager:

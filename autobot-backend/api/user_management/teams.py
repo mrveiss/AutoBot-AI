@@ -10,6 +10,7 @@ REST API for team management operations.
 import logging
 import uuid
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -39,7 +40,7 @@ from user_management.services.team_service import (
 )
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # -------------------------------------------------------------------------

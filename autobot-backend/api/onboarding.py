@@ -13,6 +13,7 @@ Provides first-run UX endpoints:
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import logging
 from typing import Any
@@ -25,7 +26,7 @@ from auth_middleware import check_admin_permission, get_current_user
 from onboarding.doctor import run_doctor
 from onboarding.presets import get_all_presets, get_preset
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["onboarding"])
 

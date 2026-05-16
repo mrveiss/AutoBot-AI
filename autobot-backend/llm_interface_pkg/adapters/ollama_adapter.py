@@ -13,6 +13,7 @@ diagnostic method used by ``api/adapters.py``.
 import logging
 import time
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
@@ -29,7 +30,7 @@ from .base import (
     EnvironmentTestResult,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OllamaAdapter(AdapterBase):

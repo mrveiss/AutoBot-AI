@@ -9,6 +9,7 @@ Contains enums, dataclasses, and type definitions for model optimization.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import logging
 import time
@@ -16,7 +17,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Bytes-per-parameter for common quantization levels (Issue #1966).
 _QUANT_BPP: Dict[str, float] = {

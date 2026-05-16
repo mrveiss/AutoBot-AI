@@ -12,15 +12,15 @@ sliding-window check available per gateway platform (Issue #4460).
 """
 
 import asyncio
-import logging
 import time
 from asyncio import Queue
 from dataclasses import dataclass, field
 from typing import Callable, Dict
 
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Shared delegate scoped to gateway operations (Issue #4460).
 # The local token-bucket ``RateLimiter`` dataclass handles per-message
@@ -82,7 +82,7 @@ class MessageQueue:
         self.queue: Queue = Queue(maxsize=max_queue_size)
         self.limiters: Dict[str, RateLimiter] = {}
         self.processing = False
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
 
     def register_platform(self, platform: str, rps: int, burst_size: int) -> None:
         """Register platform rate limiter."""

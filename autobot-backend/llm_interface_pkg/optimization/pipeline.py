@@ -20,7 +20,6 @@ request.
 Issue #3140: Assemble end-to-end LayerInference pipeline.
 """
 
-import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
@@ -33,8 +32,9 @@ from .hf_quantizer import HfQuantizerWrapper
 from .kv_cache import KVCacheConfig, KVCacheManager, LayerKVCache
 from .layer_inference import LayerInferenceConfig, LayerInferenceEngine
 from .meta_eviction import MetaDeviceEvictionManager, clean_memory
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Pipeline configuration

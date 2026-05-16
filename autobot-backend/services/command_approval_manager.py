@@ -25,6 +25,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from secure_command_executor import CommandRisk
 from type_defs.common import Metadata
@@ -33,7 +34,7 @@ from type_defs.common import Metadata
 if TYPE_CHECKING:
     from autobot_shared.ssot_config import PermissionMode
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for subcommand patterns (Issue #326)
 SUBCOMMAND_TOOLS = {"git", "docker", "kubectl", "npm", "yarn"}

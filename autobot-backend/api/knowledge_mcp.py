@@ -14,6 +14,7 @@ graph (chat_workflow/graph.py).
 import asyncio
 import logging
 from typing import List
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends
 
@@ -42,7 +43,7 @@ from knowledge_base import KnowledgeBase
 from type_defs.common import Metadata
 from utils.service_registry import get_service_url
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])
 
 get_knowledge_base = lazy_singleton(lambda: KnowledgeBase(config_manager=get_config()))

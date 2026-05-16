@@ -12,6 +12,7 @@ import json
 import logging
 import uuid
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from constants.ttl_constants import TTL_1_HOUR
 from services.command_approval_manager import AgentRole
@@ -19,7 +20,7 @@ from type_defs.common import Metadata
 
 from .models import AgentSessionState, AgentTerminalSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # O(1) lookup optimization constants (Issue #326)
 APPROVAL_RESPONSE_KEYWORDS = {"approved", "denied", "executed", "rejected"}

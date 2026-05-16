@@ -17,14 +17,14 @@ plus additional knowledge-specific types.
 
 import asyncio
 import json
-import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from autobot_shared.error_boundaries import error_boundary
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Knowledge-specific relation types extend the memory graph set
 KB_RELATION_TYPES: Set[str] = {

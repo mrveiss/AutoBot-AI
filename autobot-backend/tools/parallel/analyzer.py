@@ -8,12 +8,12 @@ Analyzes dependencies between tool calls to enable parallel execution.
 Based on Cursor's dependency detection patterns.
 """
 
-import logging
 from typing import Callable, Optional
 
 from tools.parallel.types import DependencyType, ToolCall
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DependencyAnalyzer:

@@ -15,6 +15,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from functools import wraps
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 import psutil
@@ -24,7 +25,7 @@ from autobot_shared.async_compat import run_or_schedule
 # Import existing monitoring infrastructure
 from constants.api_constants import PATH_API_HEALTH
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -157,7 +158,7 @@ class Phase9PerformanceMonitor:
     """
 
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self.monitoring_active = False
         self.collection_interval = 5.0  # Collect metrics every 5 seconds
         self.retention_hours = 24

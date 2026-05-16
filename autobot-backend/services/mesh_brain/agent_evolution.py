@@ -9,11 +9,11 @@ Analyzes task history per agent to discover which task types
 each agent excels at and updates agent profiles accordingly.
 """
 
-import logging
 from dataclasses import dataclass
 from typing import Protocol
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

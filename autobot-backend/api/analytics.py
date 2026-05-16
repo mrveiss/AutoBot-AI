@@ -14,6 +14,7 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Tuple
+from autobot_shared.logging_manager import get_logger
 
 import httpx
 from fastapi import (
@@ -64,7 +65,7 @@ from utils.background_task_manager import BackgroundTaskManager
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
 from .monitoring_hardware import hardware_monitor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["analytics"])
 
 # Module-level root cause analyzer instance (lazy initialized)

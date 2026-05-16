@@ -6,12 +6,13 @@ Test script for the advanced monitoring alerts system
 import asyncio
 import logging
 from datetime import datetime
+from autobot_shared.logging_manager import get_logger
 
 from tests.test_helpers import get_test_backend_url
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def test_monitoring_alerts():

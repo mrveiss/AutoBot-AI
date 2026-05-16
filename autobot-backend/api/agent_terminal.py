@@ -225,7 +225,6 @@ See Also:
 - docs/architecture/TERMINAL_ARCHITECTURE_DIAGRAM.md - System architecture
 """
 
-import logging
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -266,7 +265,7 @@ from services.agent_terminal import AgentSessionState, AgentTerminalService
 from services.command_approval_manager import AgentRole
 from services.command_execution_queue import get_command_queue
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Create router
 router = APIRouter(prefix="/agent-terminal", tags=["agent-terminal"])
@@ -761,6 +760,7 @@ async def agent_terminal_info(
 
 import uuid
 from datetime import datetime, timezone
+from autobot_shared.logging_manager import get_logger
 
 # In-memory store for pending host selection requests
 # In production, this would use Redis for persistence

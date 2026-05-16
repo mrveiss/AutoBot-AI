@@ -8,6 +8,7 @@ Issue #679: Permission-filtered knowledge search that respects hierarchical acce
 """
 
 import logging
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -26,7 +27,7 @@ from knowledge.search_filters import (
 from knowledge_factory import get_or_create_knowledge_base
 from user_management.models.user import User
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/knowledge/search", tags=["knowledge-search-scoped"])
 

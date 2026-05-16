@@ -28,13 +28,14 @@ import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import numpy as np
 
 from autobot_shared.redis_client import get_async_redis_client
 from utils.async_initializable import AsyncInitializable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration

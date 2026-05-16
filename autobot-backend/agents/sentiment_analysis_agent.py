@@ -10,7 +10,6 @@ Handles sentiment analysis (positive/negative/neutral) and fine-grained
 emotion classification from text input.
 """
 
-import logging
 import threading
 from typing import Any, Dict, List, Optional
 
@@ -24,8 +23,9 @@ from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SentimentAnalysisAgent(StandardizedAgent):

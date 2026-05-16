@@ -14,6 +14,7 @@ Provides a single endpoint that aggregates all analytics data from:
 
 import logging
 from typing import Any, Dict
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 from fastapi import APIRouter
@@ -24,7 +25,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.time_utils import utc_timestamp
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 # Issue #3355: prefix moved to router registry (analytics_routers.py)
 router = APIRouter(tags=["unified-analytics"])
 

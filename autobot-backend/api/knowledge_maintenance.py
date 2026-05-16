@@ -20,6 +20,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path as PathLib
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, Request
 
@@ -77,7 +78,7 @@ from services.knowledge.contradiction_detector import (
 from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
 
 # Set up logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["knowledge_maintenance"])
 

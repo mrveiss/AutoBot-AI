@@ -7,7 +7,6 @@ Config Revisions API (#1404)
 Endpoints for listing, inspecting, and rolling back configuration revisions.
 """
 
-import logging
 import uuid
 from typing import List
 
@@ -20,8 +19,9 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.models.pagination import PaginationParams
 from services.config_revision_service import ConfigRevisionService
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 

@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
@@ -33,7 +34,7 @@ from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
 from autobot_shared.status_enums import Severity as DebtSeverity  # #6689 consolidation
 from constants.ttl_constants import TTL_30_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["technical-debt", "analytics"])  # Prefix set in router_registry
 
 # Redis key prefix

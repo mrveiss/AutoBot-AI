@@ -18,8 +18,9 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from autobot_shared.time_utils import now_utc
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SkillStatus(str, Enum):
@@ -88,7 +89,7 @@ class BaseSkill(ABC):
         self._status = SkillStatus.AVAILABLE
         self._config: Dict[str, Any] = {}
         self._enabled = False
-        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        self.logger = get_logger(f"{__name__}.{self.__class__.__name__}")
 
     @staticmethod
     @abstractmethod

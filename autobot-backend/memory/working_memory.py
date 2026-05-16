@@ -12,13 +12,13 @@ Uses the 'knowledge' Redis database (DATABASE_MAPPING["knowledge"]).
 """
 
 import json
-import logging
 from typing import Any, List, Optional
 
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.ttl_constants import TTL_WORKING_MEMORY_DEFAULT
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _KEY_PREFIX = "autobot:session:{session_id}:memory:{key}"
 _SESSION_PATTERN = "autobot:session:{session_id}:memory:*"

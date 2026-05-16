@@ -8,12 +8,12 @@ Automated code review for pull requests and code diffs.
 Detects issues, suggests improvements, and enforces standards.
 """
 
-import logging
 from typing import Any, Dict
 
 from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CodeReviewSkill(BaseSkill):

@@ -12,7 +12,6 @@ or the query requires current/external data.
 """
 
 import json
-import logging
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
@@ -22,8 +21,9 @@ from config import config
 from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
 from utils.service_registry import get_service_url
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LibrarianAssistant:

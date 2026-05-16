@@ -11,7 +11,6 @@ Provides endpoints for managing the data folder:
 - Database file information
 """
 
-import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,9 +35,10 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path
 from utils.catalog_http_exceptions import raise_server_error
+from autobot_shared.logging_manager import get_logger
 
 router = APIRouter(prefix="/data-storage", tags=["Data Storage"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Data directory path
 DATA_DIR = Path(__file__).parent.parent.parent / "data"

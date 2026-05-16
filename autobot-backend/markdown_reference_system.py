@@ -8,7 +8,6 @@ Integrates markdown documents with SQLite database for enhanced knowledge manage
 
 import hashlib
 import json
-import logging
 import re
 import sqlite3
 from datetime import datetime, timezone
@@ -16,8 +15,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from memory import EnhancedMemoryManager
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for markdown parsing
 _WORD_RE = re.compile(r"\b\w+\b")

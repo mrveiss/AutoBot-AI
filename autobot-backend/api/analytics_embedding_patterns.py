@@ -17,7 +17,6 @@ Related: #229 (LLM Integration Pattern Analyzer - CLOSED)
 """
 
 import json
-import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -35,7 +34,7 @@ from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 from constants.ttl_constants import TTL_30_DAYS, TTL_90_DAYS
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -434,6 +433,7 @@ import threading
 
 from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 _embedding_analyzer: Optional[EmbeddingPatternAnalyzer] = None
 _embedding_analyzer_lock = threading.Lock()

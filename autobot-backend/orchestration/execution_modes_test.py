@@ -16,6 +16,7 @@ Covers:
 
 import asyncio
 import logging
+from autobot_shared.logging_manager import get_logger
 
 import pytest
 
@@ -28,7 +29,7 @@ from .execution_modes import (
 )
 from .workflow_executor import WorkflowExecutor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

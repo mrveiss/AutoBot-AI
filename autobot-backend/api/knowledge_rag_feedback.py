@@ -16,6 +16,7 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends
 
@@ -27,7 +28,7 @@ from constants.ttl_constants import TTL_30_DAYS
 from knowledge.schemas.mcp import RagFeedbackResponse
 from knowledge.search_components.retrieval_learner import GLOBAL_USER
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["knowledge-rag-feedback"])
 

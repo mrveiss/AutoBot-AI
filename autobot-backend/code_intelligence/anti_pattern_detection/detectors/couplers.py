@@ -14,15 +14,15 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import ast
-import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from ..models import AntiPatternResult
 from ..severity_utils import get_feature_envy_severity, get_message_chain_severity
 from ..types import AntiPatternSeverity, AntiPatternType, Thresholds
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Issue #380: Pre-computed excluded objects for feature envy detection

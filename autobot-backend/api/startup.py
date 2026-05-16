@@ -8,7 +8,6 @@ Provides friendly startup messages and status updates for the frontend
 
 import asyncio
 import json
-import logging
 import time
 from datetime import datetime, timezone
 
@@ -16,7 +15,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["startup", "status"])
 
 # Thread lock for synchronous access to startup_state
@@ -24,6 +23,7 @@ import threading
 
 from api.schemas_common import DataResponse
 from api.schemas_system import StartupMessage, StartupPhase, StartupStatusResponse
+from autobot_shared.logging_manager import get_logger
 
 _startup_lock = threading.Lock()
 

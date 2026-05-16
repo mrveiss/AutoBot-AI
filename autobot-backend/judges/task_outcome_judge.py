@@ -12,11 +12,12 @@ import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.time_utils import utc_timestamp
 from judges import BaseLLMJudge, JudgmentDimension, JudgmentResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key pattern for task outcomes
 REDIS_OUTCOMES_KEY = "task:outcomes:{task_type}"

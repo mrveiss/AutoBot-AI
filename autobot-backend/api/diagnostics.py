@@ -17,7 +17,6 @@ Used for:
 - Debugging (why did this specific task fail?)
 """
 
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -30,8 +29,9 @@ from api.schemas_system import (
 from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.causal_inference_engine import CausalInferenceEngine
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Create router
 router = APIRouter(prefix="/api/diagnostics", tags=["diagnostics"])

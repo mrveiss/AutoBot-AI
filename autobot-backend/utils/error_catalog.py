@@ -8,7 +8,6 @@ Provides centralized error message retrieval from config/error_messages.yaml
 with caching, validation, and integration with error_boundaries.py
 """
 
-import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional
@@ -17,8 +16,9 @@ import yaml
 
 from autobot_shared.error_boundaries import ErrorCategory
 from constants.path_constants import PATH
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for metadata field filtering
 _METADATA_FIELDS = frozenset({"version", "last_updated"})

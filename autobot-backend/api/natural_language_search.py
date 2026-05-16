@@ -20,6 +20,7 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -37,7 +38,7 @@ from api.schemas_knowledge import (
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for query parsing and code analysis
 _NON_WORD_CHARS_RE = re.compile(r"[^\w\s\-_]")

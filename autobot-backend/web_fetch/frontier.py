@@ -8,6 +8,7 @@ Issue #7400: Foundation package for unified web search/scrape/crawl.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import hashlib
 import logging
@@ -15,7 +16,7 @@ from collections import deque
 from typing import List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _url_key(url: str) -> str:

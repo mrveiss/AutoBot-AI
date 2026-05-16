@@ -7,7 +7,6 @@ Workflow Controller Module
 Handles workflow control actions (pause, resume, cancel, approve, skip).
 """
 
-import logging
 from datetime import datetime, timezone
 from typing import Dict
 
@@ -16,8 +15,9 @@ from monitoring.prometheus_metrics import get_metrics_manager
 from .executor import WorkflowExecutor
 from .messaging import WorkflowMessenger
 from .models import ActiveWorkflow, WorkflowControlRequest
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WorkflowController:

@@ -14,7 +14,6 @@ Parent Epic: #217 - Advanced Code Intelligence
 """
 
 import asyncio
-import logging
 import os
 import time
 from datetime import datetime, timezone
@@ -63,7 +62,7 @@ from constants.ttl_constants import TTL_5_MINUTES
 from utils.background_task_manager import BackgroundTaskManager
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 router = APIRouter()
@@ -1653,6 +1652,7 @@ async def get_performance_report(
 # Issue #243: Code Evolution Mining Endpoints
 
 from code_intelligence.code_evolution_miner import CodeEvolutionMiner
+from autobot_shared.logging_manager import get_logger
 
 
 @router.post("/evolution/analyze", response_model=DataResponse)

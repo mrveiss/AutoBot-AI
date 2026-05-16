@@ -6,12 +6,13 @@
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import yaml
 
 from constants.model_constants import ModelConfig, ModelConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Lazy singleton — imported on first call to avoid circular imports.
 _compression_service = None

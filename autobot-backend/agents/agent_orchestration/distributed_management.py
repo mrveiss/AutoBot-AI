@@ -9,7 +9,6 @@ Contains distributed agent registration, health monitoring, and lifecycle manage
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
@@ -20,8 +19,9 @@ from .types import CircuitState, DistributedAgentInfo
 if TYPE_CHECKING:
     from agents.base_agent import AgentHealth, BaseAgent
 from autobot_shared.time_utils import now_utc
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DistributedAgentManager:

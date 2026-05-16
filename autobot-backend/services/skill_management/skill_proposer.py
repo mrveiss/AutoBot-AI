@@ -11,15 +11,15 @@ Related Issue: #4338 - autonomous skill extraction from conversations
 """
 
 import asyncio
-import logging
 from typing import Dict, List, Optional
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import config
 from services.skill_management.skill_extractor import ExtractedSkill
 from services.slm_client import get_slm_client
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SkillProposalError(Exception):

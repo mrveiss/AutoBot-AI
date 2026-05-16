@@ -14,6 +14,7 @@ import shlex
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
 from constants.network_constants import NetworkConstants
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
     from services.approval_memory import ApprovalMemoryManager
     from services.permission_matcher import PermissionMatcher
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # #7375: env-var prefix injection — surfaced by #7367 test rot triage.

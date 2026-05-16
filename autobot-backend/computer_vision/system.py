@@ -8,7 +8,6 @@ Issue #381: Extracted from computer_vision_system.py god class refactoring.
 Contains the main ComputerVisionSystem class that coordinates all components.
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -18,8 +17,9 @@ from task_execution_tracker import get_task_tracker
 
 from .screen_analyzer import ScreenAnalyzer
 from .types import ScreenState
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ComputerVisionSystem:

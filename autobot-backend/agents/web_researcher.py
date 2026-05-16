@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional
 from urllib.parse import urlparse
+from autobot_shared.logging_manager import get_logger
 
 from pydantic import BaseModel
 
@@ -52,7 +53,7 @@ except ImportError:
     logging.warning("aiohttp not available. Install with: pip install aiohttp")
     get_http_client = None
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

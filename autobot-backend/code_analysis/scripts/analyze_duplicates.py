@@ -11,14 +11,13 @@ per Issue #490 - code generator producing library module. Low priority.
 
 import asyncio
 import json
-import logging
 from pathlib import Path
 
 from code_analyzer import CodeAnalyzer
 
 from autobot_shared.async_compat import run_or_schedule
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Command execution function names to search for (Issue #398: extracted data)
 COMMAND_FUNCTION_NAMES = [
@@ -162,7 +161,7 @@ import subprocess
 from typing import Any, Dict, Optional, List, Union
 import logging
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def strip_ansi_codes(text: str) -> str:
@@ -283,6 +282,7 @@ def execute_shell_command_sync(
     Returns same format as async version.
     """
     import time
+from autobot_shared.logging_manager import get_logger
     start_time = time.time()
 
     try:

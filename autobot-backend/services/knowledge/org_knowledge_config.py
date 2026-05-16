@@ -23,6 +23,7 @@ unavailable.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import json
 import logging
@@ -32,7 +33,7 @@ from pydantic import BaseModel, Field
 
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Sentinel used for single-org deployments where no explicit org_id is passed.
 DEFAULT_ORG_ID = "__default__"

@@ -1,7 +1,6 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-import logging
 
 from fastapi import APIRouter, HTTPException
 
@@ -14,10 +13,11 @@ from api.system_health import register_redis_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.config_service import ConfigService
 from utils.connection_utils import ConnectionTester
+from autobot_shared.logging_manager import get_logger
 
 router = APIRouter()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.get("/config", response_model=RedisConfigResponse)

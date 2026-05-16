@@ -10,7 +10,6 @@ and data type validation.
 """
 
 import json
-import logging
 import re
 import threading
 from dataclasses import dataclass
@@ -20,8 +19,9 @@ from constants.threshold_constants import StringParsingConstants
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

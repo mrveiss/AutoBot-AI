@@ -19,8 +19,9 @@ from typing import Any, Callable, Optional, Type, TypeVar
 
 from constants.threshold_constants import TimingConstants
 from exceptions import AutoBotError, InternalError
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 

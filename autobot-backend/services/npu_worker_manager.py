@@ -9,7 +9,6 @@ Manages NPU worker registration, health monitoring, and state tracking.
 
 import asyncio
 import json
-import logging
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -32,7 +31,7 @@ from models.npu_models import (
 from npu_integration import NPUWorkerClient
 from utils.async_initializable import AsyncInitializable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for worker events that include full data
 _WORKER_FULL_DATA_EVENTS = frozenset({"worker.added", "worker.updated"})
@@ -878,6 +877,7 @@ class NPUWorkerManager(AsyncInitializable):
 
 # Global worker manager instance (thread-safe)
 import asyncio as _asyncio_lock
+from autobot_shared.logging_manager import get_logger
 
 _worker_manager: Optional[NPUWorkerManager] = None
 _worker_manager_lock = _asyncio_lock.Lock()

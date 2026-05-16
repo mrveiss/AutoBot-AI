@@ -9,15 +9,15 @@ Supports channels: agent:{id}, task:{id}, workflow:{id}, global
 """
 
 import asyncio
-import logging
 from typing import Dict, Set
 
 from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _VALID_PREFIXES = {"agent", "task", "workflow", "global"}
 

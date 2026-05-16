@@ -3,12 +3,12 @@
 # Author: mrveiss
 """Weekly entropy control and decay for Neural Mesh RAG (#1994, #2118)."""
 
-import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _LEARNER_ORIGINS = ["learner", "discoverer"]
 

@@ -13,6 +13,7 @@ import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import redis
 from llama_index.core import Settings, VectorStoreIndex
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
 
 config = get_config_manager()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _extract_embedding_model_from_metadata(

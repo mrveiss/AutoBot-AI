@@ -15,7 +15,6 @@ Public functions
 """
 
 import asyncio
-import logging
 import sys
 from pathlib import Path
 from typing import Optional
@@ -26,8 +25,9 @@ from .indexing_executor import (
     _SUBPROCESS_WATCHDOG_INTERVAL,
 )
 from .progress_tracker import _load_task_from_redis
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _handle_subprocess_crash(

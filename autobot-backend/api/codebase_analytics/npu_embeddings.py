@@ -10,6 +10,7 @@ chunker when NPU worker is unavailable.
 
 Usage:
     from api.codebase_analytics.npu_embeddings import (
+from autobot_shared.logging_manager import get_logger
         generate_codebase_embeddings_batch,
         get_embedding_stats,
     )
@@ -23,7 +24,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # =============================================================================
 # CONFIGURATION

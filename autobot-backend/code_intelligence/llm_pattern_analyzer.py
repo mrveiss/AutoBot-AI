@@ -27,6 +27,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from code_intelligence.llm_pattern_analysis.calculators import (
     CostCalculator,
@@ -72,7 +73,7 @@ from code_intelligence.llm_pattern_analysis.types import (
     UsagePatternType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Backward compatibility aliases for module-level patterns
 _REDUNDANT_PATTERNS = REDUNDANT_PATTERNS

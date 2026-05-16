@@ -8,7 +8,6 @@ Intelligent streaming with simplified error handling
 """
 
 import json
-import logging
 import time
 from typing import Tuple
 
@@ -16,7 +15,7 @@ import aiohttp
 
 from autobot_shared.http_client import get_http_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LLMStreamProcessor:
@@ -116,6 +115,7 @@ class LLMStreamingInterface:
 
 # Global LLM streaming interface instance (thread-safe)
 import asyncio as _asyncio_lock
+from autobot_shared.logging_manager import get_logger
 
 _llm_streaming_interface = None
 _llm_streaming_interface_lock = _asyncio_lock.Lock()

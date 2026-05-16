@@ -24,6 +24,7 @@ Rate limiting: 50 req/min per user for ground-response, 100 req/min for verify-c
 
 import logging
 from typing import Any, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
@@ -45,7 +46,7 @@ from services.grounded_agent import (
     get_grounded_agent,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     tags=["knowledge-grounding"],

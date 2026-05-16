@@ -13,7 +13,6 @@ Integrates security assessment findings with Memory MCP for:
 Issue: #260
 """
 
-import logging
 from dataclasses import dataclass
 from typing import Any, FrozenSet, Optional
 
@@ -63,7 +62,7 @@ class ServiceRequest:
     metadata: Optional[dict[str, Any]] = None
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for security relation types (Issue #326)
 DETAIL_RELATION_TYPES = {"contains", "runs", "has_vulnerability", "exploited_by"}
@@ -981,6 +980,7 @@ class SecurityMemoryIntegration:
 
 # Singleton instance (thread-safe)
 import asyncio as _asyncio_lock
+from autobot_shared.logging_manager import get_logger
 
 _security_memory: Optional[SecurityMemoryIntegration] = None
 _security_memory_lock = _asyncio_lock.Lock()

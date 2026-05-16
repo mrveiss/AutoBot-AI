@@ -7,7 +7,6 @@ Approval Gates API (#1402)
 CRUD and lifecycle endpoints for human-in-the-loop approval gates.
 """
 
-import logging
 import uuid
 from typing import List, Optional
 
@@ -30,8 +29,9 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.models.pagination import PaginationParams
 from models.approval import ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 

@@ -33,7 +33,6 @@ sites intact (see issue #7401 caller audit).
 
 import asyncio
 import ipaddress
-import logging
 import re
 import time
 from dataclasses import dataclass
@@ -60,7 +59,7 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=15) if _AIOHTTP_AVAILABLE else None
 _JINA_TIMEOUT = aiohttp.ClientTimeout(total=5) if _AIOHTTP_AVAILABLE else None
@@ -503,3 +502,4 @@ def _record_jina_success() -> None:
 # the original ``_parse_jina_output`` name to preserve the existing 4
 # test imports in ``pipeline_test.py``.
 from autobot_shared.jina_parser import parse_jina_output as _parse_jina_output
+from autobot_shared.logging_manager import get_logger

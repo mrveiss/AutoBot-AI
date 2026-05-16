@@ -8,7 +8,6 @@ Automatically injects system awareness context into LLM requests
 """
 
 import json
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -18,7 +17,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from constants.ttl_constants import TTL_5_MINUTES
 from llm_self_awareness import get_llm_self_awareness
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #337: Message fields that can contain LLM prompts
 MESSAGE_FIELDS = ["message", "prompt", "user_message", "query", "input"]
@@ -220,6 +219,7 @@ Active capabilities ({context['current_capabilities']['count']}):"""
 
 # Global injector instance (thread-safe)
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.logging_manager import get_logger
 
 _awareness_injector = lazy_singleton(LLMAwarenessInjector)
 

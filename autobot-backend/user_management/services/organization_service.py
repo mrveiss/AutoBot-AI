@@ -9,7 +9,6 @@ Used in multi_company and provider deployment modes.
 """
 
 import asyncio
-import logging
 import re
 import uuid
 from typing import List, Optional
@@ -21,8 +20,9 @@ from autobot_shared.time_utils import now_utc
 from user_management.models import Organization, Team, User
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services.base_service import BaseService, TenantContext
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OrganizationServiceError(Exception):

@@ -18,7 +18,6 @@ Key Features:
 from autobot_shared.ssot_config import config
 import ast
 import asyncio
-import logging
 import os
 import re
 from collections import defaultdict
@@ -48,8 +47,9 @@ from api.schemas_analytics import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.status_enums import Severity
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

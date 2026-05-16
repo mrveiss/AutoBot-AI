@@ -6,6 +6,7 @@
 
 import logging
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -24,7 +25,7 @@ from integrations.version_control_integration import (
     GitLabIntegration,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(
     tags=["integrations-version-control"],
     dependencies=[Depends(check_admin_permission)],

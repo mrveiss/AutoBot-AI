@@ -9,15 +9,15 @@ Issue #873 - Activity Tracking Integration Hooks (#608 Phase 5)
 Integration hooks for tracking browser automation activities.
 """
 
-import logging
 import uuid
 from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from utils.activity_tracker import track_browser_activity
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _build_browser_action_metadata(

@@ -11,6 +11,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 from fastapi import APIRouter, Query
@@ -23,7 +24,7 @@ from utils.io_executor import get_analytics_executor
 
 from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, ImportContext, get_project_root
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #711: Cache configuration for call graph
 CALL_GRAPH_CACHE_PREFIX = "codebase:call_graph:cache"

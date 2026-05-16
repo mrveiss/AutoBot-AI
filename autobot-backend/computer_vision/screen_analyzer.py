@@ -9,6 +9,7 @@ Contains the main screen analysis and multimodal processing logic.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import base64
@@ -37,7 +38,7 @@ if TYPE_CHECKING:
     import cv2 as _cv2_type  # noqa: F401
     from PIL import Image as _pil_type  # noqa: F401
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #3016: lazy module-level imports for cv2 and PIL to avoid startup cost
 _cv2 = None

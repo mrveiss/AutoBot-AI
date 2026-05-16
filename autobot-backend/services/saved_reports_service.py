@@ -18,12 +18,13 @@ import logging
 import uuid
 from datetime import timedelta
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc, utc_timestamp
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key patterns (ANALYTICS db, index 11)
 _REPORT_KEY_PREFIX = "saved_report:"

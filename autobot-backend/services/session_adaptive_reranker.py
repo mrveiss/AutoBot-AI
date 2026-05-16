@@ -18,13 +18,13 @@ Design constraints:
 - All public methods are synchronous (no I/O) for zero latency overhead.
 """
 
-import logging
 import threading
 import time
 from dataclasses import dataclass, field
 from typing import Dict
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Clamp bounds for adapted weights to prevent degenerate extremes.
 _MIN_WEIGHT = 0.1

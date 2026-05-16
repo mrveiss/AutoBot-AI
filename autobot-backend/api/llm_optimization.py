@@ -9,6 +9,7 @@ Provides intelligent model selection, performance tracking, and optimization sug
 import logging
 import time
 from typing import List
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -39,7 +40,7 @@ from services.llm_service import get_llm_service
 from utils.model_optimizer import TaskRequest, get_model_optimizer
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 config = get_config_manager()
 

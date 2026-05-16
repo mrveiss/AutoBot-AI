@@ -8,10 +8,10 @@ This module defines specific exception types for better error handling
 and debugging across the AutoBot platform.
 """
 
-import logging
 from typing import Any, Callable, Dict, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AutoBotError(Exception):

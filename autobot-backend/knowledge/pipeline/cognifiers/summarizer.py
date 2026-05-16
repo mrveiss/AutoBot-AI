@@ -11,6 +11,7 @@ Issue #2027: RAPTOR recursive clustering for multi-level retrieval.
 import logging
 from typing import Dict, List, Tuple
 from uuid import UUID
+from autobot_shared.logging_manager import get_logger
 
 import numpy as np
 
@@ -25,7 +26,7 @@ from knowledge.pipeline.models.summary import Summary, SummaryLevel
 from knowledge.pipeline.registry import TaskRegistry
 from services.llm_service import get_llm_service
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 SUMMARY_PROMPT = """Summarize the following text in {max_words} words or less.

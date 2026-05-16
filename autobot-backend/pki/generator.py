@@ -11,7 +11,6 @@ Uses OpenSSL via subprocess for certificate operations.
 Inspired by oVirt's ovirt-engine-pki-ca-create and ovirt-engine-pki-enroll.
 """
 
-import logging
 import os
 import subprocess  # nosec B404 - Required for PKI certificate generation
 from datetime import datetime, timezone
@@ -19,8 +18,9 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from pki.config import VM_DEFINITIONS, CertificateStatus, TLSConfig, VMCertificateInfo
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _run_openssl_command(cmd: List[str], operation: str, context: str = "") -> Tuple[bool, Optional[str]]:

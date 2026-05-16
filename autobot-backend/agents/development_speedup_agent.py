@@ -24,8 +24,9 @@ import aiofiles
 from agents.npu_code_search_agent import get_npu_code_search
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for import statement prefixes
 _IMPORT_PREFIXES = ("import ", "from ")
@@ -93,7 +94,7 @@ class DevelopmentSpeedupAgent:
 
     def __init__(self):
         """Initialize the development speedup agent"""
-        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        self.logger = get_logger(f"{__name__}.{self.__class__.__name__}")
 
         # NPU code search agent (lazy initialization)
         self.npu_code_search = get_npu_code_search()

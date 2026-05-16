@@ -29,8 +29,9 @@ import logging
 from typing import Dict, List, Optional
 
 from prompt_manager import get_prompt
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # =============================================================================
 # Constants

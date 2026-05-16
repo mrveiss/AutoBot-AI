@@ -6,13 +6,14 @@ import asyncio
 import logging
 import os
 import subprocess
+from autobot_shared.logging_manager import get_logger
 
 import pyautogui
 
 from autobot_shared.async_compat import run_or_schedule
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GUIController:

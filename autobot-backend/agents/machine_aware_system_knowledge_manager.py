@@ -16,6 +16,7 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 import yaml
@@ -25,7 +26,7 @@ from autobot_shared.time_utils import parse_utc_iso
 from intelligence.os_detector import LinuxDistro, OSType, get_os_detector
 from knowledge_base import KnowledgeBase
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MachineProfile:

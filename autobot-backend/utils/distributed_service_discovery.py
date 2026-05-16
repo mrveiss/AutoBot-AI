@@ -11,7 +11,6 @@ ROOT CAUSE FIX: Replaces DNS resolution delays with cached service endpoints
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
@@ -24,7 +23,7 @@ from constants.network_constants import NetworkConstants
 from constants.threshold_constants import ServiceDiscoveryConfig, TimingConstants
 from utils.async_initializable import AsyncInitializable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _build_distributed_services_config() -> Dict[str, Any]:
@@ -451,6 +450,7 @@ class DistributedServiceDiscovery(AsyncInitializable):
 
 
 from autobot_shared.singleton_factory import async_lazy_singleton
+from autobot_shared.logging_manager import get_logger
 
 
 async def _init_service_discovery() -> DistributedServiceDiscovery:

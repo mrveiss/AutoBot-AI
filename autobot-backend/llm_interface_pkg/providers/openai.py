@@ -18,6 +18,7 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import logging
 import os
@@ -41,7 +42,7 @@ from llm_interface_pkg.types import ProviderType
 
 from ..base_provider import BaseProvider
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #697: tracer for LLM operations
 _tracer = trace.get_tracer("autobot.llm.openai", "2.0.0")

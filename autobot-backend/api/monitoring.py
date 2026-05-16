@@ -13,6 +13,7 @@ import logging
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 from fastapi import (
@@ -75,7 +76,7 @@ from utils.performance_monitor import (
     stop_monitoring,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Prometheus server URL — loaded once at import time via SSOT config (Issue #1283)
 _ssot = get_config()

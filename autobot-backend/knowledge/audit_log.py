@@ -9,14 +9,14 @@ Issue #679: Comprehensive audit trail for knowledge access, modifications, and p
 
 import asyncio
 import json
-import logging
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
 from autobot_shared.time_utils import now_utc, utc_timestamp
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AuditEventType(str, Enum):

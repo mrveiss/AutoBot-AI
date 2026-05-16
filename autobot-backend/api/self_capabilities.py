@@ -15,7 +15,6 @@ Issue #3295: replace the hardcoded endpoint list in llm_self_awareness.py.
 
 import asyncio
 import hashlib
-import logging
 import time
 from typing import Any, Dict, List, Optional
 
@@ -25,8 +24,9 @@ from fastapi.openapi.utils import get_openapi
 from api.schemas_agent import SelfCapabilitiesResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.ttl_constants import TTL_5_MINUTES
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

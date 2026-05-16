@@ -12,13 +12,13 @@ This module contains search and query operations:
 Part of the modular autobot_memory_graph package (Issue #716).
 """
 
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from .core import AutoBotMemoryGraphCore
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _is_entity_valid(entity: Dict[str, Any]) -> bool:

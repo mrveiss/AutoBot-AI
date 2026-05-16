@@ -22,10 +22,11 @@ import json
 import logging
 import time
 from typing import Dict, List, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Module-level constants

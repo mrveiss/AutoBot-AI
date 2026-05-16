@@ -12,12 +12,11 @@ so the module loads cleanly even when those packages are absent.
 Issue #1954: HfQuantizer integration for pre-quantized GPTQ/AWQ models.
 """
 
-import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +92,7 @@ def detect_quantization(model_config: Dict[str, Any]) -> QuantizationType:
     Args:
         model_config: The model's configuration dictionary.  Typically loaded
             from ``config.json`` via ``AutoConfig.from_pretrained(...).to_dict()``.
+from autobot_shared.logging_manager import get_logger
 
     Returns:
         The detected QuantizationType, or QuantizationType.NONE when no

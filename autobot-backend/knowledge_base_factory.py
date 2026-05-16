@@ -16,6 +16,7 @@ Key Features:
 
 Usage:
     from knowledge_base_factory import get_knowledge_base
+from autobot_shared.logging_manager import get_logger
 
     # Async context
     kb = await get_knowledge_base()
@@ -34,7 +35,7 @@ from constants.threshold_constants import TimingConstants
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class KnowledgeBaseInitializer:

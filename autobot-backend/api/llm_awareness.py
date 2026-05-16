@@ -6,7 +6,6 @@ LLM Self-Awareness API for AutoBot
 Provides endpoints for LLM agents to access system context and capabilities
 """
 
-import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
@@ -29,9 +28,10 @@ from api.schemas_agent import (
 from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from llm_self_awareness import get_llm_self_awareness
+from autobot_shared.logging_manager import get_logger
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for context level validation (Issue #326)
 VALID_CONTEXT_LEVELS = {"basic", "detailed", "full"}

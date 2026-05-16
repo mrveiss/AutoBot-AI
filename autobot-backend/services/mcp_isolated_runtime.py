@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import os
 import sys
 import time
@@ -17,8 +16,9 @@ from typing import Any, Dict, Optional
 
 from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 from services.mcp_isolation_config import BridgePolicy, IsolationMode, policy_for
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _JSONRPC = "2.0"
 _WORKER_SCRIPT = str(Path(__file__).parent / "mcp_bridge_workers" / "worker_entrypoint.py")

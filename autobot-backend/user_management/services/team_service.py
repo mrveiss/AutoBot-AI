@@ -8,7 +8,6 @@ Business logic for team management operations including CRUD,
 membership management, and role assignment within teams.
 """
 
-import logging
 import uuid
 from typing import List, Optional
 
@@ -20,8 +19,9 @@ from autobot_shared.time_utils import now_utc
 from user_management.models import Team, TeamMembership
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services.base_service import BaseService, TenantContext
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TeamServiceError(Exception):

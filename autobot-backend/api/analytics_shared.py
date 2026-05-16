@@ -11,8 +11,9 @@ analytics_code_review, and analytics_code_generation.
 import logging
 from pathlib import Path
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def resolve_source_or_404(source_id: Optional[str]) -> None:

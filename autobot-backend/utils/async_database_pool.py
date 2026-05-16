@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
+from autobot_shared.logging_manager import get_logger
 
 import aiosqlite
 
@@ -24,7 +25,7 @@ import aiosqlite
 from constants.threshold_constants import TimingConstants
 from utils.database_helpers import join_results  # noqa: F401 - re-export
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _get_sqlite_pool_size() -> int:

@@ -15,8 +15,9 @@ import re
 from typing import Dict, List, Set
 
 from .tier_config import ComplexityResult, TierConfig
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TaskComplexityScorer:

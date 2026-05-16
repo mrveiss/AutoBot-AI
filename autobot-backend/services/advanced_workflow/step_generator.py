@@ -7,7 +7,6 @@ Step Generator
 Generates smart workflow steps with AI enhancements.
 """
 
-import logging
 from typing import List, Optional
 
 from autobot_types import TaskComplexity
@@ -16,8 +15,9 @@ from orchestrator import get_orchestrator_sync as get_orchestrator
 from type_defs.common import Metadata
 
 from .models import SmartWorkflowStep, WorkflowIntent
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for high-risk command patterns
 _HIGH_RISK_PATTERNS = (

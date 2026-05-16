@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
     from services.knowledge.sync_queue import SyncQueueEntry, SyncReason  # noqa: F401
@@ -32,7 +33,7 @@ from constants.path_constants import PATH
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from services.knowledge.synthesis_schema_loader import SynthesisSchema, load_synthesis_schema
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ============================================================================
 # TIER DEFINITIONS (from CLI tool)

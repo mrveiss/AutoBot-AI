@@ -16,6 +16,7 @@ Feature flag: ``TIERED_CONTEXT_ENABLED=true`` (env var, default false).
 Usage::
 
     from chat_history.layers import TieredContextBuilder
+from autobot_shared.logging_manager import get_logger
 
     ctx = await TieredContextBuilder().build(
         user_message=message,
@@ -32,7 +33,7 @@ import os
 import re
 from typing import Any, Optional
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Feature flag

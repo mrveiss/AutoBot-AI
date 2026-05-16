@@ -26,6 +26,7 @@ Guardrails
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import json
@@ -59,7 +60,7 @@ except Exception:  # pragma: no cover
     get_rag_config = None  # type: ignore[assignment]
     update_rag_config = None  # type: ignore[assignment]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key for persisting _pending_approval across server restarts (Issue #4792).
 _PENDING_APPROVAL_REDIS_KEY = "autobot:loop:pending_approval"

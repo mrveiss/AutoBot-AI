@@ -16,6 +16,7 @@ import logging
 import re
 from pathlib import Path
 from typing import Dict, List, Set, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from code_intelligence.base_analyzer import (
     AnalysisIssue,
@@ -25,7 +26,7 @@ from code_intelligence.base_analyzer import (
     Language,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for dangerous shell commands
 _DANGEROUS_COMMANDS = frozenset({"rm", "mv", "cp", "chmod", "chown", "mkdir", "rmdir", "cd"})

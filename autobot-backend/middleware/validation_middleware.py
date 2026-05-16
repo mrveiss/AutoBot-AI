@@ -34,7 +34,6 @@ Usage (wired automatically via ``configure_validation`` in
 from __future__ import annotations
 
 import json
-import logging
 import re
 from typing import Final, Sequence
 
@@ -43,8 +42,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration

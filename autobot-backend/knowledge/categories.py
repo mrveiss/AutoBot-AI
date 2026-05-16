@@ -12,7 +12,6 @@ parent-child relationships and path-based lookups.
 """
 
 import asyncio
-import logging
 import uuid
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -20,8 +19,9 @@ if TYPE_CHECKING:
     import aioredis
     import redis
 from autobot_shared.time_utils import now_utc
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CategoriesMixin:

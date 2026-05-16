@@ -12,6 +12,7 @@ import os
 from collections import defaultdict
 from time import time
 from typing import Dict, List
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -39,7 +40,7 @@ from user_management.database import db_session_context
 from user_management.services.user_service import UserService
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Rate limiting for password change endpoint (stricter limits for security)

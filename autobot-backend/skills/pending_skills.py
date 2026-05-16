@@ -22,14 +22,14 @@ or restart-time discovery picks it up.
 """
 
 import asyncio
-import logging
 import threading
 import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

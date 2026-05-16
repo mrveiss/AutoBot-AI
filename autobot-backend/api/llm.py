@@ -3,6 +3,7 @@
 # Author: mrveiss
 import asyncio
 import logging
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -33,7 +34,7 @@ config = get_config_manager()
 
 router = APIRouter()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for embedding model detection (Issue #326)
 EMBEDDING_MODEL_PATTERNS = {"embed", "nomic", "all-minilm", "sentence"}

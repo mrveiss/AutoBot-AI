@@ -9,7 +9,6 @@ Handles system operations, shell commands, and system administration tasks.
 """
 
 import json
-import logging
 import re
 import shlex
 from typing import Any, Dict, FrozenSet, List, Optional
@@ -25,8 +24,9 @@ from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
 from .standardized_agent import StandardizedAgent
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for dangerous rm flags
 _DANGEROUS_RM_FLAGS: FrozenSet[str] = frozenset({"-r", "-rf", "-f"})

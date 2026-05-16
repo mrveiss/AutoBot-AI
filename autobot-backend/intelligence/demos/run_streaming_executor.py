@@ -15,6 +15,7 @@ any project import, then drive the production class with mocks.
 # ----- sys.path bootstrap (must run first; do NOT add project imports above) -----
 import sys
 from pathlib import Path
+from autobot_shared.logging_manager import get_logger
 
 _HERE = Path(__file__).resolve()
 _BACKEND = _HERE.parent.parent.parent  # autobot-backend/
@@ -38,7 +39,7 @@ from tests.fixtures.mocks import (  # noqa: E402
     MockLLMService,
 )
 
-logger = logging.getLogger("intelligence.demos.run_streaming_executor")
+logger = get_logger("intelligence.demos.run_streaming_executor")
 
 
 async def _demo() -> None:

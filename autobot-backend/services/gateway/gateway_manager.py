@@ -15,7 +15,6 @@ Features:
 - Performance target: normalize + route <50ms
 """
 
-import logging
 import time
 from typing import Any, Callable, Dict, List, Optional
 
@@ -30,8 +29,9 @@ from .adapters import (
     WhatsAppAdapter,
 )
 from .message_queue import MessageQueue
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GatewayManager:
@@ -47,7 +47,7 @@ class GatewayManager:
         self.adapters: Dict[str, BaseAdapter] = {}
         self.queue = MessageQueue()
         self.response_handlers: Dict[str, Callable] = {}
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
 
         # Register all platform adapters
         self._register_adapters()

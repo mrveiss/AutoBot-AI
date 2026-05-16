@@ -13,13 +13,12 @@ is fully transport-agnostic.  Auto-detection maps URI schemes:
 
 import asyncio
 import json
-import logging
 from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, Optional
 
 import aiohttp
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # JSON-RPC version used by MCP
 _JSONRPC = "2.0"
@@ -235,6 +234,7 @@ class HTTPTransport(MCPTransport):
 
     Each request opens a new HTTP session so this transport is safe to use
     from multiple coroutines without shared session state.
+from autobot_shared.logging_manager import get_logger
     """
 
     def __init__(self, base_url: str, timeout: float = 10.0) -> None:

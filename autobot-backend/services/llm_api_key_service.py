@@ -16,7 +16,6 @@ from autobot_shared.ssot_config import config
 from __future__ import annotations
 
 import hashlib
-import logging
 import os
 import secrets
 import time
@@ -26,8 +25,9 @@ from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Rotation grace period: after a key is rotated the old hash remains valid for
 # this many seconds so in-flight requests finish cleanly.

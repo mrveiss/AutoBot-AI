@@ -10,7 +10,6 @@ This module provides a centralized interface for communicating with the AI Stack
 
 import asyncio
 import json
-import logging
 import os
 import time
 import uuid
@@ -24,8 +23,9 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.time_utils import utc_timestamp
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Rate-limit connection error log messages to prevent log flooding (#3686).
 # The first failure is logged at WARNING; subsequent failures within the

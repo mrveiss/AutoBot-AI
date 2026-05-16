@@ -16,6 +16,7 @@ aggregator.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import logging
@@ -26,7 +27,7 @@ from typing import Awaitable, Callable, Literal, Optional
 from fastapi import Request
 from pydantic import BaseModel
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Per-probe timeout. Probes slower than this become ``status="down"`` so a slow
 # component cannot hold the aggregator hostage.

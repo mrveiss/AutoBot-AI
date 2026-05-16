@@ -43,15 +43,15 @@ Usage:
 
 import hashlib
 import json
-import logging
 import time
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key prefix for approval memory
 REDIS_KEY_PREFIX = "autobot:approval_memory"

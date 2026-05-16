@@ -9,12 +9,11 @@ request payloads through compression, summarization, and intelligent chunking.
 """
 
 import json
-import logging
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Pattern
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for text compression
 _WHITESPACE_RE = re.compile(r"\s+")
@@ -514,6 +513,7 @@ class PayloadOptimizer:
 
 
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.logging_manager import get_logger
 
 get_payload_optimizer = lazy_singleton(PayloadOptimizer)
 

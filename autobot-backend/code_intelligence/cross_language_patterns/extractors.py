@@ -9,15 +9,15 @@ for cross-language analysis.
 """
 
 import ast
-import logging
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Pattern, Set
 
 from .models import PatternCategory, PatternLocation, PatternType
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================

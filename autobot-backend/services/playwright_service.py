@@ -7,7 +7,6 @@ Integrates Docker-based Playwright into the main AutoBot application
 """
 
 import asyncio
-import logging
 import os
 from autobot_shared.ssot_config import config
 from contextlib import asynccontextmanager
@@ -20,7 +19,7 @@ from constants.network_constants import NetworkConstants, ServiceURLs
 from exceptions import ServiceUnavailableError
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PlaywrightService:
@@ -412,6 +411,7 @@ class PlaywrightService:
 
 # Global service instance (thread-safe)
 import asyncio as _asyncio_lock
+from autobot_shared.logging_manager import get_logger
 
 _playwright_service: Optional[PlaywrightService] = None
 _playwright_service_lock = _asyncio_lock.Lock()

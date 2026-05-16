@@ -7,11 +7,11 @@ Summary Search Service - Search and navigate hierarchical summaries.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-import logging
 from typing import List, Optional
 from uuid import UUID
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SummarySearchService:

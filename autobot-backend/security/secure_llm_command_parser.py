@@ -21,8 +21,9 @@ from security.prompt_injection_detector import (
     get_prompt_injection_detector,
 )
 from utils.command_validator import CommandValidator
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

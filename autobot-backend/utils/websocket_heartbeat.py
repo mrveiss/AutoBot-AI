@@ -8,7 +8,6 @@ Uses heartbeat and event-driven patterns instead of arbitrary timeouts
 
 import asyncio
 import json
-import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -17,8 +16,9 @@ from typing import Any, Callable, Dict, FrozenSet, Optional, Set
 from fastapi import WebSocket, WebSocketDisconnect
 
 from constants.threshold_constants import TimingConstants
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ConnectionState(Enum):

@@ -11,6 +11,7 @@ Author: mrveiss
 
 import logging
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -20,7 +21,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from computer_vision_system import ElementType, InteractionType, ScreenAnalyzer
 
 router = APIRouter(tags=["vision", "gui-automation"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Global screen analyzer instance (thread-safe)
 import threading

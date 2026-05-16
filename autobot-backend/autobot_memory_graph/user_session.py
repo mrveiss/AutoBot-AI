@@ -14,14 +14,14 @@ Part of the modular autobot_memory_graph package (Issue #716).
 Secret management is in secrets.py module.
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.time_utils import utc_timestamp
 
 from .core import VALID_ACTIVITY_TYPES, AutoBotMemoryGraphCore
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class UserSessionMixin:

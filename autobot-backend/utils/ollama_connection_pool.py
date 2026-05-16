@@ -14,11 +14,12 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.http_client import get_http_client
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

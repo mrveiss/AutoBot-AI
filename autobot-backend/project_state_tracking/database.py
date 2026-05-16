@@ -11,7 +11,6 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import json
-import logging
 import os
 import sqlite3
 from typing import List, Optional, Tuple
@@ -20,8 +19,9 @@ from autobot_shared.time_utils import parse_utc_iso
 
 from .models import StateSnapshot
 from .types import TrackingMetric
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #281: SQL schema definitions
 DATABASE_SCHEMA_TABLES = (

@@ -32,6 +32,7 @@ import threading
 from collections import deque
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import HTTPException
 
@@ -89,7 +90,7 @@ from .storage import get_redis_connection
 from .subprocess_runner import _run_indexing_subprocess as _sr_run_indexing_subprocess
 from .types import FileAnalysisResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # =============================================================================
 # File processing configuration (Issue #659)

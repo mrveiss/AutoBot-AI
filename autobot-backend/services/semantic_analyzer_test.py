@@ -106,8 +106,7 @@ def test_detect_autobot_logger():
     analyzer = SemanticAnalyzer()
 
     code = """
-import logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 """
     patterns = analyzer.detect_autobot_patterns(code)
 
@@ -259,8 +258,9 @@ def test_comprehensive_semantic_analysis():
 from fastapi import FastAPI
 from autobot_shared.ssot_config import config
 import logging
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 @router.get("/test")
 def test():

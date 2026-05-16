@@ -11,7 +11,6 @@ Issue #717: Efficient Inference Design implementation.
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Coroutine, Dict
@@ -23,8 +22,9 @@ from .connection_pool import ConnectionPoolManager, PoolConfig
 from .prompt_compressor import CompressionConfig, PromptCompressor
 from .rate_limiter import RateLimitConfig, RateLimitHandler
 from .router import OptimizationCategory, OptimizationConfig, get_optimization_router
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

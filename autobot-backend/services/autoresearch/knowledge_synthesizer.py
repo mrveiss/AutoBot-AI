@@ -15,6 +15,7 @@ Issue #4564: BaseSynthesizer ABC extracted for shared interface reuse.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import json
 import logging
@@ -29,7 +30,7 @@ from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
 from .config import AutoResearchConfig
 from .store import ExperimentStore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SYNTHESIS_SYSTEM_PROMPT = (
     "You are an ML experiment analyst. Analyze the following experiment results "

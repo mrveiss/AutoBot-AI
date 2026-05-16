@@ -13,7 +13,6 @@ Provides endpoints to:
 """
 
 import asyncio
-import logging
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Query
@@ -23,8 +22,9 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 from ..api_endpoint_scanner import APIEndpointChecker
 from ..models import APIEndpointAnalysis
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

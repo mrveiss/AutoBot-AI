@@ -16,6 +16,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from .core import (
     INCOMING_DIRECTIONS,
@@ -24,7 +25,7 @@ from .core import (
     AutoBotMemoryGraphCore,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RelationOperationsMixin:

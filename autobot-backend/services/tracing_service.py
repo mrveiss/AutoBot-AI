@@ -30,6 +30,7 @@ import threading
 from autobot_shared.ssot_config import config
 from contextlib import contextmanager
 from typing import Any, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -50,7 +51,7 @@ from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapProp
 
 from constants.network_constants import NetworkConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Service identification for distributed tracing
 SERVICE_INSTANCES = {

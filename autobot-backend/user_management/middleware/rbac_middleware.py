@@ -10,7 +10,6 @@ Provides database-driven permission checking with Redis-backed caching.
 
 import asyncio
 import json
-import logging
 import time
 import uuid
 from functools import wraps
@@ -23,8 +22,9 @@ from constants.ttl_constants import TTL_5_MINUTES
 from user_management.config import get_deployment_config
 from user_management.database import db_session_context
 from user_management.services import TenantContext, UserService
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _PUBSUB_CHANNEL = "autobot:rbac:invalidate"
 _REDIS_KEY_PREFIX = "rbac:perm:"

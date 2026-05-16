@@ -16,6 +16,7 @@ import fcntl
 import logging
 import threading
 from typing import Dict
+from autobot_shared.logging_manager import get_logger
 
 import yaml
 
@@ -36,7 +37,7 @@ HTTP_PROTOCOL = "http"
 REDIS_HOST_IP = _ssot.vm.redis if _ssot else NetworkConstants.REDIS_VM_IP
 from config import unified_config_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for LLM provider keys
 _LLM_PROVIDER_KEYS = frozenset({"ollama", "local", "cloud"})

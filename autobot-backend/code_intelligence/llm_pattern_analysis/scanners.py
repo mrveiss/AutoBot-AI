@@ -18,6 +18,7 @@ import re
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from code_intelligence.llm_pattern_analysis.data_models import (
     BatchingOpportunity,
@@ -34,7 +35,7 @@ from code_intelligence.llm_pattern_analysis.types import (
     UsagePatternType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================

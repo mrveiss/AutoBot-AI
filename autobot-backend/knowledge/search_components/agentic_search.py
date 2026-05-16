@@ -29,13 +29,14 @@ import logging
 import threading
 from dataclasses import dataclass, field
 from typing import Any, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from services.context_sufficiency import (
     SufficiencyVerdict,
     get_context_sufficiency_evaluator,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Config

@@ -13,6 +13,7 @@ import logging
 import shutil
 import time
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from ..models import LLMRequest, LLMResponse
 from .base import (
@@ -23,7 +24,7 @@ from .base import (
     EnvironmentTestResult,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DEFAULT_ALLOWED_TOOLS = {
     "claude": {

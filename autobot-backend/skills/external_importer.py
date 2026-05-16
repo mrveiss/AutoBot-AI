@@ -14,13 +14,14 @@ import logging
 import os
 import uuid
 from typing import Any
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
 from skills.manifest_parser import parse_manifest
 from skills.models import SkillPackage, SkillState, TrustLevel
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SKILL_CACHE_DIR = "/var/lib/autobot/skill_cache"
 _GIT_TIMEOUT = 120

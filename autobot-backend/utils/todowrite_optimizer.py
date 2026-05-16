@@ -21,7 +21,6 @@ import asyncio
 import difflib
 import hashlib
 import json
-import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -30,7 +29,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TodoOptimizationStrategy(Enum):
@@ -723,6 +722,7 @@ from autobot_shared.async_compat import run_or_schedule
 
 # Global optimizer instance for easy access (thread-safe)
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.logging_manager import get_logger
 
 _global_optimizer = lazy_singleton(TodoWriteOptimizer)
 

@@ -14,6 +14,7 @@ import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
 import numpy as np
 import psutil
@@ -29,7 +30,7 @@ except (ImportError, RuntimeError):
     TORCH_AVAILABLE = False
     torch = None
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #473: Get metrics manager for Prometheus integration
 _metrics = get_metrics_manager()

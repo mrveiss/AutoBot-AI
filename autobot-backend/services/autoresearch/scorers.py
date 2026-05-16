@@ -12,7 +12,6 @@ human review for top candidates, val_bpb for AutoResearch.
 from __future__ import annotations
 
 import json
-import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -25,7 +24,7 @@ if TYPE_CHECKING:
 
 from constants.ttl_constants import TTL_24_HOURS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Validation pattern for Redis key components — alphanumeric, hyphens, underscores
 _KEY_COMPONENT_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
@@ -89,6 +88,7 @@ class PromptScorer(ABC):
 
 from .models import Experiment, ExperimentTask, HyperParams
 from .runner import ExperimentRunner, build_task_inference_params
+from autobot_shared.logging_manager import get_logger
 
 
 class ValBpbScorer(PromptScorer):

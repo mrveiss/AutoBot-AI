@@ -9,13 +9,12 @@ Implements LRU eviction and adaptive cleanup to prevent memory growth
 
 import asyncio
 import gc
-import logging
 from collections import OrderedDict
 from typing import Any, Dict, Optional
 
 import psutil
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AdaptiveMemoryManager:
@@ -226,6 +225,7 @@ class AdaptiveMemoryManager:
 
 # Global adaptive memory manager instance (thread-safe)
 import threading
+from autobot_shared.logging_manager import get_logger
 
 _memory_manager = None
 _memory_manager_lock = threading.Lock()

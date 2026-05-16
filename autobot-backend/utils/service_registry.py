@@ -24,7 +24,6 @@ Usage:
 
 import asyncio
 import json
-import logging
 import os
 import time
 from dataclasses import dataclass
@@ -190,7 +189,7 @@ class ServiceRegistry:
 
     def __init__(self, config_file: Optional[str] = None):
         """Initialize service registry with optional configuration file"""
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self.services: Dict[str, ServiceConfig] = {}
         self.health_status: Dict[str, ServiceHealth] = {}
         self.deployment_mode = self._detect_deployment_mode()
@@ -477,6 +476,7 @@ class ServiceRegistry:
 
 # Global service registry instance (thread-safe)
 import threading
+from autobot_shared.logging_manager import get_logger
 
 _registry: Optional[ServiceRegistry] = None
 _registry_lock = threading.Lock()

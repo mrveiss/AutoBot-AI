@@ -13,11 +13,12 @@ Integration point for the Think Tool with causal reasoning guidance.
 import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from agent_loop.think_tool import ThinkTool
 from agent_loop.types import ThinkCategory, ThinkResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

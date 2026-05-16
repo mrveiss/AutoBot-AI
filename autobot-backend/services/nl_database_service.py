@@ -27,11 +27,12 @@ import time
 from autobot_shared.ssot_config import config
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.time_utils import utc_timestamp
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Read-only SQL prefixes allowed
 _SAFE_SQL_PREFIXES = ("SELECT", "SHOW", "DESCRIBE", "DESC", "EXPLAIN", "WITH")

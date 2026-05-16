@@ -14,12 +14,13 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from pydantic import BaseModel, Field
 
 from autobot_shared.time_utils import now_utc
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class IntegrationStatus(str, Enum):
@@ -80,7 +81,7 @@ class BaseIntegration(ABC):
 
     def __init__(self, config: IntegrationConfig):
         self.config = config
-        self.logger = logging.getLogger(f"{__name__}.{config.provider}")
+        self.logger = get_logger(f"{__name__}.{config.provider}")
         self._status = IntegrationStatus.DISCONNECTED
 
     @property

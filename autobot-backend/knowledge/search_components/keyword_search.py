@@ -10,13 +10,13 @@ Contains keyword-based search functionality using Redis.
 """
 
 import json
-import logging
 from typing import Any, Dict, List, Optional, Set
 
 from .bm25 import BM25Scorer
 from .helpers import build_search_result, decode_redis_hash, matches_category
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _CORPUS_STATS_KEY = "bm25:corpus_stats"
 _DEFAULT_TOTAL_DOCS = 1

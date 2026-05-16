@@ -8,7 +8,6 @@ Business logic for agent organizational hierarchy: trees, chains of command,
 direct reports, reporting-line updates with cycle detection, and role defaults.
 """
 
-import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -16,8 +15,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.agent_org import AgentOrgNode, OrgRole
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Default permissions per org role (manager can delegate, workers execute)
 _ROLE_DEFAULTS: Dict[str, Dict[str, Any]] = {

@@ -10,13 +10,13 @@ partial/full/failed evaluation outcomes.
 """
 
 import asyncio
-import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SuccessCriteriaType(Enum):

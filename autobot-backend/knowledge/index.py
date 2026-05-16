@@ -13,11 +13,12 @@ import asyncio
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
     from llama_index.vector_stores.chroma import ChromaVectorStore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class IndexMixin:

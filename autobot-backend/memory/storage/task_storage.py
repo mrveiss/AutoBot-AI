@@ -6,7 +6,6 @@ Task Storage Implementation - Task execution history management
 """
 
 import json
-import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -16,8 +15,9 @@ from autobot_shared.time_utils import parse_utc_iso
 
 from ..enums import TaskPriority, TaskStatus
 from ..models import TaskExecutionRecord
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Field categories for update_task (Issue #315: extracted to reduce nesting)
 _ENUM_FIELDS = {"status": TaskStatus, "priority": TaskPriority}

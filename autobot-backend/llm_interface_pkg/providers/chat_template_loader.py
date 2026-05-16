@@ -6,12 +6,12 @@
 Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
-import logging
 import os
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "chat_templates")
 SUPPORTED_TEMPLATES = {"chatml", "zephyr", "vicuna"}

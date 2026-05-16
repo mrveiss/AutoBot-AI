@@ -10,7 +10,6 @@ Issue #1498: Contextual Retrieval - +35% RAG retrieval accuracy.
 from autobot_shared.ssot_config import config
 import asyncio
 import json
-import logging
 import os
 
 from autobot_shared.redis_client import get_redis_client
@@ -19,8 +18,9 @@ from autobot_shared.time_utils import now_utc
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.registry import TaskRegistry
 from services.llm_service import get_llm_service
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SUMMARY_PROMPT = (
     "You are summarizing a document for a retrieval system.\n"

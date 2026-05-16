@@ -13,7 +13,6 @@ Issue #697: Added OpenTelemetry tracing for SSH operations.
 """
 
 import asyncio
-import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -23,8 +22,9 @@ from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from pki.config import VM_DEFINITIONS, TLSConfig, VMCertificateInfo
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #697: Get tracer for PKI operations
 _tracer = trace.get_tracer("autobot.pki.distributor", "2.0.0")

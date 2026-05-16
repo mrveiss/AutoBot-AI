@@ -12,6 +12,7 @@ Part of Issue #381 - God Class Refactoring
 import logging
 import time
 from typing import Any, Dict, Tuple
+from autobot_shared.logging_manager import get_logger
 
 import numpy as np
 
@@ -58,10 +59,10 @@ try:
     AUDIO_MODELS_AVAILABLE = True
 except ImportError:
     AUDIO_MODELS_AVAILABLE = False
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
     logger.warning("Audio models not available. Install with: pip install transformers librosa")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class VoiceProcessor(BaseModalProcessor):

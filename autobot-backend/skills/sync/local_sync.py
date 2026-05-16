@@ -3,14 +3,14 @@
 # Author: mrveiss
 """Local directory skill repo sync (Phase 3)."""
 
-import logging
 import os
 from typing import Any, Dict, List, Optional
 
 from skills.models import SkillState
 from skills.sync.base_sync import BaseRepoSync
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LocalDirSync(BaseRepoSync):

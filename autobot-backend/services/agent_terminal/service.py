@@ -10,6 +10,7 @@ Main service class that composes all agent terminal functionality.
 import logging
 import time
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_logging.terminal_logger import TerminalLogger
 from chat_history import ChatHistoryManager
@@ -25,7 +26,7 @@ from .models import AgentSessionState, AgentTerminalSession
 from .session_manager import SessionManager
 from .utils import create_command_execution, is_interactive_command
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AgentTerminalService:

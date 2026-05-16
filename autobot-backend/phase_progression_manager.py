@@ -9,7 +9,6 @@ Implements intelligent phase progression logic with automated promotions and sel
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
@@ -30,7 +29,7 @@ except ImportError as _phase_validator_import_error:
     PhaseValidator = _MissingDep("PhaseValidator", _phase_validator_import_error)  # type: ignore[assignment, misc]
 
 # Setup logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ProgressionTrigger(Enum):
@@ -837,6 +836,7 @@ class PhaseProgressionManager:
 
 # Singleton instance for global access (thread-safe)
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.logging_manager import get_logger
 
 _progression_manager = lazy_singleton(PhaseProgressionManager)
 

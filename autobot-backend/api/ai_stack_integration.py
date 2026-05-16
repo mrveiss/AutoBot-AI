@@ -8,7 +8,6 @@ This module provides comprehensive API endpoints that integrate all AI Stack age
 from VM4 (uses NetworkConstants.AI_STACK_VM_IP) with the main AutoBot backend.
 """
 
-import logging
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from fastapi import APIRouter, Depends
@@ -40,8 +39,9 @@ from type_defs.common import Metadata
 
 # Import shared response utilities (Issue #292 - Eliminate duplicate code)
 from utils.response_helpers import create_success_response
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Type alias for agent handlers (Issue #336)
 AgentQueryHandler = Callable[[Any, str], Awaitable[Dict[str, Any]]]

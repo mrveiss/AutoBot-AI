@@ -7,15 +7,15 @@ Base Service Class
 Provides tenant context management and common service patterns.
 """
 
-import logging
 import uuid
 from dataclasses import dataclass
 from typing import Optional
 
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

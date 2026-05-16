@@ -11,12 +11,13 @@ from autobot_shared.ssot_config import config
 import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from constants.network_constants import NetworkConstants
 from intelligence.goal_processor import GoalCategory, ProcessedGoal
 from intelligence.os_detector import LinuxDistro, OSDetector, OSType
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

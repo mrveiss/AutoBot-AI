@@ -8,13 +8,13 @@ Issue #658: Implements Agent Zero's extension pattern where extensions
 can hook into 22 lifecycle points to modify agent behavior.
 """
 
-import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from extensions.hooks import HookPoint
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

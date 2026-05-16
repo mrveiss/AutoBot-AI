@@ -9,15 +9,15 @@ Issue #3398: enhanced validation — startup warnings, conflict detection,
              invalid-value fast-fail, and startup summary log.
 """
 
-import logging
 import os
 from autobot_shared.ssot_config import config
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 from config.loader import ENV_VAR_MAPPINGS
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Minimum/maximum valid port range.
 _PORT_MIN = 1

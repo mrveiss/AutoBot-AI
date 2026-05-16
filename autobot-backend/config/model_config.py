@@ -10,8 +10,9 @@ import logging
 import os
 from autobot_shared.ssot_config import config
 from typing import Any, Dict
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ModelConfigMixin:

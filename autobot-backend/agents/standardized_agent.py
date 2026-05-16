@@ -18,6 +18,7 @@ import time
 from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from memory.manager import UnifiedMemoryManager
 from prompt_manager import get_language_instruction, resolve_language
@@ -50,7 +51,7 @@ class StandardizedAgent(BaseAgent):
     def __init__(self, agent_type: str, deployment_mode: DeploymentMode = DeploymentMode.LOCAL):
         """Initialize standardized agent with action handlers and metrics."""
         super().__init__(agent_type, deployment_mode)
-        self.logger = logging.getLogger(f"{__name__}.{agent_type}")
+        self.logger = get_logger(f"{__name__}.{agent_type}")
 
         # Lazy memory facade — created on first access so agents that never
         # use memory don't pay the UnifiedMemoryManager construction cost.

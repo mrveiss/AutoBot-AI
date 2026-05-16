@@ -11,7 +11,6 @@ catalog URLs alongside the built-in AutoBot marketplace.
 from __future__ import annotations
 
 import json
-import logging
 import re
 import socket
 import uuid
@@ -32,8 +31,9 @@ from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.url_safety import resolve_safe_ip_async
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

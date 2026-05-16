@@ -8,12 +8,12 @@ Handles LLM streaming responses using natural completion signals instead of time
 
 import asyncio
 import json
-import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for O(1) lookup
 _OPENAI_PROVIDERS = frozenset({"openai", "gpt"})

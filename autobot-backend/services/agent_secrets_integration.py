@@ -12,7 +12,6 @@ Related Issues:
 - #211 - Secrets Management System - Missing Features
 """
 
-import logging
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
@@ -20,8 +19,9 @@ from typing import Dict, List, Optional, Set
 
 from autobot_shared.singleton_factory import lazy_singleton
 from services.secrets_service import SecretsService, get_secrets_service
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SecretRequirement(Enum):

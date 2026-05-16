@@ -12,13 +12,14 @@ guards or Jina logic — those live in media/link/pipeline.py.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import json
 import logging
 import re
 from typing import Any, Dict, Tuple
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # SPA detection markers — pages dominated by these patterns require JS rendering.
 _SPA_MARKERS = (

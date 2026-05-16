@@ -14,12 +14,13 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
 from constants.ttl_constants import TTL_5_MINUTES
 
 from ..types import ProviderType
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OptimizationCategory(Enum):

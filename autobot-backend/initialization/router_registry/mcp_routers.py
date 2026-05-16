@@ -10,10 +10,10 @@ and future MCP router additions that may be optional.
 """
 
 import importlib
-import logging
 from typing import List, Tuple
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _load_single_mcp_router(module_path: str, prefix: str, tags: List[str], name: str) -> Tuple | None:

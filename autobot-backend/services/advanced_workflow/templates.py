@@ -9,6 +9,7 @@ Handles creation and management of workflow templates.
 
 import logging
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from .models import (
     SmartWorkflowStep,
@@ -17,7 +18,7 @@ from .models import (
     WorkflowTemplate,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TemplateManager:

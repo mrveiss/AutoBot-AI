@@ -14,8 +14,9 @@ import json
 import logging
 import time
 from functools import wraps
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Module-level redis client reference (set by monitor)
 _redis_client = None

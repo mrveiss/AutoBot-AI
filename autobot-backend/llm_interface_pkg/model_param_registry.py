@@ -17,6 +17,7 @@ The YAML also records ``api_name`` (provider→model-id mapping) and ``aliases``
 Usage::
 
     from llm_interface_pkg.model_param_registry import get_model_kwargs, resolve_model_name
+from autobot_shared.logging_manager import get_logger
 
     kwargs = get_model_kwargs("claude-sonnet", provider="anthropic")
     # {"temperature": 1, "max_tokens": 8192}
@@ -36,7 +37,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants

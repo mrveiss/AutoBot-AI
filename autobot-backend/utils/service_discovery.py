@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
@@ -23,7 +24,7 @@ from constants.network_constants import NetworkConstants
 from constants.path_constants import PATH
 from constants.threshold_constants import RetryConfig, ServiceDiscoveryConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for service health checks (Issue #326)
 DEGRADED_STATUS_FIELDS = {"degraded", "warning"}

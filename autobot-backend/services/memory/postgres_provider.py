@@ -3,12 +3,12 @@
 # Author: mrveiss
 """PostgreSQL Memory Provider (Issue #4344)"""
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PostgresMemoryProvider:

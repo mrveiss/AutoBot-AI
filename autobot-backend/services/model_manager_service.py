@@ -10,6 +10,7 @@ combined list in Redis for 60 seconds to avoid latency on every dropdown open.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import json
 import logging
@@ -17,7 +18,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.redis_client import get_async_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _CACHE_KEY = "model_manager:available_models"
 _CACHE_TTL = 60  # seconds — intentionally short for live-system accuracy

@@ -15,6 +15,7 @@ for issues, cards, and tasks.
 
 import logging
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -40,7 +41,7 @@ from integrations.project_management_integration import (
     TrelloIntegration,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     tags=["integrations-project-management"],

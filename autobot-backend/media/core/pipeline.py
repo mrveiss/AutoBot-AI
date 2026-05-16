@@ -11,6 +11,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from typing import ClassVar, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from media.core.types import MediaInput, MediaType, PipelineMetrics, ProcessingResult
 
@@ -31,7 +32,7 @@ class MediaPipeline(ABC):
             pipeline_name: Name identifier for this pipeline
         """
         self.pipeline_name = pipeline_name
-        self.logger = logging.getLogger(f"{__name__}.{pipeline_name}")
+        self.logger = get_logger(f"{__name__}.{pipeline_name}")
         self.metrics = PipelineMetrics()
         self._enabled = True
 

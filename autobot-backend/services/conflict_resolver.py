@@ -29,6 +29,7 @@ All I/O is async-first; no blocking operations.
 import logging
 import time
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from api.knowledge_grounding_models import (
     Claim,
@@ -43,7 +44,7 @@ from api.knowledge_grounding_models import (
 )
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis database for conflict resolution data
 _REDIS_DATABASE = "analytics"

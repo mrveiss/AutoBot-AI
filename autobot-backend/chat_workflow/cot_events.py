@@ -26,8 +26,9 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import Any, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Sensitive argument key patterns — values for these keys are replaced with

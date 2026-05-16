@@ -8,10 +8,10 @@ Static type analysis for better completion suggestions.
 """
 
 import ast
-import logging
 from typing import Dict, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TypeInferencer:
