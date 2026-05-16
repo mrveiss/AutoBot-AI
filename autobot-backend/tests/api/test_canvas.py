@@ -35,8 +35,9 @@ _CELL_ID = uuid.uuid4()
 _NOW = datetime(2026, 5, 16, 8, 0, 0, tzinfo=timezone.utc)
 
 
-def _make_canvas(user_id: str = "user-alice") -> Canvas:
-    c = Canvas.__new__(Canvas)
+def _make_canvas(user_id: str = "user-alice"):
+    """Create a mock Canvas instance with required attributes."""
+    c = MagicMock(spec=Canvas)
     c.id = _CANVAS_ID
     c.user_id = user_id
     c.title = "Test Canvas"
@@ -51,8 +52,9 @@ def _make_cell(
     owner: str = "agent",
     state: str = CellState.complete,
     user_id: str = "user-alice",
-) -> CanvasCell:
-    cell = CanvasCell.__new__(CanvasCell)
+):
+    """Create a mock CanvasCell instance with required attributes."""
+    cell = MagicMock(spec=CanvasCell)
     cell.id = _CELL_ID
     cell.canvas_id = _CANVAS_ID
     cell.user_id = user_id
@@ -84,7 +86,8 @@ def _mock_session():
     # Simulate scalars().all() chain
     scalars_mock = MagicMock()
     scalars_mock.all.return_value = []
-    result_mock = AsyncMock()
+    # Create a non-async result mock where scalar_one_or_none is a regular method
+    result_mock = MagicMock()
     result_mock.scalar_one_or_none.return_value = None
     result_mock.scalars.return_value = scalars_mock
     session.execute = AsyncMock(return_value=result_mock)
@@ -105,7 +108,7 @@ class TestGetCanvas:
         session = _mock_session()
 
         def _execute_side_effect(stmt):
-            result = AsyncMock()
+            result = MagicMock()
             scalars = MagicMock()
             scalars.all.return_value = []
             result.scalar_one_or_none = MagicMock(return_value=canvas)
@@ -115,14 +118,15 @@ class TestGetCanvas:
         session.execute = AsyncMock(side_effect=_execute_side_effect)
 
         from user_management.database import get_async_session
+        from auth_middleware import get_current_user
 
         app.dependency_overrides = {
             get_async_session: lambda: session,
+            get_current_user: lambda: _USER_A,
         }
 
-        with patch("api.canvas.get_current_user", return_value=_USER_A):
-            with TestClient(app) as client:
-                resp = client.get(f"/api/canvas/{_CANVAS_ID}")
+        with TestClient(app) as client:
+            resp = client.get(f"/api/canvas/{_CANVAS_ID}")
         assert resp.status_code == 200
         data = resp.json()
         assert data["canvas"]["id"] == str(_CANVAS_ID)
@@ -133,12 +137,15 @@ class TestGetCanvas:
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=None)
 
         from user_management.database import get_async_session
+        from auth_middleware import get_current_user
 
-        app.dependency_overrides = {get_async_session: lambda: session}
+        app.dependency_overrides = {
+            get_async_session: lambda: session,
+            get_current_user: lambda: _USER_A,
+        }
 
-        with patch("api.canvas.get_current_user", return_value=_USER_A):
-            with TestClient(app) as client:
-                resp = client.get(f"/api/canvas/{uuid.uuid4()}")
+        with TestClient(app) as client:
+            resp = client.get(f"/api/canvas/{uuid.uuid4()}")
         assert resp.status_code == 404
 
     def test_get_canvas_403_cross_user(self, app):
@@ -147,12 +154,15 @@ class TestGetCanvas:
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=canvas)
 
         from user_management.database import get_async_session
+        from auth_middleware import get_current_user
 
-        app.dependency_overrides = {get_async_session: lambda: session}
+        app.dependency_overrides = {
+            get_async_session: lambda: session,
+            get_current_user: lambda: _USER_B,
+        }
 
-        with patch("api.canvas.get_current_user", return_value=_USER_B):
-            with TestClient(app) as client:
-                resp = client.get(f"/api/canvas/{_CANVAS_ID}")
+        with TestClient(app) as client:
+            resp = client.get(f"/api/canvas/{_CANVAS_ID}")
         assert resp.status_code == 403
 
 
@@ -168,15 +178,18 @@ class TestPutCanvas:
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=canvas)
 
         from user_management.database import get_async_session
+        from auth_middleware import get_current_user
 
-        app.dependency_overrides = {get_async_session: lambda: session}
+        app.dependency_overrides = {
+            get_async_session: lambda: session,
+            get_current_user: lambda: _USER_A,
+        }
 
-        with patch("api.canvas.get_current_user", return_value=_USER_A):
-            with TestClient(app) as client:
-                resp = client.put(
-                    f"/api/canvas/{_CANVAS_ID}",
-                    json={"title": "Updated Title", "cells": []},
-                )
+        with TestClient(app) as client:
+            resp = client.put(
+                f"/api/canvas/{_CANVAS_ID}",
+                json={"title": "Updated Title", "cells": []},
+            )
         assert resp.status_code == 200
         data = resp.json()
         assert "save_token" in data
@@ -188,12 +201,15 @@ class TestPutCanvas:
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=canvas)
 
         from user_management.database import get_async_session
+        from auth_middleware import get_current_user
 
-        app.dependency_overrides = {get_async_session: lambda: session}
+        app.dependency_overrides = {
+            get_async_session: lambda: session,
+            get_current_user: lambda: _USER_B,
+        }
 
-        with patch("api.canvas.get_current_user", return_value=_USER_B):
-            with TestClient(app) as client:
-                resp = client.put(f"/api/canvas/{_CANVAS_ID}", json={"cells": []})
+        with TestClient(app) as client:
+            resp = client.put(f"/api/canvas/{_CANVAS_ID}", json={"cells": []})
         assert resp.status_code == 403
 
 
@@ -224,15 +240,18 @@ class TestAddCell:
         session.refresh = _refresh_patch
 
         from user_management.database import get_async_session
+        from auth_middleware import get_current_user
 
-        app.dependency_overrides = {get_async_session: lambda: session}
+        app.dependency_overrides = {
+            get_async_session: lambda: session,
+            get_current_user: lambda: _USER_A,
+        }
 
-        with patch("api.canvas.get_current_user", return_value=_USER_A):
-            with TestClient(app) as client:
-                resp = client.post(
-                    f"/api/canvas/{_CANVAS_ID}/cells",
-                    json={"type": "text", "content": "Hello", "position": 0},
-                )
+        with TestClient(app) as client:
+            resp = client.post(
+                f"/api/canvas/{_CANVAS_ID}/cells",
+                json={"type": "text", "content": "Hello", "position": 0},
+            )
         assert resp.status_code == 201
 
     def test_add_cell_403_cross_user(self, app):
@@ -241,15 +260,18 @@ class TestAddCell:
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=canvas)
 
         from user_management.database import get_async_session
+        from auth_middleware import get_current_user
 
-        app.dependency_overrides = {get_async_session: lambda: session}
+        app.dependency_overrides = {
+            get_async_session: lambda: session,
+            get_current_user: lambda: _USER_B,
+        }
 
-        with patch("api.canvas.get_current_user", return_value=_USER_B):
-            with TestClient(app) as client:
-                resp = client.post(
-                    f"/api/canvas/{_CANVAS_ID}/cells",
-                    json={"type": "text", "content": "Hello", "position": 0},
-                )
+        with TestClient(app) as client:
+            resp = client.post(
+                f"/api/canvas/{_CANVAS_ID}/cells",
+                json={"type": "text", "content": "Hello", "position": 0},
+            )
         assert resp.status_code == 403
 
 
@@ -265,7 +287,7 @@ class TestTransitionCell:
 
         def _execute_side_effect(stmt):
             nonlocal call_count
-            result = AsyncMock()
+            result = MagicMock()
             scalars_mock = MagicMock()
             scalars_mock.all.return_value = []
             result.scalars = MagicMock(return_value=scalars_mock)
@@ -284,8 +306,12 @@ class TestTransitionCell:
         session.refresh = _refresh_patch
 
         from user_management.database import get_async_session
+        from auth_middleware import get_current_user
 
-        app.dependency_overrides = {get_async_session: lambda: session}
+        app.dependency_overrides = {
+            get_async_session: lambda: session,
+            get_current_user: lambda: _USER_A,
+        }
         return session
 
     def test_accept_agent_cell_reaches_committed(self, app):
@@ -293,12 +319,11 @@ class TestTransitionCell:
         cell = _make_cell(owner="agent", state=CellState.complete)
         self._setup_app(app, canvas, cell)
 
-        with patch("api.canvas.get_current_user", return_value=_USER_A):
-            with TestClient(app) as client:
-                resp = client.patch(
-                    f"/api/canvas/{_CANVAS_ID}/cells/{_CELL_ID}",
-                    json={"action": "accept"},
-                )
+        with TestClient(app) as client:
+            resp = client.patch(
+                f"/api/canvas/{_CANVAS_ID}/cells/{_CELL_ID}",
+                json={"action": "accept"},
+            )
         assert resp.status_code == 200
         assert resp.json()["state"] == CellState.committed
 
@@ -309,12 +334,11 @@ class TestTransitionCell:
         cell = _make_cell(owner="agent", state=CellState.streaming)
         self._setup_app(app, canvas, cell)
 
-        with patch("api.canvas.get_current_user", return_value=_USER_A):
-            with TestClient(app) as client:
-                resp = client.patch(
-                    f"/api/canvas/{_CANVAS_ID}/cells/{_CELL_ID}",
-                    json={"action": "accept"},
-                )
+        with TestClient(app) as client:
+            resp = client.patch(
+                f"/api/canvas/{_CANVAS_ID}/cells/{_CELL_ID}",
+                json={"action": "accept"},
+            )
         assert resp.status_code == 409
 
     def test_discard_moves_to_cancelled(self, app):
@@ -322,12 +346,11 @@ class TestTransitionCell:
         cell = _make_cell(owner="agent", state=CellState.complete)
         self._setup_app(app, canvas, cell)
 
-        with patch("api.canvas.get_current_user", return_value=_USER_A):
-            with TestClient(app) as client:
-                resp = client.patch(
-                    f"/api/canvas/{_CANVAS_ID}/cells/{_CELL_ID}",
-                    json={"action": "discard"},
-                )
+        with TestClient(app) as client:
+            resp = client.patch(
+                f"/api/canvas/{_CANVAS_ID}/cells/{_CELL_ID}",
+                json={"action": "discard"},
+            )
         assert resp.status_code == 200
         assert resp.json()["state"] == CellState.cancelled
 
@@ -336,12 +359,11 @@ class TestTransitionCell:
         cell = _make_cell(owner="agent", state=CellState.complete)
         self._setup_app(app, canvas, cell)
 
-        with patch("api.canvas.get_current_user", return_value=_USER_A):
-            with TestClient(app) as client:
-                resp = client.patch(
-                    f"/api/canvas/{_CANVAS_ID}/cells/{_CELL_ID}",
-                    json={"action": "edit"},
-                )
+        with TestClient(app) as client:
+            resp = client.patch(
+                f"/api/canvas/{_CANVAS_ID}/cells/{_CELL_ID}",
+                json={"action": "edit"},
+            )
         assert resp.status_code == 422
 
     def test_transition_403_cross_user(self, app):
@@ -350,15 +372,18 @@ class TestTransitionCell:
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=canvas)
 
         from user_management.database import get_async_session
+        from auth_middleware import get_current_user
 
-        app.dependency_overrides = {get_async_session: lambda: session}
+        app.dependency_overrides = {
+            get_async_session: lambda: session,
+            get_current_user: lambda: _USER_B,
+        }
 
-        with patch("api.canvas.get_current_user", return_value=_USER_B):
-            with TestClient(app) as client:
-                resp = client.patch(
-                    f"/api/canvas/{_CANVAS_ID}/cells/{_CELL_ID}",
-                    json={"action": "accept"},
-                )
+        with TestClient(app) as client:
+            resp = client.patch(
+                f"/api/canvas/{_CANVAS_ID}/cells/{_CELL_ID}",
+                json={"action": "accept"},
+            )
         assert resp.status_code == 403
 
 
