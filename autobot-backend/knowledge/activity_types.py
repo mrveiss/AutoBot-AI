@@ -18,7 +18,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from autobot_shared.time_utils import now_utc
 
@@ -51,8 +51,8 @@ class TerminalActivity(BaseModel):
     )
     timestamp: datetime = Field(default_factory=now_utc)
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "user_id": "550e8400-e29b-41d4-a716-446655440000",
                 "session_id": "chat_abc123",
@@ -64,6 +64,7 @@ class TerminalActivity(BaseModel):
                 "metadata": {"shell": "bash", "duration_ms": 1250},
             }
         }
+    )
 
 
 class FileActivity(BaseModel):
@@ -94,8 +95,8 @@ class FileActivity(BaseModel):
     )
     timestamp: datetime = Field(default_factory=now_utc)
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "user_id": "550e8400-e29b-41d4-a716-446655440000",
                 "session_id": "chat_abc123",
@@ -106,6 +107,7 @@ class FileActivity(BaseModel):
                 "metadata": {"permissions": "0644", "encoding": "utf-8"},
             }
         }
+    )
 
 
 class BrowserActivity(BaseModel):
@@ -139,8 +141,8 @@ class BrowserActivity(BaseModel):
     )
     timestamp: datetime = Field(default_factory=now_utc)
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "user_id": "550e8400-e29b-41d4-a716-446655440000",
                 "session_id": "chat_abc123",
@@ -151,6 +153,7 @@ class BrowserActivity(BaseModel):
                 "metadata": {"status_code": 200, "redirect_url": "/dashboard"},
             }
         }
+    )
 
 
 class DesktopActivity(BaseModel):
@@ -181,8 +184,8 @@ class DesktopActivity(BaseModel):
     )
     timestamp: datetime = Field(default_factory=now_utc)
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "user_id": "550e8400-e29b-41d4-a716-446655440000",
                 "session_id": "chat_abc123",
@@ -192,6 +195,7 @@ class DesktopActivity(BaseModel):
                 "metadata": {"app": "code", "ocr_text": "Save File"},
             }
         }
+    )
 
 
 class SecretUsage(BaseModel):
@@ -228,8 +232,8 @@ class SecretUsage(BaseModel):
     )
     timestamp: datetime = Field(default_factory=now_utc)
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "secret_id": "660e8400-e29b-41d4-a716-446655440001",
                 "user_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -240,3 +244,4 @@ class SecretUsage(BaseModel):
                 "metadata": {"ip": "192.168.1.10", "location": "office"},
             }
         }
+    )

@@ -74,7 +74,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from autobot_shared.time_utils import utc_timestamp
 
@@ -98,8 +98,8 @@ class StandardResponse(BaseModel):
         description="Response timestamp (ISO 8601)",
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "success": True,
                 "message": "Operation completed successfully",
@@ -107,6 +107,7 @@ class StandardResponse(BaseModel):
                 "timestamp": "2025-01-09T10:00:00.000000",
             }
         }
+    )
 
 
 class ErrorResponse(BaseModel):
@@ -125,8 +126,8 @@ class ErrorResponse(BaseModel):
         description="Error timestamp (ISO 8601)",
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "success": False,
                 "error": "Resource not found",
@@ -135,6 +136,7 @@ class ErrorResponse(BaseModel):
                 "timestamp": "2025-01-09T10:00:00.000000",
             }
         }
+    )
 
 
 class PaginatedResponse(BaseModel):

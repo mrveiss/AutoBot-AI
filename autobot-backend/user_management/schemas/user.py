@@ -12,19 +12,18 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class RoleResponse(BaseModel):
     """Role information in responses."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
     name: str
     description: Optional[str] = None
     is_system: bool = False
-
-    class Config:
-        from_attributes = True
 
 
 class UserCreate(BaseModel):
@@ -96,6 +95,8 @@ class UserUpdate(BaseModel):
 class UserResponse(BaseModel):
     """Response model for a single user."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
     email: str
     username: str
@@ -112,9 +113,6 @@ class UserResponse(BaseModel):
     last_login_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class UserListResponse(BaseModel):

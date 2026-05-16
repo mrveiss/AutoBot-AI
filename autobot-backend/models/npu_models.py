@@ -11,7 +11,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from autobot_shared.time_utils import now_utc
 from constants.network_constants import NetworkConstants
@@ -60,14 +60,16 @@ class NPUWorkerConfig(BaseModel):
     weight: int = Field(default=1, ge=1, le=100, description="Worker weight for weighted load balancing")
     max_concurrent_tasks: int = Field(default=4, ge=1, description="Maximum concurrent tasks")
 
-    @validator("url")
+    @field_validator("url")
+    @classmethod
     def validate_url(cls, v):
         """Validate URL format"""
         if not v.startswith(_VALID_URL_SCHEMES):  # Issue #380
             raise ValueError("URL must start with http:// or https://")
         return v.rstrip("/")
 
-    @validator("id")
+    @field_validator("id")
+    @classmethod
     def validate_id(cls, v):
         """Validate worker ID format"""
         if not v or len(v.strip()) == 0:
@@ -77,8 +79,8 @@ class NPUWorkerConfig(BaseModel):
             raise ValueError("Worker ID must contain only alphanumeric characters, hyphens, and underscores")
         return v
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "id": "npu-worker-1",
                 "name": "Primary NPU Worker",
@@ -90,6 +92,7 @@ class NPUWorkerConfig(BaseModel):
                 "max_concurrent_tasks": 4,
             }
         }
+    )
 
 
 class NPUWorkerStatus(BaseModel):
@@ -104,8 +107,8 @@ class NPUWorkerStatus(BaseModel):
     last_heartbeat: Optional[datetime] = Field(default=None, description="Last successful heartbeat timestamp")
     error_message: Optional[str] = Field(default=None, description="Latest error message if status is ERROR")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "id": "npu-worker-1",
                 "status": "online",
@@ -117,6 +120,7 @@ class NPUWorkerStatus(BaseModel):
                 "error_message": None,
             }
         }
+    )
 
 
 class NPUWorkerMetrics(BaseModel):
@@ -130,8 +134,8 @@ class NPUWorkerMetrics(BaseModel):
     last_error_time: Optional[datetime] = Field(default=None, description="Timestamp of last error")
     metrics_timestamp: datetime = Field(default_factory=now_utc, description="Metrics collection timestamp")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "id": "npu-worker-1",
                 "avg_response_time_ms": 245.8,
@@ -142,6 +146,7 @@ class NPUWorkerMetrics(BaseModel):
                 "metrics_timestamp": "2025-10-04T12:34:56Z",
             }
         }
+    )
 
 
 class LoadBalancingConfig(BaseModel):
@@ -169,8 +174,8 @@ class LoadBalancingConfig(BaseModel):
         description="Cooldown period before retrying failed workers (10-600 seconds)",
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "strategy": "least-loaded",
                 "health_check_interval": 30,
@@ -179,6 +184,7 @@ class LoadBalancingConfig(BaseModel):
                 "retry_cooldown_seconds": 60,
             }
         }
+    )
 
 
 class NPUWorkerDetails(BaseModel):
@@ -214,15 +220,15 @@ class NPUWorkerDetails(BaseModel):
             "current_load": self.status.current_load,
             "max_capacity": self.config.max_concurrent_tasks,
             "uptime": f"{int(self.status.uptime_seconds)}s",
-            "performance_metrics": self.metrics.dict() if self.metrics else {},
+            "performance_metrics": self.metrics.model_dump() if self.metrics else {},
             "priority": self.config.priority,
             "weight": self.config.weight,
             "last_heartbeat": (self.status.last_heartbeat.isoformat() + "Z" if self.status.last_heartbeat else ""),
             "created_at": "",  # Not tracked in current model
         }
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "config": {
                     "id": "npu-worker-1",
@@ -255,6 +261,7 @@ class NPUWorkerDetails(BaseModel):
                 },
             }
         }
+    )
 
 
 class WorkerHeartbeat(BaseModel):
@@ -275,8 +282,8 @@ class WorkerHeartbeat(BaseModel):
     loaded_models: list = Field(default_factory=list, description="List of loaded model names")
     metrics: Optional[Dict[str, Any]] = Field(default=None, description="Performance metrics")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "worker_id": "windows_npu_worker_abc123",
                 "status": "online",
@@ -291,6 +298,7 @@ class WorkerHeartbeat(BaseModel):
                 "metrics": {"avg_response_time_ms": 25.5, "cache_hit_rate": 85.2},
             }
         }
+    )
 
 
 class WorkerTestResult(BaseModel):
@@ -303,8 +311,8 @@ class WorkerTestResult(BaseModel):
     error_message: Optional[str] = Field(default=None, description="Error message if test failed")
     health_data: Optional[Dict] = Field(default=None, description="Health check response data")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "worker_id": "npu-worker-1",
                 "success": True,
@@ -318,3 +326,4 @@ class WorkerTestResult(BaseModel):
                 },
             }
         }
+    )

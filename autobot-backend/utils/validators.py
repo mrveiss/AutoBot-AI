@@ -39,7 +39,8 @@ from utils.validators import (
 class MyModel(BaseModel):
     username: str
 
-    @validator("username")
+    @field_validator("username")
+    @classmethod
     def validate_username(cls, v):
         v = sanitize_string(v)  # Strip and lowercase
         validate_non_empty_string(v, "Username")
