@@ -684,6 +684,16 @@ export const routes: RouteRecordRaw[] = [
       },
     ],
   },
+  // MVA-360: Live Canvas — isolated component tree behind VITE_FEATURE_CANVAS flag
+  {
+    path: '/canvas',
+    name: 'canvas',
+    component: () => import('@/views/CanvasView.vue'),
+    meta: {
+      title: 'Canvas',
+      requiresAuth: true,
+    },
+  },
   // Issue #3201: AutoResearch Experiment Dashboard
   {
     path: '/experiments',
