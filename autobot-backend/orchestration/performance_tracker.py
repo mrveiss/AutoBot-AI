@@ -7,6 +7,7 @@ import time
 from typing import TYPE_CHECKING, Any, Dict
 
 from autobot_shared.logging_manager import get_logger
+from orchestration.types import AgentPerformance
 
 if TYPE_CHECKING:
     from enhanced_orchestration.types import WorkflowPlan
@@ -23,8 +24,6 @@ class PerformanceTracker:
     """
 
     def __init__(self, agent_capabilities: Dict[str, Any]) -> None:
-        from enhanced_orchestration.types import AgentPerformance
-
         self.agent_performance: Dict[str, Any] = {
             agent: AgentPerformance(agent_type=agent) for agent in agent_capabilities
         }
