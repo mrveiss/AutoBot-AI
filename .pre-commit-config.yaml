@@ -262,6 +262,22 @@ repos:
         stages: [pre-commit]
         description: "Block requests.* and Path.read_text/write_text inside async def bodies (#7444)"
 
+  # AutoBot custom: regression-prevention for #7372 plugin/extension boundary.
+  # Extensions (lifecycle hooks), skills (user-facing capabilities), and
+  # core-plugins must import ONLY from autobot_shared/ (the public SDK).
+  # They must NOT reach into autobot-backend core modules or import siblings.
+  # This prevents the same brittle implicit coupling that broke marketplace
+  # remote-entry (#6525): silent failures when core is refactored.
+  - repo: local
+    hooks:
+      - id: extension-import-boundaries
+        name: Enforce extension/skill/plugin import boundaries (#7372)
+        entry: tools/lint/check_extension_import_boundaries.py
+        language: python
+        files: ^(autobot-backend/extensions/builtin/|autobot-backend/skills/builtin/|plugins/core-plugins/).*\.py$
+        stages: [pre-commit]
+        description: "Extensions/skills/plugins must import from autobot_shared/ or own package — not core internals (#7372)"
+
   # Python-specific checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0

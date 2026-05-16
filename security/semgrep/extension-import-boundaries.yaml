@@ -1,0 +1,102 @@
+---
+# AutoBot extension/skill/plugin import boundary enforcement (#7372)
+#
+# Extensions (lifecycle hooks), skills (user-facing capabilities), and
+# core-plugins must import ONLY from autobot_shared/ (the public SDK) or
+# their own package. They must NOT reach into autobot-backend core modules
+# or import sibling extensions.
+#
+# Why: implicit coupling between layers breaks silently when core moves.
+# Same root cause as marketplace brittle remote-entry (#6525).
+#
+# Waiver: add a comment on the same line: # nosemgrep: <rule-id>
+# Waivers must include a reason explaining why the violation is intentional.
+
+rules:
+  - id: extension-no-core-internals
+    patterns:
+      - pattern-either:
+          # Direct package import from core
+          - pattern: from $MOD import $X
+          - pattern: import $MOD
+    pattern-where-not:
+      - pattern-either:
+          # autobot_shared is the approved public surface
+          - pattern: from autobot_shared.$REST import $X
+          - pattern: import autobot_shared.$REST
+          # Own package imports are allowed
+          - pattern: from extensions.$OWN import $X
+          - pattern: from skills.$OWN import $X
+          # Stdlib and third-party are allowed (no autobot prefix)
+    paths:
+      include:
+        - autobot-backend/extensions/builtin/
+        - autobot-backend/skills/builtin/
+        - plugins/core-plugins/
+    focus-metavariable: $MOD
+    pattern-not-regex: "^(autobot_shared|extensions|skills|plugins).*"
+    message: |
+      Extensions/skills/plugins must import from autobot_shared/ (public SDK)
+      or their own package — not from autobot-backend core modules.
+      This prevents silent coupling that breaks when core is refactored.
+      Issue: #7372
+    languages:
+      - python
+    severity: ERROR
+    metadata:
+      category: architecture
+      technology:
+        - python
+      references:
+        - "https://github.com/mrveiss/AutoBot-AI/issues/7372"
+        - "https://github.com/mrveiss/AutoBot-AI/issues/6525"
+      autofix: false
+
+  - id: extension-no-sibling-import
+    pattern: from extensions.builtin.$OTHER import $X
+    paths:
+      include:
+        - autobot-backend/extensions/builtin/
+    # Allow __init__.py to re-export siblings — that is the package's job
+    path-filter:
+      exclude:
+        - autobot-backend/extensions/builtin/__init__.py
+    message: |
+      Extensions must not import sibling extensions directly.
+      This creates inter-plugin coupling; use the ExtensionManager hooks
+      interface instead, or move shared logic to autobot_shared/.
+      Issue: #7372
+    languages:
+      - python
+    severity: ERROR
+    metadata:
+      category: architecture
+      technology:
+        - python
+      references:
+        - "https://github.com/mrveiss/AutoBot-AI/issues/7372"
+      autofix: false
+
+  - id: skill-no-sibling-import
+    pattern: from skills.builtin.$OTHER import $X
+    paths:
+      include:
+        - autobot-backend/skills/builtin/
+    path-filter:
+      exclude:
+        - autobot-backend/skills/builtin/__init__.py
+    message: |
+      Skills must not import sibling skills directly.
+      Skills are independent user-facing capabilities; share logic via
+      autobot_shared/ or a dedicated helper module.
+      Issue: #7372
+    languages:
+      - python
+    severity: ERROR
+    metadata:
+      category: architecture
+      technology:
+        - python
+      references:
+        - "https://github.com/mrveiss/AutoBot-AI/issues/7372"
+      autofix: false
