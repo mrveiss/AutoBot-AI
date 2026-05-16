@@ -93,6 +93,44 @@ if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(
   deny "Blocked: never check out main/master locally (#4113, #6512). Main is read-only; commits flow Dev_new_gui → main via release cycle. If you need to inspect main, use git log origin/main or create a worktree: git worktree add .worktrees/inspect-main main"
 fi
 
+# Block checkout to issue-* branches from main session (#6512)
+# Agents and parallel work must run inside .worktrees/issue-*/, not on main checkout
+if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(checkout|switch)[[:space:]]+(issue-[0-9a-zA-Z_-]+|origin/issue-[0-9a-zA-Z_-]+)([[:space:]]|$)'; then
+  CURRENT_DIR=$(pwd)
+  IN_WORKTREE=0
+
+  # Check if we're already inside a worktree (then it's fine)
+  if [[ "$CURRENT_DIR" =~ \.worktrees/ ]]; then
+    IN_WORKTREE=1
+  fi
+
+  if [ "$IN_WORKTREE" -eq 0 ]; then
+    deny "Blocked: never checkout issue-* branches on the main working tree (#6512). All parallel work must happen in isolated worktrees. Create one: git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/Dev_new_gui && cd .worktrees/issue-XXXX"
+  fi
+fi
+
+# Warn if committing outside a worktree when issue-specific worktree exists (#6512)
+if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+commit'; then
+  CURRENT_DIR=$(pwd)
+  IN_WORKTREE=0
+
+  # Check if we're inside .worktrees/
+  if [[ "$CURRENT_DIR" =~ \.worktrees/issue- ]]; then
+    IN_WORKTREE=1
+  fi
+
+  # If NOT in a worktree, warn about parallel work isolation
+  if [ "$IN_WORKTREE" -eq 0 ]; then
+    # Check if any issue-specific worktrees exist
+    REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+    if [ -d "$REPO_ROOT/.worktrees" ] && ls "$REPO_ROOT/.worktrees"/issue-* >/dev/null 2>&1; then
+      # Worktrees exist—you should be using one
+      AVAILABLE=$(ls -d "$REPO_ROOT/.worktrees"/issue-* 2>/dev/null | xargs basename -a | paste -sd "," -)
+      echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"warn\",\"permissionDecisionReason\":\"Git commit outside worktree detected (#6512). Parallel work worktrees exist: $AVAILABLE. Consider: cd $REPO_ROOT/.worktrees/issue-XXXX && git commit (...) to avoid shared tree conflicts.\"}}" >&2
+    fi
+  fi
+fi
+
 # Block bare `git reset <ref>` on Dev_new_gui — parallel sessions doing
 # `git reset origin/Dev_new_gui` from a feature branch silently move HEAD
 # and lose committed work that wasn't pushed yet (#6512).

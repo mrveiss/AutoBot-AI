@@ -188,6 +188,8 @@ A standard "Behavioral grep audit" block, as shown above, immediately after the 
 
 ## 1a. Create Isolated Worktrees
 
+**CRITICAL (#6512): Parallel agents MUST use worktrees. This prevents commits landing on wrong branches.**
+
 **For each issue in WORK_QUEUE:**
 
 ```bash
@@ -199,17 +201,23 @@ if git worktree list | grep -q "issue-<number>"; then
   git branch -D "issue-<number>" 2>/dev/null
 fi
 
-# Create fresh worktree
+# Create fresh worktree — AGENTS MUST RUN INSIDE THIS
 git worktree add "$WORKTREE_PATH" -b "issue-<number>" origin/Dev_new_gui
+cd "$WORKTREE_PATH"
+git branch --unset-upstream
 
-# Verify branch is correct
-cd "$WORKTREE_PATH" && git branch --show-current  # should print: issue-<number>
+# Verify isolated from main session
+echo "Agent will work in: $(pwd)"
+echo "Branch is: $(git branch --show-current)"  # should print: issue-<number>
+echo "Main session remains on Dev_new_gui — checked separately"
 ```
 
-**Key rules:**
+**Key rules (non-negotiable):**
 - Absolute paths: `/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-XXXX`
 - Each issue gets dedicated branch `issue-XXXX`
 - All worktrees isolated — no shared directories
+- **Agents MUST cd into the worktree BEFORE making any git commits**
+- **Agents MUST NEVER call `git checkout` on the main tree**
 
 ## 1b. Initialize Retry State Table
 
@@ -244,7 +252,20 @@ Take up to 3 from the queue. Spawn in parallel — each agent:
 4. Reports: `RESULT: SUCCESS|FAILURE`, `COMMIT_SHA: <sha>`, `TESTS: PASS|FAIL`, `ERROR: <if any>`
 
 **Agent prompt must include:**
-> "You have Bash, Read, Edit, Write, Grep, Glob permissions. Commit only — do NOT push. If you lose Bash permissions, STOP and report. Required tools: Bash, Read, Edit, Write, Grep, Glob."
+> "You have Bash, Read, Edit, Write, Grep, Glob permissions. Commit only — do NOT push. If you lose Bash permissions, STOP and report. Required tools: Bash, Read, Edit, Write, Grep, Glob.
+>
+> **CRITICAL — Worktree Isolation (Issue #6512):**
+> - NEVER call `git checkout` on the main working tree
+> - BEFORE making any changes, create an isolated worktree:
+>   ```bash
+>   ISSUE_NUM=<issue-number>
+>   git worktree add .worktrees/issue-$ISSUE_NUM -b issue-$ISSUE_NUM origin/Dev_new_gui
+>   cd .worktrees/issue-$ISSUE_NUM
+>   git branch --unset-upstream
+>   ```
+> - Make all edits, commits, and git operations INSIDE that worktree directory
+> - Your commit will land on the correct branch automatically
+> - Do NOT switch branches or checkout anywhere else"
 
 **Main session then pushes each successful branch and creates PR.**
 
