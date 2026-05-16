@@ -14,6 +14,7 @@ from autobot_shared.logging_manager import get_logger
 from orchestrator import Orchestrator
 from orchestrator import get_orchestrator_sync as get_orchestrator
 from services.notification_service import NotificationService
+from services.workflow_versioning import WorkflowVersionStore
 from type_defs.common import Metadata
 
 from .controller import WorkflowController
@@ -143,6 +144,17 @@ class WorkflowAutomationManager:
         )
 
         self.active_workflows[workflow_id] = workflow
+
+        # Snapshot initial state for rollback/audit (#2145)
+        try:
+            version_store = WorkflowVersionStore()
+            await version_store.save_version(
+                workflow_id,
+                workflow.to_status_dict() if hasattr(workflow, "to_status_dict") else {"name": name},
+                notes="initial version",
+            )
+        except Exception:
+            logger.warning("workflow_versioning: could not snapshot workflow %s", workflow_id)
 
         logger.info("Created automated workflow %s: %s", workflow_id, name)
         return workflow_id
