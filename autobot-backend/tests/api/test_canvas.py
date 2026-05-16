@@ -8,8 +8,10 @@ Covers:
 - PATCH /api/canvas/{id}/cells/{cellId}: accept/edit/discard, trust contract,
   state machine enforcement
 - POST /api/canvas/{id}/export: md/json/html/pdf, include toggles
+- WebSocket canvas_cell and canvas_cancel (MVA-370)
 """
 
+import asyncio
 import uuid
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -414,3 +416,115 @@ class TestExportHelpers:
         data = _json.loads(result)
         assert len(data["cells"]) == 1
         assert data["cells"][0]["owner"] == "user"
+
+
+# ---------------------------------------------------------------------------
+# WebSocket canvas streaming (MVA-370)
+# ---------------------------------------------------------------------------
+
+
+class TestCanvasWebSocketStreaming:
+    @pytest.mark.asyncio
+    async def test_register_and_unregister_streaming_task(self):
+        from api.websockets import register_canvas_streaming_task, unregister_canvas_streaming_task, _canvas_streaming_tasks
+
+        task = asyncio.create_task(asyncio.sleep(10))
+        canvas_id = str(uuid.uuid4())
+        cell_id = str(uuid.uuid4())
+
+        await register_canvas_streaming_task(canvas_id, cell_id, task)
+        key = (canvas_id, cell_id)
+        assert key in _canvas_streaming_tasks
+        assert _canvas_streaming_tasks[key] == task
+
+        await unregister_canvas_streaming_task(canvas_id, cell_id)
+        assert key not in _canvas_streaming_tasks
+
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    @pytest.mark.asyncio
+    async def test_canvas_cancel_stops_streaming_task(self):
+        from api.websockets import (
+            register_canvas_streaming_task,
+            _handle_canvas_cancel,
+            _canvas_streaming_tasks,
+        )
+
+        canvas_id = str(uuid.uuid4())
+        cell_id = str(uuid.uuid4())
+
+        async def mock_stream():
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                pass
+
+        task = asyncio.create_task(mock_stream())
+        await register_canvas_streaming_task(canvas_id, cell_id, task)
+
+        assert not task.done()
+
+        # Send canvas_cancel
+        await _handle_canvas_cancel({"cellId": cell_id, "canvasId": canvas_id})
+
+        # Task should be cancelled
+        await asyncio.sleep(0.01)  # Give task time to process cancellation
+        assert task.done()
+        assert task.cancelled()
+
+    @pytest.mark.asyncio
+    async def test_canvas_cancel_with_multiple_tasks(self):
+        from api.websockets import (
+            register_canvas_streaming_task,
+            _handle_canvas_cancel,
+            _canvas_streaming_tasks,
+        )
+
+        canvas_id = str(uuid.uuid4())
+        cell_id_1 = str(uuid.uuid4())
+        cell_id_2 = str(uuid.uuid4())
+
+        async def mock_stream():
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                pass
+
+        task1 = asyncio.create_task(mock_stream())
+        task2 = asyncio.create_task(mock_stream())
+
+        await register_canvas_streaming_task(canvas_id, cell_id_1, task1)
+        await register_canvas_streaming_task(canvas_id, cell_id_2, task2)
+
+        # Cancel only cell_id_1
+        await _handle_canvas_cancel({"cellId": cell_id_1, "canvasId": canvas_id})
+
+        await asyncio.sleep(0.01)
+        assert task1.done()
+        assert not task2.done()
+
+        # Cleanup
+        task2.cancel()
+        try:
+            await task2
+        except asyncio.CancelledError:
+            pass
+
+    def test_canvas_cell_event_format(self):
+        from api.websockets import get_canvas_cell_event
+
+        cell_id = str(uuid.uuid4())
+        canvas_id = str(uuid.uuid4())
+
+        event = get_canvas_cell_event(cell_id, seq=1, delta="Hello", state="streaming", canvas_id=canvas_id)
+
+        assert event["type"] == "canvas_cell"
+        assert event["payload"]["cellId"] == cell_id
+        assert event["payload"]["canvasId"] == canvas_id
+        assert event["payload"]["seq"] == 1
+        assert event["payload"]["delta"] == "Hello"
+        assert event["payload"]["state"] == "streaming"

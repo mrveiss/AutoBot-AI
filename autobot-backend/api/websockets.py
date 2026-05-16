@@ -216,6 +216,11 @@ def _format_agent_plan(raw_data: dict) -> Tuple[str, str]:
     return f"Plan ({step_count} steps): {summary}", "agent-plan"
 
 
+def _format_canvas_cell(raw_data: dict) -> Tuple[str, str]:
+    """Format canvas_cell event (pass-through, not logged to chat history)."""
+    return None, "canvas"
+
+
 # Issue #336: Dispatch table for message type formatting
 MESSAGE_TYPE_FORMATTERS: Dict[str, Callable[[dict], Tuple[str, str]]] = {
     "goal_received": _format_goal_received,
@@ -249,6 +254,8 @@ MESSAGE_TYPE_FORMATTERS: Dict[str, Callable[[dict], Tuple[str, str]]] = {
     "agent.tool.result": _format_agent_tool_result,
     "agent.llm.chunk": _format_agent_llm_chunk,
     "agent.plan": _format_agent_plan,
+    # MVA-370: Canvas cell streaming events
+    "canvas_cell": _format_canvas_cell,
 }
 
 
@@ -266,6 +273,93 @@ def _format_event_for_chat(message_type: str, raw_data: dict) -> Tuple[str | Non
     if formatter:
         return formatter(raw_data)
     return None, "system"
+
+
+async def register_canvas_streaming_task(canvas_id: str, cell_id: str, task: asyncio.Task) -> None:
+    """Register a canvas cell streaming task for cancellation support (MVA-370).
+
+    Args:
+        canvas_id: The canvas ID
+        cell_id: The cell ID
+        task: The asyncio.Task for the streaming operation
+    """
+    async with _canvas_tasks_lock:
+        key = (canvas_id, cell_id)
+        _canvas_streaming_tasks[key] = task
+        logger.debug(f"Registered streaming task for canvas {canvas_id}, cell {cell_id}")
+
+
+async def unregister_canvas_streaming_task(canvas_id: str, cell_id: str) -> None:
+    """Unregister a canvas cell streaming task (MVA-370).
+
+    Args:
+        canvas_id: The canvas ID
+        cell_id: The cell ID
+    """
+    async with _canvas_tasks_lock:
+        key = (canvas_id, cell_id)
+        if key in _canvas_streaming_tasks:
+            del _canvas_streaming_tasks[key]
+            logger.debug(f"Unregistered streaming task for canvas {canvas_id}, cell {cell_id}")
+
+
+def get_canvas_cell_event(cell_id: str, seq: int, delta: str, state: str, canvas_id: Optional[str] = None) -> dict:
+    """Create a canvas_cell WebSocket event (MVA-370).
+
+    Args:
+        cell_id: The cell ID
+        seq: The sequence number for this delta
+        delta: The content delta/chunk
+        state: The current cell state (queued, skeleton, streaming, complete, etc.)
+        canvas_id: Optional canvas ID for context
+
+    Returns:
+        A formatted WebSocket event dict ready to send
+    """
+    return {
+        "type": "canvas_cell",
+        "payload": {
+            "cellId": cell_id,
+            "canvasId": canvas_id,
+            "seq": seq,
+            "delta": delta,
+            "state": state,
+        },
+    }
+
+
+async def _handle_canvas_cancel(data: dict) -> None:
+    """Handle canvas_cancel message from client (MVA-370).
+
+    Cancels the streaming task for the specified cell and marks it as cancelled.
+
+    Args:
+        data: The message data with cellId
+    """
+    try:
+        cell_id = data.get("cellId")
+        canvas_id = data.get("canvasId")
+
+        if not cell_id:
+            logger.warning("canvas_cancel message missing cellId")
+            return
+
+        # Try to find and cancel the streaming task
+        async with _canvas_tasks_lock:
+            # Search through all tasks for this cell
+            keys_to_remove = [
+                k for k in _canvas_streaming_tasks.keys()
+                if k[1] == cell_id and (not canvas_id or k[0] == canvas_id)
+            ]
+
+            for key in keys_to_remove:
+                task = _canvas_streaming_tasks[key]
+                if not task.done():
+                    task.cancel()
+                    logger.info(f"Cancelled streaming task for cell {cell_id}")
+                del _canvas_streaming_tasks[key]
+    except Exception as e:
+        logger.error(f"Error handling canvas_cancel: {e}")
 
 
 async def _handle_command_approval(websocket: WebSocket, data: dict) -> None:
@@ -419,6 +513,8 @@ async def _handle_websocket_message(websocket: WebSocket, message: str) -> None:
             logger.debug("Received pong from client")
         elif msg_type == "command_approval":
             await _handle_command_approval(websocket, data)
+        elif msg_type == "canvas_cancel":
+            await _handle_canvas_cancel(data)
     except json.JSONDecodeError:
         logger.warning("Received invalid JSON via WebSocket: %s", message)
 
@@ -434,6 +530,12 @@ _ws_clients_lock = asyncio.Lock()
 import threading
 
 _npu_events_lock = threading.Lock()
+
+
+# MVA-370: Canvas cell streaming task registry
+# Tracks active streaming tasks by (canvas_id, cell_id) -> Task
+_canvas_streaming_tasks: Dict[tuple, asyncio.Task] = {}
+_canvas_tasks_lock = asyncio.Lock()
 
 
 @router.websocket("/ws-test")

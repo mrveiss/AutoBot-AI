@@ -1,0 +1,57 @@
+{
+  "$meta": {
+    "version": 1,
+    "updatedAt": "2026-05-16T07:19:34.633Z",
+    "source": "configure"
+  },
+  "database": {
+    "mode": "embedded-postgres",
+    "embeddedPostgresDataDir": "/home/martins/.paperclip-worktrees/instances/paperclip-mva-359/db",
+    "embeddedPostgresPort": 54330,
+    "backup": {
+      "enabled": true,
+      "intervalMinutes": 60,
+      "retentionDays": 30,
+      "dir": "/home/martins/.paperclip-worktrees/instances/paperclip-mva-359/data/backups"
+    }
+  },
+  "logging": {
+    "mode": "file",
+    "logDir": "/home/martins/.paperclip-worktrees/instances/paperclip-mva-359/logs"
+  },
+  "server": {
+    "deploymentMode": "local_trusted",
+    "exposure": "private",
+    "bind": "loopback",
+    "host": "127.0.0.1",
+    "port": 3101,
+    "allowedHostnames": [],
+    "serveUi": true
+  },
+  "auth": {
+    "baseUrlMode": "auto",
+    "disableSignUp": false
+  },
+  "telemetry": {
+    "enabled": true
+  },
+  "storage": {
+    "provider": "local_disk",
+    "localDisk": {
+      "baseDir": "/home/martins/.paperclip-worktrees/instances/paperclip-mva-359/data/storage"
+    },
+    "s3": {
+      "bucket": "paperclip",
+      "region": "us-east-1",
+      "prefix": "",
+      "forcePathStyle": false
+    }
+  },
+  "secrets": {
+    "provider": "local_encrypted",
+    "strictMode": false,
+    "localEncrypted": {
+      "keyFilePath": "/home/martins/.paperclip-worktrees/instances/paperclip-mva-359/secrets/master.key"
+    }
+  }
+}
