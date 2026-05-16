@@ -25,11 +25,9 @@
 
 set -uo pipefail
 
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/_common.sh
+source "$SCRIPT_DIR/lib/_common.sh"
 
 GIT_DIR_PATH=$(git rev-parse --git-dir 2>/dev/null)
 if [ -z "$GIT_DIR_PATH" ]; then
