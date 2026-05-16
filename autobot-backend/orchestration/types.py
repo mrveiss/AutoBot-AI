@@ -15,6 +15,7 @@ gets the canonical type, per the wire-in-not-delete rule.
 Contains enums and dataclasses for agent orchestration.
 """
 
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -60,6 +61,20 @@ class DocumentationType(Enum):
     PERFORMANCE_REPORT = "performance_report"
     KNOWLEDGE_EXTRACTION = "knowledge_extraction"
     ERROR_ANALYSIS = "error_analysis"
+
+
+@dataclass
+class AgentPerformance:
+    """Track agent performance metrics."""
+
+    agent_type: str
+    total_tasks: int = 0
+    successful_tasks: int = 0
+    failed_tasks: int = 0
+    average_execution_time: float = 0.0
+    reliability_score: float = 1.0
+    capability_scores: Dict[AgentCapability, float] = field(default_factory=dict)
+    last_update: float = field(default_factory=time.time)
 
 
 @dataclass

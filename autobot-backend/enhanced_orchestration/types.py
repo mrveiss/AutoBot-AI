@@ -12,7 +12,6 @@ omit (task lifecycle methods + structured success criteria), keeping fields
 in one place.
 """
 
-import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Dict, FrozenSet, List
 
@@ -22,7 +21,7 @@ if TYPE_CHECKING:
 from autobot_shared.workflow import ExecutionStrategy as ExecutionStrategy  # noqa: F401  # re-export
 from autobot_shared.workflow import WorkflowPlan as _SharedWorkflowPlan
 from autobot_shared.workflow import WorkflowTask
-from orchestration.types import AgentCapability  # single canonical definition (#6192)
+from orchestration.types import AgentCapability, AgentPerformance as AgentPerformance  # noqa: F401  # re-export
 
 # Module-level frozenset for fallback tier checks
 FALLBACK_TIERS: FrozenSet[str] = frozenset({"basic", "emergency"})
@@ -68,15 +67,3 @@ class WorkflowDependencies:
     coordinate_collaboration: Callable
 
 
-@dataclass
-class AgentPerformance:
-    """Track agent performance metrics"""
-
-    agent_type: str
-    total_tasks: int = 0
-    successful_tasks: int = 0
-    failed_tasks: int = 0
-    average_execution_time: float = 0.0
-    reliability_score: float = 1.0  # 0-1
-    capability_scores: Dict[AgentCapability, float] = field(default_factory=dict)
-    last_update: float = field(default_factory=time.time)
