@@ -1,12 +1,16 @@
 /**
  * API Error Handler Utility
  *
- * Provides standardized error handling for all API calls across the application.
- * Features:
- * - Consistent error message extraction
- * - Toast notifications for user feedback
- * - Retry logic for transient failures
- * - Loading state management helpers
+ * @deprecated Zero active callers as of GH#7447 audit. Do not add new callers.
+ *
+ * Migrate to the canonical error-handling layer instead:
+ *
+ *   - Pure message extraction → `extractApiErrorMessage()` from `@/utils/errorExtract`
+ *   - Async operation wrapper → `useAsyncHandler()` from `@/composables/useErrorHandler`
+ *   - Reactive error state → `useErrorState()` from `@/composables/useErrorHandler`
+ *   - User notification routing → `useNotificationBus()` from `@/composables/useNotificationBus`
+ *
+ * Sunset: Q3 2026. See GH#7447 for migration guide.
  *
  * @module apiErrorHandler
  */
