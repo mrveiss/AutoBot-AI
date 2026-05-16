@@ -356,12 +356,12 @@ async def _init_builtin_extensions(app: FastAPI) -> None:
     Non-critical: a failure logs a warning but does not block startup.
     """
     try:
-        from extensions.builtin import (
+        from middleware.builtin import (
             LoggingExtension,
             PermissionEnforcementExtension,
             SecretMaskingExtension,
         )
-        from extensions.manager import ExtensionManager
+        from middleware.manager import ExtensionManager
 
         manager = getattr(app.state, "extension_manager", None)
         if manager is None:
@@ -1598,7 +1598,7 @@ def create_lifespan_manager():
         logger.info("🧵 Bounded thread pool configured (max %d workers)", MAX_WORKER_THREADS)
 
         # Register the running event loop for sync-endpoint audit scheduling (#1568)
-        from middleware.audit_middleware import set_main_event_loop
+        from autobot_backend.audit_middleware import set_main_event_loop
 
         set_main_event_loop(asyncio.get_running_loop())
 
