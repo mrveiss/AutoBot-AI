@@ -9,6 +9,7 @@ between soft errors (LLM can retry with different approach) and hard errors
 (task must fail).
 """
 
+
 class RepairableException(Exception):
     """
     Soft error that LLM can potentially fix by trying a different approach.
