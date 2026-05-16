@@ -28,9 +28,21 @@
     <!-- Contextual toolbar slot -->
     <slot name="toolbar" />
 
-    <!-- Phase-2 placeholder for non-markdown cells -->
+    <!-- Rich artifact rendering (Phase 2) -->
+    <ChartCell
+      v-if="cell.contentType === 'chart' && cell.richPayload"
+      :rich-payload="cell.richPayload"
+      data-testid="chart-cell"
+    />
+    <CodeCell
+      v-else-if="cell.contentType === 'code' && cell.richPayload"
+      :rich-payload="cell.richPayload"
+      data-testid="code-cell"
+    />
+
+    <!-- Phase 2 placeholder for empty/null richPayload -->
     <div
-      v-if="cell.contentType !== 'markdown'"
+      v-else-if="cell.contentType !== 'markdown'"
       data-testid="phase2-placeholder"
       class="text-text-secondary text-sm italic py-4 text-center"
     >
@@ -149,6 +161,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { CanvasCell } from '@/types/canvas'
+import ChartCell from './ChartCell.vue'
+import CodeCell from './CodeCell.vue'
 
 const props = defineProps<{ cell: CanvasCell }>()
 
