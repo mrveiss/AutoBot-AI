@@ -25,6 +25,9 @@ from user_management.config import get_deployment_config
 # Import models to register with SQLAlchemy
 from user_management.models import Base
 
+# Import canvas models so Alembic autogenerate sees them (MVA-359)
+import canvas.models  # noqa: F401
+
 # this is the Alembic Config object
 config = context.config
 
