@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from autobot_shared.db_session import session_scope
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
 from models.ml_model import MLModel
@@ -33,7 +34,7 @@ _db_init_lock = threading.Lock()
 
 
 def _get_session():
-    """Return a new SQLAlchemy session, creating the engine on first call.
+    """Return canonical session context manager, creating the engine on first call (GH#7441).
 
     Deferred from module level to avoid DB connection at import time (Issue #940).
     Thread-safe: uses _db_init_lock to prevent double-initialization (#2846).
@@ -48,7 +49,7 @@ def _get_session():
                 )
                 _engine = create_engine(db_url)
                 _SessionLocal = sessionmaker(bind=_engine)
-    return _SessionLocal()
+    return session_scope(_SessionLocal)
 
 
 def _get_trainer_class():

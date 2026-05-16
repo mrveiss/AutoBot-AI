@@ -3,7 +3,10 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Comprehensive Error Boundary System for AutoBot
+Comprehensive Error Boundary System for AutoBot — canonical import point (GH#7435).
+
+**Canonical import path for all backend code:**
+    from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 Issue #381: This file has been refactored into the error_boundaries/ package.
 This thin facade maintains backward compatibility while delegating to focused modules.

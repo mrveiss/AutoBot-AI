@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, desc, func
 from sqlalchemy.orm import sessionmaker
 
+from autobot_shared.db_session import session_scope
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from models.code_pattern import CodePattern
@@ -33,7 +34,7 @@ _SessionLocal = None
 
 
 def _get_db_session():
-    """Get database session, initializing engine on first call."""
+    """Return canonical session context manager, initializing engine on first call (GH#7441)."""
     global _engine, _SessionLocal
     if _SessionLocal is None:
         db_url = (
@@ -42,7 +43,7 @@ def _get_db_session():
         )
         _engine = create_engine(db_url)
         _SessionLocal = sessionmaker(bind=_engine)
-    return _SessionLocal()
+    return session_scope(_SessionLocal)
 
 
 # =============================================================================
