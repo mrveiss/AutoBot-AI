@@ -77,6 +77,7 @@ from api.structured_thinking_mcp import router as structured_thinking_mcp_router
 from api.system import router as system_router
 from api.usage import router as usage_router  # Issue #1807
 from api.user_management.router import router as user_management_router  # Issue #1801
+from api.canvas import router as canvas_router  # MVA-359
 from api.vnc_manager import router as vnc_router
 from api.vnc_mcp import router as vnc_mcp_router
 from api.vnc_proxy import router as vnc_proxy_router
@@ -396,6 +397,13 @@ def _get_plugin_routers() -> list:
     ]
 
 
+def _get_canvas_routers() -> list:
+    """Canvas routers (MVA-359)."""
+    return [
+        (canvas_router, "", ["canvas"], "canvas"),
+    ]
+
+
 def load_core_routers():
     """
     Load and return core API routers (Issue #560: decomposed, #730: plugins).
@@ -417,4 +425,5 @@ def load_core_routers():
     routers.extend(_get_mcp_routers())
     routers.extend(_get_agent_routers())
     routers.extend(_get_plugin_routers())
+    routers.extend(_get_canvas_routers())
     return routers

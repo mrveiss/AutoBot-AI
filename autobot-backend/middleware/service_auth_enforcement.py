@@ -41,6 +41,8 @@ EXEMPT_PATHS: List[str] = [
     "/api/chats",
     "/api/conversations",
     "/api/conversation_files",
+    # Live Canvas — JWT-auth endpoints (MVA-359)
+    "/api/canvas",
     # Knowledge base user operations
     "/api/knowledge",
     "/api/knowledge_base",
