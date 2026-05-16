@@ -25,6 +25,10 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
 # Import existing monitoring functionality
+# #7007: single-symbol import kept verbose (not migrated to optional_import)
+# Rationale: explicit try/except provides clearer type hints and error context
+# for single symbols where optional_import savings are minimal. Marked for
+# potential future consolidation if additional symbols are added (#7007 follow-up).
 try:
     from api.monitoring import get_services_health as monitoring_services_health
 except ImportError as _e:
