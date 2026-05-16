@@ -455,14 +455,15 @@ class ErrorHandler:
             RefactoringSuggestion or None
         """
         code_template = """
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 
 class ValidatedInput(BaseModel):
     \"\"\"Validated input model using Pydantic.\"\"\"
 
     field: str
 
-    @validator('field')
+    @field_validator('field')
+    @classmethod
     def validate_field(cls, v):
         # Add validation logic here
         return v
