@@ -58,9 +58,9 @@ const errorStats = ref<ErrorStats | null>(null)
 interface MonitoringError {
   id: string
   level: string
-  component: string
   message: string
   timestamp: string
+  resolved: boolean
 }
 
 const recentErrors = ref<MonitoringError[]>([])
@@ -136,7 +136,7 @@ async function loadErrorStats(): Promise<void> {
 async function loadRecentErrors(): Promise<void> {
   try {
     const data = await api.getRecentErrors(10)
-    recentErrors.value = (data.errors || []) as unknown as MonitoringError[]
+    recentErrors.value = data.errors || []
   } catch (e) {
     logger.error('Failed to load recent errors:', e)
   }
@@ -381,7 +381,6 @@ onUnmounted(() => {
                     <span :class="['px-2 py-0.5 text-xs font-medium rounded-sm', getErrorLevelClass(err.level)]">
                       {{ err.level }}
                     </span>
-                    <span class="text-xs text-gray-500">{{ err.component }}</span>
                   </div>
                   <p class="text-sm text-gray-900 font-medium">{{ err.message }}</p>
                   <p class="text-xs text-gray-500 mt-1">{{ formatDate(err.timestamp) }}</p>
