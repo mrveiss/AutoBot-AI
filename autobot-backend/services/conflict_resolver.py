@@ -42,6 +42,7 @@ from api.knowledge_grounding_models import (
 )
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from autobot_shared.ssot_constants import TTL_90_DAYS
 
 logger = get_logger(__name__)
 
@@ -335,7 +336,7 @@ class ConflictResolver(AsyncRedisClientMixin):
             # For now: log to Redis for audit
             key = f"kb_updates:{kb_fact.source_id}"
             await redis.lpush(key, str(update_record))
-            await redis.expire(key, 86400 * 90)  # Keep 90 days
+            await redis.expire(key, TTL_90_DAYS)  # Keep 90 days
 
             logger.info(f"KB update recorded: {key}")
             return True

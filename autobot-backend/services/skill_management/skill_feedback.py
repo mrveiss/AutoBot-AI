@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from autobot_shared.ssot_constants import TTL_90_DAYS
 from autobot_shared.time_utils import now_utc
 
 from .skill_metrics import SkillMetrics
@@ -61,7 +62,7 @@ class SkillFeedbackAnalyzer(AsyncRedisClientMixin):
 
             key = f"skill_feedback:{skill_id}:{now.strftime('%Y-%m-%d')}"
             await redis.lpush(key, json.dumps(feedback_entry, default=str))
-            await redis.expire(key, 90 * 86400)  # Keep 90 days
+            await redis.expire(key, TTL_90_DAYS)  # Keep 90 days
 
             logger.debug("Logged feedback for %s: rating=%d", skill_id, rating)
 
