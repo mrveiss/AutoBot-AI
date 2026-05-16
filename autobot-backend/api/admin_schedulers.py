@@ -17,7 +17,7 @@ from auth_middleware import get_auth_middleware
 from services.scheduler_registry import REGISTRY
 from utils.catalog_http_exceptions import raise_auth_error
 
-router = APIRouter(prefix="/admin", tags=["admin", "schedulers"])
+router = APIRouter(prefix="/admin")
 
 
 def _require_admin(request: Request) -> bool:
