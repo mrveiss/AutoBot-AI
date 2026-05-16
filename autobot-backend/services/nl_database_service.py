@@ -526,13 +526,15 @@ class NLDatabaseService:
             Extracted SQL string
         """
         try:
-            from llm_multi_provider import UnifiedLLMInterface
+            from services.llm_service import LLMService
 
             if self._llm is None:
-                self._llm = UnifiedLLMInterface()
-                await self._llm.initialize()
+                self._llm = LLMService()
 
-            response = await self._llm.generate_response(prompt, llm_type="task")
+            llm_response = await self._llm.chat(
+                [{"role": "user", "content": prompt}], llm_type="task"
+            )
+            response = llm_response.content
             return _extract_sql_from_response(response)
         except Exception as exc:
             logger.error("LLM SQL generation failed: %s", exc)

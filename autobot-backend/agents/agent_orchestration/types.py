@@ -145,7 +145,11 @@ class AgentType(Enum):
 
 @dataclass
 class AgentCapabilityDescriptor:
-    """Describes an agent's capabilities and constraints."""
+    """Static capability descriptor for an agent *type* (model_size, strengths, limitations).
+
+    Distinct from ``orchestration.types.AgentProfile``, which tracks runtime
+    state of a specific agent instance (workload, success rate, availability).
+    """
 
     agent_type: AgentType
     model_size: str

@@ -7,8 +7,8 @@ Mock fixtures for AutoBot backend testing (canonical location for #6994).
 Provides mock implementations of core components for tests and the
 `__main__` demo blocks under `intelligence/`:
 
-- MockLLMInterface  - Legacy mock matching the deleted LLMInterface surface
-                      (kept per "never delete code — wire it in" policy).
+- MockLLMInterface  - Mock for UnifiedLLMInterface (llm_multi_provider); covers
+                      both chat_completion() and legacy generate_response().
 - MockLLMService    - Mock matching the LLMService surface that replaced
                       LLMInterface in #3185. Returns LLMResponse-shaped
                       objects via `.chat(...)` so demos exercising
@@ -25,11 +25,13 @@ from typing import Any, Dict, List, Optional
 
 
 class MockLLMInterface:
-    """Legacy mock LLM interface for testing agent workflows.
+    """Mock for ``UnifiedLLMInterface`` (``llm_multi_provider.UnifiedLLMInterface``).
 
-    Predates the #3185 LLMInterface retirement. Kept for any test that
-    still depends on the `generate_response()` surface. New code should
-    prefer `MockLLMService`.
+    Covers the full surface of ``UnifiedLLMInterface``: both the primary
+    ``chat_completion()`` method and the legacy ``generate_response()`` shim.
+    New test code should prefer ``MockLLMService`` (which mocks the canonical
+    ``LLMService.chat()`` surface); this class is retained for tests that
+    still exercise ``UnifiedLLMInterface`` directly.
     """
 
     def __init__(self, responses: Optional[Dict[str, str]] = None):
@@ -37,14 +39,10 @@ class MockLLMInterface:
         self._call_count = 0
         self._call_history: list = []
 
-    async def generate_response(self, prompt: str, **kwargs) -> str:
-        self._call_count += 1
-        self._call_history.append({"prompt": prompt, "kwargs": kwargs})
-
+    def _pick_response(self, prompt: str) -> str:
         for keyword, response in self._custom_responses.items():
             if keyword.lower() in prompt.lower():
                 return response
-
         prompt_lower = prompt.lower()
         if "progress" in prompt_lower:
             return "Processing data..."
@@ -53,6 +51,26 @@ class MockLLMInterface:
         if "command" in prompt_lower:
             return "COMMAND: echo 'This is a test response'\nEXPLANATION: Testing the system"
         return "Command executing..."
+
+    async def chat_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        **kwargs: Any,
+    ) -> Any:
+        """Mock primary method matching ``UnifiedLLMInterface.chat_completion``."""
+        prompt = messages[-1].get("content", "") if messages else ""
+        self._call_count += 1
+        self._call_history.append({"prompt": prompt, "kwargs": kwargs})
+        return make_llm_response(content=self._pick_response(prompt))
+
+    async def generate_response(self, prompt: str, **kwargs: Any) -> str:
+        """Legacy shim matching ``UnifiedLLMInterface.generate_response``."""
+        self._call_count += 1
+        self._call_history.append({"prompt": prompt, "kwargs": kwargs})
+        return self._pick_response(prompt)
+
+    async def initialize(self) -> None:
+        """No-op — matches ``UnifiedLLMInterface.initialize``."""
 
     @property
     def call_count(self) -> int:

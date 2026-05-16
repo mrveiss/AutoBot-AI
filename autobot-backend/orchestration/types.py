@@ -64,7 +64,11 @@ class DocumentationType(Enum):
 
 @dataclass
 class AgentProfile:
-    """Enhanced agent profile with capabilities and performance metrics."""
+    """Runtime state for a specific agent instance (workload, success rate, availability).
+
+    Distinct from ``AgentCapabilityDescriptor`` (agents.agent_orchestration.types),
+    which is a static per-type descriptor (model_size, strengths, limitations).
+    """
 
     agent_id: str
     agent_type: str
