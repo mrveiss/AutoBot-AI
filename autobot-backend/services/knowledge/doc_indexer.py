@@ -672,6 +672,10 @@ class DocIndexerService:
 
             from llama_index.embeddings.ollama import OllamaEmbedding
 
+            from autobot_shared.embedding_provenance import (
+                EmbeddingProvenance,
+                provenance_to_metadata,
+            )
             from knowledge.backends import get_default_client
 
             chromadb_path = self._root_dir / "data" / "chromadb"
@@ -703,13 +707,14 @@ class DocIndexerService:
             }
             embed_dim = _KNOWN_DIMS.get(embed_model_name)
 
+            provenance_meta = (
+                provenance_to_metadata(EmbeddingProvenance(embed_model_name, embed_dim))
+                if embed_dim is not None
+                else {}
+            )
             self._collection = self._client.get_or_create_collection(
                 name=self.COLLECTION_NAME,
-                metadata={
-                    "hnsw:space": "cosine",
-                    "embedding_model": embed_model_name,
-                    **({"embedding_dim": embed_dim} if embed_dim is not None else {}),
-                },
+                metadata={"hnsw:space": "cosine", **provenance_meta},
             )
 
             self._embed_model = OllamaEmbedding(model_name=embed_model_name, base_url=ollama_url)
