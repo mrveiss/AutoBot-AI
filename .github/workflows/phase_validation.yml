@@ -129,7 +129,9 @@ jobs:
       # currently scores ~22% against stale criteria; gating on it would
       # block every merge for reasons unrelated to the change under review.
       continue-on-error: true
+      shell: bash
       run: |
+        set -euo pipefail
         echo "Checking phase validation gate..."
 
         # Extract overall maturity from results
@@ -238,7 +240,9 @@ jobs:
     - name: Integration readiness check
       # Non-blocking until #7496 — same reason as Phase Validation Gate.
       continue-on-error: true
+      shell: bash
       run: |
+        set -euo pipefail
         echo "Checking integration readiness..."
 
         # Check if validation results indicate system is ready for integration
