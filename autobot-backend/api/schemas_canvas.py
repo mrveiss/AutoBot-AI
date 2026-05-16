@@ -2,6 +2,8 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -18,6 +20,8 @@ class CellOut(BaseModel):
     owner: str
     version: int
     locked_by: str | None = None
+    # Phase 2: null for Phase 1 / markdown / image cells (additive, non-breaking)
+    rich_payload: Any | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -76,6 +80,8 @@ class CellCreateRequest(BaseModel):
     type: str = "text"
     content: str = ""
     position: int = 0
+    # Phase 2: optional rich payload for chart/code cells
+    rich_payload: Optional[Any] = None
 
 
 # CellOut serves as the 201 response for cell creation.
@@ -89,6 +95,8 @@ class CellCreateRequest(BaseModel):
 class CellTransitionRequest(BaseModel):
     action: str  # accept | edit | discard
     content: str | None = None  # required when action=edit
+    # Phase 2: optional rich payload update during transition
+    rich_payload: Any | None = None
 
 
 class CellTransitionResponse(BaseModel):
@@ -96,6 +104,7 @@ class CellTransitionResponse(BaseModel):
     state: str
     version: int
     content: str
+    rich_payload: Optional[Any] = None
     updated_at: datetime
 
     model_config = {"from_attributes": True}
