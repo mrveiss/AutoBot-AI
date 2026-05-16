@@ -138,7 +138,13 @@
       <div class="modal">
         <div class="modal-header">
           <h3>Add User</h3>
-          <button class="btn-close" @click="showCreateModal = false"><Icon name="times" /></button>
+          <button
+            class="btn-close"
+            @click="showCreateModal = false"
+            :aria-label="$t('common.close')"
+            :title="$t('common.close')"
+            type="button"
+          ><Icon name="times" /></button>
         </div>
         <form class="modal-body" @submit.prevent="createUser">
           <div class="form-group">

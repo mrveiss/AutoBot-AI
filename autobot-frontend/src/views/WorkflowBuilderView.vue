@@ -588,7 +588,14 @@
           <div class="agents-container">
             <div class="agents-header">
               <h3><Icon name="users-cog" /> {{ $t('workflow.views.agentCapabilities') }}</h3>
-              <button @click="loadAgentCapabilities" class="btn-refresh-sm" :disabled="loadingCapabilities">
+              <button
+                @click="loadAgentCapabilities"
+                class="btn-refresh-sm"
+                :disabled="loadingCapabilities"
+                :aria-label="$t('common.refresh')"
+                :title="$t('common.refresh')"
+                type="button"
+              >
                 <Icon name="sync-alt" :spin="loadingCapabilities" />
               </button>
             </div>

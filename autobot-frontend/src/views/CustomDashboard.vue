@@ -124,7 +124,13 @@
       <div class="modal-content">
         <div class="modal-header">
           <h4><Icon name="cog" class="modal-icon" /> {{ $t('views.customDashboard.configureWidget') }}</h4>
-          <button @click="showConfigModal = false" class="close-btn">
+          <button
+            @click="showConfigModal = false"
+            class="close-btn"
+            :aria-label="$t('common.close')"
+            :title="$t('common.close')"
+            type="button"
+          >
             <Icon name="times" />
           </button>
         </div>
@@ -172,7 +178,13 @@
       <div class="modal-content">
         <div class="modal-header">
           <h4><Icon name="plus-circle" class="modal-icon" /> {{ $t('views.customDashboard.createDashboard') }}</h4>
-          <button @click="showNewDashboardModal = false" class="close-btn">
+          <button
+            @click="showNewDashboardModal = false"
+            class="close-btn"
+            :aria-label="$t('common.close')"
+            :title="$t('common.close')"
+            type="button"
+          >
             <Icon name="times" />
           </button>
         </div>
@@ -203,7 +215,13 @@
       <div class="modal-content wide">
         <div class="modal-header">
           <h4><Icon name="plus-circle" class="modal-icon" /> {{ $t('views.customDashboard.addWidgetTitle') }}</h4>
-          <button @click="showAddWidgetModal = false" class="close-btn">
+          <button
+            @click="showAddWidgetModal = false"
+            class="close-btn"
+            :aria-label="$t('common.close')"
+            :title="$t('common.close')"
+            type="button"
+          >
             <Icon name="times" />
           </button>
         </div>

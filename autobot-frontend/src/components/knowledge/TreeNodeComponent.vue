@@ -30,7 +30,13 @@
       <span v-else class="expand-spacer"></span>
 
       <!-- Node icon -->
-      <button class="node-icon-btn" @click.stop="$emit('select', node)" type="button">
+      <button
+        class="node-icon-btn"
+        @click.stop="$emit('select', node)"
+        type="button"
+        :aria-label="node.name"
+        :title="node.name"
+      >
         <i :class="['node-icon', nodeIcon]"></i>
       </button>
 
