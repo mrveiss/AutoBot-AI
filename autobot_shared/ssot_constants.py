@@ -207,6 +207,7 @@ class PathConstants:
     DOCS_DIR: Path = PROJECT_ROOT / "docs"
     BACKEND_DIR: Path = PROJECT_ROOT / "autobot-backend"
     FRONTEND_DIR: Path = PROJECT_ROOT / "autobot-frontend"
+    TESTS_DIR: Path = PROJECT_ROOT / "autobot-backend"
 
 
 PATH = PathConstants()
@@ -281,6 +282,324 @@ class SecurityThresholds:
     BLOCK_THRESHOLD = 0.7
 
 
+class AgentThresholds:
+    """Agent response evaluation thresholds."""
+
+    QUALITY_THRESHOLD = 0.7
+    RELEVANCE_THRESHOLD = 0.8
+    CONSENSUS_THRESHOLD = 0.8
+    QUALITY_WEIGHT = 0.4
+    RELEVANCE_WEIGHT = 0.3
+    CONSISTENCY_WEIGHT = 0.3
+
+
+class WorkflowThresholds:
+    """Workflow step execution thresholds."""
+
+    SAFETY_THRESHOLD = 0.7
+    QUALITY_THRESHOLD = 0.6
+
+
+class ComputerVisionThresholds:
+    """Computer vision and UI element detection thresholds."""
+
+    SEARCH_RESULT_LIMIT = 10
+    SIMILARITY_THRESHOLD = 0.7
+
+
+class CircuitBreakerDefaults:
+    """Circuit breaker default values for service protection."""
+
+    LLM_FAILURE_THRESHOLD = 3
+    LLM_RECOVERY_TIMEOUT = 30.0
+    LLM_TIMEOUT = 120.0
+    DEFAULT_FAILURE_THRESHOLD = 5
+    DEFAULT_RECOVERY_TIMEOUT = 60.0
+    DEFAULT_TIMEOUT = 30.0
+    DEFAULT_SUCCESS_THRESHOLD = 3
+    DATABASE_FAILURE_THRESHOLD = 5
+    DATABASE_RECOVERY_TIMEOUT = 15.0
+    DATABASE_TIMEOUT = 10.0
+    DATABASE_SLOW_CALL_THRESHOLD = 2.0
+    NETWORK_FAILURE_THRESHOLD = 3
+    NETWORK_RECOVERY_TIMEOUT = 20.0
+    NETWORK_TIMEOUT = 15.0
+    SLOW_CALL_THRESHOLD = 10.0
+    SLOW_CALL_RATE_THRESHOLD = 0.5
+    MIN_CALLS_FOR_EVALUATION = 10
+    RECENT_CALLS_WINDOW = 60.0
+    PERFORMANCE_WINDOW = 300.0
+    QUANTILE_SAMPLE_SIZE = 20
+    MAX_HISTORY_SIZE = 100
+
+
+class VoiceRecognitionConfig:
+    """Voice recognition system configuration."""
+
+    ENERGY_THRESHOLD = 300
+    PAUSE_THRESHOLD = 0.8
+    PHRASE_THRESHOLD = 0.3
+
+
+class CacheConfig:
+    """Cache configuration constants."""
+
+    EMBEDDING_CACHE_MAX_SIZE = 1000
+    EMBEDDING_CACHE_TTL_SECONDS = 3600
+    DATABASE_CACHE_SIZE = 10000
+
+
+class KnowledgeSyncConfig:
+    """Knowledge synchronization configuration."""
+
+    MAX_CONCURRENT_FILES = 4
+    CHUNK_BATCH_SIZE = 50
+
+
+class TimingConstants:
+    """Common timing values used throughout the codebase."""
+
+    YIELD_INTERVAL = 0.001
+    POLL_INTERVAL = 0.01
+    FAST_POLL_INTERVAL = 0.02
+    STREAMING_CHUNK_DELAY = 0.05
+    MICRO_DELAY = 0.1
+    DEBOUNCE_INTERVAL_S = 0.2
+    SHORT_DELAY = 0.5
+    STANDARD_DELAY = 1.0
+    MEDIUM_DELAY = 5.0
+    LONG_DELAY = 10.0
+    SHORT_TIMEOUT = 30
+    STANDARD_TIMEOUT = 60
+    LONG_TIMEOUT = 120
+    VERY_LONG_TIMEOUT = 300
+    SESSION_CLEANUP_INTERVAL = 60
+    HOURLY_INTERVAL = 3600
+    ERROR_RECOVERY_DELAY = 5.0
+    ERROR_RECOVERY_LONG_DELAY = 30.0
+    SERVICE_STARTUP_DELAY = 2.0
+    KB_INIT_DELAY = 3.0
+
+
+def exponential_backoff_delay(attempt: int, base: float = 2.0, cap: float = 60.0) -> float:
+    """Return capped exponential backoff delay in seconds."""
+    return min(base**attempt, cap)
+
+
+class RetryConfig:
+    """Retry configuration constants."""
+
+    MIN_RETRIES = 2
+    DEFAULT_RETRIES = 3
+    MAX_RETRIES = 5
+    BACKOFF_BASE = 2.0
+    BACKOFF_MAX_DELAY = 60.0
+
+
+class BatchConfig:
+    """Batch processing configuration."""
+
+    DEFAULT_CONCURRENCY = 10
+    HIGH_CONCURRENCY = 50
+    MAX_CONCURRENCY = 100
+    SMALL_BATCH = 10
+    MEDIUM_BATCH = 50
+    LARGE_BATCH = 100
+
+
+class LLMDefaults:
+    """Default values for LLM inference operations."""
+
+    MINIMAL_MAX_TOKENS = 10
+    SHORT_MAX_TOKENS = 50
+    COMMAND_MAX_TOKENS = 75
+    DEFAULT_MAX_TOKENS = 100
+    RETRIEVAL_MAX_TOKENS = 150
+    ANALYSIS_MAX_TOKENS = 200
+    CONCISE_MAX_TOKENS = 256
+    STANDARD_MAX_TOKENS = 500
+    CHAT_MAX_TOKENS = 512
+    ENRICHED_MAX_TOKENS = 1000
+    SYNTHESIS_MAX_TOKENS = 1024
+    EXTENDED_MAX_TOKENS = 1500
+    LONG_MAX_TOKENS = 2048
+    VERY_LONG_MAX_TOKENS = 4000
+    KNOWLEDGE_MAX_TOKENS = 2048
+    DEFAULT_TEMPERATURE = 0.7
+    DEFAULT_TOP_P = 0.9
+    DEFAULT_CONCURRENT_WORKERS = 3
+
+
+class ResourceThresholds:
+    """System resource monitoring thresholds."""
+
+    MEMORY_WARNING_THRESHOLD = 0.8
+    MEMORY_CRITICAL_THRESHOLD = 0.9
+    CPU_HIGH_THRESHOLD = 0.9
+    CPU_OPTIMAL_MAX = 0.2
+    GPU_LOW_UTILIZATION = 0.2
+    GPU_RECOMMENDATION_THRESHOLD = 0.3
+    GPU_SATURATED = 0.95
+    GPU_BUSY_THRESHOLD = 80.0
+    GPU_MODERATE_THRESHOLD = 70.0
+    GPU_AVAILABLE_THRESHOLD = 60.0
+    NPU_BUSY_THRESHOLD = 80.0
+    NPU_AVAILABLE_THRESHOLD = 60.0
+    HIGH_CORE_COUNT = 16
+
+
+class AnalyticsConfig:
+    """Code analytics and bug prediction configuration constants."""
+
+    BUG_PREDICTION_TIMEOUT = 120.0
+    DUPLICATE_DETECTION_TIMEOUT = 120.0
+    BUG_PREDICTION_FILE_LIMIT = 0
+    DUPLICATE_DETECTION_FILE_LIMIT = 0
+    DUPLICATE_MIN_SIMILARITY = 0.5
+    SEMANTIC_MIN_SIMILARITY = 0.6
+    TOP_HIGH_RISK_FILES_LIMIT = 10
+    API_ENDPOINT_LIST_LIMIT = 20
+    BUG_PREDICTION_CACHE_TTL = 1800
+    DUPLICATE_DETECTION_CACHE_TTL = 3600
+
+
+class HardwareAcceleratorConfig:
+    """Hardware accelerator configuration constants."""
+
+    NPU_MAX_MODEL_SIZE_MB = 2000
+    NPU_MAX_RESPONSE_TIME_S = 2.0
+    NPU_BASE_TEMPERATURE_C = 45.0
+    NPU_TEMP_UTILIZATION_FACTOR = 0.3
+    NPU_BASE_POWER_W = 2.0
+    NPU_MAX_POWER_W = 10.0
+    NPU_MEMORY_MB = 1024.0
+    NPU_UTILIZATION_PER_MODEL = 25.0
+    HARDWARE_CHECK_INTERVAL_S = 30
+    UNIFIED_EMBEDDING_DIM = 512
+    MINILM_OUTPUT_DIM = 384
+    CLIP_OUTPUT_DIM = 512
+    WAV2VEC_OUTPUT_DIM = 768
+    TEXT_LIGHTWEIGHT_LENGTH = 500
+    TEXT_MODERATE_LENGTH = 2000
+    DOC_LIGHTWEIGHT_COUNT = 100
+    DOC_MODERATE_COUNT = 1000
+    PERFORMANCE_FACTOR_CAP = 2.0
+
+
+class WorkflowConfig:
+    """Workflow scheduler configuration constants."""
+
+    DEFAULT_MAX_CONCURRENT = 3
+    SCHEDULER_CHECK_INTERVAL_S = 10
+    SCHEDULER_ERROR_BACKOFF_S = 30
+    PRIORITY_BASE_MULTIPLIER = 100
+    MAX_OVERDUE_BONUS = 50
+    OVERDUE_BONUS_RATE = 0.1
+    DEPENDENCY_PENALTY = 0.9
+    DEFAULT_ESTIMATED_DURATION_MIN = 30
+    DEFAULT_TIMEOUT_MIN = 120
+    MIN_DURATION_FACTOR = 0.5
+    COMPLEXITY_SIMPLE = 0.8
+    COMPLEXITY_RESEARCH = 1.0
+    COMPLEXITY_INSTALL = 1.1
+    COMPLEXITY_COMPLEX = 1.2
+    COMPLEXITY_SECURITY_SCAN = 1.3
+
+
+class ServiceDiscoveryConfig:
+    """Service discovery and health monitoring configuration."""
+
+    HEALTH_CHECK_INTERVAL_S = 30
+    CIRCUIT_BREAKER_THRESHOLD = 5
+    CIRCUIT_BREAKER_CHECK_MULTIPLIER = 2
+    FRONTEND_TIMEOUT = 10.0
+    NPU_WORKER_TIMEOUT = 15.0
+    REDIS_TIMEOUT = 5.0
+    AI_STACK_TIMEOUT = 20.0
+    BROWSER_SERVICE_TIMEOUT = 10.0
+    BACKEND_TIMEOUT = 5.0
+    OLLAMA_TIMEOUT = 10.0
+    SERVICE_WAIT_INTERVAL_S = 2
+    CORE_SERVICES_WAIT_INTERVAL_S = 5
+    ERROR_RECOVERY_DELAY_S = 5
+    DEFAULT_SERVICE_WAIT_TIMEOUT = 60.0
+    CORE_SERVICES_WAIT_TIMEOUT = 120.0
+
+
+class StringParsingConstants:
+    """String parsing constants for boolean/truthy value detection."""
+
+    BOOL_STRING_VALUES = frozenset({"true", "false"})
+    TRUTHY_STRING_VALUES = frozenset({"true", "1", "yes", "on"})
+    FALSY_STRING_VALUES = frozenset({"false", "0", "no", "off"})
+
+
+class FileWatcherConfig:
+    """File watcher configuration for config file monitoring."""
+
+    CHECK_INTERVAL_S = 1.0
+    ERROR_RETRY_INTERVAL_S = 5.0
+
+
+class QueryDefaults:
+    """Default values for search, query, and pagination operations."""
+
+    DEFAULT_SEARCH_LIMIT: int = 10
+    DEFAULT_TOP_K: int = 10
+    MAX_SEARCH_LIMIT: int = 100
+    EXTENDED_SEARCH_LIMIT: int = 50
+    LARGE_BATCH_LIMIT: int = 100
+    DEFAULT_OFFSET: int = 0
+    DEFAULT_PAGE_SIZE: int = 50
+    MAX_PAGE_SIZE: int = 500
+    RAG_DEFAULT_RESULTS: int = 5
+    RAG_MAX_RESULTS: int = 20
+    KNOWLEDGE_DEFAULT_LIMIT: int = 100
+
+
+class CategoryDefaults:
+    """Default category and type values for classification."""
+
+    GENERAL: str = "general"
+    IMPORTED: str = "imported"
+    UNKNOWN: str = "unknown"
+    SEARCH_MODE_HYBRID: str = "hybrid"
+    SEARCH_MODE_SEMANTIC: str = "semantic"
+    SEARCH_MODE_KEYWORD: str = "keyword"
+    QUERY_TYPE_GENERAL: str = "general"
+    QUERY_TYPE_TECHNICAL: str = "technical"
+    QUERY_TYPE_CODE: str = "code"
+    CONTEXT_TYPE_GENERAL: str = "general"
+    CONTEXT_TYPE_SECURITY: str = "security"
+    CONTEXT_TYPE_RESEARCH: str = "research"
+    ROLE_USER: str = "user"
+    ROLE_ASSISTANT: str = "assistant"
+    ROLE_SYSTEM: str = "system"
+    MODE_DEVELOPMENT: str = "development"
+    MODE_PRODUCTION: str = "production"
+    MODE_TESTING: str = "testing"
+
+
+class WorkStealingConfig:
+    """Work-stealing configuration for distributed agent task reassignment."""
+
+    STALE_TASK_TIMEOUT_SECONDS: int = 300
+    GRACE_PERIOD_SECONDS: int = 300
+    MAX_REASSIGNMENTS: int = 3
+    PROGRESS_TTL_SECONDS: int = 60
+
+
+class ProtocolDefaults:
+    """Default protocol and endpoint values."""
+
+    HTTP: str = "http"
+    HTTPS: str = "https"
+    WS: str = "ws"
+    WSS: str = "wss"
+    TCP: str = "tcp"
+    API_VERSION: str = "1.0"
+
+
 # ============================================================================
 # TTL CONSTANTS
 # ============================================================================
@@ -290,9 +609,13 @@ TTL_1_HOUR = 3_600
 TTL_24_HOURS = 86_400
 TTL_7_DAYS = 86_400 * 7
 TTL_30_DAYS = 86_400 * 30
+TTL_90_DAYS = 86_400 * 90
+TTL_365_DAYS = 86_400 * 365
+TTL_WORKING_MEMORY_DEFAULT = TTL_24_HOURS
 
 TIMEOUT_HTTP_DEFAULT: float = 60.0
 TIMEOUT_HTTP_LONG: float = 120.0
+TIMEOUT_TASK_ANALYSIS: float = 300.0
 
 
 # ============================================================================
