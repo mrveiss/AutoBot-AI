@@ -12,8 +12,10 @@ import threading
 from typing import Any, Dict, List, Optional, Type
 
 from extensions.base import Extension, HookContext
+from autobot_shared.plugin_sdk.extension_manifest import ExtensionManifest
 from extensions.hooks import HookPoint
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.plugin_sdk.unified_registry import get_unified_registry
 
 logger = get_logger(__name__)
 
@@ -77,6 +79,8 @@ class ExtensionManager:
 
         # Sort by priority
         self.extensions.sort(key=lambda e: e.priority)
+
+        get_unified_registry().register(extension.manifest)
 
         logger.info(
             "[Issue #658] Registered extension '%s' (priority=%d)",

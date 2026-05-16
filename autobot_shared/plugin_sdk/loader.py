@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Type
 
 from plugin_sdk.base import BasePlugin, PluginManifest, PluginRegistry, PluginStatus
+from plugin_sdk.unified_registry import get_unified_registry
 
 logger = logging.getLogger(__name__)
 
@@ -123,8 +124,9 @@ class PluginLoader:
             await plugin.initialize()
             plugin.status = PluginStatus.LOADED
 
-            # Register with registry
+            # Register with plugin registry and unified registry
             self.registry.register(plugin)
+            get_unified_registry().register(manifest)
 
             logger.info("Loaded plugin: %s v%s", manifest.name, manifest.version)
             return plugin

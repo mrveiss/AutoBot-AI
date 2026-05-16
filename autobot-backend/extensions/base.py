@@ -11,10 +11,14 @@ can hook into 22 lifecycle points to modify agent behavior.
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.plugin_sdk.extension_manifest import ExtensionManifest
 from extensions.hooks import HookPoint
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
+
+# Re-export so callers that do `from extensions.base import ExtensionManifest` still work.
+__all__ = ["ExtensionManifest", "Extension", "HookContext"]
 
 
 @dataclass
@@ -139,8 +143,19 @@ class Extension:
     """
 
     name: str = "base"
+    version: str = "0.0.0"
+    description: str = ""
     priority: int = 100
     enabled: bool = True
+
+    @property
+    def manifest(self) -> "ExtensionManifest":
+        """Return an ExtensionManifest derived from this extension's class attributes."""
+        return ExtensionManifest(
+            name=self.name,
+            version=self.version,
+            description=self.description,
+        )
 
     async def on_hook(
         self,
