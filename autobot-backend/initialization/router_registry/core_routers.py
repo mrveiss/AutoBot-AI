@@ -12,6 +12,7 @@ and are imported at module level to fail fast if missing.
 # Core router imports - these are required for basic functionality
 from api.adapters import router as adapters_router  # Issue #1403
 from api.admin_event_logs import router as admin_event_logs_router  # Issue #4461
+from api.admin_schedulers import router as admin_schedulers_router  # GH#6594
 from api.agent import router as agent_router
 from api.agent_config import router as agent_config_router
 from api.agent_org import router as agent_org_router  # #1405
@@ -95,6 +96,7 @@ def _get_system_routers() -> list:
     """Get system and settings routers (Issue #560: extracted, #1281: audit, #4461: event-logs)."""
     return [
         (admin_event_logs_router, "", ["admin", "compliance"], "admin_event_logs"),  # Issue #4461
+        (admin_schedulers_router, "", ["admin", "schedulers"], "admin_schedulers"),  # GH#6594
         (audit_router, "", ["audit"], "audit"),
         (auth_router, "/auth", ["auth"], "auth"),
         (service_messages_router, "", ["service-messages"], "service_messages"),
