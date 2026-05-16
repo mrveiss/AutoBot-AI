@@ -95,3 +95,112 @@ Every probe runs under a `_PROBE_TIMEOUT_S = 2.0` second deadline enforced by
 
 Probes **must** be `async def`.  The registry rejects sync probes at
 registration time with a `TypeError` (see Issue #6918).
+
+---
+
+## Probe Data Contract (Issue #6916)
+
+Each probe returns a `ComponentHealth` object which includes an optional `data`
+dict.  The frontend reads specific keys from `data` to render dashboards and
+trigger alerts.
+
+**Critical rule:** the `data` payload of every enriched probe is a
+frontend-backend contract.  Keys must not be renamed, removed, or retyped
+without a coordinated frontend change.  A contract test must be added
+alongside any new `data` payload or change to an existing one (see
+[Testing convention](#testing-convention) below).
+
+---
+
+## Probe contracts
+
+### `probe_batch_jobs`
+
+Source: `api/batch_jobs.py`
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `redis_connected` | `bool` | Whether the Redis ping succeeded |
+| `service` | `str` | Always `"batch_jobs_manager"` — canonical identifier used by the frontend |
+
+All three branches of the probe (client `None`, ping fails, ping succeeds)
+return both keys.  The frontend may safely access
+`probes[name=batch_jobs].data.redis_connected` and
+`probes[name=batch_jobs].data.service` without a `null`-guard.
+
+### `probe_long_running`
+
+Source: `api/long_running_operations.py`
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `active_operations` | `int` | Count of operations with status `RUNNING` |
+| `total_operations` | `int` | Total count of all tracked operations |
+| `redis_connected` | `bool` | Whether the operation manager has a non-`None` Redis client |
+| `background_processor_running` | `bool` | Whether the background processor loop is running |
+
+When the operations framework is not installed (`_OPERATIONS_AVAILABLE =
+False`) all values are `0` / `False` — the keys are still present.  The
+frontend may safely access all four keys without a `null`-guard.
+
+---
+
+## Testing convention
+
+Every probe that exposes a `data` dict **must** have a corresponding data-shape
+test in `tests/test_health_probe_data_contract.py`.
+
+### Checklist for adding a new probe with `data`
+
+1. Add the probe function in the appropriate `api/*.py` module and decorate it
+   with `@register_health_probe("<name>")`.
+2. Document the `data` keys in the table above (this file).
+3. Add at least one `@pytest.mark.asyncio` test in
+   `tests/test_health_probe_data_contract.py` that:
+   - Monkeypatches all external I/O (Redis clients, manager singletons, etc.)
+   - Calls the probe function directly (bypassing the HTTP layer)
+   - Asserts `result.data is not None`
+   - Asserts each documented key is present in `result.data`
+
+### Checklist for modifying an existing probe's `data` keys
+
+1. Update the table in this file.
+2. Update (or add) tests in `tests/test_health_probe_data_contract.py`.
+3. Coordinate the frontend change — search for the old key name in the
+   frontend codebase before merging.
+
+### Example test skeleton
+
+```python
+@pytest.mark.asyncio
+async def test_probe_my_service_data_shape(monkeypatch):
+    async def fake_client(database):
+        class _Stub:
+            async def ping(self): return True
+        return _Stub()
+
+    monkeypatch.setattr(
+        "autobot_shared.redis_client.get_async_redis_client",
+        fake_client,
+    )
+
+    from api.my_service import probe_my_service
+    result = await probe_my_service(None)
+
+    assert result.data is not None
+    assert "my_key" in result.data
+    assert "other_key" in result.data
+```
+
+---
+
+## Related issues
+
+- Issue #6902: enriched probe data introduced for `batch_jobs` and
+  `long_running` so the frontend can read structured fields instead of
+  parsing the plain-text `detail` field.
+- Issue #6916: contract tests added to prevent silent drift between the probe
+  `data` payload and the frontend's expected shape.
+- Issue #6917: `KnownProbes` enum introduced to eliminate hardcoded probe name
+  strings.
+- Issue #6918: registry rejects sync probes at registration time.
