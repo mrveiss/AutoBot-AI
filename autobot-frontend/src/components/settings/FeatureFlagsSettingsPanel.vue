@@ -78,7 +78,7 @@ Issue #4273: Wire orphaned components EnforcementModeSelector, FlagChangeHistory
 import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
-import { useToast } from '@/composables/useToast';
+import { useNotificationBus } from '@/composables/useNotificationBus';
 import featureFlagsApiClient, {
   type EnforcementMode,
   type FeatureFlagsStatus,
@@ -92,7 +92,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 
 const logger = createLogger('FeatureFlagsSettingsPanel');
 const { t } = useI18n();
-const { showToast } = useToast();
+const { showToast } = useNotificationBus();
 
 // State
 const loading = ref(false);

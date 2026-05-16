@@ -212,13 +212,13 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 // @ts-ignore - Component may not have type declarations
 import BaseButton from '@/components/base/BaseButton.vue'
-import { useToast } from '@/composables/useToast'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 import { useCodeEvolutionData } from '@/composables/analytics/useCodeEvolutionData'
 import type { TimelinePoint, TrendData, PatternPoint } from '@/composables/analytics/useCodeEvolutionData'
 
 const { t } = useI18n()
 
-const { showToast } = useToast()
+const { showToast } = useNotificationBus()
 const { fetchTimeline: apiFetchTimeline, fetchTrends: apiFetchTrends, fetchPatterns: apiFetchPatterns, fetchExport: apiFetchExport } = useCodeEvolutionData()
 
 // State

@@ -329,7 +329,7 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import { createLogger } from '@/utils/debugUtils'
-import { useToast } from '@/composables/useToast'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 
 const logger = createLogger('ChatSidebar')
 
@@ -436,7 +436,7 @@ const showShareDialog = ref(false)
 const shareTargetSessionId = ref<string | null>(null)
 
 // Toast for notifications (Issue #547)
-const { showToast } = useToast()
+const { showToast } = useNotificationBus()
 
 // Display settings configuration (UI labels)
 const displaySettingsConfig = computed(() => [

@@ -240,12 +240,12 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
-import { useToast } from '@/composables/useToast'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 import apiClient from '@/utils/ApiClient'
 
 const logger = createLogger('SettingsView')
 const { t } = useI18n()
-const { showToast } = useToast()
+const { showToast } = useNotificationBus()
 
 logger.debug('Settings view initialized')
 

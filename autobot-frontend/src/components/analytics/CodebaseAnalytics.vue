@@ -446,7 +446,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
-import { useToast } from '@/composables/useToast'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 import { getCssVar } from '@/composables/useCssVars'
 import { useCodebaseExport, type SectionType } from '@/composables/analytics/useCodebaseExport'
 import type { ScanDefinition } from '@/composables/useAnalyticsScanRunner'
@@ -500,7 +500,7 @@ const isEvolutionTabActive = computed(() => route.path.endsWith('/evolution'))
 const isCodeGenerationTabActive = computed(() => route.path.includes('/code-generation'))
 
 // Toast notifications
-const { showToast } = useToast()
+const { showToast } = useNotificationBus()
 
 // Notification helper
 const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {

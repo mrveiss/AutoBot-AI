@@ -176,12 +176,12 @@
 <script setup lang="ts">
 import { ref, computed, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useToast } from '@/composables/useToast';
+import { useNotificationBus } from '@/composables/useNotificationBus';
 import { useThumbnailWorker } from '@/composables/useThumbnailWorker';
 import type { GalleryItem } from '@/utils/VisionMultimodalApiClient';
 
 const { t } = useI18n();
-const { showToast } = useToast();
+const { showToast } = useNotificationBus();
 const { revokeBlobUrl } = useThumbnailWorker();
 
 // Props

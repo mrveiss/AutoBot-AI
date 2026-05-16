@@ -194,7 +194,7 @@
 import { ref, computed, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
-import { useToast } from '@/composables/useToast';
+import { useNotificationBus } from '@/composables/useNotificationBus';
 import { useThumbnailWorker } from '@/composables/useThumbnailWorker';
 import {
   visionMultimodalApiClient,
@@ -209,7 +209,7 @@ interface FrameResult extends MultiModalResponse {
 
 const { t } = useI18n();
 const logger = createLogger('VideoProcessor');
-const { showToast } = useToast();
+const { showToast } = useNotificationBus();
 const { generateThumbnail, isSupported: isWorkerSupported } = useThumbnailWorker();
 
 // Emits

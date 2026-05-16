@@ -294,7 +294,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useToast } from '@/composables/useToast'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 import { useExpansion } from '@/composables/useExpansion'
 import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
@@ -362,7 +362,7 @@ interface Summary {
 }
 
 // State
-const { showToast } = useToast()
+const { showToast } = useNotificationBus()
 const installing = ref(false)
 const checking = ref(false)
 const hookStatus = ref<HookStatus>({ installed: false })
