@@ -21,7 +21,6 @@ import asyncio
 import difflib
 import hashlib
 import json
-import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -29,8 +28,9 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from constants.threshold_constants import TimingConstants
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TodoOptimizationStrategy(Enum):

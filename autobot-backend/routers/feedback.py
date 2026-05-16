@@ -9,11 +9,12 @@ Endpoints for completion feedback tracking and model improvement.
 
 import logging
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["feedback"])
 

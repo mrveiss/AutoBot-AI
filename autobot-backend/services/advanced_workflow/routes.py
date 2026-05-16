@@ -7,7 +7,6 @@ Advanced Workflow API Routes
 FastAPI router endpoints for advanced workflow operations.
 """
 
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -16,8 +15,9 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 from .coordinator import WorkflowCoordinator
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["advanced_workflow"])
 

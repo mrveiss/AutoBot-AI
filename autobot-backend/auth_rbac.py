@@ -15,6 +15,7 @@ Issue #6511: Permission/Role/ROLE_PERMISSIONS moved to autobot_shared.auth.permi
 
 Usage:
     from auth_rbac import require_permission, require_role, Permission
+from autobot_shared.logging_manager import get_logger
 
     @router.get("/admin/users")
     async def list_users(
@@ -46,7 +47,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _get_security_layer = lazy_singleton(SecurityLayer)
 

@@ -21,6 +21,7 @@ import asyncio
 import logging
 import re
 from pathlib import Path as PathLib
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -41,7 +42,7 @@ from knowledge.schemas.population import (
 from knowledge_factory import get_or_create_knowledge_base
 from utils.template_loader import knowledge_data_exists, load_knowledge_data
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex for ANSI escape sequence removal
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")

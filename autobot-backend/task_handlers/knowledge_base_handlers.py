@@ -14,8 +14,9 @@ from autobot_shared.models.task_result import task_success
 from models.task_context import TaskExecutionContext
 
 from .base import TaskHandler
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class KBAddFileHandler(TaskHandler):

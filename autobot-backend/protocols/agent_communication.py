@@ -20,6 +20,7 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Awaitable, Callable, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -58,7 +59,7 @@ from autobot_shared.async_compat import run_or_schedule
 # noqa: E402
 from autobot_shared.redis_client import get_redis_client  # noqa: E402
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MessageType(Enum):

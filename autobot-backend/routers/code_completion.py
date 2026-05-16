@@ -9,6 +9,7 @@ Endpoints for pattern extraction and code completion.
 
 import logging
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -21,7 +22,7 @@ from models.code_pattern import CodePattern
 from services.context_analyzer import ContextAnalyzer
 from services.pattern_extractor import PatternExtractor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["code-completion"])
 

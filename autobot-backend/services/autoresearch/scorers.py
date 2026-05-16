@@ -12,7 +12,6 @@ human review for top candidates, val_bpb for AutoResearch.
 from __future__ import annotations
 
 import json
-import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -24,8 +23,9 @@ if TYPE_CHECKING:
     from services.llm_service import LLMService
 
 from constants.ttl_constants import TTL_24_HOURS
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Validation pattern for Redis key components — alphanumeric, hyphens, underscores
 _KEY_COMPONENT_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")

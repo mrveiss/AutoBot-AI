@@ -32,6 +32,7 @@ Related: Issue #1974
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import hashlib
 import io
@@ -45,7 +46,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 if TYPE_CHECKING:
     pass  # Playwright Page — only needed for type annotations, imported lazily
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Module-level compiled patterns (avoid re-compilation on every call)

@@ -12,6 +12,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -30,7 +31,7 @@ from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     tags=["elevation"],

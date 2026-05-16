@@ -11,7 +11,6 @@ window) with automatic Retry-After and X-RateLimit-Reset handling.
 """
 
 import asyncio
-import logging
 import time
 from typing import Any, Dict, List, Optional
 
@@ -31,8 +30,9 @@ from integrations.rate_limiter import (
     IntegrationRateLimiter,
 )
 from integrations.rate_limiter import integration_rate_limiter as _shared_rate_limiter
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # In-memory limiter retained solely for apply_response_headers() (Retry-After /
 # X-RateLimit-* header parsing).  Distributed acquire() uses _shared_rate_limiter

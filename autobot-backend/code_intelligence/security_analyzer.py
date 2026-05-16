@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, FrozenSet, List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
 # Issue #554: Import analytics infrastructure for semantic analysis
 try:
@@ -46,7 +47,7 @@ try:
 except ImportError:
     HAS_SHARED_CACHE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for placeholder patterns (Issue #326)
 PLACEHOLDER_PATTERNS = {"example", "placeholder", "your_", "xxx", "changeme", "todo"}

@@ -12,6 +12,7 @@ Issue #4681: Added GET /entity/{id}/history for evolutionary lineage tracking.
 """
 
 import logging
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -37,7 +38,7 @@ from knowledge_factory import get_or_create_knowledge_base
 from services.rag_config import get_rag_config, update_rag_config
 from services.rag_service import RAGService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

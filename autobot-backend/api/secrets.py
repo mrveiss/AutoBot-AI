@@ -25,6 +25,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from time import time
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -48,7 +49,7 @@ from middleware.proxy_utils import get_client_ip
 from services.audit.audit_log import AuditAction, audit_record
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

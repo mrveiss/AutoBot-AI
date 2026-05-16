@@ -14,10 +14,11 @@ import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_client import get_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PatternExtractor:

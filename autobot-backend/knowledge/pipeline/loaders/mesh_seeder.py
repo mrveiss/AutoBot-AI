@@ -7,7 +7,6 @@ MeshSeeder — creates structural and semantic edges in the mesh graph (#1994, #
 Part of Neural Mesh RAG Phase 2, Task 2.4.
 """
 
-import logging
 from itertools import combinations
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -15,8 +14,9 @@ import numpy as np
 
 from knowledge.pipeline.base import BaseLoader, PipelineContext
 from knowledge.pipeline.registry import TaskRegistry
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _EdgeDict = Dict[str, Any]
 

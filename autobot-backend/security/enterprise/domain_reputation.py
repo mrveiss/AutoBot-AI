@@ -7,7 +7,6 @@ Integrates with VirusTotal, URLVoid, and threat intelligence feeds
 """
 
 import asyncio
-import logging
 import time
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
@@ -18,8 +17,9 @@ from cachetools import TTLCache
 
 from autobot_shared.http_client import get_http_client
 from constants.path_constants import PATH
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DomainReputationService:

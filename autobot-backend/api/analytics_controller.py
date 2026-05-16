@@ -15,7 +15,6 @@ Related Issues: #185 (Split), #212 (Analytics split)
 
 import asyncio
 import json
-import logging
 import re
 import time
 from collections import defaultdict
@@ -35,8 +34,9 @@ from utils.system_metrics import get_metrics_collector
 
 # Import existing monitoring infrastructure
 from .monitoring_hardware import hardware_monitor
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Lock for thread-safe analytics state access
 _analytics_state_lock = asyncio.Lock()

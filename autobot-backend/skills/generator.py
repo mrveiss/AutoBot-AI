@@ -11,10 +11,11 @@ Structured output ensures valid manifests every time.
 import logging
 import re
 from typing import Any, Dict
+from autobot_shared.logging_manager import get_logger
 
 import yaml
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SYSTEM_PROMPT = """\
 You are an expert at building AutoBot skill packages.

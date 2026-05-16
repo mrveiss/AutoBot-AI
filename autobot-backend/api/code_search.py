@@ -9,7 +9,6 @@ Includes advanced codebase analytics for usage statistics and reusability detect
 """
 
 import asyncio
-import logging
 import re
 from collections import defaultdict
 from typing import List, Optional
@@ -32,9 +31,10 @@ from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.logging_manager import get_logger
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for index status validation (Issue #326)
 SUCCESSFUL_INDEX_STATUSES = {"success", "already_indexed"}

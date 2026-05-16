@@ -34,6 +34,7 @@ Refactoring History:
 import logging
 import os
 from typing import List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
 # Issue #394: Import refactored modules for delegation
 from code_intelligence.doc_generation.docstring_parser import DocstringParser
@@ -61,7 +62,7 @@ from code_intelligence.doc_generation.types import (
     ReturnDoc,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Re-export for backward compatibility
 __all__ = [

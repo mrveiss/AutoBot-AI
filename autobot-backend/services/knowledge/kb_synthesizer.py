@@ -10,6 +10,7 @@ The summaries are retrieved by RAGService as optional context enrichment.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import hashlib
@@ -20,7 +21,7 @@ from typing import TYPE_CHECKING, Any, List, Optional
 if TYPE_CHECKING:
     from services.knowledge.synthesis_schema_loader import CollectionConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _KB_SYNTHESIS_COLLECTION = "kb_synthesis"
 

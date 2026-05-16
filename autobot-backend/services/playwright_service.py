@@ -7,7 +7,6 @@ Integrates Docker-based Playwright into the main AutoBot application
 """
 
 import asyncio
-import logging
 import os
 from autobot_shared.ssot_config import config
 from contextlib import asynccontextmanager
@@ -19,8 +18,9 @@ from autobot_shared.http_client import get_http_client
 from constants.network_constants import NetworkConstants, ServiceURLs
 from exceptions import ServiceUnavailableError
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PlaywrightService:

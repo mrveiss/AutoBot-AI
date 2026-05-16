@@ -9,14 +9,14 @@ This judge assesses agent outputs to improve system reliability and user experie
 """
 
 import json
-import logging
 from typing import Any, Dict, List, Optional
 
 from constants import AgentThresholds
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AgentResponseJudge(BaseLLMJudge):

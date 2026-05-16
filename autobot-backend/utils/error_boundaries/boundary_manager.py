@@ -16,6 +16,7 @@ import traceback
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import RetryConfig
@@ -58,7 +59,7 @@ from .types import (
     RecoveryStrategy,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ErrorBoundaryManager:

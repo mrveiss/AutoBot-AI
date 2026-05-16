@@ -19,7 +19,6 @@ Features:
 - Session flow tracking
 """
 
-import logging
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -28,8 +27,9 @@ from enum import Enum
 from pathlib import Path
 from statistics import mean, stdev
 from typing import Any, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ============================================================================

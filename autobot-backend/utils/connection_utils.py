@@ -7,7 +7,6 @@ Eliminates duplication across system.py, llm.py, and redis.py
 """
 
 import asyncio
-import logging
 import os
 import time
 from datetime import datetime, timezone
@@ -22,8 +21,9 @@ from constants.api_constants import PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS
 from constants.model_constants import ModelConstants
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Cache for health status with 30-second TTL
 _health_cache = {"data": None, "timestamp": 0, "ttl": 30}

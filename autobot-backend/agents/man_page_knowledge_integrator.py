@@ -8,7 +8,6 @@ Scrapes, parses, and integrates Linux man pages into machine-aware knowledge sys
 
 import asyncio
 import json
-import logging
 import re
 import time
 from dataclasses import dataclass
@@ -21,8 +20,9 @@ import yaml
 from autobot_shared.time_utils import utc_timestamp
 from intelligence.os_detector import get_os_detector
 from utils.command_utils import execute_command
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for common command line starters
 _COMMON_COMMAND_STARTERS: FrozenSet[str] = frozenset({"ls", "cat", "grep", "find", "awk", "sed"})

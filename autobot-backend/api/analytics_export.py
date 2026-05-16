@@ -18,7 +18,6 @@ import asyncio
 import csv
 import io
 import json
-import logging
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Query
@@ -31,8 +30,9 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.agent_analytics import get_agent_analytics
 from services.llm_cost_tracker import get_cost_tracker
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(prefix="/export", tags=["analytics", "export"])
 
 

@@ -18,6 +18,7 @@ Falls back to human-in-the-loop system (captcha_human_loop.py)
 
 Usage:
     from services.captcha_solver import CaptchaSolver
+from autobot_shared.logging_manager import get_logger
 
     solver = CaptchaSolver()
     result = await solver.attempt_solve(page, captcha_type="text")
@@ -45,7 +46,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 if TYPE_CHECKING:
     from PIL import Image
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozensets for CAPTCHA type detection
 _MATH_OPERATORS = frozenset({"+", "-", "=", "\u00d7", "\u00f7", "*"})

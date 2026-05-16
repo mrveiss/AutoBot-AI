@@ -19,7 +19,6 @@ import ast
 import difflib
 import hashlib
 import json
-import logging
 import re
 import time
 from dataclasses import dataclass, field
@@ -52,12 +51,13 @@ from autobot_shared.singleton_factory import lazy_singleton
 
 # LLM Service for real code generation
 from services.llm_service import get_llm_service
+from autobot_shared.logging_manager import get_logger
 
 LLM_INTERFACE_AVAILABLE = True
 
 # Issue #552: Prefix set in router_registry to match frontend calls at /api/code-generation/*
 router = APIRouter(tags=["code-generation", "analytics"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for code analysis and extraction
 _FUNC_DEF_RE = re.compile(r"def\s+(\w+)")  # Extract function name

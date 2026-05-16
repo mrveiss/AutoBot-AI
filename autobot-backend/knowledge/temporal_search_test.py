@@ -7,7 +7,6 @@ Unit tests for TemporalSearchService with mocked Redis.
 Issue #1075: Test coverage for temporal search and causal chain traversal.
 """
 
-import logging
 from datetime import datetime
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -15,8 +14,9 @@ from uuid import uuid4
 import pytest
 
 from knowledge.temporal_search import TemporalSearchService
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # --- Fixtures ---

@@ -9,7 +9,6 @@ and agent runtime state inspection.
 """
 
 import asyncio
-import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -39,8 +38,9 @@ from models.heartbeat import (
     WakeupTrigger,
 )
 from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_state
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 _scheduler: Optional[HeartbeatScheduler] = None

@@ -9,6 +9,7 @@ and approval workflows.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import ast
 import asyncio
@@ -36,7 +37,7 @@ from chat_workflow.session_handler import (
     _emit_approval_required,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #4482: Default retry count for schema self-correction loop.
 _DEFAULT_SCHEMA_RETRIES = 3

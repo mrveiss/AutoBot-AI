@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
 
@@ -44,7 +45,7 @@ except ImportError as _e:
     _CONFIG_AVAILABLE = False
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Directories to skip during analysis
 _SKIP_DIRECTORIES = (

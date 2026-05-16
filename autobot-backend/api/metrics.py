@@ -6,7 +6,6 @@ Metrics API endpoints for workflow performance monitoring
 """
 
 import asyncio
-import logging
 from datetime import timedelta
 
 from fastapi import APIRouter, HTTPException, Query
@@ -28,8 +27,9 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

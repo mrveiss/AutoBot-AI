@@ -12,6 +12,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -22,7 +23,7 @@ from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
 from models.ml_model import MLModel
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["ml-models"])
 

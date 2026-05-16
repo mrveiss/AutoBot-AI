@@ -13,7 +13,6 @@ cold-starting across heartbeat runs.
 """
 
 import asyncio
-import logging
 import uuid
 from typing import Any, Dict, Optional, Tuple
 
@@ -33,8 +32,9 @@ from models.heartbeat import (
     WakeupTrigger,
 )
 from services.run_jwt import get_run_jwt_scopes, mint_run_jwt, revoke_run_jwt_async
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _MIN_INTERVAL_SECONDS = 10
 _DEFAULT_MAX_DURATION_SECONDS = 600

@@ -12,6 +12,7 @@ Issue #1310: Fleet/system VMs removed — they belong in SLM only.
 
 import logging
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, Query
 
@@ -19,7 +20,7 @@ from api.schemas_system import InfrastructureHostsResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["infrastructure"])
 
 # Issue #1310: Fleet hosts removed from main UI.

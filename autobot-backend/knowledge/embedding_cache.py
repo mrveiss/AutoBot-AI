@@ -10,15 +10,15 @@ Issue #65 P0 Optimization - 60-80% reduction in embedding computation for repeat
 
 import asyncio
 import hashlib
-import logging
 import time
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_1_HOUR
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EmbeddingCache:

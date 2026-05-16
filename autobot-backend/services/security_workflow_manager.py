@@ -15,7 +15,6 @@ Issue: #260
 
 import asyncio
 import json
-import logging
 import uuid
 from autobot_shared.ssot_config import config
 from dataclasses import dataclass, field
@@ -26,8 +25,9 @@ from redis.exceptions import RedisError
 
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Lazy import for memory integration to avoid circular imports (Issue #662: thread-safe)
 _memory_integration = None

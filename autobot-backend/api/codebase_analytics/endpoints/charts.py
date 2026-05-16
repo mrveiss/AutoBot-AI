@@ -7,7 +7,6 @@ Chart data endpoints for analytics visualization
 
 import asyncio
 import json
-import logging
 from typing import Dict, Optional
 
 from fastapi import APIRouter
@@ -17,8 +16,9 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from utils.chromadb_client import get_all_paginated
 
 from ..storage import get_code_collection, get_redis_connection
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

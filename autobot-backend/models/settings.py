@@ -8,13 +8,13 @@ This module provides strongly-typed configuration management using Pydantic Sett
 replacing the manual config handling with validated, type-safe configuration models.
 """
 
-import logging
 import os
 from typing import Dict, List, Optional
 
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 import yaml
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict

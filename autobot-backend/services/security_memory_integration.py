@@ -13,11 +13,11 @@ Integrates security assessment findings with Memory MCP for:
 Issue: #260
 """
 
-import logging
 from dataclasses import dataclass
 from typing import Any, FrozenSet, Optional
 
 from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_shared.logging_manager import get_logger
 
 # Issue #380: Module-level frozenset for security-related tags
 _SECURITY_TAGS: FrozenSet[str] = frozenset({"security", "vulnerability", "host", "service"})
@@ -63,7 +63,7 @@ class ServiceRequest:
     metadata: Optional[dict[str, Any]] = None
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for security relation types (Issue #326)
 DETAIL_RELATION_TYPES = {"contains", "runs", "has_vulnerability", "exploited_by"}

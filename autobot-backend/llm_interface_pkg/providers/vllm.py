@@ -12,6 +12,7 @@ import asyncio
 import logging
 import time
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 try:
     from vllm import LLM, SamplingParams
@@ -24,7 +25,7 @@ except ImportError:
 
 from .chat_template_loader import DEFAULT_TEMPLATE, render_chat_template
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class VLLMProvider:

@@ -14,10 +14,10 @@ prompt, and a recommended LLM tier.
 
 from __future__ import annotations
 
-import logging
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Preset catalogue — 7 entries covering the most common first-run scenarios

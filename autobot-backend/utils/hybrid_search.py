@@ -6,13 +6,13 @@ Hybrid Search Implementation
 Combines semantic search with keyword-based search for improved relevance and coverage.
 """
 
-import logging
 import math
 import re
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
 from config.manager import get_config_manager
+from autobot_shared.logging_manager import get_logger
 
 config = get_config_manager()
 
@@ -154,7 +154,7 @@ class HybridSearchEngine:
 
         Issue #620: Refactored to use _load_scoring_config and _load_search_config helpers.
         """
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self.knowledge_base = knowledge_base
 
         # Load configuration using helpers (Issue #620)

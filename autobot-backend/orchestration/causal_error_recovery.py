@@ -16,13 +16,14 @@ import logging
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_30_DAYS
 from orchestration.causal_error_analyzer import CausalErrorAnalysis
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key patterns for failure patterns
 FAILURE_PATTERN_PREFIX = "failure:pattern:"

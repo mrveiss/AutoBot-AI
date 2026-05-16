@@ -10,7 +10,6 @@ and the conditional indexing logic in save_experiment.
 
 from __future__ import annotations
 
-import logging
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -23,8 +22,9 @@ from services.autoresearch.models import (
     HyperParams,
 )
 from services.autoresearch.store import ExperimentStore
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

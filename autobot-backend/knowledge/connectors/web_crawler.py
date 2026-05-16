@@ -15,6 +15,7 @@ from autobot_shared.ssot_config import config
 from datetime import datetime
 from typing import List, Optional
 from urllib.parse import urlparse
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.time_utils import now_utc
 from knowledge.connectors.base import AbstractConnector
@@ -30,7 +31,7 @@ from web_fetch import ERR_CONNECTION, FetchResult, Frontier, RenderMode, RobotsC
 from web_fetch.extractors import extract_markdown
 from web_fetch.frontier import extract_links
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _url_to_source_id(url: str) -> str:

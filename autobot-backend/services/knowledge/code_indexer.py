@@ -21,10 +21,11 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
+from autobot_shared.logging_manager import get_logger
 
 from constants.path_constants import PATH
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Process-level locks keyed by cache file path.  Two concurrent index_directory()
 # calls that share the same cache file (same CodeIndexer instance or different

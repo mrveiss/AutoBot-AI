@@ -16,6 +16,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -48,7 +49,7 @@ from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Allowlist pattern for git commit range arguments (Issue #1733).
 # Allows: HEAD, HEAD~N, commit hashes, branch names, .. and ... range operators.

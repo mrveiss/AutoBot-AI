@@ -13,6 +13,7 @@ Dispatches workflow event notifications over four channels:
 Usage::
 
     from services.notification_service import (
+from autobot_shared.logging_manager import get_logger
         NotificationService,
         NotificationChannel,
         NotificationEvent,
@@ -46,7 +47,7 @@ import aiohttp
 from autobot_shared.redis_client import get_redis_client
 from constants.ttl_constants import TTL_7_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Enums

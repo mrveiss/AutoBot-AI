@@ -8,15 +8,15 @@ Issue #381: Extracted from computer_vision_system.py god class refactoring.
 Contains classifiers for UI elements, template matching, and context analysis.
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 import numpy as np
 
 from .collections import UIElementCollection
 from .types import ElementType, UIElement
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ElementClassifier:

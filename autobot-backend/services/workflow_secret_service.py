@@ -11,14 +11,14 @@ encryption logic.
 Issue #2153 — Secret management for workflow credentials.
 """
 
-import logging
 import re
 from typing import Dict, FrozenSet, List, Optional
 
 from autobot_shared.singleton_factory import lazy_singleton
 from services.secrets_service import SecretsService, get_secrets_service
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Pattern: ${secrets.SOME_KEY_NAME}
 _SECRET_REF_RE = re.compile(r"\$\{secrets\.([A-Za-z0-9_\-\.]+)\}")

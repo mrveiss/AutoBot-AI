@@ -18,12 +18,13 @@ structurally impossible to get wrong.
 import inspect
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
+from autobot_shared.logging_manager import get_logger
 
 import pytest
 
 from tests.fixtures import make_async_redis
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Patch paths

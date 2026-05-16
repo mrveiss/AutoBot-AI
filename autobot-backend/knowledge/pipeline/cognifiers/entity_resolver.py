@@ -9,15 +9,15 @@ Phase 3 — Entity Resolution: Deduplicate entities across documents (e.g., "Aut
 "AutoBot AI" = "the system") and build entity synonym map for improved recall.
 """
 
-import logging
 from difflib import SequenceMatcher
 from typing import Dict, Iterable, List, Optional, Set
 
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.registry import TaskRegistry
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Synonym mappings for common entity variations (Issue #3395)
 # Maps canonical forms to known synonyms and variations

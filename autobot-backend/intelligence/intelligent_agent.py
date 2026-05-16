@@ -9,7 +9,6 @@ to OS-aware command execution with real-time streaming and intelligent commentar
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Dict, FrozenSet, List, Optional
@@ -49,9 +48,10 @@ from reasoning.causal_reasoning import CAUSAL_REASONING_SNIPPET
 
 # Import existing AutoBot components
 from utils.command_validator import CommandValidator
+from autobot_shared.logging_manager import get_logger
 from worker_node import WorkerNode
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

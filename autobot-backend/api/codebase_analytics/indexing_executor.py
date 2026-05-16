@@ -12,11 +12,11 @@ the default executor.  With 175k+ files, the default pool can be exhausted.
 """
 
 import asyncio
-import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Issue #1341: Subprocess timeout and watchdog configuration

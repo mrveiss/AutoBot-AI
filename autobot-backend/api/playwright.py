@@ -9,6 +9,7 @@ Provides native API access to containerized Playwright functionality
 import base64
 import logging
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -47,7 +48,7 @@ from services.playwright_service import (
 )
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Browser VM connection

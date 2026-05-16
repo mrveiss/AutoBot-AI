@@ -11,6 +11,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from autobot_shared.logging_manager import get_logger
 
 # Add project root to Python path
 project_root = Path(__file__).parent
@@ -37,7 +38,7 @@ from utils.hardware_metrics import (
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Phase9MonitoringSystemTest:

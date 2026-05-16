@@ -10,7 +10,6 @@ Configures all middleware for FastAPI application:
 - Service authentication
 """
 
-import logging
 from typing import List, Optional
 
 from fastapi import FastAPI
@@ -22,8 +21,9 @@ from config.manager import get_config_manager
 from constants.network_constants import (  # noqa: F401 - used in docstring example
     NetworkConstants,
 )
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def configure_cors(app: FastAPI, allow_origins: Optional[List[str]] = None):

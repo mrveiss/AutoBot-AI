@@ -9,6 +9,7 @@ Mount point: /api/analytics/codebase (via router.py)
 """
 
 import logging
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -24,7 +25,7 @@ from ..scanner import (
     indexing_tasks,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

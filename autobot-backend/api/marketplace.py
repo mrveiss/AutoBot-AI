@@ -13,6 +13,7 @@ import json
 import logging
 from enum import Enum
 from typing import Any, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -54,7 +55,7 @@ class CatalogSort(str, Enum):
     NEWEST = "newest"
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

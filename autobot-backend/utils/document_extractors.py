@@ -29,7 +29,6 @@ Usage:
 
 import asyncio
 import json
-import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
@@ -37,8 +36,9 @@ import aiofiles
 import numpy as np
 from docx import Document as DocxDocument
 from pypdf import PdfReader
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Module-level constants for O(1) lookups (Issue #326)
 DOCX_EXTENSIONS = {".docx", ".doc"}

@@ -9,6 +9,7 @@ Uses Google's Gemma 2B/3 models for ultra-fast classification tasks
 import json
 import logging
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
@@ -27,7 +28,7 @@ from workflow_classifier import WorkflowClassifier
 from .base_agent import AgentRequest
 from .standardized_agent import StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Using ClassificationResult from classification_agent instead of custom result type

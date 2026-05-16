@@ -13,8 +13,10 @@ Public API:
     _recommend_tier(ram_gb, cpu_cores) -> str  — pure tier recommender
 """
 
-from autobot_shared.ssot_config import config
 from __future__ import annotations
+
+from autobot_shared.ssot_config import config
+from autobot_shared.logging_manager import get_logger
 
 import logging
 import os
@@ -22,7 +24,7 @@ from typing import Any
 
 import psutil
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # LLM tier constants
 TIER_POWERFUL = "powerful"

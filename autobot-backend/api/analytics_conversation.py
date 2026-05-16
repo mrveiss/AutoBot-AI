@@ -13,6 +13,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -34,7 +35,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import parse_utc_iso
 from constants.path_constants import PATH
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["conversation-flow", "analytics"])
 

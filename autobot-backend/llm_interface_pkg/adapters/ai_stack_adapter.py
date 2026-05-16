@@ -10,6 +10,7 @@ Issue #1403: Routes LLM requests through AI Stack VM (.24).
 import logging
 import time
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from ..models import LLMRequest, LLMResponse
 from .base import (
@@ -20,7 +21,7 @@ from .base import (
     EnvironmentTestResult,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AIStackAdapter(AdapterBase):

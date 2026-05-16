@@ -8,15 +8,15 @@ Issue #2511: get/set, hash, list, sorted set, stream, scan, type, ttl, delete.
 All handlers use autobot_shared.redis_client — no direct redis.Redis().
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value as _decode
 from constants.ttl_constants import TTL_24_HOURS
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Maximum keys returned by scan to prevent unbounded responses
 _SCAN_MAX_KEYS = 100

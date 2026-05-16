@@ -7,7 +7,6 @@
 
 """Centralized manager for all media processing pipelines."""
 
-import logging
 from typing import Dict, List, Optional
 
 from media.audio.pipeline import AudioPipeline
@@ -17,8 +16,9 @@ from media.document.pipeline import DocumentPipeline
 from media.image.pipeline import ImagePipeline
 from media.link.pipeline import LinkPipeline
 from media.video.pipeline import VideoPipeline
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MediaPipelineManager:

@@ -10,6 +10,7 @@ Lightweight model updates based on feedback without full retraining.
 import logging
 from datetime import timedelta
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -19,7 +20,7 @@ from autobot_shared.time_utils import now_utc, utc_timestamp
 from models.completion_feedback import CompletionFeedback
 from training.completion_trainer import CompletionTrainer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #3016: lazy module-level import for torch
 _torch = None

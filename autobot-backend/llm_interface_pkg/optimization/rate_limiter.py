@@ -14,7 +14,6 @@ core sliding-window logic (Issue #4460).
 """
 
 import asyncio
-import logging
 import random
 import time
 from dataclasses import dataclass
@@ -22,8 +21,9 @@ from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, Optional, TypeVar
 
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 

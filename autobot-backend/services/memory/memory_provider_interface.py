@@ -10,11 +10,11 @@ Providers handle data storage, retrieval, and semantic search operations.
 Issue #4344: Provider-based memory architecture with external provider support
 """
 
-import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MemoryProvider(ABC):

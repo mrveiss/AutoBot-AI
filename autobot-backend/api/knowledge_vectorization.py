@@ -6,7 +6,6 @@
 import asyncio
 import hashlib
 import json
-import logging
 import time
 import uuid
 from collections import defaultdict
@@ -45,9 +44,10 @@ from knowledge.schemas.vectorization import (
 )
 from knowledge_factory import get_or_create_knowledge_base
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
 # Set up logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["knowledge_vectorization"])
 

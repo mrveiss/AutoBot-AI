@@ -15,7 +15,6 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
 import json
-import logging
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -29,8 +28,9 @@ from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.status_enums import TaskStatus
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AgentType(str, Enum):

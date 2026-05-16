@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import time
+from autobot_shared.logging_manager import get_logger
 
 # Test the workflow automation system
 from unittest.mock import AsyncMock
@@ -28,7 +29,7 @@ except ImportError:
     COMPONENTS_AVAILABLE = False
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SessionTakeoverTestSuite:

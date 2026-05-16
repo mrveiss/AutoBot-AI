@@ -22,8 +22,9 @@ import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #554: Flag to enable semantic analysis infrastructure
 SEMANTIC_ANALYSIS_AVAILABLE = False

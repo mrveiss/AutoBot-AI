@@ -9,7 +9,6 @@ Issue #378: Added threading locks for file operations to prevent race conditions
 """
 
 import json
-import logging
 import threading
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -22,8 +21,9 @@ import yaml
 
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for policy versioning and data classification (Issue #326)
 MAJOR_VERSION_UPDATE_KEYS = {"rules", "enforcement_mode"}

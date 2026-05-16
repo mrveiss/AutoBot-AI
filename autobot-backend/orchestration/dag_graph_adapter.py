@@ -34,6 +34,7 @@ state and converts it back to the legacy execution_context dict shape.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import logging
 from typing import Any, Dict, Optional, Set
@@ -56,7 +57,7 @@ from .graph_runner import (
     StepEventEmitter,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Node wrappers

@@ -11,11 +11,12 @@ per-user skill preferences (via Redis), and skill execution routing.
 import logging
 import time
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_management.cache_wrapper import RedisCache
 from skills.registry import SkillRegistry, get_skill_registry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 REDIS_SKILL_PREFIX = "skills:config:"
 REDIS_SKILL_ENABLED_PREFIX = "skills:enabled:"

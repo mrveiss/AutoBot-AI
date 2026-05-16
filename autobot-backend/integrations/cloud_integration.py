@@ -14,6 +14,7 @@ import logging
 import time
 from typing import Any, Dict, List
 from urllib.parse import quote
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
@@ -26,7 +27,7 @@ from integrations.base import (
     IntegrationStatus,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AWSIntegration(BaseIntegration):

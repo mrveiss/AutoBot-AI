@@ -13,6 +13,7 @@ import json
 import logging
 import time
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from constants.threshold_constants import LLMDefaults
 
@@ -32,7 +33,7 @@ from .types import (
     AgentType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AgentRouter:

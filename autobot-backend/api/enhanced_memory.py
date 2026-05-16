@@ -12,6 +12,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -44,7 +45,7 @@ from enhanced_memory_manager_async import (
 from markdown_reference_system import MarkdownReferenceSystem
 from task_execution_tracker import get_task_tracker
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["enhanced_memory"])
 

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from api_consistency_analyzer import APIConsistencyAnalyzer
 from architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
@@ -23,7 +24,7 @@ from testing_coverage_analyzer import TestingCoverageAnalyzer
 from autobot_shared.async_compat import run_or_schedule
 from constants.ttl_constants import TTL_30_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

@@ -36,10 +36,11 @@ import asyncio
 import json
 import logging
 from typing import Any, Optional
+from autobot_shared.logging_manager import get_logger
 
 from skills.skill_promotion_publisher import CHANNEL_SKILL_PROMOTED
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BlockedPlanResumer:

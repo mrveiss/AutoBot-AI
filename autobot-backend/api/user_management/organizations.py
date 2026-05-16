@@ -11,6 +11,7 @@ Used in multi_company and provider deployment modes.
 import logging
 import uuid
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -36,7 +37,7 @@ from user_management.services.organization_service import (
 )
 
 router = APIRouter(prefix="/organizations", tags=["Organizations"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # -------------------------------------------------------------------------

@@ -30,6 +30,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -53,7 +54,7 @@ from .schemas_code import (
     TableListRequest,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(
     tags=["database_mcp", "mcp"],
     dependencies=[Depends(check_admin_permission)],

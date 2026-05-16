@@ -18,7 +18,6 @@ Key Features:
 from autobot_shared.ssot_config import config
 import asyncio
 import hashlib
-import logging
 import os
 import time
 from dataclasses import dataclass, field
@@ -51,8 +50,9 @@ from api.schemas_analytics import (
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

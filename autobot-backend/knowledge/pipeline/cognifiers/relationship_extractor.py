@@ -8,7 +8,6 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 Issue #2026: Dual-mode extraction — LLM + NLP co-occurrence/keyword patterns.
 """
 
-import logging
 from itertools import combinations
 from typing import Any, Dict, List, Set, Tuple
 
@@ -22,8 +21,9 @@ from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.models.relationship import Relationship, RelationType
 from knowledge.pipeline.registry import TaskRegistry
 from services.llm_service import get_llm_service
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 RELATIONSHIP_EXTRACTION_PROMPT = """Extract relationships between entities.

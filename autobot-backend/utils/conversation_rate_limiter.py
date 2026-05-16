@@ -12,15 +12,15 @@ core sliding-window logic (Issue #4460).
 """
 
 import json
-import logging
 import time
 from collections import deque
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for JSON-serializable types
 _JSON_SERIALIZABLE_TYPES = (list, tuple)

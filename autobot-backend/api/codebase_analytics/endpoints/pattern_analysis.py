@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -21,7 +22,7 @@ from constants.threshold_constants import QueryDefaults
 from constants.ttl_constants import TIMEOUT_TASK_ANALYSIS, TTL_24_HOURS
 from utils.background_task_manager import BackgroundTaskManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["Pattern Analysis"])
 

@@ -6,6 +6,7 @@
 import sys
 from types import ModuleType
 from unittest.mock import AsyncMock, patch
+from autobot_shared.logging_manager import get_logger
 
 import pytest
 
@@ -253,7 +254,7 @@ async def test_loop_body_logs_warning_and_sleeps_on_import_error(caplog):
         except ImportError as exc:
             import logging as _logging
 
-            _logging.getLogger(__name__).warning(
+            _get_logger(__name__).warning(
                 "graspologic not installed — community clustering paused. "
                 "Install with: pip install graspologic. Retrying in 24h. Error: %s",
                 exc,

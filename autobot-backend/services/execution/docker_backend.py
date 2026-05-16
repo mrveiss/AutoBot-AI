@@ -10,6 +10,7 @@ Provides CPU, memory, and timeout constraints.
 
 import logging
 from typing import Dict, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.time_utils import now_utc
 
@@ -28,7 +29,7 @@ from services.execution.base_backend import (
     ExecutionTask,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DockerBackend(ExecutionBackend):

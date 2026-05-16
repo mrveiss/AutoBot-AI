@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import yaml
 
@@ -28,7 +29,7 @@ from constants.path_constants import PATH
 if TYPE_CHECKING:
     from knowledge.backends import BaseClient
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Priority label → numeric boost applied by AdvancedRAGOptimizer
 SEED_PRIORITY_BOOST: Dict[str, float] = {

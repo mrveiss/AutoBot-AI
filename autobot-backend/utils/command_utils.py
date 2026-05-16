@@ -12,6 +12,7 @@ Issue #751: Consolidate Common Utilities
 
 Usage:
     from utils.command_utils import execute_command, execute_shell_command
+from autobot_shared.logging_manager import get_logger
 
     # Simple exec-style (for specific commands like 'man')
     result = await execute_command(["man", "-w", "ls"], timeout=5.0)
@@ -35,7 +36,7 @@ from autobot_shared.time_utils import utc_timestamp as get_timestamp
 # Issue #765: Use centralized strip_ansi_codes from encoding_utils
 from utils.encoding_utils import strip_ansi_codes
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Re-export for backward compatibility
 __all__ = [

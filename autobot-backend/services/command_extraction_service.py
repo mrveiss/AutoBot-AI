@@ -24,10 +24,11 @@ import re
 from autobot_shared.ssot_config import config
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _DEFAULT_SLM_URL = config.slm_url
 _DEFAULT_SLM_TOKEN = config.slm_auth_token

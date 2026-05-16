@@ -3,13 +3,13 @@
 # Author: mrveiss
 """Memory Manager - Unified Access Layer (Issue #4344)"""
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from .external_provider_factory import ExternalProviderFactory
 from .postgres_provider import PostgresMemoryProvider
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MemoryManager:

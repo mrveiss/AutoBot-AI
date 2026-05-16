@@ -26,6 +26,7 @@ import logging
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from redis.exceptions import RedisError
@@ -52,7 +53,7 @@ from knowledge.schemas.connectors import (
     UpdateConnectorRequest,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     tags=["knowledge-connectors"],

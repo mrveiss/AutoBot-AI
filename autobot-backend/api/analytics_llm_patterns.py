@@ -18,7 +18,6 @@ Related Issues: #229 (LLM Integration Pattern Analyzer)
 import asyncio
 import hashlib
 import json
-import logging
 import re
 from collections import defaultdict
 from dataclasses import dataclass
@@ -53,11 +52,12 @@ from constants.model_constants import (
     MODEL_COSTS_PER_1M_TOKENS,
     OPENAI_GPT4O,
 )
+from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_30_DAYS
 
 # Prefix provided by analytics_routers.py registry (#1032)
 router = APIRouter(tags=["llm-patterns", "analytics"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================

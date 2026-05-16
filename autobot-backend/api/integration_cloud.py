@@ -11,6 +11,7 @@ getting account information.
 
 import logging
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -37,7 +38,7 @@ router = APIRouter(
     tags=["integrations-cloud"],
     dependencies=[Depends(check_admin_permission)],
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.get("/providers", response_model=List[CloudProviderInfo])

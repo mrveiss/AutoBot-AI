@@ -9,7 +9,6 @@ Enables reloading of chat workflow modules without backend restart
 
 import asyncio
 import importlib
-import logging
 import sys
 import time
 from pathlib import Path
@@ -17,8 +16,9 @@ from typing import Any, Callable, Dict, FrozenSet, Optional, Set
 
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level constants to avoid repeated Path computation
 _SRC_ROOT = Path(__file__).parent.parent  # src/

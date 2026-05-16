@@ -6,7 +6,6 @@ Code declarations endpoints
 """
 
 import asyncio
-import logging
 from typing import Optional
 
 from fastapi import APIRouter
@@ -16,8 +15,9 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from utils.chromadb_client import get_all_paginated
 
 from ..storage import get_code_collection
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

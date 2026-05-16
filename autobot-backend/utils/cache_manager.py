@@ -20,7 +20,6 @@ Implements TTL-based caching for frequently requested API endpoints
 
 import functools
 import json
-import logging
 from typing import Any, Optional
 
 from fastapi import Request
@@ -29,8 +28,9 @@ from fastapi import Request
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_5_MINUTES
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CacheManager:

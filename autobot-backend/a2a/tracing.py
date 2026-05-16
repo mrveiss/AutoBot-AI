@@ -18,13 +18,13 @@ Trace ID format: 32 hex chars (UUID4 without dashes) — compatible with
 OpenTelemetry W3C Trace Context trace-id format.
 """
 
-import logging
 import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

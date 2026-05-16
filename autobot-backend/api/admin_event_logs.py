@@ -17,7 +17,6 @@ Filters:
 Access: admin role required.
 """
 
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -26,9 +25,10 @@ from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.event_log import EventType, query_events
 from utils.catalog_http_exceptions import raise_auth_error
+from autobot_shared.logging_manager import get_logger
 
 router = APIRouter(prefix="/admin", tags=["admin", "compliance"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _require_admin(request: Request) -> bool:

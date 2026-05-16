@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import re
 import tempfile
 import time
@@ -25,8 +24,9 @@ from .config import AutoResearchConfig
 from .models import Experiment, ExperimentResult, ExperimentState, ExperimentTask, ScorerResult
 from .parser import ExperimentOutputParser
 from .store import ExperimentStore
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Allowlist pattern for extra hyperparameter keys — alphanumeric + underscore only
 _EXTRA_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")

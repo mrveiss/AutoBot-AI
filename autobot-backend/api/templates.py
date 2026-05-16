@@ -13,6 +13,7 @@ segments as path parameters.
 
 import logging
 from typing import Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -38,7 +39,7 @@ from constants.error_constants import ERR_TEMPLATE_NOT_FOUND
 from utils.advanced_cache_manager import smart_cache
 from workflow_templates import TemplateCategory, workflow_template_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],

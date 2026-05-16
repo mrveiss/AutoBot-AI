@@ -9,7 +9,6 @@ session ownership validation, authentication, and authorization.
 """
 
 import asyncio
-import logging
 import secrets
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,11 +37,12 @@ from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
+from autobot_shared.logging_manager import get_logger
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for dangerous filename characters
 _DANGEROUS_FILENAME_CHARS = frozenset({"<", ">", '"', "|", "?", "*", "\0", "\r", "\n"})

@@ -12,10 +12,10 @@ Issue: #1375
 """
 
 import hashlib
-import logging
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def compute_fingerprint(content: str) -> str:

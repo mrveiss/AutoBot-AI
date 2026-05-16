@@ -12,10 +12,10 @@ data-driven configuration pattern for improved maintainability.
 """
 
 import importlib
-import logging
 from typing import List, Tuple
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Issue #281: Router configurations as data instead of repetitive code blocks

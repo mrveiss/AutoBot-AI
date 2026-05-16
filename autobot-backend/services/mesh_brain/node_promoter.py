@@ -3,11 +3,11 @@
 # Author: mrveiss
 """Daily anchor emergence: promotes hot nodes to anchor status for Neural Mesh RAG (#2119)."""
 
-import logging
 from dataclasses import dataclass, field
 from typing import Callable, Coroutine, Protocol
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================

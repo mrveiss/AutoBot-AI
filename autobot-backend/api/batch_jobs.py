@@ -18,6 +18,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -46,7 +47,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["batch-jobs", "management"])
 
 

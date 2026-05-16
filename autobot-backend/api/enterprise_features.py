@@ -9,6 +9,7 @@ Provides API endpoints for managing enterprise-grade features.
 import asyncio
 import logging
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -29,7 +30,7 @@ from enterprise_feature_manager import (
 )
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _process_feature_health_result(name: str, feature_health, health_status: dict, counters: dict) -> None:

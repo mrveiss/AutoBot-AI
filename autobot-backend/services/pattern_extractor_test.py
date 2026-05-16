@@ -31,10 +31,10 @@ def temp_codebase():
         sample_py.write_text('''
 """Sample module for testing."""
 
-import logging
 from typing import Dict, List
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def get_user(user_id: int) -> Dict:

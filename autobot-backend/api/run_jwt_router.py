@@ -8,15 +8,14 @@ The caller must present the current (not-yet-expired, not-revoked) JWT as a
 Bearer token.  The old token is atomically revoked and a fresh one returned.
 """
 
-import logging
-
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
 from services.run_jwt import JWTRefreshConflictError, _ttl, refresh_run_jwt
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

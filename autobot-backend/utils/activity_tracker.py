@@ -14,6 +14,7 @@ import logging
 import re
 import uuid
 from typing import Any, Optional
+from autobot_shared.logging_manager import get_logger
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,7 +27,7 @@ from models.activities import (
     TerminalActivityModel,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Secret detection patterns

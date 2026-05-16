@@ -30,10 +30,11 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
 from constants.status_enums import TaskStatus
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Types

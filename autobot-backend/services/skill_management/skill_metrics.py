@@ -10,14 +10,14 @@ auto-deprecation of underperforming skills.
 """
 
 import json
-import logging
 from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key prefixes
 REDIS_SKILL_METRICS_PREFIX = "skill_metrics:"

@@ -15,6 +15,7 @@ Canonical result type: SearchResult dataclass (text, score, metadata, source).
 
 All callers should import from this module:
     from knowledge.vector_search_engine import get_vector_search_engine, SearchResult
+from autobot_shared.logging_manager import get_logger
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from autobot_shared.ssot_config import config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Public types

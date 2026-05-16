@@ -8,13 +8,13 @@ token budgets when the model's context window is too small to hold the full
 retrieved memory.
 """
 
-import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Default threshold: only compress for models with context_window_tokens <= 8192.
 _DEFAULT_COMPRESSION_THRESHOLD = 8192

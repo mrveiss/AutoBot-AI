@@ -10,8 +10,9 @@ import asyncio
 import logging
 from pathlib import Path
 from typing import Dict, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for file extension checks (Issue #326)
 DOCX_EXTENSIONS = {".docx"}

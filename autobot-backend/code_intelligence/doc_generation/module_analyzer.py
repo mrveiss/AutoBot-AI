@@ -13,6 +13,7 @@ Part of god class refactoring initiative.
 import ast
 import os
 from typing import List, Optional, Set, Union
+from autobot_shared.logging_manager import get_logger
 
 import code_intelligence.doc_generation.helpers as helpers  # direct submodule (#1210)
 from code_intelligence.doc_generation.docstring_parser import DocstringParser
@@ -146,7 +147,7 @@ class ModuleAnalyzer:
         """Analyze a Python package and all its modules."""
         import logging
 
-        logger = logging.getLogger(__name__)
+        logger = get_logger(__name__)
 
         if depth > self.max_depth:
             logger.warning("Max depth reached for package: %s", package_path)

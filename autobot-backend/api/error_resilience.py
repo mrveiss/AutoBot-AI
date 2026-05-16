@@ -8,7 +8,6 @@ Issue #4342: Expose error health status, circuit breaker status, error budgets.
 Allows monitoring of system resilience and graceful degradation state.
 """
 
-import logging
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Request
@@ -27,8 +26,9 @@ from services.resilience.circuit_breaker_manager import (
 )
 from services.resilience.error_budget import get_error_budget_tracker
 from services.resilience.fallback_manager import get_fallback_manager
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/resilience", tags=["resilience"])
 

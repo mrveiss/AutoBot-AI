@@ -8,6 +8,7 @@ Tests for code completion endpoint.
 """
 
 from unittest.mock import MagicMock, patch
+from autobot_shared.logging_manager import get_logger
 
 import pytest
 
@@ -31,7 +32,7 @@ def sample_request():
     """Create sample completion request."""
     return CompletionRequest(
         file_path="test.py",
-        content="import logging\n\nlogger = logging.getLogger(__name__)\n\ndef test():\n    x = ",
+        content="import logging\n\nlogger = get_logger(__name__)\n\ndef test():\n    x = ",
         cursor_line=4,
         cursor_position=8,
         language="python",

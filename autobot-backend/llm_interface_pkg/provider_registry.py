@@ -16,6 +16,7 @@ available at runtime.  It supports:
 Usage:
 
     from llm_interface_pkg import get_provider_registry
+from autobot_shared.logging_manager import get_logger
 
     registry = get_provider_registry()
     provider = await registry.get_provider_for_request(
@@ -39,7 +40,7 @@ from prepared_facts import ProviderRuntimeFact
 
 from .base_provider import BaseProvider
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Cache health results for 30 s to avoid a health check on every request.
 _HEALTH_CACHE_TTL = 30.0

@@ -34,6 +34,7 @@ Endpoints:
 
 import logging
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -64,7 +65,7 @@ from .schemas_system import (
     NPUWorkerUnpairResponse,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Create router with /api/npu prefix
 router = APIRouter()

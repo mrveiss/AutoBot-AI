@@ -8,15 +8,15 @@ Issue #381: Extracted from enhanced_orchestrator.py god class refactoring.
 Contains workflow planning, step estimation, and capability determination.
 """
 
-import logging
 from typing import Any, Dict, List, Optional, Set
 
 # Issue #673: Import from autobot_types to avoid circular import with src.orchestrator
 from autobot_types import TaskComplexity
 
 from .types import AgentCapability, AgentProfile
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WorkflowPlanner:

@@ -21,8 +21,9 @@ from autobot_shared.ssot_config import config
 import logging
 import os
 from typing import Any, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SLACK_NOTIFICATIONS_CHANNEL_DEFAULT = "#agent-notifications"
 

@@ -30,7 +30,6 @@ Protocol (JSON messages):
 from autobot_shared.ssot_config import config
 import asyncio
 import base64
-import logging
 import os
 from collections import deque
 from typing import Optional
@@ -40,8 +39,9 @@ from starlette.websockets import WebSocketState
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.tts_client import get_tts_client
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 # Maximum TTS text length per chunk (characters)

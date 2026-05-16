@@ -8,15 +8,15 @@ AI-driven user intent analysis for workflow generation.
 """
 
 import json
-import logging
 from typing import List
 
 from services.llm_service import get_llm_service
 from type_defs.common import Metadata
 
 from .models import WorkflowComplexity, WorkflowIntent
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level constants for intent keyword detection
 # Moved from _fallback_intent_analysis to avoid repeated dict creation

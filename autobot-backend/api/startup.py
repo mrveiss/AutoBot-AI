@@ -8,15 +8,15 @@ Provides friendly startup messages and status updates for the frontend
 
 import asyncio
 import json
-import logging
 import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["startup", "status"])
 
 # Thread lock for synchronous access to startup_state

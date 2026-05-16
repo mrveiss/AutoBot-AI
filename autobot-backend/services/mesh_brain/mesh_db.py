@@ -6,11 +6,12 @@
 import logging
 from datetime import datetime
 from typing import Any, Optional
+from autobot_shared.logging_manager import get_logger
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MeshDB:

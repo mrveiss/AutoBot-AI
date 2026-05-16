@@ -17,6 +17,7 @@ import logging
 import time
 from dataclasses import asdict
 from typing import Any, Callable, Dict, List
+from autobot_shared.logging_manager import get_logger
 
 # Issue #469: Import Prometheus metrics manager
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -39,7 +40,7 @@ from utils.performance_monitoring.types import (
     DEFAULT_RETENTION_HOURS,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PerformanceMonitor:
@@ -75,7 +76,7 @@ class PerformanceMonitor:
 
     def __init__(self):
         """Initialize performance monitor with hardware detection and thresholds."""
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self.monitoring_active = False
         self.collection_interval = DEFAULT_COLLECTION_INTERVAL
         self.retention_hours = DEFAULT_RETENTION_HOURS

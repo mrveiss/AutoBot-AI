@@ -15,6 +15,7 @@ Architecture:
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import logging
@@ -28,7 +29,7 @@ from autobot_shared.ssot_config import config as ssot_config
 
 from .core import ENTITY_TYPES as _ENTITY_TYPES  # noqa: F401 — re-exported via package
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Entity-type intent patterns → UPPERCASE canonical names

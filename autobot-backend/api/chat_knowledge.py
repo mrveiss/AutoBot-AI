@@ -41,6 +41,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -70,7 +71,7 @@ from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["chat_knowledge"])
 

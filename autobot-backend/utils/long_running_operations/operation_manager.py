@@ -14,6 +14,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from constants.threshold_constants import TimingConstants
 
@@ -27,7 +28,7 @@ from .types import (
     OperationType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

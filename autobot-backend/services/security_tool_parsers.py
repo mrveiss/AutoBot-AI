@@ -10,7 +10,6 @@ Supports: nmap, masscan, nuclei, nikto, gobuster, searchsploit (extensible)
 Issue: #260
 """
 
-import logging
 import re
 import xml.etree.ElementTree as ET  # nosec B405 - parsing trusted nmap output
 from abc import ABC, abstractmethod
@@ -19,8 +18,9 @@ from typing import Any, Optional
 
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import now_utc
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for security tool parsing
 _NUCLEI_FORMAT_RE = re.compile(r"\[\w+\]\s+\[[^\]]+\]\s+\[")

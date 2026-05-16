@@ -14,6 +14,7 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 from opentelemetry import trace
@@ -28,7 +29,7 @@ from constants.api_constants import PATH_OLLAMA_CHAT
 from ..models import LLMRequest, LLMResponse, LLMSettings
 from ..streaming import StreamingManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 config = get_config_manager()
 
 # Issue #697: Get tracer for LLM operations

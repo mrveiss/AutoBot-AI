@@ -9,6 +9,7 @@ API endpoints for executing commands in the secure Docker sandbox environment.
 
 import logging
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -39,7 +40,7 @@ from utils.response_builder import (
 )
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.post("/execute", response_model=SandboxExecutionResponse)

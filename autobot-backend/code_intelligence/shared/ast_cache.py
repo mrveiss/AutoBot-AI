@@ -34,7 +34,6 @@ Part of EPIC #217 - Advanced Code Intelligence Methods
 
 from autobot_shared.ssot_config import config
 import ast
-import logging
 import os
 import threading
 import time
@@ -44,8 +43,9 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple, Union
 
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Configuration via environment variables
 DEFAULT_CACHE_SIZE = int(config.ast_cache_max_size)

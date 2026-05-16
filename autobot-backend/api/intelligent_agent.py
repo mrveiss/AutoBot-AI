@@ -11,6 +11,7 @@ import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
@@ -31,7 +32,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from monitoring.prometheus_metrics import get_metrics_manager
 
 # CRITICAL FIX: Use lazy loading to prevent startup deadlock
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Prometheus metrics instance
 prometheus_metrics = get_metrics_manager()

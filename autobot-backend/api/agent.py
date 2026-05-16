@@ -18,6 +18,7 @@ import logging
 import shlex
 import time
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -52,7 +53,7 @@ from services.ai_stack_client import AIStackError, get_ai_stack_client
 from utils.response_helpers import create_success_response, handle_ai_stack_error
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Prometheus metrics instance
 prometheus_metrics = get_metrics_manager()

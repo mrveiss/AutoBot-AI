@@ -22,6 +22,7 @@ import logging
 import os
 import secrets
 from typing import Optional, Union
+from autobot_shared.logging_manager import get_logger
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -29,7 +30,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from autobot_shared.singleton_factory import lazy_singleton
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EncryptionService:

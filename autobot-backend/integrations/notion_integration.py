@@ -21,6 +21,7 @@ Supported actions:
 import logging
 import time
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
@@ -32,7 +33,7 @@ from integrations.base import (
     IntegrationStatus,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _NOTION_API_BASE = "https://api.notion.com/v1"
 _NOTION_VERSION = "2022-06-28"

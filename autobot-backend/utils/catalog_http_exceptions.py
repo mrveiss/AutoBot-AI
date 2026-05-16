@@ -8,14 +8,14 @@ Provides convenience functions for raising HTTPExceptions using the error catalo
 Makes migration from hardcoded errors to catalog-based errors straightforward
 """
 
-import logging
 from typing import Optional
 
 from fastapi import HTTPException, status
 
 from utils.error_catalog import get_error
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def raise_catalog_error(

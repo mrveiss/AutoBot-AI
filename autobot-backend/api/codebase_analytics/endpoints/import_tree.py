@@ -7,7 +7,6 @@ Import tree visualization endpoints
 
 import ast
 import asyncio
-import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -19,8 +18,9 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from utils.background_task_manager import BackgroundTaskManager
 
 from .shared import INTERNAL_MODULE_PREFIXES, STDLIB_MODULES, get_project_root
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

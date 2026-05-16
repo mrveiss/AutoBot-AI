@@ -22,13 +22,13 @@ prior notice.
 
 from __future__ import annotations
 
-import logging
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # RFC 8594 ``Sunset`` header value — HTTP-date format (RFC 7231 §7.1.1.1).
 # Picked ~4 months out from the consolidation merge (#6870 on 2026-05-04)

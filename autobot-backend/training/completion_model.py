@@ -7,14 +7,14 @@ Code Completion Model (Issue #904)
 LSTM-based model for code completion with attention mechanism.
 """
 
-import logging
 from typing import Dict, Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CompletionModel(nn.Module):

@@ -8,8 +8,9 @@ PKI Configuration Models
 Pydantic models for TLS/PKI configuration, integrated with SSOT config system.
 """
 
-from autobot_shared.ssot_config import config
 from __future__ import annotations
+
+from autobot_shared.ssot_config import config
 
 import os
 from dataclasses import dataclass, field

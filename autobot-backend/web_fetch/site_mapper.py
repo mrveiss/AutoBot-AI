@@ -15,6 +15,7 @@ Strategy:
 Public API::
 
     from web_fetch.site_mapper import SiteMapper, SiteMapEntry, SiteMapResult
+from autobot_shared.logging_manager import get_logger
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ import xml.etree.ElementTree as ET  # nosec B405 — sitemap XML from crawled UR
 from typing import List, Optional
 from urllib.parse import urlparse
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
 _SITEMAP_TIMEOUT = 15.0  # seconds

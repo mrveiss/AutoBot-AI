@@ -22,15 +22,15 @@ All Redis operations are async (redis.asyncio).
 """
 
 import json
-import logging
 import time
 import uuid
 from collections import deque
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Key prefixes
 _PFX_NODE = "pg:node:"

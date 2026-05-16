@@ -12,8 +12,9 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -51,7 +52,7 @@ class BaseAdapter(ABC):
     def __init__(self, platform_name: str):
         """Initialize adapter for a specific platform."""
         self.platform_name = platform_name
-        self.logger = logging.getLogger(f"{__name__}.{platform_name}")
+        self.logger = get_logger(f"{__name__}.{platform_name}")
 
     @abstractmethod
     async def normalize_message(self, raw_message: Dict[str, Any]) -> UnifiedMessage:

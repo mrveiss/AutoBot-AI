@@ -8,7 +8,6 @@ Training orchestration for code completion model.
 """
 
 import json
-import logging
 import os
 from autobot_shared.ssot_config import config
 from pathlib import Path
@@ -23,8 +22,9 @@ from llm_interface_pkg.hardware import HardwareDetector
 from training.completion_model import CompletionModel
 from training.data_loader import create_dataloaders
 from training.evaluator import CompletionEvaluator
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CompletionTrainer:

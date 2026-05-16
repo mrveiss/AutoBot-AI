@@ -14,12 +14,12 @@ Security Integration:
 - User interrupt capability
 """
 
-import logging
 from typing import Any, Dict, Optional
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TerminalTool:

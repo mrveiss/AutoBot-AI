@@ -10,13 +10,13 @@ Provides deduplication of streaming and duplicate messages:
 - Time-window based grouping
 """
 
-import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.time_utils import parse_utc_iso
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for streaming message types (Issue #326)
 STREAMING_TYPES = frozenset(["llm_response", "llm_response_chunk", "response"])

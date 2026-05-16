@@ -29,6 +29,7 @@ Performance:
 
 import logging
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
@@ -63,7 +64,7 @@ from utils.request_utils import generate_request_id
 # ====================================================================
 
 router = APIRouter(tags=["memory"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ====================================================================
 # Dependency Injection

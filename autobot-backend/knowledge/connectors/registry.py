@@ -20,7 +20,6 @@ Usage:
 """
 
 import asyncio
-import logging
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Type
 
@@ -29,8 +28,9 @@ if TYPE_CHECKING:
 
 from autobot_shared.time_utils import now_utc
 from knowledge.connectors.models import ConnectorConfig
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ConnectorRegistry:

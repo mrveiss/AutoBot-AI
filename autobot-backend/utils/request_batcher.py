@@ -8,7 +8,6 @@ Implements sophisticated batching algorithms to reduce API calls and improve eff
 
 import asyncio
 import hashlib
-import logging
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
@@ -18,8 +17,9 @@ from typing import Any, Callable, Dict, List, Optional
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.threshold_constants import TimingConstants
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BatchingStrategy(Enum):

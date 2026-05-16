@@ -13,6 +13,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.time_utils import parse_utc_iso
 
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
     import redis
     from llama_index.vector_stores.chroma import ChromaVectorStore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class StatsMixin:

@@ -14,6 +14,7 @@ import logging
 import os
 import tempfile
 from typing import Any, Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from media.core.pipeline import BasePipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
@@ -26,7 +27,7 @@ try:
 except ImportError:
     _CV2_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Magic bytes for common video formats
 _VIDEO_MAGIC: List[Tuple[bytes, str]] = [

@@ -8,6 +8,7 @@ This bypasses cached instances and creates fresh knowledge base for testing
 
 import asyncio
 import logging
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter
 
@@ -16,7 +17,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import TimingConstants
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.get("/test/fresh_stats", response_model=DataResponse)

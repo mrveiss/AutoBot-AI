@@ -21,14 +21,14 @@ Error Handling (Issue #4161):
 """
 
 import json
-import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
 from integrations.base import IntegrationAction
 from integrations.communication_integration import SlackIntegration
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _CHANNEL_MAPPING_KEY_PREFIX = "slack:channel_mapping:"
 _APPROVAL_THREAD_KEY_PREFIX = "slack:approval_thread:"

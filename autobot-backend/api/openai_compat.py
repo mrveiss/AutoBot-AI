@@ -15,6 +15,7 @@ default.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import inspect
@@ -46,7 +47,7 @@ from llm_interface_pkg.tiered_routing.tier_router import get_tiered_router
 from services.llm_api_key_service import LLMApiKeyRecord, get_llm_api_key_service
 from services.llm_cost_tracker import get_cost_tracker
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["openai-compat"])
 

@@ -14,15 +14,15 @@ Supports:
 """
 
 import json
-import logging
 import time
 from typing import Any, Dict, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
 
 from .models import DecisionContext, InterventionOutcome
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CounterfactualReasoner:

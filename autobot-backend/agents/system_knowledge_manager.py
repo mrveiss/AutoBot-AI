@@ -14,6 +14,7 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 import yaml
@@ -21,7 +22,7 @@ import yaml
 from agents.kb_librarian import EnhancedKBLibrarian
 from knowledge_base import KnowledgeBase
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SystemKnowledgeManager:

@@ -8,7 +8,6 @@ Replaces SimpleChatWorkflow with proper async architecture
 """
 
 import asyncio
-import logging
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -20,8 +19,9 @@ from constants.threshold_constants import TimingConstants
 from dependency_container import inject_services
 from llm_interface_pkg.models import ChatMessage, LLMResponse  # Phase 2D #3185
 from retry_mechanism import RetryConfig, RetryStrategy, with_retry
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for message classification keywords (Issue #326)
 TERMINAL_KEYWORDS = {"terminal", "command", "bash", "shell", "run"}

@@ -9,7 +9,6 @@ Extracted from voice_processing_system.py as part of Issue #381 god class refact
 """
 
 import asyncio
-import logging
 import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -31,8 +30,9 @@ from voice_processing.constants import (
 )
 from voice_processing.models import VoiceCommandAnalysis
 from voice_processing.types import VoiceCommand
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class NaturalLanguageProcessor:

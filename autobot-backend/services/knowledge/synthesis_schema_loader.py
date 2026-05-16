@@ -8,14 +8,14 @@ Loads and validates the YAML-driven synthesis configuration that maps
 document collections to synthesis targets and prompt templates.
 """
 
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
 import yaml
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _REQUIRED_KEYS = {"name", "paths", "synthesis_target", "prompt_template"}
 _ALLOWED_KEYS = _REQUIRED_KEYS | {"synthesis_model", "prompt_variants"}

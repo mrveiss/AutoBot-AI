@@ -14,10 +14,11 @@ import json
 import logging
 import re
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
 from skills.base_skill import BaseSkill, SkillManifest
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 try:
     from services.llm_service import get_llm_service

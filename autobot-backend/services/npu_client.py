@@ -10,6 +10,7 @@ are offloaded to NPU/GPU for acceleration. Falls back to Ollama if unavailable.
 
 Usage:
     from services.npu_client import get_npu_client, NPUClient
+from autobot_shared.logging_manager import get_logger
 
     client = get_npu_client()
     if await client.is_available():
@@ -28,7 +29,7 @@ import aiohttp
 
 from autobot_shared.ssot_config import get_config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

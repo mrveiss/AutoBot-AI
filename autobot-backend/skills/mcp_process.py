@@ -10,7 +10,6 @@ a persistent subprocess communicating via stdin/stdout MCP protocol.
 
 import asyncio
 import json
-import logging
 import os
 import sys
 import tempfile
@@ -22,8 +21,9 @@ from autobot_shared.fire_and_forget import run_redis_write
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from skills.mcp_trace import MCPSpan, new_span, write_span
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 STARTUP_TIMEOUT: float = config.timeout.mcp_startup
 CALL_TIMEOUT: float = config.timeout.mcp_call

@@ -15,7 +15,6 @@ Features:
 
 import asyncio
 import json
-import logging
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.time_utils import utc_timestamp
@@ -23,8 +22,9 @@ from autobot_shared.time_utils import utc_timestamp
 if TYPE_CHECKING:
     import aioredis
     import redis
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Maximum versions to keep per fact
 MAX_VERSIONS = 20

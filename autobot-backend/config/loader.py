@@ -7,7 +7,6 @@ Configuration loading and merging logic.
 """
 
 import json
-import logging
 import os
 from autobot_shared.ssot_config import config
 from pathlib import Path
@@ -17,8 +16,9 @@ import yaml
 
 from config.defaults import get_default_config
 from constants.threshold_constants import StringParsingConstants
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Module-level constants for O(1) lookups (Issue #326)
 YAML_FILE_EXTENSIONS = {".yaml", ".yml"}

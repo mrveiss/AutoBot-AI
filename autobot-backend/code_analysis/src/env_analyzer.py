@@ -6,8 +6,10 @@ Environment Variable Analyzer using Redis and NPU acceleration
 Analyzes codebase for hardcoded values that should be environment variables
 """
 
-from autobot_shared.ssot_config import config
 from __future__ import annotations
+
+from autobot_shared.ssot_config import config
+from autobot_shared.logging_manager import get_logger
 
 import ast
 import json
@@ -58,7 +60,7 @@ except ImportError:
     SSOTMapping = None
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for literal value AST types
 _LITERAL_VALUE_TYPES = (ast.Str, ast.Num)

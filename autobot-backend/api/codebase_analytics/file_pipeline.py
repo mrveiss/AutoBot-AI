@@ -21,6 +21,7 @@ import asyncio
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from utils.file_categorization import FILE_CATEGORY_CODE, SKIP_DIRS
 from utils.file_categorization import get_file_category as _get_file_category
@@ -39,7 +40,7 @@ from .file_analyzer import (
 from .progress_tracker import _store_file_hash
 from .stats_aggregation import _aggregate_all_results, _aggregate_file_analysis
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _get_file_analysis(

@@ -17,6 +17,7 @@ import logging
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
 from code_intelligence.base_analyzer import (
     AnalysisIssue,
@@ -28,7 +29,7 @@ from code_intelligence.shell_analyzer import ShellAnalyzer
 from code_intelligence.typescript_analyzer import TypeScriptAnalyzer
 from code_intelligence.vue_analyzer import VueAnalyzer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def create_multi_language_scanner() -> MultiLanguageAnalyzer:

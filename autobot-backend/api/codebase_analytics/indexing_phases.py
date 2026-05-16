@@ -6,6 +6,7 @@ Core indexing phase orchestration.
 
 Issue #2364: Extracted from scanner.py to separate phase-level orchestration
 from the top-level do_indexing_with_progress entry point.
+from autobot_shared.logging_manager import get_logger
 
 Public functions
 ----------------
@@ -28,7 +29,7 @@ from .chromadb_storage import (
     _store_hardcodes_to_redis,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _create_progress_updater(

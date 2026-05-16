@@ -7,12 +7,12 @@ Workflow Messaging Module
 Handles WebSocket communication for workflow status updates.
 """
 
-import logging
 from typing import Any, Dict
 
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WorkflowMessenger:

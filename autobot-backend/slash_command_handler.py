@@ -31,11 +31,12 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.network_constants import NetworkConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level cached category info to avoid repeated dict creation
 _CATEGORY_INFO: Dict[str, str] = {

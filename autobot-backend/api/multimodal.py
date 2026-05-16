@@ -11,6 +11,7 @@ import logging
 import time
 import uuid
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
@@ -37,7 +38,7 @@ from multimodal_processor import (
 # Import AutoBot multi-modal components
 from npu_semantic_search import get_npu_search_engine
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Initialize router
 router = APIRouter(tags=["multimodal"])

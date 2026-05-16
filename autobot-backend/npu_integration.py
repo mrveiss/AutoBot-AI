@@ -12,7 +12,6 @@ communication with HMAC-SHA256 signatures.
 
 import asyncio
 import json
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
 
@@ -29,8 +28,9 @@ from autobot_shared.http_client import HTTPClientManager, get_http_client
 from circuit_breaker import CircuitState
 from constants.threshold_constants import LLMDefaults, TimingConstants
 from utils.service_registry import get_service_url
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #255: Enable authenticated client for service-to-service communication
 # Set to False to fall back to unauthenticated mode (for development/testing)

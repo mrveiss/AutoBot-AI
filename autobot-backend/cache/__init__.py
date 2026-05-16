@@ -19,13 +19,13 @@ Usage:
     stats = coordinator.get_unified_stats()
 """
 
-import logging
 from typing import Callable, List, Tuple
 
 from .coordinator import CacheCoordinator, get_cache_coordinator
 from .protocols import CacheProtocol
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 __all__ = [
     "CacheProtocol",

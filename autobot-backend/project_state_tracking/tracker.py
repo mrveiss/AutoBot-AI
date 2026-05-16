@@ -15,6 +15,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_client import get_redis_client
 from constants.path_constants import PATH
@@ -72,7 +73,7 @@ except ImportError:
         return None
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EnhancedProjectStateTracker:

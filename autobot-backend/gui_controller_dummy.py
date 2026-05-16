@@ -3,10 +3,10 @@
 # Author: mrveiss
 # src/gui_controller_dummy.py
 import asyncio
-import logging
 from typing import Any, Dict, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GUIController:

@@ -24,8 +24,10 @@ Bridge resolution strategy:
     keeps the existing in-process bridge code reusable without rewrites.
 """
 
-from autobot_shared.ssot_config import config
 from __future__ import annotations
+
+from autobot_shared.ssot_config import config
+from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import importlib
@@ -39,7 +41,7 @@ from typing import Any, Dict, Optional
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
 
-logger = logging.getLogger("mcp_worker")
+logger = get_logger("mcp_worker")
 
 # When set to "1" the worker enforces run-scoped JWT on every ``call`` request.
 # Workers spawned without JWT support can opt out by leaving this unset.

@@ -9,7 +9,6 @@ Features fast pattern checking, clear error messages, and bypass mechanism.
 """
 
 import asyncio
-import logging
 import re
 import subprocess  # nosec B404
 import threading
@@ -36,8 +35,9 @@ from api.schemas_analytics import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.network_constants import NetworkConstants
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["precommit", "analytics"])  # Prefix set in router_registry
 

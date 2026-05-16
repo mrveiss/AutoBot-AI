@@ -12,6 +12,7 @@ import os
 from autobot_shared.ssot_config import config
 from datetime import datetime, timezone
 from typing import Any, Dict, FrozenSet, List
+from autobot_shared.logging_manager import get_logger
 
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
@@ -20,7 +21,7 @@ from utils.agent_command_helpers import run_agent_command
 from .base_agent import DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level constants for agent configuration
 _SERVER_PORTS: FrozenSet[str] = frozenset({"22", "80", "443"})

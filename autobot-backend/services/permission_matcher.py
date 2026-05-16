@@ -30,7 +30,6 @@ Usage:
 """
 
 import fnmatch
-import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -39,8 +38,9 @@ from typing import Dict, List, Optional, Tuple
 import yaml
 
 from autobot_shared.ssot_config import PermissionAction, PermissionMode, config
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MatchResult(Enum):

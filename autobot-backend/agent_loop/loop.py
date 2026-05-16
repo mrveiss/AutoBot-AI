@@ -23,6 +23,7 @@ import logging
 import time
 import uuid
 from typing import Any, Optional
+from autobot_shared.logging_manager import get_logger
 
 from agent_loop.slack_hook import get_slack_hook
 from agent_loop.think_tool import ThinkTool
@@ -43,7 +44,7 @@ from live_event_manager import publish_live_event
 from planner import PlannerModule
 from tools.parallel import ParallelToolExecutor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # =============================================================================
 # Approval Workflow – Sensitive Tool Classification (Issue #4092)

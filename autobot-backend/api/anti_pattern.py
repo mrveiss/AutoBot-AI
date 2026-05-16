@@ -12,6 +12,7 @@ Issue: #221
 """
 
 import logging
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -25,7 +26,7 @@ from api.schemas_code import (
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for refactoring recommendation keywords (Issue #326)
 REFACTORING_KEYWORDS = {"method", "parameter", "lazy", "clump"}

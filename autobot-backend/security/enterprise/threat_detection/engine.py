@@ -18,6 +18,7 @@ from collections import defaultdict, deque
 from datetime import timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import numpy as np
 import yaml
@@ -47,7 +48,7 @@ from .models import (
     UserProfile,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ThreatDetectionEngine:

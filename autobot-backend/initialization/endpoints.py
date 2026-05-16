@@ -11,13 +11,14 @@ import logging
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import FastAPI, Request
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from circuit_breaker import get_circuit_breaker_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _get_circuit_breaker_states() -> Dict[str, Any]:

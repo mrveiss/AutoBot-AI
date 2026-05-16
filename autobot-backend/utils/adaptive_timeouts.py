@@ -7,14 +7,14 @@ Intelligent timeout management with adaptive behavior and fallback strategies
 """
 
 import asyncio
-import logging
 import time
 from enum import Enum
 from typing import Any, Callable, Dict, Optional
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TimeoutCategory(Enum):

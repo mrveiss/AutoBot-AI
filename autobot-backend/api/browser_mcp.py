@@ -25,7 +25,6 @@ Issue #49 - Additional MCP Bridges (Browser, HTTP, Database, Git)
 
 import asyncio
 import json
-import logging
 import re
 from datetime import datetime, timezone
 from typing import List
@@ -64,8 +63,9 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.time_utils import now_utc
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(
     tags=["browser_mcp", "mcp"],
     dependencies=[Depends(check_admin_permission)],

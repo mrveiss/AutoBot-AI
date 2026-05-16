@@ -15,6 +15,7 @@ import asyncio
 import json
 import logging
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends
 
@@ -29,7 +30,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 from services.man_page_parser import ManPageContent, get_man_page_content
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["manual_mcp", "mcp"])
 
 # Cache TTL for man page results (seconds). Man pages are static; 24 h is safe.

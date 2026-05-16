@@ -13,6 +13,7 @@ import asyncio
 import json
 import logging
 from typing import Any, Dict, List, Tuple
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
@@ -24,7 +25,7 @@ try:
 except ImportError:
     praw = None  # type: ignore[assignment]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _build_reddit_config() -> Dict[str, SkillConfigField]:

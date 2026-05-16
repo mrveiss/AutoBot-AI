@@ -11,6 +11,7 @@ Part of Issue #381 - God Class Refactoring
 
 import logging
 from typing import Any
+from autobot_shared.logging_manager import get_logger
 
 from enhanced_memory_manager_async import get_async_enhanced_memory_manager
 
@@ -23,7 +24,7 @@ class BaseModalProcessor:
     def __init__(self, processor_type: str):
         """Initialize base processor with type-specific logger and memory manager."""
         self.processor_type = processor_type
-        self.logger = logging.getLogger(f"{__name__}.{processor_type}")
+        self.logger = get_logger(f"{__name__}.{processor_type}")
         self.memory_manager = get_async_enhanced_memory_manager()
 
     async def process(self, input_data: MultiModalInput) -> ProcessingResult:

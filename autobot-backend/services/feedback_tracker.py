@@ -8,7 +8,6 @@ Tracks completion feedback and updates pattern statistics.
 """
 
 import json
-import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
@@ -20,8 +19,9 @@ from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from models.code_pattern import CodePattern
 from models.completion_feedback import CompletionFeedback
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class FeedbackTracker:

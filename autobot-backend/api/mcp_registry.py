@@ -36,6 +36,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -58,7 +59,7 @@ from .schemas_code import (
     MCPRegistryToolsResponse,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(
     prefix="",
     tags=["mcp", "registry"],

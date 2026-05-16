@@ -18,7 +18,6 @@ Key features:
 
 import asyncio
 import json
-import logging
 import statistics
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
@@ -27,8 +26,9 @@ from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional
 
 from constants.ttl_constants import TTL_5_MINUTES
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for tool classification (Issue #326)
 READ_KEYWORDS = {"read", "list", "glob", "get"}

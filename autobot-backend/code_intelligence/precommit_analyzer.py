@@ -16,7 +16,6 @@ Parent Epic: #217 - Advanced Code Intelligence
 """
 
 import concurrent.futures
-import logging
 import re
 import subprocess  # nosec B404 - controlled git process execution
 import time
@@ -25,8 +24,9 @@ from enum import Enum
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CheckSeverity(Enum):

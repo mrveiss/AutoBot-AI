@@ -14,8 +14,10 @@ Configuration:
 Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
-from autobot_shared.ssot_config import config
 from __future__ import annotations
+
+from autobot_shared.ssot_config import config
+from autobot_shared.logging_manager import get_logger
 
 import logging
 import os
@@ -29,7 +31,7 @@ from llm_interface_pkg.models import LLMRequest, LLMResponse
 
 from ..base_provider import BaseProvider
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 _tracer = trace.get_tracer("autobot.llm.nous", "1.0.0")
 
 NOUS_MODELS = [

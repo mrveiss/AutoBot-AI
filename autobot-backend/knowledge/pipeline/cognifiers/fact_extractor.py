@@ -9,7 +9,6 @@ Phase 2 — Atomic Facts Extraction: Extract atomic factual statements from docu
 as discrete retrievable units alongside full chunks.
 """
 
-import logging
 import re
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -20,8 +19,9 @@ from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.fact import AtomicFact
 from knowledge.pipeline.registry import TaskRegistry
 from services.llm_service import get_llm_service
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 FACT_EXTRACTION_PROMPT = """Extract atomic facts from the following text.
 

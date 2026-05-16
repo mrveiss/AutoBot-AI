@@ -13,11 +13,12 @@ import logging
 import re
 import struct
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_client import get_async_redis_client
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Upper bound for KNN top_k to prevent resource exhaustion (#2511)
 _MAX_TOP_K = 500

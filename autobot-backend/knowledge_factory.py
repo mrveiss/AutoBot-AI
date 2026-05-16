@@ -7,10 +7,11 @@ import asyncio
 import logging
 import time
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import FastAPI
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Module-level singleton for knowledge base instance (used when no app context available)
 _knowledge_base_instance: Optional["KnowledgeBase"] = None  # noqa: F821

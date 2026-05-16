@@ -12,10 +12,11 @@ import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any, List
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.time_utils import utc_timestamp
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Score threshold below which a task is considered low-quality
 LOW_SCORE_THRESHOLD = 0.6

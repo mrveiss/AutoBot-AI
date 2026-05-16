@@ -14,7 +14,6 @@ Parent Epic: #217 - Advanced Code Intelligence
 """
 
 import asyncio
-import logging
 import os
 import time
 from datetime import datetime, timezone
@@ -53,6 +52,7 @@ from code_intelligence.performance_analyzer import (
     PerformanceSeverity,
     get_performance_issue_types,
 )
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.redis_optimizer import OptimizationSeverity, RedisOptimizer
 from code_intelligence.security_analyzer import (
     SecurityAnalyzer,
@@ -63,7 +63,7 @@ from constants.ttl_constants import TTL_5_MINUTES
 from utils.background_task_manager import BackgroundTaskManager
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 router = APIRouter()

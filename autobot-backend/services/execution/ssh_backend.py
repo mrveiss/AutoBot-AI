@@ -11,6 +11,7 @@ Supports key-based and password authentication.
 import asyncio
 import logging
 from typing import Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.time_utils import now_utc
 
@@ -29,7 +30,7 @@ from services.execution.base_backend import (
     ExecutionTask,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SSHBackend(ExecutionBackend):

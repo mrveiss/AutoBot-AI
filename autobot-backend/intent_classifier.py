@@ -16,12 +16,12 @@ Avoids heavy ML models for performance.
 Related Issue: #159 - Prevent Premature Conversation Endings
 """
 
-import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for acknowledgment word detection
 _ACKNOWLEDGMENT_WORDS = frozenset({"ok", "okay", "yes", "no", "sure", "thanks", "thank you"})

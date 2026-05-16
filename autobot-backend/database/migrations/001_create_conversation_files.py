@@ -10,12 +10,13 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ConversationFilesMigration:

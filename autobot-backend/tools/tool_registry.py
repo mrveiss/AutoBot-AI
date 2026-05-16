@@ -10,7 +10,6 @@ duplication.
 """
 
 import asyncio
-import logging
 import time
 import uuid
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
@@ -20,8 +19,9 @@ from tools.code_interpreter import execute_code
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
     from worker_node import WorkerNode
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for tool name matching (Issue #326)
 EXECUTE_COMMAND_VARIANTS = {"executesystemcommand", "systemexecutecommand"}
@@ -52,7 +52,7 @@ class ToolRegistry:
         """
         self.worker_node = worker_node
         self.knowledge_base = knowledge_base
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
 
     def _generate_task_id(self) -> str:
         """Generate a unique task ID."""

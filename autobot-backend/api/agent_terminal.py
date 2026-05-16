@@ -1,4 +1,6 @@
 # AutoBot - AI-Powered Automation Platform
+from autobot_shared.logging_manager import get_logger
+
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
@@ -225,7 +227,6 @@ See Also:
 - docs/architecture/TERMINAL_ARCHITECTURE_DIAGRAM.md - System architecture
 """
 
-import logging
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -266,7 +267,7 @@ from services.agent_terminal import AgentSessionState, AgentTerminalService
 from services.command_approval_manager import AgentRole
 from services.command_execution_queue import get_command_queue
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Create router
 router = APIRouter(prefix="/agent-terminal", tags=["agent-terminal"])

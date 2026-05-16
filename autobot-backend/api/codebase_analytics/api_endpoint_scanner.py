@@ -14,6 +14,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
 from .endpoints.shared import get_project_root
 from .models import (
@@ -24,7 +25,7 @@ from .models import (
     FrontendAPICallItem,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================

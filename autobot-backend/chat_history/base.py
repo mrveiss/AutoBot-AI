@@ -11,7 +11,6 @@ Provides the foundation for the ChatHistoryManager composed class with:
 - Context window management
 """
 
-import logging
 import os
 import threading
 from typing import Optional
@@ -22,8 +21,9 @@ from autobot_shared.ssot_config import config as _ssot_config
 from config import config as global_config_manager
 from context_window_manager import ContextWindowManager
 from encryption_service import get_encryption_service, is_encryption_enabled
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ChatHistoryBase:

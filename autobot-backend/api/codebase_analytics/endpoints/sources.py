@@ -16,6 +16,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -32,7 +33,7 @@ from ..source_models import (
 )
 from ..source_storage import delete_source, get_source, list_sources, save_source
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

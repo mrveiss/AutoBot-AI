@@ -11,7 +11,6 @@ distinguishing causality from correlation. Uses LLM guidance for high-confidence
 extraction with condition detection and evidence tracking.
 """
 
-import logging
 from typing import Any, Dict, List
 
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
@@ -20,8 +19,9 @@ from knowledge.pipeline.models.causal_edge import CausalEdge
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.registry import TaskRegistry
 from services.llm_service import get_llm_service
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 CAUSAL_EXTRACTION_PROMPT = """Extract CAUSAL relationships from the following text.
 

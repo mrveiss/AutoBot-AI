@@ -16,7 +16,6 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
 import asyncio
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -38,8 +37,9 @@ from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.user_behavior_analytics import UserEvent, get_behavior_analytics
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(prefix="/behavior", tags=["analytics", "behavior"])
 
 

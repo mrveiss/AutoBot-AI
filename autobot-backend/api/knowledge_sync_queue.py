@@ -8,6 +8,7 @@ can see what is pending, what failed, and how the worker is keeping up.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import logging
 from typing import Any, Dict, List
@@ -23,7 +24,7 @@ from services.knowledge.sync_queue import (
     serialize_entry_for_api,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge-sync-queue"])
 

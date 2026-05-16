@@ -7,6 +7,7 @@ Entity Extraction API Endpoints
 
 Provides REST API for automatic entity extraction and graph population
 from conversations and messages.
+from autobot_shared.logging_manager import get_logger
 
 Architecture:
 - Reuses GraphEntityExtractor, KnowledgeExtractionAgent, AutoBotMemoryGraph
@@ -47,7 +48,7 @@ from utils.request_utils import generate_request_id
 # ====================================================================
 
 router = APIRouter(tags=["entity-extraction"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ====================================================================

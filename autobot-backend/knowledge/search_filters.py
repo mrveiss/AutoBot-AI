@@ -8,10 +8,10 @@ Issue #679: Filters search results based on hierarchical access control.
 Integrates with ChromaDB metadata and ownership system.
 """
 
-import logging
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def build_chromadb_permission_filter(

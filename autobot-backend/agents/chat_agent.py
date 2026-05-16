@@ -8,7 +8,6 @@ Handles simple conversational responses with lightweight Llama 3.2 1B model.
 Focuses on quick, natural interactions without complex reasoning.
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.ssot_config import (
@@ -22,8 +21,9 @@ from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ChatAgent(StandardizedAgent):

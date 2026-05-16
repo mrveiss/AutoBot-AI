@@ -20,8 +20,9 @@ a message to Redis.  The actual work happens in background Celery workers.
 
 import logging
 from datetime import datetime, timezone
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def on_turn_complete(

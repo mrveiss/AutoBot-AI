@@ -14,12 +14,13 @@ import functools
 import logging
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from constants.ttl_constants import TTL_24_HOURS
 
 from .types import REDIS_METRIC_KEYS, SIGNIFICANT_INTERACTIONS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def track_error_to_redis(

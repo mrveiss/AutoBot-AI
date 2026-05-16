@@ -11,6 +11,7 @@ Part of Issue #872 - Session Collaboration API (#608 Phase 3).
 import logging
 import uuid
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +31,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from models.session_collaboration import PermissionLevel, SessionCollaboration
 from user_management.database import get_async_session
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/sessions", tags=["collaboration"])
 

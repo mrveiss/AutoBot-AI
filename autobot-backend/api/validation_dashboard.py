@@ -6,7 +6,6 @@ Validation Dashboard API for AutoBot
 Provides endpoints for real-time validation dashboard and reports
 """
 
-import logging
 import os
 
 # Import the dashboard generator
@@ -49,6 +48,8 @@ except ImportError as e:
     ValidationDashboardGenerator = _MissingDep("ValidationDashboardGenerator", e)  # type: ignore[assignment]
     import_error = str(e)
 
+from autobot_shared.logging_manager import get_logger
+
 # Import LLM judges for validation enhancement
 try:
     from judges.agent_response_judge import AgentResponseJudge
@@ -59,7 +60,7 @@ except ImportError:
     VALIDATION_JUDGES_AVAILABLE = False
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Thread-safe global singletons
 import threading

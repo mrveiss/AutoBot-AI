@@ -23,8 +23,9 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _COLLECTION_NAME = "autobot_verbatim"
 _DEFAULT_LIMIT = 10

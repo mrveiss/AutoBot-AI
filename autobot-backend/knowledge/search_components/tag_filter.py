@@ -8,10 +8,10 @@ Issue #381: Extracted from search.py god class refactoring.
 Contains tag-based filtering functionality.
 """
 
-import logging
 from typing import Any, Dict, List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TagFilter:

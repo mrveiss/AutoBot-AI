@@ -10,6 +10,7 @@ REST API for user management operations.
 import logging
 import uuid
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -49,7 +50,7 @@ from user_management.services.user_service import (
 )
 
 router = APIRouter(prefix="/users", tags=["Users"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # -------------------------------------------------------------------------

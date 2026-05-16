@@ -8,12 +8,12 @@ Issue #1403: Provides registration, lookup by type, fallback behavior,
 and runtime adapter switching per agent/task.
 """
 
-import logging
 from typing import Dict, List, Optional
 
 from .base import AdapterBase, EnvironmentTestResult
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AdapterRegistry:

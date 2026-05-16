@@ -8,14 +8,14 @@ Issue #381: Extracted from gpu_acceleration_optimizer.py god class refactoring.
 Contains individual optimization strategy implementations.
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from utils.performance_monitor import performance_monitor
 
 from .types import GPUCapabilities, GPUOptimizationConfig
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _get_memory_utilization_recommendations(

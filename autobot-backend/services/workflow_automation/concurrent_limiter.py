@@ -9,7 +9,6 @@ workflows and providing configurable overflow handling (reject/queue/drop-oldest
 """
 
 import asyncio
-import logging
 import os
 import time
 from autobot_shared.ssot_config import config
@@ -22,8 +21,9 @@ _ACQUIRE_TIMEOUT_SECONDS = float(config.concurrent_limiter_timeout)
 _EVICTION_POLL_SECONDS = 5.0  # max time to wait for oldest entry to vacate before dropping it
 
 from constants.threshold_constants import TimingConstants
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

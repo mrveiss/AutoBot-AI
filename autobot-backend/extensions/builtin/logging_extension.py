@@ -13,8 +13,9 @@ import time
 from typing import Optional
 
 from extensions.base import Extension, HookContext
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LoggingExtension(Extension):

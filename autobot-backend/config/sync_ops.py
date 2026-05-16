@@ -10,10 +10,11 @@ import json
 import logging
 import time
 from typing import Any, Dict
+from autobot_shared.logging_manager import get_logger
 
 import yaml
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SyncOperationsMixin:

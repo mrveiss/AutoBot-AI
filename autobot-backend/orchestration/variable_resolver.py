@@ -23,14 +23,14 @@ steps can detect them rather than silently operating on empty strings.
 """
 
 import json
-import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from constants.status_enums import TaskStatus
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # StepOutput dataclass

@@ -11,7 +11,6 @@ re-generates with the critique as guidance, up to a configurable depth.
 Issue #1383: Follow-up from #1373.
 """
 
-import logging
 from typing import Dict, List, Optional
 from uuid import UUID
 
@@ -28,8 +27,9 @@ from knowledge.pipeline.registry import TaskRegistry
 from rlm.evaluator import ResponseQualityEvaluator
 from rlm.types import RLMConfig
 from services.llm_service import get_llm_service
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # -----------------------------------------------------------------------
 # Evaluation prompt specialised for summaries

@@ -19,10 +19,11 @@ import logging
 import re
 import uuid
 from typing import Any, Dict, List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
 from .types import AgentCapability, AgentTask, ExecutionStrategy, WorkflowPlan
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class StrategyPlanner:

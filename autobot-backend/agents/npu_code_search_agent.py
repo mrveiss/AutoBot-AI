@@ -17,6 +17,7 @@ import os
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 
@@ -31,7 +32,7 @@ from worker_node import WorkerNode
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for code element types
 _CODE_ELEMENT_TYPES = ("functions", "classes", "imports", "variables")
@@ -185,7 +186,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         Issue #281: Refactored from 135 lines to use extracted helper methods.
         """
         super().__init__("npu_code_search")
-        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        self.logger = get_logger(f"{__name__}.{self.__class__.__name__}")
 
         # Redis setup
         self.redis_client = get_redis_client(async_client=False)

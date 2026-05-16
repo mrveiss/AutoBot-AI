@@ -9,15 +9,15 @@ Issue #873 - Activity Tracking Integration Hooks (#608 Phase 5)
 Integration hooks for tracking terminal command execution activities.
 """
 
-import logging
 import uuid
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from utils.activity_tracker import track_terminal_activity
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _build_command_metadata(shell_type: str) -> dict:

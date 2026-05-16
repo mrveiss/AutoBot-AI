@@ -14,6 +14,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -36,7 +37,7 @@ from services.config_revision_service import ConfigRevisionService
 from services.config_service import ConfigService
 from services.slm_client import get_slm_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # 6-tier model mapping (#2553) — all defaults from SSOT constants.
 from autobot_shared.ssot_config import CLASSIFICATION_MODEL as _SSOT_CLASSIFICATION

@@ -7,6 +7,7 @@ import os
 import platform
 import subprocess  # nosec B404 - required for system commands
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 # #7166: markdownify is an optional dependency. Hard-import made the whole
 # module unimportable in any environment that didn't install it (any module
@@ -20,7 +21,7 @@ globals().update(optional_import("markdownify", ["markdownify"]))
 md = markdownify  # type: ignore[name-defined]  # noqa: F821 — populated by optional_import
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for valid service actions (Issue #326)
 VALID_SERVICE_ACTIONS = {"start", "stop", "restart"}

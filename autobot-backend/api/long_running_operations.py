@@ -48,6 +48,7 @@ from api.schemas_workflows import (
 )
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
@@ -76,7 +77,7 @@ except ImportError as _e:
     operation_integration_manager = _MissingDep("operation_integration_manager", _e)  # type: ignore[assignment]
     _OPERATIONS_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["long-running-operations"])
 
 # Performance optimization: O(1) lookup for failed operation statuses (Issue #326)

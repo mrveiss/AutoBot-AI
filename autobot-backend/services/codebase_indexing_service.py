@@ -18,7 +18,6 @@ Features:
 """
 
 import asyncio
-import logging
 import re
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -30,8 +29,9 @@ import aiofiles
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from knowledge_base_factory import get_knowledge_base
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for file type and metadata filtering (Issue #326)
 JAVASCRIPT_LANGUAGE_TYPES = {"javascript", "typescript"}

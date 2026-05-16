@@ -5,6 +5,7 @@
 
 import logging
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -22,7 +23,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from skills.db import get_skills_engine
 from skills.models import RepoType, SkillRepo
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 

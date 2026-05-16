@@ -11,12 +11,13 @@ Part of Issue #381 - God Class Refactoring
 
 import logging
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
 from ..models import ContextElement
 from ..time_provider import TimeProvider
 from ..types import ContextType
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AudioContextCollector:

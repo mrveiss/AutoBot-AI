@@ -9,14 +9,14 @@ Issue #635.
 """
 
 import hashlib
-import logging
 import uuid
 from typing import Optional
 
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_24_HOURS
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SessionService:

@@ -14,13 +14,13 @@ differences are ``async def`` and ``await``.
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any, List, Optional, Sequence
 
 from knowledge.backends.async_base import AsyncBaseClient, AsyncBaseCollection
 from knowledge.backends.base import Embedding, Metadata, Where, WhereDocument
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AsyncChromaDBCollection(AsyncBaseCollection):

@@ -15,6 +15,7 @@ import logging
 import os
 import time
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from ..models import LLMRequest, LLMResponse
 from .base import (
@@ -25,7 +26,7 @@ from .base import (
     EnvironmentTestResult,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GroqAdapter(AdapterBase):

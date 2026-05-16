@@ -9,7 +9,6 @@ Issue #873 - Activity Tracking Integration Hooks (#608 Phase 5)
 Integration hooks for tracking file system operation activities.
 """
 
-import logging
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -17,8 +16,9 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from utils.activity_tracker import track_file_activity
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _resolve_file_type(path: str) -> Optional[str]:

@@ -11,12 +11,12 @@ Legacy tools that do not set ``tool_permission`` on HookContext are allowed
 through unchanged so that existing callers are not broken.
 """
 
-import logging
 from typing import Optional
 
 from extensions.base import Extension, HookContext
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

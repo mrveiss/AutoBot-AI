@@ -7,13 +7,13 @@ This module replaces LLM-based command extraction with a safelist approach.
 """
 
 import json
-import logging
 import os
 from typing import Dict, Optional, Tuple
 
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozensets to avoid repeated list creation
 _COMMAND_REQUEST_KEYWORDS = frozenset({"run", "execute", "command"})

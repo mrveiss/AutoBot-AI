@@ -26,7 +26,6 @@ Issue #49 - Additional MCP Bridges (Browser, HTTP, Database, Git)
 
 import asyncio
 import json
-import logging
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -51,8 +50,9 @@ from type_defs.common import JSONObject, Metadata
 from utils.template_loader import load_mcp_tools, mcp_tools_exist
 
 from .schemas_code import HTTPClientMCPStatusResponse, HTTPRequestResultResponse
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(
     tags=["http_client_mcp", "mcp"],
     dependencies=[Depends(check_admin_permission)],

@@ -12,14 +12,14 @@ Part of the modular autobot_memory_graph package (Issue #716).
 """
 
 import asyncio
-import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from .core import ENTITY_TYPES, AutoBotMemoryGraphCore
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EntityOperationsMixin:

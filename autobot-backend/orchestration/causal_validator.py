@@ -14,7 +14,6 @@ Pre-execution validation engine that checks:
 Issue: Extend DAG executor with causal validation and effect tracing.
 """
 
-import logging
 from typing import Dict, List, Optional
 
 from orchestration.causal_models import (
@@ -22,8 +21,9 @@ from orchestration.causal_models import (
     CausalMetadata,
 )
 from orchestration.dag_executor import WorkflowDAG
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ValidationIssue:

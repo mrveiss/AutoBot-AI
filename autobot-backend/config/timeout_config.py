@@ -6,12 +6,12 @@
 Timeout configuration management for unified config manager.
 """
 
-import logging
 import os
 from autobot_shared.ssot_config import config
 from typing import Any, Dict
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for required timeout categories
 _REQUIRED_TIMEOUT_CATEGORIES = ("redis", "llamaindex", "documents", "http", "llm")

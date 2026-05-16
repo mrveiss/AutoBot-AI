@@ -16,15 +16,15 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import logging
 import os
 import re
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 import yaml
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _DEFAULT_CONFIG = os.path.join(os.path.dirname(__file__), "..", "config", "tool_output_filters.yaml")
 _TEE_DIR = Path.home() / ".local" / "share" / "autobot" / "tee"

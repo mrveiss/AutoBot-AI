@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import re
 import shutil
 import tempfile
@@ -28,8 +27,9 @@ from fastapi import HTTPException, UploadFile, status
 
 from autobot_shared.ssot_config import config
 from plugin_sdk.base import PluginManifest
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
 _GIT_URL_SCHEMES = {"http", "https"}

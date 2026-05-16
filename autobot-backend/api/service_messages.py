@@ -12,7 +12,6 @@ Endpoints:
 - GET /api/service-messages/chain/{correlation_id} — full correlation chain
 """
 
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -27,8 +26,9 @@ from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.message_bus import get_message_bus
 from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/service-messages", tags=["service-messages"])
 

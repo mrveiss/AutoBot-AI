@@ -26,11 +26,12 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_client import get_redis_client
 from knowledge.memory_graph.hybrid_scorer import HybridScorer, SearchResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants

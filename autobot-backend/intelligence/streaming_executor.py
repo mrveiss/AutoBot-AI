@@ -17,6 +17,7 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 # #7127: running this file directly cannot work — top-level project imports
 # below need sys.path entries that an inline `__main__` block cannot install
@@ -36,7 +37,7 @@ if __name__ == "__main__":
 from autobot_shared.ssot_config import config as _ssot_config
 from utils.command_validator import CommandValidator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ChunkType(Enum):

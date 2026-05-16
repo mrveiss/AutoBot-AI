@@ -14,7 +14,6 @@ Related Issue: #964 - Multi-profile personality system
 """
 
 import json
-import logging
 import os
 import uuid
 from autobot_shared.ssot_config import config
@@ -23,8 +22,9 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from autobot_shared.time_utils import now_utc
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _PERSONALITIES_DIR = Path(config.base_dir) / "autobot-backend" / "resources" / "personalities"
 

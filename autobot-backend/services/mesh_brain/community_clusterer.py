@@ -13,8 +13,9 @@ process start. The import only occurs when cluster_graph() is called.
 
 import logging
 from typing import Any
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _MAX_COMMUNITY_FRACTION = 0.25
 _MIN_SPLIT_SIZE = 10

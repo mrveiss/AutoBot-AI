@@ -7,7 +7,6 @@ Dependency analysis endpoints
 
 import ast
 import asyncio
-import logging
 from pathlib import Path
 from typing import Dict, List, Set
 
@@ -21,8 +20,9 @@ from utils.chromadb_client import get_all_paginated
 
 from ..storage import get_code_collection
 from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, get_project_root
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

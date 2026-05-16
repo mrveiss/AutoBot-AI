@@ -7,14 +7,14 @@ Temporal Search Service - Search and traverse temporal events.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-import logging
 from datetime import datetime
 from typing import List, Optional, Set
 from uuid import UUID
 
 from autobot_shared.time_utils import parse_utc_iso
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TemporalSearchService:

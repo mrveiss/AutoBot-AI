@@ -9,6 +9,7 @@ import asyncio
 import logging
 import time
 from typing import Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from .base import ProviderHealthResult, ProviderStatus
 from .providers import (
@@ -20,7 +21,7 @@ from .providers import (
     VLLMHealth,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ProviderHealthManager:

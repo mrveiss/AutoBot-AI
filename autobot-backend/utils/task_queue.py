@@ -10,7 +10,6 @@ priority handling, retry logic, and distributed task execution.
 
 import asyncio
 import json
-import logging
 import time
 import traceback
 import uuid
@@ -33,6 +32,7 @@ except ImportError as _e:
     get_redis_client = _MissingDep("get_redis_client", _e)  # type: ignore[assignment]
 
 from constants.threshold_constants import RetryConfig, TimingConstants
+from autobot_shared.logging_manager import get_logger
 
 # Temporary implementations until proper modules are created
 # try:
@@ -177,7 +177,7 @@ class TaskQueue:
         # Worker management
         self.workers: List[asyncio.Task] = []
         self.is_running = False
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
 
         # Optional NPUWorkerManager reference for per-worker task tracking (#2944).
         # Set externally after construction: queue.npu_worker_manager = manager

@@ -12,10 +12,11 @@ import asyncio
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import yaml
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _YAML_PATH = Path(__file__).parent.parent / "config" / "context_windows.yaml"
 

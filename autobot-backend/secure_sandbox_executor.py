@@ -46,8 +46,9 @@ from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_optional_singleton
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.ttl_constants import TTL_1_HOUR
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SandboxSecurityLevel(Enum):
@@ -114,7 +115,7 @@ class SecureSandboxExecutor:
 
     def __init__(self, docker_client: "Optional[docker.DockerClient]" = None):
         """Initialize secure sandbox executor with Docker client and Redis monitoring."""
-        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        self.logger = get_logger(f"{__name__}.{self.__class__.__name__}")
 
         # Docker client — fail informatively if SDK is missing (#6667)
         if not DOCKER_SDK_AVAILABLE:

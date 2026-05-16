@@ -17,8 +17,9 @@ import logging
 from enum import Enum
 from functools import lru_cache
 from typing import Dict
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AgentTier(Enum):

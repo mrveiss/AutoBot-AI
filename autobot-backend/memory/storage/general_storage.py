@@ -6,7 +6,6 @@ General Storage Implementation - Category-based memory management
 """
 
 import json
-import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Union
@@ -17,8 +16,9 @@ from autobot_shared.time_utils import parse_utc_iso
 
 from ..enums import MemoryCategory
 from ..models import MemoryEntry
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GeneralStorage:

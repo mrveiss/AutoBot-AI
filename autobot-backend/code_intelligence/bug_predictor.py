@@ -27,7 +27,6 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 """
 
 import asyncio
-import logging
 import re
 import subprocess  # nosec B404 - required for git operations
 import time
@@ -39,8 +38,9 @@ from typing import Any, Dict, List, Optional
 
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # TTL for git-based caches (seconds); prevents unbounded memory growth (#1551)
 _CHANGE_FREQ_CACHE_TTL = 3600  # 1 hour — git log --since=90 days

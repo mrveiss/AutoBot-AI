@@ -6,6 +6,7 @@ import logging
 import os
 import time
 from typing import Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException
@@ -31,7 +32,7 @@ def _validate_prompt_id(prompt_id: str) -> str:
     return prompt_id
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Cache for prompts to avoid re-reading files on every request
 _prompts_cache: Optional[Dict] = None

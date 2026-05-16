@@ -7,11 +7,11 @@ Streaming Management - Manage LLM streaming state and failures.
 Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 """
 
-import logging
 import time
 from typing import Dict
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class StreamingManager:

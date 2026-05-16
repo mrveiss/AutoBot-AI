@@ -15,12 +15,12 @@ SKIP_WEBSOCKET_PERSISTENCE_TYPES in backend/type_defs/common.py
 (Issue #350 root cause fix).
 """
 
-import logging
 import time
 import uuid
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MessagesMixin:

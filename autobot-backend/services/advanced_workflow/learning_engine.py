@@ -7,15 +7,15 @@ Workflow Learning Engine
 Machine learning component for workflow optimization.
 """
 
-import logging
 from datetime import datetime, timezone
 from typing import List
 
 from type_defs.common import Metadata
 
 from .models import SmartWorkflowStep
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WorkflowLearningEngine:

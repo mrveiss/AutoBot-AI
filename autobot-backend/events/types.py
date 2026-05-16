@@ -18,7 +18,6 @@ Event Types:
 """
 
 import json
-import logging
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -27,8 +26,9 @@ from enum import Enum, auto
 from typing import Any, Optional
 
 from autobot_shared.time_utils import now_utc, parse_utc_iso
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ArtifactType(str, Enum):

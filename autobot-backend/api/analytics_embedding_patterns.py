@@ -17,7 +17,6 @@ Related: #229 (LLM Integration Pattern Analyzer - CLOSED)
 """
 
 import json
-import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -33,9 +32,10 @@ from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 from constants.ttl_constants import TTL_30_DAYS, TTL_90_DAYS
+from autobot_shared.logging_manager import get_logger
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================

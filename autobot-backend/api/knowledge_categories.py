@@ -22,7 +22,6 @@ Endpoints:
 Related Issues: #77 (Organization), #411 (Categories)
 """
 
-import logging
 import re
 from typing import Optional
 
@@ -49,8 +48,9 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import QueryDefaults
 from knowledge_factory import get_or_create_knowledge_base
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #411: Pre-compiled regex for category ID validation
 _CATEGORY_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")

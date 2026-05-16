@@ -16,6 +16,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
@@ -42,7 +43,7 @@ from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_5_MINUTES
 from utils.background_task_manager import BackgroundTaskManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/bug-prediction", tags=["bug-prediction", "analytics"])
 

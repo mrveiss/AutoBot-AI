@@ -9,6 +9,7 @@ ChromaDB for semantic knowledge search over experiment findings.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import json
@@ -20,7 +21,7 @@ from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from .config import AutoResearchConfig
 from .models import Experiment, ExperimentState, ExperimentStats
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ExperimentStore(AsyncRedisClientMixin):

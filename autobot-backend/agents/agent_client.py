@@ -11,6 +11,7 @@ import logging
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 
@@ -30,7 +31,7 @@ from .base_agent import (
     serialize_agent_request,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AgentClientConfig:

@@ -14,8 +14,9 @@ import os
 import subprocess
 import sys
 from typing import Dict, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _parse_resolution_from_part(part: str, delimiter: str = "x") -> Optional[Tuple[int, int]]:

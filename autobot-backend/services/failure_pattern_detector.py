@@ -13,15 +13,15 @@ Issue #2154: Pattern-based error recovery optimization.
 
 import hashlib
 import json
-import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_30_DAYS
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key patterns
 PATTERN_KEY_PREFIX = "failure:pattern:"

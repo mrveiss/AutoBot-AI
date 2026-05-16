@@ -12,6 +12,7 @@ intelligent content analysis using the AI Stack VM.
 import asyncio
 import logging
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
@@ -35,7 +36,7 @@ from utils.response_helpers import (
     handle_ai_stack_error,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ====================================================================
 # Router Configuration

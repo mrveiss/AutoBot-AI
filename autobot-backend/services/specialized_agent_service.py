@@ -10,12 +10,12 @@ definitions in the web UI.  Each .md file uses YAML frontmatter
 prompt.
 """
 
-import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Repository root — two levels up from services/
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent

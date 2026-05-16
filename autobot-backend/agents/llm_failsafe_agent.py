@@ -16,6 +16,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
@@ -26,7 +27,7 @@ from autobot_shared.ssot_config import (
 from .base_agent import DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LLMTier(Enum):
@@ -77,7 +78,7 @@ class LLMFailsafeAgent(StandardizedAgent):
         """
         super().__init__(agent_type or self.AGENT_ID, deployment_mode)
         # Override self.logger to preserve existing naming convention
-        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        self.logger = get_logger(f"{__name__}.{self.__class__.__name__}")
 
         # Use explicit SSOT config - raises AgentConfigurationError if not set
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)

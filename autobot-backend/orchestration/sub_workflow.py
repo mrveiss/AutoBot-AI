@@ -29,7 +29,6 @@ extract_sub_workflow_step(step)
     Parse a raw step dict into a SubWorkflowStep dataclass.
 """
 
-import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
@@ -40,8 +39,9 @@ from .variable_resolver import StepOutput, VariableResolver
 if TYPE_CHECKING:
     # Avoid a circular import at runtime — WorkflowExecutor imports this module.
     from .workflow_executor import WorkflowExecutor
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants

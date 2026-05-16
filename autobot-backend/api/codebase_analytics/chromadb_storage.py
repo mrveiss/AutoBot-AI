@@ -14,6 +14,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_client import get_async_redis_client
 from utils.file_categorization import FILE_CATEGORY_CODE
@@ -24,7 +25,7 @@ from .storage import (
     get_redis_connection,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # =============================================================================
 # Configuration Constants (Issue #539: Configurable via environment variables)

@@ -10,14 +10,14 @@ Prevents cascading failures via fail-fast pattern.
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from threading import Lock
 from typing import Any, Callable, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CircuitBreakerState(Enum):

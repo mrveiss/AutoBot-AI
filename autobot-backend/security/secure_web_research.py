@@ -8,7 +8,6 @@ Provides secure web research functionality with comprehensive safety checks,
 input validation, domain security, and content filtering.
 """
 
-import logging
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, FrozenSet, Optional
@@ -17,8 +16,9 @@ from ..agents.web_researcher import ResearchType
 from ..agents.web_researcher import WebResearcher as WebResearchIntegration
 from .domain_security import DomainSecurityConfig, DomainSecurityManager
 from .input_validator import WebResearchInputValidator
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for risk levels requiring confirmation
 _CONFIRMATION_REQUIRED_RISK_LEVELS: FrozenSet[str] = frozenset({"medium", "high"})

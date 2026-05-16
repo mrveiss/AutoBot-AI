@@ -15,6 +15,7 @@ import hashlib
 import json
 import logging
 from typing import Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
@@ -24,7 +25,7 @@ from services.tool_output_filter import get_tool_output_filter
 
 from .types import CommandBreakdownPart, CommandExplanation, OutputExplanation
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CommandExplanationService:

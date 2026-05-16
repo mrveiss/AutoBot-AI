@@ -42,9 +42,10 @@ sys.path.append(config.project_root)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tests.test_helpers import get_test_backend_url
+from autobot_shared.logging_manager import get_logger
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

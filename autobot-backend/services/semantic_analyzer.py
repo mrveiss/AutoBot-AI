@@ -8,11 +8,11 @@ Detects frameworks, coding patterns, and AutoBot conventions.
 """
 
 import ast
-import logging
 import re
 from typing import List, Set
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SemanticAnalyzer:

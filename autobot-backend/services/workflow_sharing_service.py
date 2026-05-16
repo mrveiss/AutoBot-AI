@@ -40,15 +40,15 @@ Usage:
 """
 
 import json
-import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import utc_timestamp
 from services.workflow_serializer import WorkflowSerializer
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key prefixes
 _SHARE_KEY_PREFIX = "autobot:workflow_share"

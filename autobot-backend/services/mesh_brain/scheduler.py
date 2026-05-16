@@ -10,8 +10,9 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from constants.threshold_constants import TimingConstants
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Job status

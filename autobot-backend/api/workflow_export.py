@@ -10,8 +10,6 @@ Registered in feature_routers.py as:
     ("api.workflow_export", "/workflow-export", ["workflow-export"], "workflow_export")
 """
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_workflows import (
@@ -30,8 +28,9 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.workflow_automation.routes import get_workflow_manager
 from services.workflow_serializer import WorkflowSerializer
 from services.workflow_sharing_service import WorkflowSharingService
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["workflow-export"])
 

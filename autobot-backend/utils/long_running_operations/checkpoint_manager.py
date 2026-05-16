@@ -9,7 +9,6 @@ Handles checkpoint save/load/resume functionality.
 """
 
 import json
-import logging
 import pickle  # nosec B403 - pickle used for internal checkpoint serialization only
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -22,8 +21,9 @@ from constants.path_constants import PATH
 from constants.ttl_constants import TTL_7_DAYS
 
 from .types import OperationCheckpoint
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OperationCheckpointManager:

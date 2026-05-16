@@ -11,7 +11,6 @@ when the main asyncio thread pool is saturated by indexing operations.
 
 import asyncio
 import json
-import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,8 +37,9 @@ from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata
 from utils.io_executor import run_in_log_executor
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["logs"])
 

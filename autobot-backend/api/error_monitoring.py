@@ -10,7 +10,6 @@ Provides endpoints for monitoring system errors and error boundary statistics.
 
 import asyncio
 import json
-import logging
 import os
 import sys
 from typing import Optional
@@ -37,6 +36,7 @@ from autobot_shared.error_boundaries import (
 from config.manager import get_config_manager
 from type_defs.common import Metadata
 from utils.error_metrics import get_metrics_collector
+from autobot_shared.logging_manager import get_logger
 
 config = get_config_manager()
 
@@ -44,7 +44,7 @@ config = get_config_manager()
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Create FastAPI router
 router = APIRouter(tags=["Error Monitoring"])

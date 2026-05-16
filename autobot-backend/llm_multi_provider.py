@@ -18,7 +18,6 @@ New code should import directly from ``llm_interface_pkg.providers``:
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Dict, List, Optional, Union
 
 # ---------------------------------------------------------------------------
@@ -42,8 +41,9 @@ from llm_interface_pkg.providers import (
     VLLMProvider,
 )
 from llm_interface_pkg.types import LLMType, ProviderType
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

@@ -12,13 +12,13 @@ Provides export and import operations for chat conversations:
 """
 
 import json
-import logging
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Format identifier embedded in every exported archive
 AUTOBOT_EXPORT_FORMAT = "autobot-conversation-v1"

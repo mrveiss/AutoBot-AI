@@ -1,15 +1,13 @@
-from autobot_shared.ssot_config import config
-import logging
-import os
-
-logger = logging.getLogger(__name__)
-
 """
 Add Phase 9 monitoring router to the registry
 """
 
-# Read the registry file and add the Phase 9 monitoring entry
 import re
+
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+
+logger = get_logger(__name__)
 
 
 def add_phase9_monitoring_to_registry():

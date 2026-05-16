@@ -13,6 +13,7 @@ all blocking operations with asyncio.to_thread() for proper async handling.
 
 Usage:
     from utils.async_chromadb_client import (
+from autobot_shared.logging_manager import get_logger
         get_async_chromadb_client,
         AsyncChromaCollection
     )
@@ -46,7 +47,7 @@ if TYPE_CHECKING:
 _CHROMADB_HOST = config.chromadb_host
 _CHROMADB_PORT = _ssot_config.port.chromadb
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuples for ChromaDB default includes
 _DEFAULT_QUERY_INCLUDE = ["documents", "metadatas", "distances"]

@@ -10,7 +10,6 @@ Multi-level context extraction for intelligent code completion.
 import ast
 import hashlib
 import json
-import logging
 import uuid
 from typing import Optional
 
@@ -19,8 +18,9 @@ from models.completion_context import CompletionContext
 from services.dependency_tracker import DependencyTracker
 from services.semantic_analyzer import SemanticAnalyzer
 from services.type_inference import TypeInferencer
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ContextAnalyzer:

@@ -34,8 +34,9 @@ from autobot_shared.ssot_config import config
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Cache TTL in seconds for remote capability checks.
 _CACHE_TTL = int(os.environ.get("AUTOBOT_A2A_CAPABILITY_TTL", "300"))

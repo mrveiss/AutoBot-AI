@@ -19,8 +19,9 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PipelineProfiler:

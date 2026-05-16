@@ -13,6 +13,7 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from knowledge.connectors.models import (
     ChangeInfo,
@@ -50,7 +51,7 @@ class AbstractConnector(ABC):
 
     def __init__(self, config: ConnectorConfig) -> None:
         self.config = config
-        self.logger = logging.getLogger("%s.%s" % (__name__, self.connector_type or type(self).__name__))
+        self.logger = get_logger("%s.%s" % (__name__, self.connector_type or type(self).__name__))
 
     # ------------------------------------------------------------------
     # Abstract interface — every connector MUST implement these

@@ -12,7 +12,6 @@ Features:
 - Audit logging for all operations
 """
 
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -26,8 +25,9 @@ from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.redis_service_manager import RedisConnectionError, RedisServiceManager
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["Redis Service Management"])
 
 # Performance optimization: O(1) lookup for privileged roles (Issue #326)

@@ -9,7 +9,6 @@ for the intelligent agent system.
 """
 
 import asyncio
-import logging
 import os
 import platform
 import shutil
@@ -19,9 +18,10 @@ from typing import Dict, FrozenSet, Optional, Set, Tuple
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level cached tool category sets to avoid repeated set creation
 _NETWORK_TOOLS: FrozenSet[str] = frozenset(

@@ -25,13 +25,14 @@ Server streams:
 import json
 import logging
 from typing import Any, Callable, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 

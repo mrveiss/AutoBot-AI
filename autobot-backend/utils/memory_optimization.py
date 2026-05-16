@@ -19,8 +19,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, TypeVar, Union
 
 import psutil
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Type variable for generic caching
 T = TypeVar("T")
@@ -32,7 +33,7 @@ def _prepare_logger(name: str, level: int) -> logging.Logger:
 
     Issue #620.
     """
-    log = logging.getLogger(name)
+    log = get_logger(name)
     log.setLevel(level)
     for handler in log.handlers[:]:
         log.removeHandler(handler)

@@ -11,6 +11,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiosqlite
 
@@ -18,7 +19,7 @@ from autobot_shared.time_utils import utc_timestamp
 from knowledge.pipeline.base import BaseLoader, PipelineContext
 from knowledge.pipeline.registry import TaskRegistry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 CREATE_TABLES_SQL = """

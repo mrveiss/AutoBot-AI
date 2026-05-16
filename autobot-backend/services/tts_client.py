@@ -15,15 +15,15 @@ Usage:
         wav_bytes = await client.synthesize("Hello world", voice_id="alba")
 """
 
-import logging
 import os
 
 import aiohttp
 
 from autobot_shared.ssot_config import config
 from autobot_shared.ssot_config import get_config
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _ssot = get_config()
 TTS_WORKER_HOST = config.tts_worker_host

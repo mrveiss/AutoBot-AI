@@ -9,6 +9,7 @@ Issue #679: Organization-level knowledge policies, analytics, and controls.
 
 import logging
 from typing import Dict
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -25,7 +26,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from knowledge.ownership import VisibilityLevel
 from knowledge_factory import get_or_create_knowledge_base
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/knowledge/organization", tags=["knowledge-organization"])
 

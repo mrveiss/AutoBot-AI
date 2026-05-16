@@ -39,6 +39,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
+from autobot_shared.logging_manager import get_logger
 
 import aiofiles
 import redis.asyncio as async_redis
@@ -49,7 +50,7 @@ from models.task_context import AuditQueryContext
 from type_defs.common import Metadata
 from utils.async_initializable import AsyncInitializable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Audit result types
 AuditResult = Literal["success", "denied", "failed", "error"]

@@ -8,7 +8,6 @@ Issue #208: Generates actionable refactoring proposals based on
 detected patterns, duplicates, and complexity hotspots.
 """
 
-import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -22,8 +21,9 @@ from .types import (
     PatternType,
     RegexOpportunity,
 )
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

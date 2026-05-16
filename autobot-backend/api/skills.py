@@ -12,6 +12,7 @@ Includes metrics and health tracking (Issue #4339).
 
 import logging
 from typing import Any, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
@@ -45,9 +46,9 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from skills.manager import SkillManager
 from skills.registry import get_skill_registry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 _manager: Optional[SkillManager] = None

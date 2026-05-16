@@ -18,6 +18,7 @@ Features:
 
 Usage:
     from services.captcha_human_loop import CaptchaHumanLoop
+from autobot_shared.logging_manager import get_logger
 
     captcha_service = CaptchaHumanLoop(timeout_seconds=120)
     result = await captcha_service.request_human_intervention(
@@ -60,7 +61,7 @@ from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 from event_manager import get_event_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for unsupported CAPTCHA types (require human intervention)
 _UNSUPPORTED_CAPTCHA_TYPES = ("recaptcha", "hcaptcha", "cloudflare")

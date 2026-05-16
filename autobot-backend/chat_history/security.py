@@ -11,12 +11,12 @@ Provides secure data handling for chat history with:
 """
 
 import json
-import logging
 from typing import Any, Dict
 
 from encryption_service import decrypt_data, encrypt_data, get_encryption_service
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SecurityMixin:

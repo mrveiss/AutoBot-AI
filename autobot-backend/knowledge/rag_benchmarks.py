@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
 import pytest
 
@@ -38,7 +39,7 @@ except ModuleNotFoundError:
     BenchmarkRunner = None  # type: ignore[assignment,misc]
     assert_performance = None  # type: ignore[assignment]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TestRAGQueryBenchmarks:

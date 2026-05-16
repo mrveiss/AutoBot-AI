@@ -7,7 +7,6 @@ Workflow Automation Manager Module
 Main coordinator for workflow automation using composition.
 """
 
-import logging
 import uuid
 from typing import Dict, List, Optional
 
@@ -28,8 +27,9 @@ from .models import (
     WorkflowStep,
 )
 from .templates import WorkflowTemplateManager
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WorkflowAutomationManager:

@@ -18,6 +18,7 @@ performance requirements, and system resources.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import logging
@@ -46,7 +47,7 @@ from utils.model_optimization import (
 
 config = get_config_manager()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 __all__ = [
     # Types and enums
@@ -79,7 +80,7 @@ class ModelOptimizer:
 
     def __init__(self):
         """Initialize model optimizer with caching and performance tracking."""
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self._redis_client = None
         self._models_cache: Dict[str, ModelInfo] = {}
         self._performance_history: Dict[str, Any] = {}

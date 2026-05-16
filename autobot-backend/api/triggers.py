@@ -15,6 +15,7 @@ Routes:
 
 import logging
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
@@ -33,7 +34,7 @@ from services.trigger_service import (
     TriggerType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["triggers"])
 

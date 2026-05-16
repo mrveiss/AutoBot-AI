@@ -13,6 +13,7 @@ import re
 import time
 import uuid
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
@@ -21,7 +22,7 @@ from utils.encoding_utils import strip_ansi_codes
 
 from .models import AgentTerminalSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for error detection patterns
 _ERROR_PATTERNS = (

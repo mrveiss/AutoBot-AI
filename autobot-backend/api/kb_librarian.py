@@ -31,7 +31,6 @@ Overlap note (issue #3336):
     duplicate.
 """
 
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -45,9 +44,10 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.post("/query", response_model=KBQueryResponse)

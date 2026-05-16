@@ -14,7 +14,6 @@ when the main asyncio thread pool is saturated by indexing operations.
 """
 
 import json
-import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List
@@ -22,8 +21,9 @@ from typing import Any, Dict, List
 import aiofiles
 
 from chat_history.file_io import run_in_chat_io_executor
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _extract_chat_id_from_filename(filename: str) -> str | None:

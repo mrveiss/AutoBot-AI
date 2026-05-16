@@ -16,11 +16,11 @@ Security Features:
 - Comprehensive audit logging
 """
 
-import logging
 import re
 import shlex
 from dataclasses import dataclass
 from typing import Dict, List, Pattern, Union
+from autobot_shared.logging_manager import get_logger
 
 # Issue #380: Pre-compiled dangerous patterns for command validation
 _DANGEROUS_PATTERNS: List[Pattern] = [
@@ -70,7 +70,7 @@ class CommandValidator:
 
     def __init__(self):
         """Initialize command validator with security whitelist."""
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self._init_whitelist()
 
     def _get_process_user_commands(self) -> Dict[str, CommandPattern]:

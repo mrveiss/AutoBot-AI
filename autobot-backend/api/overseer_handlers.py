@@ -12,7 +12,6 @@ Provides WebSocket endpoints for:
 """
 
 import asyncio
-import logging
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
@@ -29,8 +28,9 @@ from api.schemas_system import OverseerStatusResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from chat_history import ChatHistoryManager
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _dict_to_step_result(step_data: Dict[str, Any]) -> StepResult:

@@ -16,7 +16,6 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
 import asyncio
-import logging
 import statistics
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -36,8 +35,9 @@ from services.user_behavior_analytics import (
     UserBehaviorAnalytics,
     get_behavior_analytics,
 )
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MaintenancePriority(str, Enum):

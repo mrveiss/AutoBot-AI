@@ -18,6 +18,7 @@ Related Issues: #78 (Search Quality), #185 (Split), #209 (Knowledge split), #555
 
 import logging
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -56,7 +57,7 @@ except ImportError:
     ADVANCED_RAG_AVAILABLE = False
     logging.warning("Advanced RAG Service not available - reranking features disabled")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Create router for search endpoints
 router = APIRouter(tags=["knowledge-search"])

@@ -9,15 +9,15 @@ skills with unhealthy scores. Runs every 5 minutes.
 """
 
 import asyncio
-import logging
 from typing import Any, Dict, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from skills.registry import get_skill_registry
 
 from .skill_metrics import SkillMetrics
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 HEALTH_CHECK_INTERVAL = 5 * 60  # 5 minutes in seconds
 HEALTH_THRESHOLD = 0.5  # Skills below this score are auto-disabled

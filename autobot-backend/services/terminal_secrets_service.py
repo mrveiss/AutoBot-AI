@@ -19,6 +19,7 @@ Related Issues:
 
 Usage:
     from services.terminal_secrets_service import get_terminal_secrets_service
+from autobot_shared.logging_manager import get_logger
 
     service = get_terminal_secrets_service()
 
@@ -45,7 +46,7 @@ from services.agent_secrets_integration import (
     get_agent_secrets_integration,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

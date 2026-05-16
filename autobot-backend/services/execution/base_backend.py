@@ -8,7 +8,6 @@ Base interface for pluggable execution backends supporting local, Docker, SSH, a
 Provides unified API for task execution with resource limits, health checks, and result capture.
 """
 
-import logging
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -16,8 +15,9 @@ from enum import Enum
 from typing import Any, Dict, Optional, Tuple
 
 from autobot_shared.time_utils import now_utc
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ExecutionStatus(str, Enum):

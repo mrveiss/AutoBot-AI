@@ -10,7 +10,6 @@ Handles code generation from natural language descriptions, code explanation,
 and multi-language programming support.
 """
 
-import logging
 import threading
 from typing import Any, Dict, List, Optional
 
@@ -24,8 +23,9 @@ from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CodeGenerationAgent(StandardizedAgent):

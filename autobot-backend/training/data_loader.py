@@ -10,6 +10,7 @@ Loads code patterns from database and prepares training data.
 import logging
 import re
 from typing import Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 import torch
 from sqlalchemy import create_engine
@@ -19,7 +20,7 @@ from torch.utils.data import Dataset
 from autobot_shared.ssot_config import config
 from models.code_pattern import CodePattern
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Tokenizer:

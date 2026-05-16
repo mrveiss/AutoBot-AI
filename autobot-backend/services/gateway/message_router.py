@@ -8,12 +8,12 @@ Issue #732: Unified Gateway for multi-channel communication.
 Routes messages to appropriate agents based on content and context.
 """
 
-import logging
 from typing import Any, Dict, Optional
 
 from .types import MessageType, RoutingDecision, UnifiedMessage
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MessageRouter:

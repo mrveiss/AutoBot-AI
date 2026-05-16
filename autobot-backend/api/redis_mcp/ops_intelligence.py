@@ -8,14 +8,14 @@ Issue #2511: server_info, dbsize, memory_stats, stream_health, client_list, slow
 Agents can chain these tools for composite diagnostics.
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value as _decode
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _get_client(database: str = "main"):

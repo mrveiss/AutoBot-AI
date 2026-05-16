@@ -8,6 +8,7 @@ Tests for multi-level context extraction.
 """
 
 from unittest.mock import MagicMock, patch
+from autobot_shared.logging_manager import get_logger
 
 from services.context_analyzer import ContextAnalyzer
 
@@ -15,7 +16,7 @@ SAMPLE_CODE = """
 import logging
 from typing import List, Optional
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Calculator:

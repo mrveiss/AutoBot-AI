@@ -25,8 +25,9 @@ import gc
 import logging
 from dataclasses import dataclass
 from typing import Any, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

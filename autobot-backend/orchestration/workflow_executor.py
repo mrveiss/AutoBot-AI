@@ -25,6 +25,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from circuit_breaker import circuit_breaker_async
 from constants.status_enums import TaskStatus
@@ -60,7 +61,7 @@ from .workflow_memory import WorkflowMemory
 # Issue #3101: lazy import to avoid circular deps at module level
 _notification_service = None
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _get_notification_service():

@@ -10,6 +10,7 @@ Issue #679: Audit logging and compliance reporting for knowledge access and modi
 import logging
 from datetime import timedelta
 from typing import Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -26,7 +27,7 @@ from autobot_shared.time_utils import now_utc
 from knowledge.audit_log import KnowledgeAuditLog
 from knowledge_factory import get_or_create_knowledge_base
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/knowledge/audit", tags=["knowledge-audit"])
 

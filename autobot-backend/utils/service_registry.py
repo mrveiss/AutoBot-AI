@@ -24,7 +24,6 @@ Usage:
 
 import asyncio
 import json
-import logging
 import os
 import time
 from dataclasses import dataclass
@@ -42,6 +41,7 @@ from config.manager import get_config_manager
 
 config = get_config_manager()
 from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH, PATH_OLLAMA_TAGS
+from autobot_shared.logging_manager import get_logger
 
 
 class ServiceStatus(Enum):
@@ -190,7 +190,7 @@ class ServiceRegistry:
 
     def __init__(self, config_file: Optional[str] = None):
         """Initialize service registry with optional configuration file"""
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self.services: Dict[str, ServiceConfig] = {}
         self.health_status: Dict[str, ServiceHealth] = {}
         self.deployment_mode = self._detect_deployment_mode()

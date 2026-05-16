@@ -10,6 +10,7 @@ Supports cost tracking and automatic scaling.
 
 import logging
 from typing import Any, Dict, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.time_utils import now_utc, utc_timestamp
 
@@ -26,7 +27,7 @@ from services.execution.base_backend import (
     ExecutionTask,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ModalBackend(ExecutionBackend):

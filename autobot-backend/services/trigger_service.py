@@ -38,13 +38,14 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_90_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Lazy-initialised encryption service for webhook HMAC secrets at rest.
 # Populated on first call to _get_encryption_service() to avoid import-time

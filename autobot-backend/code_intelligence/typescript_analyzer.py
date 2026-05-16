@@ -17,6 +17,7 @@ import logging
 import re
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Set, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from code_intelligence.base_analyzer import (
     AnalysisIssue,
@@ -27,7 +28,7 @@ from code_intelligence.base_analyzer import (
     is_in_comment,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for TypeScript file extensions
 _TYPESCRIPT_EXTENSIONS: FrozenSet[str] = frozenset({".ts", ".tsx", ".mts", ".cts"})

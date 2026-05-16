@@ -15,14 +15,14 @@ GitHub Issue: #421
 """
 
 import gzip
-import logging
 import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Regex for validating command names passed to subprocess (Issue #1733).
 # Man page command names contain only alphanumeric, hyphen, underscore, dot, plus.

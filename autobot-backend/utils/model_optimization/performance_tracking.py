@@ -8,14 +8,14 @@ Issue #381: Extracted from model_optimizer.py god class refactoring.
 Contains model performance tracking and persistence to Redis.
 """
 
-import logging
 import time
 from typing import TYPE_CHECKING, Dict
 
 if TYPE_CHECKING:
     from .types import ModelInfo
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ModelPerformanceTracker:

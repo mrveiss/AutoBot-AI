@@ -13,13 +13,13 @@ Autoresearch (Karpathy) outputs lines like:
 
 from __future__ import annotations
 
-import logging
 import re
 from typing import Optional
 
 from .models import ExperimentResult
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Regex patterns for autoresearch output
 _STEP_PATTERN = re.compile(

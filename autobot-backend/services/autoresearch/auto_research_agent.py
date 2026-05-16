@@ -32,6 +32,7 @@ autoresearch sessions only.
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import dataclasses
@@ -53,7 +54,7 @@ from .models import Experiment, ExperimentResult, HyperParams
 from .runner import ExperimentRunner
 from .store import ExperimentStore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants

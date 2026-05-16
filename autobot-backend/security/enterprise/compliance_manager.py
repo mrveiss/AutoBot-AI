@@ -10,7 +10,6 @@ Issue #378: Added threading locks for file operations to prevent race conditions
 
 import asyncio
 import json
-import logging
 import os
 import threading
 from datetime import datetime
@@ -25,8 +24,9 @@ from cryptography.fernet import Fernet
 
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozensets for compliance checks
 _CONSENT_REQUIRED_ACTIONS = frozenset({"data_export", "analytics", "marketing"})

@@ -12,6 +12,7 @@ Pool sizes are coordinated via SSOT config (#2860).
 import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
+from autobot_shared.logging_manager import get_logger
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -22,7 +23,7 @@ from sqlalchemy.ext.asyncio import (
 
 from user_management.config import get_deployment_config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Singleton engine instance
 _async_engine: Optional[AsyncEngine] = None

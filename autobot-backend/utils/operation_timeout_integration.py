@@ -18,6 +18,7 @@ framework and existing AutoBot components, including:
 import asyncio
 import logging
 from typing import Any, Callable, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 import redis.asyncio as redis
 from fastapi import APIRouter, BackgroundTasks, WebSocket, WebSocketDisconnect
@@ -42,7 +43,7 @@ from .long_running_operations_framework import (
     execute_comprehensive_test_suite,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for operation status checks (Issue #326)
 FAILED_OPERATION_STATUSES = {OperationStatus.FAILED, OperationStatus.TIMEOUT}

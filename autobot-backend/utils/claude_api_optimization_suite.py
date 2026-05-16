@@ -14,7 +14,6 @@ This is the main integration point for the comprehensive Claude API optimization
 
 import asyncio
 import json
-import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -35,8 +34,9 @@ from .payload_optimizer import PayloadOptimizer
 from .request_batcher import BatchableRequest, IntelligentRequestBatcher
 from .todowrite_optimizer import get_todowrite_optimizer
 from .tool_pattern_analyzer import get_tool_pattern_analyzer
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for batchable request types
 _BATCHABLE_TYPES = ("read", "search", "analyze", "tool_call")

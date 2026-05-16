@@ -18,15 +18,15 @@ swallowed and logged at DEBUG level so tracing never disrupts tool calls.
 """
 
 import json
-import logging
 import time
 import uuid
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SPAN_TTL: int = 3600  # seconds
 _MAX_PARAM_BYTES: int = 4096  # 4 KB cap for input_params before Redis storage

@@ -27,10 +27,11 @@ import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.redis_client import get_async_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #640 / #5231: NPU availability caching now lives inside the canonical
 # ``services.npu_client`` helpers (``generate_embedding_with_fallback`` and

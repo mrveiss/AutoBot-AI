@@ -24,6 +24,7 @@ Usage::
 import logging
 import time
 from typing import Any, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from orchestration.causal_models import (
     CascadeReport,
@@ -38,7 +39,7 @@ from orchestration.dag_executor import (
     WorkflowDAG,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CausalExecutor:

@@ -11,7 +11,6 @@ remain in the DB.
 """
 
 import asyncio
-import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -21,8 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from constants.threshold_constants import TimingConstants
 from models.process_run import ProcessRun, ProcessRunStatus, TaskDecomposition
 from services.process_adapter_service import ProcessAdapterService
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TaskDecompositionService:

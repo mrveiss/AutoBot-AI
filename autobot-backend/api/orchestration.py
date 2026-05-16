@@ -8,6 +8,7 @@ Advanced multi-agent orchestration endpoints with improved coordination and stra
 """
 
 import logging
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -29,13 +30,13 @@ except ImportError as _e:
     _ORCHESTRATOR_AVAILABLE = False
     create_and_execute_workflow = _MissingDep("create_and_execute_workflow", _e)  # type: ignore[assignment]
     orchestrator = _MissingDep("orchestrator", _e)  # type: ignore[assignment]
-    logging.getLogger(__name__).warning("orchestrator module not available")
+    get_logger(__name__).warning("orchestrator module not available")
 
 from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @with_error_handling(

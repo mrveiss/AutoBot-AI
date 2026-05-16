@@ -27,6 +27,7 @@ import json
 import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from langchain_core.runnables import RunnableConfig
 
@@ -41,7 +42,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 from typing_extensions import TypedDict
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Tool-call loop detection constants (#3254)

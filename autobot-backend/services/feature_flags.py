@@ -28,7 +28,6 @@ Usage:
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
@@ -36,8 +35,9 @@ from typing import Optional
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.threshold_constants import StringParsingConstants
 from type_defs.common import Metadata
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EnforcementMode(str, Enum):

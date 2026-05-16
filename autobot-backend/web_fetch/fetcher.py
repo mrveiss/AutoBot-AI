@@ -17,6 +17,7 @@ Jina circuit breaker from media.link.pipeline is reused via _try_jina / _record_
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import logging
@@ -53,7 +54,7 @@ from web_fetch.types import (
     RenderMode,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Concurrency limits
 _SEM_PER_DOMAIN: int = 4

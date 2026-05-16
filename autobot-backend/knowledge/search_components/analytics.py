@@ -10,11 +10,12 @@ Contains search analytics tracking functionality.
 
 import logging
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.singleton_factory import lazy_singleton
 from models.task_context import SearchAnalyticsContext
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SearchAnalytics:

@@ -14,6 +14,7 @@ import ast
 import os
 import re
 from typing import FrozenSet, List, Optional, Tuple, Union
+from autobot_shared.logging_manager import get_logger
 
 # Issue #380: Module-level frozenset for enum base class checking
 ENUM_BASE_CLASSES: FrozenSet[str] = frozenset({"Enum", "IntEnum", "StrEnum"})
@@ -423,7 +424,7 @@ def validate_module_path(file_path: str) -> Optional[str]:
     """
     import logging
 
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
 
     abs_path = os.path.abspath(file_path)
 
@@ -449,7 +450,7 @@ def read_and_parse_module(file_path: str) -> Optional[Tuple[str, ast.Module]]:
     """
     import logging
 
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
 
     try:
         with open(file_path, "r", encoding="utf-8") as f:

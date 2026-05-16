@@ -19,6 +19,7 @@ import logging
 import re
 import uuid
 from typing import Any, AsyncGenerator, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
@@ -27,7 +28,7 @@ from dependencies import get_config
 
 from .types import AgentTask, OverseerUpdate, StepResult, StepStatus, TaskPlan
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _build_previous_context(task: AgentTask, completed_results: Dict[str, StepResult]) -> Dict[str, Dict[str, Any]]:

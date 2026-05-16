@@ -10,6 +10,7 @@ and resetting learning state per agent/task type.
 
 import logging
 from typing import List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Query
 
@@ -20,7 +21,7 @@ from api.schemas_agent import (
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

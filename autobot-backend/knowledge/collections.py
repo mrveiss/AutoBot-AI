@@ -16,6 +16,7 @@ import json
 import logging
 import uuid
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.time_utils import now_utc
 
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
     import aioredis
     import redis
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CollectionsMixin:

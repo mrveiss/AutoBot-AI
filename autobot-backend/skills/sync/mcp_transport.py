@@ -13,13 +13,13 @@ is fully transport-agnostic.  Auto-detection maps URI schemes:
 
 import asyncio
 import json
-import logging
 from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, Optional
 
 import aiohttp
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # JSON-RPC version used by MCP
 _JSONRPC = "2.0"

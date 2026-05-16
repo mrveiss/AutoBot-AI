@@ -11,7 +11,6 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import asyncio
-import logging
 from typing import Any, Dict, List, Optional
 
 from enhanced_memory_manager_async import TaskPriority
@@ -23,8 +22,9 @@ from ..types import DEFAULT_USER_PREFERENCES, ContextType, DecisionType
 from .audio import AudioContextCollector
 from .system import SystemContextCollector
 from .visual import VisualContextCollector
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ContextCollector:

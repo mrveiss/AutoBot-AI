@@ -12,10 +12,11 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for import AST types
 _IMPORT_TYPES = (ast.Import, ast.ImportFrom)

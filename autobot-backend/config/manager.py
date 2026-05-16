@@ -27,7 +27,6 @@ SSOT Migration (Issue #763, #3829):
 """
 
 import asyncio
-import logging
 import time
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
@@ -43,8 +42,9 @@ from config.sync_ops import SyncOperationsMixin
 from config.timeout_config import TimeoutConfigMixin
 from config.validation import ValidationMixin
 from constants.path_constants import PATH
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ConfigManager(

@@ -19,6 +19,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.model_constants import (
@@ -34,7 +35,7 @@ from task_execution_tracker import get_task_tracker as _get_task_tracker
 task_tracker = _get_task_tracker()
 from utils.service_registry import get_service_url
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for error filtering
 _ERROR_FINISH_REASONS = frozenset({"error", "timeout"})

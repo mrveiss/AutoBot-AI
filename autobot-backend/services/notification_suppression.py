@@ -5,15 +5,15 @@ Automatically suppresses CI/CD failure notifications to reduce inbox clutter.
 Implements multi-tiered filtering for actionable vs. noise notifications.
 """
 
-import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
 from autobot_shared.time_utils import parse_utc_iso
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class NotificationReason(str, Enum):

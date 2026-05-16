@@ -19,6 +19,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 from urllib.parse import urlparse
+from autobot_shared.logging_manager import get_logger
 
 import aiohttp
 import yaml
@@ -30,7 +31,7 @@ from security.threat_intelligence import (
     get_threat_intelligence_service,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex for domain pattern analysis
 _CONSECUTIVE_DIGITS_RE = re.compile(r"\d{4,}")

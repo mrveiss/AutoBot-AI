@@ -8,7 +8,6 @@ FastAPI endpoints for workflow automation.
 """
 
 import json
-import logging
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -31,8 +30,9 @@ from .models import (
     WorkflowStep,
 )
 from .persistence import load_notification_config, save_notification_config
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["workflow_automation"])
 

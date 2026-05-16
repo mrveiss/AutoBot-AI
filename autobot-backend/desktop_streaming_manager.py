@@ -31,12 +31,13 @@ from autobot_shared.ssot_config import config
 from config import config_manager
 from constants.threshold_constants import TimingConstants
 from task_execution_tracker import TaskPriority, get_task_tracker
+from autobot_shared.logging_manager import get_logger
 
 # Type aliases for clarity
 SessionDict = dict[str, Any]
 ProcessType = asyncio.subprocess.Process
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for VNC process keys (Issue #326)
 ALL_VNC_PROCESS_KEYS: frozenset[str] = frozenset({"novnc_process", "vnc_process", "xvfb_process"})

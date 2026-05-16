@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.status_enums import AgentStatus  # #7504 consolidation
 
@@ -32,7 +33,7 @@ from protocols.agent_communication import (
     get_communication_manager,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DeploymentMode(Enum):

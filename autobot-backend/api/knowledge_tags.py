@@ -26,7 +26,6 @@ Endpoints:
 Related Issues: #77 (Tags), #185 (Split), #209 (Knowledge split), #409 (Tag CRUD), #410 (Tag Styling)
 """
 
-import logging
 import re
 from typing import Optional
 
@@ -59,8 +58,9 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import QueryDefaults
 from knowledge_factory import get_or_create_knowledge_base
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Issue #380: Pre-compiled regex for tag-name + prefix validation.

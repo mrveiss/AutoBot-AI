@@ -23,11 +23,12 @@ The Think Tool:
 import logging
 from dataclasses import dataclass
 from typing import Any, Optional
+from autobot_shared.logging_manager import get_logger
 
 from agent_loop.types import ThinkCategory, ThinkResult
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================

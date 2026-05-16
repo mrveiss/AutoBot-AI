@@ -19,6 +19,7 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
 from __future__ import annotations
+from autobot_shared.logging_manager import get_logger
 
 import logging
 from typing import Any, AsyncIterator, Dict, List, Optional
@@ -34,7 +35,7 @@ from llm_interface_pkg.types import ProviderType
 from ..base_provider import BaseProvider
 from .chat_template_loader import render_chat_template
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OllamaProvider(BaseProvider):

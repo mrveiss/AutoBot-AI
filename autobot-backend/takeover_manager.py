@@ -13,11 +13,12 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.singleton_factory import lazy_singleton
 from memory import EnhancedMemoryManager, TaskPriority
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for datetime field keys (Issue #326)
 DATETIME_FIELD_KEYS = {"started_at", "ended_at"}

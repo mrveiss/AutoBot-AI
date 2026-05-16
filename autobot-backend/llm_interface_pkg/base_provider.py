@@ -11,13 +11,13 @@ are already defined in llm_interface_pkg.models.
 
 from __future__ import annotations
 
-import logging
 from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from .models import LLMRequest, LLMResponse
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BaseProvider(ABC):

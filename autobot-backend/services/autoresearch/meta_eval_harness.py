@@ -27,7 +27,6 @@ Safety:
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 import re
 import shutil
@@ -42,8 +41,9 @@ from .auto_research_agent import ApprovalGate
 from .config import AutoResearchConfig
 from .meta_agent import MetaPatch
 from .models import VariantArchiveEntry
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

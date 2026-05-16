@@ -11,6 +11,7 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.ssot_config import config as _ssot_config
@@ -29,7 +30,7 @@ from .request_batcher import (
 # Import our components
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

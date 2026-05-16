@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 from typing import Callable, Dict, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
@@ -20,7 +21,7 @@ from auth_middleware import authenticate_websocket
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 

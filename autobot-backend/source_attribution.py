@@ -8,15 +8,15 @@ Tracks and formats information sources for all responses
 
 import gc
 import json
-import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SourceType(Enum):

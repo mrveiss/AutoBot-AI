@@ -7,7 +7,6 @@ Session management for chat workflow.
 Handles session creation, initialization, cleanup, and session information retrieval.
 """
 
-import logging
 import time
 from typing import Any, Dict, Optional
 
@@ -21,8 +20,9 @@ from extensions.manager import get_extension_manager
 from intent_classifier import ConversationIntent, IntentClassification, IntentClassifier
 
 from .models import WorkflowSession
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SessionHandlerMixin:

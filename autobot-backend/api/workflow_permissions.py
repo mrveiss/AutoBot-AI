@@ -13,7 +13,6 @@ Routes:
   GET    /api/workflows/{workflow_id}/audit               — view audit log
 """
 
-import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -32,8 +31,9 @@ from services.workflow_permission_service import (
     WorkflowPermissionService,
 )
 from services.workflow_rbac import require_workflow_permission
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["workflow-permissions"])
 

@@ -10,6 +10,7 @@ Tests for framework detection and coding pattern analysis.
 import ast
 
 from services.semantic_analyzer import SemanticAnalyzer
+from autobot_shared.logging_manager import get_logger
 
 
 def test_semantic_analyzer_initialization():
@@ -106,8 +107,7 @@ def test_detect_autobot_logger():
     analyzer = SemanticAnalyzer()
 
     code = """
-import logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 """
     patterns = analyzer.detect_autobot_patterns(code)
 
@@ -260,7 +260,7 @@ from fastapi import FastAPI
 from autobot_shared.ssot_config import config
 import logging
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 @router.get("/test")
 def test():

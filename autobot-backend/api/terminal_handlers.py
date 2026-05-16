@@ -27,6 +27,7 @@ import os
 import time
 from datetime import datetime, timezone
 from typing import Awaitable, Callable, Dict, Optional
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import WebSocket
 
@@ -65,7 +66,7 @@ _SIGNAL_MAP = {
     "SIGHUP": _signal_module.SIGHUP,
 }
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _flush_cleanup_buffer(

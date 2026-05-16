@@ -9,7 +9,6 @@ Extracted from ArchitecturalPatternAnalyzer as part of Issue #394.
 """
 
 import ast
-import logging
 from pathlib import Path
 from typing import List, Optional
 
@@ -18,8 +17,9 @@ from .complexity_calculator import ComplexityCalculator
 from .dependency_analyzer import DependencyAnalyzer
 from .pattern_detector import PatternDetector
 from .types import ArchitecturalComponent
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ComponentDiscovery:

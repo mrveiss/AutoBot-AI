@@ -6,6 +6,7 @@ import logging
 import os
 import tempfile
 from typing import Any, Dict, List
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
@@ -24,7 +25,7 @@ from services.tts_client import get_tts_client
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.post("/listen", response_model=VoiceListenResponse)

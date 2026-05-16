@@ -12,6 +12,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
+from autobot_shared.logging_manager import get_logger
 
 from .agent_diary import AgentDiaryService
 from .cache import LRUCacheManager
@@ -23,7 +24,7 @@ from .protocols import ICacheManager, IGeneralStorage, ITaskStorage
 from .storage import GeneralStorage, TaskStorage
 from .working_memory import WorkingMemoryService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class UnifiedMemoryManager:

@@ -33,7 +33,6 @@ sites intact (see issue #7401 caller audit).
 
 import asyncio
 import ipaddress
-import logging
 import re
 import time
 from dataclasses import dataclass
@@ -43,6 +42,8 @@ from urllib.parse import urljoin
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from media.core.pipeline import BasePipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
+
+from autobot_shared.logging_manager import get_logger
 
 # aiohttp for async HTTP
 try:
@@ -60,7 +61,7 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=15) if _AIOHTTP_AVAILABLE else None
 _JINA_TIMEOUT = aiohttp.ClientTimeout(total=5) if _AIOHTTP_AVAILABLE else None

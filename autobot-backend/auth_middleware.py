@@ -13,6 +13,7 @@ import os
 import secrets
 from datetime import timezone
 from typing import Dict, Optional, Tuple
+from autobot_shared.logging_manager import get_logger
 
 from fastapi import HTTPException, Request, status
 
@@ -29,7 +30,7 @@ from config.manager import get_config_manager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 config = get_config_manager()
 

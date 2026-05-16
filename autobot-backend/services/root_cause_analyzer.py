@@ -13,7 +13,6 @@ Provides:
 - Confounder detection: Identifies when multiple causes contribute to failure
 """
 
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -21,8 +20,9 @@ from uuid import UUID
 
 from autobot_shared.redis_client import get_async_redis_client
 from knowledge.temporal_search import TemporalSearchService
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

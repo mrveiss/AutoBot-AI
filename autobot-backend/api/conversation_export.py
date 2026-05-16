@@ -15,8 +15,6 @@ Endpoints:
     POST /api/conversations/import
 """
 
-import logging
-
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 
@@ -32,8 +30,9 @@ from services.conversation_export import (
     import_conversation,
 )
 from utils.chat_utils import get_chat_history_manager, validate_chat_session_id
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["conversation-export"])
 

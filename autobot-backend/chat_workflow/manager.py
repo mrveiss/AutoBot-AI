@@ -17,6 +17,7 @@ import logging
 import re
 import uuid
 from typing import Any, Dict, FrozenSet, List, Optional
+from autobot_shared.logging_manager import get_logger
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
@@ -32,7 +33,7 @@ from .models import LLMIterationContext, StreamingMessage, WorkflowSession
 from .session_handler import SessionHandlerMixin
 from .tool_handler import ToolHandlerMixin
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for terminal message types
 _TERMINAL_MESSAGE_TYPES: FrozenSet[str] = frozenset({"terminal_command", "terminal_output", "error"})

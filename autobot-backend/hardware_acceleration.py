@@ -14,13 +14,14 @@ from autobot_shared.ssot_config import config
 import platform
 import subprocess  # nosec B404 - hardware detection requires subprocess
 from typing import Any, Dict
+from autobot_shared.logging_manager import get_logger
 
 import psutil
 
 from autobot_shared.singleton_factory import lazy_singleton
 from config import config_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for NPU hardware keywords (Issue #326)
 NPU_HARDWARE_KEYWORDS = {"neural", "npu", "ai"}
