@@ -11,6 +11,22 @@ export type CellOwner = 'agent' | 'user'
 /** Cell type — phase 1 markdown only; chart/code show placeholder. */
 export type CellContentType = 'markdown' | 'chart' | 'code'
 
+export interface ChartPayload {
+  payloadType: 'vega-lite'
+  specVersion: '5'
+  spec: Record<string, unknown>
+  executable?: boolean
+}
+
+export interface CodePayload {
+  payloadType: 'code'
+  code: string
+  language?: string
+  executable?: boolean
+}
+
+export type RichPayload = ChartPayload | CodePayload | null
+
 export interface CanvasCell {
   id: string
   canvasId: string
@@ -21,6 +37,7 @@ export interface CanvasCell {
   seq: number
   createdAt: string
   updatedAt: string
+  richPayload?: RichPayload
 }
 
 export interface CanvasDocument {
