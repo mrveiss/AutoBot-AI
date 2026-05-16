@@ -126,12 +126,6 @@ jobs:
         python3 autobot-infrastructure/shared/scripts/validation_dashboard_generator.py --ci-mode > validation_dashboard.html || echo "Dashboard generation failed"
 
     - name: Phase Validation Gate
-      # Non-blocking until #7496 rewrites the legacy PHASE_CRITERIA paths
-      # (`src/`, `backend/`, `main.py`, …) to match the current
-      # `autobot-backend/` / `autobot-frontend/` reorganisation. The gate
-      # currently scores ~22% against stale criteria; gating on it would
-      # block every merge for reasons unrelated to the change under review.
-      continue-on-error: true
       shell: bash
       run: |
         set -euo pipefail
@@ -241,8 +235,6 @@ jobs:
         name: phase-validation-reports
 
     - name: Integration readiness check
-      # Non-blocking until #7496 — same reason as Phase Validation Gate.
-      continue-on-error: true
       shell: bash
       run: |
         set -euo pipefail
