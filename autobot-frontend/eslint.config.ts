@@ -96,6 +96,20 @@ export default defineConfigWithVueTs(
           message: 'Hardcoded AutoBot VM IP in template literal — use window.location.hostname or VITE_*_HOST env var (#6784).',
         },
       ],
+      // Issue #7085: forbid console.* in production code — use createLogger from @/utils/debugUtils instead.
+      // eslint-disable-next-line suppression of this rule is also blocked by reportUnusedDisableDirectives.
+      'no-console': 'error',
+    },
+  },
+  {
+    name: 'app/console-allowed-in-debug-utils',
+    files: [
+      'src/utils/debugUtils.ts',
+      'src/utils/RumConsoleHelper.ts',
+      'src/utils/chunkTestUtility.ts',
+    ],
+    rules: {
+      'no-console': 'off',
     },
   },
   ...pluginOxlint.configs['flat/recommended'],
