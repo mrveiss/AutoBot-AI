@@ -341,6 +341,50 @@ def make_async_redis(
     return redis
 
 
+def make_stateful_redis() -> "AsyncMock":
+    """Build a stateful async-redis ``AsyncMock`` that tracks stored values (#7753).
+
+    Unlike ``make_async_redis`` (which returns fixed values), this helper
+    wires ``set``/``get``/``publish`` to an in-memory ``_store`` dict and
+    ``_published`` list so tests can assert on the actual data written:
+
+        fake = make_stateful_redis()
+        await fake.set("k", "v")
+        assert fake._store["k"] == "v"
+
+        await fake.publish("chan", "msg")
+        assert fake._published == [("chan", "msg")]
+
+    All other redis methods remain standard ``AsyncMock`` instances from
+    the parent ``AsyncMock``.
+
+    Returns:
+        An ``AsyncMock`` with ``_store: dict`` and ``_published: list``
+        attributes wired through ``side_effect`` callbacks.
+    """
+    from unittest.mock import AsyncMock
+
+    fake = AsyncMock()
+    fake._store: dict = {}
+    fake._published: list = []
+
+    async def _set(key, value, *_args, **_kwargs):
+        fake._store[key] = value
+        return True
+
+    async def _get(key):
+        return fake._store.get(key)
+
+    async def _publish(channel, message):
+        fake._published.append((channel, message))
+        return 1
+
+    fake.set.side_effect = _set
+    fake.get.side_effect = _get
+    fake.publish.side_effect = _publish
+    return fake
+
+
 @contextmanager
 def patch_async_redis(target: str, redis: "AsyncMock" | None = None):
     """Context manager: patch ``get_async_redis_client`` at ``target`` with
