@@ -559,8 +559,8 @@ class ThreatIntelligenceService:
         self._cache = ThreatIntelligenceCache(default_ttl=cache_ttl)
 
         # Get rate limits from environment if not specified
-        vt_rate = int(config.virustotal_rate_limit))
-        uv_rate = int(config.urlvoid_rate_limit))
+        vt_rate = int(config.virustotal_rate_limit)
+        uv_rate = int(config.urlvoid_rate_limit)
 
         self._virustotal = VirusTotalClient(
             api_key=virustotal_api_key,

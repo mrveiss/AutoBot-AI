@@ -96,9 +96,7 @@ class TracingService:
         self._service_version: str = "1.0.0"
 
         # Configuration from environment
-        self._jaeger_endpoint = (
-            config.misc.jaeger_endpoint or f"http://{NetworkConstants.REDIS_VM_IP}:4317"
-        )
+        self._jaeger_endpoint = config.misc.jaeger_endpoint or f"http://{NetworkConstants.REDIS_VM_IP}:4317"
         self._console_export = config.trace_console.lower() == "true"
 
         # Issue #697: Configurable sampling strategy

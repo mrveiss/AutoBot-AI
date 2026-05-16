@@ -62,12 +62,7 @@ class NousPortalProvider(BaseProvider):
         """Resolve API key from settings or environment."""
         if self._api_key:
             return self._api_key
-        key = (
-            self._get_setting("api_key")
-            or config.hf_token
-            or config.huggingface_api_token
-            or config.nous_api_key
-        )
+        key = self._get_setting("api_key") or config.hf_token or config.huggingface_api_token or config.nous_api_key
         self._api_key = key
         return self._api_key
 
@@ -75,9 +70,7 @@ class NousPortalProvider(BaseProvider):
         """Resolve base URL with defaults."""
         if self._base_url:
             return self._base_url
-        url = (
-            self._get_setting("base_url") or config.nous_api_base_url or "https://api-inference.huggingface.co/v1"
-        )
+        url = self._get_setting("base_url") or config.nous_api_base_url or "https://api-inference.huggingface.co/v1"
         self._base_url = url
         return url
 

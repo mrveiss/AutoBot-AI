@@ -196,6 +196,7 @@ class ModelConstants:
 # PATH CONSTANTS
 # ============================================================================
 
+
 @dataclass(frozen=True)
 class PathConstants:
     """Centralized path constants"""
@@ -216,6 +217,7 @@ PATH = PathConstants()
 # REDIS CONSTANTS
 # ============================================================================
 
+
 @dataclass(frozen=True)
 class RedisKeyConstants:
     """Centralized Redis key patterns"""
@@ -234,6 +236,7 @@ REDIS_KEY = RedisKeyConstants()
 # ============================================================================
 # SECURITY CONSTANTS
 # ============================================================================
+
 
 class SecurityConstants:
     """RFC-defined security constants"""
@@ -273,6 +276,7 @@ MODERATE_RISK_PATTERNS = [
 # ============================================================================
 # THRESHOLD CONSTANTS
 # ============================================================================
+
 
 class SecurityThresholds:
     """Security risk evaluation thresholds."""
@@ -316,14 +320,16 @@ AUTOMATION_INTENT_PATTERNS = [
     (r"(?i)scroll", "scroll_page"),
 ]
 
-HIGH_RISK_INTENTS = frozenset({
-    "shutdown",
-    "restart",
-    "delete",
-    "uninstall",
-    "request_manual_control",
-    "emergency",
-})
+HIGH_RISK_INTENTS = frozenset(
+    {
+        "shutdown",
+        "restart",
+        "delete",
+        "uninstall",
+        "request_manual_control",
+        "emergency",
+    }
+)
 
 NUMBER_RE = re.compile(r"\b\d+\b")
 QUOTED_TEXT_RE = re.compile(r'"([^"]*)"')
@@ -341,6 +347,7 @@ def match_intent_from_patterns(transcription: str, patterns: list, default: str)
 # ============================================================================
 # THRESHOLD AND TIMING CONSTANTS (from consolidation GH#7440)
 # ============================================================================
+
 
 class AgentThresholds:
     """Agent response evaluation thresholds."""

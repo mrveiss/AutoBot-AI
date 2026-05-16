@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 _ssot = get_config()
 TTS_WORKER_HOST = config.tts_worker_host
-TTS_WORKER_PORT = config.tts_worker_port)
+TTS_WORKER_PORT = config.tts_worker_port
 TTS_WORKER_URL = f"http://{TTS_WORKER_HOST}:{TTS_WORKER_PORT}"
 
 HEALTH_TIMEOUT = 2.0

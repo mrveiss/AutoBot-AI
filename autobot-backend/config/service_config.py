@@ -154,9 +154,7 @@ class ServiceConfigMixin:
         defaults = {
             "server_host": NetworkConstants.BIND_ALL_INTERFACES,
             "server_port": ssot_config.port.backend,
-            "api_endpoint": (
-                f"http://localhost:{ssot_config.port.backend}"
-            ),
+            "api_endpoint": (f"http://localhost:{ssot_config.port.backend}"),
             "timeout": 60,
             "max_retries": 3,
             "streaming": False,
@@ -318,7 +316,9 @@ class ServiceConfigMixin:
 
         Priority: env AUTOBOT_{PROVIDER}_API_KEY > config > empty string.
         """
-        env_val = os.getenv(f"AUTOBOT_{provider.upper()}_API_KEY")  # ssot-config-exempt: dynamic provider API key lookup
+        env_val = os.getenv(
+            f"AUTOBOT_{provider.upper()}_API_KEY"
+        )  # ssot-config-exempt: dynamic provider API key lookup
         if env_val:
             return env_val
         return self.get_nested(f"backend.llm.cloud.providers.{provider}.api_key", "")

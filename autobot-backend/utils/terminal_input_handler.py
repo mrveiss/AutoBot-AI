@@ -190,11 +190,7 @@ class TerminalInputHandler:
         # Check choice pattern with digits
         if "choice" in prompt_lower and any(char.isdigit() for char in prompt):
             numbers = [char for char in prompt if char.isdigit()]
-            return (
-                numbers[0]
-                if numbers
-                else config.misc.default_choice or _get_config_default("default_choice", "1")
-            )
+            return numbers[0] if numbers else config.misc.default_choice or _get_config_default("default_choice", "1")
 
         # Check command pattern (requires both keywords)
         if "enter" in prompt_lower and "command" in prompt_lower:

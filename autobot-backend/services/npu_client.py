@@ -63,7 +63,7 @@ except Exception:  # pragma: no cover - defensive fallback
 # Configuration from SSOT with environment override capability
 _ssot = get_config()
 NPU_WORKER_HOST = config.npu_worker_host
-NPU_WORKER_PORT = config.npu_worker_port)
+NPU_WORKER_PORT = config.npu_worker_port
 NPU_WORKER_URL = f"http://{NPU_WORKER_HOST}:{NPU_WORKER_PORT}"
 
 # Timeouts
@@ -375,7 +375,7 @@ async def generate_embedding_with_fallback(
 
     # Fallback to Ollama - use SSOT config for defaults
     ollama_host = ollama_host or config.ollama_host
-    ollama_port = ollama_port or config.ollama_port)
+    ollama_port = ollama_port or config.ollama_port
     ollama_url = f"http://{ollama_host}:{ollama_port}/api/embeddings"
 
     try:

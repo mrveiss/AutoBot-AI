@@ -715,7 +715,7 @@ class SecurityAnalyzer:
             },
             "hardcoded_secrets": {
                 "before": 'API_KEY = "sk-1234567890abcdef"',
-                "after": 'API_KEY = config.api_key',
+                "after": "API_KEY = config.api_key",
             },
             "insecure_crypto": {
                 "before": "hashlib.md5(password.encode()).hexdigest()",

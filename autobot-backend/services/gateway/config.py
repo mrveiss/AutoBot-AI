@@ -45,7 +45,7 @@ class GatewayConfig:
             rate_limit_per_user=int(config.gateway_rate_limit_user),
             rate_limit_per_channel=int(config.gateway_rate_limit_channel),
             session_timeout_seconds=int(config.gateway_session_timeout),
-            max_message_size_bytes=int(config.gateway_max_message_size)),
+            max_message_size_bytes=int(config.gateway_max_message_size),
             max_sessions_per_user=int(config.gateway_max_sessions_user),
             enable_sandbox_mode=config.gateway_enable_sandbox.lower() == "true",
             heartbeat_interval_seconds=int(config.gateway_heartbeat_interval),

@@ -46,9 +46,7 @@ class SecurityLayer:
             self.enable_auth = self.security_config.get("enable_auth", True)
             logger.info("Multi-user mode - authentication enabled by default")
 
-        self.audit_log_file = self.security_config.get(
-            "audit_log_file", config.audit_log_file
-        )
+        self.audit_log_file = self.security_config.get("audit_log_file", config.audit_log_file)
         self.roles = self.security_config.get("roles", {})
         self.allowed_users = self.security_config.get("allowed_users", {})  # For simple demo auth
 

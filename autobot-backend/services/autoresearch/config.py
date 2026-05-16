@@ -25,9 +25,7 @@ class AutoResearchConfig:
 
     # Path to the cloned autoresearch repo on the GPU node
     autoresearch_dir: Path = field(
-        default_factory=lambda: Path(
-            config.misc.autoresearch_dir or "/opt/autobot/autoresearch"
-        )
+        default_factory=lambda: Path(config.misc.autoresearch_dir or "/opt/autobot/autoresearch")
     )
 
     # Training defaults
@@ -35,9 +33,7 @@ class AutoResearchConfig:
     default_max_steps: int = field(default_factory=lambda: int(config.autoresearch_max_steps))
 
     # Experiment evaluation
-    improvement_threshold: float = field(
-        default_factory=lambda: float(config.autoresearch_improvement_threshold)
-    )
+    improvement_threshold: float = field(default_factory=lambda: float(config.autoresearch_improvement_threshold))
     significant_improvement_threshold: float = field(
         default_factory=lambda: float(config.autoresearch_significant_threshold)
     )
@@ -54,18 +50,12 @@ class AutoResearchConfig:
     python_executable: Optional[str] = None
 
     # Staged evaluation (cheap-first gating)
-    staged_eval_fraction: float = field(
-        default_factory=lambda: float(config.autoresearch_staged_eval_fraction)
-    )
-    staged_eval_threshold: float = field(
-        default_factory=lambda: float(config.autoresearch_staged_eval_threshold)
-    )
+    staged_eval_fraction: float = field(default_factory=lambda: float(config.autoresearch_staged_eval_fraction))
+    staged_eval_threshold: float = field(default_factory=lambda: float(config.autoresearch_staged_eval_threshold))
 
     # Docker isolation (issue #3223)
     # Set AUTOBOT_AUTORESEARCH_DOCKER_ENABLED=true via Ansible/env to activate.
-    docker_enabled: bool = field(
-        default_factory=lambda: bool(config.autoresearch_docker_enabled)
-    )
+    docker_enabled: bool = field(default_factory=lambda: bool(config.autoresearch_docker_enabled))
     docker_image: str = field(
         default_factory=lambda: config.misc.autoresearch_docker_image or "ghcr.io/mrveiss/autobot-autoresearch:latest"
     )
@@ -74,33 +64,19 @@ class AutoResearchConfig:
     docker_timeout: int = field(default_factory=lambda: int(config.autoresearch_docker_timeout))
 
     # Meta-agent settings (issue #3224)
-    meta_agent_max_module_lines: int = field(
-        default_factory=lambda: int(config.meta_agent_max_module_lines)
-    )
-    meta_agent_llm_model: str = field(
-        default_factory=lambda: config.meta_agent_llm_model
-    )
-    meta_agent_test_timeout: int = field(
-        default_factory=lambda: int(config.meta_agent_test_timeout)
-    )
-    meta_agent_approval_threshold: float = field(
-        default_factory=lambda: float(config.meta_agent_approval_threshold)
-    )
+    meta_agent_max_module_lines: int = field(default_factory=lambda: int(config.meta_agent_max_module_lines))
+    meta_agent_llm_model: str = field(default_factory=lambda: config.meta_agent_llm_model)
+    meta_agent_test_timeout: int = field(default_factory=lambda: int(config.meta_agent_test_timeout))
+    meta_agent_approval_threshold: float = field(default_factory=lambda: float(config.meta_agent_approval_threshold))
 
     # Data directory for experiment outputs
     data_dir: Path = field(
-        default_factory=lambda: Path(
-            config.misc.autoresearch_data_dir or "/opt/autobot/autoresearch/data"
-        )
+        default_factory=lambda: Path(config.misc.autoresearch_data_dir or "/opt/autobot/autoresearch/data")
     )
 
     # Human-in-the-loop research checkpoints (issue #3291)
-    checkpoints_enabled: bool = field(
-        default_factory=lambda: bool(config.research_checkpoints_enabled)
-    )
-    checkpoint_timeout_seconds: float = field(
-        default_factory=lambda: float(config.research_checkpoint_timeout)
-    )
+    checkpoints_enabled: bool = field(default_factory=lambda: bool(config.research_checkpoints_enabled))
+    checkpoint_timeout_seconds: float = field(default_factory=lambda: float(config.research_checkpoint_timeout))
 
     @property
     def train_script(self) -> Path:

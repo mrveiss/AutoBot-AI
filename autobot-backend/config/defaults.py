@@ -179,10 +179,14 @@ def _get_local_optimization_config() -> Dict[str, Any]:
     Issue #620.
     """
     return {
-        "speculation_enabled": config.misc.speculation_enabled if config.misc.speculation_enabled is not None else False,
+        "speculation_enabled": (
+            config.misc.speculation_enabled if config.misc.speculation_enabled is not None else False
+        ),
         "speculation_draft_model": config.misc.speculation_draft_model or "",
         "speculation_num_tokens": config.misc.speculation_num_tokens or 5,
-        "speculation_use_ngram": config.misc.speculation_use_ngram if config.misc.speculation_use_ngram is not None else False,
+        "speculation_use_ngram": (
+            config.misc.speculation_use_ngram if config.misc.speculation_use_ngram is not None else False
+        ),
         "quantization_type": config.misc.quantization_type or "none",
         "vllm_multi_step": config.misc.vllm_multi_step or 8,
         "vllm_prefix_caching": config.misc.vllm_prefix_caching if config.misc.vllm_prefix_caching is not None else True,

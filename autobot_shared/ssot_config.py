@@ -1118,7 +1118,7 @@ class PathConfig(BaseSettings):
 
 class MiscConfig(BaseSettings):
     """Miscellaneous/unmapped environment variables.
-    
+
     This class collects all env vars not yet migrated to structured config sections.
     Vars default to empty string ("") when not set in environment.
     Issue: GH#7437 — Migrate 675 os.getenv/os.environ callsites
@@ -1777,6 +1777,7 @@ config = _ConfigProxy()
 # environment on access.
 #
 # For frequently-used vars, migration to structured fields is recommended.
+
 
 class _EnvVarAccessor:
     """Lazy accessor for env vars — provides config.XXX style access."""

@@ -62,7 +62,7 @@ _HISTORY_KEY_PREFIX = "nl_database:history:"
 
 # Local DB path (autobot_data.db)
 _DEFAULT_BASE = config.base_dir
-_LOCAL_DB_PATH = config.data_db)
+_LOCAL_DB_PATH = config.data_db
 
 
 def _validate_readonly_sql(sql: str) -> bool:
