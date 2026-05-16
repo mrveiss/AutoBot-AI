@@ -26,7 +26,6 @@ Endpoints:
 Related Issues: #77 (Tags), #185 (Split), #209 (Knowledge split), #409 (Tag CRUD), #410 (Tag Styling)
 """
 
-import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
@@ -53,6 +52,7 @@ from api.schemas_knowledge import (
     RenameTagRequest,
     SearchByTagsRequest,
     UpdateTagStyleRequest,
+    _LOWERCASE_TAG_RE,
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -62,14 +62,6 @@ from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
-
-# Issue #380: Pre-compiled regex for tag-name + prefix validation.
-# #6672: was r"^[a-z0-9_-]*$" — the `*` quantifier accepted empty/whitespace
-# input (after .strip()) as a "valid" tag name across 7 endpoints, letting
-# blank tags slip past the create/update/delete/get/relations callsites.
-# The `+` quantifier matches schemas_knowledge.py:_LOWERCASE_TAG_RE which is
-# the canonical tag validator (used by TagValidator + 9 other field validators).
-_TAG_PREFIX_RE = re.compile(r"^[a-z0-9_-]+$")
 
 # Create router for tag management endpoints
 router = APIRouter(tags=["knowledge-tags"])
@@ -335,7 +327,7 @@ async def list_all_tags(
     # Validate prefix if provided
     if prefix:
         prefix = prefix.lower().strip()
-        if not _TAG_PREFIX_RE.match(prefix):
+        if not _LOWERCASE_TAG_RE.match(prefix):
             raise HTTPException(
                 status_code=400,
                 detail="Invalid prefix format: only lowercase alphanumeric allowed",
@@ -435,7 +427,7 @@ async def rename_tag(
     """
     # Validate tag format
     tag_name = tag_name.lower().strip()
-    if not _TAG_PREFIX_RE.match(tag_name):
+    if not _LOWERCASE_TAG_RE.match(tag_name):
         raise HTTPException(
             status_code=400,
             detail="Invalid tag format: only lowercase alphanumeric, hyphens, underscores",
@@ -492,7 +484,7 @@ async def delete_tag_globally(
     """
     # Validate tag format
     tag_name = tag_name.lower().strip()
-    if not _TAG_PREFIX_RE.match(tag_name):
+    if not _LOWERCASE_TAG_RE.match(tag_name):
         raise HTTPException(
             status_code=400,
             detail="Invalid tag format: only lowercase alphanumeric, hyphens, underscores",
@@ -614,7 +606,7 @@ async def get_facts_by_tag(
     """
     # Validate tag format
     tag_name = tag_name.lower().strip()
-    if not _TAG_PREFIX_RE.match(tag_name):
+    if not _LOWERCASE_TAG_RE.match(tag_name):
         raise HTTPException(
             status_code=400,
             detail="Invalid tag format: only lowercase alphanumeric, hyphens, underscores",
@@ -678,7 +670,7 @@ async def get_tag_info(
     """
     # Validate tag format
     tag_name = tag_name.lower().strip()
-    if not _TAG_PREFIX_RE.match(tag_name):
+    if not _LOWERCASE_TAG_RE.match(tag_name):
         raise HTTPException(
             status_code=400,
             detail="Invalid tag format: only lowercase alphanumeric, hyphens, underscores",
@@ -738,7 +730,7 @@ async def update_tag_style(
     """
     # Validate tag format
     tag_name = tag_name.lower().strip()
-    if not _TAG_PREFIX_RE.match(tag_name):
+    if not _LOWERCASE_TAG_RE.match(tag_name):
         raise HTTPException(
             status_code=400,
             detail="Invalid tag format: only lowercase alphanumeric, hyphens, underscores",
@@ -806,7 +798,7 @@ async def get_tag_style(
     """
     # Validate tag format
     tag_name = tag_name.lower().strip()
-    if not _TAG_PREFIX_RE.match(tag_name):
+    if not _LOWERCASE_TAG_RE.match(tag_name):
         raise HTTPException(
             status_code=400,
             detail="Invalid tag format: only lowercase alphanumeric, hyphens, underscores",
@@ -867,7 +859,7 @@ async def delete_tag_style(
     """
     # Validate tag format
     tag_name = tag_name.lower().strip()
-    if not _TAG_PREFIX_RE.match(tag_name):
+    if not _LOWERCASE_TAG_RE.match(tag_name):
         raise HTTPException(
             status_code=400,
             detail="Invalid tag format: only lowercase alphanumeric, hyphens, underscores",
