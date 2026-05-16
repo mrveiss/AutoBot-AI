@@ -17,7 +17,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
-import type { TLSEndpointResponse } from '@/types/api-responses'
+import type { TLSEndpointResponse, FleetCert } from '@/types/api-responses'
 import { createLogger } from '@/utils/debugUtils'
 import { formatRelativeTime } from '@/utils/dateUtils'
 import config from '@/config/ssot-config'
@@ -41,19 +41,6 @@ type SecurityPolicy = SecurityPolicyResponse
 type SecurityOverview = SecurityOverviewResponse
 type ThreatSummary = ThreatSummaryType
 
-
-interface FleetCert {
-  cert_id: string
-  node_id: string
-  subject: string | null
-  issuer: string | null
-  serial_number: string | null
-  fingerprint: string | null
-  not_before: string | null
-  not_after: string | null
-  status: string
-  days_until_expiry: number | null
-}
 
 // Active tab — route-based
 type SecurityTab = 'overview' | 'tls-settings' | 'certificates' | 'audit' | 'threats' | 'policies'
@@ -231,7 +218,7 @@ async function fetchFleetCerts() {
   fleetCertsLoading.value = true
   try {
     const data = await slmApi.getFleetCerts()
-    fleetCerts.value = data as unknown as FleetCert[]
+    fleetCerts.value = data
   } catch (err) {
     logger.error('Failed to fetch fleet cert expiry:', err)
   } finally {
