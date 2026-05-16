@@ -20,7 +20,6 @@ import textwrap
 
 import pytest
 
-from autobot_shared.ssot_config import config
 from code_intelligence.security_analyzer import (
     SecurityAnalyzer,
     SecuritySeverity,

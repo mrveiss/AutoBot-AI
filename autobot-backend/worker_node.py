@@ -3,7 +3,6 @@
 # Author: mrveiss
 import asyncio
 import json
-import logging
 import os
 import platform
 import subprocess  # nosec B404 - required for GPU detection

@@ -14,7 +14,6 @@ Issue #607 - Uses shared FileListCache and ASTCache for performance
 
 import ast
 import asyncio
-import logging
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional

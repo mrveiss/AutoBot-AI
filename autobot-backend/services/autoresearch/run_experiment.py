@@ -24,7 +24,6 @@ import subprocess
 import sys
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = get_logger(__name__)

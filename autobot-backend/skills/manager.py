@@ -8,7 +8,6 @@ High-level manager for the skills system. Handles initialization,
 per-user skill preferences (via Redis), and skill execution routing.
 """
 
-import logging
 import time
 from typing import Any, Dict, List, Optional
 

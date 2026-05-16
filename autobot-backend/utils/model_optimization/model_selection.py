@@ -8,7 +8,6 @@ Issue #381: Extracted from model_optimizer.py god class refactoring.
 Contains model filtering and selection logic.
 """
 
-import logging
 from typing import List
 
 from autobot_shared.logging_manager import get_logger

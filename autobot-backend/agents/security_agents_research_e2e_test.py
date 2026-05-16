@@ -4,13 +4,11 @@ Test security agents with research-based tool discovery
 """
 
 import asyncio
-import os
 import sys
 
 sys.path.append(config.project_root)
 
 from agents.security_scanner_agent import security_scanner_agent
-from autobot_shared.ssot_config import config
 
 
 async def test_tool_research_workflow():

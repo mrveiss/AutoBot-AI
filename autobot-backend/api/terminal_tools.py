@@ -17,7 +17,6 @@ Endpoints:
 These endpoints are imported into terminal.py via router inclusion.
 """
 
-import logging
 from typing import Any, Dict
 
 from fastapi import APIRouter

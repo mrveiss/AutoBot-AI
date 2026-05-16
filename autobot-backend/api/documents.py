@@ -24,7 +24,6 @@ Each document is serialised as a JSON blob under the ``main`` Redis database:
 """
 
 import json
-import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query

@@ -10,7 +10,6 @@ Provides read-only operations for listing resources and getting account info.
 
 import hashlib
 import hmac
-import logging
 import time
 from typing import Any, Dict, List
 from urllib.parse import quote

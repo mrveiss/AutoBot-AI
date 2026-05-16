@@ -10,7 +10,6 @@ Contains the main PerformanceAnalyzer class and convenience functions.
 """
 
 import ast
-import logging
 import re
 import time
 from pathlib import Path

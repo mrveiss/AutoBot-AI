@@ -10,7 +10,6 @@ GPU-level optimizations while cloud providers get API-level optimizations.
 Issue #717: Efficient Inference Design implementation.
 """
 
-import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional, Set

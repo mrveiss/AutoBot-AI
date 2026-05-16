@@ -9,7 +9,6 @@ Concrete connectors subclass AbstractConnector and register via
 @ConnectorRegistry.register("<type>").
 """
 
-import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import List, Optional

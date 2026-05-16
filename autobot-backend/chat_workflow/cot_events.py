@@ -22,7 +22,6 @@ tokens never cross the WebSocket boundary.
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
 from typing import Any, List, Optional, Tuple

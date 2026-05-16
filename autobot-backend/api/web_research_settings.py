@@ -7,7 +7,6 @@ Web Research Settings API
 Provides endpoints for managing web research configuration and preferences.
 """
 
-import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException

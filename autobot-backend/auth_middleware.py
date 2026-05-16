@@ -8,8 +8,6 @@ Provides JWT-based authentication, session management, and role-based access con
 
 import datetime
 import json
-import logging
-import os
 import secrets
 from datetime import timezone
 from typing import Dict, Optional, Tuple

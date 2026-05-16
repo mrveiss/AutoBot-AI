@@ -9,7 +9,6 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
 
 import asyncio
-import logging
 import time
 from typing import Any, Dict, List, Optional
 

@@ -12,7 +12,6 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger

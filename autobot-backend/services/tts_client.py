@@ -15,8 +15,6 @@ Usage:
         wav_bytes = await client.synthesize("Hello world", voice_id="alba")
 """
 
-import os
-
 import aiohttp
 
 from autobot_shared.logging_manager import get_logger

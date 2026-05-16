@@ -7,7 +7,6 @@ Hardware Detection - Detect and select optimal hardware acceleration backends.
 Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 """
 
-import logging
 from typing import List, Optional, Set
 
 from autobot_shared.logging_manager import get_logger

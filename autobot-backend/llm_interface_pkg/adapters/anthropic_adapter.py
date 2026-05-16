@@ -10,8 +10,6 @@ think-block stripping, OTel tracing).  This adapter's sole responsibility is the
 ``test_environment()`` diagnostic method used by ``api/adapters.py``.
 """
 
-import logging
-import os
 import time
 from typing import List, Optional
 

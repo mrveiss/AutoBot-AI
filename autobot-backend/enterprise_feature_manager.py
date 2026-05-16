@@ -7,7 +7,6 @@ Enterprise Feature Manager - Phase 4 Implementation
 Enables and manages enterprise-grade features for AutoBot system.
 """
 
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -77,7 +76,6 @@ class EnterpriseFeatureManager:
 
     def _get_vm_env_config(self) -> Dict[str, Optional[str]]:
         """Get VM environment configuration variables."""
-        import os
 
         return {
             "backend_host": config.backend_host,
@@ -866,7 +864,6 @@ class EnterpriseFeatureManager:
 
     def _get_fallback_endpoints(self) -> Dict[str, str]:
         """Get fallback service endpoints"""
-        import os
 
         backend_host = config.backend_host
         backend_port = config.backend_port

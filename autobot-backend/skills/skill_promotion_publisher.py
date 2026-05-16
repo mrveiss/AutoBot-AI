@@ -31,7 +31,6 @@ Channel name and payload shape are stable contract for the resume path:
 
 import asyncio
 import json
-import logging
 import time
 from typing import List, Optional
 

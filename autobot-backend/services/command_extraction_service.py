@@ -18,8 +18,6 @@ Key Features:
 - Integrates with ChromaDB knowledge base
 """
 
-import logging
-import os
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple

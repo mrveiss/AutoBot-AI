@@ -3,7 +3,6 @@
 # Author: mrveiss
 """External Provider Factory (Issue #4344)"""
 
-import logging
 from enum import Enum
 from typing import Optional
 

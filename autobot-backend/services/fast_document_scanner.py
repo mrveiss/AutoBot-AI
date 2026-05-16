@@ -9,7 +9,6 @@ Enhanced for Issue #422: Integration with ManPageParser for structured content e
 """
 
 import gzip
-import logging
 import os
 import subprocess
 import time

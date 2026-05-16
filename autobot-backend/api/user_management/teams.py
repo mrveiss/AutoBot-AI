@@ -7,7 +7,6 @@ Teams API Endpoints
 REST API for team management operations.
 """
 
-import logging
 import uuid
 from typing import List, Optional
 

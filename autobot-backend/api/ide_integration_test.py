@@ -17,7 +17,6 @@ from api.ide_integration import (
     CompletionRequest,
     IDEIntegrationEngine,
 )
-from autobot_shared.logging_manager import get_logger
 from models.completion_context import CompletionContext
 
 

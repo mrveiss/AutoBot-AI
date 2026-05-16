@@ -8,7 +8,6 @@ This module provides integration classes for popular monitoring platforms,
 enabling AutoBot to query metrics, monitors, and application health data.
 """
 
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 

@@ -17,8 +17,6 @@ Environment variables:
                                   (default: same as SLACK_NOTIFICATIONS_CHANNEL)
 """
 
-import logging
-import os
 from typing import Any, Dict, Optional
 
 from autobot_shared.logging_manager import get_logger

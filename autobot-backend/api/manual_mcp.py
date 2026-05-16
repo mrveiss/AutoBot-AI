@@ -13,7 +13,6 @@ Issue #3287: Complete MCP manual integration.
 
 import asyncio
 import json
-import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends

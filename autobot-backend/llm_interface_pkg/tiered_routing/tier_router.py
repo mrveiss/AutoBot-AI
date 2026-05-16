@@ -9,7 +9,6 @@ Issue #748: Tiered Model Distribution Implementation.
 Selects the appropriate model tier based on task complexity scoring.
 """
 
-import logging
 from typing import Dict, List, Optional, Tuple
 
 from autobot_shared.logging_manager import get_logger

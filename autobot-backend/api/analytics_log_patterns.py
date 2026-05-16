@@ -7,7 +7,6 @@ Provides endpoints for discovering patterns, anomalies, and trends in log data
 """
 
 import asyncio
-import logging
 import re
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone

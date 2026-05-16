@@ -25,7 +25,6 @@ LLM transport follows the pattern established by rlm/evaluator.py: httpx
 against ssot_config.ollama_url with a configurable timeout.
 """
 
-import logging
 import threading
 from dataclasses import dataclass, field
 from typing import Any, List, Optional, Tuple

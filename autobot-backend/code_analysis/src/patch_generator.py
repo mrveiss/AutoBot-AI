@@ -4,7 +4,6 @@ Generates specific code fixes and patches based on analysis results from all ana
 """
 
 import json
-import logging
 import re
 import time
 from dataclasses import dataclass

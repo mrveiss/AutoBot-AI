@@ -7,7 +7,6 @@ Routes requests to local agents or remote containers based on configuration
 """
 
 import asyncio
-import logging
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional

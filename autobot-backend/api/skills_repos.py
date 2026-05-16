@@ -3,7 +3,6 @@
 # Author: mrveiss
 """Skills Repo API — CRUD + sync for skill repositories."""
 
-import logging
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException

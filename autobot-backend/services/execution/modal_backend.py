@@ -8,7 +8,6 @@ Executes tasks on Modal serverless platform.
 Supports cost tracking and automatic scaling.
 """
 
-import logging
 from typing import Any, Dict, Optional, Tuple
 
 from autobot_shared.logging_manager import get_logger

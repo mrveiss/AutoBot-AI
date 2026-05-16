@@ -6,7 +6,6 @@ Backward Compatibility Wrappers - Drop-in replacements for legacy APIs
 """
 
 import hashlib
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 

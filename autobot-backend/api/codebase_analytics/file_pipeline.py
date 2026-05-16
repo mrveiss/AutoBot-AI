@@ -18,7 +18,6 @@ Public functions
 """
 
 import asyncio
-import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 

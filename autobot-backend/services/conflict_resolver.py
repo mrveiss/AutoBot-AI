@@ -26,7 +26,6 @@ Architecture:
 All I/O is async-first; no blocking operations.
 """
 
-import logging
 import time
 from typing import Optional
 

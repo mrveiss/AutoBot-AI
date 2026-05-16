@@ -7,7 +7,6 @@ This creates a completely new knowledge base instance for testing the fixes
 """
 
 import asyncio
-import logging
 
 from fastapi import APIRouter, Depends, Request
 

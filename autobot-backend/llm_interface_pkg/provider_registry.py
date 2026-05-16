@@ -29,7 +29,6 @@ from autobot_shared.logging_manager import get_logger
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from typing import Any, Dict, List, Optional
 
@@ -339,7 +338,6 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     providers) when an API key is found.  Missing optional dependencies are
     handled gracefully so the application always starts.
     """
-    import os
 
     from autobot_shared.ssot_config import get_config as get_ssot_config
     from llm_interface_pkg.providers.anthropic import AnthropicProvider

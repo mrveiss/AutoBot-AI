@@ -8,7 +8,6 @@ Code analysis functions for codebase analytics
 import ast
 import asyncio
 import json
-import logging
 import re
 import threading
 from pathlib import Path

@@ -10,7 +10,6 @@ pattern distribution, and quality trends.
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional

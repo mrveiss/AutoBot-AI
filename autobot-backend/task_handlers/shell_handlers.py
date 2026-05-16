@@ -8,7 +8,6 @@ Issue #322: Refactored to use TaskExecutionContext to eliminate data clump patte
 """
 
 import asyncio
-import logging
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger

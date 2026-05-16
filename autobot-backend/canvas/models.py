@@ -7,7 +7,6 @@ are present from day 1. No concurrency layer is enforced in Phase 1.
 
 import enum
 import uuid
-from datetime import datetime
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID

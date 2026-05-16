@@ -22,8 +22,6 @@ DAGExecutor
 """
 
 import asyncio
-import logging
-import os
 import ssl
 import time
 from dataclasses import dataclass, field

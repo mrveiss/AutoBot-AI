@@ -7,7 +7,6 @@ Users API Endpoints
 REST API for user management operations.
 """
 
-import logging
 import uuid
 from typing import Optional
 

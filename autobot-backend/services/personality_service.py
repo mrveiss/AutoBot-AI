@@ -14,7 +14,6 @@ Related Issue: #964 - Multi-profile personality system
 """
 
 import json
-import os
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path

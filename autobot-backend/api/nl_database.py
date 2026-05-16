@@ -14,7 +14,6 @@ Endpoints:
 - GET  /nl-database/history       - Retrieve query history
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status

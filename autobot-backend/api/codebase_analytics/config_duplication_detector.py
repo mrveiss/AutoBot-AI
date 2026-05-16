@@ -16,7 +16,6 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 """
 
 import ast
-import logging
 import os
 from collections import defaultdict
 from pathlib import Path

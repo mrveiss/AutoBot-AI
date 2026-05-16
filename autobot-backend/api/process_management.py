@@ -8,7 +8,6 @@ Endpoints for spawning background processes, querying their status,
 streaming logs, sending signals, and listing processes per agent.
 """
 
-import logging
 import os
 from typing import Optional
 

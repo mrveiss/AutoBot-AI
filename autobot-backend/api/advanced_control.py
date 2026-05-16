@@ -7,7 +7,6 @@ Provides monitoring, desktop streaming, and takeover management endpoints
 """
 
 import asyncio
-import logging
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 

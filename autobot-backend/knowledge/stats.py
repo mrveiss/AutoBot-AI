@@ -10,7 +10,6 @@ Implements Issue #71 - O(1) atomic counter operations for fact/document/vector c
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 

@@ -8,7 +8,6 @@ Provides REST and WebSocket endpoints for the intelligent agent system.
 """
 
 import asyncio
-import logging
 import time
 from typing import TYPE_CHECKING, Optional
 

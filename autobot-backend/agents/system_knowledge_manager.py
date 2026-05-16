@@ -9,7 +9,6 @@ Manages immutable system knowledge templates and their runtime copies
 import asyncio
 import hashlib
 import json
-import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path

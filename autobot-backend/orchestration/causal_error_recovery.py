@@ -12,7 +12,6 @@ Issue #2154: Enhanced error handling with root-cause analysis and recovery plann
 """
 
 import json
-import logging
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional

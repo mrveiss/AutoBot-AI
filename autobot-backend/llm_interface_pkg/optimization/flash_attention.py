@@ -16,7 +16,6 @@ Issue #1955: Flash Attention v2 with variable-length sequence optimization.
 # so torch types in dataclass fields / function signatures are strings at runtime.
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional, Tuple

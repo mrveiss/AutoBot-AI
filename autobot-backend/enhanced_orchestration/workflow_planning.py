@@ -15,7 +15,6 @@ the rename removes that aliasing smell (#6817).  The orphan status of the canoni
 is tracked separately in #6820.
 """
 
-import logging
 import re
 import uuid
 from typing import Any, Dict, List, Optional, Set

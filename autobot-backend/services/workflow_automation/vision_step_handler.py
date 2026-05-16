@@ -8,7 +8,6 @@ based on the step's target property (vnc or web).
 """
 
 import asyncio
-import os
 import time
 from typing import Any
 

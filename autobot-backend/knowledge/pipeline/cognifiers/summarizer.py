@@ -8,7 +8,6 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 Issue #2027: RAPTOR recursive clustering for multi-level retrieval.
 """
 
-import logging
 from typing import Dict, List, Tuple
 from uuid import UUID
 

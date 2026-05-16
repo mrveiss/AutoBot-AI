@@ -8,7 +8,6 @@ Provides endpoints for configuring and managing embedding models and providers.
 Handles vector storage configuration and embedding model selection.
 """
 
-import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException

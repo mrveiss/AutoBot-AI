@@ -9,7 +9,6 @@ Issue #52 - Enhanced Computer Vision for GUI Automation
 Author: mrveiss
 """
 
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException

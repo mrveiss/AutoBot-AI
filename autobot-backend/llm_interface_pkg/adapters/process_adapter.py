@@ -9,7 +9,6 @@ as LLM backends via subprocess execution.
 """
 
 import asyncio
-import logging
 import shutil
 import time
 from typing import Any, Dict, List, Optional

@@ -13,7 +13,6 @@ Updated in Issue #454 to use real Vosk/Coqui TTS integration.
 
 import asyncio
 import json
-import logging
 import os
 import tempfile
 from typing import Any, Dict, Optional

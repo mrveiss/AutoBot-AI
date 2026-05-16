@@ -6,7 +6,6 @@ Security Scanner Agent for AutoBot
 Provides defensive security scanning and analysis capabilities
 """
 
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 

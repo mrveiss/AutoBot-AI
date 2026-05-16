@@ -9,7 +9,6 @@ workflows and providing configurable overflow handling (reject/queue/drop-oldest
 """
 
 import asyncio
-import os
 import time
 from collections import deque
 from dataclasses import dataclass, field

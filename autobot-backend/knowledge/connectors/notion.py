@@ -16,7 +16,6 @@ Config keys (under ``ConnectorConfig.config``):
 """
 
 import hashlib
-import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 

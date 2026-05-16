@@ -25,7 +25,6 @@ Related Issue: #40 - Chat/Conversation Targeted Refactoring
 Created: 2025-01-14 (Phase 2)
 """
 
-import logging
 from typing import Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger

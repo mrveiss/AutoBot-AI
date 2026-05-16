@@ -9,7 +9,6 @@ frontend TypeScript/Vue files for API calls.
 """
 
 import ast
-import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path

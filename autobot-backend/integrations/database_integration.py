@@ -9,7 +9,6 @@ management. Supports connection testing, listing databases/tables/collections,
 and executing read-only queries.
 """
 
-import logging
 import re
 import time
 from typing import Any, Dict, List

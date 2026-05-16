@@ -9,8 +9,6 @@ providers with provider, context-window, and capability metadata.
 Results are cached for 60 seconds to avoid latency on every dropdown open.
 """
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 

@@ -18,7 +18,6 @@ Supported actions:
 - update_page       — update page properties
 """
 
-import logging
 import time
 from typing import Any, Dict, List, Optional
 

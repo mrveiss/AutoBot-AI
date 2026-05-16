@@ -34,7 +34,6 @@ task. WorkflowRunner is responsible for both calls.
 
 import asyncio
 import json
-import logging
 from typing import Any, Optional
 
 from autobot_shared.logging_manager import get_logger

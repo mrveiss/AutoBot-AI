@@ -15,7 +15,6 @@ Issue #554: Enhanced with semantic analysis support:
 """
 
 import asyncio
-import logging
 from pathlib import Path
 from typing import Optional
 

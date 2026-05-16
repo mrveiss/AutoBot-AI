@@ -22,7 +22,6 @@ Issue #1952: Meta device eviction for processed layers.
 """
 
 import gc
-import logging
 from dataclasses import dataclass
 from typing import Any, Optional, Set
 

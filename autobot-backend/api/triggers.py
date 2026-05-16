@@ -13,7 +13,6 @@ Routes:
   POST   /api/triggers/webhook/{trigger_id} — receive an external webhook event
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status

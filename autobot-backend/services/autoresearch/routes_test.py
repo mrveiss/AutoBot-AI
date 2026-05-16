@@ -10,7 +10,6 @@ baseline management, status, and cancellation.
 
 from __future__ import annotations
 
-import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI

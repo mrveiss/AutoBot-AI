@@ -10,7 +10,6 @@ with real-time event streaming and task routing.
 Issue #725: Added mTLS support for Redis connections.
 """
 
-import os
 import ssl
 import urllib.parse
 from pathlib import Path
@@ -18,7 +17,6 @@ from pathlib import Path
 from celery import Celery
 from celery.schedules import crontab
 
-from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
@@ -151,7 +149,6 @@ def _crontab_from_string(cron_expr: str) -> crontab:
     Falls back to a daily 03:00 UTC schedule if the expression is malformed,
     logging a warning so misconfiguration does not prevent Beat from starting.
     """
-    import logging as _logging
 
     _log = _get_logger(__name__)
     parts = cron_expr.strip().split()

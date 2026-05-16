@@ -34,7 +34,6 @@ Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
 import asyncio
-import os
 import threading
 import time
 from dataclasses import dataclass

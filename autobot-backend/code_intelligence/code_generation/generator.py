@@ -10,7 +10,6 @@ Contains LLMCodeGenerator class for LLM-powered code refactoring.
 
 import asyncio
 import hashlib
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
 

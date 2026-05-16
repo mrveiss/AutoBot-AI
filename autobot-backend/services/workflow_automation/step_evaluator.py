@@ -7,7 +7,6 @@ Workflow Step Evaluator Module
 LLM judge integration for evaluating workflow steps.
 """
 
-import logging
 from typing import Set
 
 from autobot_shared.logging_manager import get_logger

@@ -28,14 +28,12 @@ Results are cached for CAPABILITY_CACHE_TTL seconds to avoid hammering
 remote endpoints on every request.
 """
 
-import logging
 import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 

@@ -9,7 +9,6 @@ Consolidates all cache-related endpoints (Issue #1286).
 
 import asyncio
 import json
-import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request

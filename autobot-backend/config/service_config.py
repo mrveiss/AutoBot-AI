@@ -6,7 +6,6 @@
 Service, host, port, and URL configuration management.
 """
 
-import logging
 import os
 from typing import Any, Dict
 from urllib.parse import urlparse

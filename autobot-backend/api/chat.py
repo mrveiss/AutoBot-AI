@@ -14,8 +14,6 @@ Consolidated from chat.py and chat_enhanced.py per Issue #708.
 
 import asyncio
 import json
-import logging
-import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4

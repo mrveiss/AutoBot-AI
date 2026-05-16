@@ -7,7 +7,6 @@ Provides API endpoints for managing enterprise-grade features.
 """
 
 import asyncio
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query

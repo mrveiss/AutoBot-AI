@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import ast
 import json
-import logging
 import re
 import sys
 import time
@@ -1283,7 +1282,6 @@ class EnvironmentAnalyzer:
         priority_filter: str | None = None,
     ) -> list[HardcodedValue]:
         """Use LLM to filter false positives. Issue #633."""
-        import os
 
         ollama_host = config.ollama_host
         ollama_port = config.ollama_port

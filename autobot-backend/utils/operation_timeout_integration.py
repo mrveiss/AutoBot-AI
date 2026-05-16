@@ -16,7 +16,6 @@ framework and existing AutoBot components, including:
 """
 
 import asyncio
-import logging
 from typing import Any, Callable, Dict, List, Optional
 
 import redis.asyncio as redis

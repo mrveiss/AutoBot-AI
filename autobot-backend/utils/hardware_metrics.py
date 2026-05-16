@@ -6,7 +6,6 @@ and real-time system optimization for Intel Ultra 9 185H + RTX 4070 hardware.
 
 import asyncio
 import json
-import logging
 import os
 import subprocess  # nosec B404 - Required for nvidia-smi GPU queries
 import time

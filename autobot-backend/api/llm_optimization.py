@@ -6,7 +6,6 @@ LLM Model Optimization API Endpoints
 Provides intelligent model selection, performance tracking, and optimization suggestions.
 """
 
-import logging
 import time
 from typing import List
 

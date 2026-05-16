@@ -14,10 +14,8 @@ Covers:
 - Performance: <5ms p99 on 1KB message (benchmarked via timeit)
 """
 
-import re
 import timeit
 import unittest
-from unittest.mock import patch
 
 from a2a.pii_pipeline import (
     _DEFAULT_POLICY,
@@ -25,7 +23,6 @@ from a2a.pii_pipeline import (
     PIIBlocked,
     PIIPipeline,
     PIIType,
-    ScrubResult,
     _high_entropy,
     _luhn,
     scrub_outbound,

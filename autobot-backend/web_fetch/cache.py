@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from typing import Optional
 
 from autobot_shared.logging_manager import get_logger

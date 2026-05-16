@@ -25,7 +25,6 @@ Configuration keys (all under ConnectorConfig.config):
 """
 
 import hashlib
-import logging
 import os
 import re
 import tempfile

@@ -7,7 +7,6 @@ Enforces service-to-service authentication on internal endpoints
 Week 3 Phase 2: Comprehensive endpoint categorization and selective enforcement
 """
 
-import os
 import random
 import secrets
 import time

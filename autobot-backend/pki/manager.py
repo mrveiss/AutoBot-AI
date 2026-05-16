@@ -11,7 +11,6 @@ Provides a unified interface for certificate lifecycle management.
 This is the primary entry point for all PKI operations in AutoBot.
 """
 
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum

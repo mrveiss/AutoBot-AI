@@ -7,8 +7,6 @@ Provides login, logout, and session management functionality
 """
 
 import datetime
-import logging
-import os
 from collections import defaultdict
 from time import time
 from typing import Dict, List

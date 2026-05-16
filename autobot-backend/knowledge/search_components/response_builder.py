@@ -8,7 +8,6 @@ Issue #381: Extracted from search.py god class refactoring.
 Contains response building and clustering functionality.
 """
 
-import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.logging_manager import get_logger

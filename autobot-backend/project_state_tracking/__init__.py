@@ -11,7 +11,6 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import json
-import logging
 import sys
 from typing import Any, Dict, Optional
 

@@ -6,7 +6,6 @@ AutoBot Services API
 Provides service status, health checks, and system information endpoints.
 """
 
-import logging
 import time
 from datetime import datetime, timezone
 

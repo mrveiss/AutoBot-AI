@@ -2,7 +2,6 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 import json
-import logging
 import os
 import platform
 import subprocess  # nosec B404 - required for system commands

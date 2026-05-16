@@ -9,7 +9,6 @@ request revision, resubmit, and comment. Publishes WebSocket
 notifications for pending approvals.
 """
 
-import logging
 import uuid
 from typing import Any, Dict, List, Optional
 

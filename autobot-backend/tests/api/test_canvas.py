@@ -19,7 +19,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.canvas import router
-from api.schemas_canvas import CanvasExportRequest, ExportInclude
 from canvas.models import Canvas, CanvasCell, CellState
 
 # ---------------------------------------------------------------------------
@@ -113,7 +112,6 @@ class TestGetCanvas:
 
         session.execute = AsyncMock(side_effect=_execute_side_effect)
 
-        from api.canvas import get_canvas
         from user_management.database import get_async_session
 
         app.dependency_overrides = {

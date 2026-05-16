@@ -37,8 +37,6 @@ Related: Issue #206
 
 import asyncio
 import base64
-import logging
-import os
 import threading
 import time
 import uuid
@@ -57,7 +55,6 @@ try:
 except ImportError:  # pragma: no cover
     from typing import Any as Page  # type: ignore[assignment, misc]
 
-from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 from event_manager import get_event_manager
 

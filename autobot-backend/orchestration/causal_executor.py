@@ -21,7 +21,6 @@ Usage::
     cascade_report = causal_executor.analyze_cascades()
 """
 
-import logging
 import time
 from typing import Any, Dict, Optional
 

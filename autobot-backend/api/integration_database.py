@@ -9,7 +9,6 @@ MySQL, and MongoDB. Supports connection testing, listing databases/tables,
 and executing read-only queries.
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException

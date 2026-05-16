@@ -23,7 +23,6 @@ Endpoints:
 - GET /entities/extract/health - Service health check
 """
 
-import logging
 from typing import List
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request

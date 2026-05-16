@@ -9,8 +9,6 @@ and automated testing environments, preventing test timeouts and CI/CD failures.
 """
 
 import asyncio
-import logging
-import os
 import queue
 import sys
 import threading

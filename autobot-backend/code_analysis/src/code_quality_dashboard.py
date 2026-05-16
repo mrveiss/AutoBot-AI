@@ -5,7 +5,6 @@ Integrates all analyzers: duplicates, environment variables, performance, securi
 
 import asyncio
 import json
-import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone

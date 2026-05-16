@@ -26,7 +26,6 @@ from autobot_shared.logging_manager import get_logger
 """
 
 import asyncio
-import logging
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, Dict, Optional
 

@@ -13,7 +13,6 @@ Issue #1287: Consolidated from batch.py — legacy batch optimization endpoints
 
 import asyncio
 import json
-import logging
 import os
 import uuid
 from datetime import datetime, timezone

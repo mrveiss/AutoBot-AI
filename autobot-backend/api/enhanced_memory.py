@@ -9,7 +9,6 @@ Issue #357: Converted to use AsyncEnhancedMemoryManager to fix blocking I/O in a
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 from typing import List, Optional
 

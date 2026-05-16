@@ -27,7 +27,6 @@ Data flow:
 7. Return GroundedResponse with full provenance
 """
 
-import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum

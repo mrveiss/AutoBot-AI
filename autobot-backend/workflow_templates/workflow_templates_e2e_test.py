@@ -4,7 +4,6 @@ Test the new workflow templates system
 """
 
 import asyncio
-import os
 import sys
 
 from autobot_shared.ssot_config import config

@@ -4,7 +4,6 @@ Test the new workflow scheduler and queue management system
 """
 
 import asyncio
-import os
 import sys
 from datetime import datetime, timedelta
 

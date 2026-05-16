@@ -18,7 +18,6 @@ Optimizes GPU utilization for multi-modal AI workloads and provides acceleration
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import asdict
 from typing import Any, Dict, List

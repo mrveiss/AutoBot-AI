@@ -10,7 +10,6 @@ without touching any other KB content.
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 

@@ -18,7 +18,6 @@ from autobot_shared.logging_manager import get_logger
 """
 
 import asyncio
-import logging
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from skills.sync.mcp_transport import MCPTransport, create_transport

@@ -11,8 +11,6 @@ feature envy, circular dependencies, and more.
 Issue: #221
 """
 
-import logging
-
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 

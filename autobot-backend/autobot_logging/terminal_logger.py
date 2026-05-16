@@ -12,7 +12,6 @@ Provides detailed logging of terminal commands with:
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, FrozenSet, List, Optional

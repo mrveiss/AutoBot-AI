@@ -4,7 +4,6 @@
 """Central cache coordinator with memory-pressure-aware eviction."""
 
 import asyncio
-import logging
 from typing import Any, Dict, Optional
 
 from autobot_shared.logging_manager import get_logger

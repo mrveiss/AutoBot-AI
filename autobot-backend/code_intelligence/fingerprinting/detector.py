@@ -15,7 +15,6 @@ Extracted from code_fingerprinting.py as part of Issue #381 refactoring.
 
 import ast
 import hashlib
-import logging
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple

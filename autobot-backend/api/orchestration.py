@@ -7,8 +7,6 @@ Enhanced Orchestration API
 Advanced multi-agent orchestration endpoints with improved coordination and strategies.
 """
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 

@@ -7,7 +7,6 @@ Provides proper cancellation patterns without arbitrary time limits
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
 from enum import Enum

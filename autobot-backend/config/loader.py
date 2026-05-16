@@ -14,7 +14,6 @@ from typing import Any, Dict, List
 import yaml
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
 from config.defaults import get_default_config
 from constants.threshold_constants import StringParsingConstants
 

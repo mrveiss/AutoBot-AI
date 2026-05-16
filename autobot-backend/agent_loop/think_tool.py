@@ -20,7 +20,6 @@ The Think Tool:
 - Provides audit trail for debugging
 """
 
-import logging
 from dataclasses import dataclass
 from typing import Any, Optional
 

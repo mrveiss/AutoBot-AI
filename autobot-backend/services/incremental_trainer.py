@@ -7,7 +7,6 @@ Incremental Trainer Service (Issue #905)
 Lightweight model updates based on feedback without full retraining.
 """
 
-import logging
 from datetime import timedelta
 from typing import Optional
 

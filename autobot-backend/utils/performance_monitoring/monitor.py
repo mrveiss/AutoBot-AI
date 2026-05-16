@@ -13,7 +13,6 @@ Extended with Prometheus integration as part of Issue #469.
 
 import asyncio
 import json
-import logging
 import time
 from dataclasses import asdict
 from typing import Any, Callable, Dict, List

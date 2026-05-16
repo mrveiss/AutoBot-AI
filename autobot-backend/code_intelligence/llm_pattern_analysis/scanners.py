@@ -13,7 +13,6 @@ Extracted from llm_pattern_analyzer.py as part of Issue #381 refactoring.
 """
 
 import hashlib
-import logging
 import re
 import time
 from pathlib import Path

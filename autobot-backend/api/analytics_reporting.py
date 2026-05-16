@@ -12,7 +12,6 @@ Provides a single endpoint that aggregates all analytics data from:
 - Bug predictions
 """
 
-import logging
 from typing import Any, Dict
 
 import aiohttp

@@ -12,7 +12,6 @@ import threading
 from typing import Any, Dict, List, Optional, Type
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.plugin_sdk.extension_manifest import ExtensionManifest
 from autobot_shared.plugin_sdk.unified_registry import get_unified_registry
 from extensions.base import Extension, HookContext
 from extensions.hooks import HookPoint

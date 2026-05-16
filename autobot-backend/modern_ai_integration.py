@@ -11,8 +11,6 @@ GPT-4V, Claude-3, Gemini for enhanced capabilities.
 import asyncio
 import base64
 import json
-import logging
-import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass

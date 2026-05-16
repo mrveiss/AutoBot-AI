@@ -7,7 +7,6 @@ Supports: PDF, DOC, DOCX, XLSX, PPT, PPTX, ODT, ODS, ODP, ODG
 """
 
 import asyncio
-import logging
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 

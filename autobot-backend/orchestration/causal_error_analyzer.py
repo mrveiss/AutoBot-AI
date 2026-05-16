@@ -10,7 +10,6 @@ and cascading failures, not just symptoms.
 Integration point for the Think Tool with causal reasoning guidance.
 """
 
-import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 

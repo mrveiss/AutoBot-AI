@@ -11,7 +11,6 @@ Contains classes for analyzing metrics and generating alerts/recommendations:
 Extracted from performance_monitor.py as part of Issue #381 refactoring.
 """
 
-import logging
 import time
 from typing import Any, Dict, List
 

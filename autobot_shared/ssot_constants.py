@@ -23,10 +23,8 @@ This module replaces:
   - autobot-backend/voice_processing/constants.py
 """
 
-import os
 import re
 from dataclasses import dataclass
-from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Optional
@@ -75,9 +73,6 @@ from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL as SSOT_LIGHT_PROC
 from autobot_shared.ssot_config import QUALITY_MODEL as SSOT_QUALITY_MODEL
 from autobot_shared.ssot_config import ROUTING_MODEL as SSOT_ROUTING_MODEL
 from autobot_shared.ssot_config import SYSTEM_MODEL as SSOT_SYSTEM_MODEL
-from autobot_shared.ssot_config import (
-    config,
-)
 
 FALLBACK_MODEL = DEFAULT_LLM_MODEL
 

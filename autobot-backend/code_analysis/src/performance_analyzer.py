@@ -5,7 +5,6 @@ Analyzes codebase for performance bottlenecks, memory leaks, and processing inef
 
 import ast
 import json
-import logging
 import re
 import time
 from dataclasses import dataclass

@@ -13,7 +13,6 @@ Part of the modular autobot_memory_graph package (Issue #716).
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 

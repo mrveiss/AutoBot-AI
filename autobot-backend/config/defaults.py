@@ -10,7 +10,6 @@ SSOT Migration (Issue #639):
     with fallback to NetworkConstants for backward compatibility.
 """
 
-import os
 from typing import Any, Dict
 
 from autobot_shared.ssot_config import config

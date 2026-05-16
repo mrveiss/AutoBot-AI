@@ -11,7 +11,6 @@ Issue #285: Integrated with Embedding Pattern Analyzer for cost tracking.
 """
 
 import asyncio
-import logging
 import time
 from datetime import datetime, timezone
 from typing import Optional

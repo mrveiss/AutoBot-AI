@@ -31,8 +31,6 @@ Key Features:
 - Cache invalidation endpoints
 """
 
-import logging
-import os
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 

@@ -9,7 +9,6 @@ Supports Python, shell, and other system commands.
 """
 
 import asyncio
-import logging
 import os
 import sys
 from typing import Dict, Tuple

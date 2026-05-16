@@ -8,7 +8,6 @@ Issue #381: Extracted from agent_orchestrator.py god class refactoring.
 Contains agent execution logic, result synthesis, and fallback handling.
 """
 
-import logging
 import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional

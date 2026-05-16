@@ -13,7 +13,6 @@ Provides connection testing, resource listing, and CRUD operations
 for issues, cards, and tasks.
 """
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query

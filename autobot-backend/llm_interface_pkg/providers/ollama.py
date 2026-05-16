@@ -10,7 +10,6 @@ Issue #697: Added OpenTelemetry tracing spans for LLM inference.
 """
 
 import asyncio
-import logging
 import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional

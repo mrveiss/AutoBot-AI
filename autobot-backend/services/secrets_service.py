@@ -68,7 +68,7 @@ class SecretsService:
             # 1. Environment variable (direct)
             # 2. Config manager (may map from env)
             # 3. Key file in data directory
-            import os
+            pass
 
             env_key = config.secrets_key
             if not env_key:

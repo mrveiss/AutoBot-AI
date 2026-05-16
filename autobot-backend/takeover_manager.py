@@ -7,7 +7,6 @@ Provides interrupt/takeover capabilities for autonomous operations
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone

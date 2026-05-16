@@ -8,7 +8,6 @@ Issue #2013: Decomposed from scanner.py god module.
 """
 
 import asyncio
-import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 

@@ -17,7 +17,6 @@ Public functions
 """
 
 import asyncio
-import logging
 from typing import Callable, Optional
 
 from constants.threshold_constants import TimingConstants

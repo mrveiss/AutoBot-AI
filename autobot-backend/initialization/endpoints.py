@@ -7,7 +7,6 @@ Root-Level API Endpoints
 Registers root-level endpoints that frontend expects directly under /api
 """
 
-import logging
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict

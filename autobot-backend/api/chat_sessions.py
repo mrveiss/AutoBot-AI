@@ -3,7 +3,6 @@
 # Author: mrveiss
 
 import json
-import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Request, Response

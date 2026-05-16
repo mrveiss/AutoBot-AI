@@ -7,7 +7,6 @@ Pattern Data Loader (Issue #904)
 Loads code patterns from database and prepares training data.
 """
 
-import logging
 import re
 from typing import Dict, List, Optional, Tuple
 

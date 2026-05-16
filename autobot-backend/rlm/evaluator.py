@@ -12,7 +12,6 @@ to generate_response with the critique as a refinement hint.
 Issue #1373: Initial RLM prototype.
 """
 
-import logging
 from typing import Optional
 
 from autobot_shared.logging_manager import get_logger

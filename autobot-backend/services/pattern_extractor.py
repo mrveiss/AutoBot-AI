@@ -9,7 +9,6 @@ Extracts code patterns from AutoBot codebase for ML training and completion.
 
 import ast
 import json
-import logging
 import re
 from collections import defaultdict
 from pathlib import Path

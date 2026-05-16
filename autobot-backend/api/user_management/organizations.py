@@ -8,7 +8,6 @@ REST API for organization (tenant) management operations.
 Used in multi_company and provider deployment modes.
 """
 
-import logging
 import uuid
 from typing import Optional
 

@@ -11,7 +11,6 @@ Vue, Shell, YAML, etc.)
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
-import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field

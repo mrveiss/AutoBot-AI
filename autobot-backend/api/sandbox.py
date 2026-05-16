@@ -7,7 +7,6 @@ Secure Sandbox API
 API endpoints for executing commands in the secure Docker sandbox environment.
 """
 
-import logging
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException

@@ -24,7 +24,6 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 - Historical review pattern learning via embeddings
 """
 
-import logging
 import re
 import subprocess  # nosec B404 - code review tools require subprocess
 from dataclasses import dataclass, field

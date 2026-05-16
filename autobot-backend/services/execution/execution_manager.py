@@ -8,7 +8,6 @@ Routes tasks to appropriate backends based on characteristics.
 Handles health checks, resource management, and routing decisions.
 """
 
-import logging
 from typing import Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger

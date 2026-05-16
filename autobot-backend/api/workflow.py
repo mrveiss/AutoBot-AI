@@ -7,7 +7,6 @@ Handles workflow approvals, progress tracking, and coordination
 """
 
 import asyncio
-import logging
 import time
 import uuid
 from datetime import datetime, timezone

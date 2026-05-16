@@ -17,7 +17,6 @@ Issue #4564: BaseSynthesizer ABC extracted for shared interface reuse.
 from __future__ import annotations
 
 import json
-import logging
 import time
 import uuid
 from abc import ABC, abstractmethod

@@ -16,7 +16,6 @@ structurally impossible to get wrong.
 """
 
 import inspect
-import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

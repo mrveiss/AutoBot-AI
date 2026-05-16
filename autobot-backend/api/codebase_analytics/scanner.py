@@ -25,8 +25,6 @@ Sub-module responsibilities
 """
 
 import asyncio
-import logging
-import os
 import threading
 from collections import deque
 from pathlib import Path

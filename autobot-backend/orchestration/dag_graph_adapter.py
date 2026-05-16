@@ -35,7 +35,6 @@ state and converts it back to the legacy execution_context dict shape.
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Dict, Optional, Set
 
 from autobot_shared.logging_manager import get_logger

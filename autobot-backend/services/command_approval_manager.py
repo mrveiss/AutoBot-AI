@@ -20,7 +20,6 @@ Key Features:
 - Supervised mode for guided dangerous actions
 """
 
-import logging
 import time
 from dataclasses import dataclass
 from enum import Enum

@@ -7,7 +7,6 @@
 
 """Base abstract class for media processing pipelines."""
 
-import logging
 import time
 from abc import ABC, abstractmethod
 from typing import ClassVar, List, Optional

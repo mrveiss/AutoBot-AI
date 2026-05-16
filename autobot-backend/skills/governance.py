@@ -9,7 +9,6 @@ Creates approval records and notifies SLM admin via Redis pub/sub.
 """
 
 import json
-import logging
 import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional

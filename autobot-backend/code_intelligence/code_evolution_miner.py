@@ -16,7 +16,6 @@ Features:
 - Evolution reports and visualizations
 """
 
-import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path

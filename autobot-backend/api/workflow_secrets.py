@@ -18,7 +18,6 @@ Routes:
 Issue #2153 — Secret management for workflow credentials.
 """
 
-import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query

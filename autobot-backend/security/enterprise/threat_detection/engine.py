@@ -11,7 +11,6 @@ Issue #378: Added threading locks for file operations to prevent race conditions
 """
 
 import asyncio
-import logging
 import pickle  # nosec B403 - internal profile storage only
 import threading
 from collections import defaultdict, deque

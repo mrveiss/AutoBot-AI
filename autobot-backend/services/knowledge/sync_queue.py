@@ -23,7 +23,6 @@ to the score at enqueue time.
 
 from __future__ import annotations
 
-import logging
 import time
 import uuid
 from dataclasses import asdict, dataclass, field

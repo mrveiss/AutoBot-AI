@@ -7,7 +7,6 @@ OS-Aware Tool Selection Module
 Selects appropriate tools based on OS capabilities and goal requirements.
 """
 
-import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
@@ -309,7 +308,6 @@ class OSAwareToolSelector:
         formatted = command
 
         # Get default network from environment; DEFAULT_SCAN_NETWORK="" until configured
-        import os
 
         default_network = config.default_scan_network
         resolved_network = parameters.get("network", default_network)

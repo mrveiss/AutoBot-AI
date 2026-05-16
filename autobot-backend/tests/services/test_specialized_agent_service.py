@@ -8,7 +8,6 @@ Tests cover the three module-level helpers and the three public methods
 of SpecializedAgentService, using tmp_path for filesystem isolation.
 """
 
-import logging
 from pathlib import Path
 from unittest.mock import patch
 

@@ -7,7 +7,6 @@ File watching and callback management for config changes.
 """
 
 import asyncio
-import logging
 from typing import Any, Callable, Dict
 
 from autobot_shared.logging_manager import get_logger

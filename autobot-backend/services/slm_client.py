@@ -22,7 +22,6 @@ Related to Issue #760 Phase 2.
 """
 
 import asyncio
-import logging
 import os
 import ssl
 import time
@@ -34,7 +33,7 @@ import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL, config
+from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
 
 logger = get_logger(__name__)

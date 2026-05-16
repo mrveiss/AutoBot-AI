@@ -16,15 +16,13 @@ Observability: OTel spans + structlog metrics via autobot_shared.
 """
 
 import json
-import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_canvas import (

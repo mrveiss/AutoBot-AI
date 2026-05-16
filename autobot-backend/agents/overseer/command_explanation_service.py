@@ -13,7 +13,6 @@ Uses caching to reduce LLM calls for common commands.
 
 import hashlib
 import json
-import logging
 from typing import Dict, Optional
 
 from autobot_shared.http_client import get_http_client

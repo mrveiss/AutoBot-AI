@@ -8,7 +8,6 @@ Issue #381: Extracted from search.py god class refactoring.
 Contains search analytics tracking functionality.
 """
 
-import logging
 from typing import List, Optional
 
 from autobot_shared.logging_manager import get_logger

@@ -22,7 +22,6 @@ for conflict resolution and stats.
 Rate limiting: 50 req/min per user for ground-response, 100 req/min for verify-claim.
 """
 
-import logging
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request

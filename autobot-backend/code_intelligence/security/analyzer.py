@@ -9,7 +9,6 @@ Issue #554: Includes semantic analysis via ChromaDB/Redis/LLM infrastructure.
 """
 
 import ast
-import logging
 import re
 import time
 from pathlib import Path

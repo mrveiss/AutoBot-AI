@@ -14,7 +14,6 @@ Parent Issue: #1282 (bi_export_endpoints.py integration)
 """
 
 import json
-import logging
 import uuid
 from datetime import timedelta
 from typing import Any, Dict, List, Optional

@@ -10,7 +10,6 @@ Pool sizes are coordinated via SSOT config (#2860).
 """
 
 import asyncio
-import logging
 import re
 from contextlib import asynccontextmanager
 from dataclasses import dataclass

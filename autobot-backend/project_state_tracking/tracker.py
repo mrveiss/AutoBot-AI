@@ -12,7 +12,6 @@ Issue #357: Wrapped blocking SQLite operations with asyncio.to_thread().
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 

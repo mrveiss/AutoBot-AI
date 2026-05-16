@@ -14,7 +14,6 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
 from config.loader import ENV_VAR_MAPPINGS
 
 logger = get_logger(__name__)

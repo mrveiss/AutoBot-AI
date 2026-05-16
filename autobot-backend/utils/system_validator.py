@@ -7,7 +7,6 @@ Validates all optimization components and their integration for production readi
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
 from enum import Enum

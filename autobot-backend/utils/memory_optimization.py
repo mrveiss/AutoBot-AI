@@ -8,7 +8,6 @@ Provides memory usage optimization and monitoring capabilities
 
 import gc
 import logging
-import os
 import sys
 import threading
 import weakref

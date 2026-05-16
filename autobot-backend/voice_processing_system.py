@@ -61,7 +61,6 @@ _match_intent_from_patterns = match_intent_from_patterns
 get_voice_processing_system = lazy_singleton(VoiceProcessingSystem)
 
 # Logging
-import logging
 
 from autobot_shared.logging_manager import get_logger
 

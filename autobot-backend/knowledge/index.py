@@ -10,7 +10,6 @@ Issue #369 - All ChromaDB operations wrapped with asyncio.to_thread() to prevent
 """
 
 import asyncio
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Optional
 

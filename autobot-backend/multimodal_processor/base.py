@@ -9,7 +9,6 @@ Abstract base class for modal-specific processors.
 Part of Issue #381 - God Class Refactoring
 """
 
-import logging
 from typing import Any
 
 from autobot_shared.logging_manager import get_logger

@@ -35,7 +35,6 @@ from autobot_shared.logging_manager import get_logger
 
 from __future__ import annotations
 
-import logging
 import time
 import uuid
 from typing import Any, AsyncIterator, Dict, List, Optional, Union

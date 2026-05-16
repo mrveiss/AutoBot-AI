@@ -27,7 +27,6 @@ Performance:
 - Relation traversal: <100ms
 """
 
-import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request

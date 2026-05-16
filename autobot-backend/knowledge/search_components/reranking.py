@@ -11,7 +11,6 @@ recency_score) replace the hardcoded 0.8/0.2 split.
 """
 
 import asyncio
-import logging
 import math
 import threading
 from dataclasses import dataclass

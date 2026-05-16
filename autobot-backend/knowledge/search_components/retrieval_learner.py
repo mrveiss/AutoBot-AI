@@ -20,7 +20,6 @@ rag:rl:cursors                                   HASH   — last processed strea
 
 import hashlib
 import json
-import logging
 import math
 import threading
 import time

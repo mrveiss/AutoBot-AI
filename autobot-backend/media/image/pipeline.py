@@ -11,7 +11,6 @@
 import asyncio
 import base64
 import io
-import logging
 from typing import Any, Dict, Optional
 
 from autobot_shared.logging_manager import get_logger

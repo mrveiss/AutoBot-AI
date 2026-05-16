@@ -20,8 +20,6 @@ Public API (preserved):
     - get_gpu_semantic_chunker()
 """
 
-import os
-
 from autobot_shared.ssot_config import config
 
 # GPU optimization environment variables (must be set before torch import)

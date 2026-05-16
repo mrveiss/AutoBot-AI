@@ -48,7 +48,6 @@ dashboard = await get_performance_dashboard()
 await stop_monitoring()
 """
 
-import logging
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule

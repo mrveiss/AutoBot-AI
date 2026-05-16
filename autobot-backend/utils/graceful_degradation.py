@@ -9,7 +9,6 @@ Implements comprehensive fallback mechanisms to maintain AutoBot functionality d
 import asyncio
 import hashlib
 import json
-import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field

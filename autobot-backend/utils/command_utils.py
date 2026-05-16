@@ -26,7 +26,6 @@ from autobot_shared.logging_manager import get_logger
 """
 
 import asyncio
-import logging
 from asyncio import Queue as AsyncQueue
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional

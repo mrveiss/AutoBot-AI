@@ -9,7 +9,6 @@ and improve performance across multiple concurrent requests.
 """
 
 import asyncio
-import logging
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass

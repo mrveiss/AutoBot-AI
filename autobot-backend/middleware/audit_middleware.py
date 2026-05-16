@@ -31,7 +31,6 @@ Usage Examples:
 
 import asyncio
 import functools
-import logging
 import time
 from typing import Any, Callable, Optional
 

@@ -10,7 +10,6 @@ Issue #1304: Migrated to shared BackgroundTaskManager.
 
 import asyncio
 import json
-import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query

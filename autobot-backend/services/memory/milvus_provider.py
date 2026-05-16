@@ -3,7 +3,6 @@
 # Author: mrveiss
 """Milvus Memory Provider (Issue #4344)"""
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger

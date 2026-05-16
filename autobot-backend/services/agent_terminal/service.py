@@ -7,7 +7,6 @@ Agent Terminal Service
 Main service class that composes all agent terminal functionality.
 """
 
-import logging
 import time
 from typing import Optional
 

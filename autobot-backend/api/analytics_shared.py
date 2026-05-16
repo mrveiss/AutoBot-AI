@@ -8,7 +8,6 @@ Contains utilities reused across analytics_quality, analytics_evolution,
 analytics_code_review, and analytics_code_generation.
 """
 
-import logging
 from pathlib import Path
 from typing import Optional
 

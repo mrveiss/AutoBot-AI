@@ -29,7 +29,6 @@ from autobot_shared.logging_manager import get_logger
 """
 
 import json
-import logging
 import smtplib
 import ssl
 import time
@@ -409,7 +408,6 @@ class NotificationService:
             AUTOBOT_SMTP_FROM   (default: autobot@localhost)
             AUTOBOT_SMTP_TLS    (default: true)
         """
-        import os
 
         smtp_host = config.smtp_host
         smtp_port = int(config.smtp_port)

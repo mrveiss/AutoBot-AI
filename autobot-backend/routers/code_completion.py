@@ -7,7 +7,6 @@ Code Completion API Router (Issue #903)
 Endpoints for pattern extraction and code completion.
 """
 
-import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query

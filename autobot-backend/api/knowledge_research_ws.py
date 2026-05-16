@@ -23,7 +23,6 @@ Server streams:
 """
 
 import json
-import logging
 from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect

@@ -5,7 +5,6 @@ Extends the analysis suite to support JavaScript, TypeScript, Vue, React, and ot
 
 import asyncio
 import json
-import logging
 import re
 import sys
 import time

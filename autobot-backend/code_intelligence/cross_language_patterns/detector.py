@@ -15,7 +15,6 @@ TypeScript/JavaScript codebases using:
 import asyncio
 import hashlib
 import json
-import logging
 import re
 import time
 import uuid
