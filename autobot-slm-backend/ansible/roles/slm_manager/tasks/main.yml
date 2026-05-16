@@ -513,6 +513,39 @@
 # ==========================================================
 # Nginx configuration
 # ==========================================================
+
+# #6842: DRY security-headers via nginx snippets (avoids repeating 5 add_header
+# lines at every location that overrides parent context).
+- name: "SLM | Ensure nginx snippets directory exists"
+  ansible.builtin.file:
+    path: /etc/nginx/snippets
+    state: directory
+    mode: "0755"
+  become: yes
+  tags: ['slm', 'nginx']
+
+- name: "SLM | Deploy strict security-headers nginx snippet (#6842)"
+  ansible.builtin.template:
+    src: autobot-security-headers-strict.conf.j2
+    dest: /etc/nginx/snippets/autobot-security-headers-strict.conf
+    mode: "0644"
+  become: yes
+  notify:
+    - test nginx config
+    - reload nginx
+  tags: ['slm', 'nginx']
+
+- name: "SLM | Deploy iframe-host security-headers nginx snippet (#6842)"
+  ansible.builtin.template:
+    src: autobot-security-headers-iframe-host.conf.j2
+    dest: /etc/nginx/snippets/autobot-security-headers-iframe-host.conf
+    mode: "0644"
+  become: yes
+  notify:
+    - test nginx config
+    - reload nginx
+  tags: ['slm', 'nginx']
+
 - name: "SLM | Deploy nginx configuration"
   ansible.builtin.template:
     src: autobot-slm.conf.j2
