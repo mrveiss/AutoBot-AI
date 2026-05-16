@@ -31,9 +31,49 @@ TTL_METHODS_INDEX_1 = {"setex", "expire", "pexpire"}
 CACHE_SET_TTL_KWARG = "ttl"
 
 
+def _eval_constant(node: ast.expr) -> float | None:
+    """Return the numeric value if *node* is a compile-time constant numeric
+    expression (bare literal or BinOp of literals), otherwise None.
+
+    Handles:
+      - ast.Constant(value=int|float)          e.g. 86400
+      - BinOp(left, Mult|Add|Sub|Div, right)   e.g. 90 * 86400, 30 * 24 * 60 * 60
+    """
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return float(node.value)
+    if isinstance(node, ast.BinOp):
+        left = _eval_constant(node.left)
+        right = _eval_constant(node.right)
+        if left is None or right is None:
+            return None
+        op = node.op
+        if isinstance(op, ast.Mult):
+            return left * right
+        if isinstance(op, ast.Add):
+            return left + right
+        if isinstance(op, ast.Sub):
+            return left - right
+        if isinstance(op, ast.Div):
+            return left / right if right != 0 else None
+    return None
+
+
 def _is_literal_number(node: ast.expr) -> bool:
-    """Return True if node is a literal int or float (not a name reference)."""
-    return isinstance(node, ast.Constant) and isinstance(node.value, (int, float))
+    """Return True if node is a literal int or float (not a name reference).
+
+    Also catches BinOp expressions that resolve entirely to numeric constants,
+    such as ``90 * 86400`` or ``30 * 24 * 60 * 60``.
+    """
+    return _eval_constant(node) is not None
+
+
+def _ttl_repr(node: ast.expr) -> str:
+    """Return a human-readable representation of a TTL node for error messages."""
+    value = _eval_constant(node)
+    src = ast.unparse(node)
+    if value is not None and not isinstance(node, ast.Constant):
+        return f"{src} (= {int(value)})"
+    return repr(int(value)) if value is not None else src
 
 
 def check_file(path: Path) -> list[str]:
@@ -63,7 +103,7 @@ def check_file(path: Path) -> list[str]:
                 # setex(key, ttl, value): ttl is args[1]
                 if len(node.args) >= 2 and _is_literal_number(node.args[1]):
                     violations.append(
-                        f"{path}:{node.lineno}: literal TTL {node.args[1].value!r} "
+                        f"{path}:{node.lineno}: literal TTL {_ttl_repr(node.args[1])} "
                         f"in .{func.attr}() — use a named constant from "
                         f"autobot_shared.ssot_constants (e.g. TTL_1_HOUR)"
                     )
@@ -73,7 +113,7 @@ def check_file(path: Path) -> list[str]:
                 for kw in node.keywords:
                     if kw.arg == CACHE_SET_TTL_KWARG and _is_literal_number(kw.value):
                         violations.append(
-                            f"{path}:{node.lineno}: literal ttl={kw.value.value!r} "
+                            f"{path}:{node.lineno}: literal ttl={_ttl_repr(kw.value)} "
                             f"in .set() — use a named constant from "
                             f"autobot_shared.ssot_constants (e.g. TTL_1_HOUR)"
                         )
