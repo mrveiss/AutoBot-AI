@@ -1783,7 +1783,6 @@ class UpdateTagStyleRequest(BaseModel):
 # ===== CATEGORY MANAGEMENT MODELS (Issue #411) =====
 
 # Issue #411: Pre-compiled regex for category name validation
-_CATEGORY_NAME_RE = re.compile(r"^[a-z0-9_-]+$")
 _CATEGORY_PATH_RE = re.compile(r"^[a-z0-9_/-]+$")
 
 
@@ -1826,7 +1825,7 @@ class CreateCategoryRequest(BaseModel):
     def validate_name(cls, v):
         """Validate category name format."""
         v = v.lower().strip().replace(" ", "-")
-        if not _CATEGORY_NAME_RE.match(v):
+        if not _LOWERCASE_TAG_RE.match(v):
             raise ValueError("Invalid category name: only lowercase alphanumeric, " "hyphens, underscores allowed")
         if contains_path_traversal(v):
             raise ValueError("Invalid characters in category name")
@@ -1890,7 +1889,7 @@ class UpdateCategoryRequest(BaseModel):
         """Validate category name format if provided."""
         if v is not None:
             v = v.lower().strip().replace(" ", "-")
-            if not _CATEGORY_NAME_RE.match(v):
+            if not _LOWERCASE_TAG_RE.match(v):
                 raise ValueError("Invalid category name: only lowercase alphanumeric, " "hyphens, underscores allowed")
         return v
 
