@@ -18,15 +18,25 @@ external monitors should be migrating *to*.
 After the sunset date elapses, the route-deletion PR can run with the
 audit playbook in ``docs/api/health.md`` knowing every consumer was given
 prior notice.
+
+Issue #6919: Logging and Prometheus metering added so external audits can
+identify which scrapers are still calling deprecated endpoints.  Each hit
+is logged at WARNING level (deprecated API surface being called) and
+increments a ``autobot_legacy_health_hits_total`` counter labelled by
+``path``.  This allows Prometheus queries such as
+``topk(10, autobot_legacy_health_hits_total)`` to surface active scrapers
+during the sunset window.
 """
 
 from __future__ import annotations
 
-
+from prometheus_client import Counter
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.proxy_utils import get_client_ip
 
 logger = get_logger(__name__)
 
@@ -44,6 +54,14 @@ _CANONICAL_PATHS = frozenset(
     }
 )
 
+# Issue #6919: Prometheus counter — one time-series per deprecated path so
+# Prometheus / Grafana can show which endpoints are still being scraped.
+_LEGACY_HEALTH_HITS = Counter(
+    "autobot_legacy_health_hits_total",
+    "Number of requests to deprecated /api/<module>/health endpoints (Issue #6919)",
+    ["path"],
+)
+
 
 def _is_legacy_module_health(path: str) -> bool:
     """Match ``/api/<module>/health`` but not the canonical aggregator paths."""
@@ -59,7 +77,12 @@ def _is_legacy_module_health(path: str) -> bool:
 
 
 class SunsetLegacyHealthMiddleware(BaseHTTPMiddleware):
-    """Add ``Sunset`` / ``Deprecation`` / ``Link`` headers to legacy /health responses."""
+    """Add ``Sunset`` / ``Deprecation`` / ``Link`` headers to legacy /health responses.
+
+    Issue #6919: Also logs each hit at WARNING level and increments a
+    per-path Prometheus counter so external audits can identify remaining
+    scrapers during the sunset window.
+    """
 
     async def dispatch(self, request: Request, call_next) -> Response:
         response = await call_next(request)
@@ -68,4 +91,15 @@ class SunsetLegacyHealthMiddleware(BaseHTTPMiddleware):
             response.headers["Sunset"] = SUNSET_DATE_HTTP
             response.headers["Deprecation"] = "true"
             response.headers["Link"] = '</api/system/health>; rel="successor-version"'
+
+            client_ip = get_client_ip(request) or "unknown"
+            logger.warning(
+                "Deprecated legacy health endpoint called — migrate to /api/system/health "
+                "(sunset: %s). path=%s client_ip=%s",
+                SUNSET_DATE_HTTP,
+                path,
+                client_ip,
+            )
+            _LEGACY_HEALTH_HITS.labels(path=path).inc()
+
         return response
