@@ -53,6 +53,12 @@ jobs:
             autobot-backend/requirements*.txt
             autobot-slm-backend/requirements*.txt
 
+      - name: Install pytest
+        run: pip install pytest
+
+      - name: Test audit script (#6929)
+        run: pytest pipeline-scripts/test_audit_unwired_trackers.py -v
+
       - name: Run audit (dry-run, JSON output)
         id: scan
         shell: bash
