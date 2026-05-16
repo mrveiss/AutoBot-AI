@@ -174,22 +174,26 @@ def register_root_endpoints(app: FastAPI) -> None:
     @app.get("/api/health/feature-routers")
     @with_error_handling(category=ErrorCategory.SYSTEM)
     async def feature_routers_health():
-        """Surface feature-router load status (#6797).
+        """Cross-worker feature-router load status (#6797, #6808).
 
         Returns the structured load-results registry populated by
         ``load_feature_routers()``. Until this endpoint existed, the
         graceful-fallback pattern from #281 silently dropped failed routers
         (boot succeeded with /api/* endpoints absent — see #6583, #6664-6667).
-        SLM dashboards and operators can now poll this endpoint to detect
-        partial-boot state without scraping logs.
+
+        #6808: results are now aggregated across all uvicorn workers via Redis
+        so a poll is not subject to per-worker sampling variance. Divergent
+        worker states (one worker missing a router) are visible with
+        worker-PID provenance in the ``workers`` field.
         """
         from initialization.router_registry.feature_routers import (
             FEATURE_ROUTER_CONFIGS,
-            get_feature_router_load_results,
+            get_cross_worker_load_results,
         )
 
-        results = get_feature_router_load_results()
-        loaded_count = sum(1 for r in results if r["loaded"])
+        cross = get_cross_worker_load_results()
+        aggregated = cross["aggregated"]
+        loaded_count = sum(1 for r in aggregated if r["loaded"])
         expected = len(FEATURE_ROUTER_CONFIGS)
         return {
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
@@ -197,7 +201,10 @@ def register_root_endpoints(app: FastAPI) -> None:
             "loaded": loaded_count,
             "failed": expected - loaded_count,
             "all_loaded": loaded_count == expected,
-            "routers": results,
+            "worker_count": cross["worker_count"],
+            "redis_available": cross["redis_available"],
+            "routers": aggregated,
+            "workers": cross["workers"],
         }
 
     @app.get("/api/version")
