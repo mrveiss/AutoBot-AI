@@ -3,11 +3,11 @@
 # Author: mrveiss
 """Canonical health-probe registry — single source of truth for /api/system/health.
 
-Issue #3333: 45 scattered ``@router.get("/health")`` definitions are being
-consolidated behind one aggregator. Modules register a probe via
-:func:`register_health_probe`; the aggregator at ``api/system.py`` runs every
-registered probe in parallel and merges their statuses into a single
-``SystemHealth`` response.
+Issue #3333 / #6902: 45 scattered per-module ``/health`` route definitions were
+consolidated behind one aggregator (Phase 1–3, PR #6870) and then deleted (Phase 4,
+PR #6902). Modules register a probe via :func:`register_health_probe`; the aggregator
+at ``api/system.py`` runs every registered probe in parallel and merges their statuses
+into a single ``SystemHealth`` response.
 
 Probes MUST be async, accept an optional ``Request`` (so they can reach
 ``request.app.state``), and return :class:`ComponentHealth`. Probes that raise

@@ -50,7 +50,6 @@ from .schemas_code import (
     MCPRegistryBridgesResponse,
     MCPRegistryCacheInvalidateResponse,
     MCPRegistryCacheStatsResponse,
-    MCPRegistryHealthResponse,
     MCPRegistryInfoResponse,
     MCPRegistryStatsResponse,
     MCPRegistryToolDetailResponse,
@@ -735,70 +734,6 @@ async def probe_mcp_registry(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", response_model=MCPRegistryHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_mcp_registry_health",
-    error_code_prefix="MCP_REGISTRY",
-)
-async def get_mcp_registry_health() -> Metadata:
-    """Get overall health status of all MCP bridges (always fresh, no cache). Ref: #1088."""
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-    health_checks = []
-    # Issue #380: Get http_client once before loop instead of per-iteration
-    http_client = get_http_client()
-
-    for (
-        bridge_name,
-        bridge_desc,
-        endpoint,
-        _,
-    ) in MCP_BRIDGES:  # Issue #382: features unused
-        start_time = datetime.now(tz=timezone.utc)
-        check = {
-            "bridge": bridge_name,
-            "status": "unknown",
-            "response_time_ms": 0,
-        }
-
-        try:
-            async with await http_client.get(
-                f"{backend_url}{endpoint}",
-                timeout=aiohttp.ClientTimeout(total=3),
-            ) as response:
-                response_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds() * 1000
-                check["response_time_ms"] = round(response_time, 2)
-
-                if response.status == 200:
-                    tools = await response.json()
-                    check["status"] = "healthy"
-                    check["tool_count"] = len(tools)
-                else:
-                    check["status"] = "degraded"
-                    check["error"] = f"HTTP {response.status}"
-        except aiohttp.ClientError as e:
-            check["status"] = "unavailable"
-            check["error"] = f"Connection error: {str(e)}"
-        except Exception as e:
-            check["status"] = "unavailable"
-            check["error"] = str(e)
-
-        health_checks.append(check)
-
-    # Overall status
-    healthy_bridges = sum(1 for c in health_checks if c["status"] == "healthy")
-    overall_status = "healthy" if healthy_bridges == len(MCP_BRIDGES) else "degraded"
-
-    return {
-        "status": overall_status,
-        "total_bridges": len(MCP_BRIDGES),
-        "healthy_bridges": healthy_bridges,
-        "checks": health_checks,
-        "cache_stats": mcp_cache.get_stats(),
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-    }
 
 
 @router.get("/stats", response_model=MCPRegistryStatsResponse)

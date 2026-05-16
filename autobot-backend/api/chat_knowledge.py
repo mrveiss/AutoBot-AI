@@ -48,7 +48,6 @@ from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     AddKnowledgeRequest,
     AssociateFileRequest,
-    ChatKnowledgeHealthResponse,
     ChatKnowledgeSearchRequest,
     CompileChatRequest,
     CreateContextRequest,
@@ -783,26 +782,6 @@ async def probe_chat_knowledge(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", response_model=ChatKnowledgeHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="CHAT_KNOWLEDGE",
-)
-async def health_check():
-    """Health check endpoint for chat knowledge system"""
-    try:
-        return {
-            "status": "healthy",
-            "service": "chat_knowledge",
-            "manager_initialized": chat_knowledge_manager is not None,
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        }
-    except Exception as e:
-        logger.error("Chat knowledge health check failed: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================

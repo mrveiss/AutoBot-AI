@@ -28,7 +28,6 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 from api.schemas_analytics import (
     ContinuousLearningFeedbackResponse,
     ContinuousLearningGenerateInsightsResponse,
-    ContinuousLearningHealthResponse,
     ContinuousLearningInsightsResponse,
     ContinuousLearningMetrics,
     ContinuousLearningRetrainResponse,
@@ -1170,23 +1169,3 @@ async def probe_analytics_continuous_learning(
         )
 
 
-@router.get("/health", summary="Health check", response_model=ContinuousLearningHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
-)
-async def health_check(
-    admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, Any]:
-    """
-    Check health of the learning system.
-
-    Issue #744: Requires admin authentication.
-    """
-    engine = await get_engine()
-    return {
-        "status": "healthy",
-        "running": engine._running,
-        "initialized": engine._initialized,
-    }

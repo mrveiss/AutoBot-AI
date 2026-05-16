@@ -21,7 +21,6 @@ from api.schemas_agent import (
     LLMModelPerformanceHistoryResponse,
     LLMModelsComparisonResponse,
     LLMOptimizationConfigResponse,
-    LLMOptimizationHealthResponse,
     LLMOptimizationRequest,
     LLMOptimizationSuggestionsResponse,
     LLMProviderOptimizationSummaryResponse,
@@ -45,40 +44,6 @@ config = get_config_manager()
 
 
 register_singleton_probe("llm_optimization", get_model_optimizer)
-
-
-@router.get("/health", response_model=LLMOptimizationHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_optimization_health",
-    error_code_prefix="LLM_OPTIMIZATION",
-)
-async def get_optimization_health(admin_check: bool = Depends(check_admin_permission)):
-    """Get model optimization system health status
-
-    Issue #744: Requires admin authentication."""
-    try:
-        optimizer = get_model_optimizer()
-
-        # Test basic functionality
-        models = await optimizer.refresh_available_models()
-
-        health_status = {
-            "status": "healthy" if models else "degraded",
-            "available_models": len(models),
-            "cache_size": len(optimizer._models_cache),
-            "ollama_connection": len(models) > 0,
-            "redis_connected": optimizer._redis_client is not None,
-        }
-
-        return health_status
-
-    except Exception as e:
-        logger.error("Error checking optimization health: %s", e)
-        return JSONResponse(
-            content={"status": "unhealthy", "error": "Internal server error"},
-            status_code=500,
-        )
 
 
 @router.get("/models/available", response_model=LLMAvailableModelsResponse)

@@ -32,7 +32,6 @@ from api.schemas_workflows import (
     SkillDetailResponse,
     SkillHealthResponse,
     SkillMetricsResponse,
-    SkillsAllHealthResponse,
     SkillsCategoriesResponse,
     SkillsInitializeResponse,
     SkillsListResponse,
@@ -132,18 +131,6 @@ async def probe_skills(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", summary="Get health of all skills", response_model=SkillsAllHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_all_health",
-    error_code_prefix="SKILLS",
-)
-async def get_all_health() -> Dict[str, Any]:
-    """Get health status for all registered skills."""
-    registry = get_skill_registry()
-    return {"skills": registry.get_all_health()}
 
 
 @router.post("/initialize", summary="Initialize skills system", response_model=SkillsInitializeResponse)

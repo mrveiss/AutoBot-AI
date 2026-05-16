@@ -311,37 +311,6 @@ async def get_unified_dashboard(
 register_singleton_probe("analytics_maintenance", get_analytics_service)
 
 
-@router.get("/health", response_model=MaintenanceHealthStatusResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_health_status",
-    error_code_prefix="ANALYTICS_MAINTENANCE",
-)
-async def get_health_status(
-    admin_check: bool = Depends(check_admin_permission),
-):
-    """
-    Get system health status.
-
-    Returns overall health score and status indicators.
-
-    Issue #744: Requires admin authentication.
-    """
-    service = get_analytics_service()
-    dashboard = await service.get_unified_dashboard(7)  # Last 7 days for health
-
-    return {
-        "timestamp": utc_timestamp(),
-        "health": dashboard["health"],
-        "indicators": {
-            "cost_trend": dashboard["cost"]["trend"],
-            "agent_success_rate": dashboard["agents"]["avg_success_rate"],
-            "maintenance_issues": dashboard["maintenance"]["total_recommendations"],
-            "optimization_opportunities": dashboard["optimization"]["total_recommendations"],
-        },
-    }
-
-
 # ============================================================================
 # CUSTOM REPORT ENDPOINTS
 # ============================================================================

@@ -473,59 +473,6 @@ async def bulk_enable_features(request: BulkFeatureRequest):
 register_singleton_probe("enterprise_features", get_enterprise_manager)
 
 
-@router.get("/health", response_model=DataResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_enterprise_health",
-    error_code_prefix="ENTERPRISE_FEATURES",
-)
-async def get_enterprise_health():
-    """
-    Get health status of all enterprise features.
-    """
-    try:
-        manager = get_enterprise_manager()
-
-        health_status = {
-            "timestamp": manager.get_enterprise_status()["timestamp"],
-            "overall_health": "healthy",
-            "feature_health": {},
-            "critical_issues": [],
-            "warnings": [],
-        }
-        counters = {"critical": 0, "warnings": 0}
-
-        enabled_features = _get_enabled_features_for_health_check(manager)
-
-        # Check health of all enabled features in parallel
-        if enabled_features:
-            health_results = await asyncio.gather(
-                *[manager._check_feature_health(name) for name, _ in enabled_features],
-                return_exceptions=True,
-            )
-            for (name, _), feature_health in zip(enabled_features, health_results):
-                _process_feature_health_result(name, feature_health, health_status, counters)
-
-        _check_features_in_error_state(manager, health_status, counters)
-        health_status["overall_health"] = _determine_overall_health(counters)
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "health": health_status,
-                "summary": (
-                    f"Health: {health_status['overall_health']}, "
-                    f"Issues: {counters['critical']}, Warnings: {counters['warnings']}"
-                ),
-            },
-        )
-
-    except Exception as e:
-        logger.error("Error getting enterprise health: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to get health status")
-
-
 @router.post("/performance/optimize", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

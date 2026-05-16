@@ -30,7 +30,6 @@ from fastapi import APIRouter, Depends, Query
 from api.schemas_analytics import (
     AnalyticsArchitectureConsistencyResponse,
     AnalyticsArchitectureDiagramResponse,
-    AnalyticsArchitectureHealthResponse,
     AnalyticsArchitectureLayersResponse,
     AnalyticsArchitecturePatternsResponse,
     AnalyticsArchitectureQuickScanResponse,
@@ -1264,30 +1263,3 @@ async def check_consistency(
     }
 
 
-@router.get("/health", response_model=AnalyticsArchitectureHealthResponse, summary="Health check")
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="ANALYTICS_ARCHITECTURE",
-)
-async def health_check(
-    admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, Any]:
-    """
-    Check the health of the architecture analyzer.
-
-    Deprecated: Use /api/system/health for system-wide health checks.
-    This per-module endpoint will be removed in a future release. (#3333)
-
-    Issue #744: Requires admin authentication.
-    """
-    logger.warning(
-        "Deprecated health endpoint called: /api/architecture/health — " "use /api/system/health instead (#3333)"
-    )
-    return {
-        "status": "healthy",
-        "available_patterns": len(PatternType),
-        "templates_loaded": len(PATTERN_TEMPLATES),
-        "deprecated": True,
-        "use_instead": "/api/system/health",
-    }

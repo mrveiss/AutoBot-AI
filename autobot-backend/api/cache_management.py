@@ -16,7 +16,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from api.schemas_system import (
     CacheClearTypeResponse,
     CacheConfigResponse,
-    CacheHealthResponse,
     CacheStatsResponse,
     CacheWarmingRequest,
     CacheWarmupResponse,
@@ -607,32 +606,6 @@ async def probe_cache(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", response_model=CacheHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cache_health_check",
-    error_code_prefix="CACHE_MANAGEMENT",
-)
-async def cache_health_check():
-    """Check cache system health"""
-    try:
-        stats = await advanced_cache.get_stats()
-
-        is_healthy = stats.get("status") == "enabled"
-
-        return {
-            "status": "healthy" if is_healthy else "unhealthy",
-            "redis_status": stats.get("status", "unknown"),
-            "total_keys": stats.get("total_cache_keys", 0),
-            "memory_usage": stats.get("memory_usage", "N/A"),
-            "global_hit_rate": stats.get("global_hit_rate", "0%"),
-        }
-
-    except Exception as e:
-        logger.error("Error checking cache health: %s", e)
-        return {"status": "unhealthy", "error": "Internal server error"}
 
 
 # =========================================================================

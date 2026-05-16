@@ -13,7 +13,6 @@ import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from api.schemas_code import ResearchBrowserHealthResponse
 from api.schemas_common import DataResponse
 from api.schemas_workflows import (
     BrowserResearchRequest,
@@ -81,34 +80,6 @@ async def probe_research_browser(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", response_model=ResearchBrowserHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="RESEARCH_BROWSER",
-)
-async def health_check():
-    """Health check endpoint for research browser service"""
-    if not _BROWSER_AVAILABLE:
-        return {
-            "status": "unavailable",
-            "service": "research_browser",
-            "detail": "playwright not installed",
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        }
-
-    status = "healthy" if get_research_browser_manager else "not_initialized"
-
-    browser_service_url = ssot_config.browser_service_url
-
-    return {
-        "status": status,
-        "service": "research_browser",
-        "browser_service_url": browser_service_url,
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-    }
 
 
 @router.post("/url", response_model=DataResponse)

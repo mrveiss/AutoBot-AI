@@ -28,7 +28,6 @@ from api.schemas_analytics import (
     DFAAnalysisResponse,
     DFAAnalyzeFileRequest,
     DFAAnalyzeRequest,
-    DfaHealthResponse,
     DfaSanitizersResponse,
     DFASeverity,
     DfaSinksResponse,
@@ -1219,33 +1218,3 @@ async def list_sanitizers(admin_check: bool = Depends(check_admin_permission)):
     return {"sanitizers": sorted(SANITIZERS)}
 
 
-@router.get("/health", response_model=DfaHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="ANALYTICS_DFA",
-)
-async def health_check(admin_check: bool = Depends(check_admin_permission)):
-    """
-    Health check endpoint.
-
-    Deprecated: Use /api/system/health for system-wide health checks.
-    This per-module endpoint will be removed in a future release. (#3333)
-
-    Issue #744: Requires admin authentication.
-    """
-    logger.warning(
-        "Deprecated health endpoint called: /api/dfa-analytics/health — " "use /api/system/health instead (#3333)"
-    )
-    return {
-        "status": "healthy",
-        "service": "data-flow-analysis",
-        "deprecated": True,
-        "use_instead": "/api/system/health",
-        "features": [
-            "variable_tracking",
-            "def_use_chains",
-            "taint_analysis",
-            "vulnerability_detection",
-        ],
-    }

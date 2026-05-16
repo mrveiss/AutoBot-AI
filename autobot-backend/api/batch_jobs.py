@@ -28,7 +28,6 @@ from api.schemas_workflows import (
     BatchJobCreate,
     BatchJobDeleteResponse,
     BatchJobList,
-    BatchJobsHealthResponse,
     BatchJobStatus,
     BatchJobType,
     BatchLoadResponse,
@@ -613,47 +612,6 @@ async def probe_batch_jobs(
             detail=f"probe error: {type(exc).__name__}",
             data={"redis_connected": False, "service": "batch_jobs_manager"},
         )
-
-
-@router.get("/health", response_model=BatchJobsHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_batch_jobs_health",
-    error_code_prefix="BATCH_JOBS",
-)
-async def get_batch_jobs_health(
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Get batch jobs service health status.
-
-    Issue #744: Requires authenticated user.
-
-    Returns:
-        dict: Service health information
-    """
-    redis_client = get_redis_client(database="main")
-    redis_healthy = redis_client is not None
-
-    if redis_healthy:
-        try:
-            redis_client.ping()
-        except Exception as e:
-            logger.warning("Redis ping failed: %s", e)
-            redis_healthy = False
-
-    return {
-        "status": "healthy" if redis_healthy else "degraded",
-        "service": "batch_jobs_manager",
-        "redis_connected": redis_healthy,
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        "capabilities": [
-            "job_management",
-            "template_management",
-            "schedule_management",
-            "log_tracking",
-        ],
-    }
 
 
 # =============================================================================

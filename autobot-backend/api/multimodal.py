@@ -22,7 +22,6 @@ from api.schemas_knowledge import (
     MultiModalResponse,
     TextProcessingRequest,
 )
-from api.schemas_system import MultimodalHealthResponse
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -813,27 +812,3 @@ async def probe_multimodal(
 
 
 # Health check endpoint
-@router.get("/health", response_model=MultimodalHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="MULTIMODAL",
-)
-async def health_check(
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Health check for multi-modal API.
-
-    Issue #744: Requires authenticated user.
-    """
-    import torch  # Issue #3016: lazy import — avoid ~3s startup cost
-
-    return {
-        "status": "healthy",
-        "timestamp": time.time(),
-        "gpu_available": torch.cuda.is_available(),
-        "processor_ready": unified_processor is not None,
-        "performance_monitoring": unified_processor.performance_monitor is not None,
-        "mixed_precision_enabled": getattr(unified_processor, "use_amp", False),
-    }

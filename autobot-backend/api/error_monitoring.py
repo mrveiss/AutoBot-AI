@@ -235,44 +235,6 @@ async def probe_error_monitoring(
         )
 
 
-@router.get("/health", response_model=ErrorMonitoringDataResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_error_system_health",
-    error_code_prefix="ERROR_MONITORING",
-)
-async def get_error_system_health():
-    """Get error system health status"""
-    try:
-        stats = get_error_statistics()
-        total_errors = stats.get("total_errors", 0)
-        severities = stats.get("severities", {})
-
-        critical_errors = severities.get("critical", 0)
-        high_errors = severities.get("high", 0)
-
-        # Use extracted helper (Issue #315 - reduced depth)
-        health_status, health_score = _calculate_health_status(critical_errors, high_errors, total_errors)
-
-        return {
-            "status": "success",
-            "data": {
-                "health_status": health_status,
-                "health_score": health_score,
-                "total_errors": total_errors,
-                "critical_errors": critical_errors,
-                "high_errors": high_errors,
-                "recommendations": _get_health_recommendations(health_status, stats),
-            },
-        }
-    except Exception as e:
-        logger.error("Failed to get error system health: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
-        )
-
-
 @router.post("/clear", response_model=ErrorMonitoringClearResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

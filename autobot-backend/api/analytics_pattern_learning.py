@@ -37,7 +37,6 @@ from api.schemas_analytics import (
     PatternLearningActiveLearningResponse,
     PatternLearningConfidenceResponse,
     PatternLearningFeedbackResponse,
-    PatternLearningHealthResponse,
     PatternLearningHistoryResponse,
     PatternLearningLearnCycleResponse,
     PatternLearningMetrics,
@@ -1066,29 +1065,3 @@ async def probe_analytics_pattern_learning(
         )
 
 
-@router.get("/health", response_model=PatternLearningHealthResponse, summary="Health check")
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="ANALYTICS_PATTERN_LEARNING",
-)
-async def health_check() -> Dict[str, Any]:
-    """Check the health of the pattern learning system."""
-    try:
-        engine = await get_learning_engine()
-        metrics = await engine.get_learning_metrics()
-
-        return {
-            "status": "healthy",
-            "initialized": engine._initialized,
-            "learning_phase": engine.learning_phase.value,
-            "total_patterns": metrics.total_patterns,
-            "total_feedback": metrics.total_feedback,
-            "redis_connected": engine.redis_client is not None,
-        }
-    except Exception as e:
-        logger.exception("Unexpected error: %s", e)
-        return {
-            "status": "degraded",
-            "error": "Internal server error",
-        }

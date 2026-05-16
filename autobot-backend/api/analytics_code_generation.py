@@ -29,7 +29,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 from api.schemas_analytics import (
-    CodeGenerationHealthResponse,
     CodeGenerationRefactoringTypesResponse,
     CodeGenerationRequest,
     CodeGenerationResponse,
@@ -812,39 +811,6 @@ get_code_generation_engine = lazy_singleton(CodeGenerationEngine)
 # =============================================================================
 # API Endpoints
 # =============================================================================
-
-
-@router.get("/health", response_model=CodeGenerationHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_health",
-    error_code_prefix="ANALYTICS_CODE_GENERATION",
-)
-async def get_health(admin_check: bool = Depends(check_admin_permission)):
-    """Get code generation service health status.
-
-    Deprecated: Use /api/system/health for system-wide health checks.
-    This per-module endpoint will be removed in a future release. (#3333)
-
-    Issue #744: Requires admin authentication.
-    """
-    logger.warning(
-        "Deprecated health endpoint called: /api/code-generation/health — " "use /api/system/health instead (#3333)"
-    )
-    return {
-        "status": "healthy",
-        "service": "code_generation",
-        "deprecated": True,
-        "use_instead": "/api/system/health",
-        "features": [
-            "code_generation",
-            "refactoring",
-            "validation",
-            "rollback",
-        ],
-        "supported_languages": [lang.value for lang in CodeLanguage],
-        "refactoring_types": [rt.value for rt in RefactoringType],
-    }
 
 
 @router.post("/generate", response_model=CodeGenerationResponse)

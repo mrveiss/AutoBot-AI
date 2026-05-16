@@ -27,7 +27,6 @@ from api.schemas_knowledge import (
     NLDomainsResponse,
     NLIntentsResponse,
     NLQuerySuggestionsResponse,
-    NLSearchHealthResponse,
     NLSearchRequest,
     NLSearchResponse,
     ParsedQueryResponse,
@@ -1258,33 +1257,3 @@ async def probe_natural_language_search(
         )
 
 
-@router.get("/health", response_model=NLSearchHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="NATURAL_LANGUAGE_SEARCH",
-)
-async def health_check():
-    """Health check endpoint.
-
-    Deprecated: Use /api/system/health for system-wide health checks.
-    This per-module endpoint will be removed in a future release. (#3333)
-    """
-    logger.warning(
-        "Deprecated health endpoint called: /api/health (natural_language_search) — "
-        "use /api/system/health instead (#3333)"
-    )
-    return {
-        "status": "healthy",
-        "service": "natural-language-search",
-        "deprecated": True,
-        "use_instead": "/api/system/health",
-        "features": [
-            "query_parsing",
-            "intent_classification",
-            "domain_detection",
-            "query_suggestions",
-            "code_explanations",
-        ],
-        "llm_available": _code_explainer.llm_available,
-    }

@@ -80,7 +80,6 @@ from knowledge.schemas.facts import (
 from knowledge.schemas.operations import (
     ImportStatisticsResponse,
     ImportStatusResponse,
-    KnowledgeHealthResponse,
     KnowledgeStatsResponse,
     MachineKnowledgeInitResponse,
     MachineProfileResponse,
@@ -1496,67 +1495,6 @@ async def probe_knowledge(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", response_model=KnowledgeHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_knowledge_health",
-    error_code_prefix="KNOWLEDGE",
-)
-async def get_knowledge_health(
-    admin_check: bool = Depends(check_admin_permission),
-    req: Request = None,
-) -> KnowledgeHealthResponse:
-    """Get knowledge base health status with RAG capability status - FIXED to use proper instance
-
-    Issue #744: Requires admin authentication.
-    """
-    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
-    if kb_to_use is None:
-        # Issue #5407: KB instance not initialized.
-        logger.warning("get_knowledge_health: KB uninitialized - returning unhealthy status")
-        from knowledge.metrics import autobot_kb_degradation_total
-
-        autobot_kb_degradation_total.labels(endpoint="health", reason="kb_uninit").inc()
-        return KnowledgeHealthResponse(
-            status="unhealthy",
-            initialized=False,
-            redis_connected=False,
-            vector_store_available=False,
-            rag_available=RAG_AVAILABLE,
-            rag_status="disabled" if not RAG_AVAILABLE else "unknown",
-            message="Knowledge base not initialized",
-        )
-
-    # Try to get stats to verify health
-    stats = await kb_to_use.get_stats()
-
-    # Check RAG Agent health if available
-    rag_status = "disabled"
-    if RAG_AVAILABLE:
-        try:
-            rag_agent = get_rag_agent()
-            # Verify RAG agent is properly initialized by checking key attributes
-            if hasattr(rag_agent, "is_rag_appropriate") and callable(rag_agent.is_rag_appropriate):
-                rag_status = "healthy"
-            else:
-                rag_status = "unhealthy: missing required methods"
-        except Exception:
-            rag_status = "error"
-
-    return {
-        "status": "healthy",
-        "initialized": stats.get("initialized", False),
-        "redis_connected": True,
-        "vector_store_available": stats.get("index_available", False),
-        "total_facts": stats.get("total_facts", 0),
-        "db_size": stats.get("db_size", 0),
-        "kb_implementation": kb_to_use.__class__.__name__,
-        "rag_available": RAG_AVAILABLE,
-        "rag_status": rag_status,
-    }
 
 
 def _empty_entries_response(message: str = "", error: str = "") -> dict:

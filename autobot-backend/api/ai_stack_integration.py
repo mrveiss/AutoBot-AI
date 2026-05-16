@@ -18,7 +18,7 @@ from api.schemas_agent import (
     EnhancedKnowledgeSearchData,
     MultiAgentQueryData,
 )
-from api.schemas_ai_stack import AIStackAgentPayload, AIStackAgentsData, AIStackHealthData
+from api.schemas_ai_stack import AIStackAgentPayload, AIStackAgentsData
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     ContentClassificationRequest,
@@ -65,39 +65,6 @@ router = APIRouter(tags=["ai-stack"])
 
 
 register_singleton_probe("ai_stack", get_ai_stack_client, async_getter=True)
-
-
-@router.get("/health", response_model=DataResponse[AIStackHealthData])
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="ai_stack_health_check",
-    error_code_prefix="AI_STACK_INTEGRATION",
-)
-async def ai_stack_health_check(admin_check: bool = Depends(check_admin_permission)):
-    """
-    Check AI Stack health and connectivity.
-
-    Issue #744: Requires admin authentication.
-    """
-    try:
-        ai_client = await get_ai_stack_client()
-        health_status = await ai_client.health_check()
-
-        return JSONResponse(
-            status_code=200 if health_status["status"] == "healthy" else 503,
-            content=create_success_response(health_status, "AI Stack health check completed").model_dump(),
-        )
-    except Exception as e:
-        logger.error("AI Stack health check failed: %s: %s", type(e).__name__, e)
-        return JSONResponse(
-            status_code=503,
-            content={
-                "success": False,
-                "error": "AI Stack unavailable",
-                "details": f"{type(e).__name__}: {e}",
-                "timestamp": utc_timestamp(),
-            },
-        )
 
 
 @router.get("/agents", response_model=DataResponse[AIStackAgentsData])
