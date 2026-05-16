@@ -88,6 +88,7 @@ from .types import (
 )
 from .variable_resolver import StepOutput, VariableResolver, resolve_variables
 from .workflow_documentation import WorkflowDocumenter
+from .success_criteria import SuccessCriteriaEvaluator  # noqa: F401
 from .workflow_executor import WorkflowExecutor
 from .workflow_memory import WorkflowMemory
 from .workflow_planner import WorkflowPlanner
@@ -154,6 +155,8 @@ __all__ = [
     "StepPlan",
     # Performance tracking (#5058)
     "PerformanceTracker",
+    # Success criteria evaluation (GH #6832)
+    "SuccessCriteriaEvaluator",
 ]
 
 from .performance_tracker import PerformanceTracker

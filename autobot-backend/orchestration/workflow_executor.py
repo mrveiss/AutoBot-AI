@@ -54,6 +54,7 @@ from .sub_workflow import (
     is_sub_workflow_step,
 )
 from .types import AgentInteraction, AgentProfile
+from .success_criteria import SuccessCriteriaEvaluator
 from .variable_resolver import StepOutput, VariableResolver
 from .workflow_memory import WorkflowMemory
 
@@ -93,6 +94,7 @@ class WorkflowExecutor:
         update_performance_callback: Callable[[str, bool, float], None],
         workflow_fetcher: Callable[[str], Dict[str, Any] | None] | None = None,
         memory: WorkflowMemory | None = None,
+        criteria_evaluator: SuccessCriteriaEvaluator | None = None,
     ):
         """
         Initialize the workflow executor.
@@ -111,6 +113,9 @@ class WorkflowExecutor:
                                          collaboration state (Issue #3009).  When provided,
                                          parallel step agents can read and write a common
                                          KV store scoped to this workflow execution.
+            criteria_evaluator:          Optional SuccessCriteriaEvaluator (GH #6832).
+                                         When provided, evaluates structured_criteria in
+                                         execution_context after status is determined.
         """
         self.agent_registry = agent_registry
         self.agent_interactions = agent_interactions
@@ -130,6 +135,8 @@ class WorkflowExecutor:
             if workflow_fetcher is not None
             else None
         )
+        # GH #6832: optional success criteria evaluator
+        self._criteria_evaluator = criteria_evaluator
 
     def _group_steps_by_dependency(self, steps: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
         """
@@ -714,6 +721,13 @@ class WorkflowExecutor:
                     return execution_context
 
             self._determine_workflow_status(steps, execution_context)
+
+            # GH #6832: optional success criteria evaluation
+            if self._criteria_evaluator and execution_context.get("structured_criteria"):
+                eval_result = await self._criteria_evaluator.evaluate(
+                    execution_context["structured_criteria"], execution_context
+                )
+                execution_context["criteria_evaluation"] = eval_result.to_dict()
 
             # Issue #2154: clear checkpoints on full success.
             # Issue #3019: also clear shared memory — no longer needed once the
