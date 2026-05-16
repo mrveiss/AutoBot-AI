@@ -262,6 +262,22 @@ repos:
         stages: [pre-commit]
         description: "Block requests.* and Path.read_text/write_text inside async def bodies (#7444)"
 
+  # AutoBot custom: regression-prevention for #7053 Ansible role-name drift.
+  # Short-form role names ('backend', 'frontend', etc.) in node_roles checks
+  # are deprecated; canonical form is 'autobot-X'. New gates must use the
+  # role_X_active shared facts or the canonical 'autobot-X' form directly.
+  # Allowlist: group_vars/all.yml and vars/role_active_facts.yml (OR-chains
+  # maintained for backward compat with existing hosts).
+  - repo: local
+    hooks:
+      - id: canonical-role-names
+        name: Enforce canonical Ansible role names (#7053)
+        entry: tools/lint/check_canonical_role_names.py
+        language: python
+        files: \.(yml|yaml)$
+        stages: [pre-commit]
+        description: "Flags 'short-form' in node_roles checks; use role_X_active shared facts or 'autobot-X' canonical form (#7053)"
+
   # AutoBot custom: regression-prevention for #7372 plugin/extension boundary.
   # Extensions (lifecycle hooks), skills (user-facing capabilities), and
   # core-plugins must import ONLY from autobot_shared/ (the public SDK).
