@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.logging_manager import get_logger
+from constants.ttl_constants import TTL_24_HOURS
 
 logger = get_logger(__name__)
 
@@ -66,7 +67,7 @@ class RedisMemoryProvider:
                 "entity_updates": turn.get("entity_updates", []),
                 "relation_updates": turn.get("relation_updates", []),
             }
-            await self.redis.setex(cache_key, 86400, json.dumps(cache_data, default=str))
+            await self.redis.setex(cache_key, TTL_24_HOURS, json.dumps(cache_data, default=str))
             logger.debug(f"Cached turn data for {conversation_id}")
         except Exception as e:
             logger.error(f"Error syncing to Redis: {e}")
@@ -110,7 +111,7 @@ class RedisMemoryProvider:
             entity = await self.get_entity(entity_id)
             if entity:
                 entity.update(updates)
-                await self.redis.setex(cache_key, 86400, json.dumps(entity, default=str))
+                await self.redis.setex(cache_key, TTL_24_HOURS, json.dumps(entity, default=str))
         except Exception as e:
             logger.error(f"Error updating entity in Redis: {e}")
 

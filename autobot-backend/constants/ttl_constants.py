@@ -9,6 +9,7 @@ MIGRATION (Issue #GH7440):
 """
 
 from autobot_shared.ssot_constants import (  # noqa: F401,F403
+    TTL_10_SECONDS,
     TTL_5_MINUTES,
     TTL_1_HOUR,
     TTL_24_HOURS,

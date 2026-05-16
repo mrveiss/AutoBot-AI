@@ -94,6 +94,21 @@ repos:
         stages: [pre-commit]
         description: "Use autobot_shared.time_utils.utc_timestamp() instead of datetime.utcnow().isoformat()"
 
+  # AutoBot custom: regression-prevention for #7080 literal-second TTL drift.
+  # #6743 root cause: setex(key, 3600, val) — the raw integer is untunable and
+  # unsearchable. TTL constants from autobot_shared.ssot_constants are the
+  # canonical source; this hook blocks new regressions.
+  - repo: local
+    hooks:
+      - id: no-literal-ttl-seconds
+        name: Ban literal seconds in Redis setex/expire/pexpire (#7080 / #6743)
+        entry: pipeline-scripts/check_no_literal_ttl_seconds.py
+        language: python
+        files: \.py$
+        exclude: ^(autobot_shared/ssot_constants\.py|autobot-backend/constants/ttl_constants\.py)
+        stages: [pre-commit]
+        description: "Use named TTL constants (TTL_1_HOUR, TTL_24_HOURS, …) instead of raw seconds"
+
   # AutoBot custom: regression-prevention for #6987 broken `src.*` mock paths.
   # autobot-backend has no `src/` package; ``patch("src.foo.bar")`` silently
   # no-ops (ModuleNotFoundError swallowed by `with` cleanup). Production

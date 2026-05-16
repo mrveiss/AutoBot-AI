@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
+from constants.ttl_constants import TTL_1_HOUR
 
 logger = get_logger(__name__)
 
@@ -808,7 +809,7 @@ class TestingCoverageAnalyzer:
             try:
                 key = self.COVERAGE_KEY
                 value = json.dumps(results, default=str)
-                await self.redis_client.setex(key, 3600, value)
+                await self.redis_client.setex(key, TTL_1_HOUR, value)
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
 

@@ -48,6 +48,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
+from constants.ttl_constants import TTL_30_DAYS
 
 # LLM Service for real code generation
 from services.llm_service import get_llm_service
@@ -745,7 +746,7 @@ class CodeGenerationEngine:
                 await redis.hincrby(stats_key, f"{operation}:success", 1)
 
             # Set expiry (30 days)
-            await redis.expire(stats_key, 30 * 24 * 60 * 60)
+            await redis.expire(stats_key, TTL_30_DAYS)
 
         except Exception as e:
             logger.error("Failed to track stats: %s", e)

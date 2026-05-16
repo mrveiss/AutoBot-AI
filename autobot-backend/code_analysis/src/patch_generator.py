@@ -12,6 +12,7 @@ from typing import Any, Dict, List
 from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
+from constants.ttl_constants import TTL_1_HOUR
 
 logger = get_logger(__name__)
 
@@ -594,7 +595,7 @@ class AutomatedFixGenerator:
         await self._ensure_redis()
         if self.redis_client:
             try:
-                await self.redis_client.setex(self.FIXES_KEY, 3600, json.dumps(results, default=str))  # 1 hour
+                await self.redis_client.setex(self.FIXES_KEY, TTL_1_HOUR, json.dumps(results, default=str))
             except Exception as e:
                 logger.warning(f"Failed to cache fixes: {e}")
 

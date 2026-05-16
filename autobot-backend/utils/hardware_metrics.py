@@ -24,6 +24,7 @@ from autobot_shared.async_compat import run_or_schedule
 
 # Import existing monitoring infrastructure
 from constants.api_constants import PATH_API_HEALTH
+from constants.ttl_constants import TTL_1_HOUR
 
 logger = get_logger(__name__)
 
@@ -1464,7 +1465,7 @@ def _store_performance_in_redis(
                 ): time.time()
             },
         )
-        phase9_monitor.redis_client.expire(key, 3600)  # 1 hour retention
+        phase9_monitor.redis_client.expire(key, TTL_1_HOUR)
     except Exception:
         logger.debug("Suppressed exception in try block", exc_info=True)
 

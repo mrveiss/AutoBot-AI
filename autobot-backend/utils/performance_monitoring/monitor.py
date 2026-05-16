@@ -39,6 +39,7 @@ from utils.performance_monitoring.types import (
     DEFAULT_PERFORMANCE_BASELINES,
     DEFAULT_RETENTION_HOURS,
 )
+from constants.ttl_constants import TTL_1_HOUR
 
 logger = get_logger(__name__)
 
@@ -451,7 +452,7 @@ class PerformanceMonitor:
                 key = "performance_alerts"
                 for alert in alerts:
                     self.redis_client.zadd(key, {json.dumps(alert): time.time()})
-                self.redis_client.expire(key, 3600)
+                self.redis_client.expire(key, TTL_1_HOUR)
 
             await asyncio.to_thread(_store_alerts)
         except Exception as e:
