@@ -299,7 +299,7 @@ onBeforeUnmount(() => {
     <!-- Strategy Configuration                                        -->
     <!-- ============================================================ -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">Strategy Configuration</h2>
+      <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('fleet.loadBalancingView.strategyConfiguration') }}</h2>
 
       <div class="flex flex-col sm:flex-row sm:items-end gap-4">
         <div class="flex-1">
@@ -307,16 +307,16 @@ onBeforeUnmount(() => {
             for="lb-strategy"
             class="block text-sm font-medium text-gray-700 mb-1"
           >
-            Current Strategy
+            {{ $t('fleet.loadBalancingView.currentStrategy') }}
           </label>
           <select
             id="lb-strategy"
             v-model="selectedStrategy"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-sm"
           >
-            <option value="round-robin">Round Robin</option>
-            <option value="least-loaded">Least Loaded</option>
-            <option value="model-affinity">Model Affinity</option>
+            <option value="round-robin">{{ $t('fleet.loadBalancingView.roundRobin') }}</option>
+            <option value="least-loaded">{{ $t('fleet.loadBalancingView.leastLoaded') }}</option>
+            <option value="model-affinity">{{ $t('fleet.loadBalancingView.modelAffinity') }}</option>
           </select>
           <p class="text-xs text-gray-500 mt-1">
             {{ strategyDescriptions[selectedStrategy] }}
@@ -337,10 +337,10 @@ onBeforeUnmount(() => {
     <!-- Task Distribution Bar Chart                                   -->
     <!-- ============================================================ -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">Task Distribution</h2>
+      <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('fleet.loadBalancingView.taskDistribution') }}</h2>
 
       <div v-if="workerMetrics.length === 0 && !loading" class="text-sm text-gray-500 text-center py-8">
-        No NPU worker metrics available.
+        {{ $t('fleet.loadBalancingView.noNPUWorkerMetrics') }}
       </div>
 
       <div v-else class="space-y-3">
@@ -383,7 +383,7 @@ onBeforeUnmount(() => {
         v-if="workerMetrics.length > 0"
         class="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-sm text-gray-500"
       >
-        <span>Total queue depth across all workers</span>
+        <span>{{ $t('fleet.loadBalancingView.totalQueueDepthAcross') }}</span>
         <span class="font-medium text-gray-900">{{ totalQueueDepth }}</span>
       </div>
     </div>
@@ -392,10 +392,10 @@ onBeforeUnmount(() => {
     <!-- Worker Load Overview                                          -->
     <!-- ============================================================ -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">Worker Load Overview</h2>
+      <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('fleet.loadBalancingView.workerLoadOverview') }}</h2>
 
       <div v-if="sortedWorkers.length === 0 && !loading" class="text-sm text-gray-500 text-center py-8">
-        No NPU workers found.
+        {{ $t('fleet.loadBalancingView.noNPUWorkersFound') }}
       </div>
 
       <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -415,7 +415,7 @@ onBeforeUnmount(() => {
           <!-- Utilization bar -->
           <div class="mb-3">
             <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>Utilization</span>
+              <span>{{ $t('fleet.loadBalancingView.utilization') }}</span>
               <span class="font-medium">{{ worker.utilization.toFixed(1) }}%</span>
             </div>
             <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -430,13 +430,13 @@ onBeforeUnmount(() => {
           <div class="grid grid-cols-2 gap-2 text-center">
             <div class="p-2 bg-gray-50 rounded-sm">
               <p class="text-sm font-semibold text-gray-900">{{ worker.queue_depth }}</p>
-              <p class="text-xs text-gray-500">Queue Depth</p>
+              <p class="text-xs text-gray-500">{{ $t('fleet.loadBalancingView.queueDepth') }}</p>
             </div>
             <div class="p-2 bg-gray-50 rounded-sm">
               <p class="text-sm font-semibold text-gray-900">
                 {{ getWorkerConfig(worker.node_id)?.assigned_models?.length ?? 0 }}
               </p>
-              <p class="text-xs text-gray-500">Models</p>
+              <p class="text-xs text-gray-500">{{ $t('fleet.loadBalancingView.models') }}</p>
             </div>
           </div>
 
@@ -446,13 +446,13 @@ onBeforeUnmount(() => {
             class="mt-3 flex items-center gap-3 text-xs text-gray-500"
           >
             <span>
-              Priority:
+              {{ $t('fleet.loadBalancingView.priority') }}
               <span class="font-medium text-gray-700">
                 {{ getWorkerConfig(worker.node_id)?.priority ?? '-' }}
               </span>
             </span>
             <span>
-              Weight:
+              {{ $t('fleet.loadBalancingView.weight') }}
               <span class="font-medium text-gray-700">
                 {{ getWorkerConfig(worker.node_id)?.weight ?? '-' }}
               </span>
@@ -466,7 +466,7 @@ onBeforeUnmount(() => {
     <!-- Rebalancing Controls                                          -->
     <!-- ============================================================ -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">Rebalancing Controls</h2>
+      <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('fleet.loadBalancingView.rebalancingControls') }}</h2>
 
       <div class="flex flex-col sm:flex-row sm:items-center gap-4">
         <!-- Rebalance Now button -->
@@ -497,7 +497,7 @@ onBeforeUnmount(() => {
             <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:bg-primary-600 transition-colors" />
             <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform peer-checked:translate-x-4" />
           </div>
-          <span class="text-sm text-gray-700">Auto-rebalance</span>
+          <span class="text-sm text-gray-700">{{ $t('fleet.loadBalancingView.autoRebalance') }}</span>
         </label>
       </div>
 
@@ -530,7 +530,7 @@ onBeforeUnmount(() => {
       <svg class="w-5 h-5 animate-spin mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
       </svg>
-      Loading NPU fleet data...
+      {{ $t('fleet.loadBalancingView.loadingNPUFleetData') }}
     </div>
   </div>
 </template>

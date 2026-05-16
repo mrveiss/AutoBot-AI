@@ -226,7 +226,7 @@ onUnmounted(() => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 border-l-4 border-l-blue-500">
         <div class="flex items-center justify-between">
           <div>
-            <h3 class="text-sm font-medium text-gray-500 uppercase">Total MCP Tools</h3>
+            <h3 class="text-sm font-medium text-gray-500 uppercase">{{ $t('tools.admin.mCPTool.totalMCPTools') }}</h3>
             <p class="mt-2 text-3xl font-bold text-gray-900">{{ stats.total_tools || 0 }}</p>
             <p class="mt-1 text-sm text-gray-600">Across {{ stats.total_bridges || 0 }} bridges</p>
           </div>
@@ -240,7 +240,7 @@ onUnmounted(() => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 border-l-4 border-l-green-500">
         <div class="flex items-center justify-between">
           <div>
-            <h3 class="text-sm font-medium text-gray-500 uppercase">Healthy Bridges</h3>
+            <h3 class="text-sm font-medium text-gray-500 uppercase">{{ $t('tools.admin.mCPTool.healthyBridges') }}</h3>
             <p class="mt-2 text-3xl font-bold text-gray-900">
               {{ stats.healthy_bridges || 0 }}/{{ stats.total_bridges || 0 }}
             </p>
@@ -258,7 +258,7 @@ onUnmounted(() => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 border-l-4 border-l-purple-500">
         <div class="flex items-center justify-between">
           <div>
-            <h3 class="text-sm font-medium text-gray-500 uppercase">Last Updated</h3>
+            <h3 class="text-sm font-medium text-gray-500 uppercase">{{ $t('tools.admin.mCPTool.lastUpdated') }}</h3>
             <p class="mt-2 text-lg font-bold text-gray-900">{{ lastUpdatedTime }}</p>
             <button
               @click="refreshData"
@@ -268,7 +268,7 @@ onUnmounted(() => {
               <svg class="w-4 h-4" :class="{ 'animate-spin': isRefreshing }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              Refresh Now
+              {{ $t('tools.admin.mCPTool.refreshNow') }}
             </button>
           </div>
           <svg class="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -293,7 +293,7 @@ onUnmounted(() => {
           <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
-          MCP Bridges
+          {{ $t('tools.admin.mCPTool.mCPBridges') }}
         </button>
         <button
           @click="activeTab = 'tools'"
@@ -307,7 +307,7 @@ onUnmounted(() => {
           <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
           </svg>
-          Available Tools
+          {{ $t('tools.admin.mCPTool.availableTools') }}
         </button>
         <button
           @click="activeTab = 'health'"
@@ -321,7 +321,7 @@ onUnmounted(() => {
           <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
           </svg>
-          Health Status
+          {{ $t('tools.admin.mCPTool.healthStatus') }}
         </button>
       </nav>
     </div>
@@ -332,7 +332,7 @@ onUnmounted(() => {
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
-      <p class="mt-4 text-gray-600">Loading MCP data...</p>
+      <p class="mt-4 text-gray-600">{{ $t('tools.admin.mCPTool.loadingMCPData') }}</p>
     </div>
 
     <!-- Error State (#986) -->
@@ -345,7 +345,7 @@ onUnmounted(() => {
         @click="refreshData"
         class="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm"
       >
-        Retry
+        {{ $t('tools.admin.mCPTool.retry') }}
       </button>
     </div>
 
@@ -355,7 +355,7 @@ onUnmounted(() => {
         <svg class="w-12 h-12 mx-auto text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
-        <p class="mt-4 text-gray-600">No MCP bridges found</p>
+        <p class="mt-4 text-gray-600">{{ $t('tools.admin.mCPTool.noMCPBridgesFound') }}</p>
       </div>
 
       <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -379,17 +379,17 @@ onUnmounted(() => {
 
           <div class="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <p class="text-xs text-gray-500 uppercase">Tools</p>
+              <p class="text-xs text-gray-500 uppercase">{{ $t('tools.admin.mCPTool.tools') }}</p>
               <p class="text-2xl font-bold text-gray-900">{{ bridge.tool_count }}</p>
             </div>
             <div>
-              <p class="text-xs text-gray-500 uppercase">Features</p>
+              <p class="text-xs text-gray-500 uppercase">{{ $t('tools.admin.mCPTool.features') }}</p>
               <p class="text-2xl font-bold text-gray-900">{{ bridge.features?.length || 0 }}</p>
             </div>
           </div>
 
           <div class="mb-4">
-            <p class="text-xs font-medium text-gray-700 mb-2">FEATURES:</p>
+            <p class="text-xs font-medium text-gray-700 mb-2">{{ $t('tools.admin.mCPTool.fEATURES') }}</p>
             <div class="flex flex-wrap gap-1">
               <span
                 v-for="feature in bridge.features"
@@ -402,7 +402,7 @@ onUnmounted(() => {
           </div>
 
           <div class="mt-4 pt-4 border-t border-gray-200">
-            <p class="text-xs text-gray-500">ENDPOINT:</p>
+            <p class="text-xs text-gray-500">{{ $t('tools.admin.mCPTool.eNDPOINT') }}</p>
             <code class="text-xs text-gray-700 bg-gray-100 px-2 py-1 rounded-sm">
               {{ bridge.endpoint }}
             </code>
@@ -421,7 +421,7 @@ onUnmounted(() => {
         <svg class="w-12 h-12 mx-auto text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
-        <p class="mt-4 text-gray-600">No MCP tools found</p>
+        <p class="mt-4 text-gray-600">{{ $t('tools.admin.mCPTool.noMCPToolsFound') }}</p>
       </div>
 
       <div v-else>
@@ -464,13 +464,13 @@ onUnmounted(() => {
                     :d="expandedTools.has(tool.name) ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'"
                   />
                 </svg>
-                Schema
+                {{ $t('tools.admin.mCPTool.schema') }}
               </button>
             </div>
 
             <div class="flex items-center gap-4 text-xs text-gray-600 mb-3">
               <span class="flex items-center gap-1">
-                Bridge: <strong class="text-gray-900">{{ tool.bridge }}</strong>
+                {{ $t('tools.admin.mCPTool.bridge') }} <strong class="text-gray-900">{{ tool.bridge }}</strong>
               </span>
               <span class="flex items-center gap-1">
                 <code class="text-xs bg-gray-100 px-2 py-0.5 rounded-sm">{{ tool.endpoint }}</code>
@@ -478,7 +478,7 @@ onUnmounted(() => {
             </div>
 
             <div v-if="expandedTools.has(tool.name)" class="mt-4 pt-4 border-t border-gray-200">
-              <p class="text-xs font-medium text-gray-700 mb-2">INPUT SCHEMA:</p>
+              <p class="text-xs font-medium text-gray-700 mb-2">{{ $t('tools.admin.mCPTool.iNPUTSCHEMA') }}</p>
               <pre class="bg-gray-900 text-green-400 p-4 rounded-sm text-xs overflow-x-auto">{{ JSON.stringify(tool.input_schema, null, 2) }}</pre>
             </div>
           </div>
@@ -492,7 +492,7 @@ onUnmounted(() => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
         <div class="flex items-center justify-between">
           <div>
-            <h3 class="text-lg font-bold text-gray-900">Overall MCP System Health</h3>
+            <h3 class="text-lg font-bold text-gray-900">{{ $t('tools.admin.mCPTool.overallMCPSystemHealth') }}</h3>
             <p class="text-sm text-gray-600 mt-1">{{ healthData.timestamp }}</p>
           </div>
           <span class="px-4 py-2 text-lg font-bold rounded-full" :class="getStatusClass(healthData.status)">
@@ -517,11 +517,11 @@ onUnmounted(() => {
 
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <p class="text-xs text-gray-500">Response Time</p>
+              <p class="text-xs text-gray-500">{{ $t('tools.admin.mCPTool.responseTime') }}</p>
               <p class="text-lg font-bold text-gray-900">{{ check.response_time_ms }}ms</p>
             </div>
             <div v-if="check.tool_count">
-              <p class="text-xs text-gray-500">Tools Available</p>
+              <p class="text-xs text-gray-500">{{ $t('tools.admin.mCPTool.toolsAvailable') }}</p>
               <p class="text-lg font-bold text-gray-900">{{ check.tool_count }}</p>
             </div>
           </div>

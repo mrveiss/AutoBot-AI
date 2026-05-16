@@ -161,7 +161,7 @@ onMounted(() => {
             :disabled="loading"
             class="px-3 py-1 text-xs bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors disabled:opacity-50"
           >
-            Start Browser
+            {{ $t('tools.admin.browserTool.startBrowser') }}
           </button>
           <button
             v-else
@@ -169,7 +169,7 @@ onMounted(() => {
             :disabled="loading"
             class="px-3 py-1 text-xs bg-red-600 text-white rounded-sm hover:bg-red-700 transition-colors disabled:opacity-50"
           >
-            Close Browser
+            {{ $t('tools.admin.browserTool.closeBrowser') }}
           </button>
         </div>
 
@@ -228,7 +228,7 @@ onMounted(() => {
               :disabled="!isConnected || loading"
               class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 text-sm"
             >
-              Go
+              {{ $t('tools.admin.browserTool.go') }}
             </button>
           </div>
 
@@ -259,15 +259,15 @@ onMounted(() => {
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <p class="mt-4 text-gray-400">Loading...</p>
+          <p class="mt-4 text-gray-400">{{ $t('tools.admin.browserTool.loading') }}</p>
         </div>
 
         <div v-else-if="!isConnected" class="text-center p-8">
           <svg class="w-16 h-16 mx-auto text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
           </svg>
-          <h3 class="mt-4 text-lg font-medium text-gray-300">Browser Automation</h3>
-          <p class="mt-2 text-gray-500">Click "Start Browser" to begin a new browser session</p>
+          <h3 class="mt-4 text-lg font-medium text-gray-300">{{ $t('tools.admin.browserTool.browserAutomation') }}</h3>
+          <p class="mt-2 text-gray-500">{{ $t('tools.admin.browserTool.clickStartBrowserTo') }}</p>
         </div>
 
         <img
@@ -278,12 +278,12 @@ onMounted(() => {
         />
 
         <div v-else class="text-center p-8">
-          <p class="text-gray-400">No screenshot available</p>
+          <p class="text-gray-400">{{ $t('tools.admin.browserTool.noScreenshotAvailable') }}</p>
           <button
             @click="takeScreenshot"
             class="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm"
           >
-            Take Screenshot
+            {{ $t('tools.admin.browserTool.takeScreenshot') }}
           </button>
         </div>
       </div>

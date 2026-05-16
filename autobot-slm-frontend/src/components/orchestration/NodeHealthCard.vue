@@ -120,7 +120,7 @@ const emit = defineEmits<{
         <span v-if="isRestartingAll && restartProgress">
           {{ restartProgress.completed }}/{{ restartProgress.total }}
         </span>
-        <span v-else>Restart All</span>
+        <span v-else>{{ $t('orchestration.nodeHealthCard.restartAll') }}</span>
       </button>
     </div>
   </button>

@@ -208,8 +208,8 @@ onMounted(() => {
 <template>
   <div class="agents-view">
     <header class="view-header">
-      <h1>Agent Management</h1>
-      <p class="subtitle">Configure LLM settings for each agent</p>
+      <h1>{{ $t('agentsView.agentManagement') }}</h1>
+      <p class="subtitle">{{ $t('agentsView.configureLLMSettingsFor') }}</p>
     </header>
 
     <!-- Tab navigation -->
@@ -223,7 +223,7 @@ onMounted(() => {
               ? 'border-primary-500 text-primary-600'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
           ]"
-        >Local Agents</button>
+        >{{ $t('agentsView.localAgents') }}</button>
         <button
           @click="navigateToTab('external-agents')"
           :class="[
@@ -232,7 +232,7 @@ onMounted(() => {
               ? 'border-primary-500 text-primary-600'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
           ]"
-        >External Agents</button>
+        >{{ $t('agentsView.externalAgents') }}</button>
         <button
           @click="navigateToTab('org-chart')"
           :class="[
@@ -241,7 +241,7 @@ onMounted(() => {
               ? 'border-primary-500 text-primary-600'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
           ]"
-        >Org Chart</button>
+        >{{ $t('agentsView.orgChart') }}</button>
         <button
           @click="navigateToTab('config-history')"
           :class="[
@@ -250,7 +250,7 @@ onMounted(() => {
               ? 'border-primary-500 text-primary-600'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
           ]"
-        >Config History</button>
+        >{{ $t('agentsView.configHistory') }}</button>
         <button
           @click="navigateToTab('processes')"
           :class="[
@@ -259,7 +259,7 @@ onMounted(() => {
               ? 'border-primary-500 text-primary-600'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
           ]"
-        >Processes</button>
+        >{{ $t('agentsView.processes') }}</button>
       </nav>
     </div>
 
@@ -268,29 +268,29 @@ onMounted(() => {
 
     <div v-if="error" class="error-banner">
       {{ error }}
-      <button @click="error = null">Dismiss</button>
+      <button @click="error = null">{{ $t('agentsView.dismiss') }}</button>
     </div>
 
     <div class="agents-stats">
       <div class="stat-card">
         <span class="stat-value">{{ agents.length }}</span>
-        <span class="stat-label">Total Agents</span>
+        <span class="stat-label">{{ $t('agentsView.totalAgents') }}</span>
       </div>
       <div class="stat-card">
         <span class="stat-value">{{ activeAgentCount }}</span>
-        <span class="stat-label">Active</span>
+        <span class="stat-label">{{ $t('agentsView.active') }}</span>
       </div>
       <div class="stat-card">
         <span class="stat-value">{{ agents.length - activeAgentCount }}</span>
-        <span class="stat-label">Inactive</span>
+        <span class="stat-label">{{ $t('agentsView.inactive') }}</span>
       </div>
     </div>
 
     <div class="agents-container">
       <!-- Agent list -->
       <div class="agents-list">
-        <h2>Agents</h2>
-        <div v-if="loading" class="loading">Loading agents...</div>
+        <h2>{{ $t('agentsView.agents') }}</h2>
+        <div v-if="loading" class="loading">{{ $t('agentsView.loadingAgents') }}</div>
         <ul v-else>
           <li
             v-for="agent in agents"
@@ -303,7 +303,7 @@ onMounted(() => {
           >
             <span class="agent-name">{{ agent.name }}</span>
             <span class="agent-model">{{ agent.llm_model }}</span>
-            <span v-if="agent.is_default" class="default-badge">Default</span>
+            <span v-if="agent.is_default" class="default-badge">{{ $t('agentsView.default') }}</span>
           </li>
         </ul>
       </div>
@@ -313,10 +313,10 @@ onMounted(() => {
         <div class="detail-header">
           <h2>{{ selectedAgent.name }}</h2>
           <div class="actions">
-            <button v-if="!isEditing" class="btn-edit" @click="startEditing">Edit</button>
+            <button v-if="!isEditing" class="btn-edit" @click="startEditing">{{ $t('agentsView.edit') }}</button>
             <template v-else>
-              <button class="btn-save" @click="saveAgent">Save</button>
-              <button class="btn-cancel" @click="cancelEditing">Cancel</button>
+              <button class="btn-save" @click="saveAgent">{{ $t('agentsView.save') }}</button>
+              <button class="btn-cancel" @click="cancelEditing">{{ $t('agentsView.cancel') }}</button>
             </template>
           </div>
         </div>

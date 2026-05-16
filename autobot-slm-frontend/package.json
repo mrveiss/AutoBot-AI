@@ -10,15 +10,21 @@
     "build:check": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint . --fix",
-    "type-check": "vue-tsc --noEmit -p tsconfig.json"
+    "type-check": "vue-tsc --noEmit -p tsconfig.json",
+    "storybook": "VITE_API_URL=/slm storybook dev -p 6007",
+    "build-storybook": "VITE_API_URL=/slm storybook build"
   },
   "dependencies": {
     "axios": "^1.16.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.32",
+    "vue-i18n": "^11.4.2",
     "vue-router": "^5.0.6"
   },
   "devDependencies": {
+    "@storybook/addon-docs": "^10.4.0",
+    "@storybook/vue3": "^10.4.0",
+    "@storybook/vue3-vite": "^10.4.0",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "^25.6.2",
     "@vitejs/plugin-vue": "^6.0.6",
@@ -26,6 +32,7 @@
     "eslint": "^10.3.0",
     "eslint-plugin-vue": "^10.9.1",
     "postcss": "^8.5.12",
+    "storybook": "^10.4.0",
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.59.2",

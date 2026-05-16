@@ -174,7 +174,7 @@ function loadFromHistory(item: AnalysisHistory): void {
               <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
               </svg>
-              Capture
+              {{ $t('tools.admin.visionTool.capture') }}
             </button>
             <button
               @click="activeTab = 'analyze'"
@@ -189,7 +189,7 @@ function loadFromHistory(item: AnalysisHistory): void {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
-              Analyze
+              {{ $t('tools.admin.visionTool.analyze') }}
             </button>
             <button
               @click="activeTab = 'history'"
@@ -203,7 +203,7 @@ function loadFromHistory(item: AnalysisHistory): void {
               <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              History
+              {{ $t('tools.admin.visionTool.history') }}
             </button>
           </nav>
         </div>
@@ -216,7 +216,7 @@ function loadFromHistory(item: AnalysisHistory): void {
         <!-- Capture Tab -->
         <div v-if="activeTab === 'capture'" class="flex-1 p-6 overflow-auto">
           <div class="max-w-2xl mx-auto">
-            <h3 class="text-lg font-semibold text-gray-900 mb-4">Capture Image</h3>
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('tools.admin.visionTool.captureImage') }}</h3>
 
             <!-- Source Selection -->
             <div class="flex gap-4 mb-6">
@@ -232,7 +232,7 @@ function loadFromHistory(item: AnalysisHistory): void {
                 <svg class="w-8 h-8 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
-                <p class="text-sm font-medium text-gray-900">Upload File</p>
+                <p class="text-sm font-medium text-gray-900">{{ $t('tools.admin.visionTool.uploadFile') }}</p>
               </button>
 
               <button
@@ -247,7 +247,7 @@ function loadFromHistory(item: AnalysisHistory): void {
                 <svg class="w-8 h-8 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                 </svg>
-                <p class="text-sm font-medium text-gray-900">Camera</p>
+                <p class="text-sm font-medium text-gray-900">{{ $t('tools.admin.visionTool.camera') }}</p>
               </button>
 
               <button
@@ -262,7 +262,7 @@ function loadFromHistory(item: AnalysisHistory): void {
                 <svg class="w-8 h-8 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
-                <p class="text-sm font-medium text-gray-900">Screen Capture</p>
+                <p class="text-sm font-medium text-gray-900">{{ $t('tools.admin.visionTool.screenCapture') }}</p>
               </button>
             </div>
 
@@ -281,7 +281,7 @@ function loadFromHistory(item: AnalysisHistory): void {
                 @click="triggerFileUpload"
                 class="flex-1 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
               >
-                Select Image File
+                {{ $t('tools.admin.visionTool.selectImageFile') }}
               </button>
 
               <button
@@ -306,19 +306,19 @@ function loadFromHistory(item: AnalysisHistory): void {
             <!-- Preview -->
             <div v-if="capturedImage" class="border border-gray-200 rounded-lg p-4">
               <div class="flex items-center justify-between mb-4">
-                <h4 class="font-medium text-gray-900">Preview</h4>
+                <h4 class="font-medium text-gray-900">{{ $t('tools.admin.visionTool.preview') }}</h4>
                 <div class="flex gap-2">
                   <button
                     @click="clearImage"
                     class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
                   >
-                    Clear
+                    {{ $t('tools.admin.visionTool.clear') }}
                   </button>
                   <button
                     @click="activeTab = 'analyze'"
                     class="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-sm hover:bg-primary-700"
                   >
-                    Analyze
+                    {{ $t('tools.admin.visionTool.analyze') }}
                   </button>
                 </div>
               </div>
@@ -330,13 +330,13 @@ function loadFromHistory(item: AnalysisHistory): void {
         <!-- Analyze Tab -->
         <div v-if="activeTab === 'analyze'" class="flex-1 p-6 overflow-auto">
           <div class="max-w-3xl mx-auto">
-            <h3 class="text-lg font-semibold text-gray-900 mb-4">Analyze Image</h3>
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('tools.admin.visionTool.analyzeImage') }}</h3>
 
             <div v-if="!capturedImage" class="text-center py-12 bg-gray-50 rounded-lg">
               <svg class="w-12 h-12 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              <p class="mt-4 text-gray-600">No image captured. Go to Capture tab first.</p>
+              <p class="mt-4 text-gray-600">{{ $t('tools.admin.visionTool.noImageCapturedGo') }}</p>
             </div>
 
             <div v-else class="space-y-6">
@@ -347,7 +347,7 @@ function loadFromHistory(item: AnalysisHistory): void {
 
               <!-- Analysis Prompt -->
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Analysis Prompt</label>
+                <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('tools.admin.visionTool.analysisPrompt') }}</label>
                 <textarea
                   v-model="analysisPrompt"
                   rows="3"
@@ -371,7 +371,7 @@ function loadFromHistory(item: AnalysisHistory): void {
 
               <!-- Analysis Result -->
               <div v-if="analysisResult" class="bg-primary-50 border border-primary-200 rounded-lg p-6">
-                <h4 class="font-medium text-primary-900 mb-2">Analysis Result</h4>
+                <h4 class="font-medium text-primary-900 mb-2">{{ $t('tools.admin.visionTool.analysisResult') }}</h4>
                 <p class="text-primary-800 whitespace-pre-wrap">{{ analysisResult }}</p>
               </div>
             </div>
@@ -380,13 +380,13 @@ function loadFromHistory(item: AnalysisHistory): void {
 
         <!-- History Tab -->
         <div v-if="activeTab === 'history'" class="flex-1 p-6 overflow-auto">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">Analysis History</h3>
+          <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('tools.admin.visionTool.analysisHistory') }}</h3>
 
           <div v-if="history.length === 0" class="text-center py-12 bg-gray-50 rounded-lg">
             <svg class="w-12 h-12 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p class="mt-4 text-gray-600">No analysis history yet</p>
+            <p class="mt-4 text-gray-600">{{ $t('tools.admin.visionTool.noAnalysisHistoryYet') }}</p>
           </div>
 
           <div v-else class="space-y-4">

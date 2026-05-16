@@ -86,7 +86,7 @@ function isExecuting(
     class="px-4 py-2 bg-gray-50 border-b border-gray-100 flex flex-wrap items-center gap-1.5"
   >
     <span class="text-xs font-medium text-gray-500 mr-1">
-      Post-sync:
+      {{ $t('orchestration.postSyncActionBadges.postSync') }}
     </span>
     <button
       v-for="action in actions"

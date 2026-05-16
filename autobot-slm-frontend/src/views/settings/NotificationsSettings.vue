@@ -107,16 +107,16 @@ onMounted(fetchSettings)
 
       <!-- Alert Types -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
-        <h2 class="text-lg font-semibold mb-6">Alert Types</h2>
+        <h2 class="text-lg font-semibold mb-6">{{ $t('settings.notificationsSettings.alertTypes') }}</h2>
         <p class="text-sm text-gray-500 mb-6">
-          Choose which types of alerts and notifications to receive.
+          {{ $t('settings.notificationsSettings.chooseWhichTypesOf') }}
         </p>
 
         <div class="space-y-4">
           <div class="flex items-center justify-between py-3 border-b border-gray-100">
             <div>
-              <p class="font-medium text-gray-900">Node Health Alerts</p>
-              <p class="text-sm text-gray-500">Get notified when nodes go offline or have issues</p>
+              <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.nodeHealthAlerts') }}</p>
+              <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.getNotifiedWhenNodes') }}</p>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="notifications.node_health_alerts" class="sr-only peer" />
@@ -126,8 +126,8 @@ onMounted(fetchSettings)
 
           <div class="flex items-center justify-between py-3 border-b border-gray-100">
             <div>
-              <p class="font-medium text-gray-900">Deployment Notifications</p>
-              <p class="text-sm text-gray-500">Notifications for deployment progress and completion</p>
+              <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.deploymentNotifications') }}</p>
+              <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.notificationsForDeploymentProgress') }}</p>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="notifications.deployment_notifications" class="sr-only peer" />
@@ -137,8 +137,8 @@ onMounted(fetchSettings)
 
           <div class="flex items-center justify-between py-3 border-b border-gray-100">
             <div>
-              <p class="font-medium text-gray-900">Backup Completion Alerts</p>
-              <p class="text-sm text-gray-500">Get notified when backups complete or fail</p>
+              <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.backupCompletionAlerts') }}</p>
+              <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.getNotifiedWhenBackups') }}</p>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="notifications.backup_completion_alerts" class="sr-only peer" />
@@ -148,8 +148,8 @@ onMounted(fetchSettings)
 
           <div class="flex items-center justify-between py-3 border-b border-gray-100">
             <div>
-              <p class="font-medium text-gray-900">Maintenance Reminders</p>
-              <p class="text-sm text-gray-500">Reminders for scheduled maintenance windows</p>
+              <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.maintenanceReminders') }}</p>
+              <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.remindersForScheduledMaintenance') }}</p>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="notifications.maintenance_reminders" class="sr-only peer" />
@@ -159,8 +159,8 @@ onMounted(fetchSettings)
 
           <div class="flex items-center justify-between py-3 border-b border-gray-100">
             <div>
-              <p class="font-medium text-gray-900">Security Alerts</p>
-              <p class="text-sm text-gray-500">Critical security notifications</p>
+              <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.securityAlerts') }}</p>
+              <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.criticalSecurityNotifications') }}</p>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="notifications.security_alerts" class="sr-only peer" />
@@ -170,8 +170,8 @@ onMounted(fetchSettings)
 
           <div class="flex items-center justify-between py-3">
             <div>
-              <p class="font-medium text-gray-900">Performance Warnings</p>
-              <p class="text-sm text-gray-500">Alerts for performance degradation</p>
+              <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.performanceWarnings') }}</p>
+              <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.alertsForPerformanceDegradation') }}</p>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="notifications.performance_warnings" class="sr-only peer" />
@@ -183,13 +183,13 @@ onMounted(fetchSettings)
 
       <!-- Email Notifications -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-        <h2 class="text-lg font-semibold mb-6">Email Notifications</h2>
+        <h2 class="text-lg font-semibold mb-6">{{ $t('settings.notificationsSettings.emailNotifications') }}</h2>
 
         <div class="space-y-4">
           <div class="flex items-center justify-between py-3 border-b border-gray-100">
             <div>
-              <p class="font-medium text-gray-900">Enable Email</p>
-              <p class="text-sm text-gray-500">Send notifications via email</p>
+              <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.enableEmail') }}</p>
+              <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.sendNotificationsViaEmail') }}</p>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="notifications.email_notifications" class="sr-only peer" />
@@ -198,7 +198,7 @@ onMounted(fetchSettings)
           </div>
 
           <div v-if="notifications.email_notifications" class="py-3">
-            <label class="block text-sm font-medium text-gray-900 mb-2">Email Address</label>
+            <label class="block text-sm font-medium text-gray-900 mb-2">{{ $t('settings.notificationsSettings.emailAddress') }}</label>
             <input
               v-model="notifications.email_address"
               type="email"

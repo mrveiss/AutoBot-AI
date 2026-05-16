@@ -192,9 +192,9 @@ function categoryIcon(category: string): string {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold">Skills Management</h1>
+        <h1 class="text-2xl font-bold">{{ $t('skillsView.skillsManagement') }}</h1>
         <p class="text-gray-400 text-sm mt-1">
-          Manage AI capabilities as modular skill packages
+          {{ $t('skillsView.manageAICapabilitiesAs') }}
         </p>
       </div>
       <div class="flex items-center gap-3">
@@ -224,7 +224,7 @@ function categoryIcon(category: string): string {
           class="underline hover:no-underline text-amber-200"
           @click="navigateToTab('approvals')"
         >
-          Review
+          {{ $t('skillsView.review') }}
         </button>
         <button class="opacity-60 hover:opacity-100" @click="dismissDraftNotification">
           ✕
@@ -245,7 +245,7 @@ function categoryIcon(category: string): string {
             ]"
             @click="navigateToTab('active')"
           >
-            Active Skills
+            {{ $t('skillsView.activeSkills') }}
           </button>
           <button
             :class="[
@@ -256,7 +256,7 @@ function categoryIcon(category: string): string {
             ]"
             @click="navigateToTab('approvals')"
           >
-            Pending
+            {{ $t('skillsView.pending') }}
             <span
               v-if="approvals.length > 0"
               class="px-1.5 py-0.5 bg-amber-500 text-white text-xs rounded-full"
@@ -273,7 +273,7 @@ function categoryIcon(category: string): string {
             ]"
             @click="navigateToTab('repos')"
           >
-            Repos
+            {{ $t('skillsView.repos') }}
           </button>
           <button
             :class="[
@@ -284,7 +284,7 @@ function categoryIcon(category: string): string {
             ]"
             @click="navigateToTab('drafts')"
           >
-            Drafts
+            {{ $t('skillsView.drafts') }}
           </button>
         </div>
         <GovernanceModeSelector
@@ -328,15 +328,15 @@ function categoryIcon(category: string): string {
     <div class="grid grid-cols-3 gap-4 mb-6">
       <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
         <div class="text-2xl font-bold text-cyan-400">{{ statusCounts.total }}</div>
-        <div class="text-sm text-gray-400">Total Skills</div>
+        <div class="text-sm text-gray-400">{{ $t('skillsView.totalSkills') }}</div>
       </div>
       <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
         <div class="text-2xl font-bold text-emerald-400">{{ statusCounts.enabled }}</div>
-        <div class="text-sm text-gray-400">Enabled</div>
+        <div class="text-sm text-gray-400">{{ $t('skillsView.enabled') }}</div>
       </div>
       <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
         <div class="text-2xl font-bold text-gray-400">{{ statusCounts.disabled }}</div>
-        <div class="text-sm text-gray-400">Disabled</div>
+        <div class="text-sm text-gray-400">{{ $t('skillsView.disabled') }}</div>
       </div>
     </div>
 
@@ -362,7 +362,7 @@ function categoryIcon(category: string): string {
               : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
           ]"
         >
-          All
+          {{ $t('skillsView.all') }}
         </button>
         <button
           v-for="cat in categories"
@@ -382,7 +382,7 @@ function categoryIcon(category: string): string {
 
     <!-- Skills Grid -->
     <div v-if="loading && !skills.length" class="text-center py-12 text-gray-400">
-      Loading skills...
+      {{ $t('skillsView.loadingSkills') }}
     </div>
 
     <div v-else-if="!filteredSkills.length" class="text-center py-12 text-gray-400">

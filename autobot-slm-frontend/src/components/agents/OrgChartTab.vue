@@ -146,17 +146,17 @@ onMounted(fetchTree)
   <div class="org-chart-tab">
     <div v-if="error" class="error-banner">
       {{ error }}
-      <button @click="error = null">Dismiss</button>
+      <button @click="error = null">{{ $t('agents.orgChartTab.dismiss') }}</button>
     </div>
 
-    <div v-if="loading" class="loading">Loading org tree...</div>
+    <div v-if="loading" class="loading">{{ $t('agents.orgChartTab.loadingOrgTree') }}</div>
 
     <div v-else class="org-layout">
       <!-- Tree panel -->
       <div class="tree-panel">
-        <h3>Agent Hierarchy</h3>
+        <h3>{{ $t('agents.orgChartTab.agentHierarchy') }}</h3>
         <div v-if="tree.length === 0" class="empty-state">
-          No agents registered in org hierarchy yet.
+          {{ $t('agents.orgChartTab.noAgentsRegisteredIn') }}
         </div>
         <ul v-else class="tree-list">
           <OrgTreeNode
@@ -184,11 +184,11 @@ onMounted(fetchTree)
         </p>
 
         <div v-if="activity" class="activity-summary">
-          <h4>Delegation Activity</h4>
+          <h4>{{ $t('agents.orgChartTab.delegationActivity') }}</h4>
           <div class="activity-grid">
             <div class="activity-stat">
               <span class="stat-value">{{ activity.total_delegated }}</span>
-              <span class="stat-label">Total</span>
+              <span class="stat-label">{{ $t('agents.orgChartTab.total') }}</span>
             </div>
             <div
               v-for="(count, status) in activity.by_status"
@@ -219,15 +219,15 @@ onMounted(fetchTree)
             class="btn-primary"
             @click="showDelegateForm = true"
           >
-            Delegate Task
+            {{ $t('agents.orgChartTab.delegateTask') }}
           </button>
           <div v-else class="delegate-form">
-            <h4>New Delegation</h4>
+            <h4>{{ $t('agents.orgChartTab.newDelegation') }}</h4>
             <div v-if="delegateError" class="error-inline">{{ delegateError }}</div>
             <div class="form-group">
-              <label>Assign to</label>
+              <label>{{ $t('agents.orgChartTab.assignTo') }}</label>
               <select v-model="delegateForm.assignee_id">
-                <option value="" disabled>Select report...</option>
+                <option value="" disabled>{{ $t('agents.orgChartTab.selectReport') }}</option>
                 <option
                   v-for="r in directReports"
                   :key="r.agent_id"
@@ -238,7 +238,7 @@ onMounted(fetchTree)
               </select>
             </div>
             <div class="form-group">
-              <label>Task</label>
+              <label>{{ $t('agents.orgChartTab.task') }}</label>
               <textarea
                 v-model="delegateForm.task_description"
                 rows="3"
@@ -246,14 +246,14 @@ onMounted(fetchTree)
               />
             </div>
             <div class="form-actions">
-              <button class="btn-primary" @click="submitDelegation">Submit</button>
-              <button class="btn-cancel" @click="showDelegateForm = false">Cancel</button>
+              <button class="btn-primary" @click="submitDelegation">{{ $t('agents.orgChartTab.submit') }}</button>
+              <button class="btn-cancel" @click="showDelegateForm = false">{{ $t('agents.orgChartTab.cancel') }}</button>
             </div>
           </div>
         </div>
 
         <div v-if="delegations.length" class="delegations-list">
-          <h4>Recent Delegations</h4>
+          <h4>{{ $t('agents.orgChartTab.recentDelegations') }}</h4>
           <div v-for="d in delegations" :key="d.id" class="delegation-item">
             <div class="delegation-header">
               <span :class="['status-badge', statusBadgeClass(d.status)]">{{ d.status }}</span>
@@ -268,7 +268,7 @@ onMounted(fetchTree)
       </div>
 
       <div v-else class="detail-panel empty-state">
-        Select an agent to view details and delegate tasks
+        {{ $t('agents.orgChartTab.selectAnAgentTo') }}
       </div>
     </div>
   </div>

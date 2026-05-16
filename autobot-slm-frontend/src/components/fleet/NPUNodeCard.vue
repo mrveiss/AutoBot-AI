@@ -117,13 +117,13 @@ const detectionStatus = computed(() => {
         v-if="detectionStatus === 'pending'"
         class="ml-2 px-2 py-1 rounded-sm text-xs font-medium bg-yellow-100 text-yellow-700"
       >
-        Detecting...
+        {{ $t('fleet.nPUNodeCard.detecting') }}
       </span>
       <span
         v-else-if="detectionStatus === 'failed'"
         class="ml-2 px-2 py-1 rounded-sm text-xs font-medium bg-red-100 text-red-700"
       >
-        Detection Failed
+        {{ $t('fleet.nPUNodeCard.detectionFailed') }}
       </span>
     </div>
 
@@ -131,18 +131,18 @@ const detectionStatus = computed(() => {
     <div class="grid grid-cols-2 gap-3 mb-3">
       <div class="text-center p-2 bg-gray-50 rounded-sm">
         <p class="text-lg font-semibold text-gray-900">{{ loadedModelsCount }}/{{ modelsCount }}</p>
-        <p class="text-xs text-gray-500">Models Loaded</p>
+        <p class="text-xs text-gray-500">{{ $t('fleet.nPUNodeCard.modelsLoaded') }}</p>
       </div>
       <div class="text-center p-2 bg-gray-50 rounded-sm">
         <p class="text-lg font-semibold text-gray-900">{{ npuStatus?.queueDepth ?? 0 }}</p>
-        <p class="text-xs text-gray-500">Queue Depth</p>
+        <p class="text-xs text-gray-500">{{ $t('fleet.nPUNodeCard.queueDepth') }}</p>
       </div>
     </div>
 
     <!-- Utilization Bar -->
     <div>
       <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
-        <span>Utilization</span>
+        <span>{{ $t('fleet.nPUNodeCard.utilization') }}</span>
         <span>{{ utilization }}%</span>
       </div>
       <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden">

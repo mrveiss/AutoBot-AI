@@ -202,7 +202,7 @@ onUnmounted(() => {
             <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
-            <span class="font-medium text-gray-900">noVNC Remote Desktop</span>
+            <span class="font-medium text-gray-900">{{ $t('tools.admin.noVNCTool.noVNCRemoteDesktop') }}</span>
           </div>
 
           <!-- Host Selector -->
@@ -271,7 +271,7 @@ onUnmounted(() => {
                 : 'bg-green-100 text-green-700 hover:bg-green-200'
             ]"
           >
-            <span v-if="loading">Connecting...</span>
+            <span v-if="loading">{{ $t('tools.admin.noVNCTool.connecting') }}</span>
             <span v-else>{{ isConnected ? 'Disconnect' : 'Connect' }}</span>
           </button>
 
@@ -314,8 +314,8 @@ onUnmounted(() => {
             <svg class="w-16 h-16 mx-auto text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
-            <h3 class="mt-4 text-lg font-medium text-gray-300">noVNC Remote Desktop</h3>
-            <p class="mt-2 text-gray-500">Select a host and click Connect to start a VNC session</p>
+            <h3 class="mt-4 text-lg font-medium text-gray-300">{{ $t('tools.admin.noVNCTool.noVNCRemoteDesktop') }}</h3>
+            <p class="mt-2 text-gray-500">{{ $t('tools.admin.noVNCTool.selectAHostAnd') }}</p>
             <div v-if="currentHost" class="mt-4 p-4 bg-gray-800 rounded-lg">
               <p class="text-sm text-gray-400">{{ currentHost.description }}</p>
               <p class="text-xs text-gray-500 mt-2 font-mono">{{ currentHost.host }}:{{ currentHost.port }}</p>
@@ -339,14 +339,14 @@ onUnmounted(() => {
             <svg class="w-12 h-12 mx-auto text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
-            <p class="text-gray-300 mb-4">This host requires a direct connection</p>
+            <p class="text-gray-300 mb-4">{{ $t('tools.admin.noVNCTool.thisHostRequiresA') }}</p>
             <a
               :href="vncUrl"
               target="_blank"
               rel="noopener"
               class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              Open noVNC in New Tab
+              {{ $t('tools.admin.noVNCTool.openNoVNCInNew') }}
             </a>
           </div>
         </div>
@@ -355,24 +355,24 @@ onUnmounted(() => {
 
     <!-- Info Panel -->
     <div class="mt-4 p-4 bg-gray-100 rounded-lg">
-      <h3 class="text-sm font-medium text-gray-900 mb-2">Connection Info</h3>
+      <h3 class="text-sm font-medium text-gray-900 mb-2">{{ $t('tools.admin.noVNCTool.connectionInfo') }}</h3>
       <div class="grid grid-cols-2 gap-4 text-sm">
         <div>
-          <span class="text-gray-500">Host:</span>
+          <span class="text-gray-500">{{ $t('tools.admin.noVNCTool.host') }}</span>
           <span class="ml-2 text-gray-900 font-mono">{{ currentHost?.host || 'Not selected' }}</span>
         </div>
         <div>
-          <span class="text-gray-500">Port:</span>
+          <span class="text-gray-500">{{ $t('tools.admin.noVNCTool.port') }}</span>
           <span class="ml-2 text-gray-900 font-mono">{{ currentHost?.port || '-' }}</span>
         </div>
         <div>
-          <span class="text-gray-500">Status:</span>
+          <span class="text-gray-500">{{ $t('tools.admin.noVNCTool.status') }}</span>
           <span :class="isConnected ? 'text-green-600' : 'text-red-600'" class="ml-2">
             {{ isConnected ? 'Connected' : 'Disconnected' }}
           </span>
         </div>
         <div>
-          <span class="text-gray-500">Source:</span>
+          <span class="text-gray-500">{{ $t('tools.admin.noVNCTool.source') }}</span>
           <span class="ml-2 text-gray-900">
             {{ currentHost?.source === 'dynamic' ? 'SLM-Managed' : 'Static Config' }}
           </span>
@@ -382,19 +382,19 @@ onUnmounted(() => {
 
     <!-- Desktop Actions Toolbar (Issue #74) -->
     <div v-if="isConnected" class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-      <h3 class="text-sm font-medium text-gray-900 mb-3">Desktop Actions</h3>
+      <h3 class="text-sm font-medium text-gray-900 mb-3">{{ $t('tools.admin.noVNCTool.desktopActions') }}</h3>
       <div class="flex items-center gap-2 flex-wrap">
         <button @click="takeScreenshot" class="action-btn" title="Take Screenshot">
-          📷 Screenshot
+          {{ $t('tools.admin.noVNCTool.screenshot') }}
         </button>
         <button @click="showTypeDialog = true" class="action-btn" title="Type Text">
-          ⌨️ Type Text
+          {{ $t('tools.admin.noVNCTool.typeText') }}
         </button>
         <button @click="sendCtrlAltDel" class="action-btn" title="Send Ctrl+Alt+Del">
-          🔴 Ctrl+Alt+Del
+          {{ $t('tools.admin.noVNCTool.ctrlAltDel') }}
         </button>
         <button @click="pasteFromClipboard" class="action-btn" title="Paste Clipboard">
-          📋 Paste
+          {{ $t('tools.admin.noVNCTool.paste') }}
         </button>
       </div>
     </div>
@@ -404,7 +404,7 @@ onUnmounted(() => {
       <div v-if="showScreenshotModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/75" @click="showScreenshotModal = false">
         <div class="bg-white rounded-lg shadow-xl max-w-4xl max-h-[90vh] flex flex-col" @click.stop>
           <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <h3 class="text-lg font-semibold text-gray-900">Desktop Screenshot</h3>
+            <h3 class="text-lg font-semibold text-gray-900">{{ $t('tools.admin.noVNCTool.desktopScreenshot') }}</h3>
             <button @click="showScreenshotModal = false" class="text-2xl text-gray-500 hover:text-gray-700 transition-colors">×</button>
           </div>
           <div class="p-6 overflow-auto flex-1">
@@ -412,10 +412,10 @@ onUnmounted(() => {
           </div>
           <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-2">
             <button @click="downloadScreenshot" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-sm transition-colors">
-              💾 Download
+              {{ $t('tools.admin.noVNCTool.download') }}
             </button>
             <button @click="showScreenshotModal = false" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-sm transition-colors">
-              Close
+              {{ $t('tools.admin.noVNCTool.close') }}
             </button>
           </div>
         </div>
@@ -425,7 +425,7 @@ onUnmounted(() => {
       <div v-if="showTypeDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click="showTypeDialog = false">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-md" @click.stop>
           <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <h3 class="text-lg font-semibold text-gray-900">Type Text on Desktop</h3>
+            <h3 class="text-lg font-semibold text-gray-900">{{ $t('tools.admin.noVNCTool.typeTextOnDesktop') }}</h3>
             <button @click="showTypeDialog = false" class="text-2xl text-gray-500 hover:text-gray-700 transition-colors">×</button>
           </div>
           <div class="p-6">
@@ -438,10 +438,10 @@ onUnmounted(() => {
           </div>
           <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-2">
             <button @click="handleTypeText" :disabled="!textToType.trim()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-              ⌨️ Type
+              {{ $t('tools.admin.noVNCTool.type') }}
             </button>
             <button @click="showTypeDialog = false" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-sm transition-colors">
-              Cancel
+              {{ $t('tools.admin.noVNCTool.cancel') }}
             </button>
           </div>
         </div>

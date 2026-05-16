@@ -868,9 +868,9 @@ onUnmounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Orchestration</h1>
+        <h1 class="text-2xl font-bold text-gray-900">{{ $t('orchestrationView.orchestration') }}</h1>
         <p class="text-sm text-gray-500 mt-1">
-          Unified service lifecycle management across the fleet
+          {{ $t('orchestrationView.unifiedServiceLifecycleManagement') }}
         </p>
       </div>
       <div class="flex items-center gap-3">
@@ -892,7 +892,7 @@ onUnmounted(() => {
             @change="toggleAutoRefresh"
             class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
           />
-          Auto-refresh
+          {{ $t('orchestrationView.autoRefresh') }}
         </label>
         <button
           @click="refresh"
@@ -912,7 +912,7 @@ onUnmounted(() => {
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          Refresh
+          {{ $t('orchestrationView.refresh') }}
         </button>
       </div>
     </div>
@@ -924,13 +924,13 @@ onUnmounted(() => {
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
         </svg>
         <div class="flex-1">
-          <h3 class="text-sm font-medium text-red-800">Error Loading Data</h3>
+          <h3 class="text-sm font-medium text-red-800">{{ $t('orchestrationView.errorLoadingData') }}</h3>
           <p class="mt-1 text-sm text-red-700">{{ orchestration.error }}</p>
           <button
             @click="refresh"
             class="mt-2 text-sm text-red-600 hover:text-red-800 underline"
           >
-            Retry
+            {{ $t('orchestrationView.retry') }}
           </button>
         </div>
       </div>
@@ -939,7 +939,7 @@ onUnmounted(() => {
     <!-- LOADING STATE -->
     <div v-if="orchestration.loading && !orchestration.fleetServices?.length" class="mb-4 p-8 bg-blue-50 border border-blue-200 rounded-lg text-center">
       <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-3"></div>
-      <p class="text-sm text-blue-700">Loading orchestration data...</p>
+      <p class="text-sm text-blue-700">{{ $t('orchestrationView.loadingOrchestrationData') }}</p>
       <p class="text-xs text-blue-600 mt-1">Fetching services from {{ orchestration.fleetStore.nodeList.length }} nodes</p>
     </div>
 
@@ -1019,11 +1019,11 @@ onUnmounted(() => {
             <!-- Expand/Collapse -->
             <div class="flex items-center gap-2">
               <button @click="expandAll" class="text-sm text-primary-600 hover:text-primary-800">
-                Expand All
+                {{ $t('orchestrationView.expandAll') }}
               </button>
               <span class="text-gray-300">|</span>
               <button @click="collapseAll" class="text-sm text-primary-600 hover:text-primary-800">
-                Collapse All
+                {{ $t('orchestrationView.collapseAll') }}
               </button>
             </div>
           </div>
@@ -1055,7 +1055,7 @@ onUnmounted(() => {
                 v-if="nodeRolesCache[node.nodeId] || loadingRolesForNode[node.nodeId]"
                 class="px-4 py-2 bg-blue-50 border-b border-blue-100 flex flex-wrap items-center gap-1.5"
               >
-                <span class="text-xs font-medium text-blue-700 mr-1">Roles:</span>
+                <span class="text-xs font-medium text-blue-700 mr-1">{{ $t('orchestrationView.roles') }}</span>
                 <span
                   v-for="roleItem in nodeRolesCache[node.nodeId]?.roles"
                   :key="roleItem.role_name"
@@ -1070,7 +1070,7 @@ onUnmounted(() => {
                   {{ roleItem.role_name }}
                 </span>
                 <span v-if="loadingRolesForNode[node.nodeId]" class="text-xs text-gray-400 italic">
-                  Loading…
+                  {{ $t('orchestrationView.loading') }}
                 </span>
               </div>
               <!-- Post-sync action badges (Issue #1243) -->
@@ -1087,11 +1087,11 @@ onUnmounted(() => {
               <table class="w-full">
                 <thead class="bg-gray-50">
                   <tr class="text-xs text-gray-500 uppercase">
-                    <th class="px-4 py-2 text-left">Service</th>
-                    <th class="px-4 py-2 text-left w-36">Endpoint</th>
-                    <th class="px-4 py-2 text-left w-24">Category</th>
-                    <th class="px-4 py-2 text-left w-24">Status</th>
-                    <th class="px-4 py-2 text-right w-32">Actions</th>
+                    <th class="px-4 py-2 text-left">{{ $t('orchestrationView.service') }}</th>
+                    <th class="px-4 py-2 text-left w-36">{{ $t('orchestrationView.endpoint') }}</th>
+                    <th class="px-4 py-2 text-left w-24">{{ $t('orchestrationView.category') }}</th>
+                    <th class="px-4 py-2 text-left w-24">{{ $t('orchestrationView.status') }}</th>
+                    <th class="px-4 py-2 text-right w-32">{{ $t('orchestrationView.actions') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1108,7 +1108,7 @@ onUnmounted(() => {
                         v-if="service.port"
                         class="text-xs font-mono text-gray-500"
                       >{{ service.ip_address || node.ipAddress }}:{{ service.port }}</span>
-                      <span v-else class="text-xs text-gray-300">&mdash;</span>
+                      <span v-else class="text-xs text-gray-300">{{ $t('orchestrationView.mdash') }}</span>
                     </td>
                     <td class="px-4 py-2">
                       <span
@@ -1147,7 +1147,7 @@ onUnmounted(() => {
           <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
           </svg>
-          <p class="text-gray-500 mb-2 font-medium">No services found</p>
+          <p class="text-gray-500 mb-2 font-medium">{{ $t('orchestrationView.noServicesFound') }}</p>
           <p class="text-sm text-gray-400 mb-4">
             {{ orchestration.fleetStore.nodeList.length === 0
               ? 'No nodes are registered in the fleet. Add nodes to see services.'
@@ -1159,7 +1159,7 @@ onUnmounted(() => {
             @click="refresh"
             class="px-4 py-2 text-sm bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200"
           >
-            Refresh
+            {{ $t('orchestrationView.refresh') }}
           </button>
         </div>
       </div>
@@ -1257,28 +1257,28 @@ onUnmounted(() => {
 
         <!-- Fleet Actions -->
         <div class="card p-4">
-          <h3 class="font-medium text-gray-900 mb-3">Fleet-Wide Actions</h3>
+          <h3 class="font-medium text-gray-900 mb-3">{{ $t('orchestrationView.fleetWideActions') }}</h3>
           <div class="flex items-center gap-3">
             <button
               @click="handleBulkAction('start')"
               :disabled="orchestration.loading"
               class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
             >
-              Start All Services
+              {{ $t('orchestrationView.startAllServices') }}
             </button>
             <button
               @click="handleBulkAction('stop')"
               :disabled="orchestration.loading"
               class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
             >
-              Stop All Services
+              {{ $t('orchestrationView.stopAllServices') }}
             </button>
             <button
               @click="handleBulkAction('restart')"
               :disabled="orchestration.loading"
               class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
             >
-              Restart All Services
+              {{ $t('orchestrationView.restartAllServices') }}
             </button>
           </div>
         </div>
@@ -1286,17 +1286,17 @@ onUnmounted(() => {
         <!-- Fleet Services Table -->
         <div class="card">
           <div class="px-4 py-3 bg-gray-50 border-b">
-            <h3 class="font-medium text-gray-900">Fleet Services</h3>
+            <h3 class="font-medium text-gray-900">{{ $t('orchestrationView.fleetServices') }}</h3>
           </div>
           <table class="w-full">
             <thead class="bg-gray-50">
               <tr class="text-xs text-gray-500 uppercase">
-                <th class="px-4 py-2 text-left">Service</th>
-                <th class="px-4 py-2 text-left">Category</th>
-                <th class="px-4 py-2 text-center">Running</th>
-                <th class="px-4 py-2 text-center">Stopped</th>
-                <th class="px-4 py-2 text-center">Failed</th>
-                <th class="px-4 py-2 text-right">Actions</th>
+                <th class="px-4 py-2 text-left">{{ $t('orchestrationView.service') }}</th>
+                <th class="px-4 py-2 text-left">{{ $t('orchestrationView.category') }}</th>
+                <th class="px-4 py-2 text-center">{{ $t('orchestrationView.running') }}</th>
+                <th class="px-4 py-2 text-center">{{ $t('orchestrationView.stopped') }}</th>
+                <th class="px-4 py-2 text-center">{{ $t('orchestrationView.failed') }}</th>
+                <th class="px-4 py-2 text-right">{{ $t('orchestrationView.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -1343,17 +1343,17 @@ onUnmounted(() => {
                         @click="handleFleetServiceAction(service.service_name, 'start')"
                         class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-sm hover:bg-green-200"
                         title="Start on all nodes"
-                      >Start</button>
+                      >{{ $t('orchestrationView.start') }}</button>
                       <button
                         @click="handleFleetServiceAction(service.service_name, 'stop')"
                         class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-sm hover:bg-red-200"
                         title="Stop on all nodes"
-                      >Stop</button>
+                      >{{ $t('orchestrationView.stop') }}</button>
                       <button
                         @click="handleFleetServiceAction(service.service_name, 'restart')"
                         class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded-sm hover:bg-blue-200"
                         title="Restart on all nodes"
-                      >Restart</button>
+                      >{{ $t('orchestrationView.restart') }}</button>
                     </div>
                   </td>
                 </tr>

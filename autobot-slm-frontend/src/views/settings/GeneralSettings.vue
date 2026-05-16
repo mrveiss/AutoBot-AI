@@ -350,14 +350,14 @@ onMounted(() => {
 
       <!-- General Settings Card -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-        <h2 class="text-lg font-semibold mb-6">General Settings</h2>
+        <h2 class="text-lg font-semibold mb-6">{{ $t('settings.generalSettings.generalSettings') }}</h2>
 
         <div class="space-y-6">
           <!-- System Name -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">System Name</label>
-              <p class="text-xs text-gray-500 mt-1">Display name for this installation</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.generalSettings.systemName') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.generalSettings.displayNameForThis') }}</p>
             </div>
             <input
               type="text"
@@ -369,7 +369,7 @@ onMounted(() => {
           <!-- Default Timezone — full IANA list -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Default Timezone</label>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.generalSettings.defaultTimezone') }}</label>
               <p class="text-xs text-gray-500 mt-1">
                 Timezone for displaying dates and times ({{ allTimezones.length }} zones available)
               </p>
@@ -385,8 +385,8 @@ onMounted(() => {
           <!-- Dark Mode -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Dark Mode</label>
-              <p class="text-xs text-gray-500 mt-1">Use dark theme for the interface</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.generalSettings.darkMode') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.generalSettings.useDarkThemeFor') }}</p>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="settings.dark_mode" class="sr-only peer" />
@@ -397,8 +397,8 @@ onMounted(() => {
           <!-- Auto Refresh -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Auto Refresh</label>
-              <p class="text-xs text-gray-500 mt-1">Automatically refresh data on dashboards</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.generalSettings.autoRefresh') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.generalSettings.automaticallyRefreshDataOn') }}</p>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="settings.auto_refresh" class="sr-only peer" />
@@ -409,19 +409,19 @@ onMounted(() => {
           <!-- Refresh Interval -->
           <div class="flex items-center justify-between">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Refresh Interval</label>
-              <p class="text-xs text-gray-500 mt-1">How often to refresh data (in seconds)</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.generalSettings.refreshInterval') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.generalSettings.howOftenToRefresh') }}</p>
             </div>
             <select
               v-model="settings.refresh_interval"
               :disabled="!settings.auto_refresh"
               class="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:text-gray-500"
             >
-              <option value="10">10 seconds</option>
-              <option value="30">30 seconds</option>
-              <option value="60">1 minute</option>
-              <option value="120">2 minutes</option>
-              <option value="300">5 minutes</option>
+              <option value="10">{{ $t('settings.generalSettings.10Seconds') }}</option>
+              <option value="30">{{ $t('settings.generalSettings.30Seconds') }}</option>
+              <option value="60">{{ $t('settings.generalSettings.1Minute') }}</option>
+              <option value="120">{{ $t('settings.generalSettings.2Minutes') }}</option>
+              <option value="300">{{ $t('settings.generalSettings.5Minutes') }}</option>
             </select>
           </div>
         </div>
@@ -446,9 +446,9 @@ onMounted(() => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-6">
           <div>
-            <h2 class="text-lg font-semibold">Fleet Time Synchronization</h2>
+            <h2 class="text-lg font-semibold">{{ $t('settings.generalSettings.fleetTimeSynchronization') }}</h2>
             <p class="text-sm text-gray-500 mt-1">
-              Configure NTP servers and push time settings to all fleet nodes via Ansible.
+              {{ $t('settings.generalSettings.configureNTPServersAnd') }}
             </p>
           </div>
           <button
@@ -471,8 +471,8 @@ onMounted(() => {
         <!-- NTP Servers textarea -->
         <div class="mb-6">
           <label class="block text-sm font-medium text-gray-900 mb-1">
-            NTP Servers
-            <span class="text-gray-400 font-normal">(one per line)</span>
+            {{ $t('settings.generalSettings.nTPServers') }}
+            <span class="text-gray-400 font-normal">{{ $t('settings.generalSettings.onePerLine') }}</span>
           </label>
           <textarea
             v-model="ntpServersText"
@@ -481,7 +481,7 @@ onMounted(() => {
             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm"
           />
           <p class="text-xs text-gray-500 mt-1">
-            Servers are tried in order. Changes are applied on next "Save Changes" or "Sync All Nodes".
+            {{ $t('settings.generalSettings.serversAreTriedIn') }}
           </p>
         </div>
 
@@ -499,7 +499,7 @@ onMounted(() => {
           </div>
           <div class="text-xs opacity-80">{{ syncResult.message }}</div>
           <details v-if="syncResult.output" class="mt-2">
-            <summary class="cursor-pointer text-xs font-medium">Ansible output</summary>
+            <summary class="cursor-pointer text-xs font-medium">{{ $t('settings.generalSettings.ansibleOutput') }}</summary>
             <pre class="mt-2 text-xs whitespace-pre-wrap font-mono opacity-80">{{ syncResult.output }}</pre>
           </details>
         </div>
@@ -508,9 +508,9 @@ onMounted(() => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-4">
           <div>
-            <h2 class="text-lg font-semibold">Setup Wizard</h2>
+            <h2 class="text-lg font-semibold">{{ $t('settings.generalSettings.setupWizard') }}</h2>
             <p class="text-sm text-gray-500 mt-1">
-              Run the guided fleet configuration wizard to add nodes, enroll agents, assign roles, and provision your fleet.
+              {{ $t('settings.generalSettings.runTheGuidedFleet') }}
             </p>
           </div>
           <span

@@ -4,7 +4,7 @@
 <template>
   <div class="drafts-tab space-y-3">
     <div v-if="!Array.isArray(drafts) || drafts.length === 0" class="text-center py-12 text-gray-400">
-      No draft skills. AutoBot will generate skills here when it detects capability gaps.
+      {{ $t('skills.draftsTab.noDraftSkillsAutoBot') }}
     </div>
     <div
       v-for="draft in typedDrafts"
@@ -30,14 +30,14 @@
                  text-gray-300 transition-colors"
           @click="$emit('test', draft.id)"
         >
-          Test Run
+          {{ $t('skills.draftsTab.testRun') }}
         </button>
         <button
           class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-sm
                  text-white transition-colors"
           @click="$emit('promote', draft.id)"
         >
-          Promote to Builtin
+          {{ $t('skills.draftsTab.promoteToBuiltin') }}
         </button>
       </div>
     </div>

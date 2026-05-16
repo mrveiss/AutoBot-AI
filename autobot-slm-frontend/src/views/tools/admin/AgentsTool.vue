@@ -178,7 +178,7 @@ onUnmounted(() => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Total Agents</p>
+            <p class="text-sm text-gray-500">{{ $t('tools.admin.agentsTool.totalAgents') }}</p>
             <p class="text-2xl font-bold text-gray-900">{{ stats.total_agents }}</p>
           </div>
           <div class="p-3 bg-blue-100 rounded-lg">
@@ -192,7 +192,7 @@ onUnmounted(() => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Active Agents</p>
+            <p class="text-sm text-gray-500">{{ $t('tools.admin.agentsTool.activeAgents') }}</p>
             <p class="text-2xl font-bold text-green-600">{{ stats.active_agents }}</p>
           </div>
           <div class="p-3 bg-green-100 rounded-lg">
@@ -206,7 +206,7 @@ onUnmounted(() => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Tasks Completed</p>
+            <p class="text-sm text-gray-500">{{ $t('tools.admin.agentsTool.tasksCompleted') }}</p>
             <p class="text-2xl font-bold text-gray-900">{{ stats.total_tasks }}</p>
           </div>
           <div class="p-3 bg-purple-100 rounded-lg">
@@ -220,7 +220,7 @@ onUnmounted(() => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Success Rate</p>
+            <p class="text-sm text-gray-500">{{ $t('tools.admin.agentsTool.successRate') }}</p>
             <p class="text-2xl font-bold text-gray-900">{{ (stats.avg_success_rate * 100).toFixed(1) }}%</p>
           </div>
           <div class="p-3 bg-amber-100 rounded-lg">
@@ -247,11 +247,11 @@ onUnmounted(() => {
           v-model="filterStatus"
           class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
         >
-          <option value="all">All Status</option>
-          <option value="active">Active</option>
-          <option value="idle">Idle</option>
-          <option value="error">Error</option>
-          <option value="stopped">Stopped</option>
+          <option value="all">{{ $t('tools.admin.agentsTool.allStatus') }}</option>
+          <option value="active">{{ $t('tools.admin.agentsTool.active') }}</option>
+          <option value="idle">{{ $t('tools.admin.agentsTool.idle') }}</option>
+          <option value="error">{{ $t('tools.admin.agentsTool.error') }}</option>
+          <option value="stopped">{{ $t('tools.admin.agentsTool.stopped') }}</option>
         </select>
         <button
           @click="refreshData"
@@ -261,7 +261,7 @@ onUnmounted(() => {
           <svg class="w-4 h-4" :class="{ 'animate-spin': loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Refresh
+          {{ $t('tools.admin.agentsTool.refresh') }}
         </button>
       </div>
     </div>
@@ -277,14 +277,14 @@ onUnmounted(() => {
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
-      <p class="mt-4 text-gray-600">Loading agents...</p>
+      <p class="mt-4 text-gray-600">{{ $t('tools.admin.agentsTool.loadingAgents') }}</p>
     </div>
 
     <div v-else-if="filteredAgents.length === 0" class="text-center py-12">
       <svg class="w-12 h-12 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
       </svg>
-      <p class="mt-4 text-gray-600">No agents found</p>
+      <p class="mt-4 text-gray-600">{{ $t('tools.admin.agentsTool.noAgentsFound') }}</p>
     </div>
 
     <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -324,18 +324,18 @@ onUnmounted(() => {
         <!-- Stats -->
         <div class="grid grid-cols-2 gap-4 mb-4">
           <div>
-            <p class="text-xs text-gray-500">Tasks Completed</p>
+            <p class="text-xs text-gray-500">{{ $t('tools.admin.agentsTool.tasksCompleted') }}</p>
             <p class="text-lg font-bold text-gray-900">{{ agent.tasks_completed }}</p>
           </div>
           <div>
-            <p class="text-xs text-gray-500">Success Rate</p>
+            <p class="text-xs text-gray-500">{{ $t('tools.admin.agentsTool.successRate') }}</p>
             <p class="text-lg font-bold text-gray-900">{{ (agent.success_rate * 100).toFixed(0) }}%</p>
           </div>
         </div>
 
         <!-- Capabilities -->
         <div class="mb-4">
-          <p class="text-xs text-gray-500 mb-2">Capabilities</p>
+          <p class="text-xs text-gray-500 mb-2">{{ $t('tools.admin.agentsTool.capabilities') }}</p>
           <div class="flex flex-wrap gap-1">
             <span
               v-for="cap in agent.capabilities"
@@ -359,20 +359,20 @@ onUnmounted(() => {
             @click.stop="startAgent(agent.id)"
             class="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700"
           >
-            Start
+            {{ $t('tools.admin.agentsTool.start') }}
           </button>
           <button
             v-if="agent.status === 'active' || agent.status === 'idle'"
             @click.stop="stopAgent(agent.id)"
             class="px-3 py-1.5 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700"
           >
-            Stop
+            {{ $t('tools.admin.agentsTool.stop') }}
           </button>
           <button
             @click.stop="restartAgent(agent.id)"
             class="px-3 py-1.5 text-xs bg-amber-600 text-white rounded-lg hover:bg-amber-700"
           >
-            Restart
+            {{ $t('tools.admin.agentsTool.restart') }}
           </button>
         </div>
       </div>

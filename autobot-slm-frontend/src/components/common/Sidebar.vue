@@ -184,8 +184,8 @@ onUnmounted(() => {
           <span class="text-xl font-bold">S</span>
         </div>
         <div>
-          <h1 class="font-bold text-lg">SLM Admin</h1>
-          <p class="text-xs text-gray-400">Service Lifecycle Manager</p>
+          <h1 class="font-bold text-lg">{{ $t('common.sidebar.sLMAdmin') }}</h1>
+          <p class="text-xs text-gray-400">{{ $t('common.sidebar.serviceLifecycleManager') }}</p>
         </div>
       </div>
     </div>
@@ -198,23 +198,23 @@ onUnmounted(() => {
           role="img"
           :aria-label="healthLabel"
         ></div>
-        <span class="text-sm font-medium">Fleet Health</span>
+        <span class="text-sm font-medium">{{ $t('common.sidebar.fleetHealth') }}</span>
       </div>
       <div class="grid grid-cols-2 gap-2 text-xs">
         <div class="flex justify-between">
-          <span class="text-gray-400">Total:</span>
+          <span class="text-gray-400">{{ $t('common.sidebar.total') }}</span>
           <span>{{ fleetStore.fleetSummary.total_nodes }}</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-success-500">Healthy:</span>
+          <span class="text-success-500">{{ $t('common.sidebar.healthy') }}</span>
           <span>{{ fleetStore.fleetSummary.healthy_nodes }}</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-warning-500">Degraded:</span>
+          <span class="text-warning-500">{{ $t('common.sidebar.degraded') }}</span>
           <span>{{ fleetStore.fleetSummary.degraded_nodes }}</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-danger-500">Unhealthy:</span>
+          <span class="text-danger-500">{{ $t('common.sidebar.unhealthy') }}</span>
           <span>{{ fleetStore.fleetSummary.unhealthy_nodes }}</span>
         </div>
       </div>
@@ -367,7 +367,7 @@ onUnmounted(() => {
           </svg>
         </button>
       </div>
-      <p class="text-xs text-gray-500">SLM Admin v1.0.0</p>
+      <p class="text-xs text-gray-500">{{ $t('common.sidebar.sLMAdminV10') }}</p>
     </div>
   </aside>
 </template>
