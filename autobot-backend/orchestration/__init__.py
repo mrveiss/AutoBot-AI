@@ -2,21 +2,35 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Orchestration Package
+Workflow Execution Primitives  (#7379 boundary)
+
+BOUNDARY: this package owns single-workflow execution building blocks.
+Use it when you need to BUILD or RUN a single workflow.
+
+The sibling `enhanced_orchestration/` package owns multi-agent coordination
+(strategy selection, agent routing, Redis pub/sub collaboration, subagent
+dispatch). New multi-agent features go there; new single-workflow primitives
+go here.
 
 Issue #381: Extracted from enhanced_orchestrator.py god class refactoring.
 Provides agent orchestration, workflow planning, and auto-documentation.
 
 This package contains:
-- types: Enums and dataclasses for orchestration
+- types: Enums and dataclasses for workflow plans, steps, and agents
 - agent_registry: Agent registration and management
-- workflow_planner: Workflow step planning and estimation
-- workflow_executor: Workflow execution with agent coordination
+- workflow_planner: Map capability requirements to available agents
+- workflow_executor: Execute a single workflow step by step
 - workflow_documentation: Auto-documentation and knowledge extraction
 - dag_executor: DAG-based execution with condition/branch routing (#2140)
-- error_handler: Step-level error handling and workflow checkpointing (#2154)
-- execution_modes: Dry-run validation and step-by-step debug mode (#2148)
+- graph_runner: Unified graph model (AutoBotGraph, GraphRunner) (#3228)
+- error_handler: Step-level error handling and checkpointing (#2154)
+- execution_modes: Dry-run validation and debug mode (#2148)
 - sub_workflow: Sub-workflow composition — workflows as reusable building blocks (#2143)
+- variable_resolver: Cross-step variable piping (#2141)
+- causal_executor / causal_error_recovery / causal_validator: Causal DAG
+  execution with automated error recovery (#5058)
+- workflow_memory: Per-run memory scoped to a workflow execution
+- performance_tracker: Timing and cost metrics for workflow runs (#5058)
 """
 
 from .agent_registry import AgentRegistry, get_default_agents

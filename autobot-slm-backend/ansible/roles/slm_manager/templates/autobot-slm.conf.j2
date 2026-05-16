@@ -370,7 +370,9 @@ server {
         try_files $uri $uri/ /slm/index.html;
 
         # Prevent index.html from being cached so new deployments are picked up
+        # #7737: child location replaces server-level add_header — re-include snippet
         location ~* /slm/index\.html$ {
+            include /etc/nginx/snippets/autobot-security-headers-strict.conf;
             add_header Cache-Control "no-cache, no-store, must-revalidate" always;
             add_header Pragma "no-cache" always;
         }
