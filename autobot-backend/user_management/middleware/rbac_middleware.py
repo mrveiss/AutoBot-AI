@@ -64,13 +64,18 @@ async def _run_invalidation_listener() -> None:
             return
         except Exception:
             logger.exception("RBAC invalidation listener: reconnecting in 5s")
+            try:
+                await pubsub.unsubscribe(_PUBSUB_CHANNEL)
+                await pubsub.aclose()
+            except Exception:
+                pass
             await asyncio.sleep(5)
 
 
 async def _ensure_listener_started() -> None:
     global _listener_task
     if _listener_task is None or _listener_task.done():
-        _listener_task = asyncio.ensure_future(_run_invalidation_listener())
+        _listener_task = asyncio.create_task(_run_invalidation_listener())
 
 
 class RBACMiddleware:
@@ -231,8 +236,10 @@ class RBACMiddleware:
             if user_id:
                 await redis.delete(f"{_REDIS_KEY_PREFIX}{user_id}")
             else:
+                pipeline = redis.pipeline()
                 async for key in redis.scan_iter(f"{_REDIS_KEY_PREFIX}*"):
-                    await redis.delete(key)
+                    pipeline.delete(key)
+                await pipeline.execute()
             payload = json.dumps({"user_id": str(user_id)} if user_id else {})
             await redis.publish(_PUBSUB_CHANNEL, payload)
             logger.debug("RBAC cache invalidated for user=%s", user_id)
