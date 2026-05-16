@@ -8,6 +8,7 @@ rollback-on-error, and guaranteed close semantics in one place.
 
 Async callers use db_session_context() from user_management.database.
 """
+
 from contextlib import contextmanager
 from typing import Callable, Generator
 

@@ -480,7 +480,9 @@ class LLMFailsafeAgent(StandardizedAgent):
             metadata=metadata,
         )
 
-    async def _try_primary_llm(self, prompt: str, context: Optional[Dict[str, Any]], start_time: float) -> FailsafeLLMResponse:
+    async def _try_primary_llm(
+        self, prompt: str, context: Optional[Dict[str, Any]], start_time: float
+    ) -> FailsafeLLMResponse:
         """Try primary LLM communication (Issue #398: refactored)."""
         self.tier_stats[LLMTier.PRIMARY]["requests"] += 1
         try:
