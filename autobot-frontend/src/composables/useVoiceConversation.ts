@@ -697,7 +697,7 @@ function _handleVadSpeechEnd(audio: Float32Array): void {
 // ─── Main composable ────────────────────────────────────
 
 export function useVoiceConversation() {
-  const { isSpeaking, unlockAudio, stopSpeaking, wsConnected } = useVoiceOutput()
+  const { isSpeaking, unlockAudio, stopSpeaking } = useVoiceOutput()
 
   const isListening = computed(() => state.value === 'listening')
   const isProcessing = computed(() => state.value === 'processing')
@@ -847,7 +847,6 @@ export function useVoiceConversation() {
     bubbles,
     isActive,
     errorMessage,
-    wsConnected,
     audioLevel,
     silenceThreshold,
     micAccessAvailable,
