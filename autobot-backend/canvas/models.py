@@ -89,6 +89,8 @@ class CanvasCell(Base):
     # Phase 3 forward-compat: present from day 1, not enforced in Phase 1
     version: Mapped[int] = mapped_column(sa.Integer, nullable=False, server_default="1")
     locked_by: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
+    # Phase 2: rich payload for chart/code cells — null for Phase 1 clients (additive)
+    rich_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
 class CanvasUndoEvent(Base):

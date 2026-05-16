@@ -15,6 +15,7 @@ an explicit user action.
 Observability: OTel spans + structlog metrics via autobot_shared.
 """
 
+import asyncio
 import json
 import uuid
 from datetime import datetime, timezone
@@ -39,6 +40,7 @@ from api.schemas_canvas import (
 from auth_middleware import get_current_user
 from autobot_shared.tracing import get_tracer
 from canvas.models import Canvas, CanvasCell, CellState
+from canvas.vega_validation import validate_vegalite_spec
 from user_management.database import get_async_session
 
 logger = structlog.get_logger(__name__)
@@ -77,6 +79,66 @@ _EXPORT_CONTENT_TYPES: dict[str, str] = {
 def _user_id(current_user: dict) -> str:
     """Extract stable user identifier from JWT dict."""
     return current_user.get("user_id") or current_user.get("id") or current_user.get("username", "")
+
+
+def _validate_and_sanitize_rich_payload(rich_payload: dict | None, cell_type: str) -> dict | None:
+    """
+    Validate and sanitize a rich payload.  Returns the sanitized payload or None.
+
+    Rules (Phase 2):
+    - chart cells: richPayload must have payloadType='vega-lite', specVersion='5',
+      and spec that passes Vega-Lite v5 validation.
+    - code cells: richPayload must have payloadType='code'; executable must be false.
+    - executable: true is always rejected.
+    """
+    if rich_payload is None:
+        return None
+    if not isinstance(rich_payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="richPayload must be a JSON object or null.",
+        )
+
+    payload_type = rich_payload.get("payloadType")
+
+    # executable: true is forbidden in Phase 2
+    if rich_payload.get("executable") is True:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="executable: true is not supported until Phase 3.",
+        )
+
+    if cell_type == "chart":
+        if payload_type != "vega-lite":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="chart cells require richPayload.payloadType='vega-lite'.",
+            )
+        if rich_payload.get("specVersion") != "5":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="chart cells require richPayload.specVersion='5' (Vega-Lite v5).",
+            )
+        try:
+            sanitized_spec = validate_vegalite_spec(rich_payload.get("spec"))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
+        return {**rich_payload, "spec": sanitized_spec, "executable": False}
+
+    if cell_type == "code":
+        if payload_type != "code":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="code cells require richPayload.payloadType='code'.",
+            )
+        # Force executable: false
+        return {**rich_payload, "executable": False}
+
+    # For text/image cells, richPayload is ignored (Phase 1 compatibility)
+    return None
 
 
 def _log_metric(event: str, **kw) -> None:
@@ -221,6 +283,8 @@ async def add_cell(
 
         await _get_canvas_owned(canvas_id, uid, session)
 
+        rich_payload = _validate_and_sanitize_rich_payload(body.rich_payload, body.type)
+
         cell = CanvasCell(
             id=uuid.uuid4(),
             canvas_id=canvas_id,
@@ -232,6 +296,7 @@ async def add_cell(
             owner="user",
             version=1,
             locked_by=None,
+            rich_payload=rich_payload,
         )
         session.add(cell)
         await session.commit()
@@ -295,6 +360,9 @@ async def transition_cell(
         cell.updated_at = now
         if body.action == "edit" and body.content is not None:
             cell.content = body.content
+        # Phase 2: allow rich_payload update on edit/accept
+        if body.rich_payload is not None and body.action in ("edit", "accept"):
+            cell.rich_payload = _validate_and_sanitize_rich_payload(body.rich_payload, cell.type)
 
         await session.commit()
         await session.refresh(cell)
@@ -307,6 +375,7 @@ async def transition_cell(
             state=cell.state,
             version=cell.version,
             content=cell.content,
+            rich_payload=cell.rich_payload,
             updated_at=cell.updated_at,
         )
 
@@ -359,11 +428,14 @@ async def export_canvas(
             elif body.format == "json":
                 data = _export_json(canvas, filtered)
                 payload = data.encode("utf-8")
-            elif body.format == "html":
-                data = _export_html(canvas, filtered)
-                payload = data.encode("utf-8")
-            elif body.format == "pdf":
-                payload = _export_pdf(canvas, filtered)
+            elif body.format in ("html", "pdf"):
+                # Pre-render chart cells to SVG for server-side embed
+                chart_svgs = await _render_chart_svgs(filtered)
+                data = _export_html(canvas, filtered, chart_svgs=chart_svgs)
+                if body.format == "html":
+                    payload = data.encode("utf-8")
+                else:
+                    payload = _export_pdf_from_html(data)
         except Exception as exc:
             _log_metric("canvas.autosave.failure", canvas_id=str(canvas_id), format=body.format, error=str(exc))
             raise HTTPException(status_code=500, detail="Export generation failed") from exc
@@ -388,8 +460,26 @@ async def export_canvas(
 def _export_md(canvas: Canvas, cells: list[CanvasCell]) -> str:
     lines = [f"# {canvas.title}", ""]
     for cell in cells:
-        if cell.type == "code":
-            lines += [f"```\n{cell.content}\n```", ""]
+        if cell.type == "chart" and cell.rich_payload:
+            spec = cell.rich_payload.get("spec", {})
+            description = spec.get("description", "Chart")
+            lines += [f"**{description}**", ""]
+            # Emit data as a Markdown table if values are simple dicts
+            data_values = spec.get("data", {}).get("values", [])
+            if data_values and isinstance(data_values[0], dict):
+                headers = list(data_values[0].keys())
+                lines.append("| " + " | ".join(headers) + " |")
+                lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
+                for row in data_values:
+                    lines.append("| " + " | ".join(str(row.get(h, "")) for h in headers) + " |")
+                lines.append("")
+        elif cell.type == "code":
+            if cell.rich_payload:
+                lang = cell.rich_payload.get("language") or ""
+                code = cell.rich_payload.get("content", cell.content)
+            else:
+                lang, code = "", cell.content
+            lines += [f"```{lang}\n{code}\n```", ""]
         else:
             lines += [cell.content, ""]
     return "\n".join(lines)
@@ -413,6 +503,7 @@ def _export_json(canvas: Canvas, cells: list[CanvasCell]) -> str:
                     "state": c.state,
                     "owner": c.owner,
                     "version": c.version,
+                    "rich_payload": c.rich_payload,
                 }
                 for c in cells
             ],
@@ -422,8 +513,15 @@ def _export_json(canvas: Canvas, cells: list[CanvasCell]) -> str:
     )
 
 
-def _export_html(canvas: Canvas, cells: list[CanvasCell]) -> str:
-    """Sanitize each cell's content before embedding in HTML (XSS/injection surface)."""
+def _export_html(
+    canvas: Canvas,
+    cells: list[CanvasCell],
+    chart_svgs: dict[str, str] | None = None,
+) -> str:
+    """Sanitize each cell's content before embedding in HTML (XSS/injection surface).
+
+    chart_svgs: optional map of cell id → pre-rendered SVG string for chart cells.
+    """
     try:
         import bleach
 
@@ -437,15 +535,45 @@ def _export_html(canvas: Canvas, cells: list[CanvasCell]) -> str:
         def _sanitize(text: str) -> str:  # type: ignore[misc]
             return html_lib.escape(text)
 
+    chart_svgs = chart_svgs or {}
     title_safe = _sanitize(canvas.title)
     rows = []
     for cell in cells:
-        content_safe = _sanitize(cell.content)
-        rows.append(
-            f'<div class="canvas-cell" data-state="{cell.state}" data-owner="{cell.owner}">'
-            f"<pre>{content_safe}</pre>"
-            f"</div>"
-        )
+        if cell.type == "chart":
+            svg = chart_svgs.get(str(cell.id))
+            if svg:
+                # SVG is server-rendered; no user-controlled HTML injected
+                rows.append(
+                    f'<div class="canvas-cell canvas-cell--chart" data-state="{cell.state}" data-owner="{cell.owner}">'
+                    f"{svg}"
+                    f"</div>"
+                )
+            else:
+                spec = (cell.rich_payload or {}).get("spec", {})
+                desc = _sanitize(spec.get("description", "Chart unavailable"))
+                rows.append(
+                    f'<div class="canvas-cell canvas-cell--chart" data-state="{cell.state}" data-owner="{cell.owner}">'
+                    f"<p><em>{desc}</em></p>"
+                    f"</div>"
+                )
+        elif cell.type == "code":
+            if cell.rich_payload:
+                lang = _sanitize(cell.rich_payload.get("language") or "")
+                code_safe = _sanitize(cell.rich_payload.get("content", cell.content))
+            else:
+                lang, code_safe = "", _sanitize(cell.content)
+            rows.append(
+                f'<div class="canvas-cell canvas-cell--code" data-state="{cell.state}" data-owner="{cell.owner}">'
+                f'<pre><code class="language-{lang}">{code_safe}</code></pre>'
+                f"</div>"
+            )
+        else:
+            content_safe = _sanitize(cell.content)
+            rows.append(
+                f'<div class="canvas-cell" data-state="{cell.state}" data-owner="{cell.owner}">'
+                f"<pre>{content_safe}</pre>"
+                f"</div>"
+            )
 
     cells_html = "\n".join(rows)
     return (
@@ -461,9 +589,29 @@ def _export_html(canvas: Canvas, cells: list[CanvasCell]) -> str:
     )
 
 
-def _export_pdf(canvas: Canvas, cells: list[CanvasCell]) -> bytes:
-    """Render sanitized HTML to PDF. Requires weasyprint."""
-    html_content = _export_html(canvas, cells)
+async def _render_chart_svgs(cells: list[CanvasCell]) -> dict[str, str]:
+    """Render all chart cells to SVG concurrently. Returns cell-id → SVG map."""
+    from canvas.vega_render import VegaRenderError, render_vegalite_to_svg
+
+    chart_cells = [c for c in cells if c.type == "chart" and c.rich_payload]
+    if not chart_cells:
+        return {}
+
+    async def _render_one(cell: CanvasCell) -> tuple[str, str | None]:
+        spec = cell.rich_payload.get("spec", {})
+        try:
+            svg = await render_vegalite_to_svg(spec)
+            return str(cell.id), svg
+        except VegaRenderError as exc:
+            logger.warning("canvas.export.chart_render_failed", cell_id=str(cell.id), error=str(exc))
+            return str(cell.id), None
+
+    results = await asyncio.gather(*(_render_one(c) for c in chart_cells))
+    return {cid: svg for cid, svg in results if svg is not None}
+
+
+def _export_pdf_from_html(html_content: str) -> bytes:
+    """Render HTML (with embedded SVGs) to PDF. Requires weasyprint."""
     try:
         from weasyprint import HTML
 
