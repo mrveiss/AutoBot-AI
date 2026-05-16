@@ -1,0 +1,65 @@
+# PR Template Compliance Check
+#
+# Validates that required sections in the PR template are filled in.
+# Fails if any required section contains only the placeholder comment or is empty.
+# See: https://github.com/mrveiss/AutoBot-AI/issues/6474
+
+name: PR Template Check
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: [Dev_new_gui, main]
+
+jobs:
+  check-template:
+    name: Validate PR template sections
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+
+    steps:
+    - name: Check required sections
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+
+        # Fetch PR body via CLI (avoids direct expression injection)
+        PR_BODY=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json body --jq '.body' 2>/dev/null || echo "")
+
+        FAILED=0
+
+        check_section() {
+          local section_header="$1"
+          local section_name="$2"
+
+          # Extract content between this section header and the next ## header
+          content=$(echo "$PR_BODY" \
+            | awk "/^## ${section_header}/{found=1; next} found && /^## /{exit} found{print}" \
+            | sed 's/<!--[^>]*-->//g' \
+            | sed '/^[[:space:]]*$/d')
+
+          if [ -z "$content" ]; then
+            echo "::error::Required section '${section_name}' is empty. Please fill it in before merging."
+            FAILED=$((FAILED + 1))
+          else
+            echo "::notice::Section '${section_name}': OK"
+          fi
+        }
+
+        check_section "Thinking Path" "Thinking Path"
+        check_section "What Changed" "What Changed"
+        check_section "Verification" "Verification"
+        check_section "Model Used" "Model Used"
+
+        if [ "$FAILED" -gt 0 ]; then
+          echo ""
+          echo "::error::${FAILED} required PR template section(s) are empty."
+          echo "Please update the PR description using the template sections."
+          exit 1
+        fi
+
+        echo "All required PR template sections are filled in."
