@@ -279,7 +279,7 @@ onUnmounted(() => {
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ error }}
-      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700">
+      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700" aria-label="Dismiss error">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -395,6 +395,7 @@ onUnmounted(() => {
           @click="fetchWorkers"
           :disabled="loading"
           class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-sm"
+          aria-label="Refresh workers"
         >
           <svg :class="['w-5 h-5', loading && 'animate-spin']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -671,7 +672,7 @@ onUnmounted(() => {
       <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-semibold text-gray-900">{{ selectedWorkerMetrics.hostname }} Metrics</h3>
-          <button @click="showMetrics = false" class="text-gray-400 hover:text-gray-600">
+          <button @click="showMetrics = false" class="text-gray-400 hover:text-gray-600" aria-label="Close">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>

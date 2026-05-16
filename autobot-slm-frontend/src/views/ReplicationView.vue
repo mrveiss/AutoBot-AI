@@ -14,6 +14,7 @@ import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
 import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
+import { useToast } from '@/composables/useToast'
 import { createLogger } from '@/utils/debugUtils'
 import type { Replication, ReplicationRequest } from '@/types/slm'
 
@@ -21,6 +22,7 @@ const logger = createLogger('ReplicationView')
 const api = useSlmApi()
 const ws = useSlmWebSocket()
 const fleetStore = useFleetStore()
+const { showToast } = useToast()
 
 // State
 const replications = ref<Replication[]>([])
@@ -112,7 +114,7 @@ async function handleCreateReplication(): Promise<void> {
     await fetchReplications()
   } catch (err) {
     logger.error('Failed to start replication:', err)
-    alert('Failed to start replication')
+    showToast('Failed to start replication', 'error')
   } finally {
     isCreating.value = false
   }
@@ -128,7 +130,7 @@ async function handlePromote(replicationId: string): Promise<void> {
     await fetchReplications()
   } catch (err) {
     logger.error('Failed to promote replica:', err)
-    alert('Failed to promote replica')
+    showToast('Failed to promote replica', 'error')
   }
 }
 
@@ -142,7 +144,7 @@ async function handleStop(replicationId: string): Promise<void> {
     await fetchReplications()
   } catch (err) {
     logger.error('Failed to stop replication:', err)
-    alert('Failed to stop replication')
+    showToast('Failed to stop replication', 'error')
   }
 }
 
@@ -574,7 +576,7 @@ function getNodeHostname(nodeId: string): string {
                   {{ selectedReplication.status }}
                 </span>
               </div>
-              <button @click="closeDetails" class="text-gray-400 hover:text-gray-600">
+              <button @click="closeDetails" class="text-gray-400 hover:text-gray-600" aria-label="Close">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>

@@ -463,7 +463,7 @@ onUnmounted(() => {
       <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6">
         <div class="flex items-center justify-between mb-6">
           <h3 class="text-lg font-semibold text-gray-900">{{ $t('tools.admin.batchTool.createBatchJob') }}</h3>
-          <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-600">
+          <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-600" aria-label="Close">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
