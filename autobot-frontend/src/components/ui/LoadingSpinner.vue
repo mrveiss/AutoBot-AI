@@ -44,12 +44,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { ComponentSize } from '@/types/component-props'
 
 const { t } = useI18n()
 
 interface Props {
   variant?: 'circle' | 'dots' | 'pulse' | 'bars'
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+  size?: ComponentSize
   color?: string
   label?: string
   labelPosition?: 'bottom' | 'right'
