@@ -646,11 +646,32 @@
     url: "http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/health"
     method: GET
     status_code: 200
+    timeout: 10
   register: _slm_health
-  retries: 60
+  retries: 120
   delay: 5
   until: _slm_health is succeeded
   tags: ['slm', 'service']
+
+# Emit service logs when health check fails to surface the actual error.
+# Runs when _slm_health was registered (task attempted) but did not succeed.
+- name: "SLM | Collect backend logs on health check failure"
+  ansible.builtin.shell:
+    cmd: >-
+      journalctl -u {{ slm_backend_service }} -n 100 --no-pager 2>&1 ||
+      tail -100 {{ slm_log_dir }}/slm-backend.log 2>/dev/null ||
+      echo "No logs available yet"
+  register: _slm_backend_log_output
+  changed_when: false
+  failed_when: false
+  when: _slm_health is defined and _slm_health is failed
+  tags: ['slm', 'service', 'debug']
+
+- name: "SLM | Display backend logs on health check failure"
+  ansible.builtin.debug:
+    msg: "{{ _slm_backend_log_output.stdout_lines | default([]) }}"
+  when: _slm_health is defined and _slm_health is failed
+  tags: ['slm', 'service', 'debug']
 
 - name: "SLM | Export admin password for downstream plays"
   ansible.builtin.shell:
